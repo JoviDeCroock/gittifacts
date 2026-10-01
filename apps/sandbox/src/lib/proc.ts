@@ -30,6 +30,8 @@ export interface RunResult {
 /** Variables never passed to repository code. */
 const SCRUBBED = [
   "GITTIFACTS_TOKEN",
+  // Resolution must come from the checkout's node_modules, not the caller's environment.
+  "NODE_PATH",
   "GIT_CONFIG_COUNT",
   "GIT_CONFIG_KEY_0",
   "GIT_CONFIG_VALUE_0",

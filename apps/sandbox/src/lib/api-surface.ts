@@ -397,7 +397,7 @@ export function describeSymbol(checker: TS.TypeChecker, symbol: TS.Symbol, at: T
     parts.push(
       [
         `${abstract}class${typeParams(decls)}${bases.length > 0 ? ` extends ${bases.join(", ")}` : ""} {`,
-        ...signaturesOf(checker, ctor, ts.SignatureKind.Construct, "  new "),
+        ...signaturesOf(checker, ctor, ts.SignatureKind.Construct, "  "),
         ...statics.map((s) => `  ${s}`),
         ...members.map((m) => `  ${m}`),
         "}",
@@ -415,7 +415,7 @@ export function describeSymbol(checker: TS.TypeChecker, symbol: TS.Symbol, at: T
       [
         `interface${typeParams(decls)}${bases.length > 0 ? ` extends ${bases.join(", ")}` : ""} {`,
         ...signaturesOf(checker, type, ts.SignatureKind.Call, "  "),
-        ...signaturesOf(checker, type, ts.SignatureKind.Construct, "  new "),
+        ...signaturesOf(checker, type, ts.SignatureKind.Construct, "  "),
         ...indexInfos(checker, type).map((i) => `  ${i}`),
         ...members.map((m) => `  ${m}`),
         "}",

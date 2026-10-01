@@ -7,11 +7,11 @@
  * its config-selecting flags (`--config`, `--project`, ...).
  */
 import { existsSync, readFileSync, realpathSync, rmSync } from "node:fs";
-import { createRequire } from "node:module";
 import { dirname, join, posix, relative, sep } from "node:path";
 import { z } from "zod";
 import { errorMessage, log, tail } from "./log.js";
 import { run } from "./proc.js";
+import { findPackageDir } from "./tools.js";
 
 export type RunnerKind = "vitest" | "jest";
 
@@ -146,13 +146,9 @@ function scanCommand(command: string, pkg: PackageJson | null, depth = 0): Comma
 }
 
 function resolveBin(dir: string, kind: RunnerKind): { bin: string; version: string | null } | null {
-  const require = createRequire(join(dir, "package.json"));
-  let pkgPath: string;
-  try {
-    pkgPath = require.resolve(`${kind}/package.json`);
-  } catch {
-    return null;
-  }
+  const pkgDir = findPackageDir(kind, dir);
+  if (pkgDir === null) return null;
+  const pkgPath = join(pkgDir, "package.json");
   const pkg = readPackageJson(pkgPath);
   const binField = pkg?.bin;
   const rel = typeof binField === "string" ? binField : (binField?.[kind] ?? null);

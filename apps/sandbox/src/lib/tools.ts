@@ -3,17 +3,39 @@
  * this module: `/opt/gittifacts-runner/node_modules` in the image, `apps/sandbox/node_modules`
  * in development. Repositories don't need to depend on any of them.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { availableParallelism, totalmem } from "node:os";
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const require = createRequire(import.meta.url);
 
+/**
+ * `node_modules/<name>` as Node would find it from `fromDir`, walking up the directory tree but
+ * ignoring NODE_PATH and global folders: "does this checkout have the package" must not be
+ * answered by the environment the runner happens to be started from.
+ */
+export function findPackageDir(name: string, fromDir: string): string | null {
+  let dir = resolve(fromDir);
+  for (;;) {
+    const candidate = join(dir, "node_modules", name);
+    if (existsSync(join(candidate, "package.json"))) {
+      try {
+        return realpathSync(candidate);
+      } catch {
+        return candidate;
+      }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 function packageDir(name: string, from?: string): string | null {
+  if (from !== undefined) return findPackageDir(name, from);
   try {
-    const req = from === undefined ? require : createRequire(join(from, "package.json"));
-    return dirname(req.resolve(`${name}/package.json`));
+    return dirname(require.resolve(`${name}/package.json`));
   } catch {
     return null;
   }
