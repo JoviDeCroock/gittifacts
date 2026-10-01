@@ -244,7 +244,7 @@ export const WaitForChangeInput = {
   properties: {
     changeId: id,
     until: { enum: WAIT_UNTIL },
-    timeoutSec: { type: "integer", minimum: 1, maximum: 600, description: "Default 120." },
+    timeoutSec: { type: "integer", minimum: 1, maximum: 600, description: "Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached." },
   },
   required: ["changeId", "until"],
   additionalProperties: false,

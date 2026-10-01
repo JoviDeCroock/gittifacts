@@ -1352,7 +1352,7 @@ export type introspection = {
     /**
      * Wait for a change
      * Long-poll until the change reaches a milestone (evidence_ready, lane_assigned, tour_ready, merged, reverted), can no longer reach it, or the timeout passes. Prefer this to polling.
-     * @param args.timeoutSec Default 120.
+     * @param args.timeoutSec Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached.
      */
     "wait_for_change": {
       "inputSchema": {
@@ -1376,7 +1376,7 @@ export type introspection = {
             "type": "integer",
             "minimum": 1,
             "maximum": 600,
-            "description": "Default 120."
+            "description": "Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached."
           }
         },
         "required": [

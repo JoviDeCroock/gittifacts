@@ -327,7 +327,8 @@ export function buildTools(backend: McpBackend) {
           nextSteps: [
             {
               title: `Push your work to ${remote.branch}`,
-              why: "Use remote.username / remote.token as HTTP basic credentials.",
+              why: "Authenticate git with remote.token as a Bearer header (the token includes its ?expires= suffix; don't put it in the URL).",
+              command: `git -c http.extraHeader="Authorization: Bearer $GITTIFACTS_PUSH_TOKEN" push ${remote.url} HEAD:refs/heads/${remote.branch}`,
             },
             {
               title: "Wait for evidence",
@@ -530,7 +531,7 @@ export function buildTools(backend: McpBackend) {
         const v = parse(
           ChangeIdArgs.extend({
             until: WaitUntil,
-            timeoutSec: z.number().int().min(1).max(600).default(120),
+            timeoutSec: z.number().int().min(1).max(600).default(50),
           }),
           args,
         );
