@@ -1,7 +1,10 @@
-# Context is the repository root (docker build -f apps/sandbox/Dockerfile .). BuildKit reads
-# this file (<Dockerfile>.dockerignore) instead of a root .dockerignore. Only the prebuilt
-# bundle and its runtime manifest are sent.
+# Applies to either build context (repository root or apps/sandbox; see the Dockerfile).
+# BuildKit reads <Dockerfile>.dockerignore instead of a .dockerignore at the context root.
+# Only the prebuilt bundle, its runtime manifest and image/ are sent.
 **
 !apps/sandbox/dist/gittifacts-runner.mjs
 !apps/sandbox/dist/package.json
 !apps/sandbox/image/**
+!dist/gittifacts-runner.mjs
+!dist/package.json
+!image/**

@@ -3,12 +3,22 @@
 # gittifacts sandbox image: CI steps, evidence tools (`gittifacts-runner`) and previews
 # (`wrangler dev`). The Runner Durable Object starts it and `exec`s commands into it.
 #
-# Build from the REPOSITORY ROOT, after bundling the runner:
+# Bundle the runner first, then build with EITHER context:
 #   pnpm --filter @app/sandbox build
-#   docker build -f apps/sandbox/Dockerfile -t gittifacts-sandbox .
-# (apps/sandbox/Dockerfile.dockerignore keeps the context to the bundle.)
+#   docker build -f apps/sandbox/Dockerfile -t gittifacts-sandbox .            # repository root
+#   docker build -t gittifacts-sandbox apps/sandbox                            # this directory
+# (wrangler's container build uses the latter: build_context "../sandbox".)
+# Dockerfile.dockerignore keeps either context down to the bundle and image/.
 
 ARG NODE_IMAGE=node:22-bookworm-slim
+
+# ---------------------------------------------------------------- normalize the build context
+FROM ${NODE_IMAGE} AS context
+COPY . /ctx
+RUN set -e; \
+    if [ -f /ctx/apps/sandbox/dist/gittifacts-runner.mjs ]; then mv /ctx/apps/sandbox /src; \
+    elif [ -f /ctx/dist/gittifacts-runner.mjs ]; then mv /ctx /src; \
+    else echo "dist/gittifacts-runner.mjs is missing: run 'pnpm --filter @app/sandbox build' first" >&2; exit 1; fi
 
 # ---------------------------------------------------------------- tool installs (npm)
 FROM ${NODE_IMAGE} AS tools
@@ -19,7 +29,7 @@ ARG NPM_VERSION=11.16.0
 RUN npm install -g "npm@${NPM_VERSION}" && npm cache clean --force
 # The runner's own tools, next to the bundle: TypeScript, esbuild, Stryker, coverage-v8 (+ vitest peer).
 WORKDIR /opt/gittifacts-runner
-COPY apps/sandbox/dist/package.json ./package.json
+COPY --from=context /src/dist/package.json ./package.json
 RUN npm install --omit=dev \
  && npm cache clean --force \
  && rm -f package-lock.json
@@ -74,8 +84,7 @@ RUN groupadd --gid 10001 runner \
  && rm -rf /opt/yarn-v1.22.22
 # Steps are exec'd with a minimal env (PATH, HOME=/root, ...), so the ENV above would not reach
 # them: every entry point is a wrapper that sources env.sh (defaults only, callers win).
-COPY apps/sandbox/image/env.sh /opt/gittifacts/env.sh
-COPY apps/sandbox/image/install-wrappers.sh /opt/gittifacts/install-wrappers.sh
+COPY --from=context /src/image/env.sh /src/image/install-wrappers.sh /opt/gittifacts/
 RUN /opt/gittifacts/install-wrappers.sh \
       pnpm=/usr/local/lib/node_modules/corepack/dist/pnpm.js \
       pnpx=/usr/local/lib/node_modules/corepack/dist/pnpx.js \
@@ -85,7 +94,8 @@ RUN /opt/gittifacts/install-wrappers.sh \
       npm=/usr/local/lib/node_modules/npm/bin/npm-cli.js \
       npx=/usr/local/lib/node_modules/npm/bin/npx-cli.js \
       wrangler=/opt/wrangler/node_modules/wrangler/bin/wrangler.js \
-      gittifacts-runner=/opt/gittifacts-runner/gittifacts-runner.mjs
+      gittifacts-runner=/opt/gittifacts-runner/gittifacts-runner.mjs \
+      git=@/usr/bin/git
 USER runner
 RUN corepack prepare "pnpm@${PNPM_VERSION}" --activate \
  && corepack prepare "yarn@${YARN_VERSION}" --activate \
@@ -94,7 +104,7 @@ USER root
 
 COPY --from=tools /opt/gittifacts-runner /opt/gittifacts-runner
 COPY --from=tools /opt/wrangler /opt/wrangler
-COPY apps/sandbox/dist/gittifacts-runner.mjs /opt/gittifacts-runner/gittifacts-runner.mjs
+COPY --from=context /src/dist/gittifacts-runner.mjs /opt/gittifacts-runner/gittifacts-runner.mjs
 
 RUN git config --system safe.directory '*' \
  && git config --system init.defaultBranch main \

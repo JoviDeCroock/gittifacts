@@ -8,9 +8,13 @@
 
 ```sh
 pnpm --filter @app/sandbox build                       # → dist/gittifacts-runner.mjs (+ dist/package.json)
-docker build -f apps/sandbox/Dockerfile -t gittifacts-sandbox .   # from the repo root
+docker build -f apps/sandbox/Dockerfile -t gittifacts-sandbox .   # from the repo root, or:
+docker build -t gittifacts-sandbox apps/sandbox                    # wrangler's build_context "../sandbox"
 docker run --rm gittifacts-sandbox gittifacts-runner --help
 ```
+
+Both contexts produce the same image. `Dockerfile.dockerignore` limits either context to
+`dist/` and `image/`, about 1 MB.
 
 ## Commands and output
 
@@ -112,7 +116,7 @@ and `.github/`.
 - **Stable caches** (reusable through snapshots): `/opt/pnpm-store`, `/opt/npm-cache` and
   `/opt/yarn-cache`.
 - **Wrappers:** every entry point in `/usr/local/bin` (pnpm, pnpx, yarn, npm, npx, corepack,
-  wrangler, gittifacts-runner) is a wrapper that sources `/opt/gittifacts/env.sh` first. The
+  wrangler, gittifacts-runner, git) is a wrapper that sources `/opt/gittifacts/env.sh` first. The
   Runner DO execs steps with a minimal env (PATH, `HOME=/root`, …), so image `ENV` doesn't reach
   them. `env.sh` only sets defaults: store and cache paths, `COREPACK_HOME`, telemetry and
   update checks off, and a writable `HOME`.
