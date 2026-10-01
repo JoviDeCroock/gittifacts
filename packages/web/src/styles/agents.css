@@ -187,3 +187,91 @@
   font-size: var(--text-small);
   color: var(--text-2);
 }
+
+/* ---------------------------------------------------------------- agent sessions (O4) */
+.agent__status {
+  display: inline-block;
+  margin-inline-start: var(--s-2);
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  vertical-align: 2px;
+  background: var(--panel-strong);
+  color: var(--text-2);
+}
+.agent__status--active {
+  background: var(--ok-tint);
+  color: var(--ok);
+}
+.agent__status--revoked {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+.agent__via {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.agent__via .icon {
+  color: var(--text-3);
+}
+.agent__host {
+  color: var(--text-3);
+}
+.agent__can {
+  margin-block-start: var(--s-1);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.agent--expired .agent__can,
+.agent--revoked .agent__can {
+  color: var(--text-2);
+}
+.agents__ended {
+  margin-block-start: var(--s-5);
+}
+.agents__ended > summary {
+  font-size: var(--text-body);
+}
+.create-agent__lede {
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.scopes__never {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding-block-start: var(--s-3);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.scopes__never .icon {
+  flex: none;
+  margin-block-start: 3px;
+}
+.agents__notice {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  margin-block-end: var(--s-4);
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--panel);
+  font-size: var(--text-small);
+  color: var(--text);
+}
+.agents__notice .icon {
+  flex: none;
+  margin-block-start: 2px;
+  color: var(--ok);
+}
+fieldset.agent__confirm {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}

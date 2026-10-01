@@ -14,8 +14,24 @@ const RolloutView = lazy(() => import("./routes/rollout.js").then((m) => m.Rollo
 const AuditView = lazy(() => import("./routes/audit.js").then((m) => m.AuditView));
 const AgentsView = lazy(() => import("./routes/agents.js").then((m) => m.AgentsView));
 const NotFound = lazy(() => import("./routes/notfound.js").then((m) => m.NotFound));
+const OAuthConsent = lazy(() => import("./routes/oauth-consent.js").then((m) => m.OAuthConsent));
+const DeviceView = lazy(() => import("./routes/device.js").then((m) => m.DeviceView));
+
+/** Agent consent screens: one decision, no navigation to wander off to. */
+const FOCUSED = /^\/(oauth\/consent|device)\/?$/;
 
 function AuthedApp() {
+  const { path } = useLocation();
+  if (FOCUSED.test(path)) {
+    return (
+      <ErrorBoundary>
+        <Router>
+          <Route path="/oauth/consent" component={OAuthConsent} />
+          <Route path="/device" component={DeviceView} />
+        </Router>
+      </ErrorBoundary>
+    );
+  }
   return (
     <Shell>
       <ErrorBoundary>

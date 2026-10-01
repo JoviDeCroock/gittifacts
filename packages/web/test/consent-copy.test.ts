@@ -4,8 +4,10 @@ import {
   consentCopy,
   formatUserCode,
   neverPhrases,
+  neverSentence,
   repoPhrase,
   sessionLengthPhrase,
+  sessionLine,
 } from "../src/lib/consent-copy.js";
 
 describe("consentCopy", () => {
@@ -35,7 +37,11 @@ describe("consentCopy", () => {
 
   it("always says what an agent can never do", () => {
     const c = consentCopy({ clientName: "X", scopes: ["repo:read"], repos: { kind: "all" } });
-    expect(c.never).toEqual(["approve plans or changes", "change policy", "administer repositories"]);
+    expect(c.never).toEqual([
+      "approve plans or changes",
+      "change policy",
+      "administer repositories",
+    ]);
     expect(c.neverSentence).toBe(
       "It can never approve plans or changes, change policy or administer repositories.",
     );
@@ -64,7 +70,11 @@ describe("consentCopy", () => {
 
   it("falls back to a neutral name for an empty client name", () => {
     expect(
-      consentCopy({ clientName: "  ", scopes: ["repo:read"], repos: { kind: "some", names: ["a"] } }).lead,
+      consentCopy({
+        clientName: "  ",
+        scopes: ["repo:read"],
+        repos: { kind: "some", names: ["a"] },
+      }).lead,
     ).toBe("This app wants to:");
   });
 });
@@ -75,7 +85,7 @@ describe("repoPhrase", () => {
     expect(repoPhrase({ kind: "some", names: ["a", "b"] })).toBe("a and b");
     expect(repoPhrase({ kind: "some", names: ["a", "b", "c", "d"] })).toBe("a, b and 2 more");
     expect(repoPhrase({ kind: "some", names: ["a", "a", " "] })).toBe("a");
-    expect(repoPhrase({ kind: "some", names: [] })).toBe("no repository yet");
+    expect(repoPhrase({ kind: "some", names: [] })).toBe("the repositories you pick");
   });
 });
 
@@ -87,12 +97,29 @@ describe("neverPhrases", () => {
   });
 });
 
+describe("sessionLine", () => {
+  it("summarizes a session for the Agents list", () => {
+    expect(
+      sessionLine(["repo:read", "change:create"], { kind: "some", names: ["billing-api"] }),
+    ).toBe("Can open Changes and read code in billing-api");
+    expect(sessionLine(["plan:create", "repo:read", "change:create"], { kind: "all" })).toBe(
+      "Can open Changes, draft Plans and read code in all your repositories",
+    );
+    expect(sessionLine(["plan:approve"], { kind: "all" })).toBe("Can do nothing");
+    expect(neverSentence(["plan:approve", "policy:admin"], "Agents")).toBe(
+      "Agents can never approve plans or changes or change policy.",
+    );
+  });
+});
+
 describe("small phrases", () => {
   it("session length, audience and user codes", () => {
     expect(sessionLengthPhrase(1)).toBe("for 1 day");
     expect(sessionLengthPhrase(30)).toBe("for 30 days");
     expect(audiencePhrase(["MCP server"])).toBe("through the MCP server");
-    expect(audiencePhrase(["MCP server", "HTTP API"])).toBe("through the MCP server and the HTTP API");
+    expect(audiencePhrase(["MCP server", "HTTP API"])).toBe(
+      "through the MCP server and the HTTP API",
+    );
     expect(formatUserCode("abcd2345")).toBe("ABCD-2345");
     expect(formatUserCode("ab cd-23 45")).toBe("ABCD-2345");
     expect(formatUserCode("abc")).toBe("ABC");

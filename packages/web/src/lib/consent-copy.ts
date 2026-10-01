@@ -33,7 +33,12 @@ export interface ConsentCopy {
   neverSentence: string;
 }
 
-const DEFAULT_NEVER: readonly Scope[] = ["plan:approve", "change:review", "policy:admin", "repo:admin"];
+const DEFAULT_NEVER: readonly Scope[] = [
+  "plan:approve",
+  "change:review",
+  "policy:admin",
+  "repo:admin",
+];
 
 /** Most consequential first: opening Changes is the point of a session. */
 const ORDER: readonly Scope[] = ["change:create", "plan:create", "repo:read"];
@@ -42,7 +47,7 @@ const ORDER: readonly Scope[] = ["change:create", "plan:create", "repo:read"];
 export function repoPhrase(repos: RepoSelection): string {
   if (repos.kind === "all") return "all your repositories";
   const names = [...new Set(repos.names.map((n) => n.trim()).filter((n) => n.length > 0))];
-  if (names.length === 0) return "no repository yet";
+  if (names.length === 0) return "the repositories you pick";
   if (names.length === 1) return names[0] ?? "";
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   const rest = names.length - 2;
@@ -66,16 +71,44 @@ function scopePhrase(scope: Scope, where: string): string | null {
 /** Approval-class scopes in words; plan:approve and change:review read as one thing. */
 export function neverPhrases(never: readonly Scope[]): string[] {
   const out: string[] = [];
-  if (never.includes("plan:approve") || never.includes("change:review")) out.push("approve plans or changes");
+  if (never.includes("plan:approve") || never.includes("change:review"))
+    out.push("approve plans or changes");
   if (never.includes("policy:admin")) out.push("change policy");
   if (never.includes("repo:admin")) out.push("administer repositories");
   return out;
 }
 
+function joinWith(items: readonly string[], word: "and" | "or"): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} ${word} ${items[items.length - 1]}`;
+}
+
 /** "a", "a or b", "a, b or c" */
 function orList(items: readonly string[]): string {
-  if (items.length <= 1) return items[0] ?? "";
-  return `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
+  return joinWith(items, "or");
+}
+
+/** "a", "a and b", "a, b and c" */
+export function andList(items: readonly string[]): string {
+  return joinWith(items, "and");
+}
+
+/** "Agents can never approve plans or changes, change policy or administer repositories." */
+export function neverSentence(never: readonly Scope[], subject = "It"): string {
+  const phrases = neverPhrases(never);
+  return phrases.length > 0 ? `${subject} can never ${orList(phrases)}.` : "";
+}
+
+/** A session in one line for lists: "Can open Changes, draft Plans and read code in billing-api". */
+export function sessionLine(scopes: readonly Scope[], repos: RepoSelection): string {
+  const verbs: Record<string, string> = {
+    "change:create": "open Changes",
+    "plan:create": "draft Plans",
+    "repo:read": "read code",
+  };
+  const can = ORDER.filter((s) => scopes.includes(s)).map((s) => verbs[s] ?? s);
+  if (can.length === 0) return "Can do nothing";
+  return `Can ${andList(can)} in ${repoPhrase(repos)}`;
 }
 
 export function consentCopy(input: ConsentCopyInput): ConsentCopy {
@@ -89,9 +122,12 @@ export function consentCopy(input: ConsentCopyInput): ConsentCopy {
   return {
     lead,
     can,
-    summary: can.length > 0 ? `${lead} ${can.join(" · ")}` : `${name} asks for nothing yet. Pick what it may do.`,
+    summary:
+      can.length > 0
+        ? `${lead} ${can.join(" · ")}`
+        : `${name} asks for nothing yet. Pick what it may do.`,
     never,
-    neverSentence: never.length > 0 ? `It can never ${orList(never)}.` : "",
+    neverSentence: neverSentence(input.never ?? DEFAULT_NEVER),
   };
 }
 
