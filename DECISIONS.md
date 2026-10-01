@@ -326,3 +326,44 @@ gateway route.
   Artifacts (`FakeGitHost`; no local simulator), containers (`FakeSandboxJobs` and a CI fake that reports a
   schema-checked ci-engine `RunSummary` through `COORDINATOR.onRunFinished` exactly like `CiRunWorkflow`, and
   validates requests against the engine's strict `RunRequest`), and the reviewer model (`FakeReviewer`).
+
+## 2026-10-01 — Affected sets for the merge queue (`@app/affected`, `gittifacts-runner affected`)
+
+- **Pure library, own marker.** `packages/affected` holds the analysis: a tolerant scanner with no TS compiler, a
+  resolver, the module graph, test impact, a cheap public-API check, Workers, and `conflictBetween`. Its only
+  dependency is zod. The sandbox command `affected` reads git objects only and prints `::affected::<AffectedSet>`.
+  It is not an EvidenceItem, so it gets its own marker.
+- **`modules` = touched + reverse closure − test files + targets of *added* import edges.** Each Change's closure
+  is computed on its own tree. A new caller of an existing module (fixture `semantic-conflict`) would otherwise
+  never overlap a Change to that module. Test files go to `testTargets`, so "shared test only" is a distinct
+  conflict reason. Closures that meet at a shared importer (a Worker entry, a barrel) conflict, as the spec asks.
+  This limits parallelism inside one app, and it is what the simulator should measure.
+- **`*config*` sentinel.** Touching any of the following puts `*config*` in `modules`, selects all tests, and keeps
+  `complete: true`. The core treats `*config*` as conflicting with everything.
+  - manifests, lockfiles, tsconfig
+  - runner, bundler and lint configs
+  - wrangler configs, Dockerfiles, `.platform/**`
+- **Completeness is fail-closed and narrow.** `complete: false` (conflict with everything) when:
+  - a touched file has no analyzer that understands its dependents and nothing imports it (fs-read data,
+    scripts, unknown types);
+  - the closure reaches a package with unresolvable references (an unmapped local package entry, or an
+    unresolved `@/`/`~/` alias);
+  - an analyzer crashed, or a scanned file was unreadable.
+
+  These do *not* make a set incomplete; they are noted only:
+  - computed `import(x)` with no static prefix (in practice these load runtime paths);
+  - relative imports of files not in the tree (generated: no Change can touch them).
+
+  Making those incomplete would have serialized every repo with one plugin loader.
+- **Test impact with a coverage map.** The targets are the tests that executed a *touched* file on main's last run
+  (classic coverage TIA), not tests that executed something in the closure. Static selection covers what the map
+  can't know: touched files no test executed, and test files missing from the map. Accepted gap: a test that imports
+  a module but never executes a statement in it is not selected by coverage. Barrels never show statement hits,
+  which is why the selection is not closure-based.
+- **Static test impact** uses the test files in the reverse closure. A runner config's `setupFiles`/`globalSetup`
+  in the closure selects every test under that config. Other string literals in configs, such as aliases, are
+  ignored on purpose.
+- **Stacked Changes** are analysed against their parent's head (the queue passes `--base <parent head>`).
+- **Fixtures.** `fixtures/queue/` has seven scenarios: independent, textual-conflict, overlapping-closure,
+  shared-test-only, stack, semantic-conflict and flaky-test. Each has an exact conflict matrix, merge cleanliness
+  and vitest outcomes on merged trees. The flaky test is deterministic under `QUEUE_FLAKE_SEED`.
