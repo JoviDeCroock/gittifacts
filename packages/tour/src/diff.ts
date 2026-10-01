@@ -51,11 +51,12 @@ export function overlaps(a: LineRange, b: LineRange): boolean {
 
 /** The diff file a path refers to (head path or rename source), or undefined. */
 export function findFile(diff: ChangeDiff, path: string): ChangeDiffFile | undefined {
-  const p = normalizePath(path);
-  return (
+  const lookup = (p: string) =>
     diff.files.find((f) => normalizePath(f.path) === p) ??
-    diff.files.find((f) => f.previousPath !== null && normalizePath(f.previousPath) === p)
-  );
+    diff.files.find((f) => f.previousPath !== null && normalizePath(f.previousPath) === p);
+  const p = normalizePath(path);
+  // Models often cite git's "a/" / "b/" prefixes; only strip them when the literal path is unknown.
+  return lookup(p) ?? (/^[ab]\//.test(p) ? lookup(p.slice(2)) : undefined);
 }
 
 export type RefCheck =

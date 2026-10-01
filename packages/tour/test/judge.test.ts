@@ -112,7 +112,7 @@ describe("reviewer.judge", () => {
     expect(q["hidden-behavior-change"]).toMatchObject({ outcome: "unsure" });
   });
 
-  it("without a plan, asks only about hidden behavior and marks the plan questions unsure", async () => {
+  it("without a plan, asks only about hidden behavior and reports the plan questions as skipped", async () => {
     const client = new FakeLlmClient([
       {
         json: {
@@ -128,9 +128,13 @@ describe("reviewer.judge", () => {
     ]);
     const result = await judge(client, false);
     const q = byQuestion(result.items);
-    expect(q["scope-drift"]).toMatchObject({ outcome: "unsure", status: "ok" });
-    expect(q["plan-conformance"]).toMatchObject({ outcome: "unsure", status: "ok" });
-    expect(q["hidden-behavior-change"]).toMatchObject({ outcome: "no-concern" });
+    // Skipped (ignored by the classifier), so a verified planless change can still reach Lane 0.
+    expect(q["scope-drift"]).toMatchObject({
+      status: "skipped",
+      note: expect.stringMatching(/No plan/),
+    });
+    expect(q["plan-conformance"]).toMatchObject({ status: "skipped" });
+    expect(q["hidden-behavior-change"]).toMatchObject({ status: "ok", outcome: "no-concern" });
     const prompt = client.requests[0]!.messages[0]!.content;
     expect(prompt).toContain("No plan is attached");
     expect(prompt).not.toContain("scope-drift:");

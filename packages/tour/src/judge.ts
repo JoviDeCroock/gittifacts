@@ -74,7 +74,7 @@ function item(
   outcome: JudgeOutcome,
   rationale: string,
   model: string,
-  status: "ok" | "error" = "ok",
+  status: "ok" | "error" | "skipped" = "ok",
   note?: string,
 ): LlmJudgment {
   return LlmJudgment.parse({
@@ -136,20 +136,22 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
   const calls: CallRecord[] = [];
   const asked: JudgeQuestion[] =
     input.plan === null ? ["hidden-behavior-change"] : [...JUDGE_QUESTIONS];
+  // Without a plan the plan questions do not apply. They are reported as "skipped" (which the
+  // classifier ignores) rather than "unsure": the classifier's own plan rules (plan.missing, or a
+  // verified planless category) decide, and an "unsure" here would make planless Lane 0 impossible.
+  const NOT_APPLICABLE =
+    "No plan is attached: not applicable (the classifier's plan rules decide).";
   const fixed: LlmJudgment[] =
     input.plan === null
       ? [
-          item(
-            "scope-drift",
-            "unsure",
-            "No plan is attached, so scope drift cannot be judged.",
-            client.model,
-          ),
+          item("scope-drift", "unsure", NOT_APPLICABLE, client.model, "skipped", NOT_APPLICABLE),
           item(
             "plan-conformance",
             "unsure",
-            "No plan is attached, so conformance cannot be judged.",
+            NOT_APPLICABLE,
             client.model,
+            "skipped",
+            NOT_APPLICABLE,
           ),
         ]
       : [];
