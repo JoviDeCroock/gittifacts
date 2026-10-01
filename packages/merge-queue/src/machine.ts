@@ -221,7 +221,8 @@ class Machine {
       );
     }
     const seq = ++this.s.seq;
-    const deps = [...new Set(ev.dependsOn)].filter((d) => d !== ev.changeId);
+    // Already-merged dependencies are satisfied (the shell should leave them out; be robust).
+    const deps = [...new Set(ev.dependsOn)].filter((d) => d !== ev.changeId && this.entry(d)?.state !== "merged");
     const approvedLane: Lane = ev.approvedLane ?? ev.lane;
     const e: QueueEntry = {
       changeId: ev.changeId,
@@ -1533,9 +1534,8 @@ class Machine {
       const mb = this.batch(m);
       if (mb !== undefined) mb.noRevalidate = true;
     }
-    l.state = "failed";
+    this.finishBatch(l, "failed");
     if (i >= 0) this.invalidateLanding(i, "revalidation failed");
-    else this.finishBatch(l, "failed");
   }
 
   private invalidateLanding(from: number, why: string): void {
@@ -1550,8 +1550,7 @@ class Machine {
     for (const lid of removed) {
       const l = this.batch(lid);
       if (l === undefined) continue;
-      if (l.state !== "failed") this.cancelBatch(l, why);
-      else this.finishBatch(l, "failed");
+      this.cancelBatch(l, why); // no-op if already failed
       for (const m of l.members) {
         const mb = this.batch(m);
         if (mb !== undefined && mb.state === "landing") mb.state = "passed";
@@ -1624,6 +1623,7 @@ class Machine {
       invariant(e.lane <= e.approvedLane && !e.approvalRequired, "cas.approval", `entry ${id} needs approval`);
       invariant(this.landAllowed([id]), "cas.frozen", `queue is frozen; ${id} is not a revert/incident fix`);
       for (const d of e.dependsOn) {
+        if (this.entry(d)?.state === "merged") continue;
         const dp = position.get(d);
         invariant(
           dp !== undefined && dp < (position.get(id) ?? 0),
@@ -2065,8 +2065,41 @@ class Machine {
     const cfg = this.cfg;
     const frozen = isFrozen(s);
     let changed = false;
+    // A dependency that left the queue without merging takes its dependents with it.
+    for (const e of Object.values(s.entries)) {
+      if (e.state !== "waiting") continue;
+      const dead = e.dependsOn.find((d) => {
+        const de = this.entry(d);
+        return de !== undefined && (de.state === "ejected" || de.state === "dequeued");
+      });
+      if (dead !== undefined) {
+        this.terminate(e, "ejected", {
+          changeId: e.changeId,
+          code: "dependency-ejected",
+          message: `depends on ${dead}, which left the queue`,
+          upstream: [dead],
+        });
+        changed = true;
+        continue;
+      }
+      // A land-together group with a member that left the queue can never land whole.
+      if (e.landTogether && e.plangroup !== null) {
+        const gone = Object.values(s.entries).find(
+          (o) => o.plangroup === e.plangroup && o.landTogether && (o.state === "ejected" || o.state === "dequeued"),
+        );
+        if (gone !== undefined) {
+          this.terminate(e, "ejected", {
+            changeId: e.changeId,
+            code: "group-member-failed",
+            message: `plan group ${e.plangroup} member ${gone.changeId} left the queue; nothing in the group lands`,
+            upstream: [gone.changeId],
+          });
+          changed = true;
+        }
+      }
+    }
     const waiting = Object.values(s.entries).filter((e) => e.state === "waiting");
-    if (waiting.length === 0) return false;
+    if (waiting.length === 0) return changed;
 
     // ---- holds
     const ready = new Map<string, QueueEntry>();
@@ -2107,7 +2140,7 @@ class Machine {
         }
       }
     }
-    if (ready.size === 0) return false;
+    if (ready.size === 0) return changed;
 
     // ---- units: glue atomic stacks and land-together groups
     const parent = new Map<string, string>();

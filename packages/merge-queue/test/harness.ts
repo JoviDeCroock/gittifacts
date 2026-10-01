@@ -12,6 +12,7 @@ import {
   type CoreEventInput,
   CoreEvent as CoreEventSchema,
   checkStateInvariants,
+  conflicts,
   initialState,
   type QueueConfig,
   type QueueState,
@@ -110,9 +111,8 @@ export class World {
   readonly ejected = new Map<string, string>();
   readonly dequeued = new Set<string>();
   readonly enqueued = new Set<string>();
-  /** treeSha → tests that failed in some run on it / tests that passed a re-check on it. */
-  readonly runFailures = new Map<string, Set<string>>();
-  readonly runPassed = new Map<string, Set<string>>();
+  /** treeSha → every run on it with the tests it failed (empty = clean run). */
+  readonly runs = new Map<string, { runId: string; scope: "all" | string[]; failed: string[] }[]>();
   readonly recheckPassed = new Map<string, Set<string>>();
   readonly quarantined = new Set<string>();
   readonly refs = new Set<string>();
@@ -146,10 +146,11 @@ export class World {
 
   send(input: CoreEventInput): void {
     const ev: CoreEvent = CoreEventSchema.parse(input);
-    const frozenBefore = this.state.freeze.reasons.length > 0;
     const res = step(this.state, ev, { now: this.now });
     this.state = res.state;
-    for (const c of res.commands) this.accept(c, frozenBefore);
+    // The core decides to land on the post-event state.
+    const frozen = this.state.freeze.reasons.length > 0;
+    for (const c of res.commands) this.accept(c, frozen);
     for (const e of Object.values(this.state.entries)) {
       const prev = this.laneHistory.get(e.changeId);
       if (prev !== undefined && e.lane < prev)
@@ -241,16 +242,15 @@ export class World {
       return;
     }
     if (commit.tree !== c.treeSha) this.violations.push(`CAS tree mismatch for ${c.casId}`);
-    const failed = this.runFailures.get(c.treeSha) ?? new Set<string>();
-    const passedRuns = this.runPassed.get(c.treeSha);
+    // Some run on exactly this tree must be clean: no failures, or each failure re-run green on
+    // this same tree, or quarantined (and recorded as such in the evidence).
     const rechecked = this.recheckPassed.get(c.treeSha) ?? new Set<string>();
-    if (passedRuns === undefined && failed.size === 0)
-      this.violations.push(`CAS ${c.casId} to a tree no run ever tested`);
-    for (const t of failed) {
-      if (rechecked.has(t)) continue;
-      if (c.evidence.quarantined.includes(t) && this.quarantined.has(t)) continue;
-      this.violations.push(`CAS ${c.casId}: ${t} failed on the tree and was never cleared`);
-    }
+    const clean = (this.runs.get(c.treeSha) ?? []).some(
+      (r) =>
+        (r.scope === "all" || c.evidence.verdict.scope !== "all") &&
+        r.failed.every((t) => rechecked.has(t) || (c.evidence.quarantined.includes(t) && this.quarantined.has(t))),
+    );
+    if (!clean) this.violations.push(`CAS ${c.casId} to a tree with no clean run on it`);
     if (c.evidence.verdict.scope !== "all") {
       for (const m of c.evidence.carried) if (m.verdict.scope !== "all") this.violations.push(`carried non-full run in ${c.casId}`);
     }
@@ -270,17 +270,32 @@ export class World {
     return this.commits.get(commitSha)?.content ?? [];
   }
 
+  /**
+   * Symmetric relation: x lists y, or y lists x. Only pairs whose affected sets overlap (or are
+   * unknown) can interact: the analyzer is sound, which is what impacted-target revalidation
+   * relies on (§4.2).
+   */
+  related(id: string, kind: "semanticWith" | "textualWith"): string[] {
+    const out = new Set(this.changes.get(id)?.[kind] ?? []);
+    for (const [o, c] of this.changes) if ((c[kind] ?? []).includes(id)) out.add(o);
+    const mine = this.changes.get(id)?.affected ?? null;
+    return [...out].filter((o) => conflicts(mine, this.changes.get(o)?.affected ?? null));
+  }
+
+  private resolved(x: string, vx: string | number | undefined, y: string, vy: string | number | undefined): boolean {
+    return this.resolvedPairs.has(`${x}@${vx}+${y}`) || this.resolvedPairs.has(`${y}@${vy}+${x}`);
+  }
+
   /** Deterministic failures of a tree's content (bad changes, unresolved semantic pairs). */
   realFailures(content: string[]): string[] {
-    const ids = new Set(content.map((x) => x.split("@")[0] ?? x));
+    const version = new Map(content.map((x) => [x.split("@")[0] ?? x, x.split("@")[1]]));
     const out: string[] = [];
-    for (const x of content) {
-      const [id, v] = x.split("@");
-      const ch = this.changes.get(id ?? "");
+    for (const [id, v] of version) {
+      const ch = this.changes.get(id);
       if (ch === undefined) continue;
       if (ch.bad) out.push(`test:${id}`);
-      for (const o of ch.semanticWith ?? [])
-        if (ids.has(o) && !this.resolvedPairs.has(`${id}@${v}+${o}`)) out.push(`pair:${[id, o].sort().join("+")}`);
+      for (const o of this.related(id, "semanticWith"))
+        if (version.has(o) && !this.resolved(id, v, o, version.get(o))) out.push(`pair:${[id, o].sort().join("+")}`);
     }
     return [...new Set(out)];
   }
@@ -320,10 +335,11 @@ export class World {
         const commits: { changeId: string; commitSha: string; treeSha: string }[] = [];
         for (const e of c.entries) {
           const h = this.heads.get(e.headSha);
-          const ch = this.changes.get(e.changeId);
-          const ids = new Set(content.map((x) => x.split("@")[0] ?? x));
+          const version = new Map(content.map((x) => [x.split("@")[0] ?? x, x.split("@")[1]]));
           const authored = this.authoredOn.get(e.changeId) ?? new Set<string>();
-          const blocker = (ch?.textualWith ?? []).find((o) => ids.has(o) && !authored.has(o) && !this.resolvedPairs.has(`${e.changeId}@${h?.v}+${o}`));
+          const blocker = this.related(e.changeId, "textualWith").find(
+            (o) => version.has(o) && !authored.has(o) && !this.resolved(e.changeId, h?.v, o, version.get(o)),
+          );
           if (blocker !== undefined) {
             this.send({ type: "RebaseResult", batchId: c.batchId, result: { status: "conflict", changeId: e.changeId, files: ["shared.ts"], upstream: [blocker] } });
             return;
@@ -346,15 +362,9 @@ export class World {
         const content = this.contentOf(c.commitSha);
         const failing = this.realFailures(content).filter((t) => this.testsCovered(c.targets, t));
         if (this.rand("flake", c.runId) < this.opts.flakeRate) failing.push(`flaky:${Math.floor(this.rand("which", c.runId) * 3)}`);
-        if (failing.length > 0) {
-          const s = this.runFailures.get(c.treeSha) ?? new Set<string>();
-          for (const t of failing) s.add(t);
-          this.runFailures.set(c.treeSha, s);
-        } else {
-          const s = this.runPassed.get(c.treeSha) ?? new Set<string>();
-          s.add(c.runId);
-          this.runPassed.set(c.treeSha, s);
-        }
+        const runs = this.runs.get(c.treeSha) ?? [];
+        runs.push({ runId: c.runId, scope: c.targets, failed: failing });
+        this.runs.set(c.treeSha, runs);
         this.send({
           type: "BatchResult",
           batchId: c.batchId,
@@ -389,7 +399,7 @@ export class World {
         const ch = this.changes.get(c.changeId);
         if (ch === undefined) return;
         const ok = this.rand("resolve", c.changeId, c.attempt) < this.opts.resolverSuccess;
-        const blamed = c.kind === "semantic" ? (ch.semanticWith ?? []).find((o) => c.upstream.includes(o)) ?? null : c.upstream[0] ?? null;
+        const blamed = c.kind === "semantic" ? this.related(c.changeId, "semanticWith").find((o) => c.upstream.includes(o)) ?? null : c.upstream[0] ?? null;
         if (c.kind === "semantic" && ch.bad) {
           this.send({ type: "ResolutionResult", changeId: c.changeId, attempt: c.attempt, resolverId: "resolver-1", outcome: { status: "not-a-conflict", message: "the change itself fails" } });
           return;
@@ -402,7 +412,8 @@ export class World {
         this.version.set(c.changeId, v);
         const head = sha(`head:${c.changeId}@${v}`);
         this.heads.set(head, { id: c.changeId, v });
-        for (const o of [...(ch.textualWith ?? []), ...(ch.semanticWith ?? [])]) this.resolvedPairs.add(`${c.changeId}@${v}+${o}`);
+        for (const o of [...this.related(c.changeId, "textualWith"), ...this.related(c.changeId, "semanticWith")])
+          this.resolvedPairs.add(`${c.changeId}@${v}+${o}`);
         const lane = this.opts.resolverLowersLane ? 0 : (ch.lane ?? 0);
         this.send({
           type: "ResolutionResult",
