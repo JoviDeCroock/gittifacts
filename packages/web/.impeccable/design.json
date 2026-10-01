@@ -1,0 +1,309 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-01T16:52:43.763Z",
+  "title": "Design System: gittifacts",
+  "extensions": {
+    "colorMeta": {
+      "form-paper": {
+        "role": "neutral",
+        "displayName": "Form Paper",
+        "canonical": "oklch(98.3% 0.004 250)",
+        "tonalRamp": [
+          "oklch(15% 0.007 250)",
+          "oklch(25% 0.007 250)",
+          "oklch(35% 0.012 250)",
+          "oklch(45% 0.012 250)",
+          "oklch(55% 0.012 250)",
+          "oklch(65% 0.012 250)",
+          "oklch(80% 0.012 250)",
+          "oklch(95% 0.007 250)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Chart Ink",
+        "canonical": "oklch(23% 0.035 262)",
+        "tonalRamp": [
+          "oklch(15% 0.021 262)",
+          "oklch(25% 0.021 262)",
+          "oklch(35% 0.035 262)",
+          "oklch(45% 0.035 262)",
+          "oklch(55% 0.035 262)",
+          "oklch(65% 0.035 262)",
+          "oklch(80% 0.035 262)",
+          "oklch(95% 0.021 262)"
+        ]
+      },
+      "scrub-teal": {
+        "role": "primary",
+        "displayName": "Scrub Teal",
+        "canonical": "oklch(47% 0.088 196)",
+        "tonalRamp": [
+          "oklch(15% 0.054 196)",
+          "oklch(25% 0.054 196)",
+          "oklch(35% 0.090 196)",
+          "oklch(45% 0.090 196)",
+          "oklch(55% 0.090 196)",
+          "oklch(65% 0.090 196)",
+          "oklch(80% 0.090 196)",
+          "oklch(95% 0.054 196)"
+        ]
+      },
+      "tag-carmine": {
+        "role": "secondary",
+        "displayName": "Tag Carmine",
+        "canonical": "oklch(52% 0.175 27)",
+        "tonalRamp": [
+          "oklch(15% 0.102 27)",
+          "oklch(25% 0.102 27)",
+          "oklch(35% 0.170 27)",
+          "oklch(45% 0.170 27)",
+          "oklch(55% 0.170 27)",
+          "oklch(65% 0.170 27)",
+          "oklch(80% 0.170 27)",
+          "oklch(95% 0.102 27)"
+        ]
+      },
+      "tag-ochre": {
+        "role": "secondary",
+        "displayName": "Tag Ochre",
+        "canonical": "oklch(84% 0.13 82)",
+        "tonalRamp": [
+          "oklch(15% 0.078 80)",
+          "oklch(25% 0.078 80)",
+          "oklch(35% 0.130 80)",
+          "oklch(45% 0.130 80)",
+          "oklch(55% 0.130 80)",
+          "oklch(65% 0.130 80)",
+          "oklch(80% 0.130 80)",
+          "oklch(95% 0.078 80)"
+        ]
+      },
+      "tag-green": {
+        "role": "secondary",
+        "displayName": "Tag Green",
+        "canonical": "oklch(52% 0.115 152)",
+        "tonalRamp": [
+          "oklch(15% 0.069 152)",
+          "oklch(25% 0.069 152)",
+          "oklch(35% 0.115 152)",
+          "oklch(45% 0.115 152)",
+          "oklch(55% 0.115 152)",
+          "oklch(65% 0.115 152)",
+          "oklch(80% 0.115 152)",
+          "oklch(95% 0.069 152)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Screen titles on desktop."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Screen titles on phones, rollout state."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Sections, stops, lane groups, panels."
+      },
+      "reading": {
+        "displayName": "Reading",
+        "purpose": "Tour reasons and plan intent, 68ch."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default text and inputs."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Chips, dense buttons, secondary lines."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Timestamps, counts, fine print."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Diffs, hashes, globs, commands only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "raise",
+        "value": "0 1px 2px oklch(23% 0.035 262 / 0.06), 0 4px 14px oklch(23% 0.035 262 / 0.06)",
+        "purpose": "Selected segment, current nav item, decision panels."
+      },
+      {
+        "name": "sheet",
+        "value": "0 -6px 28px oklch(23% 0.035 262 / 0.14)",
+        "purpose": "Bottom-fixed decision and signing bars, nav drawer."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "All state transitions."
+      },
+      {
+        "name": "ease-in",
+        "value": "cubic-bezier(0.7, 0, 0.84, 0)",
+        "purpose": "Exits."
+      },
+      {
+        "name": "feedback",
+        "value": "120ms",
+        "purpose": "Hover, press, toggles."
+      },
+      {
+        "name": "state",
+        "value": "200ms",
+        "purpose": "Disclosure, fades, meters."
+      },
+      {
+        "name": "sheet",
+        "value": "320ms",
+        "purpose": "Decision sheet and drawer entrances."
+      },
+      {
+        "name": "seal-draw",
+        "value": "520ms ring + 320ms check, cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "The approval seal, the one authored moment."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "900px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "rail",
+        "value": "1100px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action per decision.",
+      "html": "<button class=\"ds-btn-primary\">Approve change</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border:1px solid transparent;border-radius:8px;background:var(--action,oklch(47% 0.088 196));color:var(--action-text,oklch(99.5% 0.002 250));font:560 16px/1.2 \"Atkinson Hyperlegible Next Variable\",system-ui,sans-serif;transition:background-color 120ms cubic-bezier(0.22,1,0.36,1)}.ds-btn-primary:hover{background:var(--action-hover,oklch(40% 0.078 198))}.ds-btn-primary:focus-visible{outline:2px solid var(--focus,oklch(55% 0.1 194));outline-offset:2px}.ds-btn-primary:active{transform:translateY(1px)}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Alternatives beside the primary action.",
+      "html": "<button class=\"ds-btn-secondary\">Request changes</button>",
+      "css": ".ds-btn-secondary{min-height:44px;padding:0 16px;border:1px solid var(--control-border,oklch(62% 0.02 254));border-radius:8px;background:var(--surface,oklch(99.5% 0.002 250));color:var(--text,oklch(23% 0.035 262));font:560 16px/1.2 \"Atkinson Hyperlegible Next Variable\",system-ui,sans-serif}.ds-btn-secondary:hover{background:var(--panel,oklch(96.4% 0.006 250))}.ds-btn-secondary:focus-visible{outline:2px solid var(--focus,oklch(55% 0.1 194));outline-offset:2px}"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Labelled text field, 16px text.",
+      "html": "<label class=\"ds-field\"><span>Comment</span><input class=\"ds-input\" placeholder=\"Optional\"></label>",
+      "css": ".ds-field{display:grid;gap:6px;font:560 16px/1.3 \"Atkinson Hyperlegible Next Variable\",system-ui,sans-serif;color:var(--text,oklch(23% 0.035 262))}.ds-input{min-height:44px;padding:10px 12px;border:1px solid var(--control-border,oklch(62% 0.02 254));border-radius:8px;background:var(--surface,oklch(99.5% 0.002 250));font:400 16px/1.5 inherit}.ds-input:focus-visible{outline:2px solid var(--focus,oklch(55% 0.1 194));outline-offset:1px;border-color:var(--focus,oklch(55% 0.1 194))}"
+    },
+    {
+      "name": "Lane Tag",
+      "kind": "chip",
+      "refersTo": "lane-tag-1",
+      "description": "Die-cut triage tag: band, punched hole, numeral.",
+      "html": "<span class=\"ds-lane\"><svg width=\"37\" height=\"22\" viewBox=\"0 0 37 22\" role=\"img\" aria-label=\"Lane 1, glance\"><path d=\"M6.6 0.75 H34 Q36.25 0.75 36.25 3 V19 Q36.25 21.25 34 21.25 H6.6 L0.75 15.4 V6.6 Z M12.6 11 a2.2 2.2 0 1 0 -4.4 0 a2.2 2.2 0 1 0 4.4 0 Z\" fill-rule=\"evenodd\" fill=\"oklch(84% 0.13 82)\" stroke=\"oklch(64% 0.12 74)\"/><text x=\"24\" y=\"11\" dy=\"0.36em\" text-anchor=\"middle\" font-weight=\"800\" font-size=\"13\" fill=\"oklch(23% 0.035 262)\">1</text></svg><b>Lane 1</b> Glance</span>",
+      "css": ".ds-lane{display:inline-flex;align-items:center;gap:8px;font:400 14px/1 \"Atkinson Hyperlegible Next Variable\",system-ui,sans-serif;color:oklch(42% 0.028 258)}.ds-lane b{color:oklch(23% 0.035 262)}"
+    },
+    {
+      "name": "Verdict Badge",
+      "kind": "custom",
+      "description": "Shape plus word: proven, unproven, risk.",
+      "html": "<span class=\"ds-verdict\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\"><circle cx=\"12\" cy=\"12\" r=\"9.5\" fill=\"oklch(45% 0.1 152)\"/><path d=\"m7.6 12.4 3 3 5.8-6\" fill=\"none\" stroke=\"#fff\" stroke-width=\"2.4\" stroke-linecap=\"round\"/></svg>Proven</span>",
+      "css": ".ds-verdict{display:inline-flex;align-items:center;gap:6px;font:720 14px/1.2 \"Atkinson Hyperlegible Next Variable\",system-ui,sans-serif;color:oklch(45% 0.1 152)}"
+    },
+    {
+      "name": "Evidence Chip",
+      "kind": "chip",
+      "refersTo": "evidence-chip",
+      "description": "Links a claim to a signed evidence item.",
+      "html": "<a class=\"ds-evchip\" href=\"#\">Coverage <b>97%</b></a>",
+      "css": ".ds-evchip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 10px;border:1px solid oklch(84.5% 0.013 252);border-radius:8px;background:oklch(99.5% 0.002 250);color:oklch(23% 0.035 262);font:560 14px/1.2 \"Atkinson Hyperlegible Next Variable\",system-ui,sans-serif;text-decoration:none}.ds-evchip b{color:oklch(45% 0.1 152)}.ds-evchip:hover{background:oklch(96.4% 0.006 250)}.ds-evchip:focus-visible{outline:2px solid oklch(55% 0.1 194);outline-offset:2px}"
+    },
+    {
+      "name": "Navigation Item",
+      "kind": "nav",
+      "description": "Sidebar destination; current item is raised.",
+      "html": "<nav class=\"ds-nav\"><a aria-current=\"page\" href=\"#\">Repositories</a><a href=\"#\">Audit log</a></nav>",
+      "css": ".ds-nav{display:grid;gap:2px;padding:8px;background:oklch(96.4% 0.006 250)}.ds-nav a{display:flex;align-items:center;min-height:40px;padding:0 12px;border-radius:8px;color:oklch(42% 0.028 258);font:560 16px/1.2 \"Atkinson Hyperlegible Next Variable\",system-ui,sans-serif;text-decoration:none}.ds-nav a:hover{background:oklch(94% 0.008 250);color:oklch(23% 0.035 262)}.ds-nav a[aria-current=page]{background:oklch(99.5% 0.002 250);color:oklch(23% 0.035 262);box-shadow:0 1px 2px oklch(23% 0.035 262 / 0.06),0 4px 14px oklch(23% 0.035 262 / 0.06)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Triage Board",
+    "overview": "Every change arrives tagged like a triage case: a tag that pairs a printed color band with a numeral and a word, a banded chart that shows which observation forced the escalation, and a handover of what is still uncertain. Cool form paper under ink-navy text; color reserved for the one action ink, the triage bands and verdicts.",
+    "keyCharacteristics": [
+      "Die-cut lane tags with a punched hole, numeral and word: never color alone.",
+      "Banded observation chart (lane columns tinted, hairline armature) explains every lane.",
+      "Three verdict shapes: filled disc with check, dashed ring, triangle.",
+      "One family (Atkinson Hyperlegible Next) for all UI; its Mono sibling only for code, hashes and data.",
+      "Hairline-separated rows instead of cards; panels only where a block is one decision."
+    ],
+    "rules": [
+      {
+        "name": "The Band Means Lane Rule",
+        "body": "Carmine, ochre and green appear only as lane, verdict or state, and always beside a numeral, word or shape that says the same thing.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Ink Rule",
+        "body": "Teal marks the primary action, links, the current selection and focus. If a count, a status or a secondary button is teal, it is wrong.",
+        "section": "colors"
+      },
+      {
+        "name": "The Unknown Is Not Green Rule",
+        "body": "A skipped or failed measurement renders in ochre or carmine with the words Not measured or Measurement failed.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono Is Data Rule",
+        "body": "Monospace is for code, hashes, versions, globs and commands only.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence Case Rule",
+        "body": "No tracked all-caps labels and no kicker above a heading.",
+        "section": "typography"
+      },
+      {
+        "name": "The Edge Or Lift Rule",
+        "body": "A container has a hairline edge or a raise, not both; decision panels carry a 2px ink edge.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do pair every lane, verdict and test outcome with a word, numeral or shape (the Band Means Lane Rule).",
+      "Do keep tour prose at 1.0625rem with a 68ch measure, and put the reviewer agent's least-confident and not-done lists before the stops on a neutral surface with a 3px ink top rule.",
+      "Do make signing deliberate: name the consequence, gate on an explicit attestation where the act is a plan approval, wait for the server, and say what was recorded.",
+      "Do use tabular numerals for counts, percentages, times and line numbers.",
+      "Do keep primary phone actions in the bottom bar with env(safe-area-inset-bottom) padding."
+    ],
+    "donts": [
+      "Don't encode a lane as a colored side stripe on a card or row; use the tag and the tinted group band.",
+      "Don't use monospace for names, labels or prose ids.",
+      "Don't put a kicker or tracked uppercase label above a heading.",
+      "Don't show a pulsing live dot; live data is shown as a ticking countdown or a checked N seconds ago line.",
+      "Don't let anything but code blocks and rails scroll horizontally.",
+      "Don't spend motion anywhere except state feedback and the approval seal."
+    ]
+  }
+}

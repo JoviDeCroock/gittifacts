@@ -61,6 +61,11 @@ chart summary; the handover begins above the fold's end. Sticky bottom bar: Reje
 changes, Approve tour (teal, widest, right thumb). 1440px: nav rail, reading column of stops,
 sticky right column with the lane chart and the decision panel.
 
+Adaptations (cited): the change title moves into the sticky top bar once the large title scrolls
+away, and "Stop n of N" lives in the sticky station strip directly under it (no duplicated title in
+the first viewport); on desktop the decision panel leads the rail so all three actions stay above
+the fold at 1440x900 (finish review, round 1).
+
 FORM: triage tags + observation chart, candidate 4 of 7 on my ordered list, seed key 4dd7f07b.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
