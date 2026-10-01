@@ -331,7 +331,9 @@ export const issues = sqliteTable(
 export const auditEvents = sqliteTable(
   "audit_events",
   {
-    seq: integer("seq").primaryKey(),
+    /** AuditLog instance name (one per org; "global" for now). */
+    log: text("log").notNull().default("global"),
+    seq: integer("seq").notNull(),
     at: text("at").notNull(),
     principalId: text("principal_id").notNull(),
     action: text("action").notNull(),
@@ -344,8 +346,9 @@ export const auditEvents = sqliteTable(
     payload: text("payload", { mode: "json" }).$type<unknown>(),
   },
   (t) => [
-    index("audit_events_subject_seq_idx").on(t.subject, t.seq),
-    index("audit_events_principal_seq_idx").on(t.principalId, t.seq),
+    primaryKey({ columns: [t.log, t.seq] }),
+    index("audit_events_subject_seq_idx").on(t.log, t.subject, t.seq),
+    index("audit_events_principal_seq_idx").on(t.log, t.principalId, t.seq),
   ],
 );
 

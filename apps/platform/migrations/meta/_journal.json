@@ -15,6 +15,13 @@
       "when": 1790871873753,
       "tag": "0001_seed_system_principal",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790872100620,
+      "tag": "0002_audit_log_name",
+      "breakpoints": true
     }
   ]
 }
