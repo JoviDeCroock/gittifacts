@@ -15,12 +15,16 @@ export interface LineRange {
 
 /** Head-side range of a hunk, or null when it has no head lines (pure deletion). */
 export function headRange(h: DiffHunk): LineRange | null {
-  return h.newLines > 0 && h.newStart > 0 ? { startLine: h.newStart, endLine: h.newStart + h.newLines - 1 } : null;
+  return h.newLines > 0 && h.newStart > 0
+    ? { startLine: h.newStart, endLine: h.newStart + h.newLines - 1 }
+    : null;
 }
 
 /** Base-side range of a hunk, or null when it has no base lines (pure addition). */
 export function baseRange(h: DiffHunk): LineRange | null {
-  return h.oldLines > 0 && h.oldStart > 0 ? { startLine: h.oldStart, endLine: h.oldStart + h.oldLines - 1 } : null;
+  return h.oldLines > 0 && h.oldStart > 0
+    ? { startLine: h.oldStart, endLine: h.oldStart + h.oldLines - 1 }
+    : null;
 }
 
 export function rangeOf(h: DiffHunk, side: Side): LineRange | null {
@@ -63,7 +67,10 @@ export type RefCheck =
  * the hunks it intersects. Reversed ranges are normalized. The file is canonicalized to the
  * diff's (head) path.
  */
-export function checkHunkRef(diff: ChangeDiff, ref: { file: string; startLine: number; endLine: number; side: Side }): RefCheck {
+export function checkHunkRef(
+  diff: ChangeDiff,
+  ref: { file: string; startLine: number; endLine: number; side: Side },
+): RefCheck {
   const file = findFile(diff, ref.file);
   if (file === undefined) return { ok: false, reason: "unknown-file" };
   const want: LineRange = {
@@ -80,7 +87,11 @@ export function checkHunkRef(diff: ChangeDiff, ref: { file: string; startLine: n
   }
   if (!Number.isFinite(start)) return { ok: false, reason: "outside-hunks" };
   const clamped = start !== want.startLine || end !== want.endLine || file.path !== ref.file;
-  return { ok: true, ref: { file: file.path, startLine: start, endLine: end, side: ref.side }, clamped };
+  return {
+    ok: true,
+    ref: { file: file.path, startLine: start, endLine: end, side: ref.side },
+    clamped,
+  };
 }
 
 // ---------------------------------------------------------------- rendering
@@ -133,7 +144,10 @@ function rangeLabel(h: DiffHunk): string {
 }
 
 function fileHeader(f: ChangeDiffFile): string {
-  const status = f.previousPath !== null && f.previousPath !== f.path ? `${f.status} from ${f.previousPath}` : f.status;
+  const status =
+    f.previousPath !== null && f.previousPath !== f.path
+      ? `${f.status} from ${f.previousPath}`
+      : f.status;
   const notes: string[] = [`${status}`, `+${f.additions} -${f.deletions}`];
   if (f.binary) notes.push("binary, not shown");
   if (f.truncated) notes.push("diff truncated by the platform; only the hunks below were captured");
@@ -166,7 +180,11 @@ function slotKey(path: string, hunkIndex: number): string {
  * hunks with risk factors, least risky first. The riskiest hunk is never omitted entirely; if it
  * alone is over budget it is cut short. Every omission is reported so the tour can say so.
  */
-export function renderDiff(diff: ChangeDiff, slots: readonly HunkSlot[], tokenBudget: number): RenderedDiff {
+export function renderDiff(
+  diff: ChangeDiff,
+  slots: readonly HunkSlot[],
+  tokenBudget: number,
+): RenderedDiff {
   const slotByKey = new Map(slots.map((s) => [slotKey(s.path, s.hunkIndex), s]));
   const omitted: OmittedHunk[] = [];
   const partial: RenderedDiff["partial"] = [];
@@ -191,9 +209,27 @@ export function renderDiff(diff: ChangeDiff, slots: readonly HunkSlot[], tokenBu
       const slot = slotByKey.get(slotKey(f.path, i));
       const header = hunkHeader(h, i, slot?.rank);
       if (lock) {
-        omitted.push({ path: f.path, hunkIndex: i, ref: wholeHunkRef(f, h), changedLines: changedLines(h), why: "lockfile" });
-        const body = [`(lockfile hunk, ${changedLines(h)} changed lines, not shown: see the dependencies evidence)`];
-        blocks.push({ path: f.path, hunkIndex: i, header, body, tokens: estimateTokens(body.join("\n")), slot, hunk: h, file: f, dropped: true });
+        omitted.push({
+          path: f.path,
+          hunkIndex: i,
+          ref: wholeHunkRef(f, h),
+          changedLines: changedLines(h),
+          why: "lockfile",
+        });
+        const body = [
+          `(lockfile hunk, ${changedLines(h)} changed lines, not shown: see the dependencies evidence)`,
+        ];
+        blocks.push({
+          path: f.path,
+          hunkIndex: i,
+          header,
+          body,
+          tokens: estimateTokens(body.join("\n")),
+          slot,
+          hunk: h,
+          file: f,
+          dropped: true,
+        });
         return;
       }
       const body = hunkBody(h);
@@ -218,12 +254,20 @@ export function renderDiff(diff: ChangeDiff, slots: readonly HunkSlot[], tokenBu
     const live = blocks.filter((b) => !b.dropped);
     const plain = live
       .filter((b) => !(b.slot?.hasRisk ?? false))
-      .sort((a, b) => changedLines(b.hunk) - changedLines(a.hunk) || (b.slot?.rank ?? 0) - (a.slot?.rank ?? 0));
+      .sort(
+        (a, b) =>
+          changedLines(b.hunk) - changedLines(a.hunk) || (b.slot?.rank ?? 0) - (a.slot?.rank ?? 0),
+      );
     const risky = live
       .filter((b) => b.slot?.hasRisk ?? false)
       .sort((a, b) => (b.slot?.rank ?? 0) - (a.slot?.rank ?? 0));
     const order = [...plain, ...risky];
-    const top = order.length > 0 ? order.reduce((best, b) => ((b.slot?.rank ?? Infinity) < (best.slot?.rank ?? Infinity) ? b : best)) : undefined;
+    const top =
+      order.length > 0
+        ? order.reduce((best, b) =>
+            (b.slot?.rank ?? Infinity) < (best.slot?.rank ?? Infinity) ? b : best,
+          )
+        : undefined;
     for (const b of order) {
       if (total <= tokenBudget) break;
       if (b === top) continue;
@@ -233,7 +277,13 @@ export function renderDiff(diff: ChangeDiff, slots: readonly HunkSlot[], tokenBu
       b.body = marker;
       b.tokens = tokens;
       b.dropped = true;
-      omitted.push({ path: b.path, hunkIndex: b.hunkIndex, ref: wholeHunkRef(b.file, b.hunk), changedLines: changedLines(b.hunk), why: "budget" });
+      omitted.push({
+        path: b.path,
+        hunkIndex: b.hunkIndex,
+        ref: wholeHunkRef(b.file, b.hunk),
+        changedLines: changedLines(b.hunk),
+        why: "budget",
+      });
     }
     if (total > tokenBudget && top !== undefined) {
       // Cut the riskiest hunk short: keep as many leading lines as fit.
@@ -252,7 +302,12 @@ export function renderDiff(diff: ChangeDiff, slots: readonly HunkSlot[], tokenBu
         const tokens = estimateTokens(`${top.header}\n${top.body.join("\n")}`);
         total += tokens - top.tokens;
         top.tokens = tokens;
-        partial.push({ path: top.path, hunkIndex: top.hunkIndex, keptLines: keep, totalLines: top.hunk.lines.length });
+        partial.push({
+          path: top.path,
+          hunkIndex: top.hunkIndex,
+          keptLines: keep,
+          totalLines: top.hunk.lines.length,
+        });
       }
     }
   }

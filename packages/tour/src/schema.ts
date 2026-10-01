@@ -7,7 +7,14 @@ import { z } from "zod";
 import type { JsonSchema } from "./llm.js";
 
 /** Stop kinds the model may use. "transform" is reserved for the platform's deterministic stop. */
-export const MODEL_STOP_KINDS = ["intent", "behavior", "risk", "proof", "uncovered", "other"] as const;
+export const MODEL_STOP_KINDS = [
+  "intent",
+  "behavior",
+  "risk",
+  "proof",
+  "uncovered",
+  "other",
+] as const;
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 
@@ -36,7 +43,11 @@ export const ModelTour = z.object({
 });
 export type ModelTour = z.infer<typeof ModelTour>;
 
-export const JUDGE_QUESTIONS = ["scope-drift", "plan-conformance", "hidden-behavior-change"] as const;
+export const JUDGE_QUESTIONS = [
+  "scope-drift",
+  "plan-conformance",
+  "hidden-behavior-change",
+] as const;
 export type JudgeQuestion = (typeof JUDGE_QUESTIONS)[number];
 
 export const JudgeOutcome = z.enum(["no-concern", "concern", "unsure"]);

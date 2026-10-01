@@ -12,7 +12,10 @@ import {
 const REQ: LlmRequest = {
   system: "You are a reviewer.",
   messages: [{ role: "user", content: "Review this." }],
-  jsonSchema: { name: "tour", schema: { type: "object", properties: {}, additionalProperties: false } },
+  jsonSchema: {
+    name: "tour",
+    schema: { type: "object", properties: {}, additionalProperties: false },
+  },
   maxTokens: 1000,
   metadata: { change_id: "chg_1", purpose: "tour", head: "abc", attempt: 1, prompt: "p1" },
 };
@@ -23,17 +26,23 @@ interface Captured {
   body: Record<string, unknown>;
 }
 
-function fakeFetch(response: { status?: number; body: unknown; headers?: Record<string, string> }, captured: Captured[]) {
+function fakeFetch(
+  response: { status?: number; body: unknown; headers?: Record<string, string> },
+  captured: Captured[],
+) {
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     captured.push({
       url: String(input),
       headers: Object.fromEntries(new Headers(init?.headers).entries()),
       body: JSON.parse(String(init?.body)) as Record<string, unknown>,
     });
-    return new Response(typeof response.body === "string" ? response.body : JSON.stringify(response.body), {
-      status: response.status ?? 200,
-      headers: response.headers ?? {},
-    });
+    return new Response(
+      typeof response.body === "string" ? response.body : JSON.stringify(response.body),
+      {
+        status: response.status ?? 200,
+        headers: response.headers ?? {},
+      },
+    );
   }) as typeof fetch;
 }
 
@@ -61,7 +70,10 @@ describe("AiGatewayClient (chat completions, Auto Router)", () => {
             choices: [{ message: { content: '{"ok":true}' }, finish_reason: "stop" }],
             usage: { prompt_tokens: 10_000, completion_tokens: 2_000 },
           },
-          headers: { "cf-aig-routed-model": "anthropic/claude-sonnet-5-5", "cf-aig-log-id": "log-1" },
+          headers: {
+            "cf-aig-routed-model": "anthropic/claude-sonnet-5-5",
+            "cf-aig-log-id": "log-1",
+          },
         },
         captured,
       ),
@@ -69,11 +81,15 @@ describe("AiGatewayClient (chat completions, Auto Router)", () => {
     const res = await client.complete(REQ);
 
     const call = captured[0]!;
-    expect(call.url).toBe("https://api.cloudflare.com/client/v4/accounts/acct/ai/v1/chat/completions");
+    expect(call.url).toBe(
+      "https://api.cloudflare.com/client/v4/accounts/acct/ai/v1/chat/completions",
+    );
     expect(call.headers.authorization).toBe("Bearer tok");
     expect(call.headers["cf-aig-gateway-id"]).toBe("gittifacts");
     expect(JSON.parse(call.headers["cf-aig-metadata"]!)).toEqual(REQ.metadata);
-    expect(call.headers["cf-aig-allowed-models"]).toBe("anthropic/claude-sonnet-5-5,anthropic/claude-opus-5-5");
+    expect(call.headers["cf-aig-allowed-models"]).toBe(
+      "anthropic/claude-sonnet-5-5,anthropic/claude-opus-5-5",
+    );
     expect(call.body).toMatchObject({
       model: "cloudflare/auto",
       max_tokens: 1000,
@@ -143,7 +159,14 @@ describe("AiGatewayClient (chat completions, Auto Router)", () => {
 
   it("refuses the Anthropic schema for the Auto Router", () => {
     expect(
-      () => new AiGatewayClient({ accountId: "a", gatewayId: "g", apiToken: "t", model: "auto", format: "anthropic-messages" }),
+      () =>
+        new AiGatewayClient({
+          accountId: "a",
+          gatewayId: "g",
+          apiToken: "t",
+          model: "auto",
+          format: "anthropic-messages",
+        }),
     ).toThrow(/Auto Router/);
   });
 });
@@ -183,7 +206,10 @@ describe("AiGatewayClient (Anthropic messages)", () => {
       max_tokens: 1000,
       system: "You are a reviewer.",
       messages: [{ role: "user", content: "Review this." }],
-      output_config: { format: { type: "json_schema", schema: REQ.jsonSchema!.schema }, effort: "medium" },
+      output_config: {
+        format: { type: "json_schema", schema: REQ.jsonSchema!.schema },
+        effort: "medium",
+      },
     });
     expect(res.text).toBe('{"a":1}');
     expect(res.json).toEqual({ a: 1 });
@@ -219,7 +245,13 @@ describe("AiGatewayClient (Anthropic messages)", () => {
 
 describe("metadata and JSON helpers", () => {
   it("keeps at most five entries and drops reserved cf.* keys", () => {
-    expect(normalizeMetadata({ "cf.x": 1, a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 })).toEqual({ a: 1, b: 2, c: 3, d: 4, e: 5 });
+    expect(normalizeMetadata({ "cf.x": 1, a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 })).toEqual({
+      a: 1,
+      b: 2,
+      c: 3,
+      d: 4,
+      e: 5,
+    });
   });
 
   it("parses raw, fenced and embedded JSON, and returns undefined otherwise", () => {
@@ -232,7 +264,11 @@ describe("metadata and JSON helpers", () => {
 
 describe("FakeLlmClient", () => {
   it("replays scripted responses in order and records requests", async () => {
-    const client = new FakeLlmClient(["hello", { json: { a: 1 }, costUsd: 0.5 }, new Error("boom")]);
+    const client = new FakeLlmClient([
+      "hello",
+      { json: { a: 1 }, costUsd: 0.5 },
+      new Error("boom"),
+    ]);
     await expect(client.complete(REQ)).resolves.toMatchObject({ text: "hello", costUsd: 0.01 });
     await expect(client.complete(REQ)).resolves.toMatchObject({ json: { a: 1 }, costUsd: 0.5 });
     await expect(client.complete(REQ)).rejects.toThrow("boom");

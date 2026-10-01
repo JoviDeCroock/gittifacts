@@ -4,7 +4,15 @@
  * required `options` parameter.
  */
 import type { ClassifyResult } from "@app/classifier";
-import type { Change, ChangeDiff, ChangeDiffFile, DiffHunk, DiffLine, LaneReason, Plan } from "@app/domain";
+import type {
+  Change,
+  ChangeDiff,
+  ChangeDiffFile,
+  DiffHunk,
+  DiffLine,
+  LaneReason,
+  Plan,
+} from "@app/domain";
 import type { EvidenceItem, SignedEvidence } from "@app/evidence";
 import type { ModelTour, ModelTourStop } from "../../src/schema.js";
 import type { TourInput } from "../../src/tour.js";
@@ -16,7 +24,12 @@ export const CHANGE_ID = "chg_breaking_api";
 type Line = [kind: " " | "+" | "-", text: string];
 
 /** Build a hunk from lines; numbers are assigned from the starts. */
-export function hunk(oldStart: number, newStart: number, lines: readonly Line[], header = ""): DiffHunk {
+export function hunk(
+  oldStart: number,
+  newStart: number,
+  lines: readonly Line[],
+  header = "",
+): DiffHunk {
   let oldNo = oldStart;
   let newNo = newStart;
   const out: DiffLine[] = [];
@@ -40,7 +53,9 @@ export function hunk(oldStart: number, newStart: number, lines: readonly Line[],
 export function file(
   path: string,
   hunks: DiffHunk[],
-  opts: Partial<Pick<ChangeDiffFile, "status" | "previousPath" | "transformVerified" | "binary" | "truncated">> = {},
+  opts: Partial<
+    Pick<ChangeDiffFile, "status" | "previousPath" | "transformVerified" | "binary" | "truncated">
+  > = {},
 ): ChangeDiffFile {
   const additions = hunks.reduce((n, h) => n + h.lines.filter((l) => l.kind === "add").length, 0);
   const deletions = hunks.reduce((n, h) => n + h.lines.filter((l) => l.kind === "del").length, 0);
@@ -67,7 +82,11 @@ export function diffOf(files: ChangeDiffFile[]): ChangeDiff {
   };
 }
 
-export function signed(items: EvidenceItem[], changeId = CHANGE_ID, headSha = HEAD_SHA): SignedEvidence {
+export function signed(
+  items: EvidenceItem[],
+  changeId = CHANGE_ID,
+  headSha = HEAD_SHA,
+): SignedEvidence {
   return {
     changeId,
     headSha,
@@ -111,7 +130,10 @@ export function plan(overrides: Partial<Plan> = {}): Plan {
     ],
     outOfScope: ["Locale-aware formatting via Intl", "Parsing the symbol style"],
     riskDeclarations: [
-      { area: "public API", description: "Breaking: formatMoney gains a required options parameter." },
+      {
+        area: "public API",
+        description: "Breaking: formatMoney gains a required options parameter.",
+      },
     ],
     scopePaths: ["src/format.ts", "src/index.ts", "test/format.test.ts", "README.md"],
     affectedRoutes: [],
@@ -128,7 +150,7 @@ export function plan(overrides: Partial<Plan> = {}): Plan {
 
 // ---------------------------------------------------------------- breaking-api
 
-/** src/format.ts hunk 1: the formatMoney signature change. Head lines 1-26. */
+/** src/format.ts hunk 1: the formatMoney signature change (diff text, so `${…}` in strings is intended). */
 export const FORMAT_DECL_HUNK = hunk(1, 1, [
   [" ", 'import { minorDigits, requireCurrency } from "./internal/currency.js";'],
   ["-", 'import { type Money, money } from "./money.js";'],
@@ -138,11 +160,17 @@ export const FORMAT_DECL_HUNK = hunk(1, 1, [
   ["+", '  readonly style: "code" | "symbol";'],
   ["+", "}"],
   ["+", ""],
-  ["+", 'const SYMBOLS: Readonly<Record<CurrencyCode, string>> = { EUR: "€", USD: "$", GBP: "£", JPY: "¥" };'],
+  [
+    "+",
+    'const SYMBOLS: Readonly<Record<CurrencyCode, string>> = { EUR: "€", USD: "$", GBP: "£", JPY: "¥" };',
+  ],
   [" ", ""],
   [" ", "/**"],
   ["-", " * Formats money as a plain decimal followed by its ISO code: `-1234.50 EUR`, `980 JPY`."],
-  ["+", " * Formats money in the requested style. Both styles are deterministic and locale-independent."],
+  [
+    "+",
+    " * Formats money in the requested style. Both styles are deterministic and locale-independent.",
+  ],
   [" ", " */"],
   ["-", "export function formatMoney(value: Money): string {"],
   ["+", "export function formatMoney(value: Money, options: FormatOptions): string {"],
@@ -150,24 +178,34 @@ export const FORMAT_DECL_HUNK = hunk(1, 1, [
   [" ", '  const sign = value.amount < 0 ? "-" : "";'],
   [" ", "  const absolute = Math.abs(value.amount);"],
   ["-", "  if (digits === 0) {"],
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: this is diff text, not a template
   ["-", "    return `${sign}${absolute} ${value.currency}`;"],
   ["-", "  }"],
   [" ", "  const scale = 10 ** digits;"],
   ["-", "  const whole = Math.floor(absolute / scale);"],
   ["-", '  const fraction = String(absolute % scale).padStart(digits, "0");'],
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: this is diff text, not a template
   ["-", "  return `${sign}${whole}.${fraction} ${value.currency}`;"],
   ["+", "  const number ="],
   ["+", "    digits === 0"],
   ["+", "      ? String(absolute)"],
-  ["+", '      : `${Math.floor(absolute / scale)}.${String(absolute % scale).padStart(digits, "0")}`;'],
+  [
+    "+",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: this is diff text, not a template
+    '      : `${Math.floor(absolute / scale)}.${String(absolute % scale).padStart(digits, "0")}`;',
+  ],
   ["+", '  return options.style === "symbol"'],
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: this is diff text, not a template
   ["+", "    ? `${sign}${SYMBOLS[value.currency]}${number}`"],
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: this is diff text, not a template
   ["+", "    : `${sign}${number} ${value.currency}`;"],
   [" ", "}"],
 ]);
 /** The head line of `export function formatMoney(value: Money, options: FormatOptions)`. */
 export const FORMAT_DECL_HEAD_LINE: number = (() => {
-  const line = FORMAT_DECL_HUNK.lines.find((l) => l.kind === "add" && l.text.startsWith("export function formatMoney"));
+  const line = FORMAT_DECL_HUNK.lines.find(
+    (l) => l.kind === "add" && l.text.startsWith("export function formatMoney"),
+  );
   if (line?.newNo == null) throw new Error("scenario: declaration line missing");
   return line.newNo;
 })();
@@ -176,8 +214,14 @@ export const FORMAT_DECL_HEAD_LINE: number = (() => {
 export const FORMAT_DOC_HUNK = hunk(22, 36, [
   [" ", "const MONEY_PATTERN = /^(-?)(\\d+)(?:\\.(\\d+))? ([A-Z]{3})$/;"],
   [" ", ""],
-  ["-", "/** Parses the output of {@link formatMoney} back into Money. Throws on anything else. */"],
-  ["+", '/** Parses the `"code"` style of {@link formatMoney} back into Money. Throws on anything else. */'],
+  [
+    "-",
+    "/** Parses the output of {@link formatMoney} back into Money. Throws on anything else. */",
+  ],
+  [
+    "+",
+    '/** Parses the `"code"` style of {@link formatMoney} back into Money. Throws on anything else. */',
+  ],
   [" ", "export function parseMoney(input: string): Money {"],
 ]);
 
@@ -190,7 +234,10 @@ function testHunk(): DiffHunk {
     ["-1230", "GBP", "-12.30 GBP"],
   ] as const) {
     lines.push(["-", `  expect(formatMoney(money(${amount}, "${cur}"))).toBe("${out}");`]);
-    lines.push(["+", `  expect(formatMoney(money(${amount}, "${cur}"), { style: "code" })).toBe("${out}");`]);
+    lines.push([
+      "+",
+      `  expect(formatMoney(money(${amount}, "${cur}"), { style: "code" })).toBe("${out}");`,
+    ]);
   }
   lines.push([" ", "});"], ["+", ""], ["+", 'describe("formatMoney with style: symbol", () => {']);
   lines.push(["+", '  it("puts the currency symbol in front of the amount", () => {']);
@@ -199,13 +246,22 @@ function testHunk(): DiffHunk {
     ["5", "USD", "$0.05"],
     ["980", "JPY", "¥980"],
   ] as const) {
-    lines.push(["+", `    expect(formatMoney(money(${amount}, "${cur}"), { style: "symbol" })).toBe("${out}");`]);
+    lines.push([
+      "+",
+      `    expect(formatMoney(money(${amount}, "${cur}"), { style: "symbol" })).toBe("${out}");`,
+    ]);
   }
   for (let cents = 1; cents <= 24; cents++) {
-    lines.push(["+", `    expect(formatMoney(money(${cents}, "USD"), { style: "symbol" })).toBe("$0.${String(cents).padStart(2, "0")}");`]);
+    lines.push([
+      "+",
+      `    expect(formatMoney(money(${cents}, "USD"), { style: "symbol" })).toBe("$0.${String(cents).padStart(2, "0")}");`,
+    ]);
   }
   lines.push(["+", "  });"], ["+", '  it("puts the minus sign before the symbol", () => {']);
-  lines.push(["+", '    expect(formatMoney(money(-1230, "GBP"), { style: "symbol" })).toBe("-£12.30");']);
+  lines.push([
+    "+",
+    '    expect(formatMoney(money(-1230, "GBP"), { style: "symbol" })).toBe("-£12.30");',
+  ]);
   lines.push(["+", "  });"], ["+", "});"]);
   return hunk(10, 10, lines);
 }
@@ -234,8 +290,16 @@ export function breakingApiDiff(): ChangeDiff {
 }
 
 export const RED_GREEN_TESTS = [
-  { id: "t1", file: "test/format.test.ts", name: "formatMoney with style: symbol > puts the currency symbol in front of the amount" },
-  { id: "t2", file: "test/format.test.ts", name: "formatMoney with style: symbol > puts the minus sign before the symbol" },
+  {
+    id: "t1",
+    file: "test/format.test.ts",
+    name: "formatMoney with style: symbol > puts the currency symbol in front of the amount",
+  },
+  {
+    id: "t2",
+    file: "test/format.test.ts",
+    name: "formatMoney with style: symbol > puts the minus sign before the symbol",
+  },
 ];
 
 export function breakingApiEvidence(): EvidenceItem[] {
@@ -245,8 +309,20 @@ export function breakingApiEvidence(): EvidenceItem[] {
       kind: "red-green",
       status: "ok",
       tests: RED_GREEN_TESTS,
-      base: { sha: BASE_SHA, results: [{ id: "t1", outcome: "fail" }, { id: "t2", outcome: "fail" }] },
-      head: { sha: HEAD_SHA, results: [{ id: "t1", outcome: "pass" }, { id: "t2", outcome: "pass" }] },
+      base: {
+        sha: BASE_SHA,
+        results: [
+          { id: "t1", outcome: "fail" },
+          { id: "t2", outcome: "fail" },
+        ],
+      },
+      head: {
+        sha: HEAD_SHA,
+        results: [
+          { id: "t1", outcome: "pass" },
+          { id: "t2", outcome: "pass" },
+        ],
+      },
       verdict: "proven",
     },
     {
@@ -293,7 +369,12 @@ export function breakingApiEvidence(): EvidenceItem[] {
         {
           name: "money",
           entry: "src/index.ts",
-          added: [{ symbol: "FormatOptions", after: 'interface FormatOptions { readonly style: "code" | "symbol" }' }],
+          added: [
+            {
+              symbol: "FormatOptions",
+              after: 'interface FormatOptions { readonly style: "code" | "symbol" }',
+            },
+          ],
           removed: [],
           changed: [
             {
@@ -315,7 +396,13 @@ export function breakingApiEvidence(): EvidenceItem[] {
       newInstallScripts: [],
       lockfileChanged: false,
     },
-    { id: "sensitive-paths", kind: "sensitive-paths", status: "ok", patterns: ["**/auth/**"], hits: [] },
+    {
+      id: "sensitive-paths",
+      kind: "sensitive-paths",
+      status: "ok",
+      patterns: ["**/auth/**"],
+      hits: [],
+    },
   ];
 }
 
@@ -410,7 +497,14 @@ export const RISK_DECL_STOP = stop({
   kind: "risk",
   title: "formatMoney now requires options",
   why: "Every existing call formatMoney(value) stops compiling. The plan declares this breaking change.",
-  hunkRefs: [{ file: "src/format.ts", startLine: FORMAT_DECL_HEAD_LINE, endLine: FORMAT_DECL_HEAD_LINE, side: "head" }],
+  hunkRefs: [
+    {
+      file: "src/format.ts",
+      startLine: FORMAT_DECL_HEAD_LINE,
+      endLine: FORMAT_DECL_HEAD_LINE,
+      side: "head",
+    },
+  ],
   evidenceRefs: ["public-api"],
   verdict: "risk",
 });
@@ -434,7 +528,9 @@ export const UNCOVERED_STOP = stop({
 export function goodModelTour(overrides: Partial<ModelTour> = {}): ModelTour {
   return {
     stops: [INTENT_STOP, BEHAVIOR_STOP, RISK_DECL_STOP, PROOF_STOP, UNCOVERED_STOP],
-    leastConfident: ["Whether any caller outside this repository still uses the one-argument form."],
+    leastConfident: [
+      "Whether any caller outside this repository still uses the one-argument form.",
+    ],
     notDone: ["Did not check the README renders correctly."],
     ...overrides,
   };

@@ -13,7 +13,16 @@ import { JUDGE_JSON_SCHEMA, type JudgeQuestion, TOUR_JSON_SCHEMA } from "./schem
 
 export const PROMPT_VERSION = "tour-2026-10-01.1";
 
-const DATA_TAGS = ["change", "plan", "classification", "evidence", "risk-candidates", "mechanical", "diff", "limits"];
+const DATA_TAGS = [
+  "change",
+  "plan",
+  "classification",
+  "evidence",
+  "risk-candidates",
+  "mechanical",
+  "diff",
+  "limits",
+];
 const CLOSING_TAG = new RegExp(`</(${DATA_TAGS.join("|")})>`, "gi");
 
 /** Data may not close our sections early (prompt-injection hygiene). */
@@ -27,7 +36,11 @@ function section(open: string, tag: string, body: readonly string[]): string {
 }
 
 function attr(value: string): string {
-  return value.replace(/[\r\n]+/g, " ").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  return value
+    .replace(/[\r\n]+/g, " ")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
 }
 
 function oneLine(text: string, max: number): string {
@@ -51,12 +64,21 @@ export function renderPlan(plan: Plan | null): string {
     "Acceptance criteria:",
     ...plan.acceptanceCriteria.map((c) => `- ${oneLine(c, 400)}`),
   ];
-  if (plan.outOfScope.length > 0) lines.push("Out of scope:", ...plan.outOfScope.map((c) => `- ${oneLine(c, 400)}`));
+  if (plan.outOfScope.length > 0)
+    lines.push("Out of scope:", ...plan.outOfScope.map((c) => `- ${oneLine(c, 400)}`));
   if (plan.riskDeclarations.length > 0) {
-    lines.push("Declared risks:", ...plan.riskDeclarations.map((r) => `- ${oneLine(r.area, 100)}: ${oneLine(r.description, 400)}`));
+    lines.push(
+      "Declared risks:",
+      ...plan.riskDeclarations.map(
+        (r) => `- ${oneLine(r.area, 100)}: ${oneLine(r.description, 400)}`,
+      ),
+    );
   }
-  lines.push(`Scope paths: ${plan.scopePaths.length > 0 ? plan.scopePaths.join(", ") : "(not declared)"}`);
-  if (plan.affectedRoutes.length > 0) lines.push(`Affected routes: ${plan.affectedRoutes.join(", ")}`);
+  lines.push(
+    `Scope paths: ${plan.scopePaths.length > 0 ? plan.scopePaths.join(", ") : "(not declared)"}`,
+  );
+  if (plan.affectedRoutes.length > 0)
+    lines.push(`Affected routes: ${plan.affectedRoutes.join(", ")}`);
   return section(`<plan id="${attr(plan.id)}" status="${plan.status}">`, "plan", lines);
 }
 
@@ -75,7 +97,9 @@ export function summarizeEvidenceItem(item: EvidenceItem): string {
     }
     case "test-run":
       body = ` · step ${item.step} · ${item.runner} · ${item.passed} passed, ${item.failed} failed, ${item.skipped} skipped${
-        item.failures.length > 0 ? ` · failures: ${list(item.failures, 5, (f) => oneLine(f.name, 120))}` : ""
+        item.failures.length > 0
+          ? ` · failures: ${list(item.failures, 5, (f) => oneLine(f.name, 120))}`
+          : ""
       }`;
       break;
     case "coverage":
@@ -91,11 +115,17 @@ export function summarizeEvidenceItem(item: EvidenceItem): string {
       break;
     case "mutation":
       body = ` · ${item.tool} score ${(item.score * 100).toFixed(1)}% · killed ${item.killed}, survived ${item.survived}, no coverage ${item.noCoverage}${
-        item.survivors.length > 0 ? ` · survivors: ${list(item.survivors, 8, (s) => `${s.file}:${s.line} ${s.mutator}`)}` : ""
+        item.survivors.length > 0
+          ? ` · survivors: ${list(item.survivors, 8, (s) => `${s.file}:${s.line} ${s.mutator}`)}`
+          : ""
       }`;
       break;
     case "public-api": {
-      const sig = (c: { symbol: string; before?: string | undefined; after?: string | undefined }) =>
+      const sig = (c: {
+        symbol: string;
+        before?: string | undefined;
+        after?: string | undefined;
+      }) =>
         c.before !== undefined || c.after !== undefined
           ? `${c.symbol} [${oneLine(c.before ?? "∅", 160)} → ${oneLine(c.after ?? "∅", 160)}]`
           : c.symbol;
@@ -117,7 +147,10 @@ export function summarizeEvidenceItem(item: EvidenceItem): string {
       } · lockfile ${item.lockfileChanged ? "changed" : "unchanged"}`;
       break;
     case "sensitive-paths":
-      body = item.hits.length > 0 ? ` · hits: ${list(item.hits, 10, (h) => `${h.path} (${h.pattern})`)}` : " · no hits";
+      body =
+        item.hits.length > 0
+          ? ` · hits: ${list(item.hits, 10, (h) => `${h.path} (${h.pattern})`)}`
+          : " · no hits";
       break;
     case "preview":
       body = item.url ? ` · ${item.url}` : "";
@@ -131,7 +164,9 @@ export function summarizeEvidenceItem(item: EvidenceItem): string {
       break;
     case "transform":
       body = ` · ${item.transform} · \`${oneLine(item.command, 160)}\` · ${item.verified ? "verified" : "NOT verified"} · ${item.files.length} files${
-        item.mismatchedFiles.length > 0 ? ` · mismatched: ${list(item.mismatchedFiles, 8, String)}` : ""
+        item.mismatchedFiles.length > 0
+          ? ` · mismatched: ${list(item.mismatchedFiles, 8, String)}`
+          : ""
       }`;
       break;
     case "llm-judgment":
@@ -155,7 +190,10 @@ export function renderClassification(c: {
   const raised = c.reasons.filter((r) => r.lane > 0);
   const lines =
     raised.length > 0
-      ? raised.map((r) => `- [lane ${r.lane}] ${r.code}: ${oneLine(r.message, 300)}${r.evidenceRef ? ` (evidence "${r.evidenceRef}")` : ""}`)
+      ? raised.map(
+          (r) =>
+            `- [lane ${r.lane}] ${r.code}: ${oneLine(r.message, 300)}${r.evidenceRef ? ` (evidence "${r.evidenceRef}")` : ""}`,
+        )
       : ["- No reason raised the lane."];
   return section(
     `<classification lane="${c.lane}" computedLane="${c.computedLane}" requiresHumanApproval="${c.requiresHumanApproval}">`,
@@ -170,11 +208,16 @@ export function renderCandidates(ranking: readonly RankedHunk[], max = 8): strin
   if (shown.length === 0) {
     const biggest = ranking.slice(0, 3);
     lines.push("No hunk has a risk signal beyond its size. Largest hunks:");
-    for (const r of biggest) lines.push(`${r.rank}. ${r.path} ${r.ref.side} ${r.ref.startLine}-${r.ref.endLine} — ${r.changedLines} changed lines`);
+    for (const r of biggest)
+      lines.push(
+        `${r.rank}. ${r.path} ${r.ref.side} ${r.ref.startLine}-${r.ref.endLine} — ${r.changedLines} changed lines`,
+      );
   } else {
     for (const r of shown) {
       const factors = r.factors.map((f) => f.detail).join("; ");
-      lines.push(`${r.rank}. ${r.path} ${r.ref.side} ${r.ref.startLine}-${r.ref.endLine} — ${oneLine(factors, 400)}`);
+      lines.push(
+        `${r.rank}. ${r.path} ${r.ref.side} ${r.ref.startLine}-${r.ref.endLine} — ${oneLine(factors, 400)}`,
+      );
     }
   }
   return section("<risk-candidates>", "risk-candidates", lines);
@@ -197,7 +240,12 @@ export interface TourLimits {
 export interface TourPromptInput {
   change: { id: string; title: string; headSha: string; baseSha: string };
   plan: Plan | null;
-  classification: { lane: number; computedLane: number; requiresHumanApproval: boolean; reasons: readonly LaneReason[] };
+  classification: {
+    lane: number;
+    computedLane: number;
+    requiresHumanApproval: boolean;
+    reasons: readonly LaneReason[];
+  };
   evidence: readonly EvidenceItem[];
   ranking: readonly RankedHunk[];
   /** Compact diff text from `renderDiff` (verified-transform files already removed). */
@@ -255,7 +303,9 @@ export function buildTourUserPrompt(input: TourPromptInput): string {
       ]),
     );
   }
-  sections.push(`<diff>\n${neutralize(input.diffText === "" ? "(no reviewable hunks)" : input.diffText)}\n</diff>`);
+  sections.push(
+    `<diff>\n${neutralize(input.diffText === "" ? "(no reviewable hunks)" : input.diffText)}\n</diff>`,
+  );
   const omitted =
     input.omittedHunks > 0
       ? ` ${input.omittedHunks} hunk(s) are omitted or cut short in <diff>; mention that in notDone.`

@@ -19,7 +19,13 @@ import { renderDiff } from "./diff.js";
 import { type LlmClient, LlmError, type LlmResponse, parseJsonLoose } from "./llm.js";
 import { buildJudgeUserPrompt, JUDGE_SYSTEM_PROMPT, PROMPT_VERSION } from "./prompt.js";
 import { hasRisk, rankHunks } from "./rank.js";
-import { JUDGE_JSON_SCHEMA, JUDGE_QUESTIONS, type JudgeOutcome, type JudgeQuestion, ModelJudgment } from "./schema.js";
+import {
+  JUDGE_JSON_SCHEMA,
+  JUDGE_QUESTIONS,
+  type JudgeOutcome,
+  type JudgeQuestion,
+  ModelJudgment,
+} from "./schema.js";
 
 export interface JudgeInput {
   plan: Plan | null;
@@ -94,7 +100,10 @@ export function parseJudgments(
   const out = new Map<JudgeQuestion, { outcome: JudgeOutcome; rationale: string }>();
   const json = response.json ?? parseJsonLoose(response.text);
   const raw =
-    json !== null && typeof json === "object" && "judgments" in json && Array.isArray(json.judgments)
+    json !== null &&
+    typeof json === "object" &&
+    "judgments" in json &&
+    Array.isArray(json.judgments)
       ? (json.judgments as unknown[])
       : Array.isArray(json)
         ? (json as unknown[])
@@ -125,12 +134,23 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
   const { client } = deps;
   const tracker = new BudgetTracker(input.budget);
   const calls: CallRecord[] = [];
-  const asked: JudgeQuestion[] = input.plan === null ? ["hidden-behavior-change"] : [...JUDGE_QUESTIONS];
+  const asked: JudgeQuestion[] =
+    input.plan === null ? ["hidden-behavior-change"] : [...JUDGE_QUESTIONS];
   const fixed: LlmJudgment[] =
     input.plan === null
       ? [
-          item("scope-drift", "unsure", "No plan is attached, so scope drift cannot be judged.", client.model),
-          item("plan-conformance", "unsure", "No plan is attached, so conformance cannot be judged.", client.model),
+          item(
+            "scope-drift",
+            "unsure",
+            "No plan is attached, so scope drift cannot be judged.",
+            client.model,
+          ),
+          item(
+            "plan-conformance",
+            "unsure",
+            "No plan is attached, so conformance cannot be judged.",
+            client.model,
+          ),
         ]
       : [];
   const errored = (note: string): JudgeResult => ({
@@ -147,9 +167,18 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
   const transformed = input.diff.files.filter((f) => f.transformVerified).map((f) => f.path);
   const reviewDiff = { ...input.diff, files: input.diff.files.filter((f) => !f.transformVerified) };
   const ranking = rankHunks({ diff: reviewDiff, evidence: [], plan: input.plan });
-  const slots = ranking.map((r) => ({ path: r.path, hunkIndex: r.hunkIndex, rank: r.rank, hasRisk: hasRisk(r) }));
+  const slots = ranking.map((r) => ({
+    path: r.path,
+    hunkIndex: r.hunkIndex,
+    rank: r.rank,
+    hasRisk: hasRisk(r),
+  }));
 
-  const overhead = estimateTokens(JUDGE_SYSTEM_PROMPT + buildJudgeUserPrompt({ plan: input.plan, diffText: "", questions: asked })) + 64;
+  const overhead =
+    estimateTokens(
+      JUDGE_SYSTEM_PROMPT +
+        buildJudgeUserPrompt({ plan: input.plan, diffText: "", questions: asked }),
+    ) + 64;
   const affordable = affordableInputTokens(
     tracker.remainingUsd,
     client.model,
@@ -161,7 +190,9 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
   const diffBudget = Math.min(deps.diffTokenBudget, affordable - overhead);
   if (diffBudget < Math.min(MIN_JUDGE_DIFF_TOKENS, fullTokens)) {
     tracker.markExceeded();
-    return errored(`budget exceeded: $${tracker.remainingUsd.toFixed(4)} left cannot pay for a judge call`);
+    return errored(
+      `budget exceeded: $${tracker.remainingUsd.toFixed(4)} left cannot pay for a judge call`,
+    );
   }
   const rendered = renderDiff(reviewDiff, slots, diffBudget);
   let diffText = rendered.text;
@@ -174,7 +205,12 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
 
   const req = {
     system: JUDGE_SYSTEM_PROMPT,
-    messages: [{ role: "user" as const, content: buildJudgeUserPrompt({ plan: input.plan, diffText, questions: asked }) }],
+    messages: [
+      {
+        role: "user" as const,
+        content: buildJudgeUserPrompt({ plan: input.plan, diffText, questions: asked }),
+      },
+    ],
     jsonSchema: { name: "judgments", schema: JUDGE_JSON_SCHEMA },
     maxTokens: deps.maxOutputTokens,
     metadata: {
@@ -222,7 +258,14 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
     ...fixed.map((f) => ({ ...f, model: res.model })),
     ...asked.map((q) => {
       const a = answers.get(q)!;
-      return item(q, a.outcome, a.rationale, res.model, "ok", truncated ? "The model's reply hit the output limit." : undefined);
+      return item(
+        q,
+        a.outcome,
+        a.rationale,
+        res.model,
+        "ok",
+        truncated ? "The model's reply hit the output limit." : undefined,
+      );
     }),
   ];
   return { items, costUsd: tracker.costUsd, budgetExceeded: tracker.exceeded, calls };

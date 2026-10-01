@@ -15,7 +15,13 @@ export {
   type TokenUsage,
 } from "./budget.js";
 export { checkHunkRef, type OmittedHunk, type RenderedDiff, renderDiff } from "./diff.js";
-export { type CallRecord, type JudgeInput, type JudgeResult, judgmentId, parseJudgments } from "./judge.js";
+export {
+  type CallRecord,
+  type JudgeInput,
+  type JudgeResult,
+  judgmentId,
+  parseJudgments,
+} from "./judge.js";
 export {
   AiGatewayClient,
   type AiGatewayClientOptions,
@@ -62,7 +68,14 @@ export {
   TOUR_SYSTEM_PROMPT,
   type TourPromptInput,
 } from "./prompt.js";
-export { lane2Anchor, type RankedHunk, type RankInput, type RiskFactor, type RiskFactorCode, rankHunks } from "./rank.js";
+export {
+  lane2Anchor,
+  type RankedHunk,
+  type RankInput,
+  type RiskFactor,
+  type RiskFactorCode,
+  rankHunks,
+} from "./rank.js";
 export {
   JUDGE_JSON_SCHEMA,
   JUDGE_QUESTIONS,

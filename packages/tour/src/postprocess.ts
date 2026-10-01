@@ -16,10 +16,17 @@
  * stated in leastConfident / notDone.
  */
 import { normalizePath } from "@app/classifier";
-import type { ChangeDiff, ChangeDiffFile, HunkRef, LaneReason, TourStop, TourVerdict } from "@app/domain";
+import type {
+  ChangeDiff,
+  ChangeDiffFile,
+  HunkRef,
+  LaneReason,
+  TourStop,
+  TourVerdict,
+} from "@app/domain";
 import type { ApiChange, EvidenceItem, ReproducibleTransform } from "@app/evidence";
 import { baseRange, checkHunkRef, headRange, type Side } from "./diff.js";
-import { type RankedHunk, type RiskFactor, lane2Anchor, refHitsCandidate } from "./rank.js";
+import { lane2Anchor, type RankedHunk, type RiskFactor, refHitsCandidate } from "./rank.js";
 import type { ModelTour } from "./schema.js";
 
 // ---------------------------------------------------------------- caps & readability
@@ -57,7 +64,11 @@ export function countWords(text: string): number {
   return t === "" ? 0 : t.split(/\s+/).length;
 }
 
-export function tourWords(stops: readonly TourStop[], leastConfident: readonly string[], notDone: readonly string[]): number {
+export function tourWords(
+  stops: readonly TourStop[],
+  leastConfident: readonly string[],
+  notDone: readonly string[],
+): number {
   let n = 0;
   for (const s of stops) n += countWords(s.title) + countWords(s.why);
   for (const s of leastConfident) n += countWords(s);
@@ -98,7 +109,10 @@ function clip(text: string, max: number): string {
 function firstWords(text: string, n: number): string {
   const words = text.trim().split(/\s+/);
   if (words.length <= n) return text.trim();
-  return `${words.slice(0, Math.max(1, n)).join(" ").replace(/[,;:.]+$/, "")}…`;
+  return `${words
+    .slice(0, Math.max(1, n))
+    .join(" ")
+    .replace(/[,;:.]+$/, "")}…`;
 }
 
 function fmtRef(r: { file: string; startLine: number; endLine: number; side?: Side }): string {
@@ -130,11 +144,21 @@ function transformVerified(t: ReproducibleTransform): boolean {
 function spanRef(f: ChangeDiffFile): HunkRef | null {
   const heads = f.hunks.map(headRange).filter((r) => r !== null);
   if (heads.length > 0) {
-    return { file: f.path, startLine: heads[0]!.startLine, endLine: heads[heads.length - 1]!.endLine, side: "head" };
+    return {
+      file: f.path,
+      startLine: heads[0]!.startLine,
+      endLine: heads[heads.length - 1]!.endLine,
+      side: "head",
+    };
   }
   const bases = f.hunks.map(baseRange).filter((r) => r !== null);
   if (bases.length > 0) {
-    return { file: f.path, startLine: bases[0]!.startLine, endLine: bases[bases.length - 1]!.endLine, side: "base" };
+    return {
+      file: f.path,
+      startLine: bases[0]!.startLine,
+      endLine: bases[bases.length - 1]!.endLine,
+      side: "base",
+    };
   }
   return null;
 }
@@ -143,8 +167,13 @@ function spanRef(f: ChangeDiffFile): HunkRef | null {
  * Files fully reproduced by a verified transform (path and rename source listed in a verified
  * item, same rule as the classifier) become one deterministic stop.
  */
-export function collapseTransforms(diff: ChangeDiff, items: readonly EvidenceItem[]): TransformCollapse {
-  const verified = items.filter((i): i is ReproducibleTransform => i.kind === "transform" && transformVerified(i));
+export function collapseTransforms(
+  diff: ChangeDiff,
+  items: readonly EvidenceItem[],
+): TransformCollapse {
+  const verified = items.filter(
+    (i): i is ReproducibleTransform => i.kind === "transform" && transformVerified(i),
+  );
   const coveredBy = new Map<string, ReproducibleTransform[]>();
   for (const t of verified) {
     for (const f of t.files) {
@@ -154,19 +183,22 @@ export function collapseTransforms(diff: ChangeDiff, items: readonly EvidenceIte
   }
   const files = diff.files.filter(
     (f) =>
-      coveredBy.has(normalizePath(f.path)) && (f.previousPath === null || coveredBy.has(normalizePath(f.previousPath))),
+      coveredBy.has(normalizePath(f.path)) &&
+      (f.previousPath === null || coveredBy.has(normalizePath(f.previousPath))),
   );
   if (files.length === 0) return { stop: null, paths: new Set(), transforms: [] };
 
   const used = new Map<string, ReproducibleTransform>();
-  for (const f of files) for (const t of coveredBy.get(normalizePath(f.path)) ?? []) used.set(t.id, t);
+  for (const f of files)
+    for (const t of coveredBy.get(normalizePath(f.path)) ?? []) used.set(t.id, t);
   const transforms = [...used.values()];
   const names = [...new Set(transforms.map((t) => t.transform))];
   const commands = [...new Set(transforms.map((t) => `\`${clip(t.command, 80)}\``))];
   const adds = files.reduce((n, f) => n + f.additions, 0);
   const dels = files.reduce((n, f) => n + f.deletions, 0);
   const shownFiles = files.slice(0, 6).map((f) => f.path);
-  const more = files.length > shownFiles.length ? ` and ${files.length - shownFiles.length} more` : "";
+  const more =
+    files.length > shownFiles.length ? ` and ${files.length - shownFiles.length} more` : "";
 
   const stop: TourStop = {
     kind: "transform",
@@ -205,7 +237,11 @@ export function canProve(item: EvidenceItem): boolean {
   }
 }
 
-function apiChangeOf(items: readonly EvidenceItem[], ref: string | undefined, symbol: string): ApiChange | undefined {
+function apiChangeOf(
+  items: readonly EvidenceItem[],
+  ref: string | undefined,
+  symbol: string,
+): ApiChange | undefined {
   for (const i of items) {
     if (i.kind !== "public-api" || (ref !== undefined && i.id !== ref)) continue;
     for (const p of i.packages) {
@@ -300,7 +336,9 @@ function normalizeStop(
     let reason: string | null = null;
     if (raw.evidenceRefs.length === 0) reason = "claimed proven without citing evidence";
     else if (evidenceRefs.length === 0) reason = "cited only evidence ids that do not exist";
-    else if (proving.length === 0) reason = "cited evidence that cannot prove it (errored, skipped, failing or a model judgment)";
+    else if (proving.length === 0)
+      reason =
+        "cited evidence that cannot prove it (errored, skipped, failing or a model judgment)";
     else if (raw.kind === "uncovered") reason = "an uncovered stop cannot be proven";
     if (reason !== null) {
       report.downgraded.push({ stop: title, from: "proven", to: "unproven", reason });
@@ -343,11 +381,16 @@ export function deterministicRiskStop(
   const parts = [clip(reason.message, 400)];
   if (factor.code === "api-breaking") {
     const symbol = factor.symbols?.[0];
-    const change = symbol === undefined ? undefined : apiChangeOf(evidence, factor.evidenceRef, symbol);
+    const change =
+      symbol === undefined ? undefined : apiChangeOf(evidence, factor.evidenceRef, symbol);
     if (change?.before !== undefined || change?.after !== undefined) {
-      parts.push(`\`${clip(change?.before ?? "(none)", 160)}\` becomes \`${clip(change?.after ?? "(removed)", 160)}\`.`);
+      parts.push(
+        `\`${clip(change?.before ?? "(none)", 160)}\` becomes \`${clip(change?.after ?? "(removed)", 160)}\`.`,
+      );
     }
-    parts.push("Every caller of the old shape breaks: check that the plan expects this and that callers are updated.");
+    parts.push(
+      "Every caller of the old shape breaks: check that the plan expects this and that callers are updated.",
+    );
   } else {
     parts.push("Read this hunk closely before approving.");
   }
@@ -355,12 +398,24 @@ export function deterministicRiskStop(
   parts.push(`Ranked riskiest by the platform: ${clip(factors.join("; "), 300)}.`);
 
   const hunkRefs: HunkRef[] = [];
-  if (factor.focus !== undefined && normalizePath(factor.focus.file) === normalizePath(top.path)) hunkRefs.push(factor.focus);
+  if (factor.focus !== undefined && normalizePath(factor.focus.file) === normalizePath(top.path))
+    hunkRefs.push(factor.focus);
   const whole = top.ref;
-  if (!hunkRefs.some((r) => r.side === whole.side && r.startLine === whole.startLine && r.endLine === whole.endLine)) {
+  if (
+    !hunkRefs.some(
+      (r) =>
+        r.side === whole.side && r.startLine === whole.startLine && r.endLine === whole.endLine,
+    )
+  ) {
     hunkRefs.push(whole);
   }
-  const evidenceRefs = [...new Set([factor.evidenceRef, reason.evidenceRef].filter((r): r is string => r !== undefined && ids.has(r)))];
+  const evidenceRefs = [
+    ...new Set(
+      [factor.evidenceRef, reason.evidenceRef].filter(
+        (r): r is string => r !== undefined && ids.has(r),
+      ),
+    ),
+  ];
   return {
     kind: "risk",
     title: clip(factorTitle(top, factor), 160),
@@ -423,7 +478,12 @@ export function orderStops(stops: readonly TourStop[]): TourStop[] {
   const firstRisk = stops.find((s) => s.kind === "risk");
   return stops
     .map((s, i) => ({ s, i }))
-    .sort((a, b) => SECTION[a.s.kind] - SECTION[b.s.kind] || Number(b.s === firstRisk) - Number(a.s === firstRisk) || a.i - b.i)
+    .sort(
+      (a, b) =>
+        SECTION[a.s.kind] - SECTION[b.s.kind] ||
+        Number(b.s === firstRisk) - Number(a.s === firstRisk) ||
+        a.i - b.i,
+    )
     .map((x) => x.s);
 }
 
@@ -459,7 +519,12 @@ export function listCap(caps: TourCaps): number {
 }
 
 /** Model entries first, then the single platform entry (always kept). */
-function mergeList(model: readonly string[], platform: string | null, max: number, report: PostprocessReport): string[] {
+function mergeList(
+  model: readonly string[],
+  platform: string | null,
+  max: number,
+  report: PostprocessReport,
+): string[] {
   const room = platform === null ? max : max - 1;
   const fromModel = model.map((t) => clip(t, 600));
   if (fromModel.length > room) report.droppedListEntries += fromModel.length - room;
@@ -513,7 +578,8 @@ function enforceWordCap(
     for (let i = 0; i < stops.length; i++) {
       if (words[i]! > lo) {
         stops[i] = { ...stops[i]!, why: firstWords(stops[i]!.why, lo) };
-        if (!report.shortenedStops.includes(stops[i]!.title)) report.shortenedStops.push(stops[i]!.title);
+        if (!report.shortenedStops.includes(stops[i]!.title))
+          report.shortenedStops.push(stops[i]!.title);
       }
     }
     return true;
@@ -522,7 +588,8 @@ function enforceWordCap(
   if (fitWhys(MIN_WHY_WORDS)) return;
   shrinkLists(15);
   if (fitWhys(MIN_WHY_WORDS)) return;
-  for (let i = 0; i < stops.length; i++) stops[i] = { ...stops[i]!, title: firstWords(stops[i]!.title, 12) };
+  for (let i = 0; i < stops.length; i++)
+    stops[i] = { ...stops[i]!, title: firstWords(stops[i]!.title, 12) };
   if (fitWhys(MIN_WHY_WORDS)) return;
   fitWhys(1);
 }
@@ -564,7 +631,8 @@ export function postprocessTour(input: PostprocessInput): PostprocessResult {
     if (dropped === undefined) break;
     report.droppedStops.push(dropped.title);
   }
-  if (report.droppedStops.length > 0) ndNotes.push(`Omitted for length: ${quoteList(report.droppedStops, 4)}.`);
+  if (report.droppedStops.length > 0)
+    ndNotes.push(`Omitted for length: ${quoteList(report.droppedStops, 4)}.`);
 
   // 6. Say what the platform corrected.
   if (report.droppedHunkRefs.length > 0) {
@@ -589,7 +657,12 @@ export function postprocessTour(input: PostprocessInput): PostprocessResult {
     );
   }
   const max = listCap(input.caps);
-  const leastConfident = mergeList(input.model.leastConfident, combine("Platform checks:", lcNotes), max, report);
+  const leastConfident = mergeList(
+    input.model.leastConfident,
+    combine("Platform checks:", lcNotes),
+    max,
+    report,
+  );
   const notDone = mergeList(input.model.notDone, combine("Platform:", ndNotes), max, report);
 
   // 7. Word cap.

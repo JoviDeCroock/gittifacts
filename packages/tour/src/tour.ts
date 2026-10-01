@@ -22,7 +22,14 @@ import {
 } from "./budget.js";
 import { type OmittedHunk, renderDiff } from "./diff.js";
 import { type CallRecord, type JudgeInput, type JudgeResult, runJudge } from "./judge.js";
-import { type LlmClient, LlmError, type LlmMessage, type LlmRequest, type LlmResponse, parseJsonLoose } from "./llm.js";
+import {
+  type LlmClient,
+  LlmError,
+  type LlmMessage,
+  type LlmRequest,
+  type LlmResponse,
+  parseJsonLoose,
+} from "./llm.js";
 import {
   capsForLane,
   collapseTransforms,
@@ -31,7 +38,13 @@ import {
   postprocessTour,
   type Readability,
 } from "./postprocess.js";
-import { buildRetryPrompt, buildTourUserPrompt, PROMPT_VERSION, TOUR_SYSTEM_PROMPT, type TourPromptInput } from "./prompt.js";
+import {
+  buildRetryPrompt,
+  buildTourUserPrompt,
+  PROMPT_VERSION,
+  TOUR_SYSTEM_PROMPT,
+  type TourPromptInput,
+} from "./prompt.js";
 import { hasRisk, type RankedHunk, rankHunks } from "./rank.js";
 import { formatIssues, ModelTour, TOUR_JSON_SCHEMA } from "./schema.js";
 
@@ -78,7 +91,13 @@ export type TourOutcome =
       readability: Readability;
       diagnostics: TourDiagnostics;
     }
-  | { status: "failed"; reason: string; costUsd: number; budgetExceeded: boolean; diagnostics: TourDiagnostics };
+  | {
+      status: "failed";
+      reason: string;
+      costUsd: number;
+      budgetExceeded: boolean;
+      diagnostics: TourDiagnostics;
+    };
 
 /** Structurally a `Reviewer` (coordinator port) with richer results. */
 export interface TourReviewer {
@@ -144,7 +163,9 @@ function fmtRef(r: RankedHunk): string {
 
 type Validation = { ok: true; tour: ModelTour } | { ok: false; problems: string };
 
-export function validateModelTour(res: Pick<LlmResponse, "text" | "json" | "stopReason">): Validation {
+export function validateModelTour(
+  res: Pick<LlmResponse, "text" | "json" | "stopReason">,
+): Validation {
   const cutOff = res.stopReason === "length" || res.stopReason === "max_tokens";
   const json = res.json ?? parseJsonLoose(res.text);
   if (json === undefined) {
@@ -172,7 +193,9 @@ function notDoneNotes(omitted: readonly OmittedHunk[], partial: number): string[
     );
   }
   if (omitted.some((o) => o.why === "lockfile")) {
-    notes.push("Lockfile hunks were not read line by line; the dependencies evidence summarizes them.");
+    notes.push(
+      "Lockfile hunks were not read line by line; the dependencies evidence summarizes them.",
+    );
   }
   return notes;
 }
@@ -220,7 +243,10 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
 
   const collapse = collapseTransforms(input.diff, items);
   diagnostics.collapsedFiles = [...collapse.paths];
-  const reviewDiff: ChangeDiff = { ...input.diff, files: input.diff.files.filter((f) => !collapse.paths.has(f.path)) };
+  const reviewDiff: ChangeDiff = {
+    ...input.diff,
+    files: input.diff.files.filter((f) => !collapse.paths.has(f.path)),
+  };
   const ranking = rankHunks({
     diff: input.diff,
     evidence: items,
@@ -228,10 +254,19 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
     reasons: input.classification.reasons,
     exclude: collapse.paths,
   });
-  diagnostics.ranking = ranking.slice(0, 10).map((r) => ({ rank: r.rank, ref: fmtRef(r), factors: r.factors.map((f) => f.detail) }));
-  const slots = ranking.map((r) => ({ path: r.path, hunkIndex: r.hunkIndex, rank: r.rank, hasRisk: hasRisk(r) }));
+  diagnostics.ranking = ranking
+    .slice(0, 10)
+    .map((r) => ({ rank: r.rank, ref: fmtRef(r), factors: r.factors.map((f) => f.detail) }));
+  const slots = ranking.map((r) => ({
+    path: r.path,
+    hunkIndex: r.hunkIndex,
+    rank: r.rank,
+    hasRisk: hasRisk(r),
+  }));
 
-  const transformWords = collapse.stop ? countWords(collapse.stop.title) + countWords(collapse.stop.why) : 0;
+  const transformWords = collapse.stop
+    ? countWords(collapse.stop.title) + countWords(collapse.stop.why)
+    : 0;
   const promptInput: TourPromptInput = {
     change: subject,
     plan: input.plan,
@@ -255,7 +290,13 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
 
   // Fit the diff to what the remaining budget can pay for (one call, worst-case output).
   const overhead = estimateTokens(TOUR_SYSTEM_PROMPT + buildTourUserPrompt(promptInput)) + 64;
-  const affordable = affordableInputTokens(tracker.remainingUsd, client.model, deps.tourMaxTokens, deps.prices, client.allowedModels);
+  const affordable = affordableInputTokens(
+    tracker.remainingUsd,
+    client.model,
+    deps.tourMaxTokens,
+    deps.prices,
+    client.allowedModels,
+  );
   const fullTokens = renderDiff(reviewDiff, slots, Number.POSITIVE_INFINITY).tokens;
   const diffBudget = Math.min(deps.tourDiffTokens, affordable - overhead);
   diagnostics.diffTokenBudget = Math.max(0, diffBudget);
@@ -268,7 +309,8 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
   const rendered = renderDiff(reviewDiff, slots, diffBudget);
   diagnostics.omittedHunks = rendered.omitted;
   promptInput.diffText = rendered.text;
-  promptInput.omittedHunks = rendered.omitted.filter((o) => o.why === "budget").length + rendered.partial.length;
+  promptInput.omittedHunks =
+    rendered.omitted.filter((o) => o.why === "budget").length + rendered.partial.length;
 
   const messages: LlmMessage[] = [{ role: "user", content: buildTourUserPrompt(promptInput) }];
   let model = client.model;
@@ -297,7 +339,8 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
       client.allowedModels,
     );
     if (!tracker.tryReserve(estimate)) {
-      const after = attempt > 1 ? ` (before regenerating; previous problems: ${clip(lastProblem, 300)})` : "";
+      const after =
+        attempt > 1 ? ` (before regenerating; previous problems: ${clip(lastProblem, 300)})` : "";
       return fail(
         `budget exceeded: spent $${tracker.spentUsd.toFixed(4)} + estimate $${estimate.toFixed(4)} > limit $${tracker.limitUsd.toFixed(4)}${after}`,
       );
@@ -340,7 +383,9 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
     );
   }
   if (parsed === null) {
-    return fail(`tour output invalid after ${diagnostics.attempts} attempt(s):\n${clip(lastProblem, 1500)}`);
+    return fail(
+      `tour output invalid after ${diagnostics.attempts} attempt(s):\n${clip(lastProblem, 1500)}`,
+    );
   }
 
   const post = postprocessTour({
@@ -371,7 +416,8 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
     },
     createdAt: deps.now().toISOString(),
   });
-  if (!tour.success) return fail(`post-processed tour failed the Tour schema:\n${formatIssues(tour.error)}`);
+  if (!tour.success)
+    return fail(`post-processed tour failed the Tour schema:\n${formatIssues(tour.error)}`);
 
   return {
     status: "ok",

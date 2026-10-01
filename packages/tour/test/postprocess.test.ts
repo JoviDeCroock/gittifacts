@@ -74,7 +74,9 @@ function codemodInput() {
   const input = breakingApiInput({
     diff,
     evidence: signed([transform]),
-    classification: classification(1, [{ code: "size.transform-excluded", lane: 0, message: "excluded" }]),
+    classification: classification(1, [
+      { code: "size.transform-excluded", lane: 0, message: "excluded" },
+    ]),
     plan: plan({ scopePaths: [] }),
   });
   return { input, transform };
@@ -85,7 +87,11 @@ describe("transform collapse", () => {
     const { input } = codemodInput();
     const collapse = collapseTransforms(input.diff, input.evidence.items);
     expect([...collapse.paths]).toEqual(RENAMED);
-    expect(collapse.stop).toMatchObject({ kind: "transform", verdict: "proven", evidenceRefs: ["transform:rename"] });
+    expect(collapse.stop).toMatchObject({
+      kind: "transform",
+      verdict: "proven",
+      evidenceRefs: ["transform:rename"],
+    });
     expect(collapse.stop?.hunkRefs.map((r) => r.file)).toEqual(RENAMED);
     expect(collapse.stop?.title).toBe("Mechanical: rename-oldName reproduced 3 file(s)");
   });
@@ -94,7 +100,11 @@ describe("transform collapse", () => {
     const { input } = codemodInput();
     const tour: ModelTour = goodModelTour({
       stops: [
-        stop({ kind: "intent", title: "Feature uses the new name", hunkRefs: [{ file: "src/feature.ts", startLine: 11, endLine: 11, side: "head" }] }),
+        stop({
+          kind: "intent",
+          title: "Feature uses the new name",
+          hunkRefs: [{ file: "src/feature.ts", startLine: 11, endLine: 11, side: "head" }],
+        }),
       ],
     });
     const client = new FakeLlmClient([{ json: tour }]);
@@ -171,7 +181,9 @@ describe("word and stop caps", () => {
   });
 
   it("leaves a tour that already fits untouched", async () => {
-    const outcome = await createReviewer(new FakeLlmClient([{ json: goodModelTour() }])).tour(breakingApiInput());
+    const outcome = await createReviewer(new FakeLlmClient([{ json: goodModelTour() }])).tour(
+      breakingApiInput(),
+    );
     if (outcome.status !== "ok") throw new Error(outcome.reason);
     expect(outcome.diagnostics.postprocess?.shortenedStops).toEqual([]);
     expect(outcome.tour.stops.map((s) => s.why)).toEqual(goodModelTour().stops.map((s) => s.why));
@@ -188,7 +200,9 @@ describe("estimatedReadSeconds", () => {
   });
 
   it("is reported on the outcome and matches the final tour", async () => {
-    const outcome = await createReviewer(new FakeLlmClient([{ json: goodModelTour() }])).tour(breakingApiInput());
+    const outcome = await createReviewer(new FakeLlmClient([{ json: goodModelTour() }])).tour(
+      breakingApiInput(),
+    );
     if (outcome.status !== "ok") throw new Error(outcome.reason);
     const { stops, leastConfident, notDone } = outcome.tour;
     const w = tourWords(stops, leastConfident, notDone);
@@ -243,7 +257,9 @@ describe("proof rules", () => {
   it("only ok, non-judgment, passing evidence can prove", () => {
     const byId = new Map(items.map((i) => [i.id, i]));
     expect(canProve(byId.get("red-green")!)).toBe(true);
-    expect(canProve({ ...byId.get("red-green")!, verdict: "not-proven" } as EvidenceItem)).toBe(false);
+    expect(canProve({ ...byId.get("red-green")!, verdict: "not-proven" } as EvidenceItem)).toBe(
+      false,
+    );
     expect(canProve({ ...byId.get("test-run")!, failed: 2 } as EvidenceItem)).toBe(false);
     expect(canProve({ ...byId.get("coverage")!, status: "error" } as EvidenceItem)).toBe(false);
     const judgment: EvidenceItem = {
@@ -272,9 +288,20 @@ describe("proof rules", () => {
   }
 
   it("downgrades proven stops citing only errored evidence or model judgments", () => {
-    const errored = items.map((i) => (i.id === "coverage" ? ({ ...i, status: "error", note: "lcov missing" } as EvidenceItem) : i));
+    const errored = items.map((i) =>
+      i.id === "coverage" ? ({ ...i, status: "error", note: "lcov missing" } as EvidenceItem) : i,
+    );
     const result = run(
-      goodModelTour({ stops: [stop({ kind: "proof", title: "Coverage proves it", evidenceRefs: ["coverage"], verdict: "proven" })] }),
+      goodModelTour({
+        stops: [
+          stop({
+            kind: "proof",
+            title: "Coverage proves it",
+            evidenceRefs: ["coverage"],
+            verdict: "proven",
+          }),
+        ],
+      }),
       errored,
     );
     expect(result.stops[0]).toMatchObject({ verdict: "unproven", evidenceRefs: ["coverage"] });
@@ -297,7 +324,11 @@ describe("proof rules", () => {
   it("keeps platform notes even when the model fills its lists", () => {
     const result = run(
       goodModelTour({
-        stops: [INTENT_STOP, stop({ title: "X", evidenceRefs: ["ghost"], verdict: "proven" }), RISK_DECL_STOP],
+        stops: [
+          INTENT_STOP,
+          stop({ title: "X", evidenceRefs: ["ghost"], verdict: "proven" }),
+          RISK_DECL_STOP,
+        ],
         leastConfident: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
       }),
     );
@@ -309,7 +340,9 @@ describe("proof rules", () => {
 
 describe("tour binding", () => {
   it("binds the tour to the diff's head and the change id", async () => {
-    const outcome = await createReviewer(new FakeLlmClient([{ json: goodModelTour() }])).tour(breakingApiInput());
+    const outcome = await createReviewer(new FakeLlmClient([{ json: goodModelTour() }])).tour(
+      breakingApiInput(),
+    );
     if (outcome.status !== "ok") throw new Error(outcome.reason);
     expect(outcome.tour.headSha).toBe(HEAD_SHA);
     expect(outcome.tour.changeId).toBe(CHANGE_ID);

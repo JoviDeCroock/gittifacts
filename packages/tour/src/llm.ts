@@ -8,7 +8,13 @@
  * - {@link FakeLlmClient}: deterministic scripted responses for tests.
  */
 import { z } from "zod";
-import { AUTO_ROUTER_MODEL, costOfUsage, DEFAULT_PRICES, type PriceTable, type TokenUsage } from "./budget.js";
+import {
+  AUTO_ROUTER_MODEL,
+  costOfUsage,
+  DEFAULT_PRICES,
+  type PriceTable,
+  type TokenUsage,
+} from "./budget.js";
 
 // ---------------------------------------------------------------- interface
 
@@ -55,11 +61,7 @@ export interface LlmClient {
 
 export type LlmErrorKind =
   /** The gateway refused for spend (HTTP 429: spend-limit rule or rate limit; we can't tell). */
-  | "budget"
-  | "http"
-  | "network"
-  | "timeout"
-  | "bad-response";
+  "budget" | "http" | "network" | "timeout" | "bad-response";
 
 export class LlmError extends Error {
   readonly kind: LlmErrorKind;
@@ -104,7 +106,9 @@ export function parseJsonLoose(text: string): unknown {
 }
 
 /** Validates and normalizes gateway metadata (≤ 5 flat entries, no `cf.` keys). */
-export function normalizeMetadata(metadata: LlmMetadata): Record<string, string | number | boolean> {
+export function normalizeMetadata(
+  metadata: LlmMetadata,
+): Record<string, string | number | boolean> {
   const out: Record<string, string | number | boolean> = {};
   for (const [key, value] of Object.entries(metadata)) {
     if (key.startsWith("cf.")) continue;
@@ -182,7 +186,7 @@ const OpenAiChatResponse = z.object({
       prompt_tokens: z.number().int().nonnegative(),
       completion_tokens: z.number().int().nonnegative(),
     })
-    
+
     .optional(),
 });
 
@@ -197,7 +201,7 @@ const AnthropicMessagesResponse = z.object({
       cache_read_input_tokens: z.number().int().nonnegative().nullable().optional(),
       cache_creation_input_tokens: z.number().int().nonnegative().nullable().optional(),
     })
-    
+
     .optional(),
 });
 
@@ -228,7 +232,10 @@ export class AiGatewayClient implements LlmClient {
   /** Build from Worker env vars; `model` comes from the BASE policy's `ai.reviewerModel`. */
   static fromEnv(
     env: unknown,
-    opts: { model: string } & Omit<AiGatewayClientOptions, "accountId" | "gatewayId" | "apiToken" | "model">,
+    opts: { model: string } & Omit<
+      AiGatewayClientOptions,
+      "accountId" | "gatewayId" | "apiToken" | "model"
+    >,
   ): AiGatewayClient {
     const parsed = AiGatewayEnv.parse(env);
     return new AiGatewayClient({
@@ -252,7 +259,11 @@ export class AiGatewayClient implements LlmClient {
   }
 
   /** Request headers and body, exposed for tests and the live script. */
-  buildRequest(req: LlmRequest): { url: string; headers: Record<string, string>; body: Record<string, unknown> } {
+  buildRequest(req: LlmRequest): {
+    url: string;
+    headers: Record<string, string>;
+    body: Record<string, unknown>;
+  } {
     const headers: Record<string, string> = {
       "content-type": "application/json",
       "cf-aig-gateway-id": this.opts.gatewayId,
@@ -266,10 +277,12 @@ export class AiGatewayClient implements LlmClient {
     }
     const timeout = this.opts.requestTimeoutMs ?? 120_000;
     headers["cf-aig-request-timeout"] = String(timeout);
-    if (this.opts.maxAttempts !== undefined) headers["cf-aig-max-attempts"] = String(this.opts.maxAttempts);
+    if (this.opts.maxAttempts !== undefined)
+      headers["cf-aig-max-attempts"] = String(this.opts.maxAttempts);
     if (this.opts.skipCache) headers["cf-aig-skip-cache"] = "true";
     if (this.model === AUTO_ROUTER_MODEL) {
-      if (this.opts.allowedModels?.length) headers["cf-aig-allowed-models"] = this.opts.allowedModels.join(",");
+      if (this.opts.allowedModels?.length)
+        headers["cf-aig-allowed-models"] = this.opts.allowedModels.join(",");
       if (this.opts.allowedProviders?.length) {
         headers["cf-aig-allowed-providers"] = this.opts.allowedProviders.join(",");
       }
@@ -278,7 +291,8 @@ export class AiGatewayClient implements LlmClient {
     if (this.format === "anthropic-messages") {
       headers["anthropic-version"] = "2023-06-01";
       const outputConfig: Record<string, unknown> = {};
-      if (req.jsonSchema) outputConfig.format = { type: "json_schema", schema: req.jsonSchema.schema };
+      if (req.jsonSchema)
+        outputConfig.format = { type: "json_schema", schema: req.jsonSchema.schema };
       if (this.opts.effort) outputConfig.effort = this.opts.effort;
       const body: Record<string, unknown> = {
         model: this.model,
@@ -337,12 +351,17 @@ export class AiGatewayClient implements LlmClient {
     try {
       payload = JSON.parse(raw) as unknown;
     } catch {
-      throw new LlmError("bad-response", `AI Gateway returned non-JSON: ${raw.slice(0, 200)}`, res.status);
+      throw new LlmError(
+        "bad-response",
+        `AI Gateway returned non-JSON: ${raw.slice(0, 200)}`,
+        res.status,
+      );
     }
 
     const routed = res.headers.get("cf-aig-routed-model") ?? undefined;
     const logId = res.headers.get("cf-aig-log-id") ?? undefined;
-    const parsed = this.format === "anthropic-messages" ? parseAnthropic(payload) : parseOpenAi(payload);
+    const parsed =
+      this.format === "anthropic-messages" ? parseAnthropic(payload) : parseOpenAi(payload);
     const model = routed ?? parsed.model ?? this.model;
     const costUsd = costOfUsage(model, parsed.usage, this.prices);
     const json = parsed.text === "" ? undefined : parseJsonLoose(parsed.text);
@@ -368,14 +387,21 @@ interface ParsedCompletion {
 
 function parseOpenAi(payload: unknown): ParsedCompletion {
   const r = OpenAiChatResponse.safeParse(payload);
-  if (!r.success) throw new LlmError("bad-response", `Unexpected chat-completions response: ${r.error.message}`);
+  if (!r.success)
+    throw new LlmError("bad-response", `Unexpected chat-completions response: ${r.error.message}`);
   const choice = r.data.choices[0];
   if (r.data.usage === undefined) {
-    throw new LlmError("bad-response", "chat-completions response has no usage; cannot account for cost");
+    throw new LlmError(
+      "bad-response",
+      "chat-completions response has no usage; cannot account for cost",
+    );
   }
   return {
     text: choice?.message.content ?? "",
-    usage: { inputTokens: r.data.usage.prompt_tokens, outputTokens: r.data.usage.completion_tokens },
+    usage: {
+      inputTokens: r.data.usage.prompt_tokens,
+      outputTokens: r.data.usage.completion_tokens,
+    },
     model: r.data.model,
     stopReason: choice?.finish_reason ?? undefined,
   };
@@ -383,7 +409,8 @@ function parseOpenAi(payload: unknown): ParsedCompletion {
 
 function parseAnthropic(payload: unknown): ParsedCompletion {
   const r = AnthropicMessagesResponse.safeParse(payload);
-  if (!r.success) throw new LlmError("bad-response", `Unexpected messages response: ${r.error.message}`);
+  if (!r.success)
+    throw new LlmError("bad-response", `Unexpected messages response: ${r.error.message}`);
   if (r.data.usage === undefined) {
     throw new LlmError("bad-response", "messages response has no usage; cannot account for cost");
   }
@@ -391,9 +418,14 @@ function parseAnthropic(payload: unknown): ParsedCompletion {
     .filter((b) => b.type === "text")
     .map((b) => b.text ?? "")
     .join("");
-  const usage: TokenUsage = { inputTokens: r.data.usage.input_tokens, outputTokens: r.data.usage.output_tokens };
-  if (r.data.usage.cache_read_input_tokens) usage.cacheReadInputTokens = r.data.usage.cache_read_input_tokens;
-  if (r.data.usage.cache_creation_input_tokens) usage.cacheWriteInputTokens = r.data.usage.cache_creation_input_tokens;
+  const usage: TokenUsage = {
+    inputTokens: r.data.usage.input_tokens,
+    outputTokens: r.data.usage.output_tokens,
+  };
+  if (r.data.usage.cache_read_input_tokens)
+    usage.cacheReadInputTokens = r.data.usage.cache_read_input_tokens;
+  if (r.data.usage.cache_creation_input_tokens)
+    usage.cacheWriteInputTokens = r.data.usage.cache_creation_input_tokens;
   return { text, usage, model: r.data.model, stopReason: r.data.stop_reason ?? undefined };
 }
 
@@ -451,7 +483,9 @@ export class FakeLlmClient implements LlmClient {
     const out: LlmResponse = {
       text,
       usage: next.usage ?? {
-        inputTokens: Math.ceil((req.system.length + req.messages.reduce((n, m) => n + m.content.length, 0)) / 3),
+        inputTokens: Math.ceil(
+          (req.system.length + req.messages.reduce((n, m) => n + m.content.length, 0)) / 3,
+        ),
         outputTokens: Math.ceil(text.length / 3),
       },
       costUsd: next.costUsd ?? this.defaultCostUsd,

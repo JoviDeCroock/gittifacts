@@ -100,7 +100,11 @@ export interface TokenUsage {
   cacheWriteInputTokens?: number;
 }
 
-export function costOfUsage(model: string, usage: TokenUsage, table: PriceTable = DEFAULT_PRICES): number {
+export function costOfUsage(
+  model: string,
+  usage: TokenUsage,
+  table: PriceTable = DEFAULT_PRICES,
+): number {
   const { price } = priceFor(model, table);
   const cacheRead = price.cacheReadPerMTok ?? price.inputPerMTok * 0.1;
   const cacheWrite = price.cacheWritePerMTok ?? price.inputPerMTok * 1.25;
@@ -131,7 +135,8 @@ export function estimateCallCostUsd(
 ): number {
   const { price } = priceFor(model, table, allowedModels);
   return roundUsd(
-    (estimateTokens(inputText) * price.inputPerMTok + maxOutputTokens * price.outputPerMTok) / 1_000_000,
+    (estimateTokens(inputText) * price.inputPerMTok + maxOutputTokens * price.outputPerMTok) /
+      1_000_000,
   );
 }
 
