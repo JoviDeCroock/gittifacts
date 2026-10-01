@@ -15,18 +15,23 @@ export {
   MIGRATION_GLOBS,
   NON_SOURCE_GLOBS,
   normalizePath,
-  PLATFORM_GLOBS,
   type PathMatcher,
+  PLATFORM_GLOBS,
 } from "./paths.js";
 export {
   formatReason,
   GATES,
   type Gate,
   REASON_CODES,
+  REVERT_WAIVABLE_CODES,
   type ReasonCode,
   type ReasonOutcome,
   type ReasonParams,
   type ReasonSpec,
-  REVERT_WAIVABLE_CODES,
 } from "./reasons.js";
-export { type ShadowAgreement, type ShadowSample, sampleAgrees, shadowAgreement } from "./shadow.js";
+export {
+  type ShadowAgreement,
+  type ShadowSample,
+  sampleAgrees,
+  shadowAgreement,
+} from "./shadow.js";

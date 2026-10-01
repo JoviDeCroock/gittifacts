@@ -41,7 +41,6 @@ import {
   NON_SOURCE_GLOBS,
   normalizePath,
   PLATFORM_GLOBS,
-  type PathMatcher,
   sortStrings,
 } from "./paths.js";
 import {
@@ -49,10 +48,10 @@ import {
   GATES,
   type Gate,
   REASON_CODES,
+  REVERT_WAIVABLE_CODES,
   type ReasonCode,
   type ReasonOutcome,
   type ReasonParams,
-  REVERT_WAIVABLE_CODES,
 } from "./reasons.js";
 
 // ---------------------------------------------------------------- public types
@@ -298,7 +297,11 @@ function satisfiedPlanless(
         if (context.pureRevertVerified) return category;
         break;
       case "verified-transform":
-        if (diffStats !== null && diffStats.files.length > 0 && diffStats.files.every(transforms.covers))
+        if (
+          diffStats !== null &&
+          diffStats.files.length > 0 &&
+          diffStats.files.every(transforms.covers)
+        )
           return category;
         break;
       case "dependency-patch":
@@ -335,11 +338,19 @@ function checkTests(out: Reasons, items: readonly TestRun[]): void {
   for (const r of failing) out.add("tests.failing", { step: r.step, failed: r.failed }, r.id);
   if (failing.length === 0) {
     const passed = s.ok.reduce((n, r) => n + r.passed, 0);
-    out.add("tests.passed", { passed, runs: s.ok.length }, s.ok.length === 1 ? s.ok[0]?.id : undefined);
+    out.add(
+      "tests.passed",
+      { passed, runs: s.ok.length },
+      s.ok.length === 1 ? s.ok[0]?.id : undefined,
+    );
   }
 }
 
-function checkRedGreen(out: Reasons, items: readonly RedGreenProof[], category: ClaimedCategory): void {
+function checkRedGreen(
+  out: Reasons,
+  items: readonly RedGreenProof[],
+  category: ClaimedCategory,
+): void {
   const s = readSignal(items);
   const required = category === "fix";
   // Required for a claimed fix (Lane 2 when errored); otherwise an errored proof is an
@@ -366,13 +377,21 @@ function checkRedGreen(out: Reasons, items: readonly RedGreenProof[], category: 
   }
 }
 
-function checkPublicApi(out: Reasons, items: readonly PublicApiDiff[], noSourceChanged: boolean): void {
+function checkPublicApi(
+  out: Reasons,
+  items: readonly PublicApiDiff[],
+  noSourceChanged: boolean,
+): void {
   const s = readSignal(items);
   for (const e of s.errored) out.add("signal.error.public-api", { detail: errorDetail(e) }, e.id);
   if (s.ok.length === 0) {
     if (s.errored.length > 0) return;
     if (s.skipped.length > 0 && noSourceChanged) {
-      out.add("signal.skip-accepted.public-api", { detail: skippedDetail(s.skipped) }, s.skipped[0]?.id);
+      out.add(
+        "signal.skip-accepted.public-api",
+        { detail: skippedDetail(s.skipped) },
+        s.skipped[0]?.id,
+      );
     } else {
       out.add("signal.missing.public-api", { detail: skippedDetail(s.skipped) }, s.skipped[0]?.id);
     }
@@ -381,7 +400,9 @@ function checkPublicApi(out: Reasons, items: readonly PublicApiDiff[], noSourceC
   let flagged = false;
   for (const d of s.ok) {
     if (d.classification === "breaking") {
-      const symbols = d.packages.flatMap((p) => [...p.removed, ...p.changed].map((c) => `${p.name}:${c.symbol}`));
+      const symbols = d.packages.flatMap((p) =>
+        [...p.removed, ...p.changed].map((c) => `${p.name}:${c.symbol}`),
+      );
       out.add("api.breaking", { symbols: formatList(symbols, 8, "see evidence") }, d.id);
       flagged = true;
     } else if (d.classification === "additive") {
@@ -401,7 +422,11 @@ function checkDependencies(out: Reasons, s: SignalRead<DependencyDiff>, policy: 
   for (const e of s.errored) out.add("signal.error.dependencies", { detail: errorDetail(e) }, e.id);
   if (s.ok.length === 0) {
     if (s.errored.length === 0)
-      out.add("signal.missing.dependencies", { detail: skippedDetail(s.skipped) }, s.skipped[0]?.id);
+      out.add(
+        "signal.missing.dependencies",
+        { detail: skippedDetail(s.skipped) },
+        s.skipped[0]?.id,
+      );
     return;
   }
   /** Anchor an aggregated reason to the first item that contributed to it. */
@@ -428,7 +453,11 @@ function checkDependencies(out: Reasons, s: SignalRead<DependencyDiff>, policy: 
   if (scripts.length > 0)
     out.add(
       "dependency.install-script",
-      { names: formatList(scripts.map((x) => `${x.name} (${x.script}: ${truncate(x.command, 80)})`)) },
+      {
+        names: formatList(
+          scripts.map((x) => `${x.name} (${x.script}: ${truncate(x.command, 80)})`),
+        ),
+      },
       ref((d) => d.newInstallScripts.length > 0),
     );
 
@@ -437,7 +466,9 @@ function checkDependencies(out: Reasons, s: SignalRead<DependencyDiff>, policy: 
     other: "dependency.other-bump",
     minor: "dependency.minor",
     prerelease: "dependency.prerelease",
-    patch: policy.dependencies.allowPatchBumpsInLane0 ? "dependency.patch" : "dependency.patch-not-allowed",
+    patch: policy.dependencies.allowPatchBumpsInLane0
+      ? "dependency.patch"
+      : "dependency.patch-not-allowed",
   };
   const byCode = new Map<ReasonCode, string[]>();
   for (const c of changed) {
@@ -448,12 +479,22 @@ function checkDependencies(out: Reasons, s: SignalRead<DependencyDiff>, policy: 
     byCode.set(code, names);
   }
   for (const [code, names] of byCode) {
-    out.add(code, { names: formatList(names) }, ref((d) => d.changed.length > 0));
+    out.add(
+      code,
+      { names: formatList(names) },
+      ref((d) => d.changed.length > 0),
+    );
   }
 
   if (added.length === 0 && removed.length === 0 && changed.length === 0) {
-    if (lockfileChanged) out.add("dependency.lockfile-only", {}, ref((d) => d.lockfileChanged));
-    else if (scripts.length === 0) out.add("dependency.none", {}, s.ok.length === 1 ? s.ok[0]?.id : undefined);
+    if (lockfileChanged)
+      out.add(
+        "dependency.lockfile-only",
+        {},
+        ref((d) => d.lockfileChanged),
+      );
+    else if (scripts.length === 0)
+      out.add("dependency.none", {}, s.ok.length === 1 ? s.ok[0]?.id : undefined);
   }
 }
 
@@ -464,14 +505,20 @@ function checkSensitive(
   policy: RepoPolicy,
 ): void {
   const s = readSignal(items);
-  for (const e of s.errored) out.add("signal.error.sensitive-paths", { detail: errorDetail(e) }, e.id);
+  for (const e of s.errored)
+    out.add("signal.error.sensitive-paths", { detail: errorDetail(e) }, e.id);
   if (s.ok.length === 0 && s.errored.length === 0)
-    out.add("signal.missing.sensitive-paths", { detail: skippedDetail(s.skipped) }, s.skipped[0]?.id);
+    out.add(
+      "signal.missing.sensitive-paths",
+      { detail: skippedDetail(s.skipped) },
+      s.skipped[0]?.id,
+    );
 
   // Defence in depth: the evidence may have been computed with the head's policy. Always also
   // match the diff against the BASE policy passed in here.
   const hits: string[] = [];
-  for (const item of s.ok) for (const h of item.hits) hits.push(`${normalizePath(h.path)} (${h.pattern})`);
+  for (const item of s.ok)
+    for (const h of item.hits) hits.push(`${normalizePath(h.path)} (${h.pattern})`);
   for (const pattern of policy.sensitivePaths) {
     const matches = compileGlobs([pattern], "match-all");
     for (const p of paths) if (matches(p)) hits.push(`${p} (${pattern})`);
@@ -596,7 +643,11 @@ function checkCoverage(
   if (s.ok.length === 0) {
     if (s.errored.length > 0) return;
     if (s.skipped.length > 0 && noSourceChanged) {
-      out.add("signal.skip-accepted.coverage", { detail: skippedDetail(s.skipped) }, s.skipped[0]?.id);
+      out.add(
+        "signal.skip-accepted.coverage",
+        { detail: skippedDetail(s.skipped) },
+        s.skipped[0]?.id,
+      );
     } else {
       out.add("signal.missing.coverage", { detail: skippedDetail(s.skipped) }, s.skipped[0]?.id);
     }
@@ -644,9 +695,14 @@ function checkMutation(out: Reasons, items: readonly MutationScore[], threshold:
 }
 
 function checkTransforms(out: Reasons, t: TransformAnalysis, category: ClaimedCategory): void {
-  for (const e of t.read.errored) out.add("signal.error.transform", { detail: errorDetail(e) }, e.id);
+  for (const e of t.read.errored)
+    out.add("signal.error.transform", { detail: errorDetail(e) }, e.id);
   for (const m of t.mismatched)
-    out.add("transform.mismatch", { transform: m.transform, paths: formatList(m.mismatchedFiles) }, m.id);
+    out.add(
+      "transform.mismatch",
+      { transform: m.transform, paths: formatList(m.mismatchedFiles) },
+      m.id,
+    );
   for (const v of t.verified)
     out.add("transform.verified", { transform: v.transform, files: v.files.length }, v.id);
   if (category === "transform" && t.verified.length === 0) out.add("transform.unverified");
@@ -770,7 +826,12 @@ export function classify(
 
   // Size (verified transform files excluded), Lane-0 gates, transforms.
   if (diffStats !== null) checkSize(out, diffStats, transforms.covers, policy);
-  checkCoverage(out, ofKind(items, "coverage"), policy.thresholds.changedLineCoverage, noSourceChanged);
+  checkCoverage(
+    out,
+    ofKind(items, "coverage"),
+    policy.thresholds.changedLineCoverage,
+    noSourceChanged,
+  );
   checkMutation(out, ofKind(items, "mutation"), policy.thresholds.mutationScore);
   checkTransforms(out, transforms, change.category);
 

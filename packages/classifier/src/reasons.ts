@@ -237,7 +237,7 @@ export const REASON_CODES = {
     "pass",
     ["public-api"],
     "Public API diff was skipped and no source files changed{detail}.",
-    'Only skipped public-api items, diffStats present and every changed file is non-source (docs, images, license).',
+    "Only skipped public-api items, diffStats present and every changed file is non-source (docs, images, license).",
   ),
 
   // ------------------------------------------------------------------ dependencies (required)
@@ -540,7 +540,7 @@ export const REASON_CODES = {
     "pass",
     ["coverage"],
     "Coverage was skipped and no source files changed{detail}.",
-    'Only skipped coverage items, diffStats present and every changed file is non-source (docs, images, license).',
+    "Only skipped coverage items, diffStats present and every changed file is non-source (docs, images, license).",
   ),
 
   // ------------------------------------------------------------------ mutation (Lane-0 gate)
