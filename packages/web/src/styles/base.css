@@ -1,0 +1,187 @@
+@import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
+@import "@fontsource-variable/atkinson-hyperlegible-mono/wght.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--canvas);
+  scrollbar-color: var(--rule-strong) transparent;
+  accent-color: var(--action);
+  caret-color: var(--action-ink);
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-regular);
+  font-optical-sizing: auto;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Light text on dark ground: a touch more weight, tracking and leading. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body {
+    letter-spacing: 0.008em;
+    line-height: 1.6;
+  }
+}
+:root[data-theme="dark"] body {
+  letter-spacing: 0.008em;
+  line-height: 1.6;
+}
+
+::selection {
+  background: var(--selection);
+  color: var(--text);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  text-wrap: balance;
+  letter-spacing: -0.012em;
+}
+
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+}
+
+a {
+  color: var(--action-ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  inset-inline-start: var(--s-4);
+  top: -100px;
+  z-index: var(--z-toast);
+  padding: var(--s-2) var(--s-4);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--r-control);
+  box-shadow: var(--shadow-raise);
+}
+.skip-link:focus {
+  top: var(--s-2);
+}
+
+/* Custom scrollbars on code and horizontal rails only; page scroll stays native. */
+.scroll-x {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.scroll-x::-webkit-scrollbar {
+  height: 8px;
+}
+.scroll-x::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border-radius: 8px;
+}
+
+/*
+ * Reduced motion: remove travel, keep state. Colour and opacity changes still run,
+ * shortened, so feedback is never erased.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-property: color, background-color, border-color, opacity, outline-color !important;
+    transition-duration: 80ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

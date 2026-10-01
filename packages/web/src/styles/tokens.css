@@ -1,0 +1,303 @@
+/*
+ * gittifacts design tokens.
+ * World: triage tags + observation charts. Cool form-paper ground, ink-navy text,
+ * one scrub-teal action ink. Lane bands are printed flat (carmine / ochre / green).
+ * Primitives first, then the semantic layer. Themes remap the semantic layer only.
+ */
+
+:root {
+  /* ---------------------------------------------------------------- primitives */
+  /* Neutrals, cool (hue 250), chroma reduced toward the ends. */
+  --p-paper-0: oklch(99.5% 0.002 250);
+  --p-paper-1: oklch(98.3% 0.004 250);
+  --p-paper-2: oklch(96.4% 0.006 250);
+  --p-paper-3: oklch(94% 0.008 250);
+  --p-rule-1: oklch(90.5% 0.01 250);
+  --p-rule-2: oklch(84.5% 0.013 252);
+  --p-ink-4: oklch(62% 0.02 254);
+  --p-ink-3: oklch(51% 0.024 256);
+  --p-ink-2: oklch(42% 0.028 258);
+  --p-ink-1: oklch(23% 0.035 262);
+
+  --p-night-0: oklch(17.5% 0.016 258);
+  --p-night-1: oklch(20.5% 0.018 258);
+  --p-night-2: oklch(23.5% 0.02 258);
+  --p-night-3: oklch(27% 0.022 258);
+  --p-night-rule-1: oklch(31% 0.022 258);
+  --p-night-rule-2: oklch(39% 0.024 258);
+  --p-night-ink-4: oklch(62% 0.02 252);
+  --p-night-ink-3: oklch(72% 0.018 252);
+  --p-night-ink-2: oklch(82% 0.014 250);
+  --p-night-ink-1: oklch(94% 0.008 250);
+
+  /* Scrub teal: the one action ink. */
+  --p-teal-50: oklch(95.5% 0.025 192);
+  --p-teal-100: oklch(91% 0.045 192);
+  --p-teal-500: oklch(55% 0.1 194);
+  --p-teal-600: oklch(47% 0.088 196);
+  --p-teal-700: oklch(40% 0.078 198);
+  --p-teal-night: oklch(76% 0.105 190);
+  --p-teal-night-hover: oklch(82% 0.1 190);
+
+  /* Triage bands. Printed flat, never glowing. */
+  --p-carmine-50: oklch(96% 0.02 25);
+  --p-carmine-100: oklch(92.5% 0.04 25);
+  --p-carmine-500: oklch(52% 0.175 27);
+  --p-carmine-600: oklch(46% 0.16 27);
+  --p-carmine-night: oklch(70% 0.15 25);
+
+  --p-ochre-50: oklch(97% 0.03 88);
+  --p-ochre-100: oklch(93.5% 0.06 86);
+  --p-ochre-300: oklch(84% 0.13 82);
+  --p-ochre-600: oklch(50% 0.1 70);
+  --p-ochre-night: oklch(83% 0.12 82);
+
+  --p-green-50: oklch(96.5% 0.025 155);
+  --p-green-100: oklch(92.5% 0.045 155);
+  --p-green-500: oklch(52% 0.115 152);
+  --p-green-600: oklch(45% 0.1 152);
+  --p-green-night: oklch(75% 0.13 152);
+
+  /* ---------------------------------------------------------------- type */
+  --font-ui: "Atkinson Hyperlegible Next Variable", "Atkinson Hyperlegible Next", ui-sans-serif,
+    system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-code: "Atkinson Hyperlegible Mono Variable", "Atkinson Hyperlegible Mono", ui-monospace,
+    "SF Mono", Menlo, Consolas, monospace;
+
+  /* Fixed rem scale, ratio 1.2 from 16px. Named by role. */
+  --text-meta: 0.75rem; /* 12px: timestamps, counts beside labels */
+  --text-small: 0.875rem; /* 14px: secondary lines */
+  --text-body: 1rem; /* 16px */
+  --text-title: 1.1875rem; /* 19px: section and stop titles */
+  --text-heading: 1.4375rem; /* 23px: screen titles on phone */
+  --text-display: 1.75rem; /* 28px: screen titles on desktop */
+  --text-code: 0.8125rem; /* 13px mono reads like 14px sans */
+
+  --leading-body: 1.55;
+  --leading-tight: 1.25;
+  --leading-code: 1.6;
+
+  --weight-regular: 400;
+  --weight-medium: 560;
+  --weight-bold: 720;
+
+  /* ---------------------------------------------------------------- space (4px base) */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4rem;
+
+  --gutter: 1rem;
+  --measure: 68ch;
+  --tap: 44px;
+
+  /* ---------------------------------------------------------------- shape */
+  --r-tag: 3px;
+  --r-control: 8px;
+  --r-panel: 12px;
+  --r-sheet: 18px;
+  --hairline: 1px;
+
+  /* ---------------------------------------------------------------- motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --dur-feedback: 120ms;
+  --dur-state: 200ms;
+  --dur-sheet: 320ms;
+
+  /* ---------------------------------------------------------------- layers */
+  --z-sticky: 200;
+  --z-backdrop: 300;
+  --z-sheet: 400;
+  --z-toast: 500;
+
+  /* ---------------------------------------------------------------- semantic: light */
+  color-scheme: light;
+  --canvas: var(--p-paper-1);
+  --surface: var(--p-paper-0);
+  --panel: var(--p-paper-2);
+  --panel-strong: var(--p-paper-3);
+  --rule: var(--p-rule-1);
+  --rule-strong: var(--p-rule-2);
+  --control-border: var(--p-ink-4);
+  --text: var(--p-ink-1);
+  --text-2: var(--p-ink-2);
+  --text-3: var(--p-ink-3);
+  --text-4: var(--p-ink-4);
+
+  --action: var(--p-teal-600);
+  --action-hover: var(--p-teal-700);
+  --action-text: var(--p-paper-0);
+  --action-ink: var(--p-teal-600);
+  --action-tint: var(--p-teal-50);
+  --focus: var(--p-teal-500);
+  --selection: var(--p-teal-100);
+
+  --lane2: var(--p-carmine-500);
+  --lane2-on: var(--p-paper-0);
+  --lane2-tint: var(--p-carmine-50);
+  --lane2-ink: var(--p-carmine-600);
+  --lane1: var(--p-ochre-300);
+  --lane1-edge: oklch(64% 0.12 74);
+  --lane1-on: var(--p-ink-1);
+  --lane1-tint: var(--p-ochre-50);
+  --lane1-ink: var(--p-ochre-600);
+  --lane0: var(--p-green-500);
+  --lane0-on: var(--p-paper-0);
+  --lane0-tint: var(--p-green-50);
+  --lane0-ink: var(--p-green-600);
+
+  --ok: var(--p-green-600);
+  --ok-tint: var(--p-green-50);
+  --ok-line: var(--p-green-100);
+  --warn: var(--p-ochre-600);
+  --warn-tint: var(--p-ochre-50);
+  --warn-line: var(--p-ochre-100);
+  --danger: var(--p-carmine-600);
+  --danger-tint: var(--p-carmine-50);
+  --danger-line: var(--p-carmine-100);
+
+  --diff-add: oklch(95.5% 0.035 155);
+  --diff-add-strong: oklch(90% 0.06 155);
+  --diff-del: oklch(95.5% 0.025 25);
+  --diff-del-strong: oklch(91% 0.05 25);
+  --code-bg: var(--p-paper-2);
+  --code-comment: var(--p-ink-3);
+  --code-string: oklch(43% 0.09 152);
+  --code-keyword: oklch(38% 0.1 262);
+  --code-number: oklch(46% 0.12 40);
+
+  --shadow-raise: 0 1px 2px oklch(23% 0.035 262 / 0.06), 0 4px 14px oklch(23% 0.035 262 / 0.06);
+  --shadow-sheet: 0 -6px 28px oklch(23% 0.035 262 / 0.14);
+  --backdrop: oklch(23% 0.035 262 / 0.38);
+}
+
+/* ---------------------------------------------------------------- semantic: dark */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: var(--p-night-0);
+    --surface: var(--p-night-1);
+    --panel: var(--p-night-2);
+    --panel-strong: var(--p-night-3);
+    --rule: var(--p-night-rule-1);
+    --rule-strong: var(--p-night-rule-2);
+    --control-border: var(--p-night-ink-4);
+    --text: var(--p-night-ink-1);
+    --text-2: var(--p-night-ink-2);
+    --text-3: var(--p-night-ink-3);
+    --text-4: var(--p-night-ink-4);
+    --action: var(--p-teal-night);
+    --action-hover: var(--p-teal-night-hover);
+    --action-text: var(--p-night-0);
+    --action-ink: var(--p-teal-night);
+    --action-tint: oklch(30% 0.045 195);
+    --focus: var(--p-teal-night);
+    --selection: oklch(36% 0.06 195);
+    --lane2: var(--p-carmine-night);
+    --lane2-on: var(--p-night-0);
+    --lane2-tint: oklch(27% 0.05 25);
+    --lane2-ink: var(--p-carmine-night);
+    --lane1: var(--p-ochre-night);
+    --lane1-edge: var(--p-ochre-night);
+    --lane1-on: var(--p-night-0);
+    --lane1-tint: oklch(28% 0.045 80);
+    --lane1-ink: var(--p-ochre-night);
+    --lane0: var(--p-green-night);
+    --lane0-on: var(--p-night-0);
+    --lane0-tint: oklch(27% 0.04 155);
+    --lane0-ink: var(--p-green-night);
+    --ok: var(--p-green-night);
+    --ok-tint: oklch(26% 0.035 155);
+    --ok-line: oklch(36% 0.06 155);
+    --warn: var(--p-ochre-night);
+    --warn-tint: oklch(27% 0.04 80);
+    --warn-line: oklch(38% 0.07 80);
+    --danger: var(--p-carmine-night);
+    --danger-tint: oklch(26% 0.045 25);
+    --danger-line: oklch(38% 0.08 25);
+    --diff-add: oklch(27% 0.045 155);
+    --diff-add-strong: oklch(33% 0.07 155);
+    --diff-del: oklch(27% 0.045 25);
+    --diff-del-strong: oklch(33% 0.08 25);
+    --code-bg: var(--p-night-2);
+    --code-comment: var(--p-night-ink-4);
+    --code-string: oklch(80% 0.1 152);
+    --code-keyword: oklch(80% 0.08 262);
+    --code-number: oklch(80% 0.1 50);
+    --shadow-raise: 0 1px 2px oklch(0% 0 0 / 0.3), 0 6px 18px oklch(0% 0 0 / 0.25);
+    --shadow-sheet: 0 -8px 32px oklch(0% 0 0 / 0.45);
+    --backdrop: oklch(10% 0.01 258 / 0.6);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: var(--p-night-0);
+  --surface: var(--p-night-1);
+  --panel: var(--p-night-2);
+  --panel-strong: var(--p-night-3);
+  --rule: var(--p-night-rule-1);
+  --rule-strong: var(--p-night-rule-2);
+  --control-border: var(--p-night-ink-4);
+  --text: var(--p-night-ink-1);
+  --text-2: var(--p-night-ink-2);
+  --text-3: var(--p-night-ink-3);
+  --text-4: var(--p-night-ink-4);
+  --action: var(--p-teal-night);
+  --action-hover: var(--p-teal-night-hover);
+  --action-text: var(--p-night-0);
+  --action-ink: var(--p-teal-night);
+  --action-tint: oklch(30% 0.045 195);
+  --focus: var(--p-teal-night);
+  --selection: oklch(36% 0.06 195);
+  --lane2: var(--p-carmine-night);
+  --lane2-on: var(--p-night-0);
+  --lane2-tint: oklch(27% 0.05 25);
+  --lane2-ink: var(--p-carmine-night);
+  --lane1: var(--p-ochre-night);
+  --lane1-edge: var(--p-ochre-night);
+  --lane1-on: var(--p-night-0);
+  --lane1-tint: oklch(28% 0.045 80);
+  --lane1-ink: var(--p-ochre-night);
+  --lane0: var(--p-green-night);
+  --lane0-on: var(--p-night-0);
+  --lane0-tint: oklch(27% 0.04 155);
+  --lane0-ink: var(--p-green-night);
+  --ok: var(--p-green-night);
+  --ok-tint: oklch(26% 0.035 155);
+  --ok-line: oklch(36% 0.06 155);
+  --warn: var(--p-ochre-night);
+  --warn-tint: oklch(27% 0.04 80);
+  --warn-line: oklch(38% 0.07 80);
+  --danger: var(--p-carmine-night);
+  --danger-tint: oklch(26% 0.045 25);
+  --danger-line: oklch(38% 0.08 25);
+  --diff-add: oklch(27% 0.045 155);
+  --diff-add-strong: oklch(33% 0.07 155);
+  --diff-del: oklch(27% 0.045 25);
+  --diff-del-strong: oklch(33% 0.08 25);
+  --code-bg: var(--p-night-2);
+  --code-comment: var(--p-night-ink-4);
+  --code-string: oklch(80% 0.1 152);
+  --code-keyword: oklch(80% 0.08 262);
+  --code-number: oklch(80% 0.1 50);
+  --shadow-raise: 0 1px 2px oklch(0% 0 0 / 0.3), 0 6px 18px oklch(0% 0 0 / 0.25);
+  --shadow-sheet: 0 -8px 32px oklch(0% 0 0 / 0.45);
+  --backdrop: oklch(10% 0.01 258 / 0.6);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --gutter: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  :root {
+    --gutter: 2rem;
+  }
+}

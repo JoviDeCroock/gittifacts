@@ -13,10 +13,14 @@
   "dependencies": {
     "@app/domain": "workspace:*",
     "@app/evidence": "workspace:*",
+    "@fontsource-variable/atkinson-hyperlegible-mono": "^5.3.0",
+    "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
     "@preact/signals": "^2.11.3",
     "better-auth": "^1.7.7",
+    "lucide": "^1.49.0",
     "preact": "^11.0.0",
-    "preact-iso": "^2.12.2"
+    "preact-iso": "^2.12.2",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",
