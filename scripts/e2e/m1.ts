@@ -179,14 +179,15 @@ async function main(): Promise<void> {
     // ------------------------------------------------------------ wait for evidence
     let reached = false;
     while (!reached && Date.now() < DEADLINE) {
-      const timeoutSec = Math.max(1, Math.min(600, Math.floor((DEADLINE - Date.now()) / 1000)));
+      // ≤ 240 s per long-poll: Node's fetch gives up waiting for response headers after 300 s.
+      // The MCP client's own request timeout (60 s by default) must outlast the server's wait.
+      const timeoutSec = Math.max(1, Math.min(240, Math.floor((DEADLINE - Date.now()) / 1000)));
       const w = ok(
         "wait_for_change",
-        await mcp.tools.wait_for_change({
-          changeId: change.id,
-          until: "evidence_ready",
-          timeoutSec,
-        }),
+        await mcp.tools.wait_for_change(
+          { changeId: change.id, until: "evidence_ready", timeoutSec },
+          { timeout: (timeoutSec + 30) * 1000 },
+        ),
       );
       log(`wait_for_change(evidence_ready): ${w.reason}; status ${w.change.status}`);
       if (w.reason === "unreachable")
