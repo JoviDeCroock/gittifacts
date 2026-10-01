@@ -9,7 +9,7 @@
  * coverage analysis; other runners fall back to Stryker's `command` runner (the test command per
  * mutant, no coverage analysis: slower but runner-agnostic).
  */
-import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type MutationScore, mutationScore, parseStrykerReport, type StrykerReport } from "@app/evidence";
 import { loadChanges } from "../lib/changes.js";
@@ -89,11 +89,17 @@ export async function mutation(ctx: Context): Promise<MutationScore> {
   const stryker = ownTool("@stryker-mutator/core");
   log(`mutation: stryker ${stryker?.version ?? "?"} on ${mutate.length} range(s) in ${files.length} file(s), concurrency ${concurrency}`);
   const timeoutMs = Number(process.env.GITTIFACTS_MUTATION_TIMEOUT_MS) || 25 * 60_000;
+  // Stryker's sandbox copies of the tests must not outlive the run (a later test run in the
+  // same checkout would pick them up).
+  const strykerTmp = join(ctx.repo, ".stryker-tmp");
+  const hadStrykerTmp = existsSync(strykerTmp);
   let result: Awaited<ReturnType<typeof run>>;
   try {
     result = await run(process.execPath, [bin, "run", configPath], { cwd: ctx.repo, timeoutMs });
   } catch (error) {
     return mutationError(`could not start stryker: ${errorMessage(error)}`);
+  } finally {
+    if (!hadStrykerTmp) rmSync(strykerTmp, { recursive: true, force: true });
   }
   if (result.timedOut) return mutationError(joinNotes([`stryker timed out after ${Math.round(timeoutMs / 60_000)} min`, ...notes]) ?? "timed out");
   if (!existsSync(reportFile)) {

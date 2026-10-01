@@ -41,6 +41,10 @@ function packageDir(name: string, from?: string): string | null {
   }
 }
 
+export function versionOf(dir: string | null): string | null {
+  return versionAt(dir);
+}
+
 function versionAt(dir: string | null): string | null {
   if (dir === null) return null;
   try {
