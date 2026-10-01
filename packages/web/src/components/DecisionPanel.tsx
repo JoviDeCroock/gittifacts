@@ -90,7 +90,7 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
   const intentKey = useRef<string | null>(null);
 
   useEffect(() => {
-    if (decision.value && layout === "bar") formRef.current?.querySelector<HTMLElement>("textarea, button")?.focus();
+    if (decision.value && layout === "bar") formRef.current?.querySelector<HTMLElement>("textarea")?.focus({ preventScroll: true });
   }, [decision.value, layout]);
 
   const shadowCandidate = change.computedLane === 0 && !lane0Enabled;

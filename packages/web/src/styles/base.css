@@ -124,6 +124,14 @@ svg {
   font-variant-numeric: tabular-nums;
 }
 
+.inline-code {
+  padding: 0.05em 0.35em;
+  border-radius: 4px;
+  background: var(--panel-strong);
+  font-size: 0.86em;
+  overflow-wrap: anywhere;
+}
+
 .mono {
   font-family: var(--font-code);
   font-size: var(--text-code);

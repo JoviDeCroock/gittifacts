@@ -13,6 +13,7 @@ import { DecisionPanel } from "../components/DecisionPanel.js";
 import { DiffExcerpt } from "../components/DiffExcerpt.js";
 import { EvidenceChip, MissingChip, RedGreenList, ShotPair } from "../components/EvidenceBits.js";
 import { Icon } from "../components/Icon.js";
+import { Prose } from "../components/Prose.js";
 import { Page } from "../components/Shell.js";
 import { TriageChart } from "../components/TriageChart.js";
 import { ErrorState, LaneTag, Loading, StatusChip, VerdictBadge, VerdictMark, Who } from "../components/ui.js";
@@ -214,7 +215,9 @@ function Handover({ tour, reviewer }: { tour: Tour; reviewer: string }) {
           </h3>
           <ul class="handover__list">
             {tour.leastConfident.map((t, i) => (
-              <li key={i}>{t}</li>
+              <li key={i}>
+                <Prose text={t} />
+              </li>
             ))}
           </ul>
         </div>
@@ -224,7 +227,9 @@ function Handover({ tour, reviewer }: { tour: Tour; reviewer: string }) {
           </h3>
           <ul class="handover__list handover__list--notdone">
             {tour.notDone.map((t, i) => (
-              <li key={i}>{t}</li>
+              <li key={i}>
+                <Prose text={t} />
+              </li>
             ))}
           </ul>
         </div>
@@ -250,7 +255,9 @@ function StopBody({ stop, data, items }: { stop: TourStop; data: TourData; items
   const showTests = redGreen?.kind === "red-green" && (stop.kind === "behavior" || stop.kind === "proof");
   return (
     <>
-      <p class="stop__why">{stop.why}</p>
+      <p class="stop__why">
+        <Prose text={stop.why} />
+      </p>
       {showTests && redGreen?.kind === "red-green" ? <RedGreenList item={redGreen} compact /> : null}
       {shots?.kind === "screenshots" && shots.shots.length > 0 ? (
         <div class="stop__shots">
@@ -297,7 +304,7 @@ function StopView({ stop, index, total, data, items }: { stop: TourStop; index: 
           <span class="sr-only">
             Stop {index + 1} of {total}:{" "}
           </span>
-          {stop.title}
+          <Prose text={stop.title} />
         </h2>
         <p class="stop__meta">
           <VerdictBadge verdict={stop.verdict} />
@@ -483,7 +490,7 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
             <span>
               {CATEGORY_LABEL[change.claim.category]} · updated <time dateTime={change.updatedAt}>{shortAge(change.updatedAt, now)} ago</time>
             </span>
-            {data.diff ? (
+            {data.diff && data.diff.files.length > 0 ? (
               <span class="tour__stat tnum">
                 <span class="tone--ok">+{data.diff.additions}</span> <span class="tone--danger">−{data.diff.deletions}</span> in {plural(data.diff.files.length, "file")}
               </span>
