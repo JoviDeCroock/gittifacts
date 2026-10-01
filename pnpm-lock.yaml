@@ -41,6 +41,9 @@ importers:
       '@app/classifier':
         specifier: workspace:*
         version: link:../../packages/classifier
+      '@app/conventions':
+        specifier: workspace:*
+        version: link:../../packages/conventions
       '@app/coordinator':
         specifier: workspace:*
         version: link:../../packages/coordinator
