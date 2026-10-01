@@ -102,6 +102,9 @@ importers:
 
   apps/sandbox:
     dependencies:
+      '@app/affected':
+        specifier: workspace:*
+        version: link:../../packages/affected
       '@app/ci-engine':
         specifier: workspace:*
         version: link:../../packages/ci-engine

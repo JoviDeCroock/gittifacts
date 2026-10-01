@@ -14,6 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { EvidenceItem, type ReproducibleTransform } from "@app/evidence";
+import { AFFECTED_PREFIX, affectedCommand } from "./commands/affected.js";
 import { coverage } from "./commands/coverage.js";
 import { dependencies } from "./commands/dependencies.js";
 import { changeDiff } from "./commands/diff.js";
@@ -47,6 +48,7 @@ export const EVIDENCE_PREFIX = "::evidence::";
 export const PLAN_PREFIX = "::plan::";
 export const PREVIEW_PREFIX = "::preview::";
 export const MERGE_PREFIX = "::merge::";
+export { AFFECTED_PREFIX };
 
 export const EVIDENCE_KINDS = [
   "red-green",
@@ -71,12 +73,15 @@ Usage:
   gittifacts-runner preview [--port 8787] [--ip 0.0.0.0] [--dir dist] [--dry-run]
   gittifacts-runner merge-attempt --base <sha> --onto <sha> --head <sha>
   gittifacts-runner apply-resolution --patch <file> [--onto <sha>]
+  gittifacts-runner affected --base <sha> --head <sha> [--coverage-map <file>]
 
 Merge queue:
   merge-attempt     replay base..head onto --onto (3-way, explicit merge base); prints
                     ${MERGE_PREFIX}{status: clean|conflict|error, files[], newSha | conflictSha}
   apply-resolution  apply a resolution patch on --onto (default HEAD; merge-attempt's conflictSha),
                     commit it as gittifacts-resolver and print ${MERGE_PREFIX}{status, newSha}
+  affected          the change's AffectedSet (touched files, module closure, test targets,
+                    public API, Workers) for the conflict graph: ${AFFECTED_PREFIX}<AffectedSet>
 
 Evidence kinds:
   red-green        new/changed tests: fail on base (head's tests overlaid), pass on head
@@ -99,6 +104,10 @@ Options:
   --out <file>              also write the JSON document here (default $GITTIFACTS_EVIDENCE_OUT)
   --onto <sha>              merge-attempt: the new base; apply-resolution: the commit to resolve
   --patch <file>            apply-resolution: unified diff from --onto to the resolved tree
+  --coverage-map <file>     affected: per-test coverage from main's last full run
+                            ({test: files[]}, {test: coverage-final.json}, or wrapped)
+  --public-api-evidence <file>
+                            affected: a public-api evidence item for a precise publicApi
   --port, --ip, --dir       preview: listen address and build output / assets directory
   --dry-run                 preview: print what would be served, don't start it
   -h, --help                show this help
@@ -113,6 +122,8 @@ interface Options {
   head: string | undefined;
   onto: string | undefined;
   patch: string | undefined;
+  coverageMap: string | undefined;
+  publicApiEvidence: string | undefined;
   cwd: string;
   packageManager: string | undefined;
   testCommand: string | undefined;
@@ -138,6 +149,8 @@ function parse(argv: readonly string[]): Options {
       sha: { type: "string" },
       onto: { type: "string" },
       patch: { type: "string" },
+      "coverage-map": { type: "string" },
+      "public-api-evidence": { type: "string" },
       cwd: { type: "string" },
       "package-manager": { type: "string" },
       "test-command": { type: "string" },
@@ -159,6 +172,8 @@ function parse(argv: readonly string[]): Options {
     head: values.head ?? values.sha ?? env("GITTIFACTS_HEAD_SHA"),
     onto: values.onto ?? env("GITTIFACTS_ONTO_SHA"),
     patch: values.patch,
+    coverageMap: values["coverage-map"] ?? env("GITTIFACTS_COVERAGE_MAP"),
+    publicApiEvidence: values["public-api-evidence"],
     cwd: resolve(values.cwd ?? process.cwd()),
     packageManager: values["package-manager"],
     testCommand: values["test-command"],
@@ -378,6 +393,19 @@ export async function main(argv: readonly string[]): Promise<number> {
 
   if (command === "merge-attempt" || command === "apply-resolution") {
     return mergeCommand(command, opts);
+  }
+
+  if (command === "affected") {
+    return affectedCommand(
+      {
+        cwd: opts.cwd,
+        base: opts.base,
+        head: opts.head,
+        coverageMap: opts.coverageMap,
+        publicApiEvidence: opts.publicApiEvidence,
+      },
+      (doc) => emit(AFFECTED_PREFIX, doc, opts.out),
+    );
   }
 
   let kind: EvidenceCommand | "diff" | "policy-document";

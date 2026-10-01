@@ -10,6 +10,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@app/affected": "workspace:*",
     "@app/ci-engine": "workspace:*",
     "@app/domain": "workspace:*",
     "@app/evidence": "workspace:*",

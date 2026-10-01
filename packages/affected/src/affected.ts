@@ -66,6 +66,8 @@ export interface ComputeInput {
    * exported-signature diff decides.
    */
   publicApi?: boolean | null;
+  /** Caller notes (e.g. an unusable input), added to the `affected` report. */
+  notes?: readonly string[];
 }
 
 export function defaultAnalyzers(): Analyzer[] {
@@ -138,7 +140,7 @@ export function computeAffectedSet(input: ComputeInput): AffectedSet {
   const files = sortedUnique(touchedList);
   const deleted = new Set(files.filter((p) => !headFiles.has(p)));
   const reports: AnalyzerReport[] = [];
-  const affectedNotes: string[] = [];
+  const affectedNotes: string[] = [...(input.notes ?? [])];
   let affectedComplete = true;
 
   // ---- module graph
