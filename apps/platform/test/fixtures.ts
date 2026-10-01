@@ -63,6 +63,8 @@ export function repoFixture(over: Partial<Repo> = {}): Repo {
     policy: defaultPolicy(),
     policySha: BASE_SHA,
     deployTarget: null,
+    claim: { status: "claimed", ownerId: null, expiresAt: null },
+    template: null,
     createdAt: new Date().toISOString(),
     ...over,
   };

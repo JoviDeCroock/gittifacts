@@ -98,12 +98,21 @@ export const repos = sqliteTable(
     policy: text("policy", { mode: "json" }).$type<unknown>().notNull(),
     policySha: text("policy_sha"),
     deployTarget: text("deploy_target"),
+    /** Onboarding §4: unclaimed projects are created without an account and expire unless claimed. */
+    claimStatus: text("claim_status", { enum: ["claimed", "unclaimed"] })
+      .notNull()
+      .default("claimed"),
+    claimOwnerId: text("claim_owner_id"),
+    claimExpiresAt: text("claim_expires_at"),
+    template: text("template"),
     createdBy: text("created_by"),
     createdAt: text("created_at").notNull(),
   },
   (t) => [
     uniqueIndex("repos_artifacts_name_uq").on(t.artifactsName),
     uniqueIndex("repos_namespace_name_uq").on(t.namespace, t.name),
+    index("repos_claim_expiry_idx").on(t.claimStatus, t.claimExpiresAt),
+    index("repos_claim_owner_idx").on(t.claimOwnerId),
   ],
 );
 
@@ -349,6 +358,29 @@ export const auditEvents = sqliteTable(
     primaryKey({ columns: [t.log, t.seq] }),
     index("audit_events_subject_seq_idx").on(t.log, t.subject, t.seq),
     index("audit_events_principal_seq_idx").on(t.log, t.principalId, t.seq),
+  ],
+);
+
+/**
+ * Idempotency keys (onboarding §5): (principal, key) → fingerprint of the first request and its
+ * response, kept 24 h. A replay returns the stored response; another request under the same key
+ * is a 409. `status` is null while the first request is still running.
+ */
+export const idempotencyKeys = sqliteTable(
+  "idempotency_keys",
+  {
+    principalId: text("principal_id").notNull(),
+    key: text("key").notNull(),
+    /** hex SHA-256 of "<method> <path>\n<body>". */
+    requestHash: text("request_hash").notNull(),
+    status: integer("status"),
+    response: text("response"),
+    createdAt: text("created_at").notNull(),
+    expiresAt: text("expires_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.principalId, t.key] }),
+    index("idempotency_keys_expires_idx").on(t.expiresAt),
   ],
 );
 
