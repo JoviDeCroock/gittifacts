@@ -110,3 +110,34 @@ and publishes exactly those schemas on `tools/list`. `mcp-tada@0.4.0` derives a 
 exports a typed client factory (`@app/mcp` → `createPlatformClient`) used by our e2e tests and offered to agent
 authors. A committed `tools.introspection.d.ts` snapshot is checked against the deployed server with
 `mcp-tada check` in CI, so tool contract drift fails the build.
+
+## 2026-10-01 — Classifier judgment calls
+
+Full table in `packages/classifier/README.md` (93 reason codes, 20 Lane-0 gates). The calls that go beyond the spec:
+
+- **Sensitive paths.** The classifier re-checks the diff against the base `policy.sensitivePaths` itself instead of
+  trusting the evidence item alone. Rename/copy sources count for sensitive paths, scope, migrations, `.platform/` and transforms.
+- **Skips.** A skipped `public-api` or `coverage` signal is accepted only for docs, image or licence-only diffs (an allow-list).
+  A skipped `mutation` signal is never accepted. A docs-only change needs a mutation item with score 1 and zero mutants.
+- **Multiple items of one kind.** Any error escalates, the lowest coverage or mutation score wins, and the worst API classification wins.
+- **Additions.**
+  - `tests.failing` (L2): a test run reports failures while CI says passed.
+  - `dependency.lockfile-only` (L1).
+  - `transform.mismatch` (L2) applies to any claimed category.
+  - Unrecognised runtime values are read as the worst case.
+- **Plan approval** counts only with `status=approved`, `approvedBy` set, and approver ≠ author.
+- **`dependency-patch` planless Lane 0** needs at least one patch bump, may only modify manifests and lockfiles, and each
+  manifest's line churn is bounded by its recorded bumps, so script edits can't ride along.
+- **Verified reverts.** Waived reasons stay visible as `revert.waived` (L0). The result is lane 0 and not shadowed.
+- **Size.** Files fully reproduced by a verified transform don't count towards the line or file thresholds.
+- **`blocked`** only covers CI failure, or evidence that is present but unverified. `requiresHumanApproval` is also set when
+  diff stats are missing, because a policy change can't be ruled out.
+- **Known limit.** Detaching a plan from a change would turn `scope.drift` (L2) into L1, so `Change.planId` is immutable
+  once set. The API never allows changing it.
+
+## 2026-10-01 — Reproducible transforms run the BASE copy of the transform script
+
+A codemod added in the same change it claims to reproduce proves nothing: it could just write out head's files.
+The platform runs `.platform/transforms/<name>` **from the base tree** against a clean base checkout and compares
+the result byte-for-byte with head. A change that adds or edits a transform script touches `.platform/**`, which makes
+it Lane 2 with a human approval. Once that script is on main, later changes can use it to reach Lane 0.
