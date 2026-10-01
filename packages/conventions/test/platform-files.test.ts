@@ -2,6 +2,11 @@ import { RepoPolicy } from "@app/domain";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
+  type PipelineFunction,
+  PipelineSpec,
+  recordPipeline,
+} from "../../ci-engine/src/plan/index.js";
+import {
   defaultCiTs,
   defaultPolicyTs,
   detectProject,
@@ -51,24 +56,23 @@ interface Recorded {
   command: string;
   parent: string | null;
   inputs: string[] | null;
+  after: string[];
 }
 
-/** A minimal stand-in for the ci-engine's plan-mode recorder. */
+/**
+ * The ci-engine's plan-mode recorder (the code that evaluates `.platform/ci.ts` in the sandbox),
+ * mapped to a compact shape. Like `@cloudflare/ci`, `runner()` exists on the awaited result only.
+ */
 async function record(pipeline: unknown): Promise<Recorded[]> {
-  const steps: Recorded[] = [];
-  type Spec = { name: string; command: string; cache?: { inputs: string[] } };
-  const runner = (parent: string | null) => (spec: Spec) => {
-    steps.push({
-      name: spec.name,
-      command: spec.command,
-      parent,
-      inputs: spec.cache?.inputs ?? null,
-    });
-    const p = Promise.resolve({ exitCode: 0 });
-    return Object.assign(p, { runner: runner(spec.name) });
-  };
-  await (pipeline as (ci: unknown) => Promise<void>)({ runner: runner(null) });
-  return steps;
+  const spec = await recordPipeline(pipeline as PipelineFunction);
+  expect(PipelineSpec.safeParse(spec).success).toBe(true);
+  return spec.steps.map((s) => ({
+    name: s.name,
+    command: s.command,
+    parent: s.parent,
+    inputs: s.cache?.inputs ?? null,
+    after: s.after,
+  }));
 }
 
 describe("defaultCiTs", () => {
@@ -93,6 +97,8 @@ describe("defaultCiTs", () => {
       for (const s of steps.slice(1)) {
         expect(s.command).toBe(`pnpm run ${s.name}`);
         expect(s.inputs).toEqual(TEMPLATES[id].features.cacheInputs);
+        // Parallel: each check waits only for its parent (install), not for its siblings.
+        expect(s.after).toEqual([]);
       }
     },
   );

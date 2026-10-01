@@ -2,19 +2,20 @@
 // are always Lane 2 and need a human's approval.
 //
 // Self-contained on purpose (no imports): the platform evaluates this file in a sandbox with a
-// `ci` builder. `ci.runner()` starts a step from a fresh checkout, `step.runner()` starts a step
-// from `step`'s snapshot (so it reuses the install), and awaiting a step waits for it. A step is
-// skipped, reusing its last result, when none of its `cache.inputs` files changed.
+// `ci` builder. `await ci.runner()` runs a step from a fresh checkout and resolves to the finished
+// step; `step.runner()` runs a step from that step's snapshot (so it reuses the install). Steps
+// started without awaiting in between run in parallel. A step is skipped, reusing its last
+// result, when none of its `cache.inputs` files changed.
 // The platform adds its evidence steps (red/green, coverage, public API, ...) after these.
 
 type RunnerSpec = { name: string; command: string; cache?: { inputs: string[] } };
-type Step = PromiseLike<unknown> & { runner(spec: RunnerSpec): Step };
-type Ci = { runner(spec: RunnerSpec): Step };
+type Step = { runner(spec: RunnerSpec): Promise<Step> };
+type Ci = Step;
 
 const INPUTS = ["src/**", "test/**", "package.json", "pnpm-lock.yaml", "tsconfig.json"];
 
 export default async (ci: Ci) => {
-  const install = ci.runner({
+  const install = await ci.runner({
     name: "install",
     command: "pnpm install --frozen-lockfile",
     cache: { inputs: ["**/package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".npmrc"] },
