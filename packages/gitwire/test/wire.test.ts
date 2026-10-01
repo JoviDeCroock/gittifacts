@@ -122,7 +122,7 @@ describe("listRefs", () => {
 
   it("authenticates with Bearer or Basic and surfaces 401s", async () => {
     const name = seededRepo();
-    const basic = server.remote(name, { basic: { username: "x", password: TOKEN } });
+    const basic = server.remote(name, { basic: { username: "x", password: TOKEN.split("?expires=")[0]! } });
     expect((await listRefs(basic)).get("refs/heads/main")).toBe(c1);
     const err = await listRefs(server.remote(name, null)).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(GitHttpError);

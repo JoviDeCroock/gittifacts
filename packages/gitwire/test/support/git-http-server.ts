@@ -86,7 +86,8 @@ function authorized(header: string | undefined, token: string): boolean {
   if (!header.startsWith("Basic ")) return false;
   const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
   const colon = decoded.indexOf(":");
-  return colon > 0 && decoded.slice(colon + 1) === token;
+  // Like Artifacts: the Basic password is the token without its `?expires=` suffix.
+  return colon > 0 && decoded.slice(colon + 1) === token.split("?expires=")[0];
 }
 
 export async function startGitHttpServer(opts: { token?: string } = {}): Promise<GitHttpServer> {
