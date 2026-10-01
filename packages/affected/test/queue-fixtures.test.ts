@@ -30,7 +30,12 @@ const OUT = realpathSync(mkdtempSync(join(tmpdir(), "gittifacts-queue-")));
 const VITEST = join(REPO_ROOT, "node_modules", "vitest", "vitest.mjs");
 
 afterAll(() => {
-  rmSync(OUT, { recursive: true, force: true });
+  // Best effort: a slow or failing cleanup of the scratch repos must not fail the suite.
+  try {
+    rmSync(OUT, { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    // left in the OS temp directory
+  }
 });
 
 const names = listQueueScenarioNames();
