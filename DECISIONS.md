@@ -253,3 +253,30 @@ Work order:
   - A pure revert of a `.platform/**` change still needs a human.
 - **Unclaimed projects.** These never enqueue automatically and never start a RolloutWorkflow. The rule is enforced in the
   coordinator (`restrictForClaim`), not just in the UI.
+
+## 2026-10-01 — Platform Worker, templates and sandbox choices
+
+- **Agent tokens.** Agents use our own `agent_tokens` table, not better-auth's api-key plugin.
+  - Plugin keys point at a better-auth user, and agents aren't users.
+  - The plugin would add a second scope vocabulary next to our `Scope` enum.
+  - Its default rate limit is 10 requests/day per key, and it writes to D1 on every check.
+  - Ours: `gtf_` + 32 random bytes, only the SHA-256 stored, one indexed read. Agents can only ever hold `repo:read`,
+    `plan:create`, `change:create`.
+- **Signatures.** Detached signatures are purpose-scoped: `gittifacts/plan-approval`, `gittifacts/audit-entry`, `gittifacts/document`.
+- **Idempotency.** Only successful responses are stored, and push grants (tokens) never are.
+- **Templates.** These are standalone pnpm projects (own lockfile and workspace file). They build with esbuild (~0.1 s,
+  versus ~1.3 s for `wrangler deploy --dry-run`) and don't depend on wrangler; the sandbox image ships wrangler 4.145.0 globally.
+  Measured CI work per template is 5–8 s, so container start and snapshot reuse are what decide the 60 s target.
+  `ts-library` has no preview (it's a library); its "preview" is the generated API docs page (TODO).
+- **MCP discovery** (see `docs/research/mcp-discovery.md`). Spec 2026-07-28 has no ratified `.well-known/mcp`.
+  - We serve RFC 9728 `/.well-known/oauth-protected-resource[/mcp]`, but only once an authorization server exists.
+  - We serve a draft SEP-2127 Server Card at `/mcp/server-card`, plus a draft `/.well-known/ai-catalog.json`.
+  - We do not serve the dead `/.well-known/mcp*` proposals.
+- **Sandbox image.** `node:22-bookworm-slim` + git, tini, procps, wrangler 4.145.0, stryker, coverage-v8. 686 MB
+  uncompressed, ~194 MB gzipped.
+  - Evidence commands, wrangler builds and previews all work with `--network none`; only installs need a registry.
+  - Coverage: the runner symlinks its own `@vitest/coverage-v8` into the checkout when the repo can't resolve one. A
+    non-zero exit with all tests passing becomes an error item, never 0%.
+- **pnpm 11 build-script approval** (`ERR_PNPM_IGNORED_BUILDS`) breaks installs of imported repos that have
+  unapproved build scripts. Import detection must surface this in the generated Plan, and the sandbox must not
+  auto-approve build scripts for unclaimed projects.
