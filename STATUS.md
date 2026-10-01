@@ -21,17 +21,18 @@ Specs:
 | O4 Delegated auth (MCP OAuth, device flow) | in progress |
 | O5 Import detection + remote workspaces | planned |
 | O6 Onboarding eval | planned |
-| Q1–Q6 Merge queue | core + simulator, affected-set analyzer, conflict resolver in progress |
+| Q1–Q6 Merge queue | core + simulator, affected-set analyzer in progress; Q3 resolver built (corpus green with a scripted model; real-model eval pending credentials) |
 
 ## What works (tested)
 | Package | What it does | Tests |
 |---|---|---|
-| `@app/evidence` | canonical JSON, Ed25519 attestations, git-notes, pure producers, standalone verify CLI | 285 |
-| `@app/classifier` | pure lanes, 94 reason codes, shadow agreement | 413 |
+| `@app/evidence` | canonical JSON, Ed25519 attestations, git-notes, pure producers, standalone verify CLI; conflict-resolution + quarantine items | 318 |
+| `@app/classifier` | pure lanes, 104 reason codes, shadow agreement, `neverLower` lane floor | 452 |
 | `@app/gitwire` | git smart-HTTP client for Workers; live-verified on Artifacts (CAS, notes, cross-repo transfer) | 58 |
 | `@app/ci-engine` | Workflows + `ctx.container` engine, hermetic global cache, egress gateway, opt-in `@cloudflare/ci` adapter | 150 |
 | `@app/coordinator` | ChangeCoordinator DO, ChangeWorkflow, MergeQueue DO, RolloutWorkflow, PushRouter, Cloudflare adapters, fakes | 152 |
-| `@app/tour` | reviewer agent; AI binding + gateway clients; budget; risk-ordered, evidence-anchored tours | 105 |
+| `@app/tour` | reviewer agent; AI binding + gateway clients; budget; risk-ordered, evidence-anchored tours; conflict-resolution stop | 116 |
+| `@app/resolver` | merge-queue conflict resolver (`system:resolver`): verified patches, mechanical scope, ejections with fixes; 14-case conflict corpus | 68 |
 | `@app/conventions` | `AGENTS.md`, `/start`, `/llms.txt`, MCP discovery, fix hints, next steps, `.platform` generators | 226 |
 | `@app/mcp` | 11 tools on mcp-tada-server, typed client, contract snapshot | 8 |
 | `apps/platform` | the one Worker: Hono API + OpenAPI, better-auth, D1, AuditLog DO, MCP, SSE, Ports per role wiring the coordinator, CI engine (Runner container) and reviewer; M1 vertical-slice test | 85 |

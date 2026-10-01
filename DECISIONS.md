@@ -367,3 +367,49 @@ gateway route.
 - **Fixtures.** `fixtures/queue/` has seven scenarios: independent, textual-conflict, overlapping-closure,
   shared-test-only, stack, semantic-conflict and flaky-test. Each has an exact conflict matrix, merge cleanliness
   and vitest outcomes on merged trees. The flaky test is deterministic under `QUEUE_FLAKE_SEED`.
+
+## 2026-10-01 — Merge queue Q3: agent conflict resolution (resolver, evidence, lane floor, tour stop)
+
+- **Evidence.** Two new item kinds in `@app/evidence`.
+  - `conflict-resolution`: upstream Changes, `conflictHunks`, `outsideHunks`, a resolution diff
+    capped at 64 KB on a line boundary (`truncated`), `touchesOutsideConflictHunks`, `novelLines`,
+    the semantic culprit, the resolver's model, principal and prompt version, and attempts.
+  - `quarantine` is a separate item rather than a field on `test-run`. The quarantine list and the
+    affected set belong to the queue, not to the test runner. An unknown affected set counts every
+    quarantined test as affected.
+- **"Within the conflict hunks" is computed exactly, never reported by the model.** `resolutionScope`
+  accepts a resolution only if it equals the mechanical merge with each region (markers included)
+  replaced and every clean line kept verbatim and in order: a wildcard match, solved greedily.
+  - Unparseable markers, edits to files that were not in conflict, and edits with no conflict hunk
+    (every semantic fix) count as outside.
+  - `novelLines` counts resolved lines found on neither side. It is recorded and shown, not classified.
+- **Classifier.** Resolution and quarantine items only add reasons:
+  - `resolution.within-conflict` (L0), `resolution.outside-conflict` / `.semantic` / `.truncated` / `.skipped` (L1);
+  - `signal.error.conflict-resolution` (L2);
+  - `tests.quarantined` (L1, tests gate unknown) and `signal.error.quarantine` (L1).
+
+  New gate: `conflict-resolution`, which makes 21 gates. `neverLower(previous, next)` keeps lane and
+  computed lane at least at the previous values. When it raises, it adds `resolution.lane-kept` at
+  the previous lane, drops shadow mode, and keeps `requiresHumanApproval`. `reclassifyAfterResolution`
+  composes it with `classify`, so the queue shell cannot forget the floor. The merge-queue core
+  keeps the max as well (defence in depth).
+- **Runner.** git 2.39 in the sandbox image has no `merge-tree --merge-base`, so `merge-attempt`
+  cherry-picks a synthetic commit (head's tree, parent = the Change's base). That makes the merge
+  base exactly `--base`.
+  - Content conflicts are re-merged with `git merge-file --diff3 --marker-size=13 -L upstream -L base -L change`,
+    so the markers can't be confused with file content.
+  - The conflicted tree is committed (`conflictSha`, deterministic).
+  - `apply-resolution` commits the resolution on top as `gittifacts-resolver`. It accepts an empty
+    patch (keeping a modify/delete survivor), so the resolution stays its own attributable commit.
+    The queue may squash the two commits; that is its choice.
+- **Resolver.** Principal `system:resolver`, not configurable. Its prompt input type has no author
+  summary, claim or trace. The model answers per region, and whole files only for edits outside
+  the regions. Every answer is validated, the patch is verified in memory, there is one
+  regeneration, and every failure ejects with a machine-readable `fix` for the author.
+  - The per-change budget is shared with the reviewer (`@app/tour` `BudgetTracker`).
+  - A model's culprit claim on a textual conflict is ignored.
+  - The resolver can only edit files it was shown in full.
+- **Eval.** The corpus is `fixtures/conflicts`: 11 textual and 3 semantic cases. `pnpm test` runs
+  it with a scripted model through the real runner and the cases' checks (all pass, 0 downgrades).
+  The real-model `eval` script gates on ≥ 80% textual success and 0 downgrades. It has **not been
+  run yet**: no AI Gateway credentials were available in this environment.
