@@ -348,6 +348,32 @@ export class FakeGitHost implements GitHost {
     return { ok: true };
   }
 
+  async writeInitialCommit(
+    repo: string,
+    input: {
+      branch: string;
+      files: Readonly<Record<string, string | Uint8Array>>;
+      message: string;
+    },
+  ): Promise<{ sha: string; treeSha: string }> {
+    // Create-only, like the real host: no write guard, but never over an existing branch.
+    const r = this.repo(repo);
+    const ref = `refs/heads/${input.branch}`;
+    if (r.refs.has(ref)) throw new FakeGitError("STALE", `${ref} already exists in ${repo}`);
+    if (Object.keys(input.files).length === 0) throw new TypeError("an initial commit needs files");
+    const decoder = new TextDecoder();
+    const files: Record<string, string> = {};
+    for (const [path, content] of Object.entries(input.files)) {
+      files[path] = typeof content === "string" ? content : decoder.decode(content);
+    }
+    const treeSha = this.treeSha(files);
+    const sha = this.newCommit(treeSha, [], input.message);
+    r.objects.add(sha);
+    r.refs.set(ref, sha);
+    this.writes.push({ op: "initial-commit", repo, ref });
+    return { sha, treeSha };
+  }
+
   async commitTree(
     repo: string,
     input: {

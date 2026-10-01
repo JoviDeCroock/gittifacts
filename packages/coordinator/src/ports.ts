@@ -87,6 +87,10 @@ export type FastForwardResult =
  * repo are only allowed on the GitHost built for the `merge-queue` role (see `PortsRole`). Every
  * other GitHost must refuse to write anywhere but a change fork (`task-*`). Main-repo write
  * tokens are minted internally with TTL <= 300 s and never leave the host.
+ *
+ * The one exception is `writeInitialCommit`: every role may use it, because it can only create
+ * the first commit of a branch that does not exist yet (CAS against the zero SHA). It can never
+ * rewrite or extend history, so "only the merge queue moves main" still holds.
  */
 export interface GitHost {
   /** Artifacts namespace this host operates on (e.g. "gittifacts-eu"). */
@@ -138,6 +142,19 @@ export interface GitHost {
   transferObjects(fromRepo: string, toRepo: string, sha: string, toRef: string): Promise<void>;
   /** Compare-and-swap ref update. `oldSha` = 40 zeros to create. */
   updateRef(repo: string, ref: string, oldSha: string, newSha: string): Promise<FastForwardResult>;
+  /**
+   * The first commit of an empty repo: `files` (repo path → content, mode 100644) as one root
+   * commit on `refs/heads/<branch>`, pushed with old SHA = zero so it fails once the branch exists.
+   */
+  writeInitialCommit(
+    repo: string,
+    input: {
+      branch: string;
+      files: Readonly<Record<string, string | Uint8Array>>;
+      message: string;
+      author?: { name: string; email: string };
+    },
+  ): Promise<{ sha: string; treeSha: string }>;
   /** Create a commit whose tree is `treeSha` (used for pure reverts) and push it to `branch`. */
   commitTree(
     repo: string,

@@ -1,4 +1,5 @@
 /** Request shapes of the Cloudflare adapters, against a mocked fetch / fake bindings. */
+import * as gitwire from "@app/gitwire";
 import { describe, expect, it } from "vitest";
 import {
   type ArtifactsBindingLike,
@@ -571,6 +572,7 @@ describe("ArtifactsGitHost", () => {
       },
       assertRefUpdated: (report, ref) =>
         report.refs.find((r) => r.ref === ref) ?? { ref, ok: false },
+      encodeTree: () => new Uint8Array(),
       encodeCommit: (c) => new TextEncoder().encode(`tree ${c.tree}\n\n${c.message}`),
       hashObject: async () => "d".repeat(40),
       buildPack: async () => new Uint8Array([1]),
@@ -604,6 +606,62 @@ describe("ArtifactsGitHost", () => {
     await queue.h.mintToken("main-repo", "write", 3600);
     expect(queue.tokens.at(-1)).toEqual(["main-repo", "write", 300]);
     expect(h.remoteOf("x")).toBe("https://acc.artifacts.cloudflare.net/git/ns/x.git");
+  });
+
+  it("writes an initial commit create-only (zero old SHA), from any role, with real git objects", async () => {
+    const tokens: Array<[string, string | undefined, number | undefined]> = [];
+    const pushes: Array<{ updates: Array<{ ref: string; oldSha: string }>; pack: Uint8Array }> = [];
+    const binding = {
+      get: async (name: string) =>
+        ({
+          createToken: async (scope?: "read" | "write", ttl?: number) => {
+            tokens.push([name, scope, ttl]);
+            return { plaintext: "tok", expiresAt: "2030-01-01T00:00:00Z" };
+          },
+        }) as unknown as ArtifactsRepoLike,
+    } as unknown as ArtifactsBindingLike;
+    const wire: GitWire = {
+      ...gitwire,
+      receivePack: async (_remote, updates, pack) => {
+        pushes.push({ updates, pack: pack ?? new Uint8Array() });
+        return { unpackOk: true, refs: updates.map((u) => ({ ref: u.ref, ok: true })) };
+      },
+    };
+    // The default (fork-only) host: initial commits are the one main-repo write it allows.
+    const h = new ArtifactsGitHost({ binding, wire, namespace: "ns", accountId: "acc" });
+    const files = {
+      "README.md": "# app\n",
+      "src/index.ts": "export {};\n",
+      "src/lib/a.ts": "export const a = 1;\n",
+      ".platform/ci.ts": "export default async () => {};\n",
+    };
+    const out = await h.writeInitialCommit("app", { branch: "main", files, message: "init" });
+    expect(tokens).toEqual([["app", "write", 300]]);
+    expect(pushes[0]?.updates).toEqual([
+      { ref: "refs/heads/main", oldSha: "0".repeat(40), newSha: out.sha },
+    ]);
+    const objects = await gitwire.parsePack(pushes[0]?.pack ?? new Uint8Array());
+    const byId = new Map(objects.map((o) => [o.sha, o]));
+    const commit = gitwire.decodeCommit(byId.get(out.sha)?.data ?? new Uint8Array());
+    expect(commit).toMatchObject({ tree: out.treeSha, parents: [], message: "init\n" });
+    // Walk the pushed tree back into files.
+    const read = (treeSha: string, prefix: string): Record<string, string> => {
+      const entries = gitwire.decodeTree(byId.get(treeSha)?.data ?? new Uint8Array());
+      return Object.assign(
+        {},
+        ...entries.map((e) =>
+          e.mode === "40000"
+            ? read(e.sha, `${prefix}${e.name}/`)
+            : { [`${prefix}${e.name}`]: new TextDecoder().decode(byId.get(e.sha)?.data) },
+        ),
+      ) as Record<string, string>;
+    };
+    expect(read(out.treeSha, "")).toEqual(files);
+    for (const bad of ["../x", "/abs", "a//b", ".git/config", "a/./b"]) {
+      await expect(
+        h.writeInitialCommit("app", { branch: "main", files: { [bad]: "x" }, message: "m" }),
+      ).rejects.toThrow(TypeError);
+    }
   });
 
   it("maps CAS errors and uses short-lived internal tokens", async () => {

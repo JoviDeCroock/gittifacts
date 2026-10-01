@@ -73,6 +73,7 @@ export interface GitWire {
     pack?: Uint8Array,
   ): Promise<WirePushReport>;
   assertRefUpdated(report: WirePushReport, ref: string): WireRefResult;
+  encodeTree(entries: ReadonlyArray<{ mode: string; name: string; sha: string }>): Uint8Array;
   encodeCommit(c: {
     tree: string;
     parents: string[];
@@ -145,6 +146,51 @@ const INTERNAL_TOKEN_TTL = 300;
 
 export class GitWriteForbiddenError extends Error {
   override name = "GitWriteForbiddenError";
+}
+
+const ZERO = "0".repeat(40);
+const encoder = new TextEncoder();
+
+/** A safe repository path: relative, no `.`/`..`/empty segments, never inside `.git`. */
+export function assertRepoPath(path: string): string[] {
+  const parts = path.split("/");
+  if (
+    path === "" ||
+    path.startsWith("/") ||
+    parts.some((p) => p === "" || p === "." || p === ".." || p.includes("\0")) ||
+    parts.some((p) => p.toLowerCase() === ".git")
+  ) {
+    throw new TypeError(`invalid repository path ${JSON.stringify(path)}`);
+  }
+  return parts;
+}
+
+interface DirNode {
+  files: Map<string, Uint8Array>;
+  dirs: Map<string, DirNode>;
+}
+
+/** Nested directory nodes for a flat `path → content` map. */
+export function fileTree(files: Readonly<Record<string, string | Uint8Array>>): DirNode {
+  const root: DirNode = { files: new Map(), dirs: new Map() };
+  for (const [path, content] of Object.entries(files)) {
+    const parts = assertRepoPath(path);
+    const name = parts.pop() as string;
+    let dir = root;
+    for (const part of parts) {
+      if (dir.files.has(part))
+        throw new TypeError(`${path}: ${part} is both a file and a directory`);
+      let next = dir.dirs.get(part);
+      if (next === undefined) {
+        next = { files: new Map(), dirs: new Map() };
+        dir.dirs.set(part, next);
+      }
+      dir = next;
+    }
+    if (dir.dirs.has(name)) throw new TypeError(`${path} is both a file and a directory`);
+    dir.files.set(name, typeof content === "string" ? encoder.encode(content) : content);
+  }
+  return root;
 }
 
 function errorCode(e: unknown): string | null {
@@ -244,11 +290,17 @@ export class ArtifactsGitHost implements GitHost {
     return plaintext;
   }
 
-  private async remote(repo: string, scope: "read" | "write"): Promise<WireRemote> {
-    const remote: WireRemote = {
-      url: this.remoteOf(repo),
-      auth: { bearer: await this.internalToken(repo, scope) },
-    };
+  private async remote(
+    repo: string,
+    scope: "read" | "write",
+    opts: { createOnly?: boolean } = {},
+  ): Promise<WireRemote> {
+    const token =
+      opts.createOnly === true
+        ? // Repo creation: a write token for this one push, which may only create the branch.
+          (await this.withRepo(repo, (r) => r.createToken("write", INTERNAL_TOKEN_TTL))).plaintext
+        : await this.internalToken(repo, scope);
+    const remote: WireRemote = { url: this.remoteOf(repo), auth: { bearer: token } };
     if (this.opts.fetch) remote.fetch = this.opts.fetch;
     return remote;
   }
@@ -472,5 +524,62 @@ export class ArtifactsGitHost implements GitHost {
     );
     wire.assertRefUpdated(report, ref);
     return { sha };
+  }
+
+  /**
+   * The first commit of an empty repo, pushed with compare-and-swap against "no branch": the
+   * receive-pack command's old SHA is zero, so Artifacts refuses it once the branch exists. That
+   * makes it the one main-repo write allowed outside the merge queue: it can create history but
+   * never change it. The write token is minted for this push only (TTL <= 300 s) and never leaves.
+   */
+  async writeInitialCommit(
+    repo: string,
+    input: {
+      branch: string;
+      files: Readonly<Record<string, string | Uint8Array>>;
+      message: string;
+      author?: { name: string; email: string };
+    },
+  ): Promise<{ sha: string; treeSha: string }> {
+    const { wire } = this.opts;
+    if (Object.keys(input.files).length === 0) throw new TypeError("an initial commit needs files");
+    const objects: WireObject[] = [];
+    const seen = new Set<string>();
+    const put = async (obj: WireObject): Promise<string> => {
+      const sha = await wire.hashObject(obj);
+      if (!seen.has(sha)) {
+        seen.add(sha);
+        objects.push(obj);
+      }
+      return sha;
+    };
+    const writeDir = async (dir: DirNode): Promise<string> => {
+      const entries: Array<{ mode: string; name: string; sha: string }> = [];
+      for (const [name, data] of dir.files) {
+        entries.push({ mode: "100644", name, sha: await put({ type: "blob", data }) });
+      }
+      for (const [name, sub] of dir.dirs) {
+        entries.push({ mode: "40000", name, sha: await writeDir(sub) });
+      }
+      return put({ type: "tree", data: wire.encodeTree(entries) });
+    };
+    const treeSha = await writeDir(fileTree(input.files));
+    const now = Math.floor(Date.now() / 1000);
+    const author = { ...(input.author ?? this.committer), timestamp: now, timezone: "+0000" };
+    const committer = { ...this.committer, timestamp: now, timezone: "+0000" };
+    const message = input.message.endsWith("\n") ? input.message : `${input.message}\n`;
+    const sha = await put({
+      type: "commit",
+      data: wire.encodeCommit({ tree: treeSha, parents: [], author, committer, message }),
+    });
+    const ref = `refs/heads/${input.branch}`;
+    const remote = await this.remote(repo, "write", { createOnly: true });
+    const report = await wire.receivePack(
+      remote,
+      [{ ref, oldSha: ZERO, newSha: sha }],
+      await wire.buildPack(objects),
+    );
+    wire.assertRefUpdated(report, ref);
+    return { sha, treeSha };
   }
 }
