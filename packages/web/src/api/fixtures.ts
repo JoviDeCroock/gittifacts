@@ -3,7 +3,7 @@
  * repositories, metrics and hashes are invented. Times are relative to page load.
  */
 import { RepoPolicy } from "@app/domain";
-import { NOW, PLATFORM_KEY_ID, ago, b64u, sha } from "./fixture-kit.js";
+import { NOW, PLATFORM_KEY_ID, ago, ahead, b64u, sha } from "./fixture-kit.js";
 import type { Scenario } from "./scenario-kit.js";
 import { SCENARIOS } from "./scenarios.js";
 import type { AuditEvent, Plan, Principal, PrincipalRef, Repo, SessionUser, ShadowStats } from "./types.js";
@@ -72,7 +72,15 @@ interface RepoRecord {
 function repo(
   id: string,
   name: string,
-  opts: { jurisdiction: Repo["jurisdiction"]; lane0: boolean; deployTarget: string | null; importedFrom?: string; createdMin: number },
+  opts: {
+    jurisdiction: Repo["jurisdiction"];
+    lane0: boolean;
+    deployTarget: string | null;
+    importedFrom?: string;
+    createdMin: number;
+    unclaimedForMin?: number;
+    template?: string;
+  },
 ): Repo {
   return {
     id,
@@ -85,6 +93,11 @@ function repo(
     policy: RepoPolicy.parse({ lane0Enabled: opts.lane0, planlessLane0: ["verified-transform", "pure-revert"] }),
     policySha: sha(`${id}:policy`),
     deployTarget: opts.deployTarget,
+    claim:
+      opts.unclaimedForMin === undefined
+        ? { status: "claimed", ownerId: "prn_maya", expiresAt: null }
+        : { status: "unclaimed", ownerId: null, expiresAt: ahead(opts.unclaimedForMin) },
+    template: opts.template ?? null,
     createdAt: ago(opts.createdMin),
   };
 }
@@ -105,6 +118,17 @@ export function repos(): RepoRecord[] {
     },
     {
       repo: repo("repo_ios", "ios-sdk", { jurisdiction: "us", lane0: false, deployTarget: null, importedFrom: "https://github.com/acme/ios-sdk", createdMin: 900 }),
+      shadow: { samples: 0, agreed: 0, ratio: null, needed: 25, threshold: 0.95, eligibleToEnableLane0: false },
+    },
+    {
+      repo: repo("repo_widget", "invoice-widget", {
+        jurisdiction: "unrestricted",
+        lane0: false,
+        deployTarget: null,
+        createdMin: 300,
+        unclaimedForMin: 3 * 24 * 60 - 300,
+        template: "workers-hono",
+      }),
       shadow: { samples: 0, agreed: 0, ratio: null, needed: 25, threshold: 0.95, eligibleToEnableLane0: false },
     },
   ];

@@ -5,7 +5,9 @@ import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
 import { EmptyState, ErrorState, LaneTag, Loading, Meter } from "../components/ui.js";
 import { pct, shadowProgress } from "../lib/lanes.js";
+import { relative } from "../lib/time.js";
 import { plural } from "../lib/vocab.js";
+import { minuteClock } from "../state/clock.js";
 import { useResource } from "../state/resource.js";
 import "../styles/repos.css";
 
@@ -63,6 +65,11 @@ function RepoRow({ repo }: { repo: RepoSummary }) {
             <span class="repo-row__juris" title="Data jurisdiction">
               {repo.jurisdiction === "unrestricted" ? "any region" : repo.jurisdiction.toUpperCase()}
             </span>
+            {repo.claim.status === "unclaimed" ? (
+              <span class="repo-row__unclaimed">
+                Unclaimed{repo.claim.expiresAt ? `, deleted ${relative(repo.claim.expiresAt, minuteClock.value)}` : ""}
+              </span>
+            ) : null}
           </span>
         </div>
         <div class="repo-row__waiting">

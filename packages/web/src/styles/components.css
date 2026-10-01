@@ -284,6 +284,7 @@ a.btn:hover {
   display: inline-grid;
   place-items: center;
   flex: none;
+  align-self: center;
   font-weight: var(--weight-bold);
   letter-spacing: 0.02em;
   line-height: 1;
@@ -293,7 +294,7 @@ a.btn:hover {
   background: var(--surface);
   color: var(--text);
   box-shadow: inset 0 0 0 1.5px var(--text-3);
-  font-size: 0.62em;
+  letter-spacing: 0;
 }
 .avatar--agent {
   border-radius: 5px;
@@ -630,4 +631,10 @@ a.btn:hover {
   gap: var(--s-2);
   color: var(--text);
   text-decoration: none;
+}
+
+/* secondary inline text used across screens */
+.ev-sub {
+  color: var(--text-3);
+  font-size: var(--text-small);
 }

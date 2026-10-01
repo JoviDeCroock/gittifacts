@@ -53,7 +53,28 @@ export function mockSignOut(): void {
 // ---------------------------------------------------------------- helpers
 
 const ok = (body: unknown, status = 200): RawResponse => ({ status, body: structuredClone(body) });
-const fail = (status: number, code: string, message: string): RawResponse => ({ status, body: { error: { code, message } } });
+const FIX: Record<string, string> = {
+  unauthenticated: "Sign in again; your session cookie is missing or expired.",
+  not_found: "Check the link, or go back to the repository list.",
+  own_plan: "Ask a teammate with the plan:approve scope to review it.",
+  own_change: "Ask a teammate with the change:review scope to review it.",
+  not_draft: "Reload the plan to see its current state.",
+  not_reviewable: "Reload the change to see its current state.",
+  comment_required: "Add a comment and submit again.",
+  reason_required: "Add a reason and submit again.",
+  shadow_threshold_not_met: "Keep reviewing Lane 0 candidates until agreement reaches the policy threshold.",
+  not_rolling_out: "Reload the rollout; it may already have finished or rolled back.",
+  invalid_name: "Pick a name like fleet-coder-08.",
+  name_taken: "Pick a different name, or revoke and reuse the old agent.",
+  forbidden: "Ask the agent's owner to do it.",
+  evidence_not_ready: "Wait for the pipeline to finish; evidence is signed at the end.",
+  tour_not_ready: "Wait for the pipeline to pass; the reviewer agent writes the tour right after.",
+};
+const fail = (status: number, code: string, message: string): RawResponse => ({
+  status,
+  body: { error: { code, message, fix: { explanation: FIX[code] ?? "Retry, or reload the page." } } },
+});
+const idempotent = new Map<string, RawResponse>();
 
 function wait(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -418,8 +439,17 @@ function withScenario(id: string | undefined, fn: (s: Scenario) => RawResponse):
   return s ? fn(s) : fail(404, "not_found", "No such change.");
 }
 
-export async function handle(method: string, path: string, body?: unknown): Promise<RawResponse> {
+export async function handle(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<RawResponse> {
   await wait(latency(method));
+  const replayKey = method !== "GET" && idempotencyKey ? `${method} ${path} ${idempotencyKey}` : null;
+  const replay = replayKey ? idempotent.get(replayKey) : undefined;
+  if (replay) return structuredClone(replay);
+  const res = route(method, path, body);
+  if (replayKey && res.status < 500) idempotent.set(replayKey, structuredClone(res));
+  return res;
+}
+
+function route(method: string, path: string, body: unknown): RawResponse {
   const url = new URL(path, window.location.origin);
   if (url.pathname !== "/api/v1/me" && !signedIn()) return fail(401, "unauthenticated", "Sign in to continue.");
   if (url.pathname === "/api/v1/me" && !signedIn()) return fail(401, "unauthenticated", "Sign in to continue.");

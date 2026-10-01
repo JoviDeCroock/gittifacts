@@ -1,6 +1,6 @@
 import { useSignal } from "@preact/signals";
 import { useLocation } from "preact-iso";
-import { ApiError, api, describeError } from "../api/client.js";
+import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { ChangeSummary, Plan, RepoDetail } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
@@ -119,11 +119,11 @@ function Lane0Control({ detail, onChange }: { detail: RepoDetail; onChange: (d: 
     busy.value = true;
     error.value = null;
     try {
-      const { repo } = await api.setLane0(detail.repo.id, next);
+      const { repo } = await api.setLane0(detail.repo.id, next, newIdempotencyKey());
       onChange({ ...detail, repo });
       confirm.value = false;
     } catch (err) {
-      error.value = err instanceof ApiError ? err.message : describeError(err).detail;
+      error.value = inlineError(err);
     } finally {
       busy.value = false;
     }
@@ -219,6 +219,9 @@ export function RepoChanges({ repoId }: { repoId: string }) {
             <span>
               Deploys <code>{repo.deployTarget}</code>
             </span>
+          ) : null}
+          {repo.claim.status === "unclaimed" ? (
+            <span class="tone--warn">Unclaimed project: previews only, no production deploys, no Lane 0</span>
           ) : null}
           {repo.policySha ? (
             <span title="Policy is read from the default branch">

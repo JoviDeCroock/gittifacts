@@ -91,3 +91,11 @@ export function durationLabel(ms: number): string {
   const rest = Math.round(s % 60);
   return rest ? `${m} min ${rest} s` : `${m} min`;
 }
+
+/** Time of day for today's events, date and time otherwise. */
+export function formatWhen(iso: string, now: number): string {
+  const d = new Date(iso);
+  const n = new Date(now);
+  const sameDay = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+  return sameDay ? formatTime(iso) : formatDateTime(iso);
+}

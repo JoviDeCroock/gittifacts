@@ -168,13 +168,13 @@ function initials(name: string): string {
 export function Avatar({ kind, name, size = 24 }: { kind: PrincipalKind; name: string; size?: number }) {
   if (kind === "human") {
     return (
-      <span class="avatar avatar--human" style={{ width: size, height: size, fontSize: size * 0.42 }} aria-hidden="true">
+      <span class="avatar avatar--human" style={{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.42)}px` }} aria-hidden="true">
         {initials(name)}
       </span>
     );
   }
   return (
-    <span class={`avatar avatar--${kind}`} style={{ width: size, height: size }} aria-hidden="true">
+    <span class={`avatar avatar--${kind}`} style={{ width: `${size}px`, height: `${size}px` }} aria-hidden="true">
       <Icon name={kind === "agent" ? "bot" : "server"} size={Math.round(size * 0.66)} />
     </span>
   );
@@ -321,7 +321,7 @@ export function EmptyState({ icon, title, children, action }: { icon: IconId; ti
 // ---------------------------------------------------------------- misc
 
 export function Hash({ value, head = 8, tail = 6, full = false }: { value: string; head?: number; tail?: number; full?: boolean }) {
-  const shown = full || value.length <= head + tail + 1 ? value : `${value.slice(0, head)}…${value.slice(-tail)}`;
+  const shown = full || value.length <= head + tail + 1 ? value : `${value.slice(0, head)}…${tail > 0 ? value.slice(-tail) : ""}`;
   return (
     <code class="hash" title={value}>
       {shown}

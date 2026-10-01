@@ -6,7 +6,7 @@
 import type { Change, Lane, Principal } from "@app/domain";
 import { useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
-import { ApiError, api, describeError } from "../api/client.js";
+import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { ReviewDecisionKind, ShadowStats } from "../api/types.js";
 import { LANES } from "../lib/lanes.js";
 import { CHANGE_STATUS, shortSha } from "../lib/vocab.js";
@@ -86,6 +86,8 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
   const error = useSignal<string | null>(null);
   const done = useSignal<ReviewDecisionKind | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  /** One key per decision attempt; a retry after a network error reuses it. */
+  const intentKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (decision.value && layout === "bar") formRef.current?.querySelector<HTMLElement>("textarea, button")?.focus();
@@ -139,16 +141,21 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
     }
     busy.value = true;
     error.value = null;
+    intentKey.current ??= newIdempotencyKey();
     try {
-      const res = await api.review(change.id, {
-        decision: d,
-        ...(humanLane.value !== null ? { humanLane: humanLane.value } : {}),
-        ...(comment.value.trim() ? { comment: comment.value.trim() } : {}),
-      });
+      const res = await api.review(
+        change.id,
+        {
+          decision: d,
+          ...(humanLane.value !== null ? { humanLane: humanLane.value } : {}),
+          ...(comment.value.trim() ? { comment: comment.value.trim() } : {}),
+        },
+        intentKey.current,
+      );
       done.value = d;
       onDecided(res.change);
     } catch (err) {
-      error.value = err instanceof ApiError ? err.message : describeError(err).detail;
+      error.value = inlineError(err);
     } finally {
       busy.value = false;
     }
@@ -163,7 +170,7 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
             <h2 id="decision-title" class="decision__title">
               {COPY[d].title}
             </h2>
-            <button type="button" class="icon-btn" aria-label="Cancel" onClick={() => ((decision.value = null), (error.value = null))}>
+            <button type="button" class="icon-btn" aria-label="Cancel" onClick={() => ((decision.value = null), (error.value = null), (intentKey.current = null))}>
               <Icon name="x" size={20} />
             </button>
           </div>
@@ -200,7 +207,7 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
             <Icon name="signature" size={14} /> You sign as {me?.name ?? "yourself"} for head <code>{shortSha(change.headSha)}</code>.
           </p>
           <div class="decision__confirm">
-            <Button variant="secondary" onClick={() => ((decision.value = null), (error.value = null))} disabled={busy.value}>
+            <Button variant="secondary" onClick={() => ((decision.value = null), (error.value = null), (intentKey.current = null))} disabled={busy.value}>
               Back
             </Button>
             <Button type="submit" variant={COPY[d].variant === "secondary" ? "primary" : COPY[d].variant} busy={busy.value} busyLabel={COPY[d].busy} wide>

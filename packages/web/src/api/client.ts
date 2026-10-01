@@ -32,18 +32,33 @@ import type {
 
 export type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
+export interface ErrorFix {
+  explanation: string;
+  call?: string;
+  command?: string;
+  docsUrl?: string;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly details: unknown;
+  /** What the server says to do next (docs/api.md error envelope). */
+  readonly fix: ErrorFix | null;
 
-  constructor(status: number, code: string, message: string, details?: unknown) {
+  constructor(status: number, code: string, message: string, details?: unknown, fix: ErrorFix | null = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.details = details;
+    this.fix = fix;
   }
+}
+
+/** One key per user intent: reuse it when retrying the same action so it applies once. */
+export function newIdempotencyKey(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `k_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
 export interface RawResponse {
@@ -57,17 +72,20 @@ function isErrorBody(body: unknown): body is ApiErrorBody {
   return typeof err === "object" && err !== null && "code" in err && "message" in err;
 }
 
-async function send(method: Method, path: string, body?: unknown): Promise<RawResponse> {
+async function send(method: Method, path: string, body?: unknown, idempotencyKey?: string): Promise<RawResponse> {
   if (isMockMode()) {
     const mock = await import("./mock.js");
-    return mock.handle(method, path, body);
+    return mock.handle(method, path, body, idempotencyKey);
   }
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (body !== undefined) headers["content-type"] = "application/json";
+  if (method !== "GET") headers["Idempotency-Key"] = idempotencyKey ?? newIdempotencyKey();
   let res: Response;
   try {
     res = await fetch(path, {
       method,
       credentials: "include",
-      headers: body === undefined ? { accept: "application/json" } : { "content-type": "application/json", accept: "application/json" },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (cause) {
@@ -85,12 +103,26 @@ async function send(method: Method, path: string, body?: unknown): Promise<RawRe
   return { status: res.status, body: parsed };
 }
 
-export async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
-  const res = await send(method, path, body);
+function readFix(err: object): ErrorFix | null {
+  if (!("fix" in err)) return null;
+  const fix = (err as { fix: unknown }).fix;
+  if (typeof fix !== "object" || fix === null || !("explanation" in fix)) return null;
+  const f = fix as Record<string, unknown>;
+  if (typeof f.explanation !== "string") return null;
+  return {
+    explanation: f.explanation,
+    ...(typeof f.call === "string" ? { call: f.call } : {}),
+    ...(typeof f.command === "string" ? { command: f.command } : {}),
+    ...(typeof f.docsUrl === "string" ? { docsUrl: f.docsUrl } : {}),
+  };
+}
+
+export async function request<T>(method: Method, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+  const res = await send(method, path, body, idempotencyKey);
   if (res.status >= 200 && res.status < 300) return res.body as T;
   if (isErrorBody(res.body)) {
     const { code, message, details } = res.body.error;
-    throw new ApiError(res.status, code, message, details);
+    throw new ApiError(res.status, code, message, details, readFix(res.body.error));
   }
   throw new ApiError(res.status, `http_${res.status}`, `The server answered ${res.status}.`);
 }
@@ -118,14 +150,14 @@ export const api = {
   principals: () => request<{ principals: Principal[] }>("GET", "/api/v1/principals"),
   /** GAP: not in docs/api.md. */
   principal: (id: string) => request<{ principal: PrincipalRef }>("GET", `/api/v1/principals/${enc(id)}`),
-  createAgent: (input: CreateAgentInput) => request<CreateAgentResponse>("POST", "/api/v1/principals/agents", input),
-  revokeTokens: (id: string) => request<{ revoked: number }>("DELETE", `/api/v1/principals/${enc(id)}/tokens`),
+  createAgent: (input: CreateAgentInput, key?: string) => request<CreateAgentResponse>("POST", "/api/v1/principals/agents", input, key),
+  revokeTokens: (id: string, key?: string) => request<{ revoked: number }>("DELETE", `/api/v1/principals/${enc(id)}/tokens`, undefined, key),
 
   // repos
   repos: () => request<{ repos: RepoSummary[] }>("GET", "/api/v1/repos"),
   repo: (repoId: string) => request<RepoDetail>("GET", `/api/v1/repos/${enc(repoId)}`),
-  setLane0: (repoId: string, enabled: boolean) =>
-    request<{ repo: Repo }>("PATCH", `/api/v1/repos/${enc(repoId)}/lane0`, { enabled }),
+  setLane0: (repoId: string, enabled: boolean, key?: string) =>
+    request<{ repo: Repo }>("PATCH", `/api/v1/repos/${enc(repoId)}/lane0`, { enabled }, key),
 
   // plans
   repoPlans: async (repoId: string) => {
@@ -136,10 +168,10 @@ export const api = {
     const res = await request<{ plan: unknown; changes: Change[] }>("GET", `/api/v1/plans/${enc(planId)}`);
     return { plan: validated(Plan, res.plan, "plan"), changes: res.changes };
   },
-  approvePlan: (planId: string, comment?: string) =>
-    request<{ plan: Plan }>("POST", `/api/v1/plans/${enc(planId)}/approve`, comment ? { comment } : {}),
-  rejectPlan: (planId: string, comment: string) =>
-    request<{ plan: Plan }>("POST", `/api/v1/plans/${enc(planId)}/reject`, { comment }),
+  approvePlan: (planId: string, comment?: string, key?: string) =>
+    request<{ plan: Plan }>("POST", `/api/v1/plans/${enc(planId)}/approve`, comment ? { comment } : {}, key),
+  rejectPlan: (planId: string, comment: string, key?: string) =>
+    request<{ plan: Plan }>("POST", `/api/v1/plans/${enc(planId)}/reject`, { comment }, key),
 
   // changes
   changes: (repoId: string, filter: { status?: string; lane?: string } = {}) =>
@@ -157,11 +189,11 @@ export const api = {
     const res = await request<{ tour: unknown }>("GET", `/api/v1/changes/${enc(changeId)}/tour`);
     return { tour: validated(Tour, res.tour, "tour") };
   },
-  review: (changeId: string, input: ReviewInput) =>
-    request<{ change: Change }>("POST", `/api/v1/changes/${enc(changeId)}/review`, input),
+  review: (changeId: string, input: ReviewInput, key?: string) =>
+    request<{ change: Change }>("POST", `/api/v1/changes/${enc(changeId)}/review`, input, key),
   rollout: (changeId: string) => request<RolloutResponse>("GET", `/api/v1/changes/${enc(changeId)}/rollout`),
-  kill: (changeId: string, reason: string) =>
-    request<{ change: Change }>("POST", `/api/v1/changes/${enc(changeId)}/kill`, { reason }),
+  kill: (changeId: string, reason: string, key?: string) =>
+    request<{ change: Change }>("POST", `/api/v1/changes/${enc(changeId)}/kill`, { reason }, key),
   issues: (changeId: string) => request<{ issues: LinkedIssue[] }>("GET", `/api/v1/changes/${enc(changeId)}/issues`),
 
   // audit
@@ -189,6 +221,9 @@ export interface ErrorCopy {
 
 /** What failed, why, and how to recover. Internal codes are never the headline. */
 export function describeError(err: unknown, what = "this"): ErrorCopy {
+  if (err instanceof ApiError && err.fix && err.status !== 401) {
+    return { title: err.message, detail: err.fix.explanation, retry: err.status === 0 || err.status === 409 || err.status === 429 || err.status >= 500 };
+  }
   if (err instanceof ApiError) {
     switch (true) {
       case err.status === 0:
@@ -214,4 +249,10 @@ export function describeError(err: unknown, what = "this"): ErrorCopy {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** The message to show inline under a form after a failed mutation: what failed, then what to do. */
+export function inlineError(err: unknown): string {
+  if (err instanceof ApiError) return err.fix ? `${err.message} ${err.fix.explanation}` : err.message;
+  return describeError(err).detail;
 }

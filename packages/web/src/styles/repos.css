@@ -59,6 +59,14 @@
   font-weight: var(--weight-medium);
   color: var(--text-2);
 }
+.repo-row__unclaimed {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--warn-tint);
+  color: var(--warn);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-bold);
+}
 .repo-row__chev {
   grid-area: chev;
   align-self: center;
