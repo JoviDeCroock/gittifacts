@@ -25,6 +25,7 @@ import {
   sensitiveError,
   testRunError,
 } from "./commands/items.js";
+import { applyResolution, mergeAttempt } from "./commands/merge.js";
 import { mutation } from "./commands/mutation.js";
 import { plan, planEvalChild } from "./commands/plan.js";
 import { type PolicyDocument, policy } from "./commands/policy.js";
@@ -35,7 +36,7 @@ import { sensitivePaths } from "./commands/sensitive-paths.js";
 import { testRun } from "./commands/test-run.js";
 import { transforms } from "./commands/transforms.js";
 import { type Context, createContext, disposeContext, UsageError } from "./lib/context.js";
-import { isSha } from "./lib/git.js";
+import { gitText, isSha } from "./lib/git.js";
 import { errorMessage, log } from "./lib/log.js";
 import { killAllChildren } from "./lib/proc.js";
 import { isPackageManager } from "./lib/repo.js";
@@ -45,6 +46,7 @@ export const VERSION = "0.1.0";
 export const EVIDENCE_PREFIX = "::evidence::";
 export const PLAN_PREFIX = "::plan::";
 export const PREVIEW_PREFIX = "::preview::";
+export const MERGE_PREFIX = "::merge::";
 
 export const EVIDENCE_KINDS = [
   "red-green",
@@ -67,6 +69,14 @@ Usage:
   gittifacts-runner plan [file]            (default file: .platform/ci.ts)
   gittifacts-runner diff --base <sha> --head <sha>
   gittifacts-runner preview [--port 8787] [--ip 0.0.0.0] [--dir dist] [--dry-run]
+  gittifacts-runner merge-attempt --base <sha> --onto <sha> --head <sha>
+  gittifacts-runner apply-resolution --patch <file> [--onto <sha>]
+
+Merge queue:
+  merge-attempt     replay base..head onto --onto (3-way, explicit merge base); prints
+                    ${MERGE_PREFIX}{status: clean|conflict|error, files[], newSha | conflictSha}
+  apply-resolution  apply a resolution patch on --onto (default HEAD; merge-attempt's conflictSha),
+                    commit it as gittifacts-resolver and print ${MERGE_PREFIX}{status, newSha}
 
 Evidence kinds:
   red-green        new/changed tests: fail on base (head's tests overlaid), pass on head
@@ -87,6 +97,8 @@ Options:
   --package-manager <pm>    pnpm | npm | yarn | yarn-berry | bun (default: detected)
   --test-command <cmd>      how the repo runs its tests (selects vitest/jest + config flags)
   --out <file>              also write the JSON document here (default $GITTIFACTS_EVIDENCE_OUT)
+  --onto <sha>              merge-attempt: the new base; apply-resolution: the commit to resolve
+  --patch <file>            apply-resolution: unified diff from --onto to the resolved tree
   --port, --ip, --dir       preview: listen address and build output / assets directory
   --dry-run                 preview: print what would be served, don't start it
   -h, --help                show this help
@@ -99,6 +111,8 @@ preview prints ${PREVIEW_PREFIX}<json> once the server answers, then runs until 
 interface Options {
   base: string | undefined;
   head: string | undefined;
+  onto: string | undefined;
+  patch: string | undefined;
   cwd: string;
   packageManager: string | undefined;
   testCommand: string | undefined;
@@ -122,6 +136,8 @@ function parse(argv: readonly string[]): Options {
       head: { type: "string" },
       // `plan --sha <sha>` (the Runner DO's plan invocation) is `--head`.
       sha: { type: "string" },
+      onto: { type: "string" },
+      patch: { type: "string" },
       cwd: { type: "string" },
       "package-manager": { type: "string" },
       "test-command": { type: "string" },
@@ -141,6 +157,8 @@ function parse(argv: readonly string[]): Options {
   return {
     base: values.base ?? env("GITTIFACTS_BASE_SHA"),
     head: values.head ?? values.sha ?? env("GITTIFACTS_HEAD_SHA"),
+    onto: values.onto ?? env("GITTIFACTS_ONTO_SHA"),
+    patch: values.patch,
     cwd: resolve(values.cwd ?? process.cwd()),
     packageManager: values["package-manager"],
     testCommand: values["test-command"],
@@ -358,6 +376,10 @@ export async function main(argv: readonly string[]): Promise<number> {
     }
   }
 
+  if (command === "merge-attempt" || command === "apply-resolution") {
+    return mergeCommand(command, opts);
+  }
+
   let kind: EvidenceCommand | "diff" | "policy-document";
   if (command === "evidence") {
     const k = rest[0];
@@ -457,6 +479,52 @@ export async function main(argv: readonly string[]): Promise<number> {
     return 0;
   } finally {
     disposeContext(ctx);
+  }
+}
+
+/** merge-attempt / apply-resolution: one `::merge::` document; exit 0 even for status "error". */
+async function mergeCommand(
+  command: "merge-attempt" | "apply-resolution",
+  opts: Options,
+): Promise<number> {
+  const missing =
+    command === "merge-attempt"
+      ? (["base", "onto", "head"] as const).filter((k) => opts[k] === undefined)
+      : opts.patch === undefined
+        ? ["patch"]
+        : [];
+  if (missing.length > 0) {
+    process.stderr.write(`${command} needs ${missing.map((m) => `--${m}`).join(", ")}\n`);
+    return 2;
+  }
+  let repo: string;
+  try {
+    repo = (await gitText(opts.cwd, ["rev-parse", "--show-toplevel"])).trim();
+  } catch (error) {
+    process.stderr.write(`not a git checkout: ${errorMessage(error)}\n`);
+    return 2;
+  }
+  const tmp = mkdtempSync(join(process.env.GITTIFACTS_TMPDIR ?? tmpdir(), "gittifacts-merge-"));
+  try {
+    const doc =
+      command === "merge-attempt"
+        ? await mergeAttempt({
+            repo,
+            tmp,
+            base: opts.base ?? "",
+            onto: opts.onto ?? "",
+            head: opts.head ?? "",
+          })
+        : await applyResolution({
+            repo,
+            tmp,
+            onto: opts.onto ?? "HEAD",
+            patch: resolve(opts.cwd, opts.patch ?? ""),
+          });
+    emit(MERGE_PREFIX, doc, opts.out);
+    return 0;
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
   }
 }
 

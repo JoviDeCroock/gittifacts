@@ -25,6 +25,8 @@ Both contexts produce the same image. `Dockerfile.dockerignore` limits either co
 | `plan [file] [--sha <sha>] [--base <sha>]` | `::plan::<PipelineSpec>`, or `::plan::{"error","file"}` |
 | `diff --base <sha> --head <sha>` | `::evidence::<ChangeDiff>` |
 | `preview [--port 8787] [--ip 0.0.0.0] [--dir dist] [--dry-run]` | `::preview::{status,kind,mode,command,url}` once the port answers; then it runs until wrangler exits |
+| `merge-attempt --base <sha> --onto <sha> --head <sha>` | `::merge::{status: clean\|conflict\|error, files[], newSha \| conflictSha, markers, upstreamCommits, messages}` (`src/commands/merge.ts`) |
+| `apply-resolution --patch <file> [--onto <sha>]` | `::merge::{status: resolved\|error, parentSha, newSha, files}` |
 
 - **Evidence kinds:** `red-green`, `coverage`, `mutation`, `public-api`, `dependencies`,
   `transforms`, `sensitive-paths`, `test-run`, and `policy`. `evidence policy` returns the
@@ -41,6 +43,37 @@ Both contexts produce the same image. `Dockerfile.dockerignore` limits either co
 - **Missing commits:** a commit that isn't in the checkout is fetched from `$GITTIFACTS_REMOTE`
   with `$GITTIFACTS_TOKEN`. The token goes through git's `GIT_CONFIG_*` env only. It is never in
   argv and never in logs, and it is scrubbed from every child process.
+
+## Merge-queue jobs
+
+Both commands work in a throwaway worktree, never move the checkout's `HEAD`, and print exit 0
+with a `::merge::` document even when the job fails (`status: "error"`, with a `note`).
+
+- **`merge-attempt`** replays the Change (`base..head`) as one commit onto `--onto` with an
+  explicit merge base: it cherry-picks a synthetic commit (head's tree, parent `base`), because
+  git 2.39 in the image has no `merge-tree --merge-base`. Commits below `--base` are never carried
+  over.
+  - **clean:** `newSha` is the replayed commit (parent `onto`, the head's author and message,
+    committer `gittifacts`).
+  - **conflict:** every conflicted path is listed with `kind` (`content`, `add-add`,
+    `modify-delete`, `other`), `mode`, and the `base`, `ours` (upstream, `--onto`) and `theirs`
+    (the Change, `--head`) contents. Content conflicts are re-merged with
+    `git merge-file --diff3 --marker-size=13 -L upstream -L base -L change`, so
+    `merged_with_markers` uses `<<<<<<<<<<<<< upstream`, `||||||||||||| base`, `=============`
+    and `>>>>>>>>>>>>> change`. These markers are rare enough not to clash with file content, and
+    `markers` in the document says so for parsers (`@app/evidence` `parseConflicts`). Whole-file
+    conflicts keep the surviving side. Binary or over-512 KiB sides are not inlined (`binary`,
+    `tooLarge`). `conflictSha` is a commit on `onto` whose tree holds those files;
+    `upstreamCommits` are the commits in `base..onto` that touched a conflicted path.
+  - Commits are deterministic: identities and dates come from the inputs, so a re-run in a fresh
+    container reproduces the same SHAs.
+- **`apply-resolution`** applies a resolution patch (`git apply --index`, the diff from the
+  conflict commit to the resolved tree) on `--onto` (default `HEAD`, normally merge-attempt's
+  `conflictSha`, or its `newSha` for a semantic conflict). It refuses when the patch does not
+  apply or when any merge-attempt marker remains, and otherwise commits as
+  `gittifacts-resolver <resolver@gittifacts.dev>` with a `Gittifacts-Resolver: system:resolver`
+  trailer. The resolution is its own commit, so it stays attributable apart from the author's
+  work.
 
 ## How each signal is measured
 
