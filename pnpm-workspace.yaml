@@ -5,3 +5,14 @@ allowBuilds:
   esbuild: true
   workerd: true
   sharp: true
+minimumReleaseAgeExclude:
+  - '@better-auth/core@1.7.7'
+  - '@better-auth/drizzle-adapter@1.7.7'
+  - '@better-auth/kysely-adapter@1.7.7'
+  - '@better-auth/memory-adapter@1.7.7'
+  - '@better-auth/mongo-adapter@1.7.7'
+  - '@better-auth/prisma-adapter@1.7.7'
+  - '@better-auth/telemetry@1.7.7'
+  - better-auth@1.7.7
+  - vite@8.3.2
+  - '@cloudflare/workers-types@5.20261001.1'
