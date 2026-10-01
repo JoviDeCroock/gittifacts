@@ -171,7 +171,12 @@ export interface CiRunRequest {
   /** Omitted → the engine's default evidence steps; [] → none (cheap re-checks). */
   evidenceSteps?: unknown[];
   pipelineFrom?: "base" | "head";
-  budget: { maxMinutes: number };
+  /** Per-run quotas (the engine requires `limits` or the deprecated `budget`). */
+  limits?: { maxMinutes: number; maxLogBytes?: number; instance?: string };
+  /** Deprecated by the engine in favour of `limits`. */
+  budget?: { maxMinutes: number };
+  /** `registries-only` for unclaimed projects (sandbox egress allowlisted to package registries). */
+  network?: "open" | "registries-only";
 }
 
 export type CiRunState = "queued" | "running" | "passed" | "failed" | "cancelled" | "superseded";

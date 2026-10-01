@@ -23,7 +23,7 @@ describe("ChangeWorkflow (node, fake ports)", () => {
     // The reviewer agent never sees the author's summary.
     expect(JSON.stringify(s.ports.reviewer.tourCalls)).not.toContain("author's own summary");
     // CI was asked to plan from BASE, and evidence landed on the fork as a git note.
-    expect(s.ports.ci.starts[0]?.pipelineFrom).toBe("base");
+    expect(s.ports.ci.starts[0]).toMatchObject({ pipelineFrom: "base", network: "open", limits: { maxMinutes: 90 } });
     expect(await s.ports.git.readNote(change.forkName, headSha)).toContain("gittifacts.evidence/v1");
     const evidence = await s.ports.store.getEvidence(change.id, headSha);
     expect(evidence?.notesWritten).toBe(true);
@@ -98,6 +98,8 @@ describe("ChangeWorkflow (node, fake ports)", () => {
     expect(s.bindings.rolloutWorkflow.instances.size).toBe(0);
     expect(s.ports.deployer.uploads).toHaveLength(0);
     expect(s.ports.audit.actions(`change:${change.id}`)).toContain("rollout.skipped");
+    // CI for unclaimed projects only reaches package registries.
+    expect(s.ports.ci.starts.every((r) => r.network === "registries-only")).toBe(true);
   });
 
   it("CI failure blocks: failing, notified, no tour, no merge", async () => {

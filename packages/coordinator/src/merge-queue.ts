@@ -265,7 +265,8 @@ export class MergeQueueCore implements MergeQueueClient {
       headSha: result.newSha,
       pipelineFrom: "base",
       evidenceSteps: [],
-      budget: { maxMinutes: CHEAP_CHECK_MINUTES },
+      limits: { maxMinutes: CHEAP_CHECK_MINUTES },
+      network: repo.claim.status === "claimed" ? "open" : "registries-only",
     });
     await this.save({
       ...item,

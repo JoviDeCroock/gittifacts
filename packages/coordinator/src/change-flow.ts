@@ -239,7 +239,9 @@ export async function runChangeWorkflow(
       baseSha,
       // The pipeline comes from BASE: a change must not edit the CI that judges it.
       pipelineFrom: "base",
-      budget: { maxMinutes: CI_BUDGET_MINUTES },
+      limits: { maxMinutes: CI_BUDGET_MINUTES },
+      // Unclaimed projects: sandbox egress to package registries only (onboarding §4).
+      network: ctx.claimed ? "open" : "registries-only",
     };
     let note = planWarning;
     try {

@@ -470,12 +470,21 @@ export function createCoordinator(
       if (flagKey !== null) await upstream("disable the change's flag", () => ports.flags.setEnabled(flagKey, false));
       const script = repo.deployTarget;
       const previous = state?.previousVersionId ?? null;
+      const ours = state?.versionId ?? null;
       let rolledBack = false;
-      if (script !== null && previous !== null) {
-        await upstream("roll back the deployment", () =>
-          ports.deployer.rollback(script, previous, `kill switch: ${changeId}: ${trimmed}`.slice(0, 1000)),
-        );
-        rolledBack = true;
+      let rollbackSkipped: string | null = null;
+      if (script !== null && previous !== null && ours !== null) {
+        // Only roll back while this change's version still serves traffic: after later
+        // releases, "previous" would also drop their code. The revert change handles that case.
+        const live = await upstream("read the deployment", () => ports.deployer.currentVersions(script));
+        if (live.some((v) => v.versionId === ours && v.percentage > 0)) {
+          await upstream("roll back the deployment", () =>
+            ports.deployer.rollback(script, previous, `kill switch: ${changeId}: ${trimmed}`.slice(0, 1000)),
+          );
+          rolledBack = true;
+        } else {
+          rollbackSkipped = `version ${ours} is no longer live`;
+        }
       }
       if (state !== null) {
         await store.updateChange(changeId, { rolloutState: { ...state, status: rolledBack ? "rolled-back" : state.status } });
@@ -484,7 +493,7 @@ export function createCoordinator(
         principalId: actor.id,
         action: "change.killed",
         subject: changeSubject(changeId),
-        payload: { reason: trimmed, flagKey, rolledBack, previousVersionId: previous, rolloutStopped: stopped },
+        payload: { reason: trimmed, flagKey, rolledBack, rollbackSkipped, previousVersionId: previous, rolloutStopped: stopped },
       });
       const fresh = await requireChange(changeId);
       const revert = await upstream("open the revert change", () =>

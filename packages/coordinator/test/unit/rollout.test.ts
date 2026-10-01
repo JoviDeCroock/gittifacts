@@ -159,4 +159,17 @@ describe("RolloutWorkflow", () => {
     expect(await s.ports.store.getChange(revertIdFor(change.id))).toMatchObject({ revertOf: change.id });
     expect(s.ports.audit.actions(`change:${change.id}`)).toContain("change.killed");
   });
+
+  it("killing a change after later releases does not roll their code back (revert only)", async () => {
+    const s = await withRollout();
+    const { change } = await mergeOne(s);
+    expect((await reload(s, change.id)).status).toBe("released");
+    s.ports.deployer.live.set("api", [{ versionId: "someone-elses", percentage: 100 }]);
+    await s.coordinator.kill(s.reviewer, change.id, "found a bug later");
+    await s.settle();
+    expect(s.ports.deployer.rollbacks).toHaveLength(0);
+    expect(s.ports.flags.flags.get(`change-${change.id}`)).toBe(false);
+    expect(s.ports.audit.payloadOf("change.killed")).toMatchObject({ rolledBack: false, rollbackSkipped: expect.stringContaining("no longer live") });
+    expect((await reload(s, change.id)).status).toBe("reverted");
+  });
 });
