@@ -11,6 +11,7 @@ import {
 } from "../api/schemas.js";
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
+import { registerOAuthRoutes } from "../oauth/routes.js";
 import { capabilities, REPO_ACTIONS } from "../services/capabilities.js";
 import {
   createAgent,
@@ -106,7 +107,7 @@ const createAgentRoute = createRoute({
   tags: ["identity"],
   summary: "Register an agent principal owned by the caller; returns its bearer token once",
   description:
-    "Humans only. Agents may hold repo:read, plan:create and change:create; never plan:approve, change:review or policy:admin.",
+    "Humans only. Agents may hold repo:read, plan:create and change:create; never plan:approve, change:review, policy:admin or repo:admin.",
   security: SECURITY,
   middleware: [requirePrincipal([], { humanOnly: true }), idempotent()] as const,
   request: { headers: IdempotencyHeaders, body: body(CreateAgentBody) },
@@ -152,4 +153,6 @@ export function registerIdentityRoutes(app: ApiApp): void {
     const revoked = await revokeTokens(c.get("services"), callerOf(c), c.req.valid("param").id);
     return c.json({ revoked }, 200);
   });
+  // Delegated agent auth (O4): MCP OAuth, device flow, consent, agent sessions.
+  registerOAuthRoutes(app);
 }
