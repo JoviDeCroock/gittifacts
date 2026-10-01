@@ -1,0 +1,7 @@
+# Context is the repository root (docker build -f apps/sandbox/Dockerfile .). BuildKit reads
+# this file (<Dockerfile>.dockerignore) instead of a root .dockerignore. Only the prebuilt
+# bundle and its runtime manifest are sent.
+**
+!apps/sandbox/dist/gittifacts-runner.mjs
+!apps/sandbox/dist/package.json
+!apps/sandbox/image/**
