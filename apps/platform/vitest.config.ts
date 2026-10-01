@@ -36,7 +36,6 @@ export default defineConfig(async () => ({
           GITHUB_CLIENT_SECRET: "",
           ISSUES_WEBHOOK_SECRET: "test-issues-webhook-secret",
           CF_API_TOKEN: "",
-          CF_ACCOUNT_ID: "",
         },
       },
     }),

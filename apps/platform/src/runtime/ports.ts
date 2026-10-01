@@ -121,8 +121,8 @@ export function lazyReviewer(env: unknown, model: string = DEFAULT_REVIEWER_MODE
     return reviewer;
   };
   return {
-    judge: (input) => get().judge(input),
-    tour: (input) => get().tour(input),
+    judge: async (input) => get().judge(input),
+    tour: async (input) => get().tour(input),
   };
 }
 
@@ -139,10 +139,10 @@ export function lazyCiEngine(env: PortsEnv): CiEngine {
     return engine;
   };
   return {
-    start: (req) => get().start(req),
-    status: (runId) => get().status(runId),
-    cancel: (runId, reason) => get().cancel(runId, reason),
-    restartFrom: (runId, step) => get().restartFrom(runId, step),
+    start: async (req) => get().start(req),
+    status: async (runId) => get().status(runId),
+    cancel: async (runId, reason) => get().cancel(runId, reason),
+    restartFrom: async (runId, step) => get().restartFrom(runId, step),
   };
 }
 

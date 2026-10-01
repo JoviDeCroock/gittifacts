@@ -239,9 +239,12 @@ describe("M1 vertical slice (workerd, real platform + coordinator, fake Artifact
         token: agent.token,
       });
       expect(rollout.status).toBe(200);
-      const { timeline } = await json<{ timeline: Array<{ action: string; summary: string }> }>(
-        rollout,
-      );
+      const { timeline, policySha } = await json<{
+        timeline: Array<{ action: string; summary: string }>;
+        policySha: string | null;
+      }>(rollout);
+      // The base policy was evaluated in the sandbox at baseSha and cached for that sha.
+      expect(policySha).toBe(baseSha);
       const summaries = Object.fromEntries(timeline.map((e) => [e.action, e.summary]));
       expect(summaries).toMatchObject({
         "change.started": "Change started",

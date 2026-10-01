@@ -13,7 +13,7 @@
  * Kept on globalThis so the test file and the Durable Objects / Workflows (same isolate, possibly
  * another module instance) share one set.
  */
-import { RunSummary } from "@app/ci-engine";
+import { RunRequest, RunSummary } from "@app/ci-engine";
 import type {
   CiEngine,
   CiRunRequest,
@@ -36,6 +36,8 @@ export class EngineShapedCi implements CiEngine {
   readonly runs = new Map<string, { request: CiRunRequest; status: CiRunStatus }>();
 
   async start(req: CiRunRequest): Promise<{ runId: string }> {
+    // The real engine's request schema is strict: whatever the coordinator sends must parse.
+    RunRequest.parse(req);
     if (!this.runs.has(req.runId)) {
       this.runs.set(req.runId, {
         request: structuredClone(req),
