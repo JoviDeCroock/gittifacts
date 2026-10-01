@@ -1,0 +1,9 @@
+{
+  "id": "ts-library",
+  "title": "TypeScript library",
+  "description": "An npm library with Vitest and emitted .d.ts, so every Change gets a public-API diff (none/additive/breaking).",
+  "previewCommand": null,
+  "buildOutput": "dist",
+  "routes": [],
+  "expectedCiSeconds": 30
+}

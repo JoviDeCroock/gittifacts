@@ -2,6 +2,7 @@ import { WaitUntil } from "@app/domain";
 import { describe, expect, it } from "vitest";
 import {
   AGENTS_MD_MAX_LINES,
+  type AgentsMdOptions,
   agentsMd,
   CONVENTIONS_MARKER,
   commandsFor,
@@ -12,7 +13,7 @@ import {
 import { callsIn, expectValidCall, HOST, MCP_URL } from "./helpers.js";
 
 const base = { projectName: "my-api", host: HOST, mcpUrl: MCP_URL, repoId: "rep_123" };
-const variants = [
+const variants: AgentsMdOptions[] = [
   ...TEMPLATE_IDS.flatMap((template) => [true, false].map((claimed) => ({ ...base, template, claimed }))),
   { ...base, claimed: true },
   {
