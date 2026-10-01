@@ -10,7 +10,7 @@ Specs:
 ## Milestones
 | Milestone | State |
 |---|---|
-| M1 Vertical slice | all packages built; platform integration (coordinator + CI + tour wiring) in progress; deploy pending a `wrangler login` refresh |
+| M1 Vertical slice | **integrated, passes locally** (workerd vertical slice: MCP start_change → push event → ChangeWorkflow → CI → evidence → lane); `wrangler deploy --dry-run` + sandbox image build pass; deploy pending a `wrangler login` refresh, then `scripts/e2e/m1.ts` |
 | M2 Evidence | **acceptance passes locally**: sandbox e2e, real red/green on a seeded bug fix, attestation verified with the standalone CLI |
 | M3 Classifier + tour | **acceptance passes locally**: all 9 fixtures classify exactly, and the breaking-api tour puts `formatMoney` as its riskiest stop |
 | M4 Merge, rollout, revert | coordinator merge/rollout/revert built (152 tests); live e2e after deploy |
@@ -34,7 +34,7 @@ Specs:
 | `@app/tour` | reviewer agent; AI binding + gateway clients; budget; risk-ordered, evidence-anchored tours | 105 |
 | `@app/conventions` | `AGENTS.md`, `/start`, `/llms.txt`, MCP discovery, fix hints, next steps, `.platform` generators | 226 |
 | `@app/mcp` | 11 tools on mcp-tada-server, typed client, contract snapshot | 8 |
-| `apps/platform` | Hono API + OpenAPI, better-auth, Drizzle/D1, AuditLog DO, idempotency, issues webhook | 57 |
+| `apps/platform` | the one Worker: Hono API + OpenAPI, better-auth, D1, AuditLog DO, MCP, SSE, Ports per role wiring the coordinator, CI engine (Runner container) and reviewer; M1 vertical-slice test | 85 |
 | `apps/sandbox` | `gittifacts-runner` (plan, policy, evidence ×9, diff, preview) and its container image | 57, incl. 9-fixture e2e |
 | `@app/web` | 9 screens, mock backend, 45 screenshots in `docs/screenshots/` | 35 |
 
@@ -52,7 +52,7 @@ Also: `templates/` (4 templates, CI path 5–8 s each) and `fixtures/` (9 change
 - Nothing is deployed yet. Containers have only run under local Docker; `ctx.container` hasn't run on Cloudflare yet.
 
 ## Next
-1. Finish platform integration → deploy → M1/M4 live e2e.
+1. Deploy (`pnpm --filter @app/platform deploy`, docs/deploy.md) → `scripts/e2e/m1.ts` → M4 live e2e.
 2. O1 `create_project` + preview gateway; O3 claimable projects and abuse limits; O5; O6 eval loop.
 3. Merge queue Q1–Q6: DO shell + BatchRunWorkflow around the pure core, MCP tools, queue UI, deploy trains.
 4. **Final phase (requested):** large-scale dogfooding of everything, a large-scale UI/UX review, and recorded videos of
