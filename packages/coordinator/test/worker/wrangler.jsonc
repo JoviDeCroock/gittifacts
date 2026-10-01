@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../../node_modules/wrangler/config-schema.json",
+  "name": "coordinator-test",
+  "main": "./entry.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      { "name": "CHANGE_COORDINATOR", "class_name": "ChangeCoordinator" },
+      { "name": "MERGE_QUEUE", "class_name": "MergeQueue" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChangeCoordinator", "MergeQueue"] }],
+  "workflows": [
+    { "name": "change", "binding": "CHANGE_WORKFLOW", "class_name": "ChangeWorkflow" },
+    { "name": "rollout", "binding": "ROLLOUT_WORKFLOW", "class_name": "RolloutWorkflow" },
+    { "name": "push-router", "binding": "PUSH_ROUTER", "class_name": "PushRouter" }
+  ]
+}
