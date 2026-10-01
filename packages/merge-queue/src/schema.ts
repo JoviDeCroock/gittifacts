@@ -224,6 +224,8 @@ export const QueueEntry = z.object({
   /** Test each unit alone after a failure (no-bisection mode). */
   isolate: z.boolean(),
   dequeueRequested: z.boolean(),
+  /** Soft wait: don't schedule until these Changes merged or left the queue. */
+  waitFor: z.array(ChangeId),
   firstBatchAt: z.number().int().nullable(),
   mergedSha: Sha.nullable(),
   terminalAt: z.number().int().nullable(),
@@ -283,8 +285,15 @@ export const Batch = z.object({
   id: z.string(),
   kind: BatchKind,
   trackId: z.string().nullable(),
-  /** Chain: previous batch in the chain (null: built on `rootBase`). Landing: previous landing batch. */
+  /**
+   * Chain: the conflicting predecessor whose tip this batch is built on (null: built on
+   * `rootBase`). Landing: the previous landing batch.
+   */
   parentId: z.string().nullable(),
+  /** Merge batch: the predecessors whose unmerged entries (`carried`) are rebuilt on `rootBase`. */
+  mergeParents: z.array(z.string()),
+  /** Entries of other batches applied before this batch's own units (merge batches). */
+  carried: z.array(ChangeId),
   /** Main sha the chain this batch belongs to was rooted on. */
   rootBase: Sha,
   rootSeq: z.number().int().nonnegative(),
@@ -307,7 +316,8 @@ export const Batch = z.object({
   recheck: z.object({ tests: z.array(z.string()), mainSha: Sha }).nullable(),
   bisect: z
     .object({
-      lo: z.number().int().nonnegative(),
+      /** Longest own-unit prefix known to pass (-1: not even the carried entries are known good). */
+      lo: z.number().int().min(-1),
       hi: z.number().int().positive(),
       probeIds: z.array(z.string()),
       round: z.number().int().nonnegative(),
@@ -315,7 +325,7 @@ export const Batch = z.object({
       runIds: z.array(z.string()),
     })
     .nullable(),
-  probe: z.object({ of: z.string(), prefixUnits: z.number().int().positive() }).nullable(),
+  probe: z.object({ of: z.string(), prefixUnits: z.number().int().nonnegative() }).nullable(),
   /** Landing batch: the passed chain batches it revalidates, in landing order. */
   members: z.array(z.string()),
   fallbackOf: z.string().nullable(),
@@ -329,7 +339,7 @@ export type Batch = z.infer<typeof Batch>;
 
 export const Track = z.object({
   id: z.string(),
-  /** Batches not yet landed, in landing order (head first). */
+  /** Active batches of this component (a DAG: each batch is built on its conflicting predecessors), oldest first. */
   chain: z.array(z.string()),
   createdAt: z.number().int(),
   /** Express track: revert/incident entries rooted on main while the queue is frozen. */

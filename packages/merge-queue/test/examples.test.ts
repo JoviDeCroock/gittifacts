@@ -71,18 +71,35 @@ describe("independent tracks and revalidation (§4.2)", () => {
     expect(cas?.evidence.carried[0]?.verdict.scope).toBe("all");
   });
 
-  it("serializes conflicting changes in one track and lands them in order", () => {
+  it("a change conflicting with two tracks merges them (no drain): its batch carries both on main", () => {
     const w = new World({ precompute: true });
     w.enqueue({ id: "a", affected: affected({ files: ["s.ts"] }) });
-    w.enqueue({ id: "b", affected: affected({ modules: ["m"] , files: ["t.ts"] }) });
+    w.enqueue({ id: "b", affected: affected({ modules: ["m"], files: ["t.ts"] }) });
+    expect(Object.keys(w.state.tracks).length).toBe(2);
     w.enqueue({ id: "c", affected: affected({ files: ["s.ts"], modules: ["m"] }) });
-    // c conflicts with a (file) and b (module): it waits until one of the tracks drains.
+    // c speculates right away on a merge batch rebuilt on main with a and b applied first.
     const st = entryStatus(w.state, "c", w.now);
-    expect(st?.state).toBe("waiting");
-    expect(st?.reason).toMatch(/waiting on conflicting Change a in track .* and Change b in track/);
+    expect(st?.state).toBe("speculating");
+    expect(Object.keys(w.state.tracks).length).toBe(1);
+    const build = cmds(w, "BuildBatchTree").find((x) => x.entries.some((e) => e.changeId === "c"));
+    expect(build?.entries.map((e) => e.changeId)).toEqual(["a", "b", "c"]);
     w.drain();
     expect(w.violations).toEqual([]);
     expect(w.merged.indexOf("c")).toBe(2);
+  });
+
+  it("independent work speculates in parallel next to a conflicting chain (siblings, not a queue)", () => {
+    const w = new World({ precompute: true });
+    w.enqueue({ id: "a", affected: affected({ files: ["s.ts"], modules: ["m1", "m2"] }) });
+    w.enqueue({ id: "b", affected: affected({ files: ["x.ts"], modules: ["m1"] }) });
+    w.enqueue({ id: "c", affected: affected({ files: ["y.ts"], modules: ["m2"] }) });
+    // b and c both build on a's tip but not on each other.
+    const parent = (id: string) => w.state.batches[w.state.entries[id]?.batchId ?? ""]?.parentId;
+    expect(parent("b")).toBe(w.state.entries.a?.batchId);
+    expect(parent("c")).toBe(w.state.entries.a?.batchId);
+    w.drain();
+    expect(w.violations).toEqual([]);
+    expect(new Set(w.merged)).toEqual(new Set(["a", "b", "c"]));
   });
 });
 

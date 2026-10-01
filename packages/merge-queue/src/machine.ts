@@ -2,35 +2,27 @@
  * The pure scheduling core: `step(state, event, { now }) → { state, commands }`.
  *
  * No IO, no clock, no randomness: time comes from `now`, ids from a counter in the state. The
- * `MergeQueue` DO and the simulator run exactly this code. See protocol.ts for the vocabulary and
- * README-level notes in each section below for the mechanics (§ refer to 03-merge-queue.md).
+ * `MergeQueue` DO and the simulator run exactly this code (§ refer to docs/prompts/03-merge-queue.md).
+ *
+ * Speculation is a DAG of batches. A new batch is built on exactly the batches it conflicts with
+ * (its "frontier"): on one predecessor's tip, or, when it joins several independent components (or
+ * main moved under its predecessor in a conflicting way), as a merge batch rebuilt on main that
+ * carries the predecessors' unmerged entries. Independent work never waits for unrelated work;
+ * conflicting work is ordered. A "track" is a connected component of this DAG.
  */
 import { ConflictIndex, conflicts, needsAllTests, unionAffected } from "./conflict.js";
-import { ejectReason, type EjectInput } from "./eject.js";
+import { type EjectInput, ejectReason } from "./eject.js";
 import { InvariantViolation, invariant } from "./invariants.js";
 import { predict } from "./predict.js";
+import { advanceVirtualTime, assignTag, compareOrder, effectiveRank, flowKey, isExpress } from "./priority.js";
+import type { CasEvidence, Command, CoreEvent, CoreEventOf, LaneRaise } from "./protocol.js";
 import {
-  advanceVirtualTime,
-  assignTag,
-  compareOrder,
-  effectiveRank,
-  flowKey,
-  isExpress,
-} from "./priority.js";
-import type {
-  CasEvidence,
-  Command,
-  CoreEvent,
-  CoreEventOf,
-  LaneRaise,
-} from "./protocol.js";
-import {
-  ALL_TESTS,
   type AffectedSet,
   type Batch,
   type FreezeReason,
   type Lane,
   type LaneReason,
+  type Prediction,
   type QueueEntry,
   type QueueEvent,
   type ResolutionState,
@@ -38,7 +30,6 @@ import {
   type TestScope,
   type Track,
   type TreeVerdict,
-  type Unit,
   unknownAffectedSet,
 } from "./schema.js";
 import { cloneState, isFrozen, type QueueState } from "./state.js";
@@ -85,6 +76,11 @@ function ownEntries(b: Batch): string[] {
   return out;
 }
 
+/** Not yet tested: counts toward speculation depth and the in-flight cap. */
+function inFlight(b: Batch): boolean {
+  return b.state === "pending" || b.state === "building" || b.state === "ready" || b.state === "running" || b.state === "rechecking";
+}
+
 interface PlannedUnit {
   changeIds: string[];
   entries: QueueEntry[];
@@ -102,6 +98,7 @@ interface PlannedUnit {
 
 class Machine {
   readonly out: Command[] = [];
+  private readonly predictions = new Map<string, Prediction>();
 
   constructor(
     readonly s: QueueState,
@@ -141,15 +138,21 @@ class Machine {
     this.out.push({ type: "Audit", action, subject, principalId, signature, payload });
   }
 
-  private telemetry(
-    kind: "prediction" | "outcome" | "lane-downgrade-ignored" | "rejected-event",
-    data: Record<string, unknown>,
-  ): void {
+  private telemetry(kind: "prediction" | "outcome" | "lane-downgrade-ignored" | "rejected-event", data: Record<string, unknown>): void {
     this.out.push({ type: "Telemetry", kind, data });
   }
 
   private reject(event: string, why: string, data: Record<string, unknown> = {}): void {
     this.telemetry("rejected-event", { event, why, ...data });
+  }
+
+  private predictionOf(e: QueueEntry): Prediction {
+    let p = this.predictions.get(e.changeId);
+    if (p === undefined) {
+      p = predict(this.s, e);
+      this.predictions.set(e.changeId, p);
+    }
+    return p;
   }
 
   // ================================================================ events
@@ -201,21 +204,15 @@ class Machine {
     if (existing !== undefined && !isTerminal(existing)) {
       if (existing.headSha === ev.headSha) return; // idempotent re-enqueue
       if (this.inCas(existing.changeId)) {
-        this.reject("Enqueued", "a previous head is landing right now; retry after it settles", {
-          changeId: ev.changeId,
-        });
+        this.reject("Enqueued", "a previous head is landing right now; retry after it settles", { changeId: ev.changeId });
         return;
       }
-      // New head: the old one leaves the queue, the new one starts over at the back.
+      // New head: the old one leaves the queue (dependents keep waiting for the new one).
       this.removeFromFlight(existing);
       this.terminate(
         existing,
         "ejected",
-        {
-          changeId: existing.changeId,
-          code: "superseded",
-          message: `head ${existing.headSha.slice(0, 12)} replaced by ${ev.headSha.slice(0, 12)}`,
-        },
+        { changeId: existing.changeId, code: "superseded", message: `head ${existing.headSha.slice(0, 12)} replaced by ${ev.headSha.slice(0, 12)}` },
         SYSTEM_PRINCIPAL,
         false,
       );
@@ -254,26 +251,22 @@ class Machine {
       ejectReason: null,
       resolution: null,
       resolverIds: [],
-      approvalRequired: false,
+      approvalRequired: ev.approvedLane !== undefined && ev.approvedLane < ev.lane,
       size: ev.size,
       evidence: ev.evidence,
       prediction: null,
       wfqTag: 0,
       isolate: false,
       dequeueRequested: false,
+      waitFor: [],
       firstBatchAt: null,
       mergedSha: null,
       terminalAt: null,
     };
-    // A Change enqueued with a lane above its approval is never schedulable until approved.
-    if (ev.approvedLane !== undefined && ev.approvedLane < ev.lane) e.approvalRequired = true;
     e.wfqTag = assignTag(this.s, e);
     this.s.entries[e.changeId] = e;
-    if (e.affected === null) {
-      this.out.push({ type: "ComputeAffectedSet", changeId: e.changeId, headSha: e.headSha });
-    } else {
-      this.applyQuarantineTo(e);
-    }
+    if (e.affected === null) this.out.push({ type: "ComputeAffectedSet", changeId: e.changeId, headSha: e.headSha });
+    else this.applyQuarantineTo(e);
     if (e.approvalRequired) this.requestApproval(e);
     this.audit("merge-queue.enqueued", `change:${e.changeId}`, {
       headSha: e.headSha,
@@ -300,8 +293,7 @@ class Machine {
         signer: null,
         message: `automatic revert ${e.changeId} of ${e.revertOf} in progress`,
       });
-      const seqOf = this.landedSeqOf(e.revertOf);
-      this.markBad(seqOf ?? this.s.main.seq);
+      this.markBad(this.landedSeqOf(e.revertOf) ?? this.s.main.seq);
     }
   }
 
@@ -321,32 +313,22 @@ class Machine {
     if (e === undefined || isTerminal(e)) return;
     const human = ev.by.kind === "human";
     if (ev.priority === "incident" && !human && ev.incidentPlanId === null) {
-      this.reject("Reprioritized", "the incident class needs a human or an incident Plan", {
-        changeId: e.changeId,
-        by: ev.by.principalId,
-      });
+      this.reject("Reprioritized", "the incident class needs a human or an incident Plan", { changeId: e.changeId, by: ev.by.principalId });
       return;
     }
     if (ev.priority === "revert" && e.revertOf === null && !human) {
-      this.reject("Reprioritized", "only reverts (or a human) may use the revert class", {
-        changeId: e.changeId,
-      });
+      this.reject("Reprioritized", "only reverts (or a human) may use the revert class", { changeId: e.changeId });
       return;
     }
     const from = e.priority;
     e.priority = ev.priority;
-    this.audit("merge-queue.reprioritized", `change:${e.changeId}`, {
-      from,
-      to: ev.priority,
-      by: ev.by.principalId,
-      incidentPlanId: ev.incidentPlanId,
-    });
+    this.audit("merge-queue.reprioritized", `change:${e.changeId}`, { from, to: ev.priority, by: ev.by.principalId, incidentPlanId: ev.incidentPlanId });
   }
 
   private onAffected(ev: CoreEventOf<"AffectedSetComputed">): void {
     const e = this.entry(ev.changeId);
     if (e === undefined || isTerminal(e) || e.headSha !== ev.headSha) return;
-    // Only a pending set or the timeout's unknown placeholder may be replaced while in flight.
+    // In flight, only the timeout's placeholder may be replaced (by a narrower set: still safe).
     if (e.affected !== null && e.affected.complete && e.batchId !== null) return;
     e.affected = ev.affected;
     e.affectedRequestedAt = null;
@@ -359,15 +341,14 @@ class Machine {
     const b = this.batch(ev.batchId);
     if (b === undefined || b.state !== "building") {
       // A build for a batch we no longer want: make sure its ref doesn't leak.
-      if (ev.result.status === "clean")
-        this.out.push({ type: "DeleteQueueRef", refName: `refs/queue/${ev.batchId}` });
+      if (ev.result.status === "clean") this.out.push({ type: "DeleteQueueRef", refName: `refs/queue/${ev.batchId}` });
       return;
     }
     if (ev.result.status === "conflict") {
       this.onTextualConflict(b, ev.result.changeId, ev.result.files, ev.result.upstream);
       return;
     }
-    const expected = ownEntries(b);
+    const expected = [...b.carried, ...ownEntries(b)];
     const got = ev.result.commits.map((c) => c.changeId);
     const last = ev.result.commits[ev.result.commits.length - 1];
     if (
@@ -396,20 +377,12 @@ class Machine {
     }
     if (ev.treeSha !== b.treeSha) {
       // Never count a result for a different tree: main only advances to exactly-tested trees.
-      this.audit("merge-queue.result-tree-mismatch", `batch:${b.id}`, {
-        runId: ev.runId,
-        expected: b.treeSha,
-        got: ev.treeSha,
-      });
+      this.audit("merge-queue.result-tree-mismatch", `batch:${b.id}`, { runId: ev.runId, expected: b.treeSha, got: ev.treeSha });
       this.infraRetry(b, "result for a different tree", "ready");
       return;
     }
     if (!this.scopeCovers(ev.scope, b.targets)) {
-      this.audit("merge-queue.result-scope-short", `batch:${b.id}`, {
-        runId: ev.runId,
-        wanted: b.targets,
-        got: ev.scope,
-      });
+      this.audit("merge-queue.result-scope-short", `batch:${b.id}`, { runId: ev.runId, wanted: b.targets, got: ev.scope });
       this.infraRetry(b, "run did not cover the required targets", "ready");
       return;
     }
@@ -428,13 +401,13 @@ class Machine {
       return;
     }
     if (this.cfg.features.flakeRecheck) {
+      invariant(b.tipSha !== null && b.treeSha !== null, "recheck.tree", "re-check of an unbuilt batch");
       b.state = "rechecking";
       b.recheck = { tests: candidates, mainSha: this.s.main.sha };
       b.verdict = verdict;
       b.runSeq++;
       b.runId = `${b.id}-k${b.runSeq}`;
       b.startedAt = this.now;
-      invariant(b.tipSha !== null && b.treeSha !== null, "recheck.tree", "re-check of an unbuilt batch");
       this.out.push({
         type: "RunFlakeRecheck",
         batchId: b.id,
@@ -451,8 +424,7 @@ class Machine {
 
   private onRecheck(ev: CoreEventOf<"FlakeRecheckResult">): void {
     const b = this.batch(ev.batchId);
-    if (b === undefined || b.state !== "rechecking" || b.runId !== ev.runId || b.recheck === null)
-      return;
+    if (b === undefined || b.state !== "rechecking" || b.runId !== ev.runId || b.recheck === null) return;
     const base = b.verdict ?? this.newVerdict(b, ev.runId, []);
     const byTest = new Map(ev.results.map((r) => [r.test, r]));
     const real: string[] = [];
@@ -497,11 +469,7 @@ class Machine {
   }
 
   private newVerdict(b: Batch, runId: string, quarantinedFailing: string[]): TreeVerdict {
-    invariant(
-      b.treeSha !== null && b.tipSha !== null && b.baseSha !== null,
-      "verdict.tree",
-      `verdict for unbuilt batch ${b.id}`,
-    );
+    invariant(b.treeSha !== null && b.tipSha !== null && b.baseSha !== null, "verdict.tree", `verdict for unbuilt batch ${b.id}`);
     return {
       treeSha: b.treeSha,
       commitSha: b.tipSha,
@@ -510,16 +478,9 @@ class Machine {
       runIds: [runId],
       passed: true,
       failing: [],
-      quarantined: [...new Set([...quarantinedFailing, ...this.relevantQuarantine(this.verdictEntries(b))])],
+      quarantined: [...new Set([...quarantinedFailing, ...this.relevantQuarantine(this.landingEntriesOf(b))])],
       flakyRetried: [],
     };
-  }
-
-  private verdictEntries(b: Batch): string[] {
-    if (b.kind !== "landing") return ownEntries(b);
-    const out: string[] = [];
-    for (const m of b.members) out.push(...ownEntries(this.batch(m) ?? b));
-    return out;
   }
 
   private scopeCovers(got: TestScope, wanted: TestScope): boolean {
@@ -577,29 +538,24 @@ class Machine {
         return;
       }
       case "landing": {
-        const i = this.s.landing.indexOf(b.id);
         for (const m of b.members) {
           const mb = this.batch(m);
           if (mb !== undefined) mb.noRevalidate = true;
         }
+        const i = this.s.landing.indexOf(b.id);
         if (i >= 0) this.invalidateLanding(i, why);
         return;
       }
       case "chain": {
-        const t = this.s.tracks[b.trackId ?? ""];
         const own = ownEntries(b);
-        if (t !== undefined && t.chain.includes(b.id)) this.cancelChainFrom(t, t.chain.indexOf(b.id), why);
+        this.cancelTree(b, why);
         for (const id of own) {
           const e = this.entry(id);
           if (e === undefined || isTerminal(e)) continue;
           e.infraErrors++;
           if (e.infraErrors > this.cfg.maxInfraRetries) {
             this.removeFromFlight(e);
-            this.terminate(e, "ejected", {
-              changeId: id,
-              code: "infra-error",
-              message: `CI could not produce a result (${why})`,
-            });
+            this.terminate(e, "ejected", { changeId: id, code: "infra-error", message: `CI could not produce a result (${why})` });
           }
         }
         return;
@@ -607,29 +563,109 @@ class Machine {
     }
   }
 
+  // ---------------------------------------------------------------- the speculation DAG
+
+  /** Active chain batches (in some track), oldest first. */
+  private activeChain(): Batch[] {
+    const out: Batch[] = [];
+    for (const t of Object.values(this.s.tracks))
+      for (const bid of t.chain) {
+        const b = this.batch(bid);
+        if (b !== undefined) out.push(b);
+      }
+    return out.sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
+  }
+
+  private isActiveChain(b: Batch): boolean {
+    const t = this.s.tracks[b.trackId ?? ""];
+    return b.kind === "chain" && t !== undefined && t.chain.includes(b.id);
+  }
+
+  /** Active chain batches whose own entries are in b's tree (its ancestors). */
+  private ancestorsOf(b: Batch): Batch[] {
+    const own = new Set(ownEntries(b));
+    const out = new Map<string, Batch>();
+    for (const id of b.lineage) {
+      if (own.has(id)) continue;
+      const e = this.entry(id);
+      if (e === undefined || isTerminal(e)) continue;
+      const a = this.batch(e.batchId);
+      if (a !== undefined && a.id !== b.id && this.isActiveChain(a)) out.set(a.id, a);
+    }
+    return [...out.values()];
+  }
+
+  /** Active chain batches whose tree contains b's own entries. */
+  private descendantsOf(b: Batch): Batch[] {
+    const first = ownEntries(b)[0];
+    if (first === undefined) return [];
+    return this.activeChain().filter((c) => c.id !== b.id && c.lineage.includes(first));
+  }
+
+  private removeFromTrack(b: Batch): void {
+    const t = this.s.tracks[b.trackId ?? ""];
+    if (t === undefined) return;
+    t.chain = t.chain.filter((x) => x !== b.id);
+    if (t.chain.length === 0) delete this.s.tracks[t.id];
+  }
+
+  /** Cancel b (unless `keepSelf`) and every batch built on it; their entries wait again. */
+  private cancelTree(b: Batch, why: string, keepSelf = false): void {
+    const victims = [...this.descendantsOf(b), ...(keepSelf ? [] : [b])];
+    for (const v of victims) invariant(!this.batchInCas(v), "cancel.in-cas", `cannot cancel ${v.id}: CAS in flight`);
+    for (const v of victims) {
+      const li = this.s.landing.findIndex((lid) => this.batch(lid)?.members.includes(v.id) === true);
+      if (li >= 0) this.invalidateLanding(li, why);
+      this.removeFromTrack(v);
+      this.cancelBatch(v, why);
+      this.returnUnits(v);
+      this.abortChildBisections(v, why);
+    }
+  }
+
+  private mergeTracks(ids: string[]): Track | undefined {
+    const tracks = [...new Set(ids)]
+      .map((id) => this.s.tracks[id])
+      .filter((t): t is Track => t !== undefined)
+      .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
+    const keep = tracks[0];
+    if (keep === undefined) return undefined;
+    for (const t of tracks.slice(1)) {
+      for (const bid of t.chain) {
+        const b = this.batch(bid);
+        if (b === undefined) continue;
+        b.trackId = keep.id;
+        for (const id of ownEntries(b)) {
+          const e = this.entry(id);
+          if (e !== undefined && e.batchId === bid) e.trackId = keep.id;
+        }
+      }
+      keep.chain = [...keep.chain, ...t.chain];
+      keep.express = keep.express || t.express;
+      delete this.s.tracks[t.id];
+    }
+    return keep;
+  }
+
   // ---------------------------------------------------------------- failures and bisection (§4.3)
 
   private onChainFailure(b: Batch): void {
     this.s.stats.batchPassRate = 0.8 * this.s.stats.batchPassRate;
-    const t = this.s.tracks[b.trackId ?? ""];
-    if (t !== undefined) {
-      const idx = t.chain.indexOf(b.id);
-      // Descendants contain the culprit: re-form them right away on b's parent (they don't wait
-      // for the bisection).
-      if (idx >= 0) {
-        this.cancelChainFrom(t, idx + 1, `ancestor ${b.id} failed`);
-        t.chain = t.chain.filter((x) => x !== b.id);
-        if (t.chain.length === 0) delete this.s.tracks[t.id];
-      }
+    // Everything built on b contains the culprit: re-form it right away (it doesn't wait for the
+    // bisection). b itself leaves the DAG and is bisected on the side.
+    if (this.isActiveChain(b)) {
+      this.cancelTree(b, `ancestor ${b.id} failed`, true);
+      this.removeFromTrack(b);
     }
-    this.abortChildBisections(b.id, `ancestor ${b.id} failed`);
+    // Children already bisecting on top of b: their base is bad, their verdicts are moot.
+    this.abortChildBisections(b, `ancestor ${b.id} failed`);
     for (const id of ownEntries(b)) {
       const e = this.entry(id);
       if (e !== undefined) e.attempts++;
     }
     b.state = "bisecting";
     b.bisect = {
-      lo: 0,
+      lo: b.carried.length > 0 ? -1 : 0,
       hi: b.units.length,
       probeIds: [],
       round: 0,
@@ -641,7 +677,7 @@ class Machine {
 
   /** "good": the tree b was built on passed; "bad": it failed or vanished; "pending": unknown yet. */
   private baseStatus(b: Batch): "good" | "bad" | "pending" {
-    if (b.parentId === null) return "good"; // rooted on main, which is green by construction
+    if (b.parentId === null) return "good"; // main (green by construction); carried entries get probe 0
     const p = this.batch(b.parentId);
     if (p === undefined) return "bad";
     if (p.verdict?.passed === true) return "good";
@@ -658,6 +694,13 @@ class Machine {
       return;
     }
     if (bis.hi - bis.lo <= 1) {
+      if (bis.hi <= 0) {
+        // The carried entries alone fail: not this batch's fault. Wait for them to settle in their
+        // own batches before trying again (else the same merge would be rebuilt and fail forever).
+        this.abortBisection(b, "the carried entries fail without this batch's own units");
+        this.waitForCarried(b);
+        return;
+      }
       if (base === "pending") return; // decided once the parent settles
       this.decideCulprit(b, bis.hi - 1);
       return;
@@ -671,6 +714,7 @@ class Machine {
           this.toWaiting(e);
         }
       }
+      this.waitForCarried(b);
       this.finishBatch(b, "failed");
       return;
     }
@@ -689,7 +733,7 @@ class Machine {
 
   private createProbe(b: Batch, prefixUnits: number): string {
     const units = b.units.slice(0, prefixUnits);
-    let n = 0;
+    let n = b.carried.length;
     for (const u of units) n += u.changeIds.length;
     const c = b.commits[n - 1];
     invariant(c !== undefined && b.baseSha !== null, "probe.commit", `no commit for prefix ${n} of ${b.id}`);
@@ -699,6 +743,8 @@ class Machine {
       kind: "probe",
       trackId: b.trackId,
       parentId: null,
+      mergeParents: [],
+      carried: b.carried,
       rootBase: b.rootBase,
       rootSeq: b.rootSeq,
       baseSha: b.baseSha,
@@ -740,11 +786,10 @@ class Machine {
       bis.runIds = [...bis.runIds, ...(p.verdict?.runIds ?? [])];
       if (bis.lo >= bis.hi) {
         // Contradictory results (only a flake can do this): keep the best passing prefix below hi.
-        let lo = 0;
+        let lo = b.carried.length > 0 ? -1 : 0;
         for (const id of bis.probeIds) {
           const q = this.batch(id);
-          if (q?.state === "passed" && q.probe !== null && q.probe.prefixUnits < bis.hi)
-            lo = Math.max(lo, q.probe.prefixUnits);
+          if (q?.state === "passed" && q.probe !== null && q.probe.prefixUnits < bis.hi) lo = Math.max(lo, q.probe.prefixUnits);
         }
         bis.lo = lo;
       }
@@ -761,13 +806,30 @@ class Machine {
   }
 
   private settleChildBisections(parentId: string): void {
-    for (const b of Object.values(this.s.batches))
-      if (b.state === "bisecting" && b.parentId === parentId) this.resolveBisection(b);
+    for (const b of Object.values(this.s.batches)) if (b.state === "bisecting" && b.parentId === parentId) this.resolveBisection(b);
   }
 
-  private abortChildBisections(parentId: string, why: string): void {
-    for (const b of Object.values(this.s.batches))
-      if (b.state === "bisecting" && b.parentId === parentId) this.abortBisection(b, why);
+  /** A bisection whose base contains a failed/cancelled batch's entries is moot. */
+  private abortChildBisections(gone: Batch, why: string): void {
+    const first = ownEntries(gone)[0];
+    for (const b of Object.values(this.s.batches)) {
+      if (b.state !== "bisecting" || b.id === gone.id) continue;
+      if (b.parentId === gone.id || (first !== undefined && b.lineage.includes(first) && !ownEntries(b).includes(first)))
+        this.abortBisection(b, why);
+    }
+  }
+
+  /** Own units of a failed merge batch wait until its carried entries landed or left the queue. */
+  private waitForCarried(b: Batch): void {
+    const pending = b.carried.filter((id) => {
+      const e = this.entry(id);
+      return e !== undefined && !isTerminal(e);
+    });
+    if (pending.length === 0) return;
+    for (const id of ownEntries(b)) {
+      const e = this.entry(id);
+      if (e !== undefined && e.state === "waiting") e.waitFor = [...new Set([...e.waitFor, ...pending])];
+    }
   }
 
   private abortBisection(b: Batch, why: string): void {
@@ -790,7 +852,8 @@ class Machine {
     const failing = bis?.failingTests ?? [];
     const runIds = bis?.runIds ?? [];
     const prefix = b.units.slice(0, idx).flatMap((u) => u.changeIds);
-    const ancestors = b.lineage.filter((id) => !ownEntries(b).includes(id));
+    const own = ownEntries(b);
+    const ancestors = b.lineage.filter((id) => !own.includes(id));
     // Innocents re-form into new batches automatically.
     b.units.forEach((u, i) => {
       if (i === idx) return;
@@ -812,7 +875,7 @@ class Machine {
         files: [],
         failingTests: failing,
         ontoSha: b.baseSha ?? this.s.main.sha,
-        preceding: prefix,
+        preceding: [...b.carried, ...prefix],
       });
       return;
     }
@@ -854,24 +917,28 @@ class Machine {
       if (i >= 0) this.invalidateLanding(i, `rebase conflict on ${changeId} during revalidation`);
       return;
     }
-    const t = this.s.tracks[b.trackId ?? ""];
-    const units = b.units;
-    const ui = units.findIndex((u) => u.changeIds.includes(changeId));
-    const preceding = units.slice(0, Math.max(0, ui)).flatMap((u) => u.changeIds);
-    const lineageBefore = b.lineage.slice(0, b.lineage.indexOf(changeId) >= 0 ? b.lineage.indexOf(changeId) : b.lineage.length);
-    if (t !== undefined && t.chain.includes(b.id)) this.cancelChainFrom(t, t.chain.indexOf(b.id), `rebase conflict on ${changeId}`);
+    const own = ownEntries(b);
+    if (!own.includes(changeId)) {
+      // A carried entry (another batch's) doesn't rebase onto current main: this merge can't be
+      // built yet. Its units wait until that entry has landed (or left the queue).
+      this.cancelTree(b, `carried ${changeId} does not apply on main`);
+      for (const id of own) {
+        const e = this.entry(id);
+        if (e !== undefined && !isTerminal(e)) e.waitFor = [...new Set([...e.waitFor, changeId])];
+      }
+      return;
+    }
+    const ui = b.units.findIndex((u) => u.changeIds.includes(changeId));
+    const preceding = [...b.carried, ...b.units.slice(0, Math.max(0, ui)).flatMap((u) => u.changeIds)];
+    const at = b.lineage.indexOf(changeId);
+    const lineageBefore = b.lineage.slice(0, at >= 0 ? at : b.lineage.length);
+    if (this.isActiveChain(b)) this.cancelTree(b, `rebase conflict on ${changeId}`);
     const e = this.entry(changeId);
     if (e === undefined || isTerminal(e)) return;
     if (e.batchId !== null) this.removeFromFlight(e);
     const suspects = upstream.length > 0 ? upstream : [...new Set([...lineageBefore, ...this.overlappingLanded(e)])].slice(0, 20);
     if (this.canResolve(e, "textual")) {
-      this.startResolution(e, "textual", {
-        upstream: suspects,
-        files,
-        failingTests: [],
-        ontoSha: b.baseSha ?? this.s.main.sha,
-        preceding,
-      });
+      this.startResolution(e, "textual", { upstream: suspects, files, failingTests: [], ontoSha: b.baseSha ?? this.s.main.sha, preceding });
       return;
     }
     this.terminate(e, "ejected", {
@@ -901,15 +968,7 @@ class Machine {
     e.state = "resolving";
     e.batchId = null;
     e.trackId = null;
-    e.resolution = {
-      kind,
-      attempts,
-      upstream: info.upstream,
-      files: info.files,
-      failingTests: info.failingTests,
-      blamed: null,
-      resolved: false,
-    };
+    e.resolution = { kind, attempts, upstream: info.upstream, files: info.files, failingTests: info.failingTests, blamed: null, resolved: false };
     this.out.push({
       type: "RequestResolution",
       changeId: e.changeId,
@@ -923,32 +982,20 @@ class Machine {
       failingTests: info.failingTests,
       excludePrincipals: [e.authorId],
     });
-    this.emit({
-      type: "resolving_conflict",
-      at: this.now,
-      changeId: e.changeId,
-      kind,
-      upstream: info.upstream,
-      attempt: attempts,
-    });
+    this.emit({ type: "resolving_conflict", at: this.now, changeId: e.changeId, kind, upstream: info.upstream, attempt: attempts });
   }
 
   private onResolution(ev: CoreEventOf<"ResolutionResult">): void {
     const e = this.entry(ev.changeId);
     const r = e?.resolution ?? null;
     if (e === undefined || e.state !== "resolving" || r === null || ev.attempt !== r.attempts) {
-      this.reject("ResolutionResult", "no matching resolution in progress", {
-        changeId: ev.changeId,
-        attempt: ev.attempt,
-      });
+      this.reject("ResolutionResult", "no matching resolution in progress", { changeId: ev.changeId, attempt: ev.attempt });
       return;
     }
     let outcome = ev.outcome;
     if (ev.resolverId === e.authorId) {
       // The resolver must not be the Change's authoring agent (no self-approval of resolutions).
-      this.audit("merge-queue.self-resolution-rejected", `change:${e.changeId}`, {
-        resolverId: ev.resolverId,
-      });
+      this.audit("merge-queue.self-resolution-rejected", `change:${e.changeId}`, { resolverId: ev.resolverId });
       outcome = { status: "failed", message: "resolver is the Change's author" };
     } else if (outcome.status === "resolved" && r.kind === "semantic" && outcome.blamedUpstream === null) {
       outcome = { status: "failed", message: "semantic resolution did not name the upstream Change" };
@@ -956,19 +1003,10 @@ class Machine {
     switch (outcome.status) {
       case "resolved": {
         if (outcome.lane < e.lane)
-          this.telemetry("lane-downgrade-ignored", {
-            changeId: e.changeId,
-            lane: e.lane,
-            reported: outcome.lane,
-            resolverId: ev.resolverId,
-          });
+          this.telemetry("lane-downgrade-ignored", { changeId: e.changeId, lane: e.lane, reported: outcome.lane, resolverId: ev.resolverId });
         const reasons: LaneReason[] = [...outcome.laneReasons];
         if (outcome.outsideHunks)
-          reasons.push({
-            code: "merge-queue.resolution-outside-hunks",
-            lane: 1,
-            message: "The conflict resolution touches lines outside the conflict hunks.",
-          });
+          reasons.push({ code: "merge-queue.resolution-outside-hunks", lane: 1, message: "The conflict resolution touches lines outside the conflict hunks." });
         // The lane may only stay or rise: the core keeps the max.
         this.raiseLane(e, Math.max(outcome.lane, outcome.outsideHunks ? 1 : 0) as Lane, reasons, false);
         e.headSha = outcome.newHeadSha;
@@ -977,8 +1015,7 @@ class Machine {
         e.affected = outcome.affected;
         e.affectedRequestedAt = outcome.affected === null ? this.now : null;
         e.state = "waiting";
-        if (outcome.affected === null)
-          this.out.push({ type: "ComputeAffectedSet", changeId: e.changeId, headSha: e.headSha });
+        if (outcome.affected === null) this.out.push({ type: "ComputeAffectedSet", changeId: e.changeId, headSha: e.headSha });
         else this.applyQuarantineTo(e);
         if (outcome.outsideHunks || e.lane > e.approvedLane) {
           e.approvalRequired = true;
@@ -1016,25 +1053,12 @@ class Machine {
         });
         return;
       }
-      case "budget-exhausted": {
-        this.terminate(e, "ejected", {
-          changeId: e.changeId,
-          code: "resolution-budget-exhausted",
-          message: outcome.message,
-          upstream: r.upstream,
-          files: r.files,
-        });
+      case "budget-exhausted":
+        this.terminate(e, "ejected", { changeId: e.changeId, code: "resolution-budget-exhausted", message: outcome.message, upstream: r.upstream, files: r.files });
         return;
-      }
       case "failed": {
         if (r.attempts < this.cfg.resolutionMaxAttempts && e.resolverIds.length < MAX_RESOLUTIONS_PER_ENTRY) {
-          this.startResolution(e, r.kind, {
-            upstream: r.upstream,
-            files: r.files,
-            failingTests: r.failingTests,
-            ontoSha: this.s.main.sha,
-            preceding: [],
-          });
+          this.startResolution(e, r.kind, { upstream: r.upstream, files: r.files, failingTests: r.failingTests, ontoSha: this.s.main.sha, preceding: [] });
           return;
         }
         if (r.kind === "semantic") this.authorOutcome(e, false);
@@ -1090,9 +1114,7 @@ class Machine {
       return;
     }
     if (ev.lane < e.lane) {
-      this.reject("Approved", `approval covers lane ${ev.lane}, the Change is lane ${e.lane}`, {
-        changeId: e.changeId,
-      });
+      this.reject("Approved", `approval covers lane ${ev.lane}, the Change is lane ${e.lane}`, { changeId: e.changeId });
       return;
     }
     e.approvedLane = Math.max(e.approvedLane, ev.lane) as Lane;
@@ -1103,8 +1125,7 @@ class Machine {
   // ---------------------------------------------------------------- flakes (§4.7)
 
   private quarantineTest(test: string, b: Batch, mainSha: string): void {
-    if (this.s.quarantine[test] !== undefined) return;
-    if (b.treeSha === null) return;
+    if (this.s.quarantine[test] !== undefined || b.treeSha === null) return;
     this.s.quarantine[test] = { test, at: this.now, batchId: b.id, treeSha: b.treeSha, mainSha };
     const refs = [`batch:${b.id}`, ...(b.verdict?.runIds ?? []).map((r) => `ci-run:${r}`)];
     this.audit("merge-queue.test-quarantined", `test:${test}`.slice(0, 200), {
@@ -1115,17 +1136,8 @@ class Machine {
       mainSha,
       runIds: b.verdict?.runIds ?? [],
     });
-    this.out.push({
-      type: "OpenPlan",
-      kind: "fix-flaky-test",
-      test,
-      title: `Fix flaky test ${test}`.slice(0, 200),
-      evidenceRefs: refs,
-    });
-    for (const e of Object.values(this.s.entries)) {
-      if (isTerminal(e)) continue;
-      this.applyQuarantineTo(e);
-    }
+    this.out.push({ type: "OpenPlan", kind: "fix-flaky-test", test, title: `Fix flaky test ${test}`.slice(0, 200), evidenceRefs: refs });
+    for (const e of Object.values(this.s.entries)) if (!isTerminal(e)) this.applyQuarantineTo(e);
   }
 
   /** An entry whose affected set includes a quarantined test is at least Lane 1. */
@@ -1139,8 +1151,7 @@ class Machine {
         message: `Quarantined test(s) in this Change's affected set do not count as passing: ${hit.slice(0, 5).join(", ")}.`,
       },
     ]);
-    if (raised && e.approvalRequired && e.batchId !== null && !this.inCas(e.changeId))
-      this.removeFromFlight(e);
+    if (raised && e.approvalRequired && e.batchId !== null && !this.inCas(e.changeId)) this.removeFromFlight(e);
   }
 
   private relevantQuarantine(changeIds: string[]): string[] {
@@ -1175,17 +1186,9 @@ class Machine {
     invariant(b !== undefined, "cas.batch", `CAS ${cas.casId} for unknown batch ${cas.batchId}`);
     if (ev.result !== "ok") {
       b.state = "passed";
-      this.audit("merge-queue.cas-" + ev.result, `batch:${b.id}`, {
-        casId: cas.casId,
-        expectedOld: cas.expectedOld,
-        actual: ev.actualSha,
-        detail: ev.detail,
-      });
-      if (ev.result === "stale" && ev.actualSha !== null && ev.actualSha !== this.s.main.sha) {
-        this.onExternalMain(ev.actualSha);
-      } else if (ev.result === "rejected") {
-        this.s.casRetryAt = this.now + 30_000;
-      }
+      this.audit(`merge-queue.cas-${ev.result}`, `batch:${b.id}`, { casId: cas.casId, expectedOld: cas.expectedOld, actual: ev.actualSha, detail: ev.detail });
+      if (ev.result === "stale" && ev.actualSha !== null && ev.actualSha !== this.s.main.sha) this.onExternalMain(ev.actualSha);
+      else if (ev.result === "rejected") this.s.casRetryAt = this.now + 30_000;
       for (const id of cas.entries) {
         const e = this.entry(id);
         if (e?.dequeueRequested === true) {
@@ -1201,24 +1204,13 @@ class Machine {
       return { changeId: id, affected: e?.affected ?? null, revertOf: e?.revertOf ?? null };
     });
     this.s.main = { sha: cas.newSha, seq: this.s.main.seq + 1 };
-    this.s.mainLog.push({
-      seq: this.s.main.seq,
-      sha: cas.newSha,
-      parentSha: cas.expectedOld,
-      changes,
-      at: this.now,
-      kind: "cas",
-    });
-    if (this.s.mainLog.length > this.cfg.mainLogLimit)
-      this.s.mainLog = this.s.mainLog.slice(this.s.mainLog.length - this.cfg.mainLogLimit);
-    const landed = b.kind === "landing" ? [b, ...b.members.map((m) => this.batch(m)).filter((x): x is Batch => x !== undefined)] : [b];
+    this.s.mainLog.push({ seq: this.s.main.seq, sha: cas.newSha, parentSha: cas.expectedOld, changes, at: this.now, kind: "cas" });
+    if (this.s.mainLog.length > this.cfg.mainLogLimit) this.s.mainLog = this.s.mainLog.slice(this.s.mainLog.length - this.cfg.mainLogLimit);
+    const landed =
+      b.kind === "landing" ? [b, ...b.members.map((m) => this.batch(m)).filter((x): x is Batch => x !== undefined)] : [b];
     for (const lb of landed) {
       this.finishBatch(lb, "landed");
-      const t = this.s.tracks[lb.trackId ?? ""];
-      if (t !== undefined) {
-        t.chain = t.chain.filter((x) => x !== lb.id);
-        if (t.chain.length === 0) delete this.s.tracks[t.id];
-      }
+      this.removeFromTrack(lb);
     }
     if (b.kind === "landing") this.s.landing = this.s.landing.filter((x) => x !== b.id);
     const reverts: string[] = [];
@@ -1244,8 +1236,7 @@ class Machine {
     if (this.s.stats.recentMerged.length > 500) this.s.stats.recentMerged.shift();
     this.authorOutcome(e, true);
     for (const o of Object.values(this.s.entries))
-      if (!isTerminal(o) && o.dependsOn.includes(e.changeId))
-        o.dependsOn = o.dependsOn.filter((d) => d !== e.changeId);
+      if (!isTerminal(o) && o.dependsOn.includes(e.changeId)) o.dependsOn = o.dependsOn.filter((d) => d !== e.changeId);
     this.emit({
       type: "merged",
       at: this.now,
@@ -1268,12 +1259,7 @@ class Machine {
       laneReasons: e.laneReasons.map((r) => r.code),
       timeInQueueMs: waitMs,
     });
-    this.telemetry("outcome", {
-      changeId: e.changeId,
-      outcome: "merged",
-      predicted: e.prediction?.p ?? null,
-      factors: e.prediction?.factors ?? {},
-    });
+    this.telemetry("outcome", { changeId: e.changeId, outcome: "merged", predicted: e.prediction?.p ?? null, factors: e.prediction?.factors ?? {} });
   }
 
   private authorOutcome(e: QueueEntry, passed: boolean): void {
@@ -1291,7 +1277,7 @@ class Machine {
       seq: this.s.main.seq,
       sha,
       parentSha: null,
-      // Unknown content conflicts with everything: every stale track re-runs in full.
+      // Unknown content conflicts with everything: every stale batch re-runs in full.
       changes: [{ changeId: `external:${sha}`, affected: null, revertOf: null }],
       at: this.now,
       kind: "external",
@@ -1315,7 +1301,7 @@ class Machine {
     return this.batch(cas.batchId)?.members.includes(b.id) === true;
   }
 
-  /** Every queue entry of b's tree below its own entries has landed. */
+  /** Every queue entry of b's tree below its own entries has landed (or is in `ahead`). */
   private lineageLanded(b: Batch, ahead: ReadonlySet<string> = new Set()): boolean {
     const own = new Set(ownEntries(b));
     for (const id of b.lineage) {
@@ -1327,9 +1313,9 @@ class Machine {
   }
 
   /**
-   * Can b's full-run result carry over to b rebased onto main (+ `ahead`)? Only if everything that
-   * landed since b's chain was rooted (and isn't in b's tree) has a known affected set disjoint from
-   * each of b's own entries. Returns the changes the result is carried across, or null.
+   * Can b's full-run result carry over to b's own entries rebased onto main (+ `ahead`)? Only if
+   * everything that landed since b was rooted (and isn't in b's tree) has a known affected set
+   * disjoint from each of b's own entries. Returns the changes the result is carried across, or null.
    */
   private carryOver(b: Batch, ahead: { changeId: string; affected: AffectedSet | null }[]): string[] | null {
     const first = this.s.mainLog[0];
@@ -1355,18 +1341,19 @@ class Machine {
   }
 
   private landingEntriesOf(b: Batch): string[] {
-    return this.verdictEntries(b);
+    if (b.kind !== "landing") return ownEntries(b);
+    const out: string[] = [];
+    for (const m of b.members) {
+      const mb = this.batch(m);
+      if (mb !== undefined) out.push(...ownEntries(mb));
+    }
+    return out;
   }
 
   private readyChainBatches(): Batch[] {
-    const out: Batch[] = [];
-    for (const t of Object.values(this.s.tracks))
-      for (const bid of t.chain) {
-        const b = this.batch(bid);
-        if (b !== undefined && b.state === "passed") out.push(b);
-      }
-    out.sort((a, b) => (a.readyAt ?? 0) - (b.readyAt ?? 0) || a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
-    return out;
+    return this.activeChain()
+      .filter((b) => b.state === "passed")
+      .sort((a, b) => (a.readyAt ?? 0) - (b.readyAt ?? 0) || a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
   }
 
   private advanceLanding(): boolean {
@@ -1401,14 +1388,15 @@ class Machine {
       const l = this.batch(lid);
       for (const m of l?.members ?? []) {
         inLanding.add(m);
-        for (const id of ownEntries(this.batch(m) ?? (l as Batch))) ahead.push({ changeId: id, affected: this.entry(id)?.affected ?? null });
+        const mb = this.batch(m);
+        for (const id of mb === undefined ? [] : ownEntries(mb)) ahead.push({ changeId: id, affected: this.entry(id)?.affected ?? null });
       }
     }
     const members: Batch[] = [];
     const aheadIds = new Set(ahead.map((a) => a.changeId));
     for (const b of this.readyChainBatches()) {
       if (inLanding.has(b.id)) continue;
-      if (s.landing.length === 0 && members.length === 0 && b.baseSha === s.main.sha) continue; // direct land path
+      if (s.landing.length === 0 && members.length === 0 && b.baseSha === s.main.sha) continue; // direct path
       const own = ownEntries(b);
       if (!this.landAllowed(own)) continue;
       if (!this.cfg.features.revalidation || b.noRevalidate) {
@@ -1420,6 +1408,13 @@ class Machine {
       }
       if (s.landing.length >= this.cfg.maxLandingDepth) continue;
       if (!this.lineageLanded(b, aheadIds)) continue;
+      if (members.length >= this.cfg.maxLandingMembers) {
+        // Close this landing batch and open the next one on top of it.
+        this.createLandingBatch(members);
+        changed = true;
+        members.length = 0;
+        if (s.landing.length >= this.cfg.maxLandingDepth) continue;
+      }
       const carried = this.carryOver(b, ahead);
       if (carried === null) {
         if (this.lineageLanded(b)) {
@@ -1452,6 +1447,8 @@ class Machine {
       kind: "landing",
       trackId: null,
       parentId,
+      mergeParents: [],
+      carried: [],
       rootBase: this.s.main.sha,
       rootSeq: this.s.main.seq,
       baseSha: null,
@@ -1481,15 +1478,17 @@ class Machine {
     this.s.landing.push(id);
   }
 
-  /** Replace a stale passed chain-head batch by a full run of the same units on current main. */
+  /** Replace a stale passed batch (all ancestors landed) by a full run of its units on current main. */
   private fallback(b: Batch): void {
+    invariant(this.isActiveChain(b), "fallback.track", `fallback of ${b.id} outside the DAG`);
     const t = this.s.tracks[b.trackId ?? ""];
-    invariant(t !== undefined && t.chain.includes(b.id), "fallback.track", `fallback of ${b.id} outside its chain`);
     const id = this.id("b");
-    const nb: Batch = {
+    this.s.batches[id] = {
       ...b,
       id,
       parentId: null,
+      mergeParents: [],
+      carried: [],
       rootBase: this.s.main.sha,
       rootSeq: this.s.main.seq,
       baseSha: this.s.main.sha,
@@ -1514,8 +1513,7 @@ class Machine {
       readyAt: null,
       infraRetries: 0,
     };
-    this.s.batches[id] = nb;
-    t.chain = t.chain.map((x) => (x === b.id ? id : x));
+    if (t !== undefined) t.chain = t.chain.map((x) => (x === b.id ? id : x));
     for (const cid of ownEntries(b)) {
       const e = this.entry(cid);
       if (e !== undefined && e.batchId === b.id) {
@@ -1529,7 +1527,7 @@ class Machine {
 
   private onLandingFailure(l: Batch): void {
     const i = this.s.landing.indexOf(l.id);
-    // A hidden interaction between tracks: every member re-runs in full on main.
+    // A hidden interaction between components: every member re-runs in full on main.
     for (const m of l.members) {
       const mb = this.batch(m);
       if (mb !== undefined) mb.noRevalidate = true;
@@ -1566,17 +1564,14 @@ class Machine {
     invariant(b.tipSha !== null && b.treeSha !== null, "cas.unbuilt", `batch ${b.id} has no tree`);
     invariant(v !== null && v.passed, "cas.untested", `batch ${b.id} has no passing verdict`, { batch: b.id });
     invariant(v.failing.length === 0, "cas.failing", `batch ${b.id} has failing checks`, { failing: v.failing });
-    invariant(
-      v.treeSha === b.treeSha && v.commitSha === b.tipSha,
-      "cas.tree-mismatch",
-      `verdict of ${b.id} is for tree ${v.treeSha}, not ${b.treeSha}`,
-    );
+    invariant(v.treeSha === b.treeSha && v.commitSha === b.tipSha, "cas.tree-mismatch", `verdict of ${b.id} is for tree ${v.treeSha}, not ${b.treeSha}`);
     invariant(b.baseSha === s.main.sha && v.baseSha === s.main.sha, "cas.stale-base", `batch ${b.id} is not built on main`);
     const entries = this.landingEntriesOf(b);
     invariant(new Set(entries).size === entries.length, "cas.duplicate", `batch ${b.id} lists an entry twice`);
     const carried: CasEvidence["carried"] = [];
     if (b.kind === "chain") {
       invariant(v.scope === "all", "cas.scope", `direct land of ${b.id} needs a full run`);
+      invariant(b.carried.every((id) => this.entry(id)?.state === "merged"), "cas.carried", `${b.id} carries unlanded entries`);
       invariant(this.lineageLanded(b), "cas.ancestors", `ancestors of ${b.id} have not landed`);
     } else {
       invariant(b.kind === "landing", "cas.kind", `cannot land a ${b.kind} batch`);
@@ -1625,24 +1620,12 @@ class Machine {
       for (const d of e.dependsOn) {
         if (this.entry(d)?.state === "merged") continue;
         const dp = position.get(d);
-        invariant(
-          dp !== undefined && dp < (position.get(id) ?? 0),
-          "cas.stack-order",
-          `${id} depends on ${d}, which neither landed nor precedes it`,
-        );
+        invariant(dp !== undefined && dp < (position.get(id) ?? 0), "cas.stack-order", `${id} depends on ${d}, which neither landed nor precedes it`);
       }
       if (e.landTogether && e.plangroup !== null) {
         const group = Object.values(s.entries).filter((o) => o.plangroup === e.plangroup && o.landTogether && !isTerminal(o));
-        invariant(
-          group.every((o) => position.has(o.changeId)),
-          "cas.plangroup",
-          `plan group ${e.plangroup} would land partially`,
-        );
-        invariant(
-          e.groupSize === null || group.length >= e.groupSize,
-          "cas.plangroup-size",
-          `plan group ${e.plangroup} has ${group.length}/${e.groupSize} members`,
-        );
+        invariant(group.every((o) => position.has(o.changeId)), "cas.plangroup", `plan group ${e.plangroup} would land partially`);
+        invariant(e.groupSize === null || group.length >= e.groupSize, "cas.plangroup-size", `plan group ${e.plangroup} has ${group.length}/${e.groupSize} members`);
       }
       const hit = this.relevantQuarantine([id]);
       if (hit.length > 0) {
@@ -1653,15 +1636,7 @@ class Machine {
       }
     }
     const casId = this.id("c");
-    s.cas = {
-      casId,
-      batchId: b.id,
-      expectedOld: s.main.sha,
-      newSha: b.tipSha,
-      treeSha: b.treeSha,
-      entries,
-      issuedAt: this.now,
-    };
+    s.cas = { casId, batchId: b.id, expectedOld: s.main.sha, newSha: b.tipSha, treeSha: b.treeSha, entries, issuedAt: this.now };
     b.state = "landing";
     this.out.push({
       type: "Cas",
@@ -1732,15 +1707,13 @@ class Machine {
   /** Every speculative batch built on the bad main (and not on top of the revert) is invalid. */
   private invalidateBuiltOnBadMain(badSeq: number, reverts: ReadonlySet<string>): number {
     let n = 0;
-    for (const t of Object.values(this.s.tracks)) {
-      const i = t.chain.findIndex((bid) => {
-        const b = this.batch(bid);
-        return b !== undefined && !this.batchInCas(b) && b.rootSeq >= badSeq && !b.lineage.some((x) => reverts.has(x));
-      });
-      if (i >= 0) {
-        n += t.chain.length - i;
-        this.cancelChainFrom(t, i, "built on a main that was reverted");
-      }
+    for (const b of this.activeChain()) {
+      if (!this.isActiveChain(b) || this.batchInCas(b)) continue;
+      if (b.rootSeq < badSeq || b.lineage.some((x) => reverts.has(x))) continue;
+      const desc = this.descendantsOf(b);
+      if (desc.some((d) => this.batchInCas(d))) continue;
+      n += 1 + desc.length;
+      this.cancelTree(b, "built on a main that was reverted");
     }
     for (const b of Object.values(this.s.batches))
       if (b.state === "bisecting" && b.rootSeq >= badSeq) {
@@ -1773,51 +1746,41 @@ class Machine {
     }
     if (!isFrozen(this.s)) return;
     this.s.freeze = { reasons: [], badSeq: null };
-    this.audit(
-      "merge-queue.thawed",
-      "repo:merge-queue",
-      { by: ev.signer.principalId, reason: ev.reason, manual: true },
-      ev.signer.principalId,
-      ev.signer.signature,
-    );
+    this.audit("merge-queue.thawed", "repo:merge-queue", { by: ev.signer.principalId, reason: ev.reason, manual: true }, ev.signer.principalId, ev.signer.signature);
     this.emit({ type: "thawed", at: this.now, by: ev.signer.principalId, invalidatedBatches: 0 });
+  }
+
+  private isExpressBatch(b: Batch): boolean {
+    return ownEntries(b).every((id) => {
+      const e = this.entry(id);
+      return e !== undefined && isExpress(e);
+    });
   }
 
   /**
    * While frozen only reverts/incident fixes land, so they must never sit behind (or in a batch
-   * with) anything else: re-root their tracks so the express entries go first, on main.
+   * with) anything else: such batches are cancelled and their express entries re-placed on main.
    */
   private ensureExpressRouting(): boolean {
     let changed = false;
-    for (const t of Object.values(this.s.tracks)) {
-      let firstNormal = -1;
-      for (let i = 0; i < t.chain.length; i++) {
-        const b = this.batch(t.chain[i] ?? null);
-        if (b === undefined) continue;
-        const ids = ownEntries(b);
-        const hasExpress = ids.some((id) => {
+    for (const b of this.activeChain()) {
+      if (!this.isActiveChain(b) || this.batchInCas(b)) continue;
+      const ids = ownEntries(b);
+      const hasExpress = ids.some((id) => {
+        const e = this.entry(id);
+        return e !== undefined && isExpress(e);
+      });
+      if (!hasExpress) continue;
+      const stuck =
+        !this.isExpressBatch(b) ||
+        this.ancestorsOf(b).some((a) => !this.isExpressBatch(a)) ||
+        b.carried.some((id) => {
           const e = this.entry(id);
-          return e !== undefined && isExpress(e);
+          return e !== undefined && !isExpress(e) && e.state !== "merged";
         });
-        const hasNormal = ids.some((id) => {
-          const e = this.entry(id);
-          return e !== undefined && !isExpress(e);
-        });
-        if (hasNormal && firstNormal < 0) firstNormal = i;
-        if (hasExpress && firstNormal >= 0) {
-          let from = firstNormal;
-          while (from < t.chain.length) {
-            const fb = this.batch(t.chain[from] ?? null);
-            if (fb === undefined || !this.batchInCas(fb)) break;
-            from++;
-          }
-          if (from < t.chain.length) {
-            this.cancelChainFrom(t, from, "frozen: revert/incident fixes go first");
-            changed = true;
-          }
-          break;
-        }
-      }
+      if (!stuck || this.descendantsOf(b).some((d) => this.batchInCas(d))) continue;
+      this.cancelTree(b, "frozen: revert/incident fixes go first");
+      changed = true;
     }
     return changed;
   }
@@ -1830,17 +1793,14 @@ class Machine {
       if (e.state !== "waiting" || e.affected !== null || e.affectedRequestedAt === null) continue;
       if (this.now - e.affectedRequestedAt >= this.cfg.affectedSetTimeoutMs) {
         e.affected = unknownAffectedSet();
-        this.audit("merge-queue.affected-set-timeout", `change:${e.changeId}`, {
-          waitedMs: this.now - e.affectedRequestedAt,
-        });
+        this.audit("merge-queue.affected-set-timeout", `change:${e.changeId}`, { waitedMs: this.now - e.affectedRequestedAt });
         this.applyQuarantineTo(e);
       }
     }
     for (const b of Object.values(s.batches)) {
       if ((b.state === "running" || b.state === "rechecking" || b.state === "building") && b.startedAt !== null) {
         if (this.now - b.startedAt < this.cfg.runTimeoutMs) continue;
-        if (b.runId !== null && b.state !== "building")
-          this.out.push({ type: "CancelBatchRun", batchId: b.id, runId: b.runId, reason: "timed out" });
+        if (b.runId !== null && b.state !== "building") this.out.push({ type: "CancelBatchRun", batchId: b.id, runId: b.runId, reason: "timed out" });
         if (b.state === "rechecking") b.recheck = null;
         this.infraRetry(b, "timed out", b.state === "building" ? "pending" : "ready");
       }
@@ -1865,8 +1825,7 @@ class Machine {
   /** Terminal transition of a batch (releases its `refs/queue/*` ref exactly once). */
   private finishBatch(b: Batch, state: "landed" | "cancelled" | "failed"): void {
     if (batchDone(b) && b.kind !== "probe") return;
-    if (b.kind !== "probe" && b.state !== "pending")
-      this.out.push({ type: "DeleteQueueRef", refName: b.refName });
+    if (b.kind !== "probe" && b.state !== "pending") this.out.push({ type: "DeleteQueueRef", refName: b.refName });
     b.state = state;
   }
 
@@ -1885,26 +1844,6 @@ class Machine {
     this.finishBatch(b, "cancelled");
   }
 
-  /** Cancel chain[from..] (never a batch whose CAS is in flight); their entries wait again. */
-  private cancelChainFrom(t: Track, from: number, why: string): void {
-    const removed = t.chain.slice(from);
-    for (const bid of removed) {
-      const b = this.batch(bid);
-      invariant(b === undefined || !this.batchInCas(b), "cancel.in-cas", `cannot cancel ${bid}: CAS in flight`);
-    }
-    t.chain = t.chain.slice(0, from);
-    for (const bid of removed) {
-      const b = this.batch(bid);
-      if (b === undefined) continue;
-      const li = this.s.landing.findIndex((lid) => this.batch(lid)?.members.includes(bid) === true);
-      if (li >= 0) this.invalidateLanding(li, why);
-      this.cancelBatch(b, why);
-      this.returnUnits(b);
-      this.abortChildBisections(bid, why);
-    }
-    if (t.chain.length === 0) delete this.s.tracks[t.id];
-  }
-
   /** Take an entry out of whatever batch holds it; its batch-mates and descendants re-form. */
   private removeFromFlight(e: QueueEntry): void {
     const b = this.batch(e.batchId);
@@ -1913,27 +1852,17 @@ class Machine {
       return;
     }
     invariant(!this.batchInCas(b), "remove.in-cas", `cannot pull ${e.changeId}: CAS in flight`);
-    if (b.state === "bisecting") {
-      this.abortBisection(b, `${e.changeId} left the batch`);
-    } else {
-      const t = this.s.tracks[b.trackId ?? ""];
-      if (t !== undefined && t.chain.includes(b.id)) this.cancelChainFrom(t, t.chain.indexOf(b.id), `${e.changeId} left the batch`);
-      else {
-        this.cancelBatch(b, `${e.changeId} left the batch`);
-        this.returnUnits(b);
-      }
+    if (b.state === "bisecting") this.abortBisection(b, `${e.changeId} left the batch`);
+    else if (this.isActiveChain(b)) this.cancelTree(b, `${e.changeId} left the batch`);
+    else {
+      this.cancelBatch(b, `${e.changeId} left the batch`);
+      this.returnUnits(b);
     }
     if (e.batchId !== null) this.toWaiting(e);
   }
 
   /** Terminal transition + cascades (stack dependents, land-together group members). */
-  private terminate(
-    e: QueueEntry,
-    state: "ejected" | "dequeued",
-    reason: EjectInput | null,
-    by = SYSTEM_PRINCIPAL,
-    cascade = true,
-  ): void {
+  private terminate(e: QueueEntry, state: "ejected" | "dequeued", reason: EjectInput | null, by = SYSTEM_PRINCIPAL, cascade = true): void {
     if (isTerminal(e)) return;
     invariant(e.batchId === null, "terminate.in-batch", `${e.changeId} must leave its batch first`);
     e.state = state;
@@ -1991,25 +1920,28 @@ class Machine {
       .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
     for (const b of pending) {
       let base: string | null;
-      if (b.kind === "chain") {
-        if (b.parentId === null) base = b.rootBase;
-        else {
-          const p = this.batch(b.parentId);
-          base = p?.tipSha ?? null;
-        }
-      } else if (b.kind === "landing") {
-        if (b.parentId === null) base = this.s.main.sha;
-        else base = this.batch(b.parentId)?.tipSha ?? null;
-      } else continue;
+      if (b.kind === "chain" && b.parentId !== null && !this.holdExpired(b)) continue;
+      if (b.kind === "chain") base = b.parentId === null ? b.rootBase : (this.batch(b.parentId)?.tipSha ?? null);
+      else if (b.kind === "landing") base = b.parentId === null ? this.s.main.sha : (this.batch(b.parentId)?.tipSha ?? null);
+      else continue;
       if (base === null) continue;
       b.baseSha = base;
       b.state = "building";
       b.startedAt = this.now;
-      const entries = ownEntries(b).map((id) => ({ changeId: id, headSha: this.entry(id)?.headSha ?? "" }));
+      const entries = [...b.carried, ...ownEntries(b)].map((id) => ({ changeId: id, headSha: this.entry(id)?.headSha ?? "" }));
       this.out.push({ type: "BuildBatchTree", batchId: b.id, refName: b.refName, baseSha: base, entries });
       changed = true;
     }
     return changed;
+  }
+
+  /** A child batch builds once its hold expired or it is full (see `batchHoldMs`). */
+  private holdExpired(b: Batch): boolean {
+    const p = this.batch(b.parentId);
+    if (p === undefined || !inFlight(p)) return true;
+    if (ownEntries(b).length >= this.batchCapacity()) return true;
+    const since = Math.max(b.createdAt, p.startedAt ?? b.createdAt);
+    return this.now >= since + this.cfg.batchHoldMs;
   }
 
   private startRuns(): boolean {
@@ -2021,10 +1953,7 @@ class Machine {
     }
     if (ready.length === 0) return false;
     const kindOrder = { landing: 0, probe: 1, chain: 2 } as const;
-    const depth = (b: Batch): number => {
-      const t = this.s.tracks[b.trackId ?? ""];
-      return t === undefined ? 0 : t.chain.indexOf(b.id);
-    };
+    const depth = (b: Batch): number => b.lineage.length - ownEntries(b).length;
     ready.sort((a, b) => kindOrder[a.kind] - kindOrder[b.kind] || depth(a) - depth(b) || a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
     let changed = false;
     for (const b of ready) {
@@ -2053,19 +1982,29 @@ class Machine {
   }
 
   /**
-   * Assign waiting entries to tracks and form speculative batches (§4.2, §4.3, §4.5, §4.6).
+   * Place waiting entries in the speculation DAG (§4.2, §4.3, §4.5, §4.6).
    *
    * Units (an entry, an atomic stack, a land-together plan group) are visited in priority order
-   * (rank with aging → fair-queuing tag → arrival). A unit joins the one track it conflicts with,
-   * opens a new track if it conflicts with none, and waits if it conflicts with several (those
-   * tracks then take no lower-priority work until they drain) or with a waiting higher-priority unit.
+   * (rank with aging → fair-queuing tag → arrival). Each unit goes on top of the active batches it
+   * conflicts with (its frontier): into an unbuilt batch that already covers that frontier, on the
+   * tip of its single predecessor, or into a merge batch rebuilt on main. Backpressure: speculation
+   * depth (untested ancestors) and the in-flight cap; a unit that can't be placed blocks every
+   * later unit it conflicts with (priority order between conflicting units is preserved).
    */
   private formBatches(): boolean {
     const s = this.s;
     const cfg = this.cfg;
     const frozen = isFrozen(s);
     let changed = false;
-    // A dependency that left the queue without merging takes its dependents with it.
+    const groups = new Map<string, QueueEntry[]>();
+    for (const e of Object.values(s.entries)) {
+      if (!e.landTogether || e.plangroup === null) continue;
+      const g = groups.get(e.plangroup) ?? [];
+      g.push(e);
+      groups.set(e.plangroup, g);
+    }
+    // A dependency (or land-together sibling) that left the queue without merging takes its
+    // dependents with it.
     for (const e of Object.values(s.entries)) {
       if (e.state !== "waiting") continue;
       const dead = e.dependsOn.find((d) => {
@@ -2073,20 +2012,12 @@ class Machine {
         return de !== undefined && (de.state === "ejected" || de.state === "dequeued");
       });
       if (dead !== undefined) {
-        this.terminate(e, "ejected", {
-          changeId: e.changeId,
-          code: "dependency-ejected",
-          message: `depends on ${dead}, which left the queue`,
-          upstream: [dead],
-        });
+        this.terminate(e, "ejected", { changeId: e.changeId, code: "dependency-ejected", message: `depends on ${dead}, which left the queue`, upstream: [dead] });
         changed = true;
         continue;
       }
-      // A land-together group with a member that left the queue can never land whole.
       if (e.landTogether && e.plangroup !== null) {
-        const gone = Object.values(s.entries).find(
-          (o) => o.plangroup === e.plangroup && o.landTogether && (o.state === "ejected" || o.state === "dequeued"),
-        );
+        const gone = (groups.get(e.plangroup) ?? []).find((o) => o.state === "ejected" || o.state === "dequeued");
         if (gone !== undefined) {
           this.terminate(e, "ejected", {
             changeId: e.changeId,
@@ -2105,39 +2036,41 @@ class Machine {
     const ready = new Map<string, QueueEntry>();
     for (const e of waiting) {
       e.hold = null;
+      if (e.waitFor.length > 0) {
+        e.waitFor = e.waitFor.filter((id) => {
+          const w = this.entry(id);
+          return w !== undefined && !isTerminal(w);
+        });
+      }
       if (e.affected === null) e.hold = "affected";
       else if (e.approvalRequired || e.lane > e.approvedLane) e.hold = "approval";
+      else if (e.waitFor.length > 0) e.hold = "dependency";
       if (e.hold === null) ready.set(e.changeId, e);
     }
-    // Dependencies: an outstanding dep must be ready (same pass) or in a chain batch.
     let progress = true;
     while (progress) {
       progress = false;
       for (const e of [...ready.values()]) {
         for (const d of e.dependsOn) {
           const de = this.entry(d);
-          const ok = de !== undefined && (ready.has(d) || this.inChain(de) || de.state === "merged");
-          if (!ok) {
-            e.hold = "dependency";
-            ready.delete(e.changeId);
-            progress = true;
-            break;
-          }
+          if (de !== undefined && (ready.has(d) || this.inChain(de) || de.state === "merged")) continue;
+          e.hold = "dependency";
+          ready.delete(e.changeId);
+          progress = true;
+          break;
         }
       }
-      // Land-together groups: every member present and ready.
       for (const e of [...ready.values()]) {
         if (!e.landTogether || e.plangroup === null) continue;
-        const group = Object.values(s.entries).filter((o) => o.plangroup === e.plangroup && o.landTogether && !isTerminal(o));
+        const group = (groups.get(e.plangroup) ?? []).filter((o) => !isTerminal(o));
         const complete = (e.groupSize === null || group.length >= e.groupSize) && group.every((o) => ready.has(o.changeId));
-        if (!complete) {
-          for (const o of group)
-            if (ready.delete(o.changeId)) {
-              o.hold = "group";
-              progress = true;
-            }
-          e.hold = "group";
-        }
+        if (complete) continue;
+        for (const o of group)
+          if (ready.delete(o.changeId)) {
+            o.hold = "group";
+            progress = true;
+          }
+        e.hold = "group";
       }
     }
     if (ready.size === 0) return changed;
@@ -2146,7 +2079,7 @@ class Machine {
     const parent = new Map<string, string>();
     const find = (x: string): string => {
       let r = x;
-      while (parent.get(r) !== undefined && parent.get(r) !== r) r = parent.get(r) ?? r;
+      for (let p = parent.get(r); p !== undefined && p !== r; p = parent.get(r)) r = p;
       return r;
     };
     const glue = (a: string, b: string): void => {
@@ -2179,7 +2112,7 @@ class Machine {
       for (const e of ordered) flows.set(flowKey(e), (flows.get(flowKey(e)) ?? 0) + 1);
       let p = 1;
       for (const e of ordered) {
-        e.prediction = predict(s, e);
+        e.prediction = this.predictionOf(e);
         p *= e.prediction.p;
       }
       units.push({
@@ -2198,104 +2131,105 @@ class Machine {
     }
     units.sort((a, b) => (frozen ? Number(b.express) - Number(a.express) : 0) || compareOrder(a, b));
 
-    // ---- in-flight counts per session (fair share of CI)
-    const inFlight = new Map<string, number>();
-    if (cfg.features.fairness)
-      for (const e of Object.values(s.entries))
-        if (e.state === "speculating" || e.state === "passed") inFlight.set(flowKey(e), (inFlight.get(flowKey(e)) ?? 0) + 1);
-
-    // ---- frozen: express units get tracks rooted on main; conflicting normal tracks re-root.
+    // ---- frozen: express units go on main; conflicting normal batches are re-rooted behind them.
     if (frozen) {
+      let cancelled = false;
       for (const u of units) {
         if (!u.express) continue;
-        for (const t of Object.values(s.tracks)) {
-          if (t.express) continue;
-          if (!this.trackConflicts(t, u.affected)) continue;
-          if (this.trackInCas(t)) continue;
-          this.cancelChainFrom(t, 0, "frozen: making room for a revert/incident fix");
-          changed = true;
+        for (const b of this.activeChain()) {
+          if (!this.isActiveChain(b) || this.isExpressBatch(b) || this.batchInCas(b)) continue;
+          if (cfg.features.conflictGraph && !this.batchConflicts(b, u.affected)) continue;
+          if (this.descendantsOf(b).some((d) => this.batchInCas(d))) continue;
+          this.cancelTree(b, "frozen: making room for a revert/incident fix");
+          cancelled = true;
         }
       }
-      if (changed) return true; // next pump pass re-plans with the re-rooted entries
+      if (cancelled) return true; // the next pump pass re-plans with the re-rooted entries
     }
 
     // ---- placement
-    const trackIndex = new ConflictIndex();
-    const trackDepth = new Map<string, number>();
-    const trackLen = new Map<string, number>();
-    for (const t of Object.values(s.tracks)) {
-      for (const id of this.chainEntries(t)) trackIndex.add(t.id, this.entry(id)?.affected ?? null);
-      if (!trackIndex.has(t.id)) trackIndex.add(t.id, unknownAffectedSet());
-      trackDepth.set(t.id, t.chain.filter((bid) => {
-        const st = this.batch(bid)?.state;
-        return st !== "passed" && st !== "landing";
-      }).length);
-      trackLen.set(t.id, t.chain.length);
-    }
+    const inFlightPerFlow = new Map<string, number>();
+    if (cfg.features.fairness)
+      for (const e of Object.values(s.entries))
+        if (e.state === "speculating" || e.state === "passed") inFlightPerFlow.set(flowKey(e), (inFlightPerFlow.get(flowKey(e)) ?? 0) + 1);
+    const index = new ConflictIndex();
+    const active = this.activeChain();
+    for (const b of active) for (const id of ownEntries(b)) index.add(b.id, this.entry(id)?.affected ?? null);
+    let inflightCount = active.filter(inFlight).length;
     const blocked = new ConflictIndex();
-    const reserved = new Set<string>();
-    const pendingFor = new Map<string, PlannedUnit[]>();
-    const newTracks = new Map<string, boolean>(); // virtual id → express
-    const placedIn = new Map<string, string>(); // changeId → track (this pass)
-    let nVirtual = 0;
-    const trackCount = (): number => Object.keys(s.tracks).length + newTracks.size;
+    const planned = new Map<string, PlannedUnit>();
+    const touched = new Set<string>();
 
     const place = (u: PlannedUnit): "placed" | "blocked" | "deferred" | "dep" => {
-      // dependency tracks
-      const depTracks = new Set<string>();
+      const depBatches = new Set<string>();
       for (const d of u.deps) {
         const de = this.entry(d);
         if (de === undefined) return "dep";
-        if (placedIn.has(d)) depTracks.add(placedIn.get(d) ?? "");
-        else if (this.inChain(de)) depTracks.add(de.trackId ?? "");
+        if (this.inChain(de) && de.batchId !== null) depBatches.add(de.batchId);
         else if (de.state !== "merged") return "dep";
       }
       if (cfg.features.fairness) {
         for (const [f, n] of u.flows) {
-          const cur = inFlight.get(f) ?? 0;
+          const cur = inFlightPerFlow.get(f) ?? 0;
           if (cur > 0 && cur + n > cfg.maxInFlightPerSession) return "deferred";
         }
       }
-      const conflictsBlocked = cfg.features.conflictGraph ? blocked.query(u.affected).size > 0 : blocked.size > 0;
-      if (conflictsBlocked && !(frozen && u.express)) return "blocked";
-      let hits: Set<string>;
-      if (!cfg.features.conflictGraph) hits = new Set(trackIndex.query(unknownAffectedSet()));
-      else hits = trackIndex.query(u.affected);
-      for (const t of depTracks) hits.add(t);
-      if (frozen && u.express) {
-        // Normal tracks were re-rooted above; one that is still here has a CAS in flight: wait.
-        for (const h of hits) {
-          const real = s.tracks[h];
-          if (real !== undefined && !real.express) return "blocked";
-          if (real === undefined && newTracks.get(h) !== true) return "blocked";
+      const expressFirst = frozen && u.express;
+      if (!expressFirst && (cfg.features.conflictGraph ? blocked.query(u.affected).size > 0 : blocked.size > 0)) return "blocked";
+      const hits = cfg.features.conflictGraph ? index.query(u.affected) : index.query(unknownAffectedSet());
+      for (const d of depBatches) hits.add(d);
+      const conflicting = [...hits].map((id) => this.batch(id)).filter((b): b is Batch => b !== undefined && this.isActiveChain(b));
+      if (expressFirst && conflicting.some((b) => !this.isExpressBatch(b))) return "blocked"; // a normal batch with a CAS in flight
+      // Frontier: the conflicting batches no other conflicting batch is built on.
+      const frontier = conflicting.filter((c) => {
+        const first = ownEntries(c)[0];
+        return !conflicting.some((o) => o.id !== c.id && first !== undefined && o.lineage.includes(first));
+      });
+      // 1) Join an unbuilt batch whose tree already covers the frontier.
+      const capacity = this.batchCapacity();
+      for (const o of [...active].reverse()) {
+        if (o.state !== "pending" || !this.isActiveChain(o)) continue;
+        // A batch something is already built on can't grow: the child's tree would contain the
+        // newcomer without listing it in its lineage.
+        if (active.some((c) => c.parentId === o.id && this.isActiveChain(c))) continue;
+        if (u.isolate || o.units.some((x) => x.changeIds.some((id) => this.entry(id)?.isolate === true))) continue;
+        if (frozen && this.isExpressBatch(o) !== u.express) continue;
+        const covers =
+          frontier.length > 0
+            ? frontier.every((f) => f.id === o.id || o.lineage.includes(ownEntries(f)[0] ?? ""))
+            : cfg.coBatch && o.parentId === null && o.carried.length === 0;
+        if (!covers) continue;
+        const size = ownEntries(o).length;
+        if (size > 0 && size + u.changeIds.length > capacity) continue;
+        if (cfg.features.prediction) {
+          let p = u.p;
+          for (const id of ownEntries(o)) p *= this.entry(id)?.prediction?.p ?? 1;
+          if (p < cfg.targetBatchPassProbability) continue;
         }
-      }
-      if (hits.size > 1) {
-        for (const h of hits) reserved.add(h);
-        return "blocked";
-      }
-      if (hits.size === 1) {
-        const tid = [...hits][0] ?? "";
-        if (reserved.has(tid) && !(frozen && u.express)) return "blocked";
-        if (!this.appendable(tid, u)) {
-          reserved.add(tid);
-          return "blocked";
-        }
-        const list = pendingFor.get(tid) ?? [];
-        list.push(u);
-        pendingFor.set(tid, list);
-        trackIndex.add(tid, u.affected);
-        for (const id of u.changeIds) placedIn.set(id, tid);
-        for (const [f, n] of u.flows) inFlight.set(f, (inFlight.get(f) ?? 0) + n);
+        this.joinBatch(o, u);
+        index.add(o.id, u.affected);
+        planned.set(u.changeIds[0] ?? "", u);
+        touched.add(o.id);
+        for (const [f, n] of u.flows) inFlightPerFlow.set(f, (inFlightPerFlow.get(f) ?? 0) + n);
         return "placed";
       }
-      if (trackCount() >= cfg.maxTracks) return "blocked";
-      const tid = `+${nVirtual++}`;
-      newTracks.set(tid, frozen && u.express);
-      pendingFor.set(tid, [u]);
-      trackIndex.add(tid, cfg.features.conflictGraph ? u.affected : unknownAffectedSet());
-      for (const id of u.changeIds) placedIn.set(id, tid);
-      for (const [f, n] of u.flows) inFlight.set(f, (inFlight.get(f) ?? 0) + n);
+      // 2) A new batch: within the speculation depth and the in-flight cap.
+      if (inflightCount >= cfg.maxInFlightBatches) return "blocked";
+      const ancestors = new Map<string, Batch>();
+      for (const f of frontier) {
+        ancestors.set(f.id, f);
+        for (const a of this.ancestorsOf(f)) ancestors.set(a.id, a);
+      }
+      const depth = 1 + [...ancestors.values()].filter(inFlight).length;
+      if (depth > cfg.maxSpeculationDepth) return "blocked";
+      if (frontier.length === 0 && Object.keys(s.tracks).length >= cfg.maxTracks) return "blocked";
+      const b = this.createChainBatch(u, frontier);
+      active.push(b);
+      inflightCount++;
+      index.add(b.id, u.affected);
+      planned.set(u.changeIds[0] ?? "", u);
+      touched.add(b.id);
+      for (const [f, n] of u.flows) inFlightPerFlow.set(f, (inFlightPerFlow.get(f) ?? 0) + n);
       return "placed";
     };
 
@@ -2304,164 +2238,101 @@ class Machine {
       const retry: PlannedUnit[] = [];
       for (const u of queue) {
         const r = place(u);
-        if (r === "blocked") blocked.add(`u:${u.changeIds[0]}`, u.affected);
+        if (r === "placed") changed = true;
+        else if (r === "blocked") blocked.add(`u:${u.changeIds[0]}`, u.affected);
         else if (r === "dep") retry.push(u);
       }
       if (retry.length === queue.length) break;
       queue = retry;
     }
-
-    // ---- batch formation per track
-    for (const [tid, list] of pendingFor) {
-      let track = s.tracks[tid];
-      let depthUsed = trackDepth.get(tid) ?? 0;
-      let len = trackLen.get(tid) ?? 0;
-      let rest = list;
-      while (rest.length > 0 && depthUsed < cfg.maxSpeculationDepth && len < cfg.maxSpeculationDepth * 3) {
-        const take = this.takeBatch(rest, frozen);
-        if (take.length === 0) break;
-        rest = rest.slice(take.length);
-        if (track === undefined) {
-          const id = this.id("t");
-          track = { id, chain: [], createdAt: this.now, express: newTracks.get(tid) === true };
-          s.tracks[id] = track;
-        }
-        this.createChainBatch(track, this.orderWithinBatch(take));
-        depthUsed++;
-        len++;
-        changed = true;
-      }
+    for (const bid of touched) {
+      const b = this.batch(bid);
+      if (b !== undefined) this.finalizeBatch(b, planned);
     }
     return changed;
   }
 
-  private chainEntries(t: Track): string[] {
-    const out: string[] = [];
-    for (const bid of t.chain) {
-      const b = this.batch(bid);
-      if (b !== undefined) out.push(...ownEntries(b));
-    }
-    return out;
+  /** Max entries per batch: adaptive to the recent pass rate (prediction on) or fixed. */
+  private batchCapacity(): number {
+    const cfg = this.cfg;
+    if (!cfg.features.prediction) return cfg.fixedBatchSize;
+    const r = this.s.stats.batchPassRate;
+    if (r < 0.5) return 1;
+    if (r < 0.7) return Math.max(1, Math.floor(cfg.maxBatchSize / 4));
+    if (r < 0.85) return Math.max(1, Math.floor(cfg.maxBatchSize / 2));
+    return cfg.maxBatchSize;
   }
 
-  private trackInCas(t: Track): boolean {
-    return t.chain.some((bid) => {
-      const b = this.batch(bid);
-      return b !== undefined && this.batchInCas(b);
-    });
+  private batchConflicts(b: Batch, a: AffectedSet): boolean {
+    return ownEntries(b).some((id) => conflicts(this.entry(id)?.affected ?? null, a));
   }
 
   private inChain(e: QueueEntry): boolean {
-    if (e.batchId === null || e.trackId === null) return false;
-    const t = this.s.tracks[e.trackId];
-    return t !== undefined && t.chain.includes(e.batchId);
-  }
-
-  private trackConflicts(t: Track, a: AffectedSet): boolean {
-    if (!this.cfg.features.conflictGraph) return true;
-    for (const id of this.chainEntries(t)) if (conflicts(this.entry(id)?.affected ?? null, a)) return true;
-    return false;
+    if (e.batchId === null) return false;
+    const b = this.batch(e.batchId);
+    return b !== undefined && this.isActiveChain(b);
   }
 
   /**
-   * Appending to a track whose chain was rooted on an older main is only allowed if nothing that
-   * landed since conflicts with the unit (else its tree would miss a conflicting change).
+   * Speculating on the predecessor's tip is only sound if nothing that landed since its chain was
+   * rooted conflicts with the unit (else the unit's tree would miss a conflicting change).
    */
-  private appendable(tid: string, u: PlannedUnit): boolean {
-    const t = this.s.tracks[tid];
-    if (t === undefined) return true;
-    const tail = this.batch(t.chain[t.chain.length - 1] ?? null);
-    if (tail === undefined) return true;
-    if (tail.rootSeq === this.s.main.seq) return true;
+  private appendable(f: Batch, a: AffectedSet): boolean {
+    if (f.rootSeq === this.s.main.seq) return true;
     const first = this.s.mainLog[0];
-    if (first === undefined || tail.rootSeq < first.seq) return false;
-    const lineage = new Set(tail.lineage);
+    if (first === undefined || f.rootSeq < first.seq) return false;
+    const lineage = new Set(f.lineage);
     for (const m of this.s.mainLog) {
-      if (m.seq <= tail.rootSeq) continue;
-      for (const c of m.changes) if (!lineage.has(c.changeId) && conflicts(c.affected, u.affected)) return false;
+      if (m.seq <= f.rootSeq) continue;
+      for (const c of m.changes) if (!lineage.has(c.changeId) && conflicts(c.affected, a)) return false;
     }
     return true;
   }
 
-  private takeBatch(pending: PlannedUnit[], frozen: boolean): PlannedUnit[] {
-    const cfg = this.cfg;
-    const first = pending[0];
-    if (first === undefined) return [];
-    if (first.isolate) return [first];
-    let max: number;
-    if (cfg.features.prediction) {
-      const r = this.s.stats.batchPassRate;
-      max = r < 0.5 ? 1 : r < 0.7 ? Math.max(1, Math.floor(cfg.maxBatchSize / 4)) : r < 0.85 ? Math.max(1, Math.floor(cfg.maxBatchSize / 2)) : cfg.maxBatchSize;
-    } else max = cfg.fixedBatchSize;
-    const out: PlannedUnit[] = [first];
-    let size = first.changeIds.length;
-    let p = first.p;
-    for (const u of pending.slice(1)) {
-      if (u.isolate) break;
-      if (frozen && u.express !== first.express) break;
-      if (size + u.changeIds.length > max) break;
-      if (cfg.features.prediction && p * u.p < cfg.targetBatchPassProbability) break;
-      out.push(u);
-      size += u.changeIds.length;
-      p *= u.p;
-    }
-    return out;
-  }
-
-  /** Likely failures last (prediction), stack order always respected. */
-  private orderWithinBatch(units: PlannedUnit[]): PlannedUnit[] {
-    if (!this.cfg.features.prediction) return units;
-    const left = [...units];
-    const out: PlannedUnit[] = [];
-    const placed = new Set<string>();
-    const inBatch = new Set(units.flatMap((u) => u.changeIds));
-    while (left.length > 0) {
-      let best = -1;
-      for (let i = 0; i < left.length; i++) {
-        const u = left[i];
-        if (u === undefined) continue;
-        if (u.deps.some((d) => inBatch.has(d) && !placed.has(d))) continue;
-        const cur = best < 0 ? undefined : left[best];
-        if (cur === undefined || u.p > cur.p) best = i;
-      }
-      if (best < 0) best = 0;
-      const [u] = left.splice(best, 1);
-      if (u === undefined) break;
-      out.push(u);
-      for (const id of u.changeIds) placed.add(id);
-    }
-    return out;
-  }
-
-  private topoOrder(members: QueueEntry[]): QueueEntry[] {
-    const ids = new Set(members.map((e) => e.changeId));
-    const out: QueueEntry[] = [];
-    const done = new Set<string>();
-    const left = [...members].sort((a, b) => a.seq - b.seq);
-    while (left.length > 0) {
-      const i = left.findIndex((e) => e.dependsOn.every((d) => !ids.has(d) || done.has(d)));
-      const [e] = left.splice(i < 0 ? 0 : i, 1);
-      if (e === undefined) break;
-      out.push(e);
-      done.add(e.changeId);
-    }
-    return out;
-  }
-
-  private createChainBatch(t: Track, units: PlannedUnit[]): void {
-    const tail = this.batch(t.chain[t.chain.length - 1] ?? null);
+  private createChainBatch(u: PlannedUnit, frontier: Batch[]): Batch {
     const id = this.id("b");
-    const own = units.flatMap((u) => u.changeIds);
+    const single = frontier.length === 1 ? frontier[0] : undefined;
+    const onTip = single !== undefined && this.appendable(single, u.affected);
+    let parentId: string | null = null;
+    const carried: string[] = [];
+    let rootBase = this.s.main.sha;
+    let rootSeq = this.s.main.seq;
+    let lineage: string[] = [];
+    if (onTip && single !== undefined) {
+      parentId = single.id;
+      rootBase = single.rootBase;
+      rootSeq = single.rootSeq;
+      lineage = [...single.lineage];
+    } else if (frontier.length > 0) {
+      // Merge batch: rebuild every unmerged entry of the predecessors on current main.
+      const seen = new Set<string>();
+      for (const f of [...frontier].sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1)))
+        for (const x of f.lineage) {
+          if (seen.has(x)) continue;
+          seen.add(x);
+          if (this.entry(x)?.state !== "merged") carried.push(x);
+        }
+      lineage = [...carried];
+    }
+    const tracks = frontier.map((f) => f.trackId ?? "").filter((t) => t !== "");
+    let track = this.mergeTracks(tracks);
+    if (track === undefined) {
+      const tid = this.id("t");
+      track = { id: tid, chain: [], createdAt: this.now, express: isFrozen(this.s) && u.express };
+      this.s.tracks[tid] = track;
+    }
     const b: Batch = {
       id,
       kind: "chain",
-      trackId: t.id,
-      parentId: tail?.id ?? null,
-      rootBase: tail?.rootBase ?? this.s.main.sha,
-      rootSeq: tail?.rootSeq ?? this.s.main.seq,
-      baseSha: tail === undefined ? this.s.main.sha : tail.tipSha,
-      units: units.map((u): Unit => ({ changeIds: u.changeIds })),
-      lineage: [...(tail?.lineage ?? []), ...own],
+      trackId: track.id,
+      parentId,
+      mergeParents: onTip ? [] : frontier.map((f) => f.id),
+      carried,
+      rootBase,
+      rootSeq,
+      baseSha: parentId === null ? rootBase : null,
+      units: [],
+      lineage,
       state: "pending",
       tipSha: null,
       treeSha: null,
@@ -2483,30 +2354,83 @@ class Machine {
       infraRetries: 0,
     };
     this.s.batches[id] = b;
-    t.chain = [...t.chain, id];
-    own.forEach((cid, position) => {
-      const e = this.entry(cid);
-      if (e === undefined) return;
+    track.chain = [...track.chain, id];
+    this.joinBatch(b, u);
+    return b;
+  }
+
+  private joinBatch(b: Batch, u: PlannedUnit): void {
+    b.units = [...b.units, { changeIds: u.changeIds }];
+    b.lineage = [...b.lineage, ...u.changeIds];
+    for (const e of u.entries) {
       e.state = "speculating";
-      e.batchId = id;
-      e.trackId = t.id;
+      e.batchId = b.id;
+      e.trackId = b.trackId;
       e.hold = null;
       e.isolate = false;
       if (e.firstBatchAt === null) e.firstBatchAt = this.now;
       advanceVirtualTime(this.s, e);
+    }
+  }
+
+  /** Likely failures last (prediction), stack order kept; then announce the batch. */
+  private finalizeBatch(b: Batch, planned: Map<string, PlannedUnit>): void {
+    if (this.cfg.features.prediction && b.units.length > 1) {
+      const pOf = (ids: string[]) => planned.get(ids[0] ?? "")?.p ?? 1;
+      const inBatch = new Set(ownEntries(b));
+      const left = [...b.units];
+      const out: typeof b.units = [];
+      const placed = new Set<string>();
+      while (left.length > 0) {
+        let best = -1;
+        for (let i = 0; i < left.length; i++) {
+          const u = left[i];
+          if (u === undefined) continue;
+          const deps = u.changeIds.flatMap((id) => this.entry(id)?.dependsOn ?? []);
+          if (deps.some((d) => inBatch.has(d) && !placed.has(d) && !u.changeIds.includes(d))) continue;
+          const cur = best < 0 ? undefined : left[best];
+          if (cur === undefined || pOf(u.changeIds) > pOf(cur.changeIds)) best = i;
+        }
+        const [u] = left.splice(best < 0 ? 0 : best, 1);
+        if (u === undefined) break;
+        out.push(u);
+        for (const id of u.changeIds) placed.add(id);
+      }
+      b.units = out;
+      b.lineage = [...b.lineage.filter((x) => !inBatch.has(x)), ...out.flatMap((u) => u.changeIds)];
+    }
+    const own = ownEntries(b);
+    own.forEach((cid, position) => {
+      const e = this.entry(cid);
+      if (e === undefined || b.trackId === null) return;
       if (e.prediction !== null)
-        this.telemetry("prediction", { changeId: cid, batchId: id, position, p: e.prediction.p, factors: e.prediction.factors, model: e.prediction.model });
+        this.telemetry("prediction", { changeId: cid, batchId: b.id, position, p: e.prediction.p, factors: e.prediction.factors, model: e.prediction.model });
       this.emit({
         type: "entered_batch",
         at: this.now,
         changeId: cid,
-        batchId: id,
-        trackId: t.id,
+        batchId: b.id,
+        trackId: b.trackId,
         position,
         batchSize: own.length,
         predictedPassProbability: e.prediction?.p ?? null,
       });
     });
+  }
+
+  private topoOrder(members: QueueEntry[]): QueueEntry[] {
+    const ids = new Set(members.map((e) => e.changeId));
+    const out: QueueEntry[] = [];
+    const done = new Set<string>();
+    const left = [...members].sort((a, b) => a.seq - b.seq);
+    while (left.length > 0) {
+      const i = left.findIndex((e) => e.dependsOn.every((d) => !ids.has(d) || done.has(d)));
+      const [e] = left.splice(i < 0 ? 0 : i, 1);
+      if (e === undefined) break;
+      out.push(e);
+      done.add(e.changeId);
+    }
+    return out;
   }
 
   // ================================================================ GC
@@ -2530,8 +2454,7 @@ class Machine {
       for (const p of b.bisect?.probeIds ?? []) referenced.add(p);
     }
     if (s.cas !== null) referenced.add(s.cas.batchId);
-    for (const [id, b] of Object.entries(s.batches))
-      if (batchDone(b) && !referenced.has(id)) delete s.batches[id];
+    for (const [id, b] of Object.entries(s.batches)) if (batchDone(b) && !referenced.has(id)) delete s.batches[id];
   }
 }
 

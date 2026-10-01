@@ -34,12 +34,29 @@ export const QueueConfig = z.object({
   fixedBatchSize: z.number().int().min(1).max(64).default(4),
   /** Stop adding entries once the predicted batch pass probability falls below this. */
   targetBatchPassProbability: z.number().min(0).max(1).default(0.85),
-  /** Batches in flight per track (1 = no speculation). */
-  maxSpeculationDepth: z.number().int().min(1).max(32).default(4),
+  /** In-flight (untested) batches a new batch may speculate on, itself included (1 = no speculation). */
+  maxSpeculationDepth: z.number().int().min(1).max(32).default(8),
+  /**
+   * A batch built on an in-flight predecessor can't land before it anyway, so it stays open for
+   * joiners this long after its parent started (free batching: fewer CI runs, no added latency).
+   */
+  batchHoldMs: z.number().int().min(0).default(2 * 60_000),
+  /**
+   * In-flight chain batches across the repo. Backpressure: while it is reached, arrivals wait and
+   * are batched together when a slot frees (bigger batches, fewer CI minutes).
+   */
+  maxInFlightBatches: z.number().int().min(1).max(1024).default(128),
+  /** Independent units placed in the same pass may share one batch (saves CI; couples their fate). */
+  coBatch: z.boolean().default(true),
   maxTracks: z.number().int().min(1).max(256).default(32),
   maxConcurrentRuns: z.number().int().min(1).max(1024).default(64),
   /** Revalidation (landing) batches in flight on top of each other. */
-  maxLandingDepth: z.number().int().min(1).max(16).default(3),
+  maxLandingDepth: z.number().int().min(1).max(64).default(16),
+  /**
+   * Passed batches revalidated together in one landing batch. Small landing batches keep the
+   * impacted-target runs short (they're on the landing critical path); the pipeline overlaps them.
+   */
+  maxLandingMembers: z.number().int().min(1).max(64).default(2),
   /** Parallel prefix probes per bisection round. */
   bisectProbes: z.number().int().min(1).max(16).default(3),
   /** Every `agingStepMs` of waiting raises an entry one priority class (never above `security`). */
@@ -91,6 +108,8 @@ export function serialConfig(): QueueConfig {
     maxBatchSize: 1,
     fixedBatchSize: 1,
     maxSpeculationDepth: 1,
+    maxInFlightBatches: 1,
+    coBatch: false,
     maxTracks: 1,
     maxLandingDepth: 1,
   });
