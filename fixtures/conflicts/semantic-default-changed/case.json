@@ -1,0 +1,48 @@
+{
+  "name": "semantic-default-changed",
+  "kind": "semantic",
+  "description": "Upstream changes slugify's default separator to '_' (file names); the change builds permalinks with the default and expects dashes. The fix is to pass '-' explicitly in the new code, not to revert upstream.",
+  "change": {
+    "changeId": "chg_permalinks",
+    "title": "Post permalinks",
+    "dir": "change",
+    "plan": {
+      "title": "Post permalinks",
+      "intent": "Posts get permalinks /posts/<title-with-dashes>.",
+      "acceptanceCriteria": [
+        "permalink('Hello World') is '/posts/hello-world'"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_slug_underscore",
+      "title": "Underscore slugs by default",
+      "dir": "upstream-1",
+      "plan": {
+        "title": "Underscore slugs by default",
+        "intent": "Exported file names must not contain dashes, so slugify() joins with '_' by default. URL builders that need dashes pass '-' explicitly.",
+        "acceptanceCriteria": [
+          "slugify('A B') is 'a_b'",
+          "slugify('A B', '-') is 'a-b'"
+        ]
+      }
+    },
+    {
+      "changeId": "chg_word_count",
+      "title": "Word count helper",
+      "dir": "upstream-2",
+      "plan": {
+        "title": "Word count helper",
+        "intent": "Show the number of words of a post title.",
+        "acceptanceCriteria": [
+          "countWords('  a b ') is 2"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "outsideHunks": true,
+    "culprit": "chg_slug_underscore"
+  }
+}

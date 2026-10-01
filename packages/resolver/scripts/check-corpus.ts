@@ -12,10 +12,10 @@
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FakeLlmClient } from "@app/tour";
+import { ApplyResolutionDoc, parseMergeOutput } from "../src/merge-doc.js";
 import { createResolver } from "../src/resolver.js";
 import type { ModelResolution } from "../src/schema.js";
 import { buildWorkspace } from "../src/workspace.js";
-import { ApplyResolutionDoc, parseMergeOutput } from "../src/merge-doc.js";
 import {
   buildRunner,
   evaluateCase,
@@ -45,18 +45,32 @@ function naive(p: Prepared, side: "ours" | "theirs"): ModelResolution {
   };
   for (const f of ws.ws.conflicted) {
     if (f.wholeFile) answer.files.push({ path: f.path, content: f.sides[side] });
-    else f.regions.forEach((r, i) => answer.regions.push({ file: f.path, conflict: i + 1, text: r[side].join("") }));
+    else
+      f.regions.forEach((r, i) => {
+        answer.regions.push({ file: f.path, conflict: i + 1, text: r[side].join("") });
+      });
   }
   return answer;
 }
 
-async function naiveFails(p: Prepared, bundle: string, root: string, side: "ours" | "theirs"): Promise<string> {
+async function naiveFails(
+  p: Prepared,
+  bundle: string,
+  root: string,
+  side: "ours" | "theirs",
+): Promise<string> {
   const out = await createResolver(new FakeLlmClient([{ json: naive(p, side) }])).resolve(p.input);
   if (out.status !== "resolved") return `naive ${side}: ejected (${out.eject.cause})`;
   const patch = join(root, `${p.c.name}-${side}.patch`);
   writeFileSync(patch, out.patch);
   const doc = parseMergeOutput(
-    (await runRunner(bundle, ["apply-resolution", "--patch", patch, "--onto", out.applyOnto], p.m.dir)).stdout,
+    (
+      await runRunner(
+        bundle,
+        ["apply-resolution", "--patch", patch, "--onto", out.applyOnto],
+        p.m.dir,
+      )
+    ).stdout,
     ApplyResolutionDoc,
   );
   if (doc.status !== "resolved") return `naive ${side}: did not apply`;
@@ -72,26 +86,40 @@ async function main(): Promise<void> {
     for (const c of listCases(argv)) {
       const problems: string[] = [];
       const p = await prepareCase(c, bundle, root, 1);
-      const shas = [["base", p.m.base], ...p.m.upstream.map((u) => [u.changeId, u.sha]), ["change", p.m.head]];
+      const shas = [
+        ["base", p.m.base],
+        ...p.m.upstream.map((u) => [u.changeId, u.sha]),
+        ["change", p.m.head],
+      ];
       for (const [label, sha] of shas) {
         const run = await runTests(p.m.dir, sha!, root);
-        if (!run.ok) problems.push(`tests fail at ${label}: ${run.failing.map((f) => f.id).join(", ")}`);
+        if (!run.ok)
+          problems.push(`tests fail at ${label}: ${run.failing.map((f) => f.id).join(", ")}`);
       }
       const r = await evaluateCase(c, { bundle, root, budgetUsd: 1, client: scriptedClient });
       if (!r.success) problems.push(`expected resolution: ${r.failure}`);
-      if (r.outside !== c.spec.expect.outsideHunks) problems.push(`outside ${r.outside}, expected ${c.spec.expect.outsideHunks}`);
-      if (r.culprit !== c.spec.expect.culprit) problems.push(`culprit ${r.culprit}, expected ${c.spec.expect.culprit}`);
+      if (r.outside !== c.spec.expect.outsideHunks)
+        problems.push(`outside ${r.outside}, expected ${c.spec.expect.outsideHunks}`);
+      if (r.culprit !== c.spec.expect.culprit)
+        problems.push(`culprit ${r.culprit}, expected ${c.spec.expect.culprit}`);
       if (c.spec.kind === "textual") {
         for (const side of ["ours", "theirs"] as const) {
           const verdict = await naiveFails(p, bundle, root, side);
           if (verdict !== "ok") problems.push(verdict);
         }
       } else {
-        const asMerged = await runTests(p.m.dir, p.merge.status === "clean" ? p.merge.newSha : p.m.onto, root, readOverlay(join(c.dir, "checks")));
+        const asMerged = await runTests(
+          p.m.dir,
+          p.merge.status === "clean" ? p.merge.newSha : p.m.onto,
+          root,
+          readOverlay(join(c.dir, "checks")),
+        );
         if (asMerged.ok) problems.push("the checks pass on the unresolved merged tree");
       }
       failures += problems.length > 0 ? 1 : 0;
-      console.log(`${problems.length === 0 ? "ok  " : "FAIL"} ${c.name} (${c.spec.kind}, checks ${r.checks?.passed ?? 0} passed)`);
+      console.log(
+        `${problems.length === 0 ? "ok  " : "FAIL"} ${c.name} (${c.spec.kind}, checks ${r.checks?.passed ?? 0} passed)`,
+      );
       for (const problem of problems) console.log(`     ${problem}`);
     }
   } finally {

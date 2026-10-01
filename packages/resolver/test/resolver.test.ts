@@ -157,7 +157,9 @@ describe("textual conflicts", () => {
   it("can only edit context files it was given, and such edits are outside", async () => {
     const files = [{ path: "src/index.ts", content: 'export * from "./handlers.js";\n' }];
     const answer = goodAnswer({
-      files: [{ path: "src/index.ts", content: 'export * from "./handlers.js";\nexport const v = 2;\n' }],
+      files: [
+        { path: "src/index.ts", content: 'export * from "./handlers.js";\nexport const v = 2;\n' },
+      ],
     });
     const out = await createResolver(new FakeLlmClient([{ json: answer }])).resolve(
       input({ files }),
@@ -227,6 +229,7 @@ describe("textual conflicts", () => {
 
 describe("semantic conflicts", () => {
   const files = [
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: file content under test
     { path: "src/greeting.ts", content: lines("export const greeting = (u) => `Hi ${u.name}`;") },
     { path: "test/greeting.test.ts", content: lines("// expects Hi Ada") },
   ];
@@ -234,6 +237,7 @@ describe("semantic conflicts", () => {
     failingTests: [{ id: "test/greeting.test.ts > greets", message: "expected 'Hi Ada'" }],
     candidates: ["chg_rename", "chg_docs"],
   };
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: file content under test
   const fixed = lines("export const greeting = (u) => `Hi ${u.displayName}`;");
   const upstream = [
     { changeId: "chg_rename", sha: "1".repeat(40), title: "Rename name", plan: null, diff: "" },
@@ -341,7 +345,9 @@ describe("separation from the author", () => {
 
 describe("budget, errors and bad input", () => {
   it("refuses before any call when the budget cannot pay for one", async () => {
-    const client = new FakeLlmClient([{ json: goodAnswer() }], { model: "anthropic/claude-sonnet-5" });
+    const client = new FakeLlmClient([{ json: goodAnswer() }], {
+      model: "anthropic/claude-sonnet-5",
+    });
     const out = await createResolver(client).resolve(
       input({ budget: { changeId: "chg_trim", limitUsd: 0.01, spentUsd: 0 } }),
     );
@@ -355,13 +361,17 @@ describe("budget, errors and bad input", () => {
 
   it("cuts diffs to fit a small budget instead of failing", async () => {
     const big = `diff --git a/x b/x\n${"+ a fairly long line of context\n".repeat(20_000)}`;
-    const client = new FakeLlmClient([{ json: goodAnswer() }], { model: "anthropic/claude-sonnet-5" });
+    const client = new FakeLlmClient([{ json: goodAnswer() }], {
+      model: "anthropic/claude-sonnet-5",
+    });
     const out = await createResolver(client).resolve(
       input({ diff: big, budget: { changeId: "chg_trim", limitUsd: 0.2, spentUsd: 0 } }),
     );
     expect(out.status).toBe("resolved");
     expect(out.diagnostics.cutDiffs).toBe(1);
-    expect(client.requests[0]?.messages[0]?.content).toContain("not shown, to stay within the budget");
+    expect(client.requests[0]?.messages[0]?.content).toContain(
+      "not shown, to stay within the budget",
+    );
   });
 
   it("a gateway budget refusal ejects as budget exhausted", async () => {
@@ -380,10 +390,17 @@ describe("budget, errors and bad input", () => {
 
   it("binary, oversized or unparseable conflicts and bad documents eject without a call", async () => {
     for (const [merge, cause] of [
-      [conflictDoc([conflictFile({ binary: true, merged_with_markers: null })]), "unsupported-conflict"],
+      [
+        conflictDoc([conflictFile({ binary: true, merged_with_markers: null })]),
+        "unsupported-conflict",
+      ],
       [conflictDoc([conflictFile({ tooLarge: true })]), "unsupported-conflict"],
       [
-        conflictDoc([conflictFile({ merged_with_markers: `${region(["a"], [], ["b"]).slice(0, 3).join("\n")}\n` })]),
+        conflictDoc([
+          conflictFile({
+            merged_with_markers: `${region(["a"], [], ["b"]).slice(0, 3).join("\n")}\n`,
+          }),
+        ]),
         "unsupported-conflict",
       ],
       [{ status: "conflict" }, "invalid-input"],
@@ -410,7 +427,14 @@ describe("the scope comes from the files, not the model", () => {
     const out = await createResolver(new FakeLlmClient([{ json: goodAnswer() }])).resolve(input());
     if (out.status !== "resolved") throw new Error("expected resolved");
     const direct = resolutionScope(
-      [{ path: "src/handlers.ts", merged: HANDLERS_MERGED, resolved: HANDLERS_RESOLVED, conflicted: true }],
+      [
+        {
+          path: "src/handlers.ts",
+          merged: HANDLERS_MERGED,
+          resolved: HANDLERS_RESOLVED,
+          conflicted: true,
+        },
+      ],
       MARKERS,
     );
     expect(out.scope).toEqual(direct);

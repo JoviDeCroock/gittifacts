@@ -24,7 +24,7 @@ import { type FileDiffStat, Plan, RepoPolicy } from "@app/domain";
 import { type EvidenceItem, matchRegions, splitLines } from "@app/evidence";
 import { FakeLlmClient, type LlmClient } from "@app/tour";
 import { z } from "zod";
-import { MergeAttempt, ApplyResolutionDoc, parseMergeOutput } from "../../src/merge-doc.js";
+import { ApplyResolutionDoc, MergeAttempt, parseMergeOutput } from "../../src/merge-doc.js";
 import {
   type ContextFileInput,
   createResolver,
@@ -154,17 +154,25 @@ function cleanEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 }
 
 export function git(dir: string, args: readonly string[], date?: string): string {
-  return execFileSync("git", ["-c", "init.defaultBranch=main", "-c", "commit.gpgSign=false", ...args], {
-    cwd: dir,
-    env: cleanEnv(date === undefined ? {} : { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date }),
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  }).trimEnd();
+  return execFileSync(
+    "git",
+    ["-c", "init.defaultBranch=main", "-c", "commit.gpgSign=false", ...args],
+    {
+      cwd: dir,
+      env: cleanEnv(date === undefined ? {} : { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date }),
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    },
+  ).trimEnd();
 }
 
 const DEFAULT_PACKAGE = `${JSON.stringify({ name: "@corpus/case", private: true, type: "module" }, null, 2)}\n`;
 
-function applyOverlay(repo: string, files: Map<string, string>, deletions: readonly string[]): void {
+function applyOverlay(
+  repo: string,
+  files: Map<string, string>,
+  deletions: readonly string[],
+): void {
   for (const [path, content] of files) {
     const full = join(repo, path);
     mkdirSync(dirname(full), { recursive: true });
@@ -200,12 +208,18 @@ export function materialize(c: ConflictCase, root: string): Materialized {
   const upstream: Materialized["upstream"] = [];
   c.spec.upstream.forEach((u, i) => {
     applyOverlay(dir, readOverlay(join(c.dir, u.dir)), u.delete);
-    upstream.push({ changeId: u.changeId, sha: commit(`${u.title}\n\nChange: ${u.changeId}`, `@${1767261600 + i * 60} +0000`) });
+    upstream.push({
+      changeId: u.changeId,
+      sha: commit(`${u.title}\n\nChange: ${u.changeId}`, `@${1767261600 + i * 60} +0000`),
+    });
   });
   const onto = upstream[upstream.length - 1]!.sha;
   git(dir, ["checkout", "-q", "-b", "change", baseSha]);
   applyOverlay(dir, readOverlay(join(c.dir, c.spec.change.dir)), c.spec.change.delete);
-  const head = commit(`${c.spec.change.title}\n\nChange: ${c.spec.change.changeId}`, "@1767265200 +0000");
+  const head = commit(
+    `${c.spec.change.title}\n\nChange: ${c.spec.change.changeId}`,
+    "@1767265200 +0000",
+  );
   return { dir, base: baseSha, onto, head, upstream };
 }
 
@@ -264,14 +278,23 @@ interface Proc {
   stderr: string;
 }
 
-function exec(cmd: string, args: readonly string[], cwd: string, timeoutMs = 120_000): Promise<Proc> {
+function exec(
+  cmd: string,
+  args: readonly string[],
+  cwd: string,
+  timeoutMs = 120_000,
+): Promise<Proc> {
   return new Promise((done) => {
     execFile(
       cmd,
       [...args],
       { cwd, env: cleanEnv(), maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs },
       (error, stdout, stderr) =>
-        done({ code: error ? (typeof error.code === "number" ? error.code : 1) : 0, stdout, stderr }),
+        done({
+          code: error ? (typeof error.code === "number" ? error.code : 1) : 0,
+          stdout,
+          stderr,
+        }),
     );
   });
 }
@@ -320,11 +343,23 @@ export async function runTests(
     const out = join(wt, ".vitest-report.json");
     const r = await exec(
       process.execPath,
-      [join(REPO_ROOT, "node_modules/vitest/vitest.mjs"), "run", "--root", wt, "--reporter=json", `--outputFile=${out}`],
+      [
+        join(REPO_ROOT, "node_modules/vitest/vitest.mjs"),
+        "run",
+        "--root",
+        wt,
+        "--reporter=json",
+        `--outputFile=${out}`,
+      ],
       wt,
     );
     if (!existsSync(out)) {
-      return { passed: 0, failed: 1, ok: false, failing: [{ id: "(vitest)", file: "", message: r.stderr.slice(-2000) }] };
+      return {
+        passed: 0,
+        failed: 1,
+        ok: false,
+        failing: [{ id: "(vitest)", file: "", message: r.stderr.slice(-2000) }],
+      };
     }
     const report = VitestJson.parse(JSON.parse(readFileSync(out, "utf8")));
     let passed = 0;
@@ -355,12 +390,59 @@ const policy = RepoPolicy.parse({ lane0Enabled: true });
 
 function greenItems(sha: string, passed: number): EvidenceItem[] {
   return [
-    { id: "test-run", kind: "test-run", status: "ok", sha, step: "test", runner: "vitest", passed, failed: 0, skipped: 0, durationMs: 1, failures: [] },
-    { id: "coverage", kind: "coverage", status: "ok", changedLines: 10, coveredChangedLines: 10, ratio: 1, files: [] },
-    { id: "mutation", kind: "mutation", status: "ok", tool: "stryker", files: [], killed: 9, survived: 1, timedOut: 0, noCoverage: 0, score: 0.9, survivors: [] },
+    {
+      id: "test-run",
+      kind: "test-run",
+      status: "ok",
+      sha,
+      step: "test",
+      runner: "vitest",
+      passed,
+      failed: 0,
+      skipped: 0,
+      durationMs: 1,
+      failures: [],
+    },
+    {
+      id: "coverage",
+      kind: "coverage",
+      status: "ok",
+      changedLines: 10,
+      coveredChangedLines: 10,
+      ratio: 1,
+      files: [],
+    },
+    {
+      id: "mutation",
+      kind: "mutation",
+      status: "ok",
+      tool: "stryker",
+      files: [],
+      killed: 9,
+      survived: 1,
+      timedOut: 0,
+      noCoverage: 0,
+      score: 0.9,
+      survivors: [],
+    },
     { id: "public-api", kind: "public-api", status: "ok", classification: "none", packages: [] },
-    { id: "dependencies", kind: "dependencies", status: "ok", added: [], removed: [], changed: [], newInstallScripts: [], lockfileChanged: false },
-    { id: "sensitive-paths", kind: "sensitive-paths", status: "ok", patterns: policy.sensitivePaths, hits: [] },
+    {
+      id: "dependencies",
+      kind: "dependencies",
+      status: "ok",
+      added: [],
+      removed: [],
+      changed: [],
+      newInstallScripts: [],
+      lockfileChanged: false,
+    },
+    {
+      id: "sensitive-paths",
+      kind: "sensitive-paths",
+      status: "ok",
+      patterns: policy.sensitivePaths,
+      hits: [],
+    },
   ];
 }
 
@@ -384,7 +466,13 @@ function laneOf(
       deletions: files.reduce((n, f) => n + f.deletions, 0),
     },
     { category: "feature" },
-    { ciStatus: "passed", evidenceVerified: true, budgetExceeded: false, tourStatus: "not-generated", pureRevertVerified: false },
+    {
+      ciStatus: "passed",
+      evidenceVerified: true,
+      budgetExceeded: false,
+      tourStatus: "not-generated",
+      pureRevertVerified: false,
+    },
   );
 }
 
@@ -428,7 +516,11 @@ export async function prepareCase(
   budgetUsd: number,
 ): Promise<Prepared> {
   const m = materialize(c, root);
-  const mergeRun = await runRunner(bundle, ["merge-attempt", "--base", m.base, "--onto", m.onto, "--head", m.head], m.dir);
+  const mergeRun = await runRunner(
+    bundle,
+    ["merge-attempt", "--base", m.base, "--onto", m.onto, "--head", m.head],
+    m.dir,
+  );
   const merge = parseMergeOutput(mergeRun.stdout, MergeAttempt);
   const want = c.spec.kind === "textual" ? "conflict" : "clean";
   if (merge.status !== want)
@@ -437,13 +529,21 @@ export async function prepareCase(
     const got = merge.files.map((f) => f.path).sort();
     const exp = [...c.spec.expect.conflicted].sort();
     if (JSON.stringify(got) !== JSON.stringify(exp))
-      throw new Error(`${c.name}: conflicted ${got.join(", ")}, the case expects ${exp.join(", ")}`);
+      throw new Error(
+        `${c.name}: conflicted ${got.join(", ")}, the case expects ${exp.join(", ")}`,
+      );
   }
-  const applyOnto = merge.status === "conflict" ? merge.conflictSha : merge.status === "clean" ? merge.newSha : m.onto;
+  const applyOnto =
+    merge.status === "conflict"
+      ? merge.conflictSha
+      : merge.status === "clean"
+        ? merge.newSha
+        : m.onto;
   let semantic: ResolverInput["semantic"];
   if (c.spec.kind === "semantic") {
     const run = await runTests(m.dir, applyOnto, root);
-    if (run.failing.length === 0) throw new Error(`${c.name}: the merged tree passes; not a semantic conflict`);
+    if (run.failing.length === 0)
+      throw new Error(`${c.name}: the merged tree passes; not a semantic conflict`);
     semantic = {
       failingTests: run.failing.map((f) => ({ id: f.id, message: f.message })),
       candidates: m.upstream.map((u) => u.changeId),
@@ -453,7 +553,8 @@ export async function prepareCase(
   const conflicted = new Set(merge.status === "conflict" ? merge.files.map((f) => f.path) : []);
   const touched = new Set<string>();
   for (const f of diffStats(m.dir, m.base, m.head)) touched.add(f.path);
-  for (const u of m.upstream) for (const f of diffStats(m.dir, `${u.sha}^`, u.sha)) touched.add(f.path);
+  for (const u of m.upstream)
+    for (const f of diffStats(m.dir, `${u.sha}^`, u.sha)) touched.add(f.path);
   for (const t of semantic?.failingTests ?? []) touched.add(t.id.split(" > ")[0]!);
   const files: ContextFileInput[] = [];
   for (const path of [...touched].sort()) {
@@ -462,7 +563,12 @@ export async function prepareCase(
     if (content !== null) files.push({ path, content });
   }
   const input: ResolverInput = {
-    change: { id: c.spec.change.changeId, title: c.spec.change.title, baseSha: m.base, headSha: m.head },
+    change: {
+      id: c.spec.change.changeId,
+      title: c.spec.change.title,
+      baseSha: m.base,
+      headSha: m.head,
+    },
     plan: toPlan(`plan_${c.spec.change.changeId}`, c.spec.change.plan),
     diff: git(m.dir, ["diff", m.base, m.head]),
     upstream: c.spec.upstream.map((u, i) => ({
@@ -499,14 +605,20 @@ export function scriptedAnswer(p: Prepared): ModelResolution {
     done.add(f.path);
     const expected = deleted.has(f.path) ? null : (resolvedFiles.get(f.path) ?? undefined);
     if (expected === undefined) throw new Error(`${p.c.name}: resolved/${f.path} is missing`);
-    const spans = expected === null || f.segments === null ? null : matchRegions(f.segments, splitLines(expected));
+    const spans =
+      expected === null || f.segments === null
+        ? null
+        : matchRegions(f.segments, splitLines(expected));
     if (spans === null) answer.files.push({ path: f.path, content: expected });
     else {
       const lines = splitLines(expected ?? "");
-      spans.forEach(([s, e], i) => answer.regions.push({ file: f.path, conflict: i + 1, text: lines.slice(s, e).join("") }));
+      spans.forEach(([s, e], i) => {
+        answer.regions.push({ file: f.path, conflict: i + 1, text: lines.slice(s, e).join("") });
+      });
     }
   }
-  for (const [path, content] of resolvedFiles) if (!done.has(path)) answer.files.push({ path, content });
+  for (const [path, content] of resolvedFiles)
+    if (!done.has(path)) answer.files.push({ path, content });
   for (const path of deleted) if (!done.has(path)) answer.files.push({ path, content: null });
   return answer;
 }
@@ -556,22 +668,37 @@ export async function evaluateCase(
   result.attempts = outcome.diagnostics.attempts;
   result.costUsd = outcome.costUsd;
   result.model = outcome.evidence.resolver.model;
-  if (outcome.status === "ejected") return finish(`ejected (${outcome.eject.cause}): ${outcome.eject.message}`);
+  if (outcome.status === "ejected")
+    return finish(`ejected (${outcome.eject.cause}): ${outcome.eject.message}`);
   result.outside = outcome.evidence.touchesOutsideConflictHunks;
   result.culprit = outcome.semanticConflictWith;
 
   const patchFile = join(opts.root, `${c.name}.patch`);
   writeFileSync(patchFile, outcome.patch);
-  const applied = await runRunner(opts.bundle, ["apply-resolution", "--patch", patchFile, "--onto", outcome.applyOnto], p.m.dir);
+  const applied = await runRunner(
+    opts.bundle,
+    ["apply-resolution", "--patch", patchFile, "--onto", outcome.applyOnto],
+    p.m.dir,
+  );
   const doc = parseMergeOutput(applied.stdout, ApplyResolutionDoc);
   if (doc.status !== "resolved") return finish(`apply-resolution failed: ${doc.note}`);
 
   const checks = await runTests(p.m.dir, doc.newSha, opts.root, readOverlay(join(c.dir, "checks")));
-  result.checks = { passed: checks.passed, failed: checks.failed, failing: checks.failing.map((f) => f.id) };
+  result.checks = {
+    passed: checks.passed,
+    failed: checks.failed,
+    failing: checks.failing.map((f) => f.id),
+  };
 
   // Lanes: the Change before (base..head) vs the merged tree (onto..resolved) with the resolution.
   const plan = p.input.plan as Plan;
-  const before = laneOf(p.m.dir, plan, p.m.base, p.m.head, greenItems(p.m.head, Math.max(1, checks.passed)));
+  const before = laneOf(
+    p.m.dir,
+    plan,
+    p.m.base,
+    p.m.head,
+    greenItems(p.m.head, Math.max(1, checks.passed)),
+  );
   const merged = laneOf(p.m.dir, plan, p.m.onto, doc.newSha, [
     ...greenItems(doc.newSha, Math.max(1, checks.passed)),
     outcome.evidence,
@@ -581,7 +708,12 @@ export async function evaluateCase(
   result.downgrade = final.lane < before.lane;
   result.keptByFloor = merged.lane < before.lane;
   if (!checks.ok)
-    return finish(`expected-behaviour tests failed: ${checks.failing.map((f) => `${f.id}: ${f.message}`).join("; ").slice(0, 1500)}`);
+    return finish(
+      `expected-behaviour tests failed: ${checks.failing
+        .map((f) => `${f.id}: ${f.message}`)
+        .join("; ")
+        .slice(0, 1500)}`,
+    );
   return finish(null);
 }
 

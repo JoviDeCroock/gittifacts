@@ -1,0 +1,49 @@
+{
+  "name": "semantic-renamed-field",
+  "kind": "semantic",
+  "description": "Upstream renames User.name to displayName everywhere; the change adds welcome(), which still reads user.name. Each passes alone; merged, welcome() says 'undefined'. The resolver must blame the rename (not the unrelated id helper) and adapt welcome().",
+  "change": {
+    "changeId": "chg_welcome",
+    "title": "Welcome-back message",
+    "dir": "change",
+    "plan": {
+      "title": "Welcome-back message",
+      "intent": "Greet returning users by name on the dashboard.",
+      "acceptanceCriteria": [
+        "welcome(makeUser(7, 'Grace')) returns 'Welcome back, Grace!'"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_next_id",
+      "title": "Next free user id",
+      "dir": "upstream-1",
+      "plan": {
+        "title": "Next free user id",
+        "intent": "Allocate the next user id after the largest one in use.",
+        "acceptanceCriteria": [
+          "nextId([3, 9]) is 10",
+          "nextId([]) is 1"
+        ]
+      }
+    },
+    {
+      "changeId": "chg_display_name",
+      "title": "Rename User.name to displayName",
+      "dir": "upstream-2",
+      "plan": {
+        "title": "Rename User.name to displayName",
+        "intent": "Users choose how they are shown; the field is now displayName everywhere.",
+        "acceptanceCriteria": [
+          "User has displayName and no name",
+          "label() output is unchanged"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "outsideHunks": true,
+    "culprit": "chg_display_name"
+  }
+}

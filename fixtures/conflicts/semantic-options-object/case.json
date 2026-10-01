@@ -1,0 +1,47 @@
+{
+  "name": "semantic-options-object",
+  "kind": "semantic",
+  "description": "Upstream turns listItems(limit) into listItems({ limit, offset }) and updates its callers; the change adds a new caller with the positional form, which now silently returns every item. Adapt the new caller.",
+  "change": {
+    "changeId": "chg_preview",
+    "title": "Item preview",
+    "dir": "change",
+    "plan": {
+      "title": "Item preview",
+      "intent": "Show the first two items as a comma-separated preview.",
+      "acceptanceCriteria": [
+        "preview() is 'apple, banana'"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_item_count",
+      "title": "Count items",
+      "dir": "upstream-1",
+      "plan": {
+        "title": "Count items",
+        "intent": "Expose how many items exist.",
+        "acceptanceCriteria": [
+          "itemCount() is 5"
+        ]
+      }
+    },
+    {
+      "changeId": "chg_list_options",
+      "title": "Paginate listItems",
+      "dir": "upstream-2",
+      "plan": {
+        "title": "Paginate listItems",
+        "intent": "listItems takes an options object { limit, offset } so pages can be fetched; update all callers.",
+        "acceptanceCriteria": [
+          "listItems({ offset: 1, limit: 2 }) is ['banana', 'cherry']"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "outsideHunks": true,
+    "culprit": "chg_list_options"
+  }
+}
