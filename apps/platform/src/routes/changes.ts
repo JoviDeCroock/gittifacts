@@ -36,9 +36,11 @@ import {
   listChangeReviews,
   refreshPushGrant,
   requestReview,
+  requireChange,
   startChange,
   submitReview,
 } from "../services/changes.js";
+import { changeEventStream } from "../services/events.js";
 import { type ApiApp, body, errors, json, SECURITY } from "./common.js";
 
 const read = requirePrincipal(["repo:read"]);
@@ -243,7 +245,41 @@ const issues = createRoute({
   },
 });
 
+export const CHANGE_EVENTS_PATH = "/api/v1/changes/:changeId/events";
+
 export function registerChangeRoutes(app: ApiApp): void {
+  // Server-Sent Events: the change every time it changes (see services/events.ts).
+  app.get(CHANGE_EVENTS_PATH, read, async (c) => {
+    const svc = c.get("services");
+    const caller = callerOf(c);
+    const changeId = c.req.param("changeId");
+    await requireChange(svc, changeId);
+    return changeEventStream(svc, caller, changeId, {
+      since: c.req.header("last-event-id") ?? c.req.query("since") ?? null,
+      signal: c.req.raw.signal,
+    });
+  });
+  app.openAPIRegistry.registerPath({
+    method: "get",
+    path: "/api/v1/changes/{changeId}/events",
+    tags: ["changes"],
+    summary: "The change as Server-Sent Events, one `change` event per update",
+    description:
+      "`text/event-stream`. Each `change` event's data is `{ change }` and its id is the change version: reconnect with `Last-Event-ID` (or `?since=`) to resume. Comment lines are heartbeats. The stream ends after 15 minutes or once the change reaches a final status.",
+    security: SECURITY,
+    request: {
+      params: ChangeIdParam,
+      query: z.object({ since: z.string().optional().describe("Change version to resume after") }),
+    },
+    responses: {
+      200: {
+        description: "Event stream",
+        content: { "text/event-stream": { schema: z.string() } },
+      },
+      ...errors(401, 403, 404),
+    },
+  });
+
   app.openapi(start, async (c) => {
     const out = await startChange(
       c.get("services"),
