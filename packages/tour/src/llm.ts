@@ -403,6 +403,12 @@ export class AiGatewayClient implements LlmClient {
     const logId = res.headers.get("cf-aig-log-id") ?? undefined;
     const parsed =
       this.format === "anthropic-messages" ? parseAnthropic(payload) : parseOpenAi(payload);
+    if (parsed.usage === undefined) {
+      throw new LlmError(
+        "bad-response",
+        "AI Gateway response has no usage; cannot account for cost",
+      );
+    }
     const model = routed ?? parsed.model ?? this.sentModel;
     const costUsd = costOfUsage(model, parsed.usage, this.prices);
     const json = parsed.text === "" ? undefined : parseJsonLoose(parsed.text);
@@ -419,54 +425,47 @@ export class AiGatewayClient implements LlmClient {
   }
 }
 
+/** A provider response reduced to what we need. `usage` is undefined when the provider sent none. */
 export interface ParsedCompletion {
   text: string;
-  usage: TokenUsage;
+  usage: TokenUsage | undefined;
   model: string | undefined;
   stopReason: string | undefined;
 }
 
+/** OpenAI chat-completions shape. */
 export function parseOpenAi(payload: unknown): ParsedCompletion {
   const r = OpenAiChatResponse.safeParse(payload);
   if (!r.success)
     throw new LlmError("bad-response", `Unexpected chat-completions response: ${r.error.message}`);
   const choice = r.data.choices[0];
-  if (r.data.usage === undefined) {
-    throw new LlmError(
-      "bad-response",
-      "chat-completions response has no usage; cannot account for cost",
-    );
-  }
   return {
     text: choice?.message.content ?? "",
-    usage: {
-      inputTokens: r.data.usage.prompt_tokens,
-      outputTokens: r.data.usage.completion_tokens,
-    },
+    usage: r.data.usage
+      ? { inputTokens: r.data.usage.prompt_tokens, outputTokens: r.data.usage.completion_tokens }
+      : undefined,
     model: r.data.model,
     stopReason: choice?.finish_reason ?? undefined,
   };
 }
 
+/** Anthropic messages shape. */
 export function parseAnthropic(payload: unknown): ParsedCompletion {
   const r = AnthropicMessagesResponse.safeParse(payload);
   if (!r.success)
     throw new LlmError("bad-response", `Unexpected messages response: ${r.error.message}`);
-  if (r.data.usage === undefined) {
-    throw new LlmError("bad-response", "messages response has no usage; cannot account for cost");
-  }
   const text = r.data.content
     .filter((b) => b.type === "text")
     .map((b) => b.text ?? "")
     .join("");
-  const usage: TokenUsage = {
-    inputTokens: r.data.usage.input_tokens,
-    outputTokens: r.data.usage.output_tokens,
-  };
-  if (r.data.usage.cache_read_input_tokens)
-    usage.cacheReadInputTokens = r.data.usage.cache_read_input_tokens;
-  if (r.data.usage.cache_creation_input_tokens)
-    usage.cacheWriteInputTokens = r.data.usage.cache_creation_input_tokens;
+  let usage: TokenUsage | undefined;
+  if (r.data.usage) {
+    usage = { inputTokens: r.data.usage.input_tokens, outputTokens: r.data.usage.output_tokens };
+    if (r.data.usage.cache_read_input_tokens)
+      usage.cacheReadInputTokens = r.data.usage.cache_read_input_tokens;
+    if (r.data.usage.cache_creation_input_tokens)
+      usage.cacheWriteInputTokens = r.data.usage.cache_creation_input_tokens;
+  }
   return { text, usage, model: r.data.model, stopReason: r.data.stop_reason ?? undefined };
 }
 
