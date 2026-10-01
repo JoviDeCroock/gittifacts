@@ -50,8 +50,11 @@ export function agentsMd(opts: AgentsMdOptions): string {
   const testFile = cmd.testFile ?? cmd.test ?? "your test command";
   const ch = "<changeId>";
   const status = opts.claimed
-    ? "**claimed** (a human owns it). Lane 0 stays off until the owner enables it."
-    : "**unclaimed**: previews only, no secrets, no Lane 0, deleted when it expires. Give the `claimUrl` from `create_project` to a human to keep it.";
+    ? ["**claimed** (a human owns it). Lane 0 stays off until the owner enables it."]
+    : [
+        "**unclaimed**: previews only, no secrets, no Lane 0, deleted when it expires.",
+        "  Give the `claimUrl` from `create_project` to a human to keep it.",
+      ];
 
   const code = (c: string | null) => (c === null ? null : `\`${c}\``);
   const commandRows: [string, string | null][] = [
@@ -72,8 +75,10 @@ export function agentsMd(opts: AgentsMdOptions): string {
     "machines prove conformance (evidence), and every Change is routed to the cheapest safe review lane.",
     "",
     `- Project: \`${repoId}\`${opts.template === undefined ? "" : ` (template \`${opts.template}\`)`}`,
-    `- MCP: ${opts.mcpUrl} · Guide: ${host}/start · API: ${host}/openapi.json`,
-    `- Status: ${status}`,
+    `- MCP: ${opts.mcpUrl}`,
+    `- Guide: ${host}/start · API: ${host}/openapi.json`,
+    `- Status: ${status[0]}`,
+    ...status.slice(1),
     "",
     "Every response has `nextSteps` and every error has `fix` (`call` / `command`). Do what they say.",
     "",
@@ -136,7 +141,8 @@ export function agentsMd(opts: AgentsMdOptions): string {
     "is regenerated for the new head. Evidence details: `" + call("get_evidence", { changeId: ch }) + "`.",
     "",
     "## Waiting for results",
-    "`wait_for_change({ changeId, until, timeoutSec })` long-polls and returns `{ change, reached, reason }`.",
+    `\`${call("wait_for_change", { changeId: ch, until: "<until>", timeoutSec: 300 })}\` long-polls; it returns`,
+    "`{ change, reached, reason }`.",
     "| `until` | Returns when |",
     "|---|---|",
     "| `evidence_ready` | CI finished (green or red) and the evidence is signed |",
