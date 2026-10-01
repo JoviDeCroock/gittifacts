@@ -1,0 +1,2 @@
+# Standalone project settings (pnpm 11 reads settings from this file).
+allowBuilds: {}

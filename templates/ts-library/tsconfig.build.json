@@ -1,0 +1,13 @@
+{
+  // `pnpm run build`: emits dist/*.js + dist/*.d.ts (the public API the platform diffs).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

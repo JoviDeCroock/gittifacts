@@ -1,0 +1,12 @@
+{
+  // Static assets only (no Worker code). The platform replaces {{projectName}} when it creates the project.
+  "name": "{{projectName}}",
+  "compatibility_date": "2026-09-30",
+  // `wrangler dev` / `wrangler deploy` run the build first (copies public/ to dist/).
+  "build": { "command": "pnpm run build", "watch_dir": "public" },
+  "assets": {
+    "directory": "dist",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  }
+}

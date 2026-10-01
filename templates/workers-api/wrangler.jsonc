@@ -1,0 +1,9 @@
+{
+  // Worker config. The platform replaces {{projectName}} when it creates the project.
+  "name": "{{projectName}}",
+  "main": "dist/index.js",
+  "compatibility_date": "2026-09-30",
+  // `wrangler dev` / `wrangler deploy` run the build first (esbuild, ~50 ms).
+  "build": { "command": "pnpm run build", "watch_dir": "src" },
+  "observability": { "enabled": true }
+}

@@ -1,0 +1,16 @@
+{
+  // Worker + static assets. The platform replaces {{projectName}} when it creates the project.
+  "name": "{{projectName}}",
+  "main": "dist/worker.js",
+  "compatibility_date": "2026-09-30",
+  // `wrangler dev` / `wrangler deploy` run the build first (esbuild, well under a second).
+  "build": { "command": "pnpm run build", "watch_dir": ["src", "public"] },
+  "assets": {
+    "directory": "dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // Only /api/* reaches the Worker; everything else is served from dist/client.
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": { "enabled": true }
+}

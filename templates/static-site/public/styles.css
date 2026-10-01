@@ -1,0 +1,13 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+  line-height: 1.6;
+}
+body {
+  margin: 0 auto;
+  padding: 1.5rem;
+  max-width: 42rem;
+}
+nav a {
+  margin-right: 0.25rem;
+}
