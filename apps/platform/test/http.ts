@@ -4,7 +4,7 @@ import type { CoordinatorApi } from "@app/coordinator";
 import type { Principal } from "@app/domain";
 import { expect } from "vitest";
 import { createApp } from "../src/app.js";
-import { coordinatorStub } from "../src/coordinator-stub.js";
+import { unavailableCoordinator } from "./coordinator-mock.js";
 
 export const ORIGIN = "http://localhost";
 
@@ -15,7 +15,7 @@ export function makeApp(coordinator: Partial<CoordinatorApi> = {}): {
   app: TestApp;
   coordinator: CoordinatorApi;
 } {
-  const mock: CoordinatorApi = { ...coordinatorStub, ...coordinator };
+  const mock: CoordinatorApi = { ...unavailableCoordinator, ...coordinator };
   return { app: createApp({ coordinator: () => mock }), coordinator: mock };
 }
 

@@ -302,7 +302,7 @@ describe("lifecycle routes call the CoordinatorApi", () => {
     );
   });
 
-  it("the stub coordinator answers 502 upstream with a fix", async () => {
+  it("an unavailable coordinator answers 502 upstream with a fix", async () => {
     const { app, agent, change } = await world();
     await expectError(
       await call(app, "POST", `/api/v1/changes/${change.id}/token`, { token: agent.token }),

@@ -100,7 +100,7 @@ describe("POST /webhooks/workers-issues", () => {
   });
 
   it("accepts an envelope with unknown data and still stores it when the coordinator is down", async () => {
-    const { app } = makeApp(); // stub coordinator: onIssue throws upstream
+    const { app } = makeApp(); // unavailable coordinator: onIssue throws upstream
     const res = await call(app, "POST", "/webhooks/workers-issues", {
       body: payload("not an object"),
       headers: { "cf-webhook-auth": SECRET },
