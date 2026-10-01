@@ -72,7 +72,7 @@ export function groupByLane<T extends Groupable>(changes: T[], lane0Enabled: boo
 export type ChangeFilter = "review" | "active" | "closed" | "all";
 
 export const FILTERS: { id: ChangeFilter; label: string }[] = [
-  { id: "review", label: "Needs review" },
+  { id: "review", label: "To review" },
   { id: "active", label: "In flight" },
   { id: "closed", label: "Closed" },
   { id: "all", label: "All" },
@@ -269,4 +269,13 @@ export function shadowProgress(s: ShadowStats): ShadowProgress {
     headline: `${pct(s.ratio, 1)} agreement`,
     detail: `${s.agreed} of ${s.samples} reviews agreed. Needs ${pct(s.threshold)}: about ${missing} more agreeing ${missing === 1 ? "review" : "reviews"}.`,
   };
+}
+
+/** The one reason that best explains a change's lane, for list rows. */
+export function topReason(reasons: LaneReason[], computed: Lane | null, routed: Lane | null): { label: string; message: string; shadow: boolean } | null {
+  if (reasons.length === 0) return null;
+  const chart = triageChart(reasons, computed, routed);
+  if (chart.shadowRaised) return { label: "Shadow mode", message: `Evidence computes ${LANES[chart.computedLane].name}; routed to you.`, shadow: true };
+  const row = chart.rows.find((r) => r.decisive) ?? chart.rows[0];
+  return row ? { label: row.label, message: row.reason.message, shadow: false } : null;
 }

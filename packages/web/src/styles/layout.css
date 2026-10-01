@@ -13,6 +13,7 @@
   .shell {
     display: grid;
     grid-template-columns: 248px minmax(0, 1fr);
+    background: linear-gradient(90deg, var(--panel) 0 247px, var(--rule) 247px 248px, var(--canvas) 248px);
   }
   .sidebar {
     position: sticky;
@@ -22,8 +23,6 @@
     gap: var(--s-5);
     block-size: 100dvh;
     padding: var(--s-5) var(--s-4) var(--s-4);
-    background: var(--panel);
-    border-inline-end: 1px solid var(--rule);
     overflow-y: auto;
   }
 }
