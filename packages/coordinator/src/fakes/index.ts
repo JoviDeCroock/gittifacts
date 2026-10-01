@@ -194,9 +194,12 @@ export function createFakeEnvironment(
         await ports.ci.settle();
         await bindings.settle();
         await new Promise((r) => setTimeout(r, 2));
-        const busy = [...bindings.changeWorkflow.instances.values(), ...bindings.rolloutWorkflow.instances.values()].some(
-          (inst) => inst.state === "running" && inst.waiting.length === 0,
-        );
+        const busy =
+          ports.ci.pendingDeliveries > 0 ||
+          bindings.pendingDrains > 0 ||
+          [...bindings.changeWorkflow.instances.values(), ...bindings.rolloutWorkflow.instances.values()].some(
+            (inst) => inst.state === "running" && inst.waiting.length === 0,
+          );
         quiet = busy ? 0 : quiet + 1;
       }
     },

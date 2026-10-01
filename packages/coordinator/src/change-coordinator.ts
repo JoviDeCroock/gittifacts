@@ -18,7 +18,7 @@ import { changeSubject, changeWorkflowId, isForkName, ZERO_SHA } from "./ids.js"
 import { errorMessage } from "./policy.js";
 import { type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
 import { PUSHABLE_STATUSES } from "./lifecycle.js";
-import { clampWait, type MilestoneState, milestoneState } from "./milestones.js";
+import { changeVersion, clampWait, type MilestoneState, milestoneState } from "./milestones.js";
 
 /** Minimal async KV (Durable Object storage satisfies it). */
 export interface KvStorage {
@@ -207,7 +207,7 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     changed: boolean;
   }> {
     const test = (change: Change | null): MilestoneState =>
-      change !== null && change.updatedAt !== input.since ? "reached" : "pending";
+      change !== null && changeVersion(change) !== input.since ? "reached" : "pending";
     const now = await this.deps.ports.store.getChange(input.changeId);
     if (test(now) === "reached" || clampWait(input.timeoutMs) === 0) {
       return { change: now, changed: test(now) === "reached" };

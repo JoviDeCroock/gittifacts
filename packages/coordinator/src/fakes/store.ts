@@ -91,6 +91,7 @@ export class FakeStore implements Store {
   }
   async insertChange(change: Change) {
     if (this.changes.has(change.id)) throw new Error(`change ${change.id} exists`);
+    this.lastUpdate = Math.max(this.lastUpdate, Date.parse(change.updatedAt));
     this.changes.set(change.id, clone(change));
   }
   async updateChange(id: string, patch: Partial<Omit<Change, "id" | "repoId" | "createdAt">>) {

@@ -33,7 +33,7 @@ import {
 } from "./ids.js";
 import { normalizeIssue } from "./issues.js";
 import { FINAL_STATUSES, KILLABLE_STATUSES, PUSHABLE_STATUSES } from "./lifecycle.js";
-import { clampWait, withChangeNotifications } from "./milestones.js";
+import { changeVersion, clampWait, withChangeNotifications } from "./milestones.js";
 import { errorMessage, resolvePolicy } from "./policy.js";
 import { type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
 import { openRevertChange } from "./revert.js";
@@ -593,7 +593,7 @@ export function createCoordinator(
       await requireChange(changeId);
       const r = await bindings.changeCoordinator(changeId).watch({ changeId, since: opts.since, timeoutMs: clampWait(opts.timeoutMs) });
       const change = r.change ?? (await requireChange(changeId));
-      return { change, changed: r.changed };
+      return { change, changed: r.changed, version: changeVersion(change) };
     },
   };
   return api;
@@ -611,8 +611,8 @@ export async function* subscribeToChange(
 ): AsyncGenerator<Change> {
   let since: string | null = null;
   while (opts.signal?.aborted !== true) {
-    const { change, changed } = await api.watchChange(actor, changeId, { since, timeoutMs: opts.pollMs ?? 60_000 });
+    const { change, changed, version } = await api.watchChange(actor, changeId, { since, timeoutMs: opts.pollMs ?? 60_000 });
     if (changed || since === null) yield change;
-    since = change.updatedAt;
+    since = version;
   }
 }

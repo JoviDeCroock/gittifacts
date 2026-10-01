@@ -10,7 +10,7 @@ export * from "./events.js";
 export * from "./ids.js";
 export * from "./lifecycle.js";
 export { createCoordinator, type CoordinatorOptions, subscribeToChange } from "./service.js";
-export { clampWait, MAX_WAIT_MS, type MilestoneState, milestoneState, withChangeNotifications } from "./milestones.js";
+export { changeVersion, clampWait, MAX_WAIT_MS, type MilestoneState, milestoneState, withChangeNotifications } from "./milestones.js";
 export { createRunSink, isTerminalRun } from "./run-sink.js";
 export { evaluateHealth, type HealthSample, type HealthStatus, type HealthVerdict, UNAVAILABLE_LIMIT } from "./health.js";
 export { isInverseDiff, type OpenRevertResult, openRevertChange, verifyPureRevert } from "./revert.js";

@@ -79,7 +79,7 @@ export interface ChangeCoordinatorClient {
     reached: boolean;
     reason: "reached" | "timeout" | "unreachable";
   }>;
-  /** Long-poll until the change's `updatedAt` differs from `since`. */
+  /** Long-poll until the change's version (`changeVersion`) differs from `since`. */
   watch(input: { changeId: string; since: string | null; timeoutMs: number }): Promise<{
     change: Change | null;
     changed: boolean;

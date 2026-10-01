@@ -108,12 +108,13 @@ export interface CoordinatorApi {
   waitFor(actor: Principal, changeId: string, until: WaitUntil, timeoutMs: number): Promise<WaitResult>;
 
   /**
-   * Subscription hook (SSE/webhooks): resolves with the change as soon as it differs from
-   * `since` (its `updatedAt`), or after `timeoutMs` with `changed: false`. Loop it to stream.
+   * Subscription hook (SSE/webhooks): resolves with the change as soon as its `version` differs
+   * from `since` (null = now), or after `timeoutMs` with `changed: false`. Loop it, passing the
+   * returned `version`, to stream every change.
    */
   watchChange(
     actor: Principal,
     changeId: string,
     options: { since: string | null; timeoutMs: number },
-  ): Promise<{ change: Change; changed: boolean }>;
+  ): Promise<{ change: Change; changed: boolean; version: string }>;
 }

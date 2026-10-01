@@ -182,7 +182,12 @@ export class FakeCiEngine implements CiEngine {
       },
       cancelReason: null,
     });
-    if (this.autoFinish) this.pending.push(new Promise((r) => setTimeout(r, 0)).then(() => this.finish(req.runId)));
+    if (this.autoFinish) {
+      const p: Promise<unknown> = new Promise((r) => setTimeout(r, 0))
+        .then(() => this.finish(req.runId))
+        .finally(() => this.pending.splice(this.pending.indexOf(p), 1));
+      this.pending.push(p);
+    }
     return { runId: req.runId };
   }
 
@@ -223,8 +228,12 @@ export class FakeCiEngine implements CiEngine {
     this.restarts.push({ runId, step });
   }
 
+  get pendingDeliveries(): number {
+    return this.pending.length;
+  }
+
   /** Wait for auto-finished runs (and their sink deliveries). */
   async settle(): Promise<void> {
-    while (this.pending.length > 0) await Promise.allSettled(this.pending.splice(0));
+    while (this.pending.length > 0) await Promise.allSettled([...this.pending]);
   }
 }

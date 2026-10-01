@@ -46,6 +46,22 @@ export function milestoneState(change: Change, until: WaitUntil): MilestoneState
   return ENDED.has(change.status) ? "unreachable" : "pending";
 }
 
+/**
+ * Opaque version of a change row for watchers: any field change changes it (an `updatedAt` alone
+ * can repeat within one millisecond).
+ */
+export function changeVersion(change: Change): string {
+  const text = JSON.stringify(change);
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193) >>> 0;
+    b = Math.imul(b ^ c, 0x5bd1e995) >>> 0;
+  }
+  return `${a.toString(16).padStart(8, "0")}${b.toString(16).padStart(8, "0")}`;
+}
+
 /** Longest a single long-poll may hold a request. */
 export const MAX_WAIT_MS = 10 * 60_000;
 

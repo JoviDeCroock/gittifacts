@@ -274,7 +274,12 @@ export class FakeBindings implements CoordinatorBindings {
     return {
       enqueue: async (input: EnqueueInput) => {
         const r = await core.enqueue(input);
-        if (this.autoDrain) this.draining.push(new Promise((res) => setTimeout(res, 0)).then(() => this.drain(repoId)));
+        if (this.autoDrain) {
+          const p: Promise<unknown> = new Promise((res) => setTimeout(res, 0))
+            .then(() => this.drain(repoId))
+            .finally(() => this.draining.splice(this.draining.indexOf(p), 1));
+          this.draining.push(p);
+        }
         return r;
       },
       remove: (input) => core.remove(input),
@@ -296,7 +301,11 @@ export class FakeBindings implements CoordinatorBindings {
     return did;
   }
 
+  get pendingDrains(): number {
+    return this.draining.length;
+  }
+
   async settle(): Promise<void> {
-    while (this.draining.length > 0) await Promise.allSettled(this.draining.splice(0));
+    while (this.draining.length > 0) await Promise.allSettled([...this.draining]);
   }
 }
