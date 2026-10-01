@@ -1,11 +1,15 @@
 /**
  * `WorkflowsCiEngine`: the default `CiEngine`, backed by `CiRunWorkflow` + `Runner`.
  * Constructed with structural bindings so it works from any Worker or Durable Object (the
- * coordinator) and can be unit-tested with fakes.
+ * coordinator) and can be unit-tested with fakes. No `cloudflare:*` imports.
+ *
+ * `WorkflowBackedEngine` holds what both engines share: one Workflow instance per run
+ * (instance id = runId), run records in R2, status folding, cancel, restart-from-step.
  */
 import {
   type CiEngine,
   type CiRunParams,
+  type EngineKind,
   InvalidRunRequestError,
   RunConflictError,
   RunNotFoundError,
@@ -27,7 +31,7 @@ import {
 } from "../run-store.js";
 import { PLAN_RUNNER_STEP, runnerName } from "../runner/job.js";
 import { type ObjectStore, writeJson } from "../storage.js";
-import { ENGINE_STEPS } from "./ci-run.js";
+import { ENGINE_STEPS } from "./constants.js";
 
 export interface WorkflowInstanceLike {
   status(): Promise<InstanceStatusLike>;
@@ -35,9 +39,9 @@ export interface WorkflowInstanceLike {
   restart(options?: { from?: { name: string } }): Promise<void>;
 }
 
-/** Structural subset of `Workflow<CiRunParams>`. */
-export interface WorkflowLike {
-  create(options: { id: string; params: CiRunParams }): Promise<unknown>;
+/** Structural subset of `Workflow<P>`. */
+export interface WorkflowLike<P = CiRunParams> {
+  create(options: { id: string; params: P }): Promise<unknown>;
   get(id: string): Promise<WorkflowInstanceLike>;
 }
 
@@ -49,8 +53,8 @@ export interface RunnerControlNamespace {
   };
 }
 
-export interface WorkflowsCiEngineOptions {
-  workflow: WorkflowLike;
+export interface WorkflowBackedEngineOptions<P> {
+  workflow: WorkflowLike<P>;
   bucket: ObjectStore;
   /** Lets `cancel()` stop containers immediately (Workflow termination alone does not). */
   runners?: RunnerControlNamespace;
@@ -58,15 +62,24 @@ export interface WorkflowsCiEngineOptions {
   cancelTimeoutMs?: number;
 }
 
-export class WorkflowsCiEngine implements CiEngine {
-  readonly kind = "workflows" as const;
+export type WorkflowsCiEngineOptions = WorkflowBackedEngineOptions<CiRunParams>;
 
-  constructor(private readonly opts: WorkflowsCiEngineOptions) {}
+export abstract class WorkflowBackedEngine<P> implements CiEngine {
+  abstract readonly kind: EngineKind;
+
+  constructor(protected readonly opts: WorkflowBackedEngineOptions<P>) {}
+
+  /** The Workflow params for a validated request. */
+  protected abstract params(req: CiRunParams): P;
+
+  /** Engine-specific request checks; throw `InvalidRunRequestError`. */
+  protected validate(_req: CiRunParams): void {}
 
   async start(input: RunRequest): Promise<{ runId: string }> {
     const parsed = RunRequest.safeParse(input);
     if (!parsed.success) throw new InvalidRunRequestError(formatIssues(parsed.error));
     const req = parsed.data;
+    this.validate(req);
     if (req.pipeline !== undefined && req.evidenceSteps !== undefined) {
       const issues = evidenceStepIssues(req.pipeline, req.evidenceSteps);
       if (issues.length > 0) throw new InvalidRunRequestError(issues.join("\n"));
@@ -87,7 +100,7 @@ export class WorkflowsCiEngine implements CiEngine {
         changeId: req.changeId,
         headSha: req.headSha,
         baseSha: req.baseSha,
-        engine: "workflows",
+        engine: this.kind,
         createdAt: new Date().toISOString(),
       } satisfies RunRecord);
       if (req.pipeline !== undefined && req.evidenceSteps !== undefined) {
@@ -101,7 +114,7 @@ export class WorkflowsCiEngine implements CiEngine {
       }
     }
     try {
-      await workflow.create({ id: req.runId, params: req });
+      await workflow.create({ id: req.runId, params: this.params(req) });
     } catch (error) {
       // Lost a race with another start() for the same run: that's the idempotent case.
       if ((await this.instance(req.runId)) !== null) return { runId: req.runId };
@@ -127,8 +140,10 @@ export class WorkflowsCiEngine implements CiEngine {
 
   async cancel(runId: string, reason: string): Promise<void> {
     const { bucket } = this.opts;
+    // A finished run (finalize wrote its summary) has nothing left to stop.
+    if ((await bucket.get(RunKeys.summary(runId))) !== null) return;
     const snapshot = await loadRunSnapshot(bucket, runId, null);
-    if (snapshot === null || snapshot.summary !== null) return;
+    if (snapshot === null) return;
     if (snapshot.cancel === null) {
       await writeJson(bucket, RunKeys.cancel(runId), {
         v: 1,
@@ -231,5 +246,13 @@ export class WorkflowsCiEngine implements CiEngine {
     } catch {
       return null;
     }
+  }
+}
+
+export class WorkflowsCiEngine extends WorkflowBackedEngine<CiRunParams> {
+  readonly kind = "workflows" as const;
+
+  protected params(req: CiRunParams): CiRunParams {
+    return req;
   }
 }

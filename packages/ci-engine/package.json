@@ -5,10 +5,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./cloudflare": "./src/cloudflare/index.ts"
+    "./cloudflare": "./src/cloudflare/index.ts",
+    "./plan": "./src/plan/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.cloudflare.json",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

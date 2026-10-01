@@ -1,0 +1,14 @@
+{
+  // Checks the opt-in @cloudflare/ci adapter entry against the real package. @cloudflare/ci@0.2.0
+  // ships .ts sources that need Node types and violate noImplicitOverride and
+  // noUncheckedIndexedAccess, so exactly those are relaxed here. Every module of ours that these
+  // files import is also checked with the full strict settings by tsconfig.json.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "node"],
+    "noImplicitOverride": false,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src/cloudflare/workflow.ts", "src/cloudflare/index.ts"],
+  "exclude": []
+}

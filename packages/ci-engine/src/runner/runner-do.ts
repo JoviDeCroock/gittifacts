@@ -13,7 +13,6 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { EvidenceItem } from "@app/evidence";
 import { z } from "zod";
 import { formatIssues } from "../plan/spec.js";
 import { type ObjectStore, writeJson } from "../storage.js";
@@ -25,6 +24,7 @@ import {
   pumpText,
   readCapped,
 } from "./container.js";
+import { parseEvidenceDocument } from "./evidence.js";
 import {
   type EvidenceCapture,
   type LogInfo,
@@ -63,8 +63,6 @@ export const MAX_PLAN_STDOUT_BYTES = 512 * 1024;
 export const WATCHDOG_GRACE_SECONDS = 60;
 const MAX_INACTIVITY_MS = 6 * 60 * 60 * 1000;
 
-const EvidenceDocument = z.union([z.array(EvidenceItem).max(50), EvidenceItem]);
-
 const AbortRecord = z.object({ reason: z.string(), at: z.string() });
 
 class RunnerError extends Error {
@@ -74,25 +72,6 @@ class RunnerError extends Error {
   ) {
     super(message);
   }
-}
-
-/** Parses the evidence document a runner command produced. */
-export function parseEvidenceDocument(
-  raw: string,
-): { ok: true; items: EvidenceItem[] } | { ok: false; error: string } {
-  let json: unknown;
-  try {
-    json = JSON.parse(raw);
-  } catch (error) {
-    return { ok: false, error: `evidence is not JSON: ${errorMessage(error)}` };
-  }
-  const parsed = EvidenceDocument.safeParse(json);
-  if (!parsed.success)
-    return {
-      ok: false,
-      error: `evidence does not match the schema\n${formatIssues(parsed.error)}`,
-    };
-  return { ok: true, items: Array.isArray(parsed.data) ? parsed.data : [parsed.data] };
 }
 
 export function snapshotName(runId: string, step: string): string {

@@ -64,6 +64,7 @@ import {
   runnerName,
 } from "../runner/job.js";
 import { type ObjectStore, readJson, writeJson } from "../storage.js";
+import { CI_PIPELINE_FILE, ENGINE_STEPS } from "./constants.js";
 
 /** The coordinator's Durable Object namespace, as far as the CI engine is concerned. */
 export interface RunSinkNamespace {
@@ -83,11 +84,6 @@ export interface CiWorkflowEnv {
   /** Cache-key salt; bump it when the runner image changes. Default "v1". */
   CI_CACHE_NAMESPACE?: string;
 }
-
-export const CI_PIPELINE_FILE = ".platform/ci.ts";
-
-/** Workflow step names the engine uses besides pipeline steps. */
-export const ENGINE_STEPS = { plan: "plan", prepare: "prepare", finalize: "finalize" } as const;
 
 const PLAN_CONFIG: WorkflowStepConfig = {
   retries: { limit: 2, delay: "10 seconds", backoff: "exponential" },

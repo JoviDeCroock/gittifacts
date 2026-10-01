@@ -16,6 +16,7 @@ export * from "./plan/index.js";
 export {
   buildRunStatus,
   CancelRecord,
+  type InstanceStatusLike,
   PipelineRecord,
   RunKeys,
   RunOutput,
@@ -23,6 +24,7 @@ export {
   StepRecord,
 } from "./run-store.js";
 export type { ContainerLike, ExecProcessLike } from "./runner/container.js";
+export { EvidenceDocument, parseEvidenceDocument } from "./runner/evidence.js";
 export {
   PlanJob,
   PlanOutcome,
@@ -34,7 +36,7 @@ export {
 } from "./runner/job.js";
 export { createStreamRedactor, REDACTED, redactText } from "./runner/redact.js";
 export type { RunnerEnv } from "./runner/runner-do.js";
-export { parseEvidenceDocument, Runner, snapshotName, stepEnv } from "./runner/runner-do.js";
+export { Runner, snapshotName, stepEnv } from "./runner/runner-do.js";
 export * from "./select.js";
 export type { ObjectStore } from "./storage.js";
 export type {
@@ -45,17 +47,13 @@ export type {
   RunSinkNamespace,
   StepResult,
 } from "./workflows/ci-run.js";
-export {
-  CI_PIPELINE_FILE,
-  CiRunWorkflow,
-  ENGINE_STEPS,
-  stepConfig,
-  toStepStatus,
-} from "./workflows/ci-run.js";
+export { CiRunWorkflow, stepConfig, toStepStatus } from "./workflows/ci-run.js";
+export { CI_PIPELINE_FILE, ENGINE_STEPS } from "./workflows/constants.js";
 export type {
   RunnerControlNamespace,
+  WorkflowBackedEngineOptions,
   WorkflowInstanceLike,
   WorkflowLike,
   WorkflowsCiEngineOptions,
 } from "./workflows/engine.js";
-export { WorkflowsCiEngine } from "./workflows/engine.js";
+export { WorkflowBackedEngine, WorkflowsCiEngine } from "./workflows/engine.js";
