@@ -1,0 +1,25 @@
+{
+  "name": "@app/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@app/domain": "workspace:*",
+    "@app/evidence": "workspace:*",
+    "@preact/signals": "^2.11.3",
+    "better-auth": "^1.7.7",
+    "preact": "^11.0.0",
+    "preact-iso": "^2.12.2"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "vite": "^8.3.2"
+  }
+}
