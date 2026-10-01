@@ -5,6 +5,7 @@
 import type { Principal, Repo, Scope } from "@app/domain";
 import type { Caller, Services } from "../app-env.js";
 import type { SessionUser } from "../auth/principals.js";
+import { filterRepos } from "../auth/repo-scope.js";
 
 export const REPO_ACTIONS = [
   "read",
@@ -64,7 +65,10 @@ export function repoActions(principal: Principal, repo: Repo): RepoAction[] {
 }
 
 export async function capabilities(svc: Services, caller: Caller): Promise<Capabilities> {
-  const repos = caller.principal.scopes.includes("repo:read") ? await svc.store.listRepos() : [];
+  // Repo-restricted agents (delegated sessions) only see the repos they were granted.
+  const repos = caller.principal.scopes.includes("repo:read")
+    ? filterRepos(caller.principal, await svc.store.listRepos())
+    : [];
   return {
     principal: caller.principal,
     user: caller.user,

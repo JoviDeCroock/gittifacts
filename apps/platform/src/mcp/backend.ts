@@ -2,10 +2,14 @@
  * The platform's `McpBackend`: every tool goes through the same service functions as the HTTP
  * routes (src/services/*), so rules live in one place. Mutating tools are idempotent per
  * (principal, idempotencyKey) through the same store as the `Idempotency-Key` header.
+ *
+ * Repo-restricted agents (delegated sessions) are checked here before any tool touches a repo,
+ * plan or change outside their grant (`repo-not-granted`, see ../auth/repo-scope.ts).
  */
 import { Principal } from "@app/domain";
 import type { McpBackend, McpCaller } from "@app/mcp";
 import type { Caller, Services } from "../app-env.js";
+import { assertTargetAllowed, filterRepos, type RepoTarget } from "../auth/repo-scope.js";
 import { toErrorResponse, unauthorized } from "../errors.js";
 import { runIdempotent } from "../idempotency.js";
 import { capabilities } from "../services/capabilities.js";
@@ -44,6 +48,13 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     fn: () => Promise<T>,
   ) => runIdempotent(svc, c.principal.id, key, { method: "MCP", path: tool, body }, fn);
 
+  /** The verified caller, after checking it may touch the repo the tool names. */
+  const scoped = async (mc: Parameters<typeof callerFrom>[0], target: RepoTarget) => {
+    const caller = callerFrom(mc);
+    await assertTargetAllowed(svc, caller.principal, target);
+    return caller;
+  };
+
   return {
     async whoami(mc) {
       const caps = await capabilities(svc, callerFrom(mc));
@@ -66,8 +77,8 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     },
 
     async listRepos(mc) {
-      callerFrom(mc);
-      return listRepoSummaries(svc);
+      const caller = callerFrom(mc);
+      return filterRepos(caller.principal, await listRepoSummaries(svc));
     },
 
     async createPlan(mc, input, opts) {
@@ -79,12 +90,12 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
 
     async startChange(mc, input, opts) {
       // Idempotent in the coordinator (same change, fresh grant); never store push grants.
-      const caller = callerFrom(mc);
+      const caller = await scoped(mc, { repoId: input.repoId, planId: input.planId ?? undefined });
       return startChange(svc, caller, input, opts.idempotencyKey);
     },
 
     async getChangeStatus(mc, changeId) {
-      callerFrom(mc);
+      await scoped(mc, { changeId });
       const d = await getChangeDetail(svc, changeId);
       return {
         change: d.change,
@@ -103,17 +114,17 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     },
 
     async getEvidence(mc, changeId) {
-      callerFrom(mc);
+      await scoped(mc, { changeId });
       return getChangeEvidence(svc, changeId);
     },
 
     async getTour(mc, changeId) {
-      callerFrom(mc);
+      await scoped(mc, { changeId });
       return getChangeTour(svc, changeId);
     },
 
     async requestReview(mc, changeId, message, opts) {
-      const caller = callerFrom(mc);
+      const caller = await scoped(mc, { changeId });
       return idem(
         caller,
         "request_review",
@@ -124,17 +135,17 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     },
 
     async listIssuesForChange(mc, changeId) {
-      callerFrom(mc);
+      await scoped(mc, { changeId });
       return listChangeIssues(svc, changeId);
     },
 
     async refreshPushToken(mc, changeId) {
       // A fresh grant per call is safe to retry; grants are never stored.
-      return refreshPushGrant(svc, callerFrom(mc), changeId);
+      return refreshPushGrant(svc, await scoped(mc, { changeId }), changeId);
     },
 
     async waitForChange(mc, changeId, until, timeoutMs) {
-      const caller = callerFrom(mc);
+      const caller = await scoped(mc, { changeId });
       await requireChange(svc, changeId);
       return svc.coordinator.waitFor(caller.principal, changeId, until, timeoutMs);
     },

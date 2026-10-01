@@ -3,7 +3,7 @@
  * agents (owned by a human, bearer tokens only) and the platform's `system` principal.
  */
 import { type Principal, Scope } from "@app/domain";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { principals } from "../db/schema.js";
 import type { D1Store } from "../store/d1-store.js";
 
@@ -57,21 +57,44 @@ export async function ensureHumanPrincipal(
 
 export async function createAgentPrincipal(
   store: D1Store,
-  input: { name: string; ownerId: string; scopes: Scope[]; now: Date },
+  input: {
+    name: string;
+    ownerId: string;
+    scopes: Scope[];
+    now: Date;
+    /** Repos it may act on; null/omitted = every repo the owner can access. */
+    repoIds?: readonly string[] | null;
+  },
 ): Promise<Principal> {
+  const notDelegable = input.scopes.filter((s) => !AGENT_ALLOWED_SCOPES.includes(s));
+  if (notDelegable.length > 0) {
+    // Last line of defence: no code path may persist an approval-class scope on an agent.
+    throw new Error(`refusing to create an agent with ${notDelegable.join(", ")}`);
+  }
   const id = `ag_${crypto.randomUUID().replaceAll("-", "")}`;
   await store.db.insert(principals).values({
     id,
     kind: "agent",
-    name: input.name,
+    name: input.name.slice(0, 120),
     ownerId: input.ownerId,
     userId: null,
     scopes: input.scopes,
+    repoIds: input.repoIds ? [...input.repoIds] : null,
     createdAt: input.now.toISOString(),
   });
   const p = await store.getPrincipal(id);
   if (!p) throw new Error(`agent principal ${id} vanished after insert`);
   return p;
+}
+
+/** Disable a principal: every token it holds stops verifying at once (see verifyAgentToken). */
+export async function disablePrincipal(store: D1Store, id: string, now: Date): Promise<boolean> {
+  const rows = await store.db
+    .update(principals)
+    .set({ disabledAt: now.toISOString() })
+    .where(and(eq(principals.id, id), isNull(principals.disabledAt)))
+    .returning({ id: principals.id });
+  return rows.length > 0;
 }
 
 /** The caller itself plus the agents it owns. */

@@ -2,9 +2,12 @@ import type { Scope } from "@app/domain";
 import type { Context, MiddlewareHandler } from "hono";
 import type { AppEnv, Caller } from "../app-env.js";
 import { ApiError, forbidden, unauthorized } from "../errors.js";
+import { urlsFor } from "../oauth/context.js";
+import { audienceAllows } from "../oauth/urls.js";
 import { isAgentToken, verifyAgentToken } from "./agent-tokens.js";
 import { createAuth } from "./better-auth.js";
 import { ensureHumanPrincipal } from "./principals.js";
+import { assertRouteRepoAccess } from "./repo-scope.js";
 
 export function authFor(c: Context<AppEnv>) {
   return createAuth(c.env, {
@@ -23,7 +26,8 @@ function bearerToken(header: string | undefined): string | null {
  * Resolve the caller once per request: a `gtf_` bearer token → agent principal; otherwise a
  * better-auth session (cookie, or a session token as bearer) → human principal, created with the
  * default human scopes on first sign-in. An agent token that fails verification never falls back
- * to the session.
+ * to the session. A token bound to another resource (e.g. an MCP-only OAuth token) is refused
+ * with a 401 that says which resource it is for (RFC 8707 audience check).
  */
 export async function resolveCaller(c: Context<AppEnv>): Promise<Caller | null> {
   const cached = c.get("caller");
@@ -33,6 +37,21 @@ export async function resolveCaller(c: Context<AppEnv>): Promise<Caller | null> 
   const token = bearerToken(c.req.header("authorization"));
   if (token && isAgentToken(token)) {
     const v = await verifyAgentToken(store, token, clock.now(), (p) => c.executionCtx.waitUntil(p));
+    if (v) {
+      const api = urlsFor(c).apiResource;
+      if (!audienceAllows(v.audience, api)) {
+        c.set("caller", null);
+        throw new ApiError(
+          401,
+          "unauthorized",
+          `this token was issued for ${v.audience?.join(", ")}, not the HTTP API (${api})`,
+          { audience: v.audience, resource: api },
+          {
+            explanation: `Use this token only with ${v.audience?.join(", ")}. For the HTTP API, authorize again with resource=${api} (or use the device flow, whose tokens cover both).`,
+          },
+        );
+      }
+    }
     caller = v
       ? { principal: v.principal, user: null, via: "agent-token", expiresAtSec: v.expiresAtSec }
       : null;
@@ -70,8 +89,9 @@ export function assertScopes(caller: Caller, scopes: readonly Scope[]): void {
 }
 
 /**
- * Route guard: 401 without a principal, 403 when a scope is missing (code `insufficient-scope`)
- * or when `humanOnly` and the caller is an agent.
+ * Route guard: 401 without a principal, 403 when a scope is missing (code `insufficient-scope`),
+ * when `humanOnly` and the caller is an agent, or when a repo-restricted agent names a repo,
+ * plan or change outside its grant (code `repo-not-granted`).
  */
 export function requirePrincipal(
   scopes: readonly Scope[] = [],
@@ -84,6 +104,7 @@ export function requirePrincipal(
       throw forbidden("only a human may do this", { kind: caller.principal.kind });
     }
     assertScopes(caller, scopes);
+    await assertRouteRepoAccess(c, caller);
     await next();
   };
 }

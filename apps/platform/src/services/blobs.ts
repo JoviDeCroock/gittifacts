@@ -11,6 +11,7 @@
  */
 import type { Repo } from "@app/domain";
 import type { Caller, Services } from "../app-env.js";
+import { repoAllowed } from "../auth/repo-scope.js";
 import { ApiError, notFound } from "../errors.js";
 
 const REF_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._\-/]{0,511}$/;
@@ -63,8 +64,8 @@ async function owningRepoId(
 }
 
 /** Single place to tighten per-repo read access (claims, org membership) later. */
-function canRead(caller: Caller, _repo: Repo): boolean {
-  return caller.principal.scopes.includes("repo:read");
+function canRead(caller: Caller, repo: Repo): boolean {
+  return caller.principal.scopes.includes("repo:read") && repoAllowed(caller.principal, repo.id);
 }
 
 function contentTypeOf(ref: string, stored: string | undefined): { type: string; inline: boolean } {

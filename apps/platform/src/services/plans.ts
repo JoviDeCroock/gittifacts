@@ -9,6 +9,7 @@
 import { type Change, type Plan, PlanDraftInput, type Principal } from "@app/domain";
 import { canonicalBytes, sha256Base64url } from "@app/evidence";
 import type { Caller, Services } from "../app-env.js";
+import { assertRepoAllowed } from "../auth/repo-scope.js";
 import { ApiError, conflict, forbidden, notFound } from "../errors.js";
 import { type PlatformSigner, Purpose, type VerifyOutcome } from "../signing.js";
 import type { PrincipalRef } from "../store/d1-store.js";
@@ -131,6 +132,7 @@ export async function getPlanDetail(
 
 export async function createPlan(svc: Services, caller: Caller, input: unknown): Promise<PlanView> {
   const draft = PlanDraftInput.parse(input);
+  assertRepoAllowed(caller.principal, draft.repoId);
   const repo = await svc.store.getRepo(draft.repoId);
   if (!repo) throw noSuchRepo(draft.repoId);
   if (draft.supersedes) {

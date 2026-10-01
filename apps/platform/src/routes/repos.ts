@@ -16,6 +16,7 @@ import {
   ShadowStatsSchema,
 } from "../api/schemas.js";
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
+import { filterRepos } from "../auth/repo-scope.js";
 import { idempotent } from "../idempotency.js";
 import { listChangeSummaries } from "../services/changes.js";
 import { listPlans } from "../services/plans.js";
@@ -114,7 +115,10 @@ const changes = createRoute({
 
 export function registerRepoRoutes(app: ApiApp): void {
   app.openapi(list, async (c) =>
-    c.json({ repos: await listRepoSummaries(c.get("services")) }, 200),
+    c.json(
+      { repos: filterRepos(callerOf(c).principal, await listRepoSummaries(c.get("services"))) },
+      200,
+    ),
   );
   app.openapi(create, async (c) => {
     const repo = await createRepo(c.get("services"), callerOf(c), c.req.valid("json"));
