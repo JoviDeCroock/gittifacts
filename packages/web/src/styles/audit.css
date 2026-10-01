@@ -1,0 +1,197 @@
+.chain {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: start;
+  margin-block-end: var(--s-5);
+  padding: var(--s-4);
+  border-radius: var(--r-panel);
+  background: var(--ok-tint);
+  border: 1px solid var(--ok-line);
+}
+.chain--ok > .icon {
+  color: var(--ok);
+}
+.chain--bad {
+  background: var(--danger-tint);
+  border-color: var(--danger-line);
+}
+.chain--bad > .icon {
+  color: var(--danger);
+}
+.chain__title {
+  font-weight: var(--weight-bold);
+}
+.chain__line {
+  font-size: var(--text-small);
+  color: var(--text-2);
+  max-inline-size: var(--measure);
+}
+
+.audit-filter {
+  margin-block-end: var(--s-5);
+  max-inline-size: 560px;
+}
+.audit-filter__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-2);
+}
+
+.audit__cols {
+  display: none;
+}
+.audit {
+  list-style: none;
+  border-block-start: 1px solid var(--rule);
+}
+.audit__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "what what"
+    "who time"
+    "seq hash";
+  gap: 6px var(--s-3);
+  padding-block: var(--s-3);
+  border-block-end: 1px solid var(--rule);
+  font-size: var(--text-small);
+}
+.audit__seq {
+  grid-area: seq;
+  color: var(--text-3);
+  font-size: var(--text-meta);
+  align-self: center;
+}
+.audit__time {
+  grid-area: time;
+  color: var(--text-3);
+  justify-self: end;
+  align-self: center;
+}
+.audit__who {
+  grid-area: who;
+  min-inline-size: 0;
+}
+.audit__what {
+  grid-area: what;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--s-2);
+  min-inline-size: 0;
+}
+.audit__action {
+  font-weight: var(--weight-bold);
+  color: var(--text);
+}
+.audit__subject {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+a.audit__subject {
+  color: var(--action-ink);
+}
+.audit__kind {
+  color: var(--text-3);
+}
+.audit__hash {
+  grid-area: hash;
+  justify-self: end;
+  min-inline-size: 0;
+}
+.audit__hash > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 32px;
+  cursor: pointer;
+  list-style: none;
+}
+.audit__hash > summary::-webkit-details-marker {
+  display: none;
+}
+.audit__hash[open] > summary .disclosure__chev {
+  transform: rotate(180deg);
+}
+.audit__hash[open] {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+}
+.audit__break {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-meta);
+  font-weight: var(--weight-bold);
+}
+.audit__hashes {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px var(--s-3);
+  margin: 6px 0 0;
+  padding: var(--s-3);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.audit__hashes dt {
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.audit__hashes dd {
+  margin: 0;
+  min-inline-size: 0;
+}
+.audit__more {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-2);
+  margin-block-start: var(--s-4);
+}
+.audit__end {
+  margin-block-start: var(--s-4);
+  font-size: var(--text-small);
+  color: var(--text-3);
+}
+
+@media (min-width: 900px) {
+  .audit__cols,
+  .audit__row {
+    display: grid;
+    grid-template-columns: 64px 128px minmax(150px, 0.9fr) minmax(0, 2fr) 150px;
+    grid-template-areas: "seq time who what hash";
+    column-gap: var(--s-4);
+    align-items: center;
+  }
+  .audit__cols {
+    padding-block-end: var(--s-2);
+    font-size: var(--text-meta);
+    font-weight: var(--weight-medium);
+    color: var(--text-3);
+  }
+  .audit__cols span:last-child {
+    text-align: end;
+  }
+  .audit__row {
+    padding-block: 6px;
+  }
+  .audit__time {
+    justify-self: start;
+  }
+  .audit__hash[open] {
+    grid-column: auto;
+    justify-self: end;
+  }
+  .audit__hash[open] .audit__hashes {
+    position: absolute;
+    inset-inline-end: 0;
+    z-index: 5;
+    inline-size: min(560px, 70vw);
+    box-shadow: var(--shadow-raise);
+    border: 1px solid var(--rule);
+    background: var(--surface);
+  }
+  .audit__row {
+    position: relative;
+  }
+}
