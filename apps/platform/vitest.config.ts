@@ -1,0 +1,47 @@
+import { webcrypto } from "node:crypto";
+import path from "node:path";
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
+import { defineConfig } from "vitest/config";
+
+function b64url(bytes: ArrayBuffer): string {
+  return Buffer.from(bytes).toString("base64url");
+}
+
+/** A throwaway platform signing key per test run, in the PLATFORM_SIGNING_KEY secret format. */
+async function testSigningKey(): Promise<string> {
+  const pair = (await webcrypto.subtle.generateKey({ name: "Ed25519" }, true, [
+    "sign",
+    "verify",
+  ])) as webcrypto.CryptoKeyPair;
+  const privateKey = b64url(await webcrypto.subtle.exportKey("pkcs8", pair.privateKey));
+  const publicKey = b64url(await webcrypto.subtle.exportKey("raw", pair.publicKey));
+  return JSON.stringify({ privateKey, publicKey, name: "test" });
+}
+
+export default defineConfig(async () => ({
+  plugins: [
+    cloudflareTest({
+      wrangler: { configPath: "./wrangler.jsonc" },
+      // Never reach the real account from tests (AI, Artifacts, Flagship, Browser stay unbound/local).
+      remoteBindings: false,
+      miniflare: {
+        bindings: {
+          TEST_MIGRATIONS: await readD1Migrations(path.join(import.meta.dirname, "migrations")),
+          PLATFORM_SIGNING_KEY: await testSigningKey(),
+          BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret-0123456789",
+          BETTER_AUTH_URL: "http://localhost",
+          GITHUB_CLIENT_ID: "",
+          GITHUB_CLIENT_SECRET: "",
+          ISSUES_WEBHOOK_SECRET: "test-issues-webhook-secret",
+          CF_API_TOKEN: "",
+          CF_ACCOUNT_ID: "",
+        },
+      },
+    }),
+  ],
+  test: {
+    name: "platform",
+    include: ["test/**/*.test.ts"],
+    setupFiles: ["./test/apply-migrations.ts"],
+  },
+}));

@@ -1,0 +1,25 @@
+# Copy to .dev.vars for `wrangler dev`. Remote values: `wrangler secret put <NAME>`.
+
+# Platform Ed25519 signing key (evidence, plan approvals, audit entries).
+# Generate with `pnpm --filter @app/evidence keygen --name platform-2026-q4` and paste the whole JSON
+# object on one line: {"privateKey":"…","publicKey":"…","keyId":"…"}.
+# Optional "previous": [{"publicKey":"…","notAfter":"<ISO time>"}] keeps rotated keys verifiable.
+PLATFORM_SIGNING_KEY={"privateKey":"","publicKey":""}
+
+# better-auth session secret, >= 32 chars (`pnpm dlx auth@1.7.7 secret`).
+BETTER_AUTH_SECRET=
+# Optional. Origin the browser sees; defaults to the request origin. Behind the Vite dev proxy use
+# http://localhost:5173 so cookies and the GitHub callback (/api/auth/callback/github) line up.
+BETTER_AUTH_URL=http://localhost:5173
+
+# GitHub OAuth app. Leave GITHUB_CLIENT_ID empty to disable GitHub sign-in.
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+
+# Shared secret Cloudflare Notifications echoes in the `cf-webhook-auth` header on
+# POST /webhooks/workers-issues.
+ISSUES_WEBHOOK_SECRET=
+
+# Cloudflare API access for Workers Versions/Deployments, Flagship, Observability and Issues APIs.
+CF_API_TOKEN=
+CF_ACCOUNT_ID=

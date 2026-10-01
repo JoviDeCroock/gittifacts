@@ -1,0 +1,125 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // The whole platform is one Worker: API, MCP, web UI (static assets), Durable Objects, Workflows.
+  "name": "gittifacts",
+  "main": "./src/index.ts",
+  // Latest date supported by workerd 1.20260930.x (docs/research/stack.md §5).
+  "compatibility_date": "2026-09-30",
+  // nodejs_compat is required by better-auth (node:crypto scrypt), not just nodejs_als.
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Workers Logs + Workers Issues. Keep `issues.enabled` set: a deploy without it turns Issues off.
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true },
+    "issues": { "enabled": true }
+  },
+
+  "vars": {
+    "CI_ENGINE": "workflows",
+    "ARTIFACTS_NAMESPACE": "gittifacts-eu",
+    "AI_GATEWAY_ID": "gittifacts",
+    "FLAGSHIP_APP_ID": "a829ecb3-7b1d-4640-9117-77d6fff4ca5d"
+  },
+
+  // `wrangler types` reads this list; values live in `.dev.vars` locally (see .dev.vars.example)
+  // and in `wrangler secret put` remotely.
+  "secrets": {
+    "required": [
+      "PLATFORM_SIGNING_KEY",
+      "BETTER_AUTH_SECRET",
+      "GITHUB_CLIENT_ID",
+      "GITHUB_CLIENT_SECRET",
+      "ISSUES_WEBHOOK_SECRET",
+      "CF_API_TOKEN",
+      "CF_ACCOUNT_ID"
+    ]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gittifacts",
+      // EU jurisdiction (docs/deploy.md).
+      "database_id": "832e640d-ef87-482c-a20e-b0aa2df1e065",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Large diffs/evidence (> 512 KB), CI logs, screenshots, build cache pointers.
+  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "gittifacts-blobs", "jurisdiction": "eu" }],
+
+  // Artifacts has no local simulator; the binding always talks to the remote service.
+  "artifacts": [{ "binding": "ARTIFACTS", "namespace": "gittifacts-eu", "remote": true }],
+
+  // Per-change kill-switch flags (app gittifacts-changes). The binding evaluates; writes go through REST.
+  "flagship": [{ "binding": "FLAGS", "app_id": "a829ecb3-7b1d-4640-9117-77d6fff4ca5d" }],
+
+  "ai": { "binding": "AI", "remote": true },
+  "browser": { "binding": "BROWSER" },
+  "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "gittifacts_metrics" }],
+  "version_metadata": { "binding": "VERSION" },
+
+  // Option A from stack.md §5: packages/web builds with Vite into ../../packages/web/dist.
+  // run_worker_first is mandatory: since compat date 2025-04-01 navigations skip the Worker,
+  // which would serve index.html for the GitHub OAuth callback.
+  "assets": {
+    "directory": "../../packages/web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/mcp", "/webhooks/*", "/.well-known/*"]
+  },
+
+  "durable_objects": {
+    "bindings": [
+      // One AuditLog per org; the platform uses the name "global" for now.
+      { "name": "AUDIT_LOG", "class_name": "AuditLog" }
+      // TODO(coordinator): { "name": "CHANGE_COORDINATOR", "class_name": "ChangeCoordinator" },  // one per change
+      // TODO(coordinator): { "name": "MERGE_QUEUE", "class_name": "MergeQueue" },                // one per repo
+      // TODO(ci-engine):   { "name": "RUNNER", "class_name": "Runner" }                          // one per CI step, drives ctx.container
+    ]
+  },
+
+  // Declarative DO exports (SQLite storage). Mutually exclusive with `migrations`.
+  "exports": {
+    "AuditLog": { "type": "durable-object", "storage": "sqlite" }
+    // TODO(coordinator): "ChangeCoordinator": { "type": "durable-object", "storage": "sqlite" },
+    // TODO(coordinator): "MergeQueue": { "type": "durable-object", "storage": "sqlite" },
+    // TODO(ci-engine):   "Runner": { "type": "durable-object", "storage": "sqlite", "container": "runner" },
+    //
+    // Workflows can also be declared here (`{ "type": "workflow", "name": "..." }`) and reached via
+    // ctx.exports, but vitest introspection needs a binding, so prefer the `workflows` array below.
+  }
+
+  // TODO(ci-engine): containers (compute.md §3.1). The durable_object policy rejects image /
+  // instance_type / max_instances; the image + instance are picked at runtime in start().
+  // "containers": [
+  //   {
+  //     "name": "runner",
+  //     "class_name": "Runner",
+  //     "scheduling_policy": "durable_object",
+  //     "images": { "base": { "dockerfile": "../sandbox/Dockerfile", "build_context": "../sandbox" } },
+  //     "observability": { "logs": { "enabled": true } }
+  //   }
+  // ],
+
+  // TODO(coordinator): workflows (compute.md §2). A `triggers.events` target must be a Workflow
+  // defined by this Worker.
+  // "workflows": [
+  //   { "name": "change-workflow", "binding": "CHANGE_WORKFLOW", "class_name": "ChangeWorkflow" },
+  //   { "name": "ci-run-workflow", "binding": "CI_RUN_WORKFLOW", "class_name": "CiRunWorkflow" },
+  //   { "name": "rollout-workflow", "binding": "ROLLOUT_WORKFLOW", "class_name": "RolloutWorkflow" },
+  //   { "name": "push-router", "binding": "PUSH_ROUTER", "class_name": "PushRouter" }
+  // ],
+
+  // TODO(coordinator): every push in the namespace starts one PushRouter instance (artifacts.md §1, §6).
+  // "triggers": {
+  //   "events": [
+  //     {
+  //       "type": "cf.artifacts.repo.pushed",
+  //       "filter": { "namespace": "gittifacts-eu" },
+  //       "targets": [{ "type": "workflow", "workflow_name": "push-router" }]
+  //     }
+  //   ]
+  // }
+}

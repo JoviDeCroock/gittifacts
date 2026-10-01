@@ -6,12 +6,13 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "pnpm --filter @app/web build && wrangler deploy",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "test": "vitest run --passWithNoTests",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types --include-runtime=false --strict-vars=false",
+    "db:auth-schema": "auth generate --config src/auth.cli.ts --adapter drizzle --dialect sqlite --output src/db/auth-schema.ts -y"
   },
   "dependencies": {
     "@app/ci-engine": "workspace:*",
