@@ -1,6 +1,7 @@
 packages:
   - "packages/*"
   - "apps/*"
+  - "sim/*"
 allowBuilds:
   esbuild: true
   workerd: true

@@ -1,0 +1,16 @@
+{
+  "name": "@sim/merge-queue",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "sim": "tsx src/cli.ts",
+    "gates": "tsx src/cli.ts gates"
+  },
+  "dependencies": {
+    "@app/merge-queue": "workspace:*"
+  },
+  "devDependencies": {}
+}
