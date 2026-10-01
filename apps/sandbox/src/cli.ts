@@ -77,11 +77,12 @@ Evidence kinds:
   transforms       re-run .platform/transforms/* (BASE copy) on base, compare with head
   sensitive-paths  changed paths matching the BASE policy's sensitivePaths
   test-run         the whole test suite at head
-  policy           same as the \`policy\` command
+  policy           base-policy evidence for the CI evidence step: the sensitive-path check
+                   (id policy:sensitive-paths), an error item if the base policy is unusable
 
 Options:
   --base <sha>              base commit (default $GITTIFACTS_BASE_SHA)
-  --head <sha>              head commit (default $GITTIFACTS_HEAD_SHA, else HEAD)
+  --head <sha>              head commit (default $GITTIFACTS_HEAD_SHA, else HEAD); alias --sha
   --cwd <dir>               the checkout (default: current directory)
   --package-manager <pm>    pnpm | npm | yarn | yarn-berry | bun (default: detected)
   --test-command <cmd>      how the repo runs its tests (selects vitest/jest + config flags)
@@ -119,6 +120,8 @@ function parse(argv: readonly string[]): Options {
     options: {
       base: { type: "string" },
       head: { type: "string" },
+      // `plan --sha <sha>` (the Runner DO's plan invocation) is `--head`.
+      sha: { type: "string" },
       cwd: { type: "string" },
       "package-manager": { type: "string" },
       "test-command": { type: "string" },
@@ -137,7 +140,7 @@ function parse(argv: readonly string[]): Options {
   };
   return {
     base: values.base ?? env("GITTIFACTS_BASE_SHA"),
-    head: values.head ?? env("GITTIFACTS_HEAD_SHA"),
+    head: values.head ?? values.sha ?? env("GITTIFACTS_HEAD_SHA"),
     cwd: resolve(values.cwd ?? process.cwd()),
     packageManager: values["package-manager"],
     testCommand: values["test-command"],
@@ -166,7 +169,7 @@ function emit(prefix: string, doc: unknown, out: string | undefined): void {
 }
 
 /** Error document for `kind` when the measurement itself could not run. */
-export function errorDocument(kind: EvidenceCommand, note: string, base: string, head: string): unknown {
+export function errorDocument(kind: EvidenceCommand | "policy-document", note: string, base: string, head: string): unknown {
   switch (kind) {
     case "red-green":
       return {
@@ -205,7 +208,9 @@ export function errorDocument(kind: EvidenceCommand, note: string, base: string,
       };
       return [item];
     }
-    case "policy": {
+    case "policy":
+      return [{ ...sensitiveError(note), id: "policy:sensitive-paths" }];
+    case "policy-document": {
       const doc: PolicyDocument = {
         kind: "policy",
         status: "error",
@@ -244,13 +249,13 @@ async function measure(kind: EvidenceCommand, ctx: Context): Promise<unknown> {
     case "test-run":
       return testRun(ctx);
     case "policy":
-      return policy(ctx);
+      // The CI evidence channel only carries EvidenceItems: the policy-derived item.
+      return [await sensitivePaths(ctx, "policy:sensitive-paths")];
   }
 }
 
 /** Items must match the evidence schema; a bug must surface as an error item, not as bad data. */
 function validated(kind: EvidenceCommand, doc: unknown, base: string, head: string): unknown {
-  if (kind === "policy") return doc;
   const items = Array.isArray(doc) ? doc : [doc];
   for (const item of items) {
     const r = EvidenceItem.safeParse(item);
@@ -340,7 +345,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     }
   }
 
-  let kind: EvidenceCommand | "diff";
+  let kind: EvidenceCommand | "diff" | "policy-document";
   if (command === "evidence") {
     const k = rest[0];
     if (k === undefined || !(EVIDENCE_KINDS as readonly string[]).includes(k)) {
@@ -349,7 +354,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     }
     kind = k as EvidenceCommand;
   } else if (command === "policy") {
-    kind = "policy";
+    kind = "policy-document";
   } else if (command === "diff") {
     kind = "diff";
   } else {
@@ -384,6 +389,17 @@ export async function main(argv: readonly string[]): Promise<number> {
   try {
     if (kind === "diff") {
       emit(EVIDENCE_PREFIX, await changeDiff(ctx), opts.out);
+      return 0;
+    }
+    if (kind === "policy-document") {
+      let policyDoc: unknown;
+      try {
+        policyDoc = await policy(ctx);
+      } catch (error) {
+        log(`policy failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
+        policyDoc = errorDocument(kind, `evaluating the base policy failed: ${errorMessage(error)}`, ctx.base, ctx.head);
+      }
+      emit(EVIDENCE_PREFIX, policyDoc, opts.out);
       return 0;
     }
     let doc: unknown;
