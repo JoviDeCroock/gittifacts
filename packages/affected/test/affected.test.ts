@@ -94,6 +94,31 @@ describe("module closure", () => {
     expect(conflictBetween(s, other)?.reasons).toEqual(["modules"]);
   });
 
+  it("a moved file's rewritten relative imports are not new edges", () => {
+    const base: Files = {
+      ...REPO,
+      "packages/tools/src/a/helper.ts": "export const h = 1;\n",
+      "packages/tools/src/a/use.ts": 'import { h } from "./helper.js";\nexport const u = h;\n',
+    };
+    const head: Files = { ...base };
+    delete head["packages/tools/src/a/use.ts"];
+    head["packages/tools/src/b/use.ts"] =
+      'import { h } from "../a/helper.js";\nexport const u = h;\n';
+    const s = computeAffectedSet({
+      head: tree(head),
+      base: tree(base),
+      changes: [
+        {
+          status: "renamed",
+          path: "packages/tools/src/b/use.ts",
+          oldPath: "packages/tools/src/a/use.ts",
+        },
+      ],
+    });
+    expect(s.files).toEqual(["packages/tools/src/a/use.ts", "packages/tools/src/b/use.ts"]);
+    expect(s.modules).toEqual(s.files);
+  });
+
   it("finds dependents of deleted and renamed files", () => {
     const del = affected(REPO, { "packages/app/src/routes/b.ts": null });
     expect(del.files).toEqual(["packages/app/src/routes/b.ts"]);

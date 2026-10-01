@@ -221,7 +221,9 @@ export function computeAffectedSet(input: ComputeInput): AffectedSet {
       if (after === null) continue;
       const basePath = basePathOf.get(f) ?? f;
       const before = base.read(basePath);
-      const was = new Set(before === null ? [] : g.edgesFor(f, before));
+      // The old version's imports resolve from where it lived (a moved file keeps its targets).
+      const was = new Set(before === null ? [] : g.edgesFor(basePath, before));
+      was.delete(f);
       for (const t of g.edgesFor(f, after)) if (!was.has(t)) added.add(t);
     }
   }
