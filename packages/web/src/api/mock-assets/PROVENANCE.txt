@@ -1,0 +1,5 @@
+invoice-before.png / invoice-after.png
+Synthetic screenshots for mock mode only. Rendered by the web agent on 2026-10-01 from a
+hand-written HTML page of an invented company ("Lumen Freight Co."), captured headless at a
+360x600 viewport, DPR 1. The only difference between the two is the due date (Oct 31 vs Oct 30).
+Source markup: invoice-source.html.txt (the "after" variant swaps the due date string).
