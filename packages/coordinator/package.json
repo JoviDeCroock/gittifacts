@@ -3,8 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc -p tsconfig.json", "test": "vitest run --passWithNoTests" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./workers": "./src/workers.ts",
+    "./adapters": "./src/adapters/index.ts",
+    "./fakes": "./src/fakes/index.ts",
+    "./flags": "./src/flags-helper.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
   "dependencies": {
     "@app/ci-engine": "workspace:*",
     "@app/classifier": "workspace:*",

@@ -1,0 +1,618 @@
+/**
+ * `createCoordinator`: the CoordinatorApi facade. It enforces the lifecycle rules (who may review,
+ * no self-approval, reviews bind to a head, Lane 0 needs shadow agreement, unclaimed projects
+ * never auto-merge, …) and hands durable work to the ChangeCoordinator DO, the MergeQueue DO and
+ * the Workflows. Every error carries a `fix` telling the caller what to do next.
+ */
+import { shadowAgreement } from "@app/classifier";
+import {
+  type Change,
+  defaultPolicy,
+  type ErrorFix,
+  type Jurisdiction,
+  type Principal,
+  type Repo,
+  type ReviewDecision,
+  StartChangeInput,
+  WaitUntil,
+} from "@app/domain";
+import { z } from "zod";
+import { type CoordinatorApi, CoordinatorError, type CoordinatorErrorCode, type GitRemoteGrant } from "./api.js";
+import { type CoordinatorBindings, terminateQuietly } from "./bindings.js";
+import { EVENT_ISSUE, EVENT_REVIEW, type ReviewEvent } from "./events.js";
+import {
+  changeSubject,
+  changeWorkflowId,
+  FORK_PREFIX,
+  forkNameFor,
+  isForkName,
+  newId,
+  repoSubject,
+  rolloutWorkflowId,
+  ZERO_SHA,
+} from "./ids.js";
+import { normalizeIssue } from "./issues.js";
+import { FINAL_STATUSES, KILLABLE_STATUSES, PUSHABLE_STATUSES } from "./lifecycle.js";
+import { clampWait, withChangeNotifications } from "./milestones.js";
+import { errorMessage, resolvePolicy } from "./policy.js";
+import { type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
+import { openRevertChange } from "./revert.js";
+
+export interface CoordinatorOptions {
+  /** Jurisdiction recorded on new repos (must match the GitHost's namespace). Default "eu". */
+  jurisdiction?: Jurisdiction;
+  newId?: () => string;
+  /** Push token TTL for change forks; capped at 3600. */
+  pushTokenTtlSeconds?: number;
+  /** Delay before an abandoned change's fork is deleted. */
+  forkGcDelayMs?: number;
+  /** Unclaimed projects expire after this long unless claimed (default 7 days). */
+  unclaimedTtlMs?: number;
+  /** How long an idempotency key is remembered (default 24 h). */
+  idempotencyTtlMs?: number;
+}
+
+const MAX_PUSH_TTL = 3600;
+/** Artifacts naming: 2-63 chars, starts with a letter or digit; letters, digits, ".", "_", "-". */
+const REPO_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{1,62}$/;
+const IdempotencyKey = z.string().min(1).max(200);
+
+const CreateRepoInput = z.object({
+  name: z.string().regex(REPO_NAME, "2-63 chars: letters, digits, '.', '_', '-'; must start with a letter or digit"),
+  defaultBranch: z
+    .string()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$/)
+    .refine((b) => !b.includes(".."), "invalid branch name")
+    .default("main"),
+  template: z.string().min(1).max(100).optional(),
+});
+const ImportRepoInput = z.object({
+  name: CreateRepoInput.shape.name,
+  url: z.string().url().refine((u) => u.startsWith("https://"), "only public https:// remotes can be imported"),
+  branch: z.string().min(1).max(100).optional(),
+});
+const StartInput = StartChangeInput.extend({ idempotencyKey: IdempotencyKey.optional() });
+const ReviewInput = z.object({
+  headSha: z.string().regex(/^[0-9a-f]{40}$/).optional(),
+  decision: z.enum(["approve", "request-changes", "reject"]),
+  humanLane: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
+  comment: z.string().max(10_000).optional(),
+  idempotencyKey: IdempotencyKey.optional(),
+});
+
+const status = (changeId: string) => `get_change_status({ changeId: "${changeId}" })`;
+
+function fail(code: CoordinatorErrorCode, message: string, fix: ErrorFix | string): never {
+  throw new CoordinatorError(code, message, fix);
+}
+
+function parse<T>(schema: z.ZodType<T>, input: unknown, what: string): T {
+  const r = schema.safeParse(input);
+  if (!r.success) {
+    const msg = r.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ");
+    fail("invalid-input", msg, `Fix the ${what} fields listed in the message and retry.`);
+  }
+  return r.data;
+}
+
+/** Wrap a port call: anything that is not already a CoordinatorError becomes "upstream". */
+async function upstream<T>(what: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e instanceof CoordinatorError) throw e;
+    throw new CoordinatorError("upstream", `${what}: ${errorMessage(e)}`, {
+      explanation: `A platform dependency failed while trying to ${what}. It is safe to retry with the same idempotency key.`,
+    });
+  }
+}
+
+/** Deterministic 20-char id from parts (idempotent creates). */
+async function derivedId(...parts: string[]): Promise<string> {
+  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join("\u0000"))));
+  const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
+  let out = "";
+  for (let i = 0; i < 20; i++) out += alphabet[(bytes[i] ?? 0) % alphabet.length];
+  return out;
+}
+
+/** Who owns a repo created by `actor`: humans own theirs, agents' owners own theirs, otherwise unclaimed. */
+function claimFor(actor: Principal, now: Date, ttlMs: number): Repo["claim"] {
+  if (actor.kind === "human") return { status: "claimed", ownerId: actor.id, expiresAt: null };
+  if (actor.kind === "agent" && actor.ownerId !== null) return { status: "claimed", ownerId: actor.ownerId, expiresAt: null };
+  return { status: "unclaimed", ownerId: null, expiresAt: new Date(now.getTime() + ttlMs).toISOString() };
+}
+
+export function createCoordinator(
+  rawPorts: Ports,
+  bindings: CoordinatorBindings,
+  options: CoordinatorOptions = {},
+): CoordinatorApi {
+  // Every change-row update also wakes `waitFor` long-polls on the change's DO.
+  const ports = withChangeNotifications(rawPorts, bindings);
+  const { store, git, audit, clock } = ports;
+  const makeId = options.newId ?? newId;
+  const jurisdiction = options.jurisdiction ?? "eu";
+  const pushTtl = Math.min(options.pushTokenTtlSeconds ?? MAX_PUSH_TTL, MAX_PUSH_TTL);
+  const forkGcDelayMs = options.forkGcDelayMs ?? 10 * 60_000;
+  const unclaimedTtlMs = options.unclaimedTtlMs ?? 7 * 24 * 60 * 60_000;
+  const idempotencyTtlMs = options.idempotencyTtlMs ?? 24 * 60 * 60_000;
+  const now = () => clock.now().toISOString();
+
+  async function requireRepo(id: string): Promise<Repo> {
+    return (await store.getRepo(id)) ?? fail("not-found", `repo ${id} not found`, "Check the repo id; list your repos to find it.");
+  }
+
+  async function requireChange(id: string): Promise<Change> {
+    return (
+      (await store.getChange(id)) ??
+      fail("not-found", `change ${id} not found`, { explanation: "Check the change id.", call: status(id) })
+    );
+  }
+
+  async function pushGrant(change: Pick<Change, "forkName">, branch: string): Promise<GitRemoteGrant> {
+    // The token is for the fork ONLY; agents never get a token for the main repo.
+    if (!isForkName(change.forkName)) fail("forbidden", "push grants are for change forks only", "Push to your change's fork.");
+    const { token, expiresAt } = await upstream("mint a push token", () => git.mintToken(change.forkName, "write", pushTtl));
+    return { url: git.remoteOf(change.forkName), username: "x", token, expiresAt, branch };
+  }
+
+  async function assertNameFree(name: string): Promise<void> {
+    if (name.startsWith(FORK_PREFIX)) {
+      fail("invalid-input", `repo names may not start with "${FORK_PREFIX}"`, `Pick a name that does not start with "${FORK_PREFIX}" (reserved for change forks).`);
+    }
+    if ((await store.getRepoByArtifactsName(name)) !== null) {
+      fail("conflict", `a repo named ${name} already exists`, "Pick another name, or open a change on the existing repo.");
+    }
+  }
+
+  function canActOnChange(actor: Principal, change: Change, author: Principal | null): boolean {
+    if (actor.id === change.authorId) return true;
+    if (author?.kind === "agent" && author.ownerId === actor.id) return true;
+    return actor.kind === "human" && actor.scopes.includes("change:review");
+  }
+
+  async function grantFor(change: Change): Promise<GitRemoteGrant> {
+    const repo = await requireRepo(change.repoId);
+    return pushGrant(change, repo.defaultBranch);
+  }
+
+  const api: CoordinatorApi = {
+    async createRepo(actor, input) {
+      const { name, defaultBranch, template } = parse(CreateRepoInput, input, "repo");
+      await assertNameFree(name);
+      await upstream("create the repo", () => git.createRepo(name, { defaultBranch }));
+      const repo: Repo = {
+        id: makeId(),
+        namespace: git.namespace,
+        artifactsName: name,
+        name,
+        defaultBranch,
+        jurisdiction,
+        importedFrom: null,
+        policy: defaultPolicy(),
+        policySha: null,
+        deployTarget: null,
+        claim: claimFor(actor, clock.now(), unclaimedTtlMs),
+        template: template ?? null,
+        createdAt: now(),
+      };
+      await store.insertRepo(repo);
+      await audit.append({
+        principalId: actor.id,
+        action: "repo.created",
+        subject: repoSubject(repo.id),
+        payload: { name, defaultBranch, namespace: repo.namespace, claim: repo.claim, template: repo.template },
+      });
+      return repo;
+    },
+
+    async importRepo(actor, input) {
+      const { name, url, branch } = parse(ImportRepoInput, input, "import");
+      await assertNameFree(name);
+      const imported = await upstream("import the repo", () =>
+        git.importRepo(name, url, branch === undefined ? {} : { branch }),
+      );
+      const claim = claimFor(actor, clock.now(), unclaimedTtlMs);
+      const head = await upstream("read the default branch", () => git.branchHead(name, imported.defaultBranch));
+      const resolved =
+        head === null
+          ? { policy: defaultPolicy(), source: "default" as const, error: null }
+          : await resolvePolicy(ports, { repo: null, claim: claim.status, repoName: name, sha: head });
+      const repo: Repo = {
+        id: makeId(),
+        namespace: git.namespace,
+        artifactsName: name,
+        name,
+        defaultBranch: imported.defaultBranch,
+        jurisdiction,
+        importedFrom: url,
+        policy: resolved.policy,
+        // An unreadable policy is not cached: every change re-evaluates it (and escalates).
+        policySha: head !== null && resolved.source !== "unavailable" ? head : null,
+        deployTarget: null,
+        claim,
+        template: null,
+        createdAt: now(),
+      };
+      await store.insertRepo(repo);
+      await audit.append({
+        principalId: actor.id,
+        action: "repo.imported",
+        subject: repoSubject(repo.id),
+        payload: { name, url, defaultBranch: repo.defaultBranch, head, policy: resolved.source, policyError: resolved.error, claim },
+      });
+      return repo;
+    },
+
+    async startChange(actor, input) {
+      const parsed = parse(StartInput, input, "change");
+      const repo = await requireRepo(parsed.repoId);
+      // Idempotent: the same (actor, key) always names the same change.
+      const id = parsed.idempotencyKey === undefined ? makeId() : await derivedId("change", actor.id, parsed.idempotencyKey);
+      const existing = parsed.idempotencyKey === undefined ? null : await store.getChange(id);
+      if (existing !== null) {
+        if (existing.authorId !== actor.id || existing.repoId !== repo.id) {
+          fail("conflict", "idempotency key already used for another change", "Use a fresh idempotency key for a new change.");
+        }
+        return { change: existing, remote: await grantFor(existing) };
+      }
+      if (parsed.planId !== undefined) {
+        const plan = await store.getPlan(parsed.planId);
+        if (plan === null) fail("not-found", `plan ${parsed.planId} not found`, "Create a plan first with create_plan, then pass its id.");
+        if (plan.repoId !== repo.id) fail("invalid-input", "plan belongs to another repo", "Pass a plan created for this repo.");
+        if (plan.status === "rejected" || plan.status === "superseded") {
+          fail("invalid-state", `plan ${plan.id} is ${plan.status}`, {
+            explanation: "Start the change from the plan's current approved version.",
+            call: `create_plan({ repoId: "${repo.id}", supersedes: "${plan.id}" })`,
+          });
+        }
+      }
+      const baseSha = await upstream("read the default branch", () => git.branchHead(repo.artifactsName, repo.defaultBranch));
+      if (baseSha === null) {
+        fail("invalid-state", `${repo.name} has no commits on ${repo.defaultBranch}`, "Push an initial commit (or create the repo from a template) before starting a change.");
+      }
+      const forkName = forkNameFor(id);
+      await upstream("fork the repo", () => git.forkRepo(repo.artifactsName, forkName));
+      const createdAt = now();
+      const change: Change = {
+        id,
+        repoId: repo.id,
+        planId: parsed.planId ?? null,
+        title: parsed.title,
+        claim: { category: parsed.category, summary: parsed.summary ?? null },
+        baseSha,
+        headSha: null,
+        forkName,
+        authorId: actor.id,
+        status: "awaiting-push",
+        computedLane: null,
+        lane: null,
+        laneReasons: [],
+        evidenceId: null,
+        tourId: null,
+        flagKey: null,
+        mergedSha: null,
+        rolloutState: null,
+        revertOf: null,
+        revertedBy: null,
+        agentTraceId: parsed.agentTraceId ?? null,
+        createdAt,
+        updatedAt: createdAt,
+      };
+      try {
+        await store.insertChange(change);
+      } catch (e) {
+        // A concurrent retry with the same key won the insert: return its change.
+        const raced = await store.getChange(id);
+        if (raced === null || raced.authorId !== actor.id) throw e;
+        return { change: raced, remote: await grantFor(raced) };
+      }
+      const remote = await pushGrant(change, repo.defaultBranch);
+      await audit.append({
+        principalId: actor.id,
+        action: "change.started",
+        subject: changeSubject(id),
+        payload: { repoId: repo.id, planId: change.planId, baseSha, forkName, category: parsed.category, tokenExpiresAt: remote.expiresAt },
+      });
+      return { change, remote };
+    },
+
+    async refreshPushGrant(actor, changeId) {
+      const change = await requireChange(changeId);
+      if (actor.id !== change.authorId) {
+        fail("forbidden", "only the change's author can push to its fork", {
+          explanation: "Start your own change instead of pushing to someone else's fork.",
+          call: `start_change({ repoId: "${change.repoId}" })`,
+        });
+      }
+      if (!PUSHABLE_STATUSES.includes(change.status)) {
+        fail("invalid-state", `change is ${change.status}; it no longer accepts pushes`, {
+          explanation: "Start a new change for further work.",
+          call: `start_change({ repoId: "${change.repoId}" })`,
+        });
+      }
+      const grant = await grantFor(change);
+      await audit.append({
+        principalId: actor.id,
+        action: "change.push-grant-refreshed",
+        subject: changeSubject(changeId),
+        payload: { forkName: change.forkName, expiresAt: grant.expiresAt },
+      });
+      return grant;
+    },
+
+    async onPush(event) {
+      if (!isForkName(event.repoName)) return; // only change forks are routed
+      if (!event.ref.startsWith("refs/heads/") || event.after === ZERO_SHA) return;
+      const change = await store.getChangeByFork(event.repoName);
+      if (change === null) return;
+      await bindings.changeCoordinator(change.id).onPush({
+        changeId: change.id,
+        ref: event.ref,
+        before: event.before,
+        after: event.after,
+      });
+    },
+
+    async submitReview(actor, changeId, input) {
+      const review = parse(ReviewInput, input, "review");
+      const change = await requireChange(changeId);
+      if (actor.kind !== "human") {
+        fail("forbidden", "only humans review changes; agents prove conformance", {
+          explanation: "Ask a human reviewer to look at the tour; agents can never approve a change.",
+          call: status(changeId),
+        });
+      }
+      if (actor.id === change.authorId) {
+        fail("self-approval", "no principal reviews its own change", {
+          explanation: "Ask another human with change:review to review it.",
+          call: status(changeId),
+        });
+      }
+      if (!actor.scopes.includes("change:review")) {
+        fail("forbidden", "missing scope change:review", "Ask a repo admin to grant you change:review.");
+      }
+      const coordinator = bindings.changeCoordinator(changeId);
+      const key = review.idempotencyKey === undefined ? null : `review:${actor.id}:${review.idempotencyKey}`;
+      if (key !== null && !(await coordinator.claimKey({ changeId, key, ttlMs: idempotencyTtlMs }))) {
+        return requireChange(changeId); // a retry of a review we already accepted
+      }
+      try {
+        if (change.status !== "awaiting-review" || change.headSha === null) {
+          fail("invalid-state", `change is ${change.status}, not awaiting review`, {
+            explanation: "Only changes in awaiting-review can be reviewed; check where this one is.",
+            call: status(changeId),
+          });
+        }
+        const headSha = review.headSha ?? change.headSha;
+        if (headSha !== change.headSha) {
+          // Reviews bind to a head: approving an older head does nothing.
+          fail("conflict", `review is for ${headSha.slice(0, 12)} but the change's head is ${change.headSha.slice(0, 12)}`, {
+            explanation: "The author pushed again. Review the tour for the current head.",
+            call: status(changeId),
+          });
+        }
+        const classification = await store.getClassification(changeId, headSha);
+        if (classification === null) {
+          fail("invalid-state", "the change has not been classified for this head yet", {
+            explanation: "Wait until the lane is assigned, then review.",
+            call: `wait_for_change({ changeId: "${changeId}", until: "lane_assigned" })`,
+          });
+        }
+        const author = await store.getPrincipal(change.authorId);
+        const viaOwner = author?.kind === "agent" && author.ownerId === actor.id;
+        const decision: ReviewDecision = {
+          id: key === null ? makeId() : await derivedId("review", changeId, key),
+          changeId,
+          headSha,
+          reviewerId: actor.id,
+          decision: review.decision,
+          humanLane: review.humanLane ?? null,
+          computedLane: classification.computedLane,
+          comment: review.comment ?? null,
+          createdAt: now(),
+        };
+        await store.putReview(decision);
+        await audit.append({
+          principalId: actor.id,
+          action: "change.reviewed",
+          subject: changeSubject(changeId),
+          payload: {
+            reviewId: decision.id,
+            headSha,
+            decision: decision.decision,
+            humanLane: decision.humanLane,
+            computedLane: decision.computedLane,
+            lane: classification.lane,
+            shadow: classification.shadow,
+            // `.platform/**` (or unknown) changes: the approver above is a human other than the author.
+            requiresHumanApproval: classification.requiresHumanApproval,
+            approvedByAgentOwner: viaOwner,
+          },
+        });
+        const event: ReviewEvent = { reviewId: decision.id, headSha, reviewerId: actor.id, decision: decision.decision };
+        const instance = await upstream("find the change's workflow", () =>
+          bindings.changeWorkflow.get(changeWorkflowId(changeId, headSha)),
+        );
+        await upstream("deliver the review", () => instance.sendEvent({ type: EVENT_REVIEW, payload: event }));
+      } catch (e) {
+        if (key !== null) await coordinator.releaseKey({ changeId, key }).catch(() => undefined);
+        throw e;
+      }
+      return requireChange(changeId);
+    },
+
+    async kill(actor, changeId, reason) {
+      if (actor.kind !== "human" || !actor.scopes.includes("change:review")) {
+        fail("forbidden", "the kill switch is for humans with change:review", "Ask a human reviewer to use the kill switch.");
+      }
+      const trimmed = reason.trim();
+      if (trimmed === "") fail("invalid-input", "a reason is required", "Say why the change is being killed.");
+      const change = await requireChange(changeId);
+      if (!KILLABLE_STATUSES.includes(change.status)) {
+        fail("invalid-state", `change is ${change.status}; only merged changes can be killed`, {
+          explanation: "Abandon an unmerged change instead.",
+          call: status(changeId),
+        });
+      }
+      if (change.revertedBy !== null) {
+        fail("conflict", `change was already reverted by ${change.revertedBy}`, {
+          explanation: "Follow the revert change.",
+          call: status(change.revertedBy),
+        });
+      }
+      const repo = await requireRepo(change.repoId);
+      // Stop the rollout first so it cannot advance a stage while we roll back.
+      const stopped = await terminateQuietly(bindings.rolloutWorkflow, rolloutWorkflowId(changeId));
+      const state = change.rolloutState;
+      const flagKey = change.flagKey ?? state?.flagKey ?? null;
+      if (flagKey !== null) await upstream("disable the change's flag", () => ports.flags.setEnabled(flagKey, false));
+      const script = repo.deployTarget;
+      const previous = state?.previousVersionId ?? null;
+      let rolledBack = false;
+      if (script !== null && previous !== null) {
+        await upstream("roll back the deployment", () =>
+          ports.deployer.rollback(script, previous, `kill switch: ${changeId}: ${trimmed}`.slice(0, 1000)),
+        );
+        rolledBack = true;
+      }
+      if (state !== null) {
+        await store.updateChange(changeId, { rolloutState: { ...state, status: rolledBack ? "rolled-back" : state.status } });
+      }
+      await audit.append({
+        principalId: actor.id,
+        action: "change.killed",
+        subject: changeSubject(changeId),
+        payload: { reason: trimmed, flagKey, rolledBack, previousVersionId: previous, rolloutStopped: stopped },
+      });
+      const fresh = await requireChange(changeId);
+      const revert = await upstream("open the revert change", () =>
+        openRevertChange({ ports, bindings }, { original: fresh, reason: `kill switch: ${trimmed}`, actorId: actor.id }),
+      );
+      const updated = await store.updateChange(changeId, { status: "reverted", revertedBy: revert.change.id });
+      await ports.notifier.notify({
+        kind: "reverted",
+        changeId,
+        repoId: repo.id,
+        message: `${actor.name} killed ${change.title}: ${trimmed}. Revert change ${revert.change.id} opened.`,
+      });
+      return updated;
+    },
+
+    async setLane0(actor, repoId, enabled) {
+      if (actor.kind !== "human" || !actor.scopes.includes("policy:admin")) {
+        fail("forbidden", "turning Lane 0 on or off needs a human with policy:admin", "Ask a policy admin.");
+      }
+      const repo = await requireRepo(repoId);
+      if (enabled && repo.claim.status !== "claimed") {
+        fail("forbidden", "Lane 0 is off for unclaimed projects", "Claim the project (log in and open its claim link) first.");
+      }
+      const samples = await store.listShadowSamples(repoId);
+      const agreement = shadowAgreement(samples, repo.policy);
+      if (enabled && !agreement.eligibleToEnableLane0) {
+        const needed =
+          agreement.needed === null ? "agreement can no longer reach the threshold" : `${agreement.needed} more agreeing reviews needed`;
+        fail(
+          "threshold-not-met",
+          `shadow agreement ${(agreement.ratio * 100).toFixed(1)}% over ${agreement.samples} Lane-0 candidates (threshold ${(repo.policy.shadow.agreementThreshold * 100).toFixed(1)}%, min ${repo.policy.shadow.minSamples}); ${needed}`,
+          "Keep reviewing Lane-0 candidates in shadow mode until humans agree often enough.",
+        );
+      }
+      const updated = await store.updateRepo(repoId, { policy: { ...repo.policy, lane0Enabled: enabled } });
+      await audit.append({
+        principalId: actor.id,
+        action: enabled ? "repo.lane0-enabled" : "repo.lane0-disabled",
+        subject: repoSubject(repoId),
+        payload: { agreement },
+      });
+      return updated;
+    },
+
+    async onIssue(payload) {
+      const normalized = normalizeIssue(payload, clock.now());
+      if (normalized === null) return;
+      const { issue, scriptName, resolved, raw } = normalized;
+      let change: Change | null = null;
+      if (issue.versionId !== null) change = await store.getChangeByRolloutVersion(issue.versionId);
+      if (change === null && issue.changeId !== null) change = await store.getChange(issue.changeId);
+      const linked = { ...issue, changeId: change?.id ?? issue.changeId };
+      await store.putIssue({ ...linked, scriptName, raw });
+      if (resolved || change === null || change.status !== "rolling-out") return;
+      try {
+        const instance = await bindings.rolloutWorkflow.get(rolloutWorkflowId(change.id));
+        await instance.sendEvent({ type: EVENT_ISSUE, payload: linked });
+      } catch (e) {
+        // The rollout finished or was stopped; the issue is stored for the record either way.
+        await audit.append({
+          principalId: SYSTEM_PRINCIPAL_ID,
+          action: "rollout.issue-undelivered",
+          subject: changeSubject(change.id),
+          payload: { issueId: issue.id, error: errorMessage(e) },
+        });
+      }
+    },
+
+    async abandon(actor, changeId) {
+      const change = await requireChange(changeId);
+      if (change.status === "abandoned") return change;
+      const author = await store.getPrincipal(change.authorId);
+      if (!canActOnChange(actor, change, author)) {
+        fail("forbidden", "only the author, its owner or a reviewer can abandon a change", { explanation: "Ask the change's author.", call: status(changeId) });
+      }
+      if (FINAL_STATUSES.includes(change.status)) {
+        fail("invalid-state", `change is ${change.status}`, {
+          explanation: change.status === "merged" || change.status === "rolling-out" || change.status === "released"
+            ? "A merged change cannot be abandoned; a human can kill it to revert it."
+            : "The change has already ended.",
+          call: status(changeId),
+        });
+      }
+      await upstream("stop the change's workflow", () => bindings.changeCoordinator(changeId).abandon(changeId));
+      await upstream("leave the merge queue", () => bindings.mergeQueue(change.repoId).remove({ repoId: change.repoId, changeId }));
+      const updated = await store.updateChange(changeId, { status: "abandoned" });
+      await bindings.changeCoordinator(changeId).scheduleForkGc({ changeId, forkName: change.forkName, delayMs: forkGcDelayMs });
+      await audit.append({
+        principalId: actor.id,
+        action: "change.abandoned",
+        subject: changeSubject(changeId),
+        payload: { previousStatus: change.status, headSha: change.headSha },
+      });
+      return updated;
+    },
+
+    async waitFor(_actor, changeId, until, timeoutMs) {
+      const milestone = parse(WaitUntil, until, "wait");
+      await requireChange(changeId);
+      const r = await bindings.changeCoordinator(changeId).waitFor({ changeId, until: milestone, timeoutMs: clampWait(timeoutMs) });
+      const change = r.change ?? (await requireChange(changeId));
+      return { change, reached: r.reached, reason: r.reason };
+    },
+
+    async watchChange(_actor, changeId, opts) {
+      await requireChange(changeId);
+      const r = await bindings.changeCoordinator(changeId).watch({ changeId, since: opts.since, timeoutMs: clampWait(opts.timeoutMs) });
+      const change = r.change ?? (await requireChange(changeId));
+      return { change, changed: r.changed };
+    },
+  };
+  return api;
+}
+
+/**
+ * SSE helper: yields the change every time it changes until `signal` aborts. Built on
+ * `watchChange`, so it works across isolates (the DO holds each long-poll).
+ */
+export async function* subscribeToChange(
+  api: Pick<CoordinatorApi, "watchChange">,
+  actor: Principal,
+  changeId: string,
+  opts: { signal?: AbortSignal; pollMs?: number } = {},
+): AsyncGenerator<Change> {
+  let since: string | null = null;
+  while (opts.signal?.aborted !== true) {
+    const { change, changed } = await api.watchChange(actor, changeId, { since, timeoutMs: opts.pollMs ?? 60_000 });
+    if (changed || since === null) yield change;
+    since = change.updatedAt;
+  }
+}
