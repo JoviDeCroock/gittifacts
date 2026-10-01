@@ -24,6 +24,8 @@
     "@app/mcp": "workspace:*",
     "@app/tour": "workspace:*",
     "@better-auth/api-key": "1.7.7",
+    "@better-auth/mcp": "1.7.7",
+    "@better-auth/oauth-provider": "1.7.7",
     "@better-auth/passkey": "1.7.7",
     "@hono/zod-openapi": "1.6.3",
     "@modelcontextprotocol/server": "2.2.0",

@@ -1,0 +1,21 @@
+{
+  "name": "gittifacts",
+  "version": "0.1.0",
+  "description": "CLI for gittifacts, the agent-native git platform. JSON by default; --human for tables.",
+  "type": "module",
+  "bin": { "gittifacts": "./dist/cli.mjs" },
+  "files": ["dist"],
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@app/domain": "workspace:*",
+    "@app/mcp": "workspace:*",
+    "@modelcontextprotocol/client": "2.2.0",
+    "esbuild": "0.28.2",
+    "mcp-tada": "0.4.0"
+  }
+}
