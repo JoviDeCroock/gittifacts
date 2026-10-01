@@ -251,8 +251,9 @@ export async function pollForToken(o: PollOptions): Promise<TokenResponse> {
   const wait = () => (failures === 0 ? interval : Math.min(interval * 2 ** failures, MAX_BACKOFF_SEC));
 
   for (;;) {
-    if (o.now() >= deadline) throw expired();
     await o.sleep(wait() * 1000, o.signal);
+    // Don't spend a request on a code that has already expired.
+    if (o.now() >= deadline) throw expired();
     let res: Response;
     try {
       res = await o.fetch(o.tokenUrl, {
