@@ -1,0 +1,26 @@
+{
+  "name": "@app/sandbox",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "gittifacts-runner": "./dist/gittifacts-runner.mjs" },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@app/ci-engine": "workspace:*",
+    "@app/domain": "workspace:*",
+    "@app/evidence": "workspace:*",
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "typescript": "6.0.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@app/classifier": "workspace:*",
+    "esbuild": "0.28.2"
+  }
+}
