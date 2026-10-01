@@ -80,6 +80,7 @@ exports[`REASON_CODES catalogue > is stable (renaming a code is a breaking chang
   "signal.missing.sensitive-paths",
   "signal.missing.test-run",
   "signal.skip-accepted.coverage",
+  "signal.skip-accepted.mutation",
   "signal.skip-accepted.public-api",
   "size.files-over-lane0",
   "size.files-over-lane1",

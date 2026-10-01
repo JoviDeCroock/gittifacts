@@ -544,6 +544,13 @@ export const REASON_CODES = {
   ),
 
   // ------------------------------------------------------------------ mutation (Lane-0 gate)
+  "signal.skip-accepted.mutation": spec(
+    0,
+    "pass",
+    ["mutation"],
+    "Mutation testing was skipped and no source files changed{detail}.",
+    "Only skipped mutation items, diffStats present and every changed file is non-source (docs, images, license).",
+  ),
   "mutation.ok": spec(
     0,
     "pass",

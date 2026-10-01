@@ -191,7 +191,8 @@ table lists every code with its lane.
 | `signal.error.coverage` | 1 | coverage ? | A coverage item has status "error". |
 | `signal.error.mutation` | 1 | mutation ? | A mutation item has status "error". |
 | `signal.missing.coverage` | 1 | coverage ? | No coverage item with status "ok", and no accepted skip. |
-| `signal.missing.mutation` | 1 | mutation ? | No mutation item with status "ok" (absent, or only skipped — a skip is never accepted). |
+| `signal.missing.mutation` | 1 | mutation ? | No mutation item with status "ok" (absent, or only skipped while source files changed). |
+| `signal.skip-accepted.mutation` | 0 | mutation ✓ | Only skipped mutation items, diffStats present and every changed file is non-source (docs, images, license). |
 | `coverage.ok` | 0 | coverage ✓ | Lowest coverage ratio over ok items >= policy.thresholds.changedLineCoverage. |
 | `mutation.ok` | 0 | mutation ✓ | Lowest mutation score over ok items >= policy.thresholds.mutationScore. |
 | `signal.skip-accepted.coverage` | 0 | coverage ✓ | Only skipped coverage items, diffStats present and every changed file is non-source (docs, images, license). |

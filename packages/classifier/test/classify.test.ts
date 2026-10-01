@@ -401,8 +401,8 @@ table("Lane-0 gates: coverage and mutation (Lane 1)", [
     includes: ["mutation.below-threshold"],
   },
   {
-    name: "mutation skipped (even docs-only) counts as missing",
-    input: () => setStatus(docsOnly(), "mutation", "skipped"),
+    name: "mutation skipped while source changed counts as missing",
+    input: () => setStatus(green(), "mutation", "skipped"),
     computedLane: 1,
     includes: ["signal.missing.mutation"],
   },
@@ -426,6 +426,13 @@ table("accepted skips: public-api and coverage on a docs-only diff", [
     ],
     check: (r) =>
       expect(reasonFor(r, "signal.skip-accepted.public-api")?.message).toContain("no TS packages"),
+  },
+  {
+    name: "mutation skipped on a docs-only diff (no mutants possible) → accepted",
+    input: () => setStatus(docsOnly(), "mutation", "skipped", "no mutants on changed lines"),
+    computedLane: 0,
+    includes: ["signal.skip-accepted.mutation"],
+    excludes: ["signal.missing.mutation"],
   },
   {
     name: "a non-allow-listed file (SVG) makes the skip unacceptable",

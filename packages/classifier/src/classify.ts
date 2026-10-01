@@ -676,13 +676,25 @@ function checkCoverage(
   else out.add("coverage.below-threshold", params, worst.id);
 }
 
-function checkMutation(out: Reasons, items: readonly MutationScore[], threshold: number): void {
+function checkMutation(
+  out: Reasons,
+  items: readonly MutationScore[],
+  threshold: number,
+  noSourceChanged: boolean,
+): void {
   const s = readSignal(items);
   for (const e of s.errored) out.add("signal.error.mutation", { detail: errorDetail(e) }, e.id);
   if (s.ok.length === 0) {
-    // A skipped mutation run is never accepted: it is the only proof the tests assert behaviour.
-    if (s.errored.length === 0)
-      out.add("signal.missing.mutation", { detail: skippedDetail(s.skipped) }, s.skipped[0]?.id);
+    if (s.errored.length > 0) return;
+    // A skipped mutation run is only accepted when no source file changed (docs, images, licence):
+    // there is no behaviour to assert. Anywhere else it is the only proof the tests assert behaviour.
+    if (s.skipped.length > 0 && noSourceChanged)
+      out.add(
+        "signal.skip-accepted.mutation",
+        { detail: skippedDetail(s.skipped) },
+        s.skipped[0]?.id,
+      );
+    else out.add("signal.missing.mutation", { detail: skippedDetail(s.skipped) }, s.skipped[0]?.id);
     return;
   }
   let worst = s.ok[0] as MutationScore;
@@ -839,7 +851,7 @@ export function classify(
     policy.thresholds.changedLineCoverage,
     noSourceChanged,
   );
-  checkMutation(out, ofKind(items, "mutation"), policy.thresholds.mutationScore);
+  checkMutation(out, ofKind(items, "mutation"), policy.thresholds.mutationScore, noSourceChanged);
   checkTransforms(out, transforms, change.category);
 
   // Model judgments (raise only), informational signals, budget, tour.

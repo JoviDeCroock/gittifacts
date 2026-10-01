@@ -159,6 +159,4 @@ it Lane 2 with a human approval. Once that script is on main, later changes can 
 - **Policy globs.** These are gitignore-style: a pattern without `/` matches at any depth, and matching a directory
   matches everything under it.
 
-**Known mismatch to fix in integration.** A mutation run with no mutants on changed lines is emitted as `skipped`. The
-classifier never accepts a skipped mutation signal, so docs/type-only changes can't reach Lane 0. Planned fix: the
-classifier accepts `mutation: skipped` under the same docs-only allow-list it already uses for coverage/public-api.
+**Resolved:** a mutation run with no mutants on changed lines is `skipped`. The classifier accepts that skip (`signal.skip-accepted.mutation`, L0) only for docs, image or licence-only diffs; anywhere else a skipped mutation run still counts as missing (L1).
