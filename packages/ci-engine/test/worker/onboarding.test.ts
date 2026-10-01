@@ -118,7 +118,7 @@ describe("global cache scope", () => {
     const ro = await runToCompletion(
       request("glob-ro", { pipeline: steps, cache: { global: "read-only" } }),
     );
-    expect(byName(ro).install).toMatchObject({ cacheHit: false, cacheScope: "global" });
+    expect(byName(ro).install).toMatchObject({ cacheHit: false, cacheScope: "repo" });
     expect((await events("glob-ro", "install")).some((x) => x.kind === "hermetic")).toBe(false);
     const pointers = await Promise.all(
       (await e.CI_BUCKET.list({ prefix: "ci-cache/" })).objects.map(async (o) =>

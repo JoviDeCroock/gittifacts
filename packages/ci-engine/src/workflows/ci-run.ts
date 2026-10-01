@@ -829,7 +829,8 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
                   fallback: { write: repoWriteKey, writeScope: repoWrite },
                 }
               : {
-                  scope: "global",
+                  // Reads the shared entry, but publishes only for this repository.
+                  scope: "repo",
                   read: [globalKey, ...repoReadKeys],
                   write: repoWriteKey,
                   writeScope: repoWrite,
