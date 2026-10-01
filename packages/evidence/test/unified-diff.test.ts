@@ -205,6 +205,35 @@ describe("parseUnifiedDiff — edge cases", () => {
     expect(() => parseUnifiedDiff("diff --cc file.txt\n")).toThrow(/combined/);
   });
 
+  it("parses plain (non-git) unified diffs such as `diff -ruN`", () => {
+    const text = [
+      "diff -ruN a/x.txt b/x.txt",
+      "--- a/x.txt\t2026-10-01 12:00:00.000000000 +0000",
+      "+++ b/x.txt\t2026-10-01 12:01:00.000000000 +0000",
+      "@@ -1,2 +1,2 @@",
+      "-old",
+      "+new",
+      " same",
+      "--- /dev/null\t1970-01-01 00:00:00.000000000 +0000",
+      "+++ b/y.txt\t2026-10-01 12:01:00.000000000 +0000",
+      "@@ -0,0 +1 @@",
+      "+fresh",
+      "",
+    ].join("\n");
+    const d = parseUnifiedDiff(text);
+    expect(d.files.map((f) => [f.path, f.status])).toEqual([
+      ["x.txt", "modified"],
+      ["y.txt", "added"],
+    ]);
+    expect(d.changedLines).toEqual({ "x.txt": [1], "y.txt": [1] });
+  });
+
+  it("refuses colored diffs instead of reporting no changes", () => {
+    expect(() =>
+      parseUnifiedDiff("\u001b[1mdiff --git a/f b/f\u001b[m\n\u001b[36m@@ -1 +1 @@\u001b[m\n"),
+    ).toThrow(/--no-color/);
+  });
+
   it("returns nothing for empty input", () => {
     expect(parseUnifiedDiff("")).toEqual({ files: [], hunks: [], changedLines: {} });
   });

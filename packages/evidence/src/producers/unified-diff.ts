@@ -224,7 +224,25 @@ function finish(b: Building): DiffFile {
   return file;
 }
 
+function newBuilding(header: [string, string] | null): Building {
+  return {
+    header,
+    fromOld: undefined,
+    fromNew: undefined,
+    isNew: false,
+    isDeleted: false,
+    binary: false,
+    hunks: [],
+    added: [],
+    removed: [],
+  };
+}
+
 export function parseUnifiedDiff(text: string): ParsedDiff {
+  if (text.includes("\u001b[")) {
+    // A colored diff would parse as "no files" — silence that looks like safety.
+    throw new DiffParseError("diff contains ANSI color codes; run git diff with --no-color", 1);
+  }
   const lines = text.split("\n");
   if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
 
@@ -269,18 +287,17 @@ export function parseUnifiedDiff(text: string): ParsedDiff {
 
     if (line.startsWith("diff --git ")) {
       if (cur) files.push(finish(cur));
-      cur = {
-        header: headerPaths(line.slice("diff --git ".length)),
-        fromOld: undefined,
-        fromNew: undefined,
-        isNew: false,
-        isDeleted: false,
-        binary: false,
-        hunks: [],
-        added: [],
-        removed: [],
-      };
+      cur = newBuilding(headerPaths(line.slice("diff --git ".length)));
       continue;
+    }
+    // Plain (non-git) unified diff, e.g. `diff -ruN`: a file starts at a ---/+++ pair.
+    if (
+      line.startsWith("--- ") &&
+      lines[idx + 1]?.startsWith("+++ ") &&
+      (cur === null || cur.hunks.length > 0 || cur.fromOld !== undefined)
+    ) {
+      if (cur) files.push(finish(cur));
+      cur = newBuilding(null);
     }
     if (line.startsWith("diff --cc ") || line.startsWith("diff --combined ")) {
       throw new DiffParseError(
