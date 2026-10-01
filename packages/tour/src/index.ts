@@ -1,2 +1,85 @@
-export * from "./budget.js";
-export * from "./llm.js";
+export {
+  AUTO_ROUTER_MODEL,
+  affordableInputTokens,
+  BudgetTracker,
+  CEILING_PRICE,
+  costOfUsage,
+  DEFAULT_PRICES,
+  estimateCallCostUsd,
+  estimateTokens,
+  type ModelPrice,
+  type PriceLookup,
+  type PriceTable,
+  priceFor,
+  type ReviewerBudget,
+  type TokenUsage,
+} from "./budget.js";
+export { checkHunkRef, type OmittedHunk, type RenderedDiff, renderDiff } from "./diff.js";
+export { type CallRecord, type JudgeInput, type JudgeResult, judgmentId, parseJudgments } from "./judge.js";
+export {
+  AiGatewayClient,
+  type AiGatewayClientOptions,
+  AiGatewayEnv,
+  FakeLlmClient,
+  type FakeLlmClientOptions,
+  type GatewayFormat,
+  type JsonSchema,
+  type LlmClient,
+  LlmError,
+  type LlmErrorKind,
+  type LlmMessage,
+  type LlmMetadata,
+  type LlmRequest,
+  type LlmResponse,
+  parseJsonLoose,
+  resolveReviewerModel,
+  type ScriptedResponse,
+} from "./llm.js";
+export {
+  canProve,
+  capsForLane,
+  collapseTransforms,
+  countWords,
+  estimateReadSeconds,
+  orderStops,
+  PHONE_TARGET_SECONDS,
+  type PostprocessInput,
+  type PostprocessReport,
+  type PostprocessResult,
+  postprocessTour,
+  READING_WPM,
+  type Readability,
+  SECONDS_PER_STOP,
+  type TourCaps,
+  type TransformCollapse,
+} from "./postprocess.js";
+export {
+  buildJudgeUserPrompt,
+  buildTourUserPrompt,
+  JUDGE_SYSTEM_PROMPT,
+  type JudgePromptInput,
+  PROMPT_VERSION,
+  TOUR_SYSTEM_PROMPT,
+  type TourPromptInput,
+} from "./prompt.js";
+export { lane2Anchor, type RankedHunk, type RankInput, type RiskFactor, type RiskFactorCode, rankHunks } from "./rank.js";
+export {
+  JUDGE_JSON_SCHEMA,
+  JUDGE_QUESTIONS,
+  type JudgeQuestion,
+  MODEL_STOP_KINDS,
+  ModelJudgeOutput,
+  ModelTour,
+  ModelTourStop,
+  TOUR_JSON_SCHEMA,
+  toModelJsonSchema,
+} from "./schema.js";
+export {
+  createReviewer,
+  type ReviewerOptions,
+  type TourDiagnostics,
+  type TourInput,
+  type TourOutcome,
+  type TourReviewer,
+  validateModelTour,
+} from "./tour.js";
