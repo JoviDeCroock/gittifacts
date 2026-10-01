@@ -95,3 +95,18 @@ Sandboxes hold no Cloudflare credentials. The sandbox builds the change's Worker
 (`wrangler deploy --dry-run --outdir`). The platform uploads it as a version tagged with the change id,
 using preview-scoped bindings. Version preview URLs aren't generated for Workers that define Durable
 Objects. For those repos, preview evidence is `skipped` with a note, which is an informational signal.
+
+## 2026-10-01 — MCP tools declared with `mcp-tada-server`, typed clients with `mcp-tada`
+
+**Context.** MCP is the main way agents use the platform, and the spec asks for tight tool descriptions
+and JSON outputs. `mcp-tada-server@0.2.0` is built on `@modelcontextprotocol/server` v2 (our stack choice).
+It declares each tool once with a JSON Schema `inputSchema`/`outputSchema`, types the handler from those
+schemas, validates arguments before the handler runs (with a built-in validator: no `eval`, Workers-safe),
+and publishes exactly those schemas on `tools/list`. `mcp-tada@0.4.0` derives a fully typed client from
+`IntrospectionOf<typeof tools>`, with no codegen round trip.
+
+**Decision.** `packages/mcp` defines every tool with `defineTools` and an `outputSchema`, so agents get typed
+`structuredContent`. Handlers still zod-parse into domain types, as defence in depth. The package also
+exports a typed client factory (`@app/mcp` → `createPlatformClient`) used by our e2e tests and offered to agent
+authors. A committed `tools.introspection.d.ts` snapshot is checked against the deployed server with
+`mcp-tada check` in CI, so tool contract drift fails the build.
