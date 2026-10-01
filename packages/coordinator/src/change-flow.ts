@@ -250,6 +250,10 @@ export async function runChangeWorkflow(
       note = `planned pipeline rejected (${errorMessage(e)}); the engine plans it`;
       await ports.ci.start(request);
     }
+    // Visible in the API right away; the run sink replaces it when the run finishes.
+    if ((await store.getRun(runId)) === null) {
+      await store.upsertRun({ ...placeholderRun(runId, changeId, headSha, clock.now().toISOString()), status: "running", finishedAt: null });
+    }
     await bindings.changeCoordinator(changeId).registerRun({ changeId, instanceId, runId });
     await log("change.ci-started", { runId, headSha, note });
     return { runId };

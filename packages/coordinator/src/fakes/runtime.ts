@@ -124,6 +124,16 @@ export class FakeWorkflowInstance<P = unknown> implements WorkflowInstanceHandle
 export interface FakeStepOptions {
   /** Return true to make this wait time out immediately (when no event is buffered). */
   timeout?: (name: string, type: string) => boolean;
+  /** Called with the duration of every sleep and every timed-out wait (e.g. to advance a clock). */
+  onElapse?: (ms: number) => void;
+}
+
+const UNIT_MS: Record<string, number> = { second: 1000, minute: 60_000, hour: 3_600_000, day: 86_400_000, week: 604_800_000 };
+
+export function durationMs(d: Duration): number {
+  if (typeof d === "number") return d;
+  const m = /^(\d+(?:\.\d+)?) (second|minute|hour|day|week)s?$/.exec(d);
+  return m === null ? 0 : Number(m[1]) * (UNIT_MS[m[2] ?? "second"] ?? 0);
 }
 
 /** What a FakeStep needs from its instance. */
@@ -165,16 +175,22 @@ export class FakeStep implements Step {
     throw last;
   }
 
-  async sleep(name: string, _duration: Duration): Promise<void> {
+  async sleep(name: string, duration: Duration): Promise<void> {
     this.check();
     this.instance.steps.push(name);
+    this.opts.onElapse?.(durationMs(duration));
   }
 
   async waitForEvent<T>(name: string, options: { type: string; timeout?: Duration }): Promise<StepEvent<T>> {
     this.check();
     this.instance.waits.push(name);
     const timeout = this.opts.timeout?.(name, options.type) ?? false;
-    return (await this.instance.nextEvent(options.type, timeout)) as StepEvent<T>;
+    try {
+      return (await this.instance.nextEvent(options.type, timeout)) as StepEvent<T>;
+    } catch (e) {
+      if (e instanceof EventTimeoutError) this.opts.onElapse?.(durationMs(options.timeout ?? "1 day"));
+      throw e;
+    }
   }
 }
 
@@ -274,7 +290,8 @@ export class FakeBindings implements CoordinatorBindings {
       const r = await core.tick();
       did.push(r.did);
       if (r.next === null) break;
-      if (r.next > 0) await new Promise((res) => setTimeout(res, 0));
+      // Let fake CI runs (finished on a macrotask) make progress between polls.
+      await new Promise((res) => setTimeout(res, 0));
     }
     return did;
   }

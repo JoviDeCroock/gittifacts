@@ -153,6 +153,8 @@ export function createFakeEnvironment(
   const ports = createFakePorts();
   const bindings = new FakeBindings((role) => portsForRole(ports, role), { pollMs: 0, ...opts.queue });
   if (opts.runWorkflows !== false) bindings.runWorkflows();
+  // Rollout waits ("issue" for one minute) time out at once and move the fake clock.
+  bindings.rolloutWorkflow.stepOptions = { timeout: (_name, type) => type === "issue", onElapse: (ms) => ports.clock.advance(ms) };
   ports.ci.sink = createRunSink(withChangeNotifications(ports, bindings), bindings);
   const coordinator = createCoordinator(portsForRole(ports, "default"), bindings, opts.coordinator);
   let repoCounter = 0;
@@ -185,18 +187,17 @@ export function createFakeEnvironment(
       return repo;
     },
     async settle() {
-      for (let i = 0; i < 50; i++) {
+      // Quiet = no CI delivery or queue drain pending and every workflow either finished or
+      // parked on waitForEvent, twice in a row.
+      let quiet = 0;
+      for (let i = 0; i < 1000 && quiet < 2; i++) {
         await ports.ci.settle();
         await bindings.settle();
-        await new Promise((r) => setTimeout(r, 0));
+        await new Promise((r) => setTimeout(r, 2));
         const busy = [...bindings.changeWorkflow.instances.values(), ...bindings.rolloutWorkflow.instances.values()].some(
           (inst) => inst.state === "running" && inst.waiting.length === 0,
         );
-        if (!busy) {
-          await ports.ci.settle();
-          await bindings.settle();
-          return;
-        }
+        quiet = busy ? 0 : quiet + 1;
       }
     },
   };
