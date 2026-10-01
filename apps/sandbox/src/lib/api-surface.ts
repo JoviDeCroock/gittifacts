@@ -10,7 +10,8 @@
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import type { ExportSurface } from "@app/evidence";
-import ts from "typescript";
+import type * as TS from "typescript";
+import { lazyTs as ts } from "./typescript.js";
 import { z } from "zod";
 
 // ---------------------------------------------------------------- discovery
@@ -207,12 +208,17 @@ export function discoverEntries(manifestPaths: readonly string[], reader: TreeRe
 
 // ---------------------------------------------------------------- compile + extract
 
-const TYPE_FLAGS =
-  ts.TypeFormatFlags.NoTruncation |
-  ts.TypeFormatFlags.WriteArrayAsGenericType |
-  ts.TypeFormatFlags.UseStructuralFallback |
-  ts.TypeFormatFlags.AllowUniqueESSymbolType |
-  ts.TypeFormatFlags.WriteTypeArgumentsOfSignature;
+let typeFlags: number | undefined;
+/** Stable, untruncated type printing (computed lazily: TypeScript loads on first use). */
+function flags(): TS.TypeFormatFlags {
+  typeFlags ??=
+    ts.TypeFormatFlags.NoTruncation |
+    ts.TypeFormatFlags.WriteArrayAsGenericType |
+    ts.TypeFormatFlags.UseStructuralFallback |
+    ts.TypeFormatFlags.AllowUniqueESSymbolType |
+    ts.TypeFormatFlags.WriteTypeArgumentsOfSignature;
+  return typeFlags;
+}
 
 export interface SurfaceResult {
   surface: ExportSurface | null;
@@ -223,12 +229,12 @@ export interface SurfaceResult {
 
 const toPosix = (p: string) => p.split(sep).join(posix.sep);
 
-function formatDiagnostic(d: ts.Diagnostic): string {
+function formatDiagnostic(d: TS.Diagnostic): string {
   return ts.flattenDiagnosticMessageText(d.messageText, "\n");
 }
 
 interface Compiled {
-  options: ts.CompilerOptions;
+  options: TS.CompilerOptions;
   rootNames: string[];
   virtual: Map<string, string>;
   typeErrors: number;
@@ -237,7 +243,7 @@ interface Compiled {
 
 function compilePackage(pkgAbs: string, extraRoots: readonly string[]): Compiled {
   const configPath = join(pkgAbs, "tsconfig.json");
-  let options: ts.CompilerOptions;
+  let options: TS.CompilerOptions;
   let fileNames: string[];
   if (existsSync(configPath)) {
     const read = ts.readConfigFile(configPath, ts.sys.readFile);
@@ -257,7 +263,7 @@ function compilePackage(pkgAbs: string, extraRoots: readonly string[]): Compiled
     };
     fileNames = [];
   }
-  const emitOptions: ts.CompilerOptions = {
+  const emitOptions: TS.CompilerOptions = {
     ...options,
     noEmit: false,
     declaration: true,
@@ -292,13 +298,13 @@ function compilePackage(pkgAbs: string, extraRoots: readonly string[]): Compiled
 
 function declarationFor(compiled: Compiled, sourceAbs: string): string | null {
   if (/\.d\.[cm]?ts$/.test(sourceAbs)) return sourceAbs;
-  const commandLine: ts.ParsedCommandLine = { options: compiled.options, fileNames: compiled.rootNames, errors: [] };
+  const commandLine: TS.ParsedCommandLine = { options: compiled.options, fileNames: compiled.rootNames, errors: [] };
   const outputs = ts.getOutputFileNames(commandLine, sourceAbs, !ts.sys.useCaseSensitiveFileNames);
   const dts = outputs.find((o) => /\.d\.[cm]?ts$/.test(o));
   return dts === undefined ? null : resolve(dts);
 }
 
-function overlayHost(options: ts.CompilerOptions, virtual: ReadonlyMap<string, string>): ts.CompilerHost {
+function overlayHost(options: TS.CompilerOptions, virtual: ReadonlyMap<string, string>): TS.CompilerHost {
   const host = ts.createCompilerHost(options, true);
   const dirs = new Set<string>();
   for (const file of virtual.keys()) {
@@ -322,50 +328,50 @@ function overlayHost(options: ts.CompilerOptions, virtual: ReadonlyMap<string, s
   return host;
 }
 
-function typeParams(decls: readonly ts.Declaration[] | undefined): string {
+function typeParams(decls: readonly TS.Declaration[] | undefined): string {
   for (const d of decls ?? []) {
-    const tps = (d as { typeParameters?: ts.NodeArray<ts.TypeParameterDeclaration> }).typeParameters;
+    const tps = (d as { typeParameters?: TS.NodeArray<TS.TypeParameterDeclaration> }).typeParameters;
     if (tps && tps.length > 0) return `<${tps.map((tp) => tp.getText().replace(/\s+/g, " ")).join(", ")}>`;
   }
   return "";
 }
 
-function isPrivateMember(symbol: ts.Symbol): boolean {
+function isPrivateMember(symbol: TS.Symbol): boolean {
   return (symbol.declarations ?? []).some((d) => {
     if ((ts.getCombinedModifierFlags(d) & ts.ModifierFlags.Private) !== 0) return true;
-    const name = (d as { name?: ts.Node }).name;
+    const name = (d as { name?: TS.Node }).name;
     return name !== undefined && ts.isPrivateIdentifier(name);
   });
 }
 
-function memberLine(checker: ts.TypeChecker, prop: ts.Symbol, at: ts.Node): string {
+function memberLine(checker: TS.TypeChecker, prop: TS.Symbol, at: TS.Node): string {
   const decl = prop.valueDeclaration ?? prop.declarations?.[0];
-  const flags = decl ? ts.getCombinedModifierFlags(decl) : 0;
+  const modifiers = decl ? ts.getCombinedModifierFlags(decl) : 0;
   const mods = [
-    flags & ts.ModifierFlags.Protected ? "protected " : "",
-    flags & ts.ModifierFlags.Readonly ? "readonly " : "",
+    modifiers & ts.ModifierFlags.Protected ? "protected " : "",
+    modifiers & ts.ModifierFlags.Readonly ? "readonly " : "",
   ].join("");
   const optional = prop.flags & ts.SymbolFlags.Optional ? "?" : "";
-  const type = checker.typeToString(checker.getTypeOfSymbolAtLocation(prop, decl ?? at), undefined, TYPE_FLAGS);
+  const type = checker.typeToString(checker.getTypeOfSymbolAtLocation(prop, decl ?? at), undefined, flags());
   return `${mods}${prop.getName()}${optional}: ${type}`;
 }
 
-function signaturesOf(checker: ts.TypeChecker, type: ts.Type, kind: ts.SignatureKind, prefix: string): string[] {
+function signaturesOf(checker: TS.TypeChecker, type: TS.Type, kind: TS.SignatureKind, prefix: string): string[] {
   return checker
     .getSignaturesOfType(type, kind)
-    .map((s) => `${prefix}${checker.signatureToString(s, undefined, TYPE_FLAGS, kind === ts.SignatureKind.Construct ? ts.SignatureKind.Construct : ts.SignatureKind.Call)}`);
+    .map((s) => `${prefix}${checker.signatureToString(s, undefined, flags(), kind === ts.SignatureKind.Construct ? ts.SignatureKind.Construct : ts.SignatureKind.Call)}`);
 }
 
-function indexInfos(checker: ts.TypeChecker, type: ts.Type): string[] {
+function indexInfos(checker: TS.TypeChecker, type: TS.Type): string[] {
   return checker.getIndexInfosOfType(type).map((info) => {
-    const key = checker.typeToString(info.keyType, undefined, TYPE_FLAGS);
-    const value = checker.typeToString(info.type, undefined, TYPE_FLAGS);
+    const key = checker.typeToString(info.keyType, undefined, flags());
+    const value = checker.typeToString(info.type, undefined, flags());
     return `${info.isReadonly ? "readonly " : ""}[key: ${key}]: ${value}`;
   });
 }
 
 /** Normalized description of one exported symbol (already de-aliased). */
-export function describeSymbol(checker: ts.TypeChecker, symbol: ts.Symbol, at: ts.Node, depth = 0): string {
+export function describeSymbol(checker: TS.TypeChecker, symbol: TS.Symbol, at: TS.Node, depth = 0): string {
   const parts: string[] = [];
   const f = symbol.flags;
   const decls = symbol.declarations ?? [];
@@ -377,7 +383,7 @@ export function describeSymbol(checker: ts.TypeChecker, symbol: ts.Symbol, at: t
     const instance = checker.getDeclaredTypeOfSymbol(symbol);
     const ctor = checker.getTypeOfSymbolAtLocation(symbol, at);
     const abstract = decls.some((d) => ts.getCombinedModifierFlags(d) & ts.ModifierFlags.Abstract) ? "abstract " : "";
-    const bases = checker.getBaseTypes(instance as ts.InterfaceType).map((b) => checker.typeToString(b, undefined, TYPE_FLAGS));
+    const bases = checker.getBaseTypes(instance as TS.InterfaceType).map((b) => checker.typeToString(b, undefined, flags()));
     const members = checker
       .getPropertiesOfType(instance)
       .filter((p) => !isPrivateMember(p))
@@ -400,7 +406,7 @@ export function describeSymbol(checker: ts.TypeChecker, symbol: ts.Symbol, at: t
   }
   if (f & ts.SymbolFlags.Interface) {
     const type = checker.getDeclaredTypeOfSymbol(symbol);
-    const bases = checker.getBaseTypes(type as ts.InterfaceType).map((b) => checker.typeToString(b, undefined, TYPE_FLAGS));
+    const bases = checker.getBaseTypes(type as TS.InterfaceType).map((b) => checker.typeToString(b, undefined, flags()));
     const members = checker
       .getPropertiesOfType(type)
       .map((p) => memberLine(checker, p, at))
@@ -418,7 +424,7 @@ export function describeSymbol(checker: ts.TypeChecker, symbol: ts.Symbol, at: t
   }
   if (f & ts.SymbolFlags.TypeAlias) {
     const type = checker.getDeclaredTypeOfSymbol(symbol);
-    parts.push(`type${typeParams(decls)} = ${checker.typeToString(type, undefined, TYPE_FLAGS | ts.TypeFormatFlags.InTypeAlias)}`);
+    parts.push(`type${typeParams(decls)} = ${checker.typeToString(type, undefined, flags() | ts.TypeFormatFlags.InTypeAlias)}`);
   }
   if (f & ts.SymbolFlags.Enum) {
     const members = checker
@@ -438,7 +444,7 @@ export function describeSymbol(checker: ts.TypeChecker, symbol: ts.Symbol, at: t
           ? "const"
           : "let"
         : "var";
-    parts.push(`${keyword}: ${checker.typeToString(checker.getTypeOfSymbolAtLocation(symbol, at), undefined, TYPE_FLAGS)}`);
+    parts.push(`${keyword}: ${checker.typeToString(checker.getTypeOfSymbolAtLocation(symbol, at), undefined, flags())}`);
   }
   if (f & (ts.SymbolFlags.ValueModule | ts.SymbolFlags.NamespaceModule) && depth < 4) {
     const exports = checker.getExportsOfModule(symbol);
@@ -455,8 +461,8 @@ export function describeSymbol(checker: ts.TypeChecker, symbol: ts.Symbol, at: t
 }
 
 /** Exported names of `dtsAbs` → description. */
-export function surfaceOfDeclarationFile(dtsAbs: string, options: ts.CompilerOptions, virtual: ReadonlyMap<string, string>): ExportSurface {
-  const readOptions: ts.CompilerOptions = { ...options, noEmit: true, emitDeclarationOnly: false, declaration: false, types: options.types ?? [] };
+export function surfaceOfDeclarationFile(dtsAbs: string, options: TS.CompilerOptions, virtual: ReadonlyMap<string, string>): ExportSurface {
+  const readOptions: TS.CompilerOptions = { ...options, noEmit: true, emitDeclarationOnly: false, declaration: false, types: options.types ?? [] };
   const host = overlayHost(readOptions, virtual);
   const program = ts.createProgram({ rootNames: [dtsAbs], options: readOptions, host });
   const checker = program.getTypeChecker();
