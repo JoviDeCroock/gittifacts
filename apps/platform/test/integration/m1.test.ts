@@ -4,7 +4,7 @@
  * wait_for_change, SSE and the CI log behind the run's logRef.
  *
  * Real: the Hono app and MCP server, better-auth + agent tokens, D1Store, the AuditLog DO, the
- * platform signing key, the coordinator facade, the ChangeCoordinator (platform subclass) and
+ * platform signing key, the coordinator facade, the ChangeCoordinator and
  * MergeQueue DOs, the PushRouter and ChangeWorkflow Workflows. Fake: see ./fakes.ts.
  */
 import {
@@ -259,20 +259,6 @@ describe("M1 vertical slice (workerd, real platform + coordinator, fake Artifact
     } finally {
       await mcp.client.close();
     }
-  });
-
-  it("the run sink maps the engine's artifacts.bundle onto the change workflow's bundleRef", async () => {
-    const { withBundleRef } = await import("../../src/runtime/change-coordinator.js");
-    const key = "ci-artifacts/run-x/build/bundle.tgz";
-    const summary = {
-      id: "run-x",
-      artifacts: { bundle: { key, bytes: 1, sha256: "0".repeat(64) } },
-    };
-    expect(withBundleRef(summary)).toMatchObject({ outputs: { bundleRef: key } });
-    expect(withBundleRef({ ...summary, outputs: { bundleRef: "kept" } })).toMatchObject({
-      outputs: { bundleRef: "kept" },
-    });
-    expect(withBundleRef({ id: "run-y" })).toEqual({ id: "run-y" });
   });
 
   it("the Workers Issues webhook forwards to the real coordinator", async () => {
