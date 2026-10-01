@@ -30,6 +30,7 @@ describe("gittifacts MCP tools", () => {
     const tools = await mcp.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "create_plan",
+      "create_project",
       "get_change_status",
       "get_evidence",
       "get_tour",
@@ -73,6 +74,39 @@ describe("gittifacts MCP tools", () => {
     expect(r.structuredContent.nextSteps.map((s) => s.call)).toContain(
       'request_review({ changeId: "chg_1" })',
     );
+  });
+
+  it("create_project returns the project, a first-change push grant and next steps", async () => {
+    const r = await mcp.tools.create_project({
+      template: "workers-api",
+      name: "my-api",
+      idempotencyKey: "p1",
+    });
+    if (r.isError) throw new Error(JSON.stringify(r.content));
+    expectTypeOf(r.structuredContent.previewUrl).toEqualTypeOf<string | null>();
+    expect(r.structuredContent).toMatchObject({
+      projectId: "repo_1",
+      template: "workers-api",
+      bootstrapChangeId: "bs-repo_1",
+      token: null,
+      remote: { changeId: "chg_2", branch: "main" },
+    });
+    expect(r.structuredContent.nextSteps[0]?.call).toMatch(/^wait_for_change\(/);
+    expect(r.structuredContent.nextSteps[1]?.command).toBe("git push");
+    expect(backend.calls).toContain("createProject:p1");
+    // Both a template and an import is a validation error with a fix.
+    const both = errorOf(
+      await mcp.tools.create_project({ template: "workers-api", from: "https://github.com/o/r" }),
+    );
+    expect(both?.error.code).toBe("invalid-request");
+    // It needs change:create (and repo:read) until unclaimed creation exists (O3).
+    const readOnly = await createPlatformClient(server.url, bearerFor("ag_3", ["repo:read"]));
+    try {
+      const denied = errorOf(await readOnly.tools.create_project({ template: "workers-api" }));
+      expect(denied?.error.code).toBe("insufficient-scope");
+    } finally {
+      await readOnly.client.close();
+    }
   });
 
   it("create_plan validates, forwards the idempotency key and suggests the next call", async () => {

@@ -70,8 +70,42 @@ export interface MutationOptions {
   idempotencyKey?: string | undefined;
 }
 
+export interface CreateProjectArgs {
+  name?: string | undefined;
+  template?: string | undefined;
+  from?: string | undefined;
+  description?: string | undefined;
+}
+
+export interface NextStepData {
+  title: string;
+  call?: string | undefined;
+  command?: string | undefined;
+  why?: string | undefined;
+}
+
+export interface ProjectCreated {
+  projectId: string;
+  name: string;
+  template: string | null;
+  defaultBranch: string;
+  remote: (GitRemote & { changeId: string }) | null;
+  token: string | null;
+  mcpUrl: string;
+  previewUrl: string | null;
+  claimUrl: string | null;
+  bootstrapChangeId: string | null;
+  nextSteps: NextStepData[];
+}
+
 export interface McpBackend {
   whoami(caller: McpCaller): Promise<WhoamiData>;
+  /** Repo (template / import / empty) + first CI + first preview + a first Change's fork. */
+  createProject(
+    caller: McpCaller,
+    input: CreateProjectArgs,
+    opts: MutationOptions,
+  ): Promise<ProjectCreated>;
   listRepos(caller: McpCaller): Promise<Array<Repo & { counts: LaneCountsData }>>;
   createPlan(
     caller: McpCaller,

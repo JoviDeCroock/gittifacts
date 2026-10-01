@@ -57,13 +57,16 @@ export const WAIT_UNTIL = [
 
 const NextSteps = {
   type: "array",
-  description: "What to do next, as concrete tool calls.",
+  description: "What to do next, as concrete tool calls (call) or shell commands (command).",
   items: {
     type: "object",
-    properties: { title: str, call: str, why: str },
+    properties: { title: str, call: str, command: str, why: str },
     required: ["title"],
   },
 } as const;
+
+/** Launch templates (must equal @app/conventions TEMPLATE_IDS; the platform tests check it). */
+export const TEMPLATES = ["workers-api", "preact-app", "ts-library", "static-site"] as const;
 
 const LaneReason = {
   type: "object",
@@ -225,6 +228,34 @@ export const StartChangeInput = {
   additionalProperties: false,
 } as const;
 
+export const CreateProjectInput = {
+  type: "object",
+  properties: {
+    name: {
+      type: "string",
+      minLength: 1,
+      maxLength: 63,
+      description:
+        "Project (and repo) name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>.",
+    },
+    template: {
+      enum: TEMPLATES,
+      description:
+        "Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty project.",
+    },
+    from: {
+      type: "string",
+      minLength: 9,
+      maxLength: 500,
+      pattern: "^https://",
+      description: "Import a public https git repository (e.g. GitHub) instead of a template.",
+    },
+    description: { type: "string", maxLength: 500, description: "One line about the project." },
+    idempotencyKey,
+  },
+  additionalProperties: false,
+} as const;
+
 export const RequestReviewInput = {
   type: "object",
   properties: { changeId: id, message: { type: "string", maxLength: 2000 }, idempotencyKey },
@@ -244,7 +275,13 @@ export const WaitForChangeInput = {
   properties: {
     changeId: id,
     until: { enum: WAIT_UNTIL },
-    timeoutSec: { type: "integer", minimum: 1, maximum: 600, description: "Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached." },
+    timeoutSec: {
+      type: "integer",
+      minimum: 1,
+      maximum: 600,
+      description:
+        "Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached.",
+    },
   },
   required: ["changeId", "until"],
   additionalProperties: false,
@@ -334,6 +371,65 @@ export const CreatePlanOutput = {
     nextSteps: NextSteps,
   },
   required: ["plan", "nextSteps"],
+} as const;
+
+export const CreateProjectOutput = {
+  type: "object",
+  properties: {
+    projectId: { ...str, description: "The repo id: use it as repoId in every other tool." },
+    name: str,
+    template: nullableStr,
+    defaultBranch: str,
+    remote: {
+      description:
+        "Push grant for your first Change's fork (changeId), at the initial commit: clone or push there right away. Null if the fork could not be made; call start_change.",
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          properties: {
+            url: str,
+            username: str,
+            token: str,
+            expiresAt: str,
+            branch: str,
+            changeId: str,
+          },
+          required: ["url", "username", "token", "expiresAt", "branch", "changeId"],
+        },
+      ],
+    },
+    token: {
+      ...nullableStr,
+      description:
+        "Bearer token for this project when you called without credentials (unclaimed projects); null when you are already authenticated.",
+    },
+    mcpUrl: str,
+    previewUrl: {
+      ...nullableStr,
+      description:
+        "Live preview of the main branch (serves a 'building' page until the first CI run is green). Null when the project has nothing to preview.",
+    },
+    claimUrl: nullableStr,
+    bootstrapChangeId: {
+      ...nullableStr,
+      description: "The Change running the first CI and preview: wait_for_change on it.",
+    },
+    nextSteps: NextSteps,
+  },
+  required: [
+    "projectId",
+    "name",
+    "template",
+    "defaultBranch",
+    "remote",
+    "token",
+    "mcpUrl",
+    "previewUrl",
+    "claimUrl",
+    "bootstrapChangeId",
+    "nextSteps",
+  ],
 } as const;
 
 export const StartChangeOutput = {

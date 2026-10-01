@@ -174,7 +174,7 @@ export type introspection = {
           },
           "nextSteps": {
             "type": "array",
-            "description": "What to do next, as concrete tool calls.",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
             "items": {
               "type": "object",
               "properties": {
@@ -182,6 +182,9 @@ export type introspection = {
                   "type": "string"
                 },
                 "call": {
+                  "type": "string"
+                },
+                "command": {
                   "type": "string"
                 },
                 "why": {
@@ -203,6 +206,188 @@ export type introspection = {
         "readOnlyHint": false,
         "destructiveHint": false,
         "openWorldHint": false
+      }
+    },
+    /**
+     * Create a project
+     * One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork. Returns at once; wait_for_change on bootstrapChangeId for the first green.
+     * @param args.name Project (and repo) name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>.
+     * @param args.template Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty project.
+     * @param args.from Import a public https git repository (e.g. GitHub) instead of a template.
+     * @param args.description One line about the project.
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "create_project": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63,
+            "description": "Project (and repo) name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>."
+          },
+          "template": {
+            "enum": [
+              "workers-api",
+              "preact-app",
+              "ts-library",
+              "static-site"
+            ],
+            "description": "Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty project."
+          },
+          "from": {
+            "type": "string",
+            "minLength": 9,
+            "maxLength": 500,
+            "pattern": "^https://",
+            "description": "Import a public https git repository (e.g. GitHub) instead of a template."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "One line about the project."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "The repo id: use it as repoId in every other tool."
+          },
+          "name": {
+            "type": "string"
+          },
+          "template": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "defaultBranch": {
+            "type": "string"
+          },
+          "remote": {
+            "description": "Push grant for your first Change's fork (changeId), at the initial commit: clone or push there right away. Null if the fork could not be made; call start_change.",
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "username": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string"
+                  },
+                  "expiresAt": {
+                    "type": "string"
+                  },
+                  "branch": {
+                    "type": "string"
+                  },
+                  "changeId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url",
+                  "username",
+                  "token",
+                  "expiresAt",
+                  "branch",
+                  "changeId"
+                ]
+              }
+            ]
+          },
+          "token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Bearer token for this project when you called without credentials (unclaimed projects); null when you are already authenticated."
+          },
+          "mcpUrl": {
+            "type": "string"
+          },
+          "previewUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Live preview of the main branch (serves a 'building' page until the first CI run is green). Null when the project has nothing to preview."
+          },
+          "claimUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bootstrapChangeId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The Change running the first CI and preview: wait_for_change on it."
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "projectId",
+          "name",
+          "template",
+          "defaultBranch",
+          "remote",
+          "token",
+          "mcpUrl",
+          "previewUrl",
+          "claimUrl",
+          "bootstrapChangeId",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
       }
     },
     /**
@@ -484,7 +669,7 @@ export type introspection = {
           },
           "nextSteps": {
             "type": "array",
-            "description": "What to do next, as concrete tool calls.",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
             "items": {
               "type": "object",
               "properties": {
@@ -492,6 +677,9 @@ export type introspection = {
                   "type": "string"
                 },
                 "call": {
+                  "type": "string"
+                },
+                "command": {
                   "type": "string"
                 },
                 "why": {
@@ -1055,7 +1243,7 @@ export type introspection = {
           },
           "nextSteps": {
             "type": "array",
-            "description": "What to do next, as concrete tool calls.",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
             "items": {
               "type": "object",
               "properties": {
@@ -1063,6 +1251,9 @@ export type introspection = {
                   "type": "string"
                 },
                 "call": {
+                  "type": "string"
+                },
+                "command": {
                   "type": "string"
                 },
                 "why": {
@@ -1317,7 +1508,7 @@ export type introspection = {
           },
           "nextSteps": {
             "type": "array",
-            "description": "What to do next, as concrete tool calls.",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
             "items": {
               "type": "object",
               "properties": {
@@ -1325,6 +1516,9 @@ export type introspection = {
                   "type": "string"
                 },
                 "call": {
+                  "type": "string"
+                },
+                "command": {
                   "type": "string"
                 },
                 "why": {
@@ -1534,7 +1728,7 @@ export type introspection = {
           },
           "nextSteps": {
             "type": "array",
-            "description": "What to do next, as concrete tool calls.",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
             "items": {
               "type": "object",
               "properties": {
@@ -1542,6 +1736,9 @@ export type introspection = {
                   "type": "string"
                 },
                 "call": {
+                  "type": "string"
+                },
+                "command": {
                   "type": "string"
                 },
                 "why": {

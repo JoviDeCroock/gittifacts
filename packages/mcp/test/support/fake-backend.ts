@@ -105,6 +105,35 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
         },
       };
     },
+    async createProject(_caller, input, opts) {
+      calls.push(`createProject:${opts.idempotencyKey ?? "-"}`);
+      return {
+        projectId: repo.id,
+        name: input.name ?? "app",
+        template: input.template ?? null,
+        defaultBranch: "main",
+        remote: {
+          url: "https://acc.artifacts.cloudflare.net/git/ns/task-chg_2.git",
+          username: "x",
+          token: "art_tok",
+          expiresAt: "2026-10-01T01:00:00.000Z",
+          branch: "main",
+          changeId: "chg_2",
+        },
+        token: null,
+        mcpUrl: "https://gittifacts.test/mcp",
+        previewUrl: `https://p-bs-${repo.id}.preview.test`,
+        claimUrl: null,
+        bootstrapChangeId: `bs-${repo.id}`,
+        nextSteps: [
+          {
+            title: "Wait for the first CI run and preview",
+            call: `wait_for_change({ changeId: "bs-${repo.id}", until: "evidence_ready", timeoutSec: 120 })`,
+          },
+          { title: "Push", command: "git push" },
+        ],
+      };
+    },
     async listRepos() {
       calls.push("listRepos");
       return [

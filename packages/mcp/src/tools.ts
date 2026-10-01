@@ -25,6 +25,8 @@ import {
   ChangeStatusOutput,
   CreatePlanInput,
   CreatePlanOutput,
+  CreateProjectInput,
+  CreateProjectOutput,
   EmptyInput,
   EvidenceOutput,
   IssuesOutput,
@@ -211,8 +213,50 @@ const ChangeIdArgs = z.object({ changeId: Id });
 
 // ---------------------------------------------------------------- tools
 
+const CreateProjectArgs = z
+  .object({
+    name: z.string().min(1).max(63).optional(),
+    template: z.string().min(1).max(100).optional(),
+    from: z.string().url().startsWith("https://").max(500).optional(),
+    description: z.string().max(500).optional(),
+  })
+  .refine((v) => v.template === undefined || v.from === undefined, {
+    message: "pass template or from, not both",
+    path: ["from"],
+  });
+
 export function buildTools(backend: McpBackend) {
   return defineTools([
+    {
+      name: "create_project",
+      title: "Create a project",
+      description:
+        "One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork. Returns at once; wait_for_change on bootstrapChangeId for the first green.",
+      inputSchema: CreateProjectInput,
+      outputSchema: CreateProjectOutput,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      handler: async (args, ctx) => {
+        const caller = callerOf(ctx);
+        // Unclaimed (credential-less) creation arrives with O3; until then: repo:read +
+        // change:create, and the project belongs to the human (or the agent's owner).
+        requireScope(caller, "repo:read");
+        requireScope(caller, "change:create");
+        const { idempotencyKey, ...rest } = args;
+        const input = parse(CreateProjectArgs, rest);
+        const out = await run(backend, () =>
+          backend.createProject(caller, input, { idempotencyKey }),
+        );
+        return {
+          ...out,
+          nextSteps: out.nextSteps.map((s) => ({
+            title: s.title,
+            ...(s.call === undefined ? {} : { call: s.call }),
+            ...(s.command === undefined ? {} : { command: s.command }),
+            ...(s.why === undefined ? {} : { why: s.why }),
+          })),
+        };
+      },
+    },
     {
       name: "whoami",
       title: "Who am I",
