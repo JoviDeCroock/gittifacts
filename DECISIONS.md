@@ -233,3 +233,23 @@ Work order:
   the Workflow and aborts every Runner DO, because terminating the Workflow alone leaves containers running.
 - **Plan-mode inference** is exact for sequential awaits, fan-out/fan-in and chaining. Interleaved independent chains
   inside one `Promise.all` may gain extra ordering edges, which costs parallelism but never correctness.
+
+## 2026-10-01 — Coordinator choices
+
+- **Write roles.** `Ports` are built per role (`default | merge-queue`). Only the merge-queue role's `GitHost` may write main
+  repos. Main-repo write tokens live ≤ 300 s and are never returned.
+- **Policy and plan from BASE.** Both `.platform/policy.ts` and `.platform/ci.ts` are read at BASE. If policy evaluation
+  fails, the change gets `policy-unavailable`, which raises it to at least Lane 1. A policy file can force Lane 0 off but
+  can never turn it on: only the owner's `setLane0` toggle (gated by shadow agreement) does that.
+- **Rebased merges.** `rebasedFrom` is not part of the signed evidence payload, which stays fixed at
+  `{changeId, headSha, items}`. The link is recorded as a separately signed document (purpose `evidence-rebase`) in the audit log.
+- **Merge conflicts.** These reach the ChangeWorkflow by polling (30-minute rounds). The queue marks the change `failing`
+  and notifies immediately. Racing two `waitForEvent`s isn't replay-deterministic, so it's avoided.
+- **Rebase/revert sandbox jobs** get a *fork-only* write token (≤ 600 s, passed via env, never argv). This is a deliberate,
+  narrow exception to "sandboxes get read tokens only": they must push the rebased commit to the change's own fork.
+- **Review flow.**
+  - `request-changes` sends the change back to `awaiting-push`.
+  - Review requests expire after 4 × 7 days, with reminders.
+  - A pure revert of a `.platform/**` change still needs a human.
+- **Unclaimed projects.** These never enqueue automatically and never start a RolloutWorkflow. The rule is enforced in the
+  coordinator (`restrictForClaim`), not just in the UI.
