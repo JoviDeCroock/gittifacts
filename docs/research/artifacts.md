@@ -341,3 +341,18 @@ Ran against the real service from this machine (git 2.39, Node 22). The probe re
 | Fast-forward to a commit absent from the repo | `unpack reachable object is missing` / `ng … missing object`. Objects have to be transferred first. |
 | REST/CLI fork | `POST …/repos/:src/fork` rejects every body shape tried (`name`, `target`, `fork_name`, …) with `10101 Invalid repo name`. Use the **Workers binding** `repo.fork(name, opts)` instead (to be verified from the deployed Worker). |
 | Wrong-repo token | Untested: the fork could not be created via CLI. |
+
+### 12.1 `@app/gitwire` live smoke (2026-10-01, all steps passed, Bearer and Basic)
+
+The server identifies as `agent=gitty/1.0`. Upload-pack v2 advertises `ls-refs=unborn`, `fetch=shallow filter sideband-all`.
+Receive-pack v1 advertises `report-status report-status-v2 delete-refs atomic ofs-delta side-band side-band-64k`.
+
+Verified with gitwire:
+- listRefs v1/v2
+- writeNote replace/append, matching `git notes show`
+- CAS fast-forward, with the `stale ref` and `missing object` errors
+- fetchPack, full and depth-1 + `blob:none`
+- **cross-repo `transferObjects`** (repo A → repo B, each with its own token)
+- ref deletion
+
+**Token scoping verified:** a write token for repo A gets HTTP 403 on repo B, so an agent's fork token cannot touch main.

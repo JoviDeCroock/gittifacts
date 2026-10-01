@@ -8,7 +8,8 @@
  *
  * Optional env:
  *   GITWIRE_AUTH=basic    use Basic auth (password = token without `?expires=`) for gitwire calls
- *   GITWIRE_REMOTE_2=…    a second repo (same token) to exercise transferObjects across repos
+ *   GITWIRE_REMOTE_2=…    a second repo to exercise transferObjects across repos
+ *   GITWIRE_TOKEN_2=…     token for GITWIRE_REMOTE_2 (Artifacts tokens are per repo; defaults to GITWIRE_TOKEN)
  *   GITWIRE_KEEP=1        keep the refs this run created (default: delete them at the end)
  *
  * It only creates refs under refs/heads/gitwire-smoke/<run>/ and refs/notes/gitwire-smoke-<run>
@@ -50,7 +51,12 @@ const auth: GitRemote["auth"] =
     : { bearer: token };
 const remote: GitRemote = { url, auth };
 const url2 = process.env.GITWIRE_REMOTE_2;
-const remote2: GitRemote | undefined = url2 ? { url: url2, auth } : undefined;
+const token2 = process.env.GITWIRE_TOKEN_2 ?? token;
+const auth2: GitRemote["auth"] =
+  process.env.GITWIRE_AUTH === "basic"
+    ? { basic: { username: "x", password: token2.split("?expires=")[0]! } }
+    : { bearer: token2 };
+const remote2: GitRemote | undefined = url2 ? { url: url2, auth: auth2 } : undefined;
 
 const run = `${Date.now().toString(36)}`;
 const branch = `refs/heads/gitwire-smoke/${run}/branch`;
