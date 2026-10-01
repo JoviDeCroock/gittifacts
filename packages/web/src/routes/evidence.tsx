@@ -460,6 +460,23 @@ function ItemBody({ item, policy }: { item: EvidenceItem; policy: RepoPolicy }) 
           </p>
         </>
       );
+    case "conflict-resolution":
+      return (
+        <>
+          <p class="ev-prose">{item.rationale}</p>
+          <p class="ev-sub">
+            Resolved by {item.resolver.principalId} ({item.resolver.model}) against {item.upstreamChanges.map((u) => u.changeId).join(", ") || "no upstream change"}.
+            {item.semanticConflictWith !== null ? ` Semantic conflict caused by ${item.semanticConflictWith}.` : ""}
+            {item.touchesOutsideConflictHunks ? " Edits lines outside the conflict hunks." : " Only edits lines inside the conflict hunks."}
+          </p>
+        </>
+      );
+    case "quarantine":
+      return (
+        <p class="ev-sub">
+          {plural(item.tests.length, "quarantined test")}; {item.inAffectedSet.length} in this change's affected set. Quarantined tests never count as passing.
+        </p>
+      );
   }
 }
 

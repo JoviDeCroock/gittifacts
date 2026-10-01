@@ -1,4 +1,5 @@
 export * from "./api-surface.js";
+export * from "./conflicts.js";
 export * from "./coverage.js";
 export * from "./dependencies.js";
 export * from "./errors.js";
@@ -8,4 +9,5 @@ export * from "./paths.js";
 export * from "./red-green.js";
 export * from "./semver.js";
 export * from "./sensitive.js";
+export * from "./text-diff.js";
 export * from "./unified-diff.js";

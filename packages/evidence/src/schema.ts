@@ -277,6 +277,102 @@ export const LlmJudgment = z.object({
 });
 export type LlmJudgment = z.infer<typeof LlmJudgment>;
 
+/** Cap on `ConflictResolution.resolutionDiff`, in UTF-8 bytes. Longer diffs are cut at a line boundary. */
+export const RESOLUTION_DIFF_MAX_BYTES = 64 * 1024;
+
+function utf8Length(s: string): number {
+  return new TextEncoder().encode(s).length;
+}
+
+/** An upstream Change (already accepted, now part of the new base) the resolution was made against. */
+export const UpstreamChangeRef = z.object({
+  changeId: z.string().min(1).max(200),
+  sha: Sha,
+  planId: z.string().min(1).max(200).optional(),
+});
+export type UpstreamChangeRef = z.infer<typeof UpstreamChangeRef>;
+
+/** Where one conflict region ended up in the resolved file: 1-based, inclusive head-side lines. */
+export const ConflictHunk = z
+  .object({
+    file: z.string().min(1).max(1000),
+    startLine: z.number().int().positive(),
+    endLine: z.number().int().positive(),
+  })
+  .refine((h) => h.endLine >= h.startLine, { message: "endLine must be >= startLine" });
+export type ConflictHunk = z.infer<typeof ConflictHunk>;
+
+/**
+ * A merge conflict resolved by the platform's resolver agent (never the Change's author) when the
+ * Change no longer applied cleanly onto its new base (textual conflict), or failed together with
+ * upstream Changes although each passed alone (semantic conflict, found by batch bisection).
+ *
+ * `conflictHunks` and `touchesOutsideConflictHunks` are computed mechanically from the merge with
+ * conflict markers and the resolved files (`resolutionScope`), never taken from the model.
+ * status "error" = the resolver ran and failed (the Change is ejected, not merged).
+ * Consumers may only use this item to RAISE risk.
+ */
+export const ConflictResolution = z.object({
+  ...base,
+  kind: z.literal("conflict-resolution"),
+  upstreamChanges: z.array(UpstreamChangeRef).max(200),
+  /** The new base the Change was rebased onto, when known. */
+  ontoSha: Sha.optional(),
+  conflictHunks: z.array(ConflictHunk).max(2000),
+  /**
+   * Unified diff from the mechanical merge (conflicted files with their markers) to the resolved
+   * tree. At most RESOLUTION_DIFF_MAX_BYTES UTF-8 bytes; `truncated` says it was cut.
+   */
+  resolutionDiff: z
+    .string()
+    .max(RESOLUTION_DIFF_MAX_BYTES)
+    .refine((s) => utf8Length(s) <= RESOLUTION_DIFF_MAX_BYTES, {
+      message: `resolutionDiff exceeds ${RESOLUTION_DIFF_MAX_BYTES} UTF-8 bytes`,
+    }),
+  truncated: z.boolean(),
+  /** True when any edit is not explained by replacing conflict regions (or no regions exist). */
+  touchesOutsideConflictHunks: z.boolean(),
+  /** Resolved lines found verbatim on neither side of their conflict region (written by the resolver). */
+  novelLines: z.number().int().nonnegative().optional(),
+  /** Semantic conflicts: the upstream changeId the resolver blamed; null for textual conflicts. */
+  semanticConflictWith: z.string().min(1).max(200).nullable(),
+  /** Semantic conflicts: the test ids that failed on the merged tree before the resolution. */
+  failingTests: z.array(z.string().min(1).max(1000)).max(200).optional(),
+  /** The resolver's own explanation (model text: may only raise risk). */
+  rationale: z.string().max(4000),
+  resolver: z.object({
+    model: z.string().min(1).max(200),
+    principalId: z.string().min(1).max(200),
+    promptVersion: z.string().min(1).max(200),
+  }),
+  /** Model calls made (0 when the resolver refused before calling the model). */
+  attempts: z.number().int().nonnegative(),
+});
+export type ConflictResolution = z.infer<typeof ConflictResolution>;
+
+export const QuarantinedTest = TestRef.extend({
+  /** Observed flake rate of the test target, 0..1. */
+  flakeRate: z.number().min(0).max(1),
+  quarantinedAt: z.string().datetime(),
+  /** The Plan auto-opened to fix the test, if any. */
+  planId: z.string().min(1).max(200).optional(),
+});
+export type QuarantinedTest = z.infer<typeof QuarantinedTest>;
+
+/**
+ * Tests the merge queue quarantined as suspected-flaky (failed on main's head too). A quarantined
+ * test never silently counts as passing: every bundle whose test runs excluded or ignored
+ * quarantined tests carries this item, and `inAffectedSet` names (by test id) the ones inside the
+ * Change's affected set. An unknown affected set counts every quarantined test as affected.
+ */
+export const Quarantine = z.object({
+  ...base,
+  kind: z.literal("quarantine"),
+  tests: z.array(QuarantinedTest).max(2000),
+  inAffectedSet: z.array(z.string().min(1)).max(2000),
+});
+export type Quarantine = z.infer<typeof Quarantine>;
+
 export const EvidenceItem = z.discriminatedUnion("kind", [
   RedGreenProof,
   TestRun,
@@ -290,6 +386,8 @@ export const EvidenceItem = z.discriminatedUnion("kind", [
   AgentTrace,
   ReproducibleTransform,
   LlmJudgment,
+  ConflictResolution,
+  Quarantine,
 ]);
 export type EvidenceItem = z.infer<typeof EvidenceItem>;
 export type EvidenceKind = EvidenceItem["kind"];

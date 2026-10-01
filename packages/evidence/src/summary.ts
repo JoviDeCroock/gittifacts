@@ -51,6 +51,19 @@ function body(item: EvidenceItem): string {
         : `${item.transform}: NOT reproduced (${item.mismatchedFiles.length} mismatched)`;
     case "llm-judgment":
       return `${item.question}: ${item.outcome} (${item.model})`;
+    case "conflict-resolution": {
+      const against = `against ${plural(item.upstreamChanges.length, "upstream change")}`;
+      const scope = item.touchesOutsideConflictHunks
+        ? "edits outside the conflict hunks"
+        : `within ${plural(item.conflictHunks.length, "conflict hunk")}`;
+      const semantic =
+        item.semanticConflictWith === null
+          ? ""
+          : `, semantic conflict with ${item.semanticConflictWith}`;
+      return `resolved ${against}, ${scope}${semantic} (${item.resolver.model})`;
+    }
+    case "quarantine":
+      return `${plural(item.tests.length, "quarantined test")}, ${item.inAffectedSet.length} in the affected set`;
   }
 }
 

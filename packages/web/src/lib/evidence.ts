@@ -19,6 +19,8 @@ export const KIND_LABEL: Record<EvidenceKind, string> = {
   "agent-trace": "Agent trace",
   transform: "Reproducible transform",
   "llm-judgment": "Model judgment",
+  "conflict-resolution": "Conflict resolution",
+  quarantine: "Quarantined tests",
 };
 
 export interface ItemSummary {
@@ -88,6 +90,18 @@ export function summarize(item: EvidenceItem): ItemSummary {
         label: QUESTION_LABEL[item.question],
         value: item.outcome === "no-concern" ? "No concern" : item.outcome === "concern" ? "Concern" : "Unsure",
         tone: item.outcome === "no-concern" ? "ok" : item.outcome === "concern" ? "danger" : "warn",
+      };
+    case "conflict-resolution":
+      return {
+        label: "Conflict resolution",
+        value: item.semanticConflictWith !== null ? "Semantic conflict" : item.touchesOutsideConflictHunks ? "Edits outside conflicts" : "Within conflicts",
+        tone: item.touchesOutsideConflictHunks || item.semanticConflictWith !== null ? "warn" : "neutral",
+      };
+    case "quarantine":
+      return {
+        label: "Quarantined tests",
+        value: item.inAffectedSet.length > 0 ? `${item.inAffectedSet.length} in affected set` : `${item.tests.length} quarantined`,
+        tone: item.inAffectedSet.length > 0 ? "warn" : "neutral",
       };
   }
 }

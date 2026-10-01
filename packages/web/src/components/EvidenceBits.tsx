@@ -25,6 +25,8 @@ const KIND_ICON: Record<EvidenceItem["kind"], IconId> = {
   "agent-trace": "route",
   transform: "check-circle",
   "llm-judgment": "comment",
+  "conflict-resolution": "git-merge",
+  quarantine: "triangle-alert",
 };
 
 const TONE_MARK: Record<Tone, string> = { ok: "ok", warn: "warn", danger: "danger", neutral: "neutral", action: "neutral" };

@@ -175,8 +175,32 @@ CI sandbox runs the tools and passes the output in.
 | `sensitivePathHits` (+ `matchPathPattern`, `matchGlob`) | paths + glob patterns | `sensitive-paths` |
 | `diffApiSurface` / `publicApiDiff` | `{symbol: signature}` maps | `public-api`. Removed or changed symbols are breaking, added symbols are additive. |
 
+| `parseConflicts` / `resolutionScope` | merged text with conflict markers + resolved files | which lines the conflict regions became (`conflictHunks`), whether anything else changed (`touchesOutsideConflictHunks`), leftover markers, novel lines |
+| `conflictResolutionItem` / `conflictResolutionError` | scope + resolution diff + resolver identity | `conflict-resolution` (diff capped at 64 KB on a line boundary, `truncated` set) |
+| `quarantineEvidence` | quarantined tests + the Change's affected test targets (or `null` = unknown) | `quarantine`. An unknown affected set counts every quarantined test as affected. |
+| `diffLines` / `unifiedFileDiff` / `unifiedDiffOf` | before/after texts | Myers line diff; `diff --git` text that `git apply` accepts (no-EOL, CRLF, adds, deletes, quoted paths) |
+
 Producers fail closed. Unparseable manifests, empty coverage reports, unknown mutant
 statuses and invalid glob patterns produce `status: "error"` items, not silent passes.
+
+### Merge-queue items
+
+- **`conflict-resolution`** records a conflict resolved by the platform's resolver agent (never
+  the Change's author): the upstream Changes it was resolved against, the resolution diff, the
+  resolver's model, principal and prompt version, its rationale and, for semantic conflicts, the
+  upstream Change it blamed. `conflictHunks` and `touchesOutsideConflictHunks` are computed by
+  `resolutionScope`, not reported by the model. "Within the conflict hunks" is exact: the
+  resolved file must equal the mechanical merge with each conflict region (markers included)
+  replaced by something, every clean line kept verbatim and in order. Edits to files that were
+  not in conflict, unparseable markers, and edits with no conflict hunk at all (semantic
+  conflicts) are outside. `status: "error"` means the resolver failed; such an item counts as
+  outside. Like `llm-judgment`, this item may only raise risk.
+- **`quarantine`** lists tests the merge queue quarantined as suspected-flaky and, in
+  `inAffectedSet`, the ones inside the Change's affected set. A quarantined test never silently
+  counts as passing: a bundle whose test runs excluded or ignored quarantined tests must carry
+  this item.
+- `checkConflictResolution` and `checkQuarantine` report internal inconsistencies (for example an
+  `inAffectedSet` id that is not quarantined).
 
 The glob matcher has no dependencies. It supports `*`, `?`, `**`, `{a,b}` (nestable),
 `[a-z]`/`[!a]` and `\` escapes, and dotfiles match. `matchPathPattern` adds
