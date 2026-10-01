@@ -24,6 +24,7 @@ import {
   startChange,
 } from "../services/changes.js";
 import { createPlan } from "../services/plans.js";
+import { createProject } from "../services/projects.js";
 import { listRepoSummaries } from "../services/repos.js";
 
 /** The bearer verifier puts the verified Principal in `authInfo.extra.principal`. */
@@ -74,6 +75,12 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
           artifactsOpsPerDay: caps.quotas.artifactsOpsPerDay,
         },
       };
+    },
+
+    async createProject(mc, input, opts) {
+      // Not stored by the idempotency table (the result holds a push grant): the coordinator
+      // derives the repo and first-change ids from (caller, key), so a retry finds them.
+      return createProject(svc, callerFrom(mc), input, opts.idempotencyKey);
     },
 
     async listRepos(mc) {

@@ -27,6 +27,8 @@ import * as gitwire from "@app/gitwire";
 import { createReviewer, reviewerLlmFromEnv } from "@app/tour";
 import { DoAudit } from "../audit/audit.js";
 import { D1Notifier } from "../notifier.js";
+import { PlatformPreviews } from "../previews/port.js";
+import { OnboardingMetrics } from "../projects/onboarding.js";
 import { type PlatformSigner, platformSigner } from "../signing.js";
 import { D1Store } from "../store/d1-store.js";
 import { r2BundleLoader } from "./bundle.js";
@@ -48,7 +50,10 @@ export type PortsEnv = Pick<
   | "CI_RUN_WORKFLOW"
   | "CI_ENGINE"
   | "PLATFORM_SIGNING_KEY"
-> & { AI?: Ai; AI_GATEWAY_TOKEN?: string };
+  | "PREVIEW_HOST"
+  | "PREVIEW_ZONE"
+  | "METRICS"
+> & { AI?: Ai; AI_GATEWAY_TOKEN?: string; BROWSER?: BrowserRun };
 
 /** The reviewer model when the repo policy does not override it (policy default is "auto"). */
 export const DEFAULT_REVIEWER_MODEL = "auto";
@@ -193,6 +198,8 @@ export function buildPorts(env: PortsEnv, role: PortsRole, opts: BuildPortsOptio
     audit: new DoAudit(env),
     notifier: new D1Notifier(store, now),
     clock,
+    previews: new PlatformPreviews(env, store, now),
+    onboarding: new OnboardingMetrics(store, env),
   };
   return { ...ports, ...opts.overrides };
 }

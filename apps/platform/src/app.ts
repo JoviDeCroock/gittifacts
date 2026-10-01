@@ -9,8 +9,10 @@ import { originOf } from "./oauth/context.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerChangeRoutes } from "./routes/changes.js";
 import { type ApiApp, newApiApp, SECURITY } from "./routes/common.js";
+import { registerFrontDoorRoutes } from "./routes/front-door.js";
 import { registerIdentityRoutes } from "./routes/identity.js";
 import { registerPlanRoutes } from "./routes/plans.js";
+import { registerProjectRoutes } from "./routes/projects.js";
 import { registerRepoRoutes } from "./routes/repos.js";
 import { registerWellKnownRoutes } from "./routes/well-known.js";
 import { readBlob } from "./services/blobs.js";
@@ -24,7 +26,17 @@ export const OPENAPI_PATH = "/api/v1/openapi.json";
 export const BLOBS_PATH = "/api/v1/blobs";
 
 /** Paths the Worker owns; everything else is the SPA (static assets). */
-const WORKER_PATHS = /^\/(api\/|mcp$|mcp\/|webhooks\/|\.well-known\/)/;
+const WORKER_PATHS = /^\/(api\/|mcp$|mcp\/|webhooks\/|\.well-known\/|internal\/ttfg$)/;
+
+const OPENAPI_CONFIG = {
+  openapi: "3.1.0",
+  info: {
+    title: "gittifacts",
+    version: "1.0.0",
+    description:
+      "Agent-native git platform. Humans approve intent; machines prove conformance. Start at /start. Errors are `{ error: { code, message, fix, details? } }`.",
+  },
+} as const;
 
 export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   const opts: AppOptions = { coordinator: getCoordinator, ...options };
@@ -62,11 +74,13 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   // better-auth (sign-up/in, sessions, GitHub OAuth callback, passkeys).
   app.on(["GET", "POST"], "/api/auth/*", (c) => authFor(c).handler(c.req.raw));
 
+  registerFrontDoorRoutes(app, () => app.getOpenAPI31Document(OPENAPI_CONFIG));
   registerWellKnownRoutes(app);
   registerIdentityRoutes(app);
   registerRepoRoutes(app);
   registerPlanRoutes(app);
   registerChangeRoutes(app);
+  registerProjectRoutes(app);
   registerAuditRoutes(app);
 
   // R2-backed references (logs, screenshots, spilled diffs). `:ref` may contain slashes.
@@ -106,7 +120,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
     tags: ["mcp"],
     summary: "MCP server (streamable HTTP, stateless)",
     description:
-      "JSON-RPC MCP endpoint for agents. `Authorization: Bearer gtf_…` (agent token). Tools: whoami, list_repos, create_plan, start_change, get_change_status, get_evidence, get_tour, request_review, list_issues_for_change, refresh_push_token, wait_for_change.",
+      "JSON-RPC MCP endpoint for agents. `Authorization: Bearer gtf_…` (agent token). Tools: create_project, whoami, list_repos, create_plan, start_change, get_change_status, get_evidence, get_tour, request_review, list_issues_for_change, refresh_push_token, wait_for_change.",
     security: [{ Bearer: [] }],
     request: { body: { content: { "application/json": { schema: z.unknown() } }, required: true } },
     responses: {
@@ -159,15 +173,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
     in: "cookie",
     name: "better-auth.session_token",
   });
-  app.doc31(OPENAPI_PATH, {
-    openapi: "3.1.0",
-    info: {
-      title: "gittifacts",
-      version: "1.0.0",
-      description:
-        "Agent-native git platform. Humans approve intent; machines prove conformance. Errors are `{ error: { code, message, details? } }`.",
-    },
-  });
+  app.doc31(OPENAPI_PATH, OPENAPI_CONFIG);
 
   return app;
 }
