@@ -49,7 +49,8 @@ describe("startGuide JSON", () => {
       "get_change_status",
     ]);
     expect(json.ship.map((s) => s.step)).toEqual([1, 2, 3]);
-    expect(json.ship[1]?.command).toMatch(
+    expect(json.ship.every((s) => s.command === undefined)).toBe(true);
+    expect(json.loop.find((s) => s.command !== undefined)?.command).toMatch(
       /^git -c http\.extraHeader="Authorization: Bearer <remote\.token>" push /,
     );
     for (const s of [...json.ship, ...json.loop]) {
@@ -72,6 +73,13 @@ describe("startGuide JSON", () => {
     expect(off.auth.anonymous.available).toBe(false);
     expect(off.auth.anonymous.how).toMatch(/Disabled/);
     expect(off.auth.deviceFlow).toEqual({ available: false });
+    expect(off.links.discovery).toEqual([
+      `${MCP_URL}/server-card`,
+      `${HOST}/.well-known/ai-catalog.json`,
+    ]);
+    const offMd = startGuide({ ...opts, authHints: { ...opts.authHints, oauth: false } }).markdown;
+    expect(offMd).not.toContain("OAuth discovery");
+    expect(offMd).toContain("MCP OAuth is not available yet");
   });
 
   it("links llms.txt, OpenAPI and MCP discovery", () => {

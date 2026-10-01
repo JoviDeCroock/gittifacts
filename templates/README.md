@@ -66,3 +66,17 @@ For each template it copies the directory to a temp dir, renders placeholders, r
 `pnpm install --frozen-lockfile`, `lint`, `typecheck`, `test` and `build`, checks the build output, and for
 Worker templates starts `wrangler dev` on the build and fetches every `template.json` route. It prints the time
 of each phase.
+
+Measured 2026-10-01 (Apple Silicon laptop, Node 22, pnpm 11.27; each `pnpm run` includes ~0.8 s of pnpm
+startup, so the tools themselves are faster: esbuild 0.1 s, tsc 1.1 s, vitest 0.6 s):
+
+| template | install warm / cold | lint | typecheck | test | build | CI path warm / cold | preview ready |
+|---|---|---|---|---|---|---|---|
+| workers-api | 2.5 s / 4.2 s | 2.3 s | 1.8 s | 3.1 s | 1.6 s | 5.6 s / 7.2 s | 3.2–4.5 s |
+| preact-app | 3.3 s / 4.4 s | 3.0 s | 2.7 s | 3.6 s | 2.0 s | 6.9 s / 8.0 s | 4.3–5.0 s |
+| ts-library | 2.4 s / 4.7 s | 2.7 s | 2.3 s | 3.3 s | 1.6 s | 5.7 s / 7.9 s | none |
+| static-site | 2.4 s / 3.4 s | 3.0 s | 2.1 s | 2.8 s | 1.1 s | 5.4 s / 6.7 s | 3.3–3.8 s |
+
+"Cold" uses an empty pnpm store, so every tarball is downloaded. "CI path" is install plus the slowest of the
+four parallel steps, which is what `.platform/ci.ts` runs. It leaves out container start and snapshot restore
+per step, which the sandbox adds.

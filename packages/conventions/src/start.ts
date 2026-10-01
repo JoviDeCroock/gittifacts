@@ -123,11 +123,9 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
     },
     {
       step: 2,
-      title: "Push and wait for evidence",
-      why: "Wait for the first CI run (the changeId is in nextSteps). For your own edits: start_change, git push to the returned fork remote, then wait the same way.",
+      title: "Wait for the first green",
+      why: "create_project already committed the template and started CI and the preview; the changeId is in nextSteps[0]. Later edits go start_change, git push to the fork, then this same wait (see the loop below).",
       call: call("wait_for_change", { changeId: CH, until: "evidence_ready", timeoutSec: 120 }),
-      command:
-        'git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>',
       returns: '{ change, reached, reason }. reason "timeout": call again.',
     },
     {
@@ -226,7 +224,11 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
       llmsTxt: join(host, "/llms.txt"),
       openapi: opts.openapiUrl,
       mcp,
-      discovery: [prm, serverCard, join(host, "/.well-known/ai-catalog.json")],
+      discovery: [
+        ...(a.oauth ? [prm] : []),
+        serverCard,
+        join(host, "/.well-known/ai-catalog.json"),
+      ],
     },
   };
   return { markdown: renderStartMarkdown(StartDoc.parse(json)), json };
@@ -291,7 +293,7 @@ export function renderStartMarkdown(doc: StartDoc): string {
     "",
     "## More",
     `- [llms.txt](${doc.links.llmsTxt}) · [OpenAPI](${doc.links.openapi}) · [MCP server card](${doc.mcp.serverCard})`,
-    `- OAuth discovery: ${doc.auth.oauth.resourceMetadata}`,
+    ...(doc.auth.oauth.available ? [`- OAuth discovery: ${doc.auth.oauth.resourceMetadata}`] : []),
     "- Each repo's AGENTS.md has the full conventions: lanes, red/green proof, tours.",
     "",
   );

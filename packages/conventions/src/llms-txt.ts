@@ -11,6 +11,8 @@ export interface LlmsTxtOptions {
   host: string;
   mcpUrl: string;
   openapiUrl: string;
+  /** MCP OAuth is offered (protected resource metadata is served). Default false. */
+  oauth?: boolean;
 }
 
 export function llmsTxt(opts: LlmsTxtOptions): string {
@@ -35,7 +37,7 @@ export function llmsTxt(opts: LlmsTxtOptions): string {
     link(
       "MCP server",
       opts.mcpUrl,
-      `streamable HTTP, MCP ${MCP_PROTOCOL_VERSION}; send Authorization: Bearer <token>, or use OAuth discovered from the 401`,
+      `streamable HTTP, MCP ${MCP_PROTOCOL_VERSION}; send Authorization: Bearer <token>${opts.oauth === true ? ", or use OAuth discovered from the 401" : ""}`,
     ),
     link("OpenAPI", opts.openapiUrl, "the HTTP API; every endpoint mirrors an MCP tool"),
     "",
@@ -50,11 +52,15 @@ export function llmsTxt(opts: LlmsTxtOptions): string {
       join(host, "/.well-known/ai-catalog.json"),
       "domain-level index pointing at the server card (draft)",
     ),
-    link(
-      "OAuth protected resource metadata",
-      prm,
-      "RFC 9728: which authorization server issues tokens for the MCP server",
-    ),
+    ...(opts.oauth === true
+      ? [
+          link(
+            "OAuth protected resource metadata",
+            prm,
+            "RFC 9728: which authorization server issues tokens for the MCP server",
+          ),
+        ]
+      : []),
     "",
     "## Optional",
     link(

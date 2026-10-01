@@ -3,7 +3,12 @@ import { llmsTxt } from "../src/index.js";
 import { HOST, MCP_URL } from "./helpers.js";
 
 describe("llmsTxt", () => {
-  const text = llmsTxt({ host: HOST, mcpUrl: MCP_URL, openapiUrl: `${HOST}/openapi.json` });
+  const text = llmsTxt({
+    host: HOST,
+    mcpUrl: MCP_URL,
+    openapiUrl: `${HOST}/openapi.json`,
+    oauth: true,
+  });
   const lines = text.split("\n");
 
   it("follows the llms.txt structure: H1, blockquote, then H2 link sections", () => {
@@ -34,5 +39,11 @@ describe("llmsTxt", () => {
     ]) {
       expect(text).toContain(`](${url})`);
     }
+  });
+
+  it("leaves OAuth out when it isn't offered", () => {
+    const plain = llmsTxt({ host: HOST, mcpUrl: MCP_URL, openapiUrl: `${HOST}/openapi.json` });
+    expect(plain).not.toContain("oauth-protected-resource");
+    expect(plain).not.toContain("OAuth");
   });
 });
