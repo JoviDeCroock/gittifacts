@@ -46,7 +46,68 @@ const SUMMARIES: Record<string, (p: Payload) => string | null> = {
   "change.review-requested": (p) =>
     str(p, "message") ? `Review requested: ${clip(str(p, "message")!)}` : "Review requested",
   "change.started": () => "Change started",
-  "change.pushed": (p) => (str(p, "after") ? `Pushed ${short(str(p, "after"))}` : "Pushed"),
+  "change.pushed": (p) => {
+    const head = str(p, "headSha") ?? str(p, "after");
+    return head ? `Pushed ${short(head)}` : "Pushed";
+  },
+  "change.pipeline-started": (p) =>
+    str(p, "headSha") ? `Pipeline started for ${short(str(p, "headSha"))}` : "Pipeline started",
+  "change.ci-started": (p) =>
+    str(p, "runId") ? `CI run ${str(p, "runId")} started` : "CI started",
+  "change.ci-passed": () => "CI passed",
+  "change.ci-failed": (p) => (str(p, "status") ? `CI ${str(p, "status")}` : "CI failed"),
+  "change.policy-unavailable": () => "Base policy could not be read: Lane 0 is off for this change",
+  "change.evidence-signed": (p) => {
+    const n = num(p, "itemCount");
+    const unverified = p.verified === false ? " (signature did not verify)" : "";
+    return n === null
+      ? `Evidence signed${unverified}`
+      : `Evidence signed: ${n} item${n === 1 ? "" : "s"}${unverified}`;
+  },
+  "change.evidence-note-failed": () => "Evidence note could not be written to the fork",
+  "change.judged": (p) => {
+    const n = num(p, "judgments");
+    return n === null
+      ? "Reviewer agent judged the diff"
+      : `Reviewer agent made ${n} judgment${n === 1 ? "" : "s"}`;
+  },
+  "change.judge-failed": () => "Reviewer agent judgment failed (treated as unknown)",
+  "change.tour-generated": (p) => {
+    const n = num(p, "stops");
+    return n === null ? "Tour ready" : `Tour ready: ${n} stop${n === 1 ? "" : "s"}`;
+  },
+  "change.tour-failed": (p) =>
+    str(p, "reason") ? `Tour failed: ${clip(str(p, "reason")!)}` : "Tour failed",
+  "change.budget-exceeded": () => "AI review budget exceeded",
+  "change.blocked": (p) =>
+    p.ciStatus === "failed" ? "Blocked: CI failed" : "Blocked: evidence could not be verified",
+  "change.queued": (p) => {
+    const position = num(p, "position");
+    return position === null ? "Queued for merge" : `Queued for merge (position ${position})`;
+  },
+  "change.approved": () => "Approved for merge",
+  "change.changes-requested": () => "Changes requested",
+  "change.rejected": () => "Rejected",
+  "change.review-expired": () => "Review request expired",
+  "change.merge-failed": (p) =>
+    str(p, "detail") ? `Merge failed: ${clip(str(p, "detail")!)}` : "Merge failed",
+  "change.released": (p) => (str(p, "reason") ? `Released (${str(p, "reason")})` : "Released"),
+  "change.rollout-started": () => "Rollout started",
+  "change.abandoned": () => "Abandoned",
+  "change.killed": (p) => (str(p, "reason") ? `Killed: ${clip(str(p, "reason")!)}` : "Killed"),
+  "change.revert-opened": (p) =>
+    str(p, "revertId") ? `Revert change ${str(p, "revertId")} opened` : "Revert change opened",
+  "change.revert-verified": (p) =>
+    p.pureRevertVerified === true ? "Verified as a pure revert" : "Not a pure revert",
+  "change.fork-deleted": () => "Fork deleted",
+  "repo.created": (p) => (str(p, "name") ? `Repo ${str(p, "name")} created` : "Repo created"),
+  "repo.imported": (p) =>
+    str(p, "url") ? `Repo imported from ${clip(str(p, "url")!)}` : "Repo imported",
+  "rollout.version-uploaded": (p) =>
+    str(p, "versionId") ? `Version ${short(str(p, "versionId"))} uploaded` : "Version uploaded",
+  "rollout.flag-off": () => "Kill switch: flag turned off",
+  "rollout.skipped": (p) =>
+    str(p, "reason") ? `Rollout skipped: ${str(p, "reason")}` : "Rollout skipped",
   "change.classified": (p) => {
     const lane = num(p, "lane");
     return lane === null ? "Classified" : `Routed to Lane ${lane}`;
