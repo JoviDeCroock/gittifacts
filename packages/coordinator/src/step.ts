@@ -44,6 +44,8 @@ export const RETRY = {
   sandbox: { retries: { limit: 2, delay: "30 seconds", backoff: "linear" }, timeout: "20 minutes" },
   /** Model calls: retries cost money, so keep them few. */
   model: { retries: { limit: 1, delay: "15 seconds", backoff: "constant" }, timeout: "10 minutes" },
+  /** Preview boot and screenshots: informational, so one retry and a bounded wait. */
+  preview: { retries: { limit: 1, delay: "5 seconds", backoff: "constant" }, timeout: "5 minutes" },
   /** Non-idempotent uploads (a retry may create a duplicate version). */
   once: { retries: { limit: 1, delay: "10 seconds", backoff: "constant" }, timeout: "10 minutes" },
 } as const satisfies Record<string, StepConfig>;

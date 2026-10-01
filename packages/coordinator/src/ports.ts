@@ -20,7 +20,7 @@ import type {
   ReviewDecision,
   Tour,
 } from "@app/domain";
-import type { EvidencePayload, LlmJudgment, SignedEvidence } from "@app/evidence";
+import type { EvidencePayload, LlmJudgment, Screenshots, SignedEvidence } from "@app/evidence";
 
 // ---------------------------------------------------------------- store (D1)
 
@@ -299,6 +299,56 @@ export interface Reviewer {
   >;
 }
 
+// ---------------------------------------------------------------- previews (preview gateway)
+
+export interface PreviewRequest {
+  changeId: string;
+  repoId: string;
+  /** The Artifacts repo CI checked out: the change's fork, or the main repo for a bootstrap. */
+  artifactsRepo: string;
+  headSha: string;
+  /** The CI run's step snapshots: previews start from `build` (else `install` + build). */
+  snapshots: Record<string, string>;
+  /** Unclaimed projects' previews never get internet access. */
+  claimed: boolean;
+  /** The repo's template id, if any (routes; templates without a runtime have no preview). */
+  template: string | null;
+}
+
+export type PreviewOutcome =
+  | { status: "ready"; url: string; pinnedUrl: string; readyMs: number }
+  | { status: "skipped" | "error"; url: string | null; reason: string };
+
+/**
+ * Change previews: the project's built Worker under workerd in a container, behind the preview
+ * gateway (a clearly marked domain with a banner). Informational evidence: `skipped` is fine,
+ * `error` raises the lane (unknown → escalate).
+ */
+export interface Previews {
+  /** Start (or wake) the change's preview at `headSha` and wait (bounded) until it serves. */
+  start(input: PreviewRequest): Promise<PreviewOutcome>;
+  /** Screenshot `routes` of a serving preview; refs are blob keys under `screenshots/<changeId>/`. */
+  screenshots(input: {
+    changeId: string;
+    headSha: string;
+    url: string;
+    routes: string[];
+    template: string | null;
+  }): Promise<Screenshots>;
+}
+
+/** Onboarding metrics (time-to-first-green). Best effort: failures never affect the change. */
+export interface Onboarding {
+  /** A repo's bootstrap Change has sealed evidence (first CI finished) and its preview outcome. */
+  bootstrapReady(input: {
+    repoId: string;
+    changeId: string;
+    ciStatus: "passed" | "failed" | "errored" | "cancelled" | "unknown";
+    evidenceAt: string;
+    preview: PreviewOutcome | null;
+  }): Promise<void>;
+}
+
 // ---------------------------------------------------------------- signing
 
 export interface Signer {
@@ -413,4 +463,8 @@ export interface Ports {
   audit: Audit;
   notifier: Notifier;
   clock: Clock;
+  /** Change previews; without it preview and screenshot evidence is `skipped`. */
+  previews?: Previews;
+  /** Onboarding metrics sink. */
+  onboarding?: Onboarding;
 }

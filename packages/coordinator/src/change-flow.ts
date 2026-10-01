@@ -20,7 +20,7 @@ import {
   type RolloutState,
   Tour,
 } from "@app/domain";
-import { EVIDENCE_NOTES_REF, type EvidenceItem, encodeNote } from "@app/evidence";
+import { EVIDENCE_NOTES_REF, type EvidenceItem, encodeNote, type Screenshots } from "@app/evidence";
 import { type CoordinatorBindings, createOrGet } from "./bindings.js";
 import {
   ChangeWorkflowParams,
@@ -36,6 +36,7 @@ import {
   assembleEvidence,
   erroredJudgment,
   judgmentItems,
+  previewItem,
   type SealedEvidence,
   sealEvidence,
 } from "./evidence.js";
@@ -49,7 +50,13 @@ import {
   resolvePolicy,
   unavailablePolicy,
 } from "./policy.js";
-import { type CiRunRequest, type CiRunStatus, type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
+import {
+  type CiRunRequest,
+  type CiRunStatus,
+  type Ports,
+  type PreviewOutcome,
+  SYSTEM_PRINCIPAL_ID,
+} from "./ports.js";
 import { verifyPureRevert } from "./revert.js";
 import { toPipelineRun } from "./run-sink.js";
 import { RETRY, type Step, waitOrTimeout } from "./step.js";
@@ -347,6 +354,44 @@ export async function runChangeWorkflow(
     return ciStatus;
   });
 
+  // ------------------------------------------------------------ 4b. preview (Worker-side, informational)
+  // Started from the CI build snapshot and served through the preview gateway. Before the
+  // evidence is sealed, so `evidence_ready` means "CI finished and the preview answers".
+  const previews = ports.previews;
+  let preview: PreviewOutcome | null = null;
+  if (previews !== undefined) {
+    if (ciStatus !== "passed") {
+      preview = {
+        status: "skipped",
+        url: null,
+        reason: "CI did not pass, so there is no build to preview (informational)",
+      };
+    } else {
+      try {
+        preview = await step.do("preview", RETRY.preview, async (): Promise<PreviewOutcome> => {
+          const repo = await store.getRepo(repoId);
+          const out = await previews.start({
+            changeId,
+            repoId,
+            artifactsRepo: forkName,
+            headSha,
+            snapshots: report.outputs.snapshots,
+            claimed: ctx.claimed,
+            template: repo?.template ?? null,
+          });
+          await log("change.preview", out);
+          return out;
+        });
+      } catch (e) {
+        preview = {
+          status: "error",
+          url: null,
+          reason: `the preview did not start: ${errorMessage(e)}`,
+        };
+      }
+    }
+  }
+
   // ------------------------------------------------------------ 5. evidence (CI + Worker items, signed)
   let sealed: SealedEvidence = await step.do("evidence", RETRY.quick, async () => {
     const diff = await store.getDiff(changeId, headSha);
@@ -355,11 +400,74 @@ export async function runChangeWorkflow(
       diff,
       policy,
       agentTraceId: ctx.agentTraceId,
+      workerItems: preview === null ? [] : [previewItem(preview)],
     });
     const out = await sealEvidence(ports, { changeId, headSha, baseSha, items });
     await log("change.evidence-signed", { ...out, dropped });
     return out;
   });
+
+  // ------------------------------------------------------------ bootstrap: time-to-first-green
+  const onboarding = ports.onboarding;
+  if (ctx.bootstrap && onboarding !== undefined) {
+    try {
+      await step.do("onboarding", RETRY.quick, async () => {
+        await onboarding.bootstrapReady({
+          repoId,
+          changeId,
+          ciStatus,
+          evidenceAt: clock.now().toISOString(),
+          preview,
+        });
+        return true;
+      });
+    } catch {
+      // Metrics are best effort.
+    }
+  }
+
+  // ------------------------------------------------------------ 5b. screenshots of the preview
+  const resealWith = async (item: EvidenceItem): Promise<SealedEvidence> => {
+    const current = await store.getEvidence(changeId, headSha);
+    if (current === null) throw new Error("evidence disappeared");
+    const keep = current.items.filter((i) => i.kind !== item.kind);
+    return sealEvidence(ports, { changeId, headSha, baseSha, items: [...keep, item] });
+  };
+  if (previews !== undefined && preview?.status === "ready") {
+    const url = preview.url;
+    try {
+      sealed = await step.do("screenshots", RETRY.preview, async () => {
+        const [repo, plan] = await Promise.all([
+          store.getRepo(repoId),
+          ctx.planId === null ? null : store.getPlan(ctx.planId),
+        ]);
+        const routes = [...new Set([...policy.previewRoutes, ...(plan?.affectedRoutes ?? [])])];
+        const shots = await previews.screenshots({
+          changeId,
+          headSha,
+          url,
+          routes,
+          template: repo?.template ?? null,
+        });
+        const out = await resealWith(shots);
+        await log("change.screenshots", { status: shots.status, shots: shots.shots.length });
+        return out;
+      });
+    } catch (e) {
+      const reason = errorMessage(e);
+      sealed = await step.do("screenshots-failed", RETRY.quick, async () => {
+        const failed: Screenshots = {
+          id: "screenshots",
+          kind: "screenshots",
+          status: "error",
+          note: `screenshots failed: ${reason}`.slice(0, 4000),
+          shots: [],
+        };
+        await log("change.screenshots-failed", { error: reason });
+        return resealWith(failed);
+      });
+    }
+  }
 
   // ------------------------------------------------------------ bootstrap: released, never routed
   if (ctx.bootstrap) {

@@ -5,6 +5,7 @@ import {
   canonicalBytes,
   type EvidencePayload,
   type LlmJudgment,
+  type Screenshots,
   type SignedEvidence,
   sha256Base64url,
 } from "@app/evidence";
@@ -16,6 +17,10 @@ import type {
   Deployer,
   Flags,
   Notifier,
+  Onboarding,
+  PreviewOutcome,
+  PreviewRequest,
+  Previews,
   Reviewer,
   Signer,
   Telemetry,
@@ -324,4 +329,54 @@ export function linkedIssue(overrides: Partial<LinkedIssue> = {}): LinkedIssue {
     url: null,
     ...overrides,
   };
+}
+
+// ---------------------------------------------------------------- previews, onboarding
+
+/** Previews that are "ready" whenever CI left a build snapshot (opt in: `ports.previews = …`). */
+export class FakePreviews implements Previews {
+  readonly starts: PreviewRequest[] = [];
+  readonly screenshotCalls: Array<{ changeId: string; url: string; routes: string[] }> = [];
+  outcome: (req: PreviewRequest) => PreviewOutcome = (req) =>
+    req.snapshots.build === undefined
+      ? { status: "skipped", url: null, reason: "no build snapshot" }
+      : {
+          status: "ready",
+          url: `https://p-${req.changeId}.preview.test`,
+          pinnedUrl: `https://p-${req.changeId}-${req.headSha.slice(0, 8)}.preview.test`,
+          readyMs: 1500,
+        };
+  screenshotError: Error | null = null;
+
+  async start(req: PreviewRequest): Promise<PreviewOutcome> {
+    this.starts.push(structuredClone(req));
+    return this.outcome(req);
+  }
+
+  async screenshots(input: {
+    changeId: string;
+    headSha: string;
+    url: string;
+    routes: string[];
+  }): Promise<Screenshots> {
+    this.screenshotCalls.push({ changeId: input.changeId, url: input.url, routes: input.routes });
+    if (this.screenshotError !== null) throw this.screenshotError;
+    return {
+      id: "screenshots",
+      kind: "screenshots",
+      status: "ok",
+      shots: input.routes.map((route) => ({
+        route,
+        viewport: "desktop" as const,
+        afterRef: `screenshots/${input.changeId}/${input.headSha.slice(0, 12)}/desktop${route === "/" ? "/index" : route}.png`,
+      })),
+    };
+  }
+}
+
+export class FakeOnboarding implements Onboarding {
+  readonly events: Array<Parameters<Onboarding["bootstrapReady"]>[0]> = [];
+  async bootstrapReady(input: Parameters<Onboarding["bootstrapReady"]>[0]): Promise<void> {
+    this.events.push(structuredClone(input));
+  }
 }

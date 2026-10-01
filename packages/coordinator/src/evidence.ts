@@ -15,7 +15,7 @@ import {
   sensitivePathHits,
 } from "@app/evidence";
 import { evidenceIdFor } from "./ids.js";
-import type { Ports } from "./ports.js";
+import type { Ports, PreviewOutcome } from "./ports.js";
 
 export interface AssembledEvidence {
   items: EvidenceItem[];
@@ -68,9 +68,12 @@ export function assembleEvidence(input: {
   diff: ChangeDiff | null;
   policy: RepoPolicy;
   agentTraceId: string | null;
+  /** Items the Worker produced itself (preview, screenshots); CI items of these kinds are dropped. */
+  workerItems?: readonly EvidenceItem[];
 }): AssembledEvidence {
   const items: EvidenceItem[] = [];
   const dropped: string[] = [];
+  const workerKinds = new Set((input.workerItems ?? []).map((i) => i.kind));
   input.ciItems.forEach((raw, index) => {
     const parsed = EvidenceItem.safeParse(raw);
     if (!parsed.success) {
@@ -81,12 +84,13 @@ export function assembleEvidence(input: {
       dropped.push(`item ${index} (${kind}): ${parsed.error.issues[0]?.message ?? "invalid"}`);
       return;
     }
-    if (WORKER_OWNED.has(parsed.data.kind)) {
+    if (WORKER_OWNED.has(parsed.data.kind) || workerKinds.has(parsed.data.kind)) {
       dropped.push(`item ${index} (${parsed.data.kind}): computed by the platform, not CI`);
       return;
     }
     items.push(parsed.data);
   });
+  items.push(...(input.workerItems ?? []));
 
   items.push(sensitiveItem(input.diff, input.policy));
   const has = (kind: EvidenceKind) => items.some((i) => i.kind === kind);
@@ -144,6 +148,20 @@ export function judgmentItems(raw: readonly LlmJudgment[]): LlmJudgment[] {
     if (parsed.success && parsed.data.kind === "llm-judgment") out.push(parsed.data);
   }
   return out;
+}
+
+/** The `preview` evidence item for a preview outcome (`null`: previews are not configured). */
+export function previewItem(outcome: PreviewOutcome): PreviewDeploy {
+  if (outcome.status === "ready") {
+    return { id: "preview", kind: "preview", status: "ok", url: outcome.url };
+  }
+  return {
+    id: "preview",
+    kind: "preview",
+    status: outcome.status,
+    note: outcome.reason.slice(0, 4000),
+    ...(outcome.url === null ? {} : { url: outcome.url }),
+  };
 }
 
 export function erroredJudgment(reason: string): LlmJudgment {
