@@ -111,13 +111,19 @@ describe("resolutionStopFor", () => {
     ).toBe("unproven");
   });
 
-  it("edits outside the conflict hunks are a risk", () => {
+  it("edits outside the conflict hunks are a risk, and their lines come first", () => {
     const s = resolutionStopFor(
       breakingApiDiff(),
-      withResolution(resolution({ touchesOutsideConflictHunks: true })),
+      withResolution(
+        resolution({
+          touchesOutsideConflictHunks: true,
+          outsideHunks: [{ file: "src/index.ts", startLine: 5, endLine: 5 }],
+        }),
+      ),
     )!;
     expect(s.verdict).toBe("risk");
     expect(s.why).toContain("OUTSIDE the conflict hunks");
+    expect(s.hunkRefs[0]).toEqual({ file: "src/index.ts", startLine: 5, endLine: 5, side: "head" });
   });
 
   it("a semantic conflict names the culprit and is a risk", () => {

@@ -191,7 +191,10 @@ export interface FileScope {
   /** Conflict markers remain in the resolved content. */
   unresolved: boolean;
   novelLines: number;
+  /** Where the conflict regions ended up (head side), when that is known. */
   hunks: ConflictHunk[];
+  /** Head-side ranges edited outside the conflict regions. */
+  outsideHunks: ConflictHunk[];
   /** Why the file counts as outside, when it does. */
   why?: string;
 }
@@ -199,6 +202,8 @@ export interface FileScope {
 export interface ResolutionScope {
   files: FileScope[];
   conflictHunks: ConflictHunk[];
+  /** Head-side ranges edited outside any conflict region. */
+  outsideHunks: ConflictHunk[];
   touchesOutsideConflictHunks: boolean;
   /** Paths with an edit outside their conflict regions (or that were not conflicted at all). */
   outsideFiles: string[];
@@ -318,6 +323,7 @@ function scopeOfFile(f: ResolvedFile, markers: ConflictMarkers): FileScope {
     unresolved: false,
     novelLines: 0,
     hunks: [],
+    outsideHunks: [],
     ...partial,
   });
   if (!f.conflicted) {
@@ -326,7 +332,7 @@ function scopeOfFile(f: ResolvedFile, markers: ConflictMarkers): FileScope {
     return scope({
       outside: true,
       why: "not in conflict",
-      hunks: changedRanges(f.path, before, after),
+      outsideHunks: changedRanges(f.path, before, after),
       novelLines: countNovel(after, before),
     });
   }
@@ -351,7 +357,7 @@ function scopeOfFile(f: ResolvedFile, markers: ConflictMarkers): FileScope {
       outside: f.merged !== f.resolved,
       unresolved,
       why: `conflict markers could not be parsed (${parsed.reason} at line ${parsed.line})`,
-      hunks: changedRanges(f.path, splitLines(f.merged), after),
+      outsideHunks: changedRanges(f.path, splitLines(f.merged), after),
       novelLines: countNovel(after, splitLines(f.merged)),
     });
   }
@@ -372,7 +378,7 @@ function scopeOfFile(f: ResolvedFile, markers: ConflictMarkers): FileScope {
       outside: true,
       unresolved,
       why: "edited lines outside the conflict regions",
-      hunks: changedRanges(f.path, merged, after),
+      outsideHunks: changedRanges(f.path, merged, after),
       novelLines: countNovel(
         after,
         parsed.segments.flatMap((s) =>
@@ -407,6 +413,7 @@ export function resolutionScope(
   return {
     files: scopes,
     conflictHunks: scopes.flatMap((s) => s.hunks),
+    outsideHunks: scopes.flatMap((s) => s.outsideHunks),
     touchesOutsideConflictHunks: outsideFiles.length > 0,
     outsideFiles,
     unresolvedFiles: scopes.filter((s) => s.unresolved).map((s) => s.path),
@@ -458,7 +465,8 @@ export interface ConflictResolutionInput {
   id?: string;
   upstreamChanges: readonly UpstreamChangeRef[];
   ontoSha?: string;
-  scope: Pick<ResolutionScope, "conflictHunks" | "touchesOutsideConflictHunks" | "novelLines">;
+  scope: Pick<ResolutionScope, "conflictHunks" | "touchesOutsideConflictHunks" | "novelLines"> &
+    Partial<Pick<ResolutionScope, "outsideHunks">>;
   /** The full resolution diff; it is capped here. */
   resolutionDiff: string;
   semanticConflictWith: string | null;
@@ -506,6 +514,8 @@ export function conflictResolutionItem(input: ConflictResolutionInput): Conflict
     attempts: input.attempts,
   };
   if (input.ontoSha !== undefined) item.ontoSha = input.ontoSha;
+  const outsideHunks = input.scope.outsideHunks ?? [];
+  if (outsideHunks.length > 0) item.outsideHunks = outsideHunks.slice(0, 2000);
   if (input.failingTests !== undefined)
     item.failingTests = input.failingTests.slice(0, 200).map((t) => text(t, 1000));
   return item;

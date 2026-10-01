@@ -153,7 +153,7 @@ describe("resolutionScope", () => {
     );
     expect(s.touchesOutsideConflictHunks).toBe(true);
     expect(s.outsideFiles).toEqual(["src/list.ts"]);
-    expect(s.conflictHunks.some((h) => h.startLine <= 7 && h.endLine >= 7)).toBe(true);
+    expect(s.outsideHunks.some((h) => h.startLine <= 7 && h.endLine >= 7)).toBe(true);
   });
 
   it("touching a file that was not in conflict is outside", () => {
@@ -167,6 +167,8 @@ describe("resolutionScope", () => {
     );
     expect(s.outsideFiles).toEqual(["src/other.ts"]);
     expect(s.touchesOutsideConflictHunks).toBe(true);
+    expect(s.outsideHunks).toEqual([{ file: "src/other.ts", startLine: 2, endLine: 2 }]);
+    expect(s.conflictHunks).toEqual([{ file: "src/list.ts", startLine: 3, endLine: 4 }]);
   });
 
   it("counts lines that appear on neither side as novel", () => {

@@ -319,6 +319,8 @@ export const ConflictResolution = z.object({
   /** The new base the Change was rebased onto, when known. */
   ontoSha: Sha.optional(),
   conflictHunks: z.array(ConflictHunk).max(2000),
+  /** Head-side ranges edited outside any conflict region (what `touchesOutsideConflictHunks` found). */
+  outsideHunks: z.array(ConflictHunk).max(2000).optional(),
   /**
    * Unified diff from the mechanical merge (conflicted files with their markers) to the resolved
    * tree. At most RESOLUTION_DIFF_MAX_BYTES UTF-8 bytes; `truncated` says it was cut.

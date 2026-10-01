@@ -281,8 +281,9 @@ export function resolutionStopFor(
 
   const hunkRefs: HunkRef[] = [];
   const seen = new Set<string>();
+  // Lines edited outside the conflict hunks first: those are the ones nobody approved.
   for (const r of ok) {
-    for (const h of r.conflictHunks) {
+    for (const h of [...(r.outsideHunks ?? []), ...r.conflictHunks]) {
       const check = checkHunkRef(diff, { ...h, side: "head" });
       if (!check.ok) continue;
       const k = `${check.ref.file}\u0000${check.ref.startLine}\u0000${check.ref.endLine}`;
