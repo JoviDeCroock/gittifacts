@@ -1,7 +1,11 @@
 # HTTP API contract (v1)
 
-JSON over HTTPS. All bodies validated with zod; errors are `{ "error": { "code": string, "message": string, "details"?: unknown } }`
-with a matching HTTP status. Types refer to `@app/domain` / `@app/evidence`. The OpenAPI document is generated from the
+JSON over HTTPS. All bodies validated with zod. Errors always tell the caller what to do next (onboarding §5):
+`{ "error": { "code": string, "message": string, "fix": { "explanation": string, "call"?: string, "command"?: string, "docsUrl"?: string }, "details"?: unknown } }`
+with a matching HTTP status (`ApiError` in `@app/domain`).
+
+Every create/mutate call accepts an `Idempotency-Key` header. A retry with the same key and the same body returns the
+stored response; the same key with a different body returns `409 idempotency-key-reuse`. Types refer to `@app/domain` / `@app/evidence`. The OpenAPI document is generated from the
 route definitions and served at `GET /api/v1/openapi.json`.
 
 ## Auth
