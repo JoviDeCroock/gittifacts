@@ -1,3 +1,4 @@
+import type { TourStop } from "@app/domain";
 import type { EvidenceItem } from "@app/evidence";
 import { describe, expect, it } from "vitest";
 import { FakeLlmClient } from "../src/llm.js";
@@ -203,8 +204,14 @@ describe("estimatedReadSeconds", () => {
 
 describe("ordering", () => {
   it("orders intent → behavior → risk/proof → other → transform → uncovered", () => {
-    const k = (kind: ModelTour["stops"][number]["kind"] | "transform", title = kind) =>
-      ({ kind, title, why: "w", hunkRefs: [], evidenceRefs: [], verdict: "unproven" }) as const;
+    const k = (kind: TourStop["kind"], title: string = kind): TourStop => ({
+      kind,
+      title,
+      why: "w",
+      hunkRefs: [],
+      evidenceRefs: [],
+      verdict: "unproven",
+    });
     const ordered = orderStops([
       k("uncovered"),
       k("proof", "proof-a"),
