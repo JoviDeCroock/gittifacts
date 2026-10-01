@@ -8,6 +8,7 @@ export {
   classify,
   type TourStatus,
 } from "./classify.js";
+export { neverLower, reclassifyAfterResolution } from "./never-lower.js";
 export {
   compileGlobs,
   LOCKFILE_GLOBS,

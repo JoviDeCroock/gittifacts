@@ -13,6 +13,7 @@ import {
 } from "@app/domain";
 import {
   type AgentTrace,
+  type ConflictResolution,
   type CoverageDelta,
   type DependencyDiff,
   EvidenceItem,
@@ -21,6 +22,7 @@ import {
   type MutationScore,
   type PreviewDeploy,
   type PublicApiDiff,
+  type Quarantine,
   type RedGreenProof,
   type ReproducibleTransform,
   type Screenshots,
@@ -365,6 +367,58 @@ export function llm(
     outcome,
     rationale: `The model says ${outcome}.`,
     model: "reviewer-model",
+    ...overrides,
+  });
+}
+
+/** A merge-queue conflict resolution that stayed inside its conflict hunks. */
+export function resolution(overrides: Partial<ConflictResolution> = {}): ConflictResolution {
+  return item<ConflictResolution>({
+    id: "conflict-resolution",
+    status: "ok",
+    kind: "conflict-resolution",
+    upstreamChanges: [{ changeId: "chg_upstream", sha: "c".repeat(40), planId: "plan-up" }],
+    conflictHunks: [{ file: "src/slugify.ts", startLine: 3, endLine: 5 }],
+    resolutionDiff:
+      "diff --git a/src/slugify.ts b/src/slugify.ts\n--- a/src/slugify.ts\n+++ b/src/slugify.ts\n@@ -3,7 +3,2 @@\n",
+    truncated: false,
+    touchesOutsideConflictHunks: false,
+    novelLines: 0,
+    semanticConflictWith: null,
+    rationale: "Kept both sides' list entries.",
+    resolver: {
+      model: "anthropic/claude-sonnet-5",
+      principalId: "system:resolver",
+      promptVersion: "resolver-test",
+    },
+    attempts: 1,
+    ...overrides,
+  });
+}
+
+/** Quarantined tests; by default one of them is in the Change's affected set. */
+export function quarantine(overrides: Partial<Quarantine> = {}): Quarantine {
+  return item<Quarantine>({
+    id: "quarantine",
+    status: "ok",
+    kind: "quarantine",
+    tests: [
+      {
+        id: "test/slugify.test.ts > flaky clock",
+        file: "test/slugify.test.ts",
+        name: "flaky clock",
+        flakeRate: 0.12,
+        quarantinedAt: "2026-10-01T08:00:00.000Z",
+      },
+      {
+        id: "test/other.test.ts > network",
+        file: "test/other.test.ts",
+        name: "network",
+        flakeRate: 0.3,
+        quarantinedAt: "2026-10-01T08:00:00.000Z",
+      },
+    ],
+    inAffectedSet: ["test/slugify.test.ts > flaky clock"],
     ...overrides,
   });
 }

@@ -27,9 +27,11 @@ import {
   plan,
   preview,
   publicApi,
+  quarantine,
   raisedCodes,
   redGreen,
   replaceKind,
+  resolution,
   run,
   setStatus,
   testRun,
@@ -203,6 +205,58 @@ const MUTATIONS: Mutation[] = [
     "lockfile-only change",
     "add",
     (i) => withItems(i, dependencies({ id: "deps:2", lockfileChanged: true })),
+  ],
+  // Merge queue: a conflict resolution (any shape) and quarantined tests may only add reasons.
+  ["resolution within hunks", "add", (i) => withItems(i, resolution({ id: "res:within" }))],
+  [
+    "resolution outside hunks",
+    "add",
+    (i) => withItems(i, resolution({ id: "res:outside", touchesOutsideConflictHunks: true })),
+  ],
+  [
+    "resolution with edits but no hunks",
+    "add",
+    (i) => withItems(i, resolution({ id: "res:nohunks", conflictHunks: [] })),
+  ],
+  [
+    "semantic resolution",
+    "add",
+    (i) =>
+      withItems(
+        i,
+        resolution({
+          id: "res:semantic",
+          conflictHunks: [],
+          touchesOutsideConflictHunks: true,
+          semanticConflictWith: "chg_upstream",
+        }),
+      ),
+  ],
+  [
+    "resolution truncated",
+    "add",
+    (i) => withItems(i, resolution({ id: "res:truncated", truncated: true })),
+  ],
+  [
+    "resolution skipped",
+    "add",
+    (i) => withItems(i, resolution({ id: "res:skipped", status: "skipped", note: "n/a" })),
+  ],
+  [
+    "resolution errored",
+    "add",
+    (i) => withItems(i, resolution({ id: "res:error", status: "error", note: "invalid twice" })),
+  ],
+  ["quarantined test in affected set", "add", (i) => withItems(i, quarantine({ id: "q:1" }))],
+  [
+    "quarantined tests outside the affected set",
+    "add",
+    (i) => withItems(i, quarantine({ id: "q:2", inAffectedSet: [] })),
+  ],
+  [
+    "quarantine list errored",
+    "add",
+    (i) => withItems(i, quarantine({ id: "q:3", status: "error", note: "registry down" })),
   ],
   ["coverage low", "add", (i) => withItems(i, coverage(0.3, { id: "coverage:2" }))],
   ["mutation low", "add", (i) => withItems(i, mutation(0.2, { id: "mutation:2" }))],

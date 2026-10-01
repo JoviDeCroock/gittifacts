@@ -21,6 +21,7 @@ export const GATES = [
   "mutation",
   "transform",
   "llm-judgments",
+  "conflict-resolution",
   "informational-signals",
   "budget",
   "tour",
@@ -652,6 +653,80 @@ export const REASON_CODES = {
     ["llm-judgments"],
     "A model judgment errored{detail}.",
     'An llm-judgment item has status "error".',
+  ),
+
+  // ------------------------------------------------------------------ quarantined tests (merge queue)
+  "tests.quarantined": spec(
+    1,
+    "unknown",
+    ["tests"],
+    "{count} quarantined test(s) in this change's affected set did not count as passing: {tests}.",
+    'A quarantine item with status "ok" lists tests in inAffectedSet (a quarantined test never silently counts as passing).',
+  ),
+  "tests.quarantined-unaffected": spec(
+    0,
+    "pass",
+    ["tests"],
+    "{count} quarantined test(s), none in this change's affected set: {tests}.",
+    'A quarantine item with status "ok" lists quarantined tests, none of them in inAffectedSet.',
+  ),
+  "signal.error.quarantine": spec(
+    1,
+    "unknown",
+    ["tests"],
+    "The quarantine list could not be read{detail}; quarantined tests in the affected set cannot be ruled out.",
+    'A quarantine item has status "error".',
+  ),
+
+  // ------------------------------------------------------------------ conflict resolution (merge queue)
+  "resolution.within-conflict": spec(
+    0,
+    "pass",
+    ["conflict-resolution"],
+    "Conflict resolution against {upstream} only replaced the {hunks} conflict hunk(s) ({resolver}).",
+    'A conflict-resolution item with status "ok" stays inside its conflict hunks (informational; the lane stays what the merged tree earns).',
+  ),
+  "resolution.outside-conflict": spec(
+    1,
+    "fail",
+    ["conflict-resolution"],
+    "The conflict resolution against {upstream} edited lines outside the conflict hunks ({resolver}).",
+    'A conflict-resolution item with status "ok" has touchesOutsideConflictHunks, or edits with no conflict hunk.',
+  ),
+  "resolution.semantic": spec(
+    1,
+    "fail",
+    ["conflict-resolution"],
+    "Resolved a semantic conflict caused by upstream change {culprit}: {rationale}",
+    'A conflict-resolution item with status "ok" names semanticConflictWith.',
+  ),
+  "resolution.truncated": spec(
+    1,
+    "unknown",
+    ["conflict-resolution"],
+    "The recorded resolution diff was cut at the size cap; read the resolution commit itself.",
+    'A conflict-resolution item with status "ok" has truncated: true.',
+  ),
+  "resolution.skipped": spec(
+    1,
+    "unknown",
+    ["conflict-resolution"],
+    "A conflict resolution is recorded as skipped{detail}, so what the resolver did is unknown.",
+    'A conflict-resolution item has status "skipped".',
+  ),
+  "signal.error.conflict-resolution": spec(
+    2,
+    "unknown",
+    ["conflict-resolution"],
+    "Conflict resolution failed{detail}.",
+    'A conflict-resolution item has status "error".',
+  ),
+  "resolution.lane-kept": spec(
+    1,
+    "fail",
+    ["conflict-resolution"],
+    "Lane kept at {lane}: the merged tree classified lower ({next}), but a conflict resolution can only keep or raise the lane (before: {codes}).",
+    "Added by neverLower when the merged tree's classification is below the Change's previous one. Its lane is the previous lane: 1 or 2.",
   ),
 
   // ------------------------------------------------------------------ informational signals

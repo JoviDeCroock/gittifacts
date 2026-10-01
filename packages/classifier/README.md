@@ -79,6 +79,8 @@ cheapest way to reach Lane 0 would be to make a check fail quietly. So:
 | `preview`, `screenshots`, `agent-trace` | informational | — | — | 1 |
 | `transform` | optional | — (1 if claimed `transform`) | — (1 if claimed `transform`) | 1 |
 | `llm-judgment` | raise-only | — | — | 1 |
+| `quarantine` | raise-only (merge queue) | — | — | 1 |
+| `conflict-resolution` | raise-only (merge queue) | — | 1 | 2 |
 
 ## Decision table
 
@@ -217,6 +219,21 @@ table lists every code with its lane.
 | `llm.no-concern` | 0 | llm-judgments ✓ | An llm-judgment item has outcome "no-concern". Never lowers anything. |
 | `llm.none` | 0 | llm-judgments ✓ | No llm-judgment item with status ok or error. |
 
+### Quarantined tests and conflict resolutions (merge queue; may only raise)
+
+| Code | Lane | Checklist | Condition |
+|---|---|---|---|
+| `signal.error.conflict-resolution` | 2 | conflict-resolution ? | A conflict-resolution item has status "error". |
+| `resolution.lane-kept` | 1 / 2 (the previous lane) | conflict-resolution ✗ | Added by `neverLower` when the merged tree's classification is below the Change's previous one. Its lane is the previous lane: 1 or 2. |
+| `resolution.outside-conflict` | 1 | conflict-resolution ✗ | A conflict-resolution item with status "ok" has touchesOutsideConflictHunks, or edits with no conflict hunk. |
+| `resolution.semantic` | 1 | conflict-resolution ✗ | A conflict-resolution item with status "ok" names semanticConflictWith. |
+| `resolution.skipped` | 1 | conflict-resolution ? | A conflict-resolution item has status "skipped". |
+| `resolution.truncated` | 1 | conflict-resolution ? | A conflict-resolution item with status "ok" has truncated: true. |
+| `signal.error.quarantine` | 1 | tests ? | A quarantine item has status "error". |
+| `tests.quarantined` | 1 | tests ? | A quarantine item with status "ok" lists tests in inAffectedSet (a quarantined test never silently counts as passing). |
+| `resolution.within-conflict` | 0 | conflict-resolution ✓ | A conflict-resolution item with status "ok" stays inside its conflict hunks (informational; the lane stays what the merged tree earns). |
+| `tests.quarantined-unaffected` | 0 | tests ✓ | A quarantine item with status "ok" lists quarantined tests, none of them in inAffectedSet. |
+
 ### Informational signals, budget, tour
 
 | Code | Lane | Checklist | Condition |
@@ -239,6 +256,31 @@ table lists every code with its lane.
 | `revert.auto-merge` | 0 | lane0-enabled ✓ | pureRevertVerified, policy.autoMergeVerifiedReverts, and every raised reason is waivable (plan.missing, plan.not-approved, plan.scope-undeclared, size.*). |
 | `revert.verified` | 0 | — | context.pureRevertVerified is true. |
 | `revert.waived` | 0 | — | Replaces each waivable reason when revert.auto-merge applies; keeps the original reason's gates. |
+
+## Merge queue: conflict resolutions and quarantined tests
+
+When a Change no longer applies onto its batch base, the merge queue's resolver agent (principal
+`system:resolver`, never the author) resolves the conflict. The Change is then re-evidenced and
+re-classified on the merged tree, so the lane describes what actually lands. Two rules keep a
+resolution from ever lowering the lane:
+
+- **Reasons only add.** A `conflict-resolution` item adds reasons and never removes one.
+  Within the conflict hunks it is informational (`resolution.within-conflict`, Lane 0): the lane is
+  whatever the merged tree earns on every other gate. Edits outside the hunks, a semantic conflict,
+  a truncated record or a skipped item raise to Lane 1; a failed resolution is Lane 2. "Outside"
+  is computed mechanically by `@app/evidence`'s `resolutionScope`, not reported by the model, and
+  an item with edits but no conflict hunk is read as outside.
+- **The previous lane is a floor.** `neverLower(previous, next)` returns `next` unless it is below
+  `previous` (lane or computed lane). Then it adds `resolution.lane-kept` at the previous lane on
+  the `conflict-resolution` gate, naming the previous raised reasons, drops shadow mode (the
+  computed lane is now at least 1) and keeps `requiresHumanApproval` if either required it.
+  `reclassifyAfterResolution(previous, …classifyArgs)` is `neverLower(previous, classify(…))`;
+  the queue shell uses it for every resolved Change, so the floor cannot be forgotten.
+
+A `quarantine` item lists tests the queue quarantined as suspected-flaky. A quarantined test never
+silently counts as passing: one in the Change's affected set raises to Lane 1 (`tests.quarantined`,
+tests gate unknown), and an unreadable quarantine list is Lane 1 too. An absent item means no test
+was quarantined; a bundle whose test runs excluded quarantined tests must carry one.
 
 ## Planless Lane 0
 

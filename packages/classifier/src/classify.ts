@@ -18,6 +18,7 @@ import type {
   RepoPolicy,
 } from "@app/domain";
 import type {
+  ConflictResolution,
   CoverageDelta,
   DependencyDiff,
   EvidenceItem,
@@ -25,6 +26,7 @@ import type {
   LlmJudgment,
   MutationScore,
   PublicApiDiff,
+  Quarantine,
   RedGreenProof,
   ReproducibleTransform,
   SensitivePathHits,
@@ -742,6 +744,72 @@ function checkLlm(out: Reasons, items: readonly LlmJudgment[]): void {
   if (s.ok.length === 0 && s.errored.length === 0) out.add("llm.none");
 }
 
+/**
+ * Quarantined tests (merge queue). A quarantined test never silently counts as passing: one in the
+ * Change's affected set raises to Lane 1 on the tests gate; an unreadable quarantine list is unknown.
+ */
+function checkQuarantine(out: Reasons, items: readonly Quarantine[]): void {
+  const s = readSignal(items);
+  for (const e of s.errored) out.add("signal.error.quarantine", { detail: errorDetail(e) }, e.id);
+  for (const q of s.ok) {
+    if (q.inAffectedSet.length > 0) {
+      out.add(
+        "tests.quarantined",
+        { count: q.inAffectedSet.length, tests: formatList(q.inAffectedSet) },
+        q.id,
+      );
+    } else if (q.tests.length > 0) {
+      out.add(
+        "tests.quarantined-unaffected",
+        { count: q.tests.length, tests: formatList(q.tests.map((t) => t.id)) },
+        q.id,
+      );
+    }
+  }
+}
+
+/**
+ * Merge-queue conflict resolutions (written by the resolver agent, never the author). They can
+ * only add reasons: a resolution inside the conflict hunks is informational, anything else raises.
+ * Contradictory items are read pessimistically: edits with no conflict hunk count as outside.
+ */
+function checkResolutions(out: Reasons, items: readonly ConflictResolution[]): void {
+  for (const r of items) {
+    if (r.status === "error") {
+      out.add("signal.error.conflict-resolution", { detail: errorDetail(r) }, r.id);
+      continue;
+    }
+    if (r.status !== "ok") {
+      // "skipped" or anything unrecognised: the resolver's work is unknown.
+      out.add("resolution.skipped", { detail: errorDetail(r) }, r.id);
+      continue;
+    }
+    const upstream = formatList(
+      r.upstreamChanges.map((u) => u.changeId),
+      8,
+      "no upstream change",
+    );
+    const resolver = `${r.resolver.principalId}, ${r.resolver.model}`;
+    const outside =
+      r.touchesOutsideConflictHunks ||
+      (r.conflictHunks.length === 0 && r.resolutionDiff.trim() !== "");
+    if (outside) out.add("resolution.outside-conflict", { upstream, resolver }, r.id);
+    if (r.semanticConflictWith !== null)
+      out.add(
+        "resolution.semantic",
+        { culprit: r.semanticConflictWith, rationale: truncate(r.rationale) },
+        r.id,
+      );
+    if (r.truncated) out.add("resolution.truncated", {}, r.id);
+    if (!outside && r.semanticConflictWith === null && !r.truncated)
+      out.add(
+        "resolution.within-conflict",
+        { upstream, hunks: r.conflictHunks.length, resolver },
+        r.id,
+      );
+  }
+}
+
 const INFORMATIONAL: ReadonlyArray<readonly [EvidenceKind, ReasonCode]> = [
   ["preview", "signal.error.preview"],
   ["screenshots", "signal.error.screenshots"],
@@ -821,6 +889,7 @@ export function classify(
 
   // Required signals (absent/errored → Lane 2).
   checkTests(out, ofKind(items, "test-run"));
+  checkQuarantine(out, ofKind(items, "quarantine"));
   checkRedGreen(out, ofKind(items, "red-green"), change.category);
   checkPublicApi(out, ofKind(items, "public-api"), noSourceChanged);
   const deps = readSignal(ofKind(items, "dependencies"));
@@ -856,6 +925,7 @@ export function classify(
 
   // Model judgments (raise only), informational signals, budget, tour.
   checkLlm(out, ofKind(items, "llm-judgment"));
+  checkResolutions(out, ofKind(items, "conflict-resolution"));
   checkInformational(out, items);
   out.add(context.budgetExceeded ? "budget.exceeded" : "budget.ok");
   if (context.tourStatus === "failed") out.add("tour.failed");
