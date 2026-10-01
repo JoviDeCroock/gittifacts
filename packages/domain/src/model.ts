@@ -57,6 +57,19 @@ export const Repo = z.object({
   policySha: Sha.nullable(),
   /** Worker script the repo deploys to (for rollout), if any. */
   deployTarget: z.string().nullable(),
+  /**
+   * Unclaimed projects are created without an account (onboarding §4): previews only, no
+   * secrets, no production deploys, no Lane 0, tight quotas, and they expire unless claimed.
+   */
+  claim: z.object({
+    status: z.enum(["claimed", "unclaimed"]),
+    /** Human principal who owns the project (null while unclaimed). */
+    ownerId: Id.nullable(),
+    /** Unclaimed projects are deleted after this instant. */
+    expiresAt: IsoDate.nullable(),
+  }),
+  /** Template the project was created from, if any. */
+  template: z.string().nullable(),
   createdAt: IsoDate,
 });
 export type Repo = z.infer<typeof Repo>;
@@ -421,3 +434,42 @@ export const LinkedIssue = z.object({
   url: z.string().url().nullable(),
 });
 export type LinkedIssue = z.infer<typeof LinkedIssue>;
+
+// ---------------------------------------------------------------- agent ergonomics (onboarding §5)
+
+/** Every error tells the caller what to do next. */
+export const ErrorFix = z.object({
+  explanation: z.string().min(1).max(2000),
+  /** A concrete MCP tool call that would fix it, e.g. `start_change({ planId: "pln_123" })`. */
+  call: z.string().max(500).optional(),
+  /** A shell command that would fix it, e.g. `git push origin HEAD:refs/heads/change`. */
+  command: z.string().max(500).optional(),
+  docsUrl: z.string().url().optional(),
+});
+export type ErrorFix = z.infer<typeof ErrorFix>;
+
+export const ApiError = z.object({
+  error: z.object({
+    code: z.string(),
+    message: z.string(),
+    fix: ErrorFix,
+    details: z.unknown().optional(),
+  }),
+});
+export type ApiError = z.infer<typeof ApiError>;
+
+/** A suggested next action returned by create/mutate calls so agents never have to guess. */
+export const NextStep = z.object({
+  title: z.string().min(1).max(200),
+  why: z.string().max(600).optional(),
+  call: z.string().max(500).optional(),
+  command: z.string().max(500).optional(),
+  docsUrl: z.string().url().optional(),
+});
+export type NextStep = z.infer<typeof NextStep>;
+
+export const WaitUntil = z.enum(["evidence_ready", "lane_assigned", "tour_ready", "merged", "reverted"]);
+export type WaitUntil = z.infer<typeof WaitUntil>;
+
+/** Header carrying a client-chosen idempotency key on every create/mutate call. */
+export const IDEMPOTENCY_HEADER = "Idempotency-Key";
