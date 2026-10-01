@@ -36,7 +36,7 @@ async function poll(answers: FakeOAuth["tokenAnswers"], over: { interval?: numbe
   const p = pollForToken({
     fetch: (i, init) => fetch(i, init),
     host: server.host,
-    tokenUrl: `${server.host}/api/auth/device/token`,
+    tokenUrl: `${server.host}/api/oauth/token`,
     clientId: "cli",
     deviceCode: "dev_123",
     intervalSec: over.interval ?? 5,
@@ -95,6 +95,11 @@ describe("device flow polling (RFC 8628 §3.5)", () => {
     expect(c.t.sleeps).toEqual([5000, 10000, 5000]);
   });
 
+  it("says the flow is unavailable when the token endpoint doesn't exist", async () => {
+    const { p } = await poll([{ status: 404, body: { error: "not_found" } }]);
+    expect(await codeOf(p)).toBe("device-flow-unavailable");
+  });
+
   it("fails on an unknown error code", async () => {
     const { p } = await poll([{ status: 400, body: { error: "invalid_grant", error_description: "Invalid device code" } }]);
     expect(await codeOf(p)).toBe("device-flow-failed");
@@ -109,18 +114,18 @@ describe("device flow polling (RFC 8628 §3.5)", () => {
 });
 
 describe("endpoint discovery", () => {
-  it("falls back to better-auth's device-authorization paths", async () => {
+  it("falls back to the platform's paths (better-auth device code, /api/oauth/token)", async () => {
     server = await fakeOAuthServer();
     const e = await discoverEndpoints((i, init) => fetch(i, init), server.host);
     expect(e).toEqual({
       deviceAuthorizationUrl: `${server.host}/api/auth/device/code`,
-      tokenUrl: `${server.host}/api/auth/device/token`,
+      tokenUrl: `${server.host}/api/oauth/token`,
       clientId: DEFAULT_CLIENT_ID,
       source: "default",
     });
   });
 
-  it("uses RFC 8414 metadata, and its token endpoint only if it supports the device grant", async () => {
+  it("uses RFC 8414 metadata: the device endpoint and the AS token endpoint", async () => {
     server = await fakeOAuthServer({
       metadata: {
         device_authorization_endpoint: "/oauth/device",
@@ -136,7 +141,11 @@ describe("endpoint discovery", () => {
     });
     server.metadata = { device_authorization_endpoint: "/oauth/device", token_endpoint: "/oauth/token" };
     const e2 = await discoverEndpoints((i, init) => fetch(i, init), server.host);
-    expect(e2.tokenUrl).toBe(`${server.host}/api/auth/device/token`);
+    expect(e2.tokenUrl).toBe(`${server.host}/oauth/token`);
+    // metadata without device support says nothing about the device flow
+    server.metadata = { token_endpoint: "/oauth/token", grant_types_supported: ["authorization_code"] };
+    const e3 = await discoverEndpoints((i, init) => fetch(i, init), server.host);
+    expect(e3).toMatchObject({ tokenUrl: `${server.host}/api/oauth/token`, source: "default" });
   });
 
   it("prefers /start's deviceFlow block and its client id; flags win over everything", async () => {
@@ -147,7 +156,7 @@ describe("endpoint discovery", () => {
             available: true,
             command: "npx gittifacts login",
             deviceAuthorizationEndpoint: "/api/auth/device/code",
-            tokenEndpoint: "/api/auth/device/token",
+            tokenEndpoint: "/api/oauth/token",
             clientId: "gittifacts-cli-prod",
           },
         },

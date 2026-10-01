@@ -1,6 +1,6 @@
 /**
- * A fake RFC 8628 authorization server shaped like better-auth's device-authorization plugin:
- * POST /api/auth/device/code, POST /api/auth/device/token (scripted answers), optional
+ * A fake RFC 8628 authorization server shaped like the platform's: POST /api/auth/device/code
+ * (better-auth's device-authorization plugin), POST /api/oauth/token (scripted answers), optional
  * /start and /.well-known/oauth-authorization-server documents.
  */
 import { createServer, type IncomingMessage, type Server } from "node:http";
@@ -61,7 +61,7 @@ export async function fakeOAuthServer(init: Partial<Pick<FakeOAuth, "tokenAnswer
         interval: 5,
       });
     }
-    if (req.method === "POST" && /\/device\/token$/.test(url.pathname)) {
+    if (req.method === "POST" && /\/(device|oauth)\/token$/.test(url.pathname)) {
       const answer = state.tokenAnswers[Math.min(polls, state.tokenAnswers.length - 1)];
       polls += 1;
       if (!answer) return json(500, { error: "server_error" });

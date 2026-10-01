@@ -4,9 +4,10 @@
  * Endpoints, in order of precedence:
  * 1. `--device-code-url` / `--token-url` (or GITTIFACTS_DEVICE_CODE_URL / GITTIFACTS_DEVICE_TOKEN_URL)
  * 2. `GET <host>/start` (JSON) → `auth.deviceFlow.{deviceAuthorizationEndpoint, tokenEndpoint, clientId}`
- * 3. `GET <host>/.well-known/oauth-authorization-server` (RFC 8414) → `device_authorization_endpoint`,
- *    and `token_endpoint` when `grant_types_supported` lists the device-code grant
- * 4. better-auth's device-authorization plugin defaults: `/api/auth/device/code`, `/api/auth/device/token`
+ * 3. `GET <host>/.well-known/oauth-authorization-server` (RFC 8414) → `device_authorization_endpoint`
+ *    and the `token_endpoint` (RFC 8628 §4: device codes are redeemed at the AS's token endpoint)
+ * 4. The platform's paths: `/api/auth/device/code` (better-auth's device-authorization plugin) and
+ *    `/api/oauth/token` (apps/platform `OAUTH_PATHS`; it issues an agent token, never a session)
  *
  * Polling follows RFC 8628 §3.5: wait `interval` between requests; `authorization_pending` keeps
  * going, `slow_down` adds 5s for this and every later request, `expired_token` and
@@ -19,7 +20,7 @@ import { isRecord } from "../tools/schema.js";
 export const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
 export const DEFAULT_CLIENT_ID = "gittifacts-cli";
 export const DEFAULT_DEVICE_CODE_PATH = "/api/auth/device/code";
-export const DEFAULT_DEVICE_TOKEN_PATH = "/api/auth/device/token";
+export const DEFAULT_DEVICE_TOKEN_PATH = "/api/oauth/token";
 /** RFC 8628 §3.2: "If no value is provided, clients MUST use 5 as the default." */
 export const DEFAULT_INTERVAL_SEC = 5;
 export const SLOW_DOWN_STEP_SEC = 5;
@@ -88,7 +89,8 @@ export async function discoverEndpoints(
     if (isRecord(meta)) {
       const d = strField(meta, "device_authorization_endpoint");
       const grants = Array.isArray(meta.grant_types_supported) ? meta.grant_types_supported : [];
-      const t = grants.includes(DEVICE_GRANT) ? strField(meta, "token_endpoint") : undefined;
+      // An AS that advertises a device endpoint redeems its codes at its token endpoint.
+      const t = d || grants.includes(DEVICE_GRANT) ? strField(meta, "token_endpoint") : undefined;
       if (d && !device) {
         device = d;
         source = "metadata";
@@ -296,6 +298,7 @@ export async function pollForToken(o: PollOptions): Promise<TokenResponse> {
           command: loginAgain,
         });
       default:
+        if (res.status === 404 || res.status === 405) throw unavailable(o.host, o.tokenUrl, res.status);
         if (res.status >= 500 || res.status === 429) {
           transient(`HTTP ${res.status}`);
           continue;
