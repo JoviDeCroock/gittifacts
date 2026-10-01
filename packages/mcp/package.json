@@ -3,13 +3,20 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc -p tsconfig.json", "test": "vitest run --passWithNoTests" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
   "dependencies": {
     "@app/domain": "workspace:*",
     "@app/evidence": "workspace:*",
+    "@modelcontextprotocol/client": "2.2.0",
     "@modelcontextprotocol/server": "2.2.0",
+    "mcp-tada": "0.4.0",
+    "mcp-tada-server": "0.2.0",
     "zod": "^4.6.5"
-  },
-  "devDependencies": {}
+  }
 }
