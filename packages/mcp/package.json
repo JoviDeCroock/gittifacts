@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "snapshot": "MCP_TADA_UPDATE=1 vitest run test/snapshot.test.ts"
   },
   "dependencies": {
     "@app/domain": "workspace:*",
