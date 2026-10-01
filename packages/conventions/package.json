@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc -p tsconfig.json", "test": "vitest run --passWithNoTests" },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "sync-templates": "tsx scripts/sync-templates.ts"
+  },
   "dependencies": {
     "@app/domain": "workspace:*",
     "zod": "^4.6.5"
