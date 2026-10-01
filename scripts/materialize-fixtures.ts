@@ -35,7 +35,8 @@ async function main(): Promise<void> {
   for (const name of selected) {
     const result = await materializeFixture(name, outDir === undefined ? {} : { outDir });
     console.log(`${name}`);
-    console.log(`  dir   ${relative(process.cwd(), result.dir) || "."}`);
+    const shown = relative(process.cwd(), result.dir);
+    console.log(`  dir   ${shown === "" ? "." : shown.startsWith("..") ? result.dir : shown}`);
     console.log(`  base  ${result.baseSha}  (main)`);
     console.log(`  head  ${result.headSha}  (change)`);
   }
