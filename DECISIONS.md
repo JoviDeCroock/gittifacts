@@ -280,3 +280,23 @@ Work order:
 - **pnpm 11 build-script approval** (`ERR_PNPM_IGNORED_BUILDS`) breaks installs of imported repos that have
   unapproved build scripts. Import detection must surface this in the generated Plan, and the sandbox must not
   auto-approve build scripts for unclaimed projects.
+
+## 2026-10-01 — Agent-native merge queue replaces the serial queue (docs/prompts/03-merge-queue.md)
+
+**CAS on main.** Artifacts enforces the receive-pack old-oid. A stale old-oid is rejected with `ng <ref> stale ref`,
+and a commit missing from the target repo with `unpack reachable object is missing`. Both were verified live on 2026-10-01
+(the probe in docs/research/artifacts.md §12, and `@app/gitwire`'s `scripts/live-smoke.ts`, steps "fastForward with stale
+old SHA -> StaleRefError" and "fastForward to an absent commit -> MissingObjectError").
+
+We still keep the DO-only-writer rule as defence in depth. Main-repo write tokens are minted only inside the `MergeQueue`
+DO, live ≤ 300 s, and are never returned. `refs/queue/*` are written only by the DO as well.
+
+**Structure.**
+- A pure, IO-free scheduling core in `packages/merge-queue` covers the conflict graph, tracks, speculative batches,
+  bisection, priority/aging, stacks, plan groups, fair share, prediction, flake handling and freezes.
+- The `MergeQueue` DO and the `BatchRunWorkflow` are thin IO shells around it.
+- `sim/merge-queue/` drives the *same* core with a seeded discrete-event simulator and enforces the §6 gates in CI.
+- The coordinator's earlier `MergeQueueCore` (serial) remains the "strictly serial" baseline in the simulator report.
+
+**Preview DNS.** `*.preview.resynapse.dev` AAAA `100::` (proxied) was created on the resynapse.dev zone for the preview
+gateway route.
