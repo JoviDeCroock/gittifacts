@@ -36,6 +36,7 @@
   "expected": {
     "computedLane": 1,
     "laneWithShadow": 1,
+    "requiresHumanApproval": false,
     "reasonCodes": [
       "api.additive"
     ],

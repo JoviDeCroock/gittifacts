@@ -28,6 +28,7 @@
   "expected": {
     "computedLane": 2,
     "laneWithShadow": 2,
+    "requiresHumanApproval": false,
     "reasonCodes": [
       "scope.drift"
     ],

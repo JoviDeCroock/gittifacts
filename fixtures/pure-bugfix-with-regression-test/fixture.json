@@ -29,7 +29,11 @@
   "expected": {
     "computedLane": 0,
     "laneWithShadow": 1,
-    "reasonCodes": [],
+    "requiresHumanApproval": false,
+    "reasonCodes": [
+      "red-green.proven",
+      "shadow.lane0-disabled"
+    ],
     "evidence": {
       "changedFiles": [
         "src/allocate.ts",

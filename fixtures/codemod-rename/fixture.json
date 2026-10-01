@@ -32,7 +32,11 @@
   "expected": {
     "computedLane": 0,
     "laneWithShadow": 1,
-    "reasonCodes": [],
+    "requiresHumanApproval": false,
+    "reasonCodes": [
+      "transform.verified",
+      "shadow.lane0-disabled"
+    ],
     "evidence": {
       "changedFiles": [
         "src/format.ts",

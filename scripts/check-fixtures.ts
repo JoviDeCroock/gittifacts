@@ -474,16 +474,25 @@ async function checkFixture(name: string): Promise<Report> {
   }
 
   // Expected reason codes must agree with what was measured.
+  const { computedLane, laneWithShadow, requiresHumanApproval } = fixture.expected;
+  const shadowed = computedLane === 0 && basePolicy?.lane0Enabled === false;
+  const platformChanged = changedFiles.some((path) => path.startsWith(".platform/"));
   checkReasonCodes(fixture, report, {
     sensitive: sensitiveHits.length > 0,
     drift: scopeDrift.length > 0,
     depsAdded: depsAdded.length > 0,
-    policyChanged,
+    platformChanged,
     verdict,
     api: apiClassification,
+    transformVerified,
+    shadowed,
   });
-  const { computedLane, laneWithShadow } = fixture.expected;
-  const shadowLane = basePolicy?.lane0Enabled === false ? Math.max(computedLane, 1) : computedLane;
+  report.assert(
+    "requiresHumanApproval iff something under .platform/ changed",
+    requiresHumanApproval === platformChanged,
+    `requiresHumanApproval is ${requiresHumanApproval}, .platform/ changed: ${platformChanged}`,
+  );
+  const shadowLane = shadowed ? 1 : computedLane;
   report.assert(
     "laneWithShadow follows shadow mode",
     laneWithShadow === shadowLane,
@@ -550,19 +559,33 @@ interface Facts {
   sensitive: boolean;
   drift: boolean;
   depsAdded: boolean;
-  policyChanged: boolean;
+  platformChanged: boolean;
   verdict: RedGreenVerdict;
   /** Measured API classification; undefined when declarations could not be built. */
   api: ApiClassification | undefined;
+  transformVerified: boolean | undefined;
+  shadowed: boolean;
 }
 
+const RED_GREEN_CODES: Record<RedGreenVerdict, string> = {
+  proven: "red-green.proven",
+  "not-proven": "red-green.not-proven",
+  "no-tests": "red-green.no-tests",
+};
+
+/**
+ * The expected reason codes (names from packages/classifier REASON_CODES) must agree with
+ * the facts measured here: a code is listed exactly when its condition holds.
+ */
 function checkReasonCodes(fixture: Fixture, report: Report, facts: Facts): void {
   const codes = new Set(fixture.expected.reasonCodes);
   const pairs: Array<[string, boolean]> = [
     ["sensitive.hit", facts.sensitive],
     ["scope.drift", facts.drift],
-    ["deps.added", facts.depsAdded],
-    ["policy.changed", facts.policyChanged],
+    ["dependency.added", facts.depsAdded],
+    ["policy.changed", facts.platformChanged],
+    ["transform.verified", facts.transformVerified === true],
+    ["shadow.lane0-disabled", facts.shadowed],
   ];
   if (facts.api !== undefined) {
     pairs.push(
@@ -570,15 +593,16 @@ function checkReasonCodes(fixture: Fixture, report: Report, facts: Facts): void 
       ["api.additive", facts.api === "additive"],
     );
   }
+  // Red/green only gates claimed fixes; other categories get "red-green.not-required".
+  for (const [verdict, code] of Object.entries(RED_GREEN_CODES)) {
+    pairs.push([code, fixture.claim.category === "fix" && facts.verdict === verdict]);
+  }
   const mismatched = pairs
     .filter(([code, measured]) => codes.has(code) !== measured)
     .map(
       ([code, measured]) =>
-        `${code}: ${measured ? "measured but not expected" : "expected but not measured"}`,
+        `${code}: ${measured ? "condition holds but code not listed" : "listed but condition does not hold"}`,
     );
-  if (codes.has("redgreen.not-proven") && facts.verdict === "proven") {
-    mismatched.push("redgreen.not-proven: expected but red/green is proven");
-  }
   report.assert(
     "expected reason codes match the measured facts",
     mismatched.length === 0,

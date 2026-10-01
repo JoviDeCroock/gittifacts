@@ -31,6 +31,7 @@
   "expected": {
     "computedLane": 2,
     "laneWithShadow": 2,
+    "requiresHumanApproval": true,
     "reasonCodes": [
       "policy.changed",
       "sensitive.hit"

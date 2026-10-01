@@ -29,8 +29,9 @@
   "expected": {
     "computedLane": 2,
     "laneWithShadow": 2,
+    "requiresHumanApproval": false,
     "reasonCodes": [
-      "redgreen.not-proven"
+      "red-green.no-tests"
     ],
     "evidence": {
       "changedFiles": [

@@ -106,9 +106,13 @@ export interface ExpectedEvidence {
 }
 
 export interface FixtureExpectation {
+  /** Lane before shadow mode (the classifier's max over reasons). */
   computedLane: Lane;
+  /** Lane the change is routed to under the fixture's base policy (lane0Enabled: false). */
   laneWithShadow: Lane;
-  /** Reason codes that MUST appear. Advisory names until reconciled with the classifier. */
+  /** A human other than the author must approve (e.g. anything under .platform/ changed). */
+  requiresHumanApproval: boolean;
+  /** Codes from the classifier's REASON_CODES that MUST appear (others may appear too). */
   reasonCodes: string[];
   evidence: ExpectedEvidence;
 }
@@ -262,7 +266,13 @@ export function parseFixture(raw: unknown, file: string): Fixture {
   };
 
   const e = r.object(root.expected, "expected");
-  r.keys(e, "expected", ["computedLane", "laneWithShadow", "reasonCodes", "evidence"]);
+  r.keys(e, "expected", [
+    "computedLane",
+    "laneWithShadow",
+    "requiresHumanApproval",
+    "reasonCodes",
+    "evidence",
+  ]);
   const ev = r.object(e.evidence, "expected.evidence");
   r.keys(ev, "expected.evidence", [
     ...EVIDENCE_STRING_LISTS,
@@ -294,6 +304,7 @@ export function parseFixture(raw: unknown, file: string): Fixture {
   const expected: FixtureExpectation = {
     computedLane: r.lane(e.computedLane, "expected.computedLane"),
     laneWithShadow: r.lane(e.laneWithShadow, "expected.laneWithShadow"),
+    requiresHumanApproval: r.boolean(e.requiresHumanApproval, "expected.requiresHumanApproval"),
     reasonCodes: r.strings(e.reasonCodes, "expected.reasonCodes"),
     evidence,
   };
