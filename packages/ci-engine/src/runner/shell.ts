@@ -65,6 +65,7 @@ export const CHECKOUT_SCRIPT = [
   "fi",
   // No existence check first: in a partial clone `git cat-file -e` would lazily fetch the commit
   // without blobs. `--no-filter` overrides the remote's recorded `partialclonefilter`.
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template.
   'if [ -n "${GITTIFACTS_BASE_SHA:-}" ]; then',
   '  git fetch -q --no-tags --no-filter --depth=1 origin "$GITTIFACTS_BASE_SHA"',
   "fi",
@@ -78,8 +79,8 @@ export function checkoutEnv(opts: {
   baseSha?: string | undefined;
   token: string;
 }): Record<string, string> {
+  // PATH is inherited from the image; exec does not inherit any other image env.
   return {
-    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     HOME: "/root",
     GIT_TERMINAL_PROMPT: "0",
     GITTIFACTS_REMOTE: opts.remote,

@@ -1,36 +1,53 @@
-import {
-  DurableObject,
-  WorkflowEntrypoint,
-  type WorkflowEvent,
-  type WorkflowStep,
-} from "cloudflare:workers";
+/**
+ * Test Worker: the real `CiRunWorkflow` and `Runner` with their I/O seams replaced by fakes.
+ */
+import type { RepoReader } from "../../src/cache/tree.js";
+import type { CiRunParams, RunSink } from "../../src/engine.js";
+import type { ContainerLike } from "../../src/runner/container.js";
+import { Runner } from "../../src/runner/runner-do.js";
+import { CiRunWorkflow, type CiWorkflowEnv } from "../../src/workflows/ci-run.js";
+import { FAKE_TOKEN, FakeContainer, fakeRepo } from "./fakes.js";
 
-interface Env {
-  RUNNER: DurableObjectNamespace<ProbeDO>;
-  PROBE_WF: Workflow<{ x: number }>;
-  CI_BUCKET: R2Bucket;
+export interface TestEnv extends CiWorkflowEnv {
+  CI_RUN_WORKFLOW: Workflow<CiRunParams>;
+  RUNNER: DurableObjectNamespace<TestRunner>;
 }
-export class ProbeDO extends DurableObject<Env> {
-  async hello(n: number): Promise<number> {
-    await new Promise((r) => setTimeout(r, 20));
-    return n * 2;
+
+export class TestRunner extends Runner<TestEnv> {
+  private fake: FakeContainer | null = null;
+
+  protected override container(): ContainerLike {
+    this.fake ??= new FakeContainer(this.env.CI_BUCKET, this.ctx.id.name ?? this.ctx.id.toString());
+    return this.fake;
+  }
+
+  protected override async mintReadToken(): Promise<string> {
+    return FAKE_TOKEN;
   }
 }
-export class ProbeWorkflow extends WorkflowEntrypoint<Env, { x: number }> {
-  override async run(event: WorkflowEvent<{ x: number }>, step: WorkflowStep) {
-    const [a, b] = await Promise.all([
-      step.do("a", () => this.env.RUNNER.getByName("a").hello(event.payload.x)),
-      step.do("b", () => this.env.RUNNER.getByName("b").hello(event.payload.x + 1)),
-    ]);
-    await step.do("put", async () => {
-      await this.env.CI_BUCKET.put("k", String(a + b));
-      return null;
-    });
-    return { sum: a + b };
+
+export class TestCiRunWorkflow extends CiRunWorkflow<TestEnv> {
+  protected override async withRepo<T>(
+    _name: string,
+    fn: (repo: RepoReader) => Promise<T>,
+  ): Promise<T> {
+    return fn(fakeRepo());
+  }
+
+  protected override runSink(req: CiRunParams): RunSink {
+    return {
+      onRunFinished: async (summary) => {
+        await this.env.CI_BUCKET.put(
+          `test-sink/${req.changeId}/${summary.id}.json`,
+          JSON.stringify(summary),
+        );
+      },
+    };
   }
 }
+
 export default {
-  fetch() {
-    return new Response("ok");
+  fetch(): Response {
+    return new Response("ci-engine test worker");
   },
 };

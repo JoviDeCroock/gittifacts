@@ -1,11 +1,17 @@
+// Test-only Worker config. Mirrors the production bindings (CI_RUN_WORKFLOW, RUNNER, CI_BUCKET)
+// but has no containers[] or artifacts[]: the Workers test runtime has neither, so the test entry
+// swaps in fakes through the Runner/Workflow seams. The Workflow binding doubles as the
+// test-only binding introspectWorkflowInstance() needs.
 {
   "$schema": "../../../../node_modules/wrangler/config-schema.json",
   "name": "ci-engine-test",
   "main": "./entry.ts",
   "compatibility_date": "2026-09-30",
   "compatibility_flags": ["nodejs_compat"],
-  "durable_objects": { "bindings": [{ "name": "RUNNER", "class_name": "ProbeDO" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProbeDO"] }],
-  "workflows": [{ "name": "probe", "binding": "PROBE_WF", "class_name": "ProbeWorkflow" }],
+  "durable_objects": { "bindings": [{ "name": "RUNNER", "class_name": "TestRunner" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TestRunner"] }],
+  "workflows": [
+    { "name": "ci-run", "binding": "CI_RUN_WORKFLOW", "class_name": "TestCiRunWorkflow" }
+  ],
   "r2_buckets": [{ "binding": "CI_BUCKET", "bucket_name": "ci-test" }]
 }
