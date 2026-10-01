@@ -58,3 +58,40 @@ for `refs/heads/<default>`.
 Implicitly created namespaces are unrestricted and the jurisdiction is immutable, so the platform
 namespace is created explicitly with `jurisdiction: "eu"`. Tokens are treated as opaque strings: the
 probe got `art_v2_e_…` while the docs show `art_v1_…`.
+
+## 2026-10-01 — `WorkflowsCiEngine` is the default; `CloudflareCiEngine` is an opt-in adapter
+
+**Context.** `@cloudflare/ci@0.2.0` is on npm and needs no allowlist, but it is built on the legacy
+`@cloudflare/sandbox@0.12.1` `Sandbox` class (default-policy container). That conflicts with the
+"use `ctx.container` only" rule. `HealingAgent` is example code, not part of the package, and the
+package doesn't expose restart-from-step.
+
+**Decision.** `CiEngine` has two implementations, chosen by `CI_ENGINE` config:
+- `WorkflowsCiEngine` (default): one Workflow step per pipeline step, a `Runner` Durable Object per step
+  that drives `ctx.container` (`exec`, `snapshotContainer`), dependent steps start from the parent's
+  snapshot, an R2 cache pointer keyed on input blob SHAs, and restart-from-step through
+  `instance.restart({ from: { name } })`.
+- `CloudflareCiEngine`: a `CIWorkflow` subclass that replays the same `PipelineSpec` through
+  `ci.runner()`. It lives at the `@app/ci-engine/cloudflare` subpath and is only wired into a separate
+  wrangler environment, so the default deployment never ships a legacy-Sandbox container.
+
+Repo pipeline files (`.platform/ci.ts`) are evaluated *inside the sandbox* in a recording "plan mode"
+that turns them into a static DAG. Repo code never runs in the platform Worker.
+
+## 2026-10-01 — `wrangler.jsonc`, not `cloudflare.config.ts`
+
+`cloudflare.config.ts` (beta) can't express the Artifacts push → Workflow trigger (`triggers.events`) or
+D1 `migrations_dir`, and `cf` Previews don't support DO-managed containers. We use `wrangler.jsonc` and
+use the `cf` CLI only for resource/API commands. Revisit once `cf` config covers triggers.
+
+## 2026-10-01 — `@cloudflare/vitest-plugin` instead of `@cloudflare/vitest-pool-workers`
+
+The pool package has been superseded by `@cloudflare/vitest-plugin` (same `cloudflare:test` API,
+including `introspectWorkflowInstance`). Pinned at 1.3.4 with vitest 4.1.
+
+## 2026-10-01 — Preview deploys are uploaded by the platform, not the sandbox
+
+Sandboxes hold no Cloudflare credentials. The sandbox builds the change's Worker bundle
+(`wrangler deploy --dry-run --outdir`). The platform uploads it as a version tagged with the change id,
+using preview-scoped bindings. Version preview URLs aren't generated for Workers that define Durable
+Objects. For those repos, preview evidence is `skipped` with a note, which is an informational signal.
