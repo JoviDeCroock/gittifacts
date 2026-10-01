@@ -78,10 +78,9 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     },
 
     async startChange(mc, input, opts) {
+      // Idempotent in the coordinator (same change, fresh grant); never store push grants.
       const caller = callerFrom(mc);
-      return idem(caller, "start_change", opts.idempotencyKey, input, () =>
-        startChange(svc, caller, input, opts.idempotencyKey),
-      );
+      return startChange(svc, caller, input, opts.idempotencyKey);
     },
 
     async getChangeStatus(mc, changeId) {
@@ -129,11 +128,9 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
       return listChangeIssues(svc, changeId);
     },
 
-    async refreshPushToken(mc, changeId, opts) {
-      const caller = callerFrom(mc);
-      return idem(caller, "refresh_push_token", opts.idempotencyKey, { changeId }, () =>
-        refreshPushGrant(svc, caller, changeId),
-      );
+    async refreshPushToken(mc, changeId) {
+      // A fresh grant per call is safe to retry; grants are never stored.
+      return refreshPushGrant(svc, callerFrom(mc), changeId);
     },
 
     async waitForChange(mc, changeId, until, timeoutMs) {

@@ -510,10 +510,8 @@ export function buildTools(backend: McpBackend) {
       handler: async (args, ctx) => {
         const caller = callerOf(ctx);
         requireScope(caller, "change:create");
-        const { changeId } = parse(ChangeIdArgs, { changeId: args.changeId });
-        const remote = await run(backend, () =>
-          backend.refreshPushToken(caller, changeId, { idempotencyKey: args.idempotencyKey }),
-        );
+        const { changeId } = parse(ChangeIdArgs, args);
+        const remote = await run(backend, () => backend.refreshPushToken(caller, changeId, {}));
         return { remote };
       },
     },

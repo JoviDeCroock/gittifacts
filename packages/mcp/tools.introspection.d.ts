@@ -935,7 +935,6 @@ export type introspection = {
     /**
      * Refresh the push token
      * A fresh short-lived push grant for your change's fork (author only). Use it when the old token expired.
-     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
      */
     "refresh_push_token": {
       "inputSchema": {
@@ -945,12 +944,6 @@ export type introspection = {
             "type": "string",
             "minLength": 1,
             "maxLength": 64
-          },
-          "idempotencyKey": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200,
-            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
           }
         },
         "required": [
@@ -1095,7 +1088,7 @@ export type introspection = {
      * Fork the repo for one change and get a short-lived push grant for that fork only. Push commits there; CI, evidence and the lane follow automatically.
      * @param args.planId The approved plan this change implements.
      * @param args.category Your claim; it can only raise risk, never lower it.
-     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the same change with a fresh push grant.
      */
     "start_change": {
       "inputSchema": {
@@ -1142,7 +1135,7 @@ export type introspection = {
             "type": "string",
             "minLength": 1,
             "maxLength": 200,
-            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+            "description": "Optional. Retrying with the same key returns the same change with a fresh push grant."
           }
         },
         "required": [

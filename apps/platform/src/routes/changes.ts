@@ -45,7 +45,10 @@ const start = createRoute({
   tags: ["changes"],
   summary: "Start a change: fork the repo and get a push grant for the fork only",
   security: SECURITY,
-  middleware: [requirePrincipal(["change:create"]), idempotent()] as const,
+  // Not stored by the idempotency middleware: the response holds a push token. The key is
+  // forwarded to the coordinator, whose startChange is idempotent per (actor, key) and returns
+  // the same change with a fresh grant.
+  middleware: [requirePrincipal(["change:create"])] as const,
   request: { headers: IdempotencyHeaders, body: body(StartChangeBody) },
   responses: {
     201: json(z.object({ change: ChangeSchema, remote: GitRemoteSchema }), "Started"),
@@ -81,7 +84,8 @@ const token = createRoute({
   tags: ["changes"],
   summary: "Fresh short-lived push token for the change's fork (author only)",
   security: SECURITY,
-  middleware: [requirePrincipal(["change:create"]), idempotent()] as const,
+  // Minting a fresh grant is naturally safe to retry; grants are never stored.
+  middleware: [requirePrincipal(["change:create"])] as const,
   request: { headers: IdempotencyHeaders, params: ChangeIdParam },
   responses: {
     200: json(z.object({ remote: GitRemoteSchema }), "Grant"),

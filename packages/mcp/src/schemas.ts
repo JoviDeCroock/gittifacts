@@ -215,7 +215,11 @@ export const StartChangeInput = {
     },
     summary: { type: "string", maxLength: 10000 },
     agentTraceId: { type: "string", maxLength: 200 },
-    idempotencyKey,
+    idempotencyKey: {
+      ...idempotencyKey,
+      description:
+        "Optional. Retrying with the same key returns the same change with a fresh push grant.",
+    },
   },
   required: ["repoId", "title", "category"],
   additionalProperties: false,
@@ -230,7 +234,7 @@ export const RequestReviewInput = {
 
 export const RefreshPushTokenInput = {
   type: "object",
-  properties: { changeId: id, idempotencyKey },
+  properties: { changeId: id },
   required: ["changeId"],
   additionalProperties: false,
 } as const;
