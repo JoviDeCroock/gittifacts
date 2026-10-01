@@ -1,18 +1,22 @@
 import { Tour } from "@app/domain";
 import type { EvidenceItem } from "@app/evidence";
 import { describe, expect, it } from "vitest";
-import { FakeLlmClient, LlmError, type LlmRequest } from "../src/llm.js";
+import { estimateCallCostUsd } from "../src/budget.js";
+import { FakeLlmClient, LlmError, type LlmRequest, type ScriptedResponse } from "../src/llm.js";
 import { PROMPT_VERSION } from "../src/prompt.js";
 import { createReviewer, type TourOutcome } from "../src/tour.js";
 import {
   BEHAVIOR_STOP,
   breakingApiInput,
   CHANGE_ID,
+  diffOf,
   FORMAT_DECL_HEAD_LINE,
   FORMAT_DECL_HUNK,
+  file,
   fullChange,
   goodModelTour,
   HEAD_SHA,
+  hunk,
   INTENT_STOP,
   PROOF_STOP,
   RISK_DECL_STOP,
@@ -482,5 +486,87 @@ describe("reviewer: the author's summary never reaches the model", () => {
     const text = promptText(client.requests[0]!);
     expect(text).toContain('id "agent-trace"');
     expect(text).not.toContain("traces.example.com");
+  });
+});
+
+describe("reviewer.tour: regeneration reserve for small diffs", () => {
+  const SONNET = "anthropic/claude-sonnet-5";
+  /** A scripted reply that costs the worst case the reviewer estimated for this request. */
+  const worstCase =
+    (json: unknown): ScriptedResponse =>
+    (req: LlmRequest) => ({
+      json,
+      costUsd: estimateCallCostUsd(
+        SONNET,
+        req.system + req.messages.map((m) => m.content).join("\n"),
+        req.maxTokens,
+      ),
+    });
+
+  it("at the default $0.50, a worst-case first call still leaves room for the regeneration", async () => {
+    const client = new FakeLlmClient([worstCase({ junk: true }), worstCase(goodModelTour())], {
+      model: SONNET,
+    });
+    const outcome = await createReviewer(client, opts).tour(
+      breakingApiInput({ budget: { changeId: CHANGE_ID, limitUsd: 0.5, spentUsd: 0.05 } }),
+    );
+    expect(outcome.diagnostics.regenerationReserved).toBe(true);
+    expect(outcome.diagnostics.omittedHunks).toEqual([]);
+    expect(client.requests).toHaveLength(2);
+    expect(outcome).toMatchObject({ status: "ok", budgetExceeded: false });
+    expect(outcome.costUsd).toBeLessThan(0.45);
+  });
+
+  it("whenever a regeneration was reserved it is never refused, even at worst-case cost", async () => {
+    let reserved = 0;
+    let trimmedToReserve = 0;
+    let notReserved = 0;
+    for (let limit = 0.06; limit <= 0.2; limit += 0.002) {
+      const client = new FakeLlmClient([worstCase({ junk: true }), worstCase(goodModelTour())], {
+        model: SONNET,
+      });
+      const outcome = await createReviewer(client, opts).tour(
+        breakingApiInput({ budget: { changeId: CHANGE_ID, limitUsd: limit, spentUsd: 0 } }),
+      );
+      if (!outcome.diagnostics.regenerationReserved) {
+        notReserved++;
+        continue;
+      }
+      reserved++;
+      if (outcome.diagnostics.omittedHunks.length > 0) trimmedToReserve++;
+      expect(client.requests).toHaveLength(2);
+      expect(outcome.status).toBe("ok");
+      expect(outcome.budgetExceeded).toBe(false);
+    }
+    expect(reserved).toBeGreaterThan(0);
+    expect(trimmedToReserve).toBeGreaterThan(0);
+    expect(notReserved).toBeGreaterThan(0);
+  });
+
+  it("does not reserve for large diffs (keeps the whole-budget fit)", async () => {
+    const big = diffOf([
+      file("src/big.ts", [
+        hunk(
+          1,
+          1,
+          Array.from(
+            { length: 1200 },
+            (_, i) =>
+              ["+", `export const value${i} = computeSomething(${i}, "padding text");`] as [
+                "+",
+                string,
+              ],
+          ),
+        ),
+      ]),
+    ]);
+    const client = new FakeLlmClient([{ json: goodModelTour({ stops: [INTENT_STOP] }) }], {
+      model: SONNET,
+    });
+    const outcome = await createReviewer(client, opts).tour(
+      breakingApiInput({ diff: big, budget: { changeId: CHANGE_ID, limitUsd: 0.5, spentUsd: 0 } }),
+    );
+    expect(outcome.diagnostics.regenerationReserved).toBe(false);
+    expect(outcome.status).toBe("ok");
   });
 });

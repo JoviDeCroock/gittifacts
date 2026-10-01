@@ -78,6 +78,8 @@ export interface TourDiagnostics {
   collapsedFiles: string[];
   omittedHunks: OmittedHunk[];
   diffTokenBudget: number;
+  /** The diff was sized so that the first call and one regeneration both fit the budget. */
+  regenerationReserved: boolean;
   postprocess?: PostprocessReport;
 }
 
@@ -113,6 +115,12 @@ const DEFAULTS = {
   judgeDiffTokens: 16_000,
 } as const;
 const MIN_TOUR_DIFF_TOKENS = 800;
+/** Diffs smaller than this get budget for one regeneration reserved up front (README: Budget). */
+export const REGENERATION_RESERVE_MAX_DIFF_TOKENS = 8000;
+/** The previous reply is echoed back to the model at most this long. */
+const MAX_ECHOED_REPLY_CHARS = 12_000;
+/** Extra input of the regeneration call: the echoed reply plus the retry message (≤ 20 issues). */
+const REGENERATION_EXTRA_TOKENS = estimateTokens("x".repeat(MAX_ECHOED_REPLY_CHARS)) + 800;
 /** Words kept free for the platform's own notes when telling the model its word limit. */
 const PLATFORM_WORD_RESERVE = 40;
 
@@ -210,6 +218,7 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
     collapsedFiles: [],
     omittedHunks: [],
     diffTokenBudget: 0,
+    regenerationReserved: false,
   };
   const fail = (reason: string): TourOutcome => ({
     status: "failed",
@@ -299,7 +308,27 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
     client.allowedModels,
   );
   const fullTokens = renderDiff(reviewDiff, slots, Number.POSITIVE_INFINITY).tokens;
-  const diffBudget = Math.min(deps.tourDiffTokens, affordable - overhead);
+  let diffBudget = Math.min(deps.tourDiffTokens, affordable - overhead);
+  // Small diffs: also reserve one regeneration, i.e. size D so that both calls fit:
+  //   (O + D)·in + M·out  +  (O + D + R)·in + M·out  ≤  remaining
+  //   ⇒ D ≤ (affordable(2M) − R) / 2 − O,   with affordable(2M) = (remaining − 2M·out) / in.
+  if (fullTokens < REGENERATION_RESERVE_MAX_DIFF_TOKENS) {
+    const affordableTwo = affordableInputTokens(
+      tracker.remainingUsd,
+      client.model,
+      2 * deps.tourMaxTokens,
+      deps.prices,
+      client.allowedModels,
+    );
+    const twoCalls = Math.min(
+      deps.tourDiffTokens,
+      Math.floor((affordableTwo - REGENERATION_EXTRA_TOKENS) / 2) - overhead,
+    );
+    if (twoCalls >= Math.min(MIN_TOUR_DIFF_TOKENS, fullTokens)) {
+      diffBudget = twoCalls;
+      diagnostics.regenerationReserved = true;
+    }
+  }
   diagnostics.diffTokenBudget = Math.max(0, diffBudget);
   if (diffBudget < Math.min(MIN_TOUR_DIFF_TOKENS, fullTokens)) {
     tracker.markExceeded();
@@ -379,7 +408,10 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
     }
     lastProblem = check.problems;
     messages.push(
-      { role: "assistant", content: clip(res.text === "" ? "(empty reply)" : res.text, 12_000) },
+      {
+        role: "assistant",
+        content: clip(res.text === "" ? "(empty reply)" : res.text, MAX_ECHOED_REPLY_CHARS),
+      },
       { role: "user", content: buildRetryPrompt(check.problems) },
     );
   }
