@@ -14,6 +14,7 @@ function down(): never {
 export const unavailableCoordinator: CoordinatorApi = {
   createRepo: async () => down(),
   importRepo: async () => down(),
+  startBootstrapChange: async () => down(),
   startChange: async () => down(),
   refreshPushGrant: async () => down(),
   onPush: async () => down(),
