@@ -160,3 +160,36 @@ it Lane 2 with a human approval. Once that script is on main, later changes can 
   matches everything under it.
 
 **Resolved:** a mutation run with no mutants on changed lines is `skipped`. The classifier accepts that skip (`signal.skip-accepted.mutation`, L0) only for docs, image or licence-only diffs; anywhere else a skipped mutation run still counts as missing (L1).
+
+## 2026-10-01 — Previews run in our containers behind a preview gateway on `*.preview.resynapse.dev` (user decision)
+
+**Context.** Onboarding requires previews of untrusted code: unclaimed projects, on a separate, clearly marked domain,
+with a banner on HTML responses and egress restricted. The account has no Workers for Platforms access ($25/month
+add-on), and plain Worker scripts on workers.dev can't get a banner injected or their egress restricted.
+
+**Decision (the user chose this option).**
+- **Hosting.** Each preview runs the project's built Worker under workerd (`wrangler dev`) inside a `ctx.container`
+  sandbox, started from the CI build snapshot.
+- **Gateway.** A separate `preview-gateway` Worker owns `*.preview.resynapse.dev/*` and maps `<previewId>.preview.resynapse.dev`
+  to a `PreviewHost` Durable Object. That DO proxies to the container port with `getTcpPort().fetch`.
+- **Banner and egress.** The gateway injects the banner with HTMLRewriter, and the container's outbound HTTP is
+  intercepted (`interceptAllOutboundHttp`) and checked against an allowlist.
+- **No direct exposure.** Containers have no public hostname, so a preview can't be reached without the banner.
+- **Idle and lifetime.** Previews sleep when idle (cold start of a few seconds) and expire with their Change, or after
+  the unclaimed project's TTL.
+
+**Consequences.** No extra spend, and previews match the abuse-limit requirements. The preview runtime is workerd in a
+container rather than the edge runtime, so production-only behaviour can differ. Production rollout (claimed projects
+with a deploy target) still uses real Worker versions and gradual deployments.
+
+## 2026-10-01 — Onboarding plan (docs/prompts/02-onboarding.md)
+
+Work order:
+1. Core platform M1–M4 integration together with O1 (front door, templates, `create_project`, `AGENTS.md`) and
+   O2 (fix-hint errors, idempotency, `wait_for_change`, `whoami`, CLI).
+2. Deploy.
+3. O3 (claimable projects + abuse limits), O4 (MCP OAuth + device flow), O5 (import detection + remote workspaces).
+4. O6 eval loop and dogfooding.
+
+`projectId` is the repo id: a project is a repo plus its preview, claim state and quotas. One source of truth
+(`packages/conventions`) generates `AGENTS.md`, `/start`, `/llms.txt` and the `nextSteps` texts.
