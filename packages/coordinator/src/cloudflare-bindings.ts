@@ -13,12 +13,16 @@ import type {
 } from "./bindings.js";
 import type { ChangeWorkflowParams, RolloutParams } from "./events.js";
 
-/** wrangler binding names the coordinator expects. */
+/**
+ * wrangler binding names the coordinator expects. `COORDINATOR` is also the name the CI engine
+ * uses to reach its run sink (`env.COORDINATOR.getByName(changeId).onRunFinished`), so one
+ * binding to the ChangeCoordinator class serves both.
+ */
 export const BINDING_NAMES = {
   changeWorkflow: "CHANGE_WORKFLOW",
   rolloutWorkflow: "ROLLOUT_WORKFLOW",
   pushRouter: "PUSH_ROUTER",
-  changeCoordinator: "CHANGE_COORDINATOR",
+  changeCoordinator: "COORDINATOR",
   mergeQueue: "MERGE_QUEUE",
 } as const;
 
@@ -42,7 +46,7 @@ export interface NamespaceLike {
 export interface CoordinatorEnv {
   CHANGE_WORKFLOW: WorkflowLike<ChangeWorkflowParams>;
   ROLLOUT_WORKFLOW: WorkflowLike<RolloutParams>;
-  CHANGE_COORDINATOR: NamespaceLike;
+  COORDINATOR: NamespaceLike;
   MERGE_QUEUE: NamespaceLike;
 }
 
@@ -85,7 +89,7 @@ export function cloudflareBindings(env: CoordinatorEnv): CoordinatorBindings {
     rolloutWorkflow: workflowHandle(env.ROLLOUT_WORKFLOW),
     // The DO classes implement exactly these client interfaces, so their RPC stubs do too.
     changeCoordinator: (changeId) =>
-      env.CHANGE_COORDINATOR.getByName(changeId) as ChangeCoordinatorClient,
+      env.COORDINATOR.getByName(changeId) as ChangeCoordinatorClient,
     mergeQueue: (repoId) => env.MERGE_QUEUE.getByName(repoId) as MergeQueueClient,
   };
 }

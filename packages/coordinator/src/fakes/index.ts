@@ -75,8 +75,8 @@ export function portsForRole(ports: FakePorts, role: PortsRole): Ports {
 
 function forkOnlyGit(git: FakeGitHost): FakeGitHost {
   return new Proxy(git, {
-    get(target, prop, receiver) {
-      const value: unknown = Reflect.get(target, prop, receiver);
+    get(target, prop) {
+      const value: unknown = Reflect.get(target, prop);
       if (typeof value !== "function") return value;
       const guarded = new Set(["writeNote", "updateRef", "commitTree", "deleteRepo"]);
       return (...args: unknown[]) => {

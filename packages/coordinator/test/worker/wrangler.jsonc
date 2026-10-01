@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "durable_objects": {
     "bindings": [
-      { "name": "CHANGE_COORDINATOR", "class_name": "ChangeCoordinator" },
+      { "name": "COORDINATOR", "class_name": "ChangeCoordinator" },
       { "name": "MERGE_QUEUE", "class_name": "MergeQueue" }
     ]
   },

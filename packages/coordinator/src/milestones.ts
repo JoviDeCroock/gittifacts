@@ -88,7 +88,7 @@ export function withChangeNotifications(ports: Ports, bindings: CoordinatorBindi
     }
   };
   const wrapped = new Proxy(store, {
-    get(target, prop, receiver) {
+    get(target, prop) {
       if (prop === "updateChange") {
         const update: Store["updateChange"] = async (id, patch) => {
           const row = await target.updateChange(id, patch);
@@ -97,7 +97,7 @@ export function withChangeNotifications(ports: Ports, bindings: CoordinatorBindi
         };
         return update;
       }
-      const value: unknown = Reflect.get(target, prop, receiver);
+      const value: unknown = Reflect.get(target, prop);
       return typeof value === "function"
         ? (value as (...a: unknown[]) => unknown).bind(target)
         : value;
