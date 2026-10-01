@@ -13,62 +13,12 @@ import {
 } from "mcp-tada";
 import { CLI_VERSION } from "./version.js";
 
-const NextSteps = {
-  type: "array",
-  items: {
-    type: "object",
-    properties: {
-      title: { type: "string" },
-      why: { type: "string" },
-      call: { type: "string" },
-      command: { type: "string" },
-    },
-    required: ["title"],
-  },
-} as const;
-
 /**
- * Tools the platform is adding (onboarding §3), typed from the spec until `@app/mcp` declares
- * them. A tool `@app/mcp` declares always wins over the entry here.
+ * Typed from the tool definitions. Tools the platform is still adding (e.g. `create_project`) are
+ * called by name through `callAnyTool` and their results validated at runtime, so this CLI keeps
+ * compiling whatever schema they land with.
  */
-interface PendingTools {
-  create_project: {
-    inputSchema: {
-      type: "object";
-      properties: {
-        name: { type: "string" };
-        template: { type: "string" };
-        from: { type: "string" };
-        description: { type: "string" };
-        idempotencyKey: { type: "string" };
-      };
-      additionalProperties: false;
-    };
-    outputSchema: {
-      type: "object";
-      properties: {
-        projectId: { type: "string" };
-        remote: {
-          anyOf: [
-            { type: "string" },
-            { type: "object"; properties: { url: { type: "string" } }; required: ["url"] },
-          ];
-        };
-        token: { type: "string" };
-        mcpUrl: { type: "string" };
-        previewUrl: { type: ["string", "null"] };
-        claimUrl: { type: ["string", "null"] };
-        nextSteps: typeof NextSteps;
-      };
-      required: ["projectId"];
-    };
-  };
-}
-
-type PlatformTools = PlatformIntrospection["tools"];
-export type CliIntrospection = {
-  tools: PlatformTools & Omit<PendingTools, keyof PlatformTools>;
-};
+export type CliIntrospection = PlatformIntrospection;
 export type PlatformMcp = TypedClient<CliIntrospection>;
 
 export type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;

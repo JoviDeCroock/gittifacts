@@ -1,19 +1,18 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ToolOutput } from "mcp-tada";
 import { describe, expect, it } from "vitest";
 import { EXIT } from "../src/errors.js";
 import { gitAuthEnv, splitRemote } from "../src/git.js";
 import { type GitRunner, runGit } from "../src/io.js";
-import type { CliIntrospection } from "../src/mcp.js";
 import { harness, run, tempDir } from "./support/io.js";
 import { mockConnector } from "./support/mcp.js";
 
 const HOST = "https://gittifacts.example";
 
-type ProjectOut = ToolOutput<CliIntrospection, "create_project">;
+/** What create_project returns (onboarding §3); the platform is still adding the tool. */
+type ProjectOut = Record<string, unknown>;
 
-function created(over: Partial<ProjectOut> = {}): ProjectOut {
+function created(over: ProjectOut = {}): ProjectOut {
   return {
     projectId: "prj_1",
     remote: "https://git.gittifacts.example/prj_1.git",
@@ -52,10 +51,6 @@ function initHarness(
   const connector = mockConnector(
     {
       tools: {
-        create_project: (args) => {
-          calls.push({ ...args });
-          return result;
-        },
         whoami: {
           principalId: "anon_prj_1",
           kind: "agent",
@@ -73,7 +68,15 @@ function initHarness(
         },
       },
     },
-    opts.declareKey ? { listTools: async () => [createProjectSchema] } : {},
+    {
+      untyped: {
+        create_project: (args) => {
+          calls.push({ ...args });
+          return result;
+        },
+      },
+      ...(opts.declareKey ? { listTools: async () => [createProjectSchema] } : {}),
+    },
   );
   h.io.connect = connector;
   return { h, calls, connector };
