@@ -794,7 +794,8 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     const common = {
       enableInternet: gateway === null,
       instance: opts.instance,
-      entrypoint: ["sleep", "infinity"],
+      // The image's own entrypoint (tini + sleep infinity) keeps the container up and reaps
+      // zombies; it also runs again when a snapshot is restored.
       labels: { "gittifacts-run": label(opts.runId), "gittifacts-step": label(opts.step) },
     };
     try {

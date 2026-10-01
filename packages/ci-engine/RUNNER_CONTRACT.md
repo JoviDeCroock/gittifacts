@@ -1,128 +1,170 @@
 # Runner contract (`@app/ci-engine` ⇄ `apps/sandbox`)
 
-What the CI engine needs from the sandbox image and the `gittifacts-runner` CLI, and what it
-guarantees in return. The engine side is `src/runner/runner-do.ts` (the `Runner` Durable Object on
-`ctx.container`) and `src/plan/*` (plan mode). Contract version: 1.
+This file covers what the CI engine needs from the sandbox image and the `gittifacts-runner` CLI,
+and what it guarantees in return. It matches `apps/sandbox/README.md`, which is the source of truth
+for the CLI. The engine side lives in `src/runner/runner-do.ts` (the `Runner` Durable Object on
+`ctx.container`), `src/runner/markers.ts` (output parsing) and `src/plan/*` (the recorder used by
+`plan`). Contract version: 2.
 
 ## 1. Image
 
-Built from `apps/sandbox/Dockerfile` and declared as `containers[].images.base` (see §6).
+The image is `apps/sandbox/Dockerfile`, declared as `containers[].images.base` (see §7).
 
-| Requirement | Why |
-|---|---|
-| Debian/Ubuntu base, runs as root | `update-ca-certificates`, writable `/usr/local/share/ca-certificates` |
-| `sh` (POSIX), GNU coreutils (`timeout`, `sleep infinity`, `head -c`, `mv`, `find`, `wc`) | every command runs as `sh -c "exec timeout --kill-after=10 <secs> sh -c '<cmd>'"`; the Runner starts the container with entrypoint `["sleep", "infinity"]` |
-| GNU tar (`--null -T -`) | global-scope cached steps reduce `/workspace` to their cache inputs |
-| git ≥ 2.30 (partial clone, `fetch --no-filter`) | checkout (§3) |
-| `ca-certificates` with `update-ca-certificates` | restricted egress intercepts TLS (§4) |
-| Node.js 22+ with corepack enabled (pnpm and yarn shims), npm | default pipelines run `pnpm install --frozen-lockfile`, `npm ci`, `yarn install …` |
-| bun (optional) | only for repos with `bun.lock` |
-| every tool on the default `PATH` (`/usr/local/bin`, `/usr/bin`, …) | `exec` does not inherit the image `ENV` except `PATH` |
-| `gittifacts-runner` on `PATH` (§5) | plan mode and evidence steps |
-| writable `/workspace` and `/tmp` | checkout target; evidence output goes to `/tmp/gittifacts/` |
-
-The image must not contain credentials. Snapshots are root-filesystem snapshots, so anything a
-step writes anywhere (including `/tmp`) is inherited by steps that start from it.
+- **Entrypoint.** `tini` + `sleep infinity`. The Runner uses the image's entrypoint and runs
+  everything through `exec`.
+- **User.** `runner`, uid/gid 10001, home `/home/runner`, workdir `/workspace` (owned by
+  `runner`). The Runner runs every workspace exec as `10001:10001`. Only the CA-trust step (§4)
+  runs as `0:0`.
+- **Tools.** sh (POSIX) and GNU coreutils: `timeout`, `head`, `find`, `wc`. GNU tar, which needs
+  `--null -T -` and `-cz`. git ≥ 2.30, for partial clone and `fetch --no-filter`. Node 22+,
+  corepack with pnpm and yarn, npm, wrangler, and `ca-certificates` with `update-ca-certificates`.
+- **PATH and env.** Every entry point in `/usr/local/bin` sources `/opt/gittifacts/env.sh`. `exec`
+  doesn't inherit the image `ENV` except `PATH`, so defaults belong in `env.sh`: store and cache
+  paths, `COREPACK_HOME`, and telemetry off.
+- **Caches.** `/opt/pnpm-store`, `/opt/npm-cache` and `/opt/yarn-cache` are reused through
+  snapshots.
+- **No credentials** in the image.
+- **Snapshots** cover the whole root filesystem, `/tmp` included. Anything a step writes is
+  inherited by the steps that start from it.
 
 ## 2. Command environment
 
-Each step runs in its own container, started from the image or from its parent step's snapshot.
+Each step runs in its own container. It starts from the image, from its parent step's snapshot, or
+from a cached snapshot.
 
-- **cwd**: `/workspace`, or `/workspace/<cwd>` for steps with a `cwd` (a missing directory is the
-  step's failure: exit 2 with a message).
-- **env** (nothing else; the image env is not inherited except `PATH`):
-  `HOME=/root CI=true LANG=C.UTF-8 TERM=dumb COREPACK_ENABLE_DOWNLOAD_PROMPT=0`, the step's own
-  `env`, then `GITTIFACTS=1 GITTIFACTS_RUN_ID GITTIFACTS_STEP GITTIFACTS_HEAD_SHA`, and for evidence
-  steps also `GITTIFACTS_BASE_SHA GITTIFACTS_EVIDENCE_OUT=/tmp/gittifacts/evidence.json`. Under
-  restricted egress also `NODE_EXTRA_CA_CERTS`.
-- **No secrets.** The only credential is a 15-minute read token for the repository, and only the
-  checkout exec sees it (as `GIT_CONFIG_*` env). Commands never get it.
-- **Timeout**: the step's `timeoutMinutes` (default 25, max 30), further bounded by the run's
-  remaining `limits.maxMinutes`. `timeout` sends SIGTERM, then SIGKILL 10 s later; exit 124/137 is
-  reported as timed out.
-- **Output**: stdout and stderr combined, redacted (the token and anything token-shaped), streamed
-  to R2 at `ci-logs/<runId>/<step>.log`, capped at `limits.maxLogBytes` (default 20 MiB).
-- **Instance**: the step's `instance` (default `standard-2`), clamped to `limits.instance`.
+- **cwd.** `/workspace`, or `/workspace/<cwd>`. If the directory is missing, the step fails with
+  exit 2 and a message.
+- **env.** This is the whole environment.
+  - Base: `HOME=/home/runner`, `CI=true`, `LANG=C.UTF-8`, `TERM=dumb`,
+    `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`.
+  - Then the step's own `env`.
+  - Then `GITTIFACTS=1`, `GITTIFACTS_RUN_ID`, `GITTIFACTS_STEP` and `GITTIFACTS_HEAD_SHA`.
+  - Evidence steps also get `GITTIFACTS_BASE_SHA` and
+    `GITTIFACTS_EVIDENCE_OUT=/tmp/gittifacts/evidence.json`.
+  - Under restricted egress, `NODE_EXTRA_CA_CERTS` is added.
+- **No secrets, ever.** Steps get no `GITTIFACTS_TOKEN` or `GITTIFACTS_REMOTE`, so the runner
+  never needs to fetch missing commits:
+  - The checkout exec gets a 15-minute read token through `GIT_CONFIG_*`, and that exec alone.
+  - Evidence steps get the base commit pre-fetched with blobs (§3).
+- **Timeout.** The step's `timeoutMinutes` (default 25, max 30), bounded by the run's remaining
+  `limits.maxMinutes`. The command runs as
+  `sh -c "exec timeout --kill-after=10 <secs> sh -c '<cmd>'"`. Exit 124 or 137 means it timed out.
+- **Output.** stdout and stderr are combined and redacted (the token, and anything that looks like
+  a token). They are streamed to R2 at `ci-logs/<runId>/<step>.log` and capped at
+  `limits.maxLogBytes`.
+- **Instance.** The step's `instance` (default `standard-2`), clamped to `limits.instance`.
 
 ## 3. Workspace
 
-`/workspace` is a git working tree: shallow (`--depth=1`), blobless fetch, detached `HEAD` at the
-head commit, `origin` = the repository remote, no credentials stored.
+`/workspace` is a shallow, blobless git checkout with a detached `HEAD` at the head commit.
+`origin` is the repository remote, and no credentials are stored.
 
-- Fresh container: `git init`, fetch, checkout.
-- From a snapshot at the same commit: untouched (a step sees its parent's changes, e.g.
-  `node_modules`).
-- From a snapshot at another commit (a cache hit): `git checkout --force` of the new commit over it;
-  untracked and ignored files (e.g. `node_modules`) stay.
-- Evidence steps: the base commit is fetched too, with blobs (`git cat-file`/`git diff base head`
-  and `git worktree add <dir> $GITTIFACTS_BASE_SHA` work offline).
-- Global-scope cached steps (install-like steps by default): the command runs with **only its
-  cache input files** in `/workspace` (no `.git`, nothing else). Install must not read other
-  repository files; if it fails that way the engine re-runs it on the full checkout and caches it
-  per repository.
+- **Fresh container.** `git init`, fetch, checkout.
+- **Snapshot at the same commit.** The workspace is untouched, so steps see their parent's
+  changes (`node_modules`).
+- **Snapshot at another commit** (a cache hit). `git checkout --force` of the new commit;
+  untracked and ignored files stay.
+- **Evidence steps.** The base commit is also fetched, with blobs. `git worktree add <dir>
+  $GITTIFACTS_BASE_SHA` and `git diff base head` work offline.
+- **Global-scope cached steps** (install-like steps by default).
+  - The command runs with only its cache input files in `/workspace`: no `.git` and nothing else.
+  - If it fails that way, the engine runs it again on the full checkout and caches it for that
+    repository only.
 
 ## 4. Network
 
-- `open`: normal internet access.
-- `registries-only` (unclaimed projects): the container starts with `enableInternet: false`, and
-  every HTTP and HTTPS request is intercepted (`interceptAllOutboundHttp`,
-  `interceptOutboundHttps("*")`) and sent to `CiEgressGateway`. Allowed: `GET`/`HEAD` to
-  `registry.npmjs.org`, `registry.yarnpkg.com`, `repo.yarnpkg.com`, `codeload.github.com`, and git
-  fetch (`info/refs?service=git-upload-pack`, `git-upload-pack`) to the repository's git host.
-  Everything else gets `403` with an explanation, and a line in the step log. DNS for other hosts
-  times out; non-HTTP protocols have no route.
-- HTTPS interception terminates TLS with a Cloudflare CA at
-  `/etc/cloudflare/certs/cloudflare-containers-ca.crt`. Before the first command the Runner copies it
-  into `/usr/local/share/ca-certificates/` and runs `update-ca-certificates`, and sets
-  `NODE_EXTRA_CA_CERTS`. Tools with their own CA bundle (Python `certifi`, Java) are not covered.
-- Plan mode always runs with egress limited to the git host when the gateway is exported.
+- **`open`.** Normal internet access.
+- **`registries-only`** (unclaimed projects).
+  - The container starts with `enableInternet: false`. Every HTTP and HTTPS request is sent to
+    `CiEgressGateway` (`interceptAllOutboundHttp`, `interceptOutboundHttps("*")`).
+  - Allowed: `GET`/`HEAD` to `registry.npmjs.org`, `registry.yarnpkg.com`, `repo.yarnpkg.com` and
+    `codeload.github.com`, plus git fetch to the repository's git host.
+  - Everything else gets a 403 and a line in the step log. Other DNS lookups time out, and
+    non-HTTP traffic has no route.
+- **TLS interception.** The certificate is `/etc/cloudflare/certs/cloudflare-containers-ca.crt`.
+  Before the first command the Runner installs it as root (`update-ca-certificates`) and sets
+  `NODE_EXTRA_CA_CERTS`. Tools that ship their own CA bundle are not covered.
+- **Plan mode** is limited to the git host whenever the gateway is exported.
 
-## 5. `gittifacts-runner` CLI
+## 5. `gittifacts-runner` protocol
 
-### `gittifacts-runner plan <file> --sha <sha> [--base <sha>]`
+- **Logs** go to stderr.
+- **Result.** The last stdout line is the result, prefixed with a marker. The engine parses the
+  last line that carries the expected marker.
+- **Exit codes.**
+  - 0 when a document was printed. That includes error items and plan error documents.
+  - 2 on a usage error.
+  - 1 on a crash.
 
-Evaluates the pipeline file (`.platform/ci.ts`) in plan mode.
+| Command | Result line |
+|---|---|
+| `plan [file] [--sha <sha>] [--base <sha>]` | `::plan::<PipelineSpec>` or `::plan::{"error","file"}` |
+| `evidence <kind> --base <sha> --head <sha> [--package-manager pm] [--test-command '…']` | `::evidence::<EvidenceItem>` (`transforms` and `policy`: an array) |
+| `policy --base <sha> [--head <sha>]` | `::evidence::<PolicyDocument>` (for the coordinator; not a CI step) |
+| `diff --base <sha> --head <sha>` | `::evidence::<ChangeDiff>` |
+| `preview [--port 8787] [--ip 0.0.0.0] [--dir dist] [--dry-run]` | `::preview::{status,kind,mode,command,url}` once the port answers. Then it runs until wrangler exits. |
 
-- Load the module without installing dependencies (Node's type stripping or a bundled loader).
-  `node_modules` is **not** installed, and the network reaches only the git host.
-- Implement with `@app/ci-engine/plan`:
-  `recordPipeline(resolvePipelineExport(mod), { context: { sha, baseSha } })`.
-- stdout: exactly one JSON document, the `PipelineSpec` (≤ 512 KiB). stderr: diagnostics.
-- Exit 0 on success. On author errors (`PlanError`, a throw, an invalid DAG) exit non-zero with a
-  readable message on stderr; it is shown to the author verbatim (last 4 KiB).
-- Time limit: 120 s.
+### plan
 
-### `gittifacts-runner evidence <kind> --base <sha> --head <sha> [--package-manager <pm>] [--test-command '<cmd>']`
+The Runner execs `gittifacts-runner plan '.platform/ci.ts' --sha <sha> --base <sha>`. The exec
+runs in a fresh checkout with no `node_modules` and egress limited to the git host, with a 120 s
+timeout and at most 512 KiB of stdout. The runner bundles the file with esbuild and records it
+with `@app/ci-engine/plan`, using `recordPipeline(resolvePipelineExport(mod))`.
 
-`<kind>` ∈ `red-green | coverage | mutation | public-api | dependencies | transforms | policy`. The
-shell expands `--base "$GITTIFACTS_BASE_SHA" --head "$GITTIFACTS_HEAD_SHA"`.
+- `::plan::<spec>`: validated with `parsePipelineSpec` and used for the run.
+- `::plan::{"error","file"}`: the run fails with `<file>: <error>` shown verbatim. These are author
+  errors and are not retried.
+- Non-zero exit, a missing marker, or invalid JSON: the run fails with the stderr tail.
 
-| kind | starts from | `requiresGreen` | output (`@app/evidence`) |
-|---|---|---|---|
-| `dependencies` | fresh checkout | no | `DependencyDiff` (`id: "dependencies"`) |
-| `policy` | fresh checkout | no | `SensitivePathHits` using the **base** `.platform/policy.ts` |
-| `red-green` | `install` snapshot | no | `RedGreenProof` (`verdict: "no-tests"` when there are none) |
-| `coverage` | `install` snapshot | yes | `CoverageDelta` on changed lines |
-| `mutation` | `install` snapshot | yes | `MutationScore` on changed lines |
-| `public-api` | `install` snapshot | no | `PublicApiDiff` (`.d.ts` diff) |
-| `transforms` | `install` snapshot | no | one `ReproducibleTransform` per `.platform/transforms/*` |
+### evidence
 
-Output, both channels:
+Kinds: `red-green`, `coverage`, `mutation`, `public-api`, `dependencies`, `transforms`, `policy`.
+The CLI also has `sensitive-paths` and `test-run`. `evidence policy` yields the base-policy
+sensitive-path item, `id: "policy:sensitive-paths"`.
 
-1. Write one JSON document, an `EvidenceItem` or an array of up to 50, to
-   `$GITTIFACTS_EVIDENCE_OUT` (≤ 4 MiB). The engine validates it against `@app/evidence`.
-2. Print the same document as the **last stdout line**, prefixed `::evidence::` (compact JSON). The
-   opt-in `@cloudflare/ci` engine has no file channel and reads only this line.
+| CI step | starts from | `requiresGreen` |
+|---|---|---|
+| `evidence:dependencies`, `evidence:policy` | fresh checkout | no |
+| `evidence:red-green`, `evidence:public-api`, `evidence:transforms` | `install` snapshot | no |
+| `evidence:coverage`, `evidence:mutation` | `install` snapshot | yes |
 
-Exit 0 when the measurement worked, whatever the verdict. When it could not measure, still emit an
-item with `status: "error"` and a `note`, then exit non-zero. No output at all is recorded as an
-evidence error, and the classifier escalates (unknown → escalate).
+The Runner reads `$GITTIFACTS_EVIDENCE_OUT` (JSON, no prefix, ≤ 4 MiB). If that file is missing,
+it uses the last `::evidence::` line. The document must be an `EvidenceItem` or an array of up to
+50, and is validated against `@app/evidence`. A failure is recorded as an evidence error, and the
+classifier escalates.
 
-Under the `@cloudflare/ci` engine the base commit is not pre-fetched. The command env then carries
-`ARTIFACTS_REMOTE` and `ARTIFACTS_TOKEN` (read-only); fetch the base with
-`git -c http.extraHeader="Authorization: Bearer $ARTIFACTS_TOKEN" fetch --depth=1 origin "$GITTIFACTS_BASE_SHA"`.
+The opt-in `@cloudflare/ci` engine reads only the `::evidence::` line. It does not pre-fetch the
+base commit; its steps carry `ARTIFACTS_REMOTE` and `ARTIFACTS_TOKEN` (read-only).
 
-## 6. Platform wiring (`apps/platform`)
+### preview
+
+The engine does not run `preview`. The preview host does:
+
+1. It restores `RunSummary.snapshots.build` (the build step's container snapshot). That snapshot
+   holds the built workspace and `node_modules`.
+2. It runs `gittifacts-runner preview`.
+3. It waits for the `::preview::` line.
+
+Rollouts deploy `RunSummary.artifacts.bundle` instead (§6).
+
+## 6. Build artifacts
+
+A step declares `artifacts: [{ name, paths, optional? }]`. The default `build` step declares
+`bundle`, taken from `template.json` `buildOutput` when present and otherwise an optional `dist`.
+
+After the command succeeds, the Runner execs `tar -C /workspace -cz -- <paths>` as the runner user.
+stdout goes straight to R2 at `ci-artifacts/<runId>/<step>/<name>.tgz`, hashed on the way and
+capped at `limits.maxArtifactBytes`. If a path is missing or the archive is too large, the step
+fails, unless the artifact is `optional`. Steps with artifacts are always snapshotted.
+
+`RunSummary` reports:
+
+- `artifacts[name] = { key, bytes, sha256, step }`.
+- `snapshots[step] = <snapshot id>` for every passed step with a snapshot.
+
+A cached re-run reports the same artifacts and snapshot as the run that filled the cache.
+
+## 7. Platform wiring (`apps/platform`)
 
 The entry module must export `CiRunWorkflow`, `Runner` and `CiEgressGateway` from `@app/ci-engine`.
 
@@ -143,10 +185,13 @@ The entry module must export `CiRunWorkflow`, `Runner` and `CiEgressGateway` fro
 }
 ```
 
-- `COORDINATOR` (optional): a Durable Object namespace whose stub has
-  `onRunFinished(summary: RunSummary)`; called once per finished run, keyed by `changeId`. Cancelled
-  runs are not reported (the caller cancelled them).
-- Build engines with `selectCiEngine(env, { engine: "workflows" })`. The `@cloudflare/ci` engine is
-  opt-in from `@app/ci-engine/cloudflare` and needs its own bindings.
-- R2 lifecycle rules: expire `ci-logs/` and `ci-evidence/` per retention policy, and `ci-cache/`
-  after 30 days (snapshots expire then anyway).
+- `COORDINATOR` (optional) is a Durable Object namespace whose stub has
+  `onRunFinished(summary: RunSummary)`. It is called once per finished run, keyed by `changeId`.
+  Cancelled runs are not reported.
+- Select the engine with `selectCiEngine(env, { engine: "workflows" })`. The `@cloudflare/ci`
+  engine is opt-in from `@app/ci-engine/cloudflare`.
+- **R2 lifecycle.** Keep `ci-artifacts/` for as long as rollouts or reverts may need a bundle, at
+  least 30 days. Cached re-runs point at bundles from earlier runs. Expire `ci-cache/` after 30 days
+  (snapshots expire then anyway). Expire `ci-logs/` and `ci-evidence/` per retention policy.
+- **Snapshot TTL.** Container snapshots live 30 days, and restoring one refreshes that. A preview
+  started from an older `snapshots.build` needs the build to run again.
