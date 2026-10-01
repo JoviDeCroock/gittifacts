@@ -34,6 +34,8 @@ export interface Services {
   waitUntil(p: Promise<unknown>): void;
   /** AuditLog instance this deployment writes to. */
   auditLog: string;
+  /** The platform origin agents see (BETTER_AUTH_URL, else the request's origin). */
+  origin: string;
 }
 
 export interface AppOptions {
@@ -43,7 +45,12 @@ export interface AppOptions {
   auditLog?: string;
 }
 
-export function createServices(env: Bindings, ctx: ExecutionContext, opts: AppOptions): Services {
+export function createServices(
+  env: Bindings,
+  ctx: ExecutionContext,
+  opts: AppOptions,
+  origin: string,
+): Services {
   const clock = opts.clock ?? { now: () => new Date() };
   const now = () => clock.now();
   const store = new D1Store(env.DB, env.BLOBS, now);
@@ -54,10 +61,11 @@ export function createServices(env: Bindings, ctx: ExecutionContext, opts: AppOp
     audit: new DoAudit(env, auditLog),
     notifier: new D1Notifier(store, now),
     clock,
-    coordinator: opts.coordinator(env, ctx),
+    coordinator: opts.coordinator(env, ctx, origin),
     signer: () => platformSigner(env),
     waitUntil: (p) => ctx.waitUntil(p),
     auditLog,
+    origin,
   };
 }
 

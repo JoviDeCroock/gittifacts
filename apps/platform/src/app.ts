@@ -5,6 +5,7 @@ import { authFor, callerOf, requirePrincipal } from "./auth/middleware.js";
 import { getCoordinator } from "./coordinator.js";
 import { fixFor, toErrorResponse } from "./errors.js";
 import { handleMcp, MCP_PATH } from "./mcp/route.js";
+import { originOf } from "./oauth/context.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerChangeRoutes } from "./routes/changes.js";
 import { type ApiApp, newApiApp, SECURITY } from "./routes/common.js";
@@ -31,7 +32,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
 
   app.use("*", async (c, next) => {
     // Hono types executionCtx with its own minimal interface; at runtime it is the Worker's ctx.
-    c.set("services", createServices(c.env, c.executionCtx as ExecutionContext, opts));
+    c.set("services", createServices(c.env, c.executionCtx as ExecutionContext, opts, originOf(c)));
     c.set("caller", undefined);
     await next();
     c.header("x-gittifacts-version", c.env.VERSION?.id ?? "dev");
