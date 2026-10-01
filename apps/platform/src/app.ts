@@ -1,17 +1,18 @@
 import { z } from "zod";
 import { ErrorSchema } from "./api/schemas.js";
 import { type AppOptions, createServices } from "./app-env.js";
-import { authFor } from "./auth/middleware.js";
+import { authFor, callerOf, requirePrincipal } from "./auth/middleware.js";
 import { getCoordinator } from "./coordinator.js";
 import { fixFor, toErrorResponse } from "./errors.js";
 import { handleMcp, MCP_PATH } from "./mcp/route.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerChangeRoutes } from "./routes/changes.js";
-import { type ApiApp, newApiApp } from "./routes/common.js";
+import { type ApiApp, newApiApp, SECURITY } from "./routes/common.js";
 import { registerIdentityRoutes } from "./routes/identity.js";
 import { registerPlanRoutes } from "./routes/plans.js";
 import { registerRepoRoutes } from "./routes/repos.js";
 import { registerWellKnownRoutes } from "./routes/well-known.js";
+import { readBlob } from "./services/blobs.js";
 import {
   handleIssuesWebhook,
   ISSUES_WEBHOOK_PATH,
@@ -19,6 +20,7 @@ import {
 } from "./webhooks/workers-issues.js";
 
 export const OPENAPI_PATH = "/api/v1/openapi.json";
+export const BLOBS_PATH = "/api/v1/blobs";
 
 /** Paths the Worker owns; everything else is the SPA (static assets). */
 const WORKER_PATHS = /^\/(api\/|mcp$|mcp\/|webhooks\/|\.well-known\/)/;
@@ -65,6 +67,35 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerPlanRoutes(app);
   registerChangeRoutes(app);
   registerAuditRoutes(app);
+
+  // R2-backed references (logs, screenshots, spilled diffs). `:ref` may contain slashes.
+  app.get(`${BLOBS_PATH}/:ref{.+}`, requirePrincipal(["repo:read"]), (c) =>
+    readBlob(c.get("services"), callerOf(c), c.req.param("ref")),
+  );
+  app.openAPIRegistry.registerPath({
+    method: "get",
+    path: `${BLOBS_PATH}/{ref}`,
+    tags: ["blobs"],
+    summary:
+      "Raw bytes of an R2 reference (logRef, beforeRef, afterRef), authorized by the owning repo",
+    security: SECURITY,
+    request: {
+      params: z.object({
+        ref: z.string().describe("The reference exactly as returned (URL-encoded)"),
+      }),
+    },
+    responses: {
+      200: { description: "The object (images, JSON or text; anything else as an attachment)" },
+      400: {
+        description: "Not a reference",
+        content: { "application/json": { schema: ErrorSchema } },
+      },
+      404: {
+        description: "Unknown or not readable",
+        content: { "application/json": { schema: ErrorSchema } },
+      },
+    },
+  });
 
   // MCP: POST only (stateless); GET/DELETE are answered 405 by the SDK handler.
   app.on(["GET", "POST", "DELETE"], MCP_PATH, handleMcp);

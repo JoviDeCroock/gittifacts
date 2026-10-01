@@ -8,6 +8,7 @@ import {
   Lane0Body,
   LaneCountsSchema,
   PlanSchema,
+  PrincipalsMapSchema,
   parseStatusList,
   RepoIdParam,
   RepoSchema,
@@ -103,7 +104,10 @@ const changes = createRoute({
   middleware: [requirePrincipal(["repo:read"])] as const,
   request: { params: RepoIdParam, query: ChangeListQuery },
   responses: {
-    200: json(z.object({ changes: z.array(ChangeSummarySchema) }), "Changes"),
+    200: json(
+      z.object({ changes: z.array(ChangeSummarySchema), principals: PrincipalsMapSchema }),
+      "Changes",
+    ),
     ...errors(400, 401, 403, 404),
   },
 });
@@ -129,7 +133,7 @@ export function registerRepoRoutes(app: ApiApp): void {
     return c.json({ repo }, 200);
   });
   app.openapi(plans, async (c) =>
-    c.json({ plans: await listPlans(c.get("services"), c.req.valid("param").repoId) }, 200),
+    c.json(await listPlans(c.get("services"), c.req.valid("param").repoId), 200),
   );
   app.openapi(changes, async (c) => {
     const q = c.req.valid("query");
@@ -137,6 +141,6 @@ export function registerRepoRoutes(app: ApiApp): void {
       statuses: parseStatusList(q.status),
       lane: q.lane === undefined ? undefined : (Number(q.lane) as 0 | 1 | 2),
     });
-    return c.json({ changes: list }, 200);
+    return c.json(list, 200);
   });
 }

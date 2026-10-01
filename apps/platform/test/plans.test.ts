@@ -91,7 +91,20 @@ describe("plans", () => {
     const detail = await json<{ plan: Plan; changes: unknown[] }>(
       await call(app, "GET", `/api/v1/plans/${plan.id}`, { token: agent.token }),
     );
-    expect(detail).toEqual({ plan: ap, changes: [] });
+    expect(detail).toEqual({
+      plan: ap,
+      changes: [],
+      principals: {
+        [agent.principal.id]: {
+          id: agent.principal.id,
+          name: "builder-bot",
+          kind: "agent",
+          ownerId: agent.principal.ownerId,
+        },
+        [bob.principal.id]: { id: bob.principal.id, name: "Bob", kind: "human", ownerId: null },
+      },
+    });
+    expect(ap).toMatchObject({ rejectedBy: null, rejectedAt: null, rejectionReason: null });
     const audit = await json<{
       events: { action: string; subject: string }[];
       chain: { verified: boolean };
@@ -178,7 +191,18 @@ describe("plans", () => {
       cookie: bob.cookie,
       body: { comment: "too broad" },
     });
-    expect((await json<{ plan: Plan }>(rej)).plan.status).toBe("rejected");
+    const rejected = (
+      await json<{ plan: Plan & { rejectedBy: string; rejectionReason: string } }>(rej)
+    ).plan;
+    expect(rejected).toMatchObject({
+      status: "rejected",
+      rejectedBy: bob.principal.id,
+      rejectionReason: "too broad",
+    });
+    const reread = await json<{ plans: (Plan & { rejectedAt: string | null })[] }>(
+      await call(app, "GET", `/api/v1/repos/${repo.id}/plans`, { token: agent.token }),
+    );
+    expect(reread.plans[0]?.rejectedAt).not.toBeNull();
 
     const missing = await expectError(
       await call(app, "POST", "/api/v1/plans", { token: agent.token, body: draft("nope") }),

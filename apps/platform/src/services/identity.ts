@@ -10,6 +10,18 @@ import {
 } from "../auth/principals.js";
 import { ApiError, forbidden, notFound } from "../errors.js";
 
+/** A principal by id, with its owner's name (for agents). */
+export async function getPrincipalDetail(
+  svc: Services,
+  id: string,
+): Promise<{ principal: Principal & { ownerName?: string } }> {
+  const principal = await svc.store.getPrincipal(id);
+  if (!principal) throw notFound(`principal ${id}`, { explanation: "No principal with that id." });
+  if (!principal.ownerId) return { principal };
+  const owner = (await svc.store.principalRefs([principal.ownerId]))[principal.ownerId];
+  return { principal: owner ? { ...principal, ownerName: owner.name } : principal };
+}
+
 export async function listPrincipals(svc: Services, caller: Caller): Promise<Principal[]> {
   return listVisiblePrincipals(svc.store, caller.principal);
 }

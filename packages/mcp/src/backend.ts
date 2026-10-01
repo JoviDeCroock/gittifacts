@@ -94,7 +94,8 @@ export interface McpBackend {
     evidence: Evidence;
     verification: { ok: boolean; keyId?: string; reason?: string };
   }>;
-  getTour(caller: McpCaller, changeId: string): Promise<Tour>;
+  /** The change's latest tour; `stale` when it was generated for an older head. */
+  getTour(caller: McpCaller, changeId: string): Promise<{ tour: Tour; stale: boolean }>;
   /** Ask a human to look at the change (notify + audit). Never approves anything. */
   requestReview(
     caller: McpCaller,

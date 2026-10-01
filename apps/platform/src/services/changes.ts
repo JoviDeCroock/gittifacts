@@ -1,14 +1,14 @@
 import type { ClassifyResult } from "@app/classifier";
 import type { GitRemoteGrant } from "@app/coordinator";
 import {
-  type AuditEvent,
   type Change,
   type ChangeDiff,
   type Evidence,
   type Lane,
   type LinkedIssue,
   type PipelineRun,
-  type Plan,
+  type ReviewDecision,
+  type RolloutPolicy,
   type RolloutState,
   StartChangeInput,
   type Tour,
@@ -17,7 +17,10 @@ import type { z } from "zod";
 import type { ReviewBody } from "../api/schemas.js";
 import type { Caller, Services } from "../app-env.js";
 import { conflict, forbidden, notFound } from "../errors.js";
-import type { ChangeSummary } from "../store/d1-store.js";
+import type { ChangeSummary, PrincipalRef } from "../store/d1-store.js";
+import type { PlanView } from "../store/rows.js";
+import { type AuditEventView, withSummaries } from "./audit.js";
+import { planPrincipalIds } from "./plans.js";
 
 /** Statuses after which nobody needs to look at a change any more. */
 const TERMINAL: readonly Change["status"][] = [
@@ -46,29 +49,44 @@ export async function listChangeSummaries(
   svc: Services,
   repoId: string,
   filter: { statuses?: Change["status"][] | undefined; lane?: Lane | undefined },
-): Promise<ChangeSummary[]> {
+): Promise<{ changes: ChangeSummary[]; principals: Record<string, PrincipalRef> }> {
   await requireRepo(svc, repoId);
-  return svc.store.listChangeSummaries(repoId, {
+  const changes = await svc.store.listChangeSummaries(repoId, {
     ...(filter.statuses ? { statuses: filter.statuses } : {}),
     ...(filter.lane !== undefined ? { lane: filter.lane } : {}),
   });
+  return { changes, principals: await svc.store.principalRefs(changes.map((c) => c.authorId)) };
 }
 
 export interface ChangeDetail {
   change: Change;
-  plan: Plan | null;
+  plan: PlanView | null;
   runs: PipelineRun[];
   classification: ClassifyResult | null;
+  principals: Record<string, PrincipalRef>;
 }
 
 export async function getChangeDetail(svc: Services, changeId: string): Promise<ChangeDetail> {
   const change = await requireChange(svc, changeId);
   const [plan, runs, classification] = await Promise.all([
-    change.planId ? svc.store.getPlan(change.planId) : Promise.resolve(null),
+    change.planId ? svc.store.getPlanView(change.planId) : Promise.resolve(null),
     svc.store.listRuns(change.id),
     change.headSha ? svc.store.getClassification(change.id, change.headSha) : Promise.resolve(null),
   ]);
-  return { change, plan, runs, classification };
+  const principals = await svc.store.principalRefs([
+    change.authorId,
+    ...(plan ? planPrincipalIds([plan]) : []),
+  ]);
+  return { change, plan, runs, classification, principals };
+}
+
+export async function listChangeReviews(
+  svc: Services,
+  changeId: string,
+): Promise<{ reviews: ReviewDecision[]; principals: Record<string, PrincipalRef> }> {
+  const change = await requireChange(svc, changeId);
+  const reviews = await svc.store.listReviews(change.id);
+  return { reviews, principals: await svc.store.principalRefs(reviews.map((r) => r.reviewerId)) };
 }
 
 export async function requireRepo(svc: Services, repoId: string) {
@@ -135,23 +153,49 @@ export async function getChangeEvidence(
   return { evidence, verification };
 }
 
-export async function getChangeTour(svc: Services, changeId: string): Promise<Tour> {
+/**
+ * The change's latest tour. It is `stale` when it was generated for an older head than the one
+ * the change is at now (a re-push happened and the new tour is not ready yet).
+ */
+export async function getChangeTour(
+  svc: Services,
+  changeId: string,
+): Promise<{ tour: Tour; stale: boolean }> {
   const change = await requireChange(svc, changeId);
   const head = requireHead(change);
   const tour =
+    (await svc.store.getTour(change.id, head)) ??
     (change.tourId ? await svc.store.getTourById(change.tourId) : null) ??
-    (await svc.store.getTour(change.id, head));
-  if (!tour || tour.headSha !== head) throw notReady(change, "The tour", head);
-  return tour;
+    (await svc.store.getLatestTour(change.id));
+  if (!tour) throw notReady(change, "The tour", head);
+  return { tour, stale: tour.headSha !== head };
 }
 
-export async function getChangeRollout(
-  svc: Services,
-  changeId: string,
-): Promise<{ rollout: RolloutState | null; timeline: AuditEvent[] }> {
+export interface RolloutView {
+  rollout: RolloutState | null;
+  timeline: AuditEventView[];
+  /** The rollout policy from the change's BASE (falls back to the repo's cached policy). */
+  policy: RolloutPolicy;
+  /** Default-branch sha the policy was read from. */
+  policySha: string | null;
+  principals: Record<string, PrincipalRef>;
+}
+
+export async function getChangeRollout(svc: Services, changeId: string): Promise<RolloutView> {
   const change = await requireChange(svc, changeId);
-  const timeline = await svc.store.auditTimeline(svc.auditLog, `change:${change.id}`);
-  return { rollout: change.rolloutState, timeline };
+  const [events, repo, basePolicy] = await Promise.all([
+    svc.store.auditTimeline(svc.auditLog, `change:${change.id}`),
+    requireRepo(svc, change.repoId),
+    svc.store.getRepoPolicyAt(change.repoId, change.baseSha),
+  ]);
+  const timeline = await withSummaries(svc, events);
+  return {
+    rollout: change.rolloutState,
+    timeline,
+    policy: (basePolicy ?? repo.policy).rollout,
+    policySha: basePolicy ? change.baseSha : repo.policySha,
+    principals: await svc.store.principalRefs(events.map((e) => e.principalId)),
+  };
 }
 
 export async function listChangeIssues(svc: Services, changeId: string): Promise<LinkedIssue[]> {

@@ -11,6 +11,26 @@ import { canonicalBytes, sha256Base64url } from "@app/evidence";
 import type { Caller, Services } from "../app-env.js";
 import { ApiError, conflict, forbidden, notFound } from "../errors.js";
 import { type PlatformSigner, Purpose, type VerifyOutcome } from "../signing.js";
+import type { PrincipalRef } from "../store/d1-store.js";
+import type { PlanView } from "../store/rows.js";
+
+export type { PlanView };
+
+/** A domain Plan as the API returns it (not rejected → rejection fields are null). */
+function view(plan: Plan, rejection?: { by: string; at: string; reason: string }): PlanView {
+  return {
+    ...plan,
+    rejectedBy: rejection?.by ?? null,
+    rejectedAt: rejection?.at ?? null,
+    rejectionReason: rejection?.reason ?? null,
+  };
+}
+
+export function planPrincipalIds(plans: readonly PlanView[]): string[] {
+  return plans.flatMap((p) =>
+    [p.authorId, p.approvedBy, p.rejectedBy].filter((x): x is string => !!x),
+  );
+}
 
 /** The fields an approval vouches for (everything a reviewer read). */
 export function planContent(plan: Plan) {
@@ -84,23 +104,32 @@ function noSuchRepo(repoId: string) {
   });
 }
 
-export async function listPlans(svc: Services, repoId: string): Promise<Plan[]> {
+export async function listPlans(
+  svc: Services,
+  repoId: string,
+): Promise<{ plans: PlanView[]; principals: Record<string, PrincipalRef> }> {
   if (!(await svc.store.getRepo(repoId))) throw noSuchRepo(repoId);
-  return svc.store.listPlans(repoId);
+  const plans = await svc.store.listPlanViews(repoId);
+  return { plans, principals: await svc.store.principalRefs(planPrincipalIds(plans)) };
 }
 
 export async function getPlanDetail(
   svc: Services,
   planId: string,
-): Promise<{ plan: Plan; changes: Change[] }> {
-  const plan = await svc.store.getPlan(planId);
+): Promise<{ plan: PlanView; changes: Change[]; principals: Record<string, PrincipalRef> }> {
+  const plan = await svc.store.getPlanView(planId);
   if (!plan) throw noSuchPlan(planId);
-  return { plan, changes: await svc.store.listChangesForPlan(planId) };
+  const changes = await svc.store.listChangesForPlan(planId);
+  const principals = await svc.store.principalRefs([
+    ...planPrincipalIds([plan]),
+    ...changes.map((c) => c.authorId),
+  ]);
+  return { plan, changes, principals };
 }
 
 // ---------------------------------------------------------------- writes
 
-export async function createPlan(svc: Services, caller: Caller, input: unknown): Promise<Plan> {
+export async function createPlan(svc: Services, caller: Caller, input: unknown): Promise<PlanView> {
   const draft = PlanDraftInput.parse(input);
   const repo = await svc.store.getRepo(draft.repoId);
   if (!repo) throw noSuchRepo(draft.repoId);
@@ -144,7 +173,7 @@ export async function createPlan(svc: Services, caller: Caller, input: unknown):
       supersedes: plan.supersedes,
     },
   });
-  return plan;
+  return view(plan);
 }
 
 function assertHumanApprover(caller: Caller): void {
@@ -171,7 +200,7 @@ export async function approvePlan(
   caller: Caller,
   planId: string,
   input: { comment?: string | undefined },
-): Promise<Plan> {
+): Promise<PlanView> {
   assertHumanApprover(caller);
   const plan = await svc.store.getPlan(planId);
   if (!plan) throw noSuchPlan(planId);
@@ -204,6 +233,7 @@ export async function approvePlan(
       approvalKeyId: sig.keyId,
       decisionComment: input.comment ?? null,
       decidedBy: caller.principal.id,
+      decidedAt: approvedAt.toISOString(),
     }),
   ];
   let superseded: Plan | null = null;
@@ -245,7 +275,7 @@ export async function approvePlan(
       payload: { by: plan.id },
     });
   }
-  return approved;
+  return view(approved);
 }
 
 export async function rejectPlan(
@@ -253,7 +283,7 @@ export async function rejectPlan(
   caller: Caller,
   planId: string,
   input: { comment: string },
-): Promise<Plan> {
+): Promise<PlanView> {
   assertHumanApprover(caller);
   const plan = await svc.store.getPlan(planId);
   if (!plan) throw noSuchPlan(planId);
@@ -263,9 +293,11 @@ export async function rejectPlan(
     });
   }
   const rejected: Plan = { ...plan, status: "rejected" };
+  const at = svc.clock.now().toISOString();
   await svc.store.updatePlanStatement(rejected, {
     decisionComment: input.comment,
     decidedBy: caller.principal.id,
+    decidedAt: at,
   });
   await svc.audit.append({
     principalId: caller.principal.id,
@@ -273,5 +305,5 @@ export async function rejectPlan(
     subject: `plan:${plan.id}`,
     payload: { comment: input.comment, withdrawnByAuthor: plan.authorId === caller.principal.id },
   });
-  return rejected;
+  return view(rejected, { by: caller.principal.id, at, reason: input.comment });
 }

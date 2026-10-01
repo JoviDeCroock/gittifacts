@@ -52,6 +52,7 @@ describe("repo read routes", () => {
       awaitingReview: 1,
       rollingOut: 0,
       failing: 1,
+      plansAwaitingApproval: 1,
     });
     expect(mine.shadow).toEqual({
       samples: 0,
@@ -112,7 +113,13 @@ describe("change read routes", () => {
     const body = await json<Record<string, unknown>>(
       await call(app, "GET", `/api/v1/changes/${change.id}`, { token: agent.token }),
     );
-    expect(body).toEqual({ change, plan, runs: [run], classification: cls });
+    expect(body).toMatchObject({
+      change,
+      plan: { ...plan, rejectedBy: null, rejectedAt: null, rejectionReason: null },
+      runs: [run],
+      classification: cls,
+    });
+    expect(Object.keys(body.principals as object)).toContain(change.authorId);
   });
 
   it("serves diff, evidence (verified), tour, rollout timeline and issues", async () => {
@@ -163,7 +170,16 @@ describe("change read routes", () => {
       ),
     ).toEqual({
       tour,
+      stale: false,
     });
+
+    // A re-push moves the head: the old tour is still served, marked stale.
+    await s.updateChange(change.id, { headSha: "c".repeat(40) });
+    const stale = await json<{ tour: { id: string }; stale: boolean }>(
+      await call(app, "GET", `/api/v1/changes/${change.id}/tour`, { token: agent.token }),
+    );
+    expect(stale).toMatchObject({ tour: { id: tour.id }, stale: true });
+    await s.updateChange(change.id, { headSha: HEAD_SHA });
 
     await new DoAudit(env).append({
       principalId: "system",
@@ -171,11 +187,32 @@ describe("change read routes", () => {
       subject: `change:${change.id}`,
       payload: { percent: 5 },
     });
-    const rollout = await json<{ rollout: unknown; timeline: { action: string }[] }>(
-      await call(app, "GET", `/api/v1/changes/${change.id}/rollout`, { token: agent.token }),
+    // The rollout policy comes from the change's base, not the repo's current policy.
+    const repoNow = (await s.getRepo(change.repoId))!;
+    await s.setRepoPolicy(
+      change.repoId,
+      { ...repoNow.policy, rollout: { ...repoNow.policy.rollout, stages: [10, 100] } },
+      change.baseSha,
     );
+    await s.setRepoPolicy(
+      change.repoId,
+      { ...repoNow.policy, rollout: { ...repoNow.policy.rollout, stages: [50, 100] } },
+      "d".repeat(40),
+    );
+    const rollout = await json<{
+      rollout: unknown;
+      timeline: { action: string; summary: string; principalId: string }[];
+      policy: { stages: number[] };
+      policySha: string;
+      principals: Record<string, { kind: string }>;
+    }>(await call(app, "GET", `/api/v1/changes/${change.id}/rollout`, { token: agent.token }));
     expect(rollout.rollout).toBeNull();
-    expect(rollout.timeline.map((e) => e.action)).toEqual(["rollout.stage"]);
+    expect(rollout.timeline.map((e) => [e.action, e.summary])).toEqual([
+      ["rollout.stage", "Stage 5% started"],
+    ]);
+    expect(rollout.policy.stages).toEqual([10, 100]);
+    expect(rollout.policySha).toBe(change.baseSha);
+    expect(rollout.principals.system?.kind).toBe("system");
 
     await s.putIssue({
       id: uid("iss"),

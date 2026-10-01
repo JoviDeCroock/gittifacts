@@ -179,7 +179,7 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
       throw new NotFound("evidence");
     },
     async getTour() {
-      return tour;
+      return { tour, stale: false };
     },
     async requestReview(_caller, changeId) {
       calls.push(`requestReview:${changeId}`);

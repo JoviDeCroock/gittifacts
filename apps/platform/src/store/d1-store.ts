@@ -16,7 +16,7 @@ import {
   type Plan,
   type Principal,
   type Repo,
-  type RepoPolicy,
+  RepoPolicy,
   ReviewDecision,
   Tour,
 } from "@app/domain";
@@ -35,6 +35,7 @@ import {
   plans,
   principalKeys,
   principals,
+  repoPolicies,
   repos,
   reviews,
   shadowSamples,
@@ -45,9 +46,11 @@ import {
   changeToRow,
   classificationFromJson,
   issueFromRow,
+  type PlanView,
   parseRow,
   planFromRow,
   planToRow,
+  planViewFromRow,
   principalFromRows,
   repoFromRow,
   repoToRow,
@@ -82,6 +85,16 @@ export interface LaneCounts {
   awaitingReview: number;
   rollingOut: number;
   failing: number;
+  /** Draft plans waiting for a human approval. */
+  plansAwaitingApproval: number;
+}
+
+/** Name card for a principal id (the `principals` map on API responses). */
+export interface PrincipalRef {
+  id: string;
+  name: string;
+  kind: "human" | "agent" | "system";
+  ownerId: string | null;
 }
 
 export const EMPTY_LANE_COUNTS: LaneCounts = {
@@ -91,6 +104,7 @@ export const EMPTY_LANE_COUNTS: LaneCounts = {
   awaitingReview: 0,
   rollingOut: 0,
   failing: 0,
+  plansAwaitingApproval: 0,
 };
 
 export interface ChangeSummary extends Change {
@@ -179,6 +193,20 @@ export class D1Store implements Store {
 
   async setRepoPolicy(repoId: string, policy: RepoPolicy, sha: string): Promise<void> {
     await this.updateRepo(repoId, { policy, policySha: sha });
+    await this.db
+      .insert(repoPolicies)
+      .values({ repoId, sha, policy, createdAt: this.iso() })
+      .onConflictDoUpdate({ target: [repoPolicies.repoId, repoPolicies.sha], set: { policy } });
+  }
+
+  /** The policy evaluated from the default branch at `sha`, if the coordinator ever cached it. */
+  async getRepoPolicyAt(repoId: string, sha: string): Promise<RepoPolicy | null> {
+    const r = await this.db
+      .select()
+      .from(repoPolicies)
+      .where(and(eq(repoPolicies.repoId, repoId), eq(repoPolicies.sha, sha)))
+      .get();
+    return r ? parseRow(RepoPolicy, r.policy, `policy ${repoId}@${sha}`) : null;
   }
 
   async listRepos(): Promise<Repo[]> {
@@ -191,6 +219,35 @@ export class D1Store implements Store {
   async getPlan(id: string): Promise<Plan | null> {
     const r = await this.db.select().from(plans).where(eq(plans.id, id)).get();
     return r ? planFromRow(r) : null;
+  }
+
+  async getPlanView(id: string): Promise<PlanView | null> {
+    const r = await this.db.select().from(plans).where(eq(plans.id, id)).get();
+    return r ? planViewFromRow(r) : null;
+  }
+
+  async listPlanViews(repoId: string): Promise<PlanView[]> {
+    const rows = await this.db
+      .select()
+      .from(plans)
+      .where(eq(plans.repoId, repoId))
+      .orderBy(desc(plans.createdAt))
+      .all();
+    return rows.map(planViewFromRow);
+  }
+
+  /** Draft plans per repo (awaiting a human approval). */
+  async countDraftPlans(repoId?: string): Promise<Map<string, number>> {
+    const where = repoId
+      ? and(eq(plans.status, "draft"), eq(plans.repoId, repoId))
+      : eq(plans.status, "draft");
+    const rows = await this.db
+      .select({ repoId: plans.repoId, n: sql<number>`count(*)` })
+      .from(plans)
+      .where(where)
+      .groupBy(plans.repoId)
+      .all();
+    return new Map(rows.map((r) => [r.repoId, Number(r.n)]));
   }
 
   /** Key id that signed the plan's approval (not part of the domain Plan). */
@@ -214,6 +271,7 @@ export class D1Store implements Store {
       approvalKeyId?: string | null;
       decisionComment?: string | null;
       decidedBy?: string | null;
+      decidedAt?: string | null;
     } = {},
   ) {
     const {
@@ -230,6 +288,7 @@ export class D1Store implements Store {
         ...row,
         ...(extra.decisionComment !== undefined ? { decisionComment: extra.decisionComment } : {}),
         ...(extra.decidedBy !== undefined ? { decidedBy: extra.decidedBy } : {}),
+        ...(extra.decidedAt !== undefined ? { decidedAt: extra.decidedAt } : {}),
       })
       .where(eq(plans.id, plan.id));
   }
@@ -370,6 +429,7 @@ export class D1Store implements Store {
         awaitingReview: Number(r.awaitingReview ?? 0),
         rollingOut: Number(r.rollingOut ?? 0),
         failing: Number(r.failing ?? 0),
+        plansAwaitingApproval: 0,
       });
     }
     return out;
@@ -555,6 +615,17 @@ export class D1Store implements Store {
     return r ? parseRow(Tour, r.json, `tour ${r.id}`) : null;
   }
 
+  /** The most recent tour of a change, whatever head it was generated for. */
+  async getLatestTour(changeId: string): Promise<Tour | null> {
+    const r = await this.db
+      .select()
+      .from(tours)
+      .where(eq(tours.changeId, changeId))
+      .orderBy(desc(tours.createdAt))
+      .get();
+    return r ? parseRow(Tour, r.json, `tour ${r.id}`) : null;
+  }
+
   async getTourById(id: string): Promise<Tour | null> {
     const r = await this.db.select().from(tours).where(eq(tours.id, id)).get();
     return r ? parseRow(Tour, r.json, `tour ${r.id}`) : null;
@@ -673,6 +744,28 @@ export class D1Store implements Store {
       .where(eq(principalKeys.principalId, id))
       .all();
     return principalFromRows(r, keys);
+  }
+
+  /** `{ id → { id, name, kind, ownerId } }` for the given ids (unknown ids are left out). */
+  async principalRefs(ids: Iterable<string>): Promise<Record<string, PrincipalRef>> {
+    const unique = [...new Set(ids)].filter((x) => x.length > 0);
+    const out: Record<string, PrincipalRef> = {};
+    for (let i = 0; i < unique.length; i += 90) {
+      const chunk = unique.slice(i, i + 90);
+      const rows = await this.db
+        .select({
+          id: principals.id,
+          name: principals.name,
+          kind: principals.kind,
+          ownerId: principals.ownerId,
+        })
+        .from(principals)
+        .where(inArray(principals.id, chunk))
+        .all();
+      for (const r of rows)
+        out[r.id] = { id: r.id, name: r.name, kind: r.kind, ownerId: r.ownerId };
+    }
+    return out;
   }
 
   async getPrincipals(ids: string[]): Promise<Map<string, Principal>> {

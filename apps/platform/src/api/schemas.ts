@@ -10,6 +10,7 @@ import {
   ApiError as DomainApiError,
   Evidence,
   Id,
+  IsoDate,
   Lane,
   LinkedIssue,
   PipelineRun,
@@ -17,6 +18,8 @@ import {
   PlanDraftInput,
   Principal,
   Repo,
+  ReviewDecision,
+  RolloutPolicy,
   RolloutState,
   Scope,
   StartChangeInput,
@@ -33,14 +36,38 @@ export const ErrorSchema = DomainApiError.meta({ id: "Error" });
 
 export const PrincipalSchema = Principal.meta({ id: "Principal" });
 export const RepoSchema = Repo.meta({ id: "Repo" });
-export const PlanSchema = Plan.meta({ id: "Plan" });
+export const PlanSchema = Plan.extend({
+  rejectedBy: Id.nullable(),
+  rejectedAt: IsoDate.nullable(),
+  rejectionReason: z.string().nullable(),
+}).meta({ id: "Plan" });
 export const ChangeSchema = Change.meta({ id: "Change" });
 export const TourSchema = Tour.meta({ id: "Tour" });
 export const EvidenceSchema = Evidence.meta({ id: "Evidence" });
 export const ChangeDiffSchema = ChangeDiff.meta({ id: "ChangeDiff" });
 export const PipelineRunSchema = PipelineRun.meta({ id: "PipelineRun" });
 export const LinkedIssueSchema = LinkedIssue.meta({ id: "LinkedIssue" });
-export const AuditEventSchema = AuditEvent.meta({ id: "AuditEvent" });
+export const AuditEventSchema = AuditEvent.extend({
+  summary: z.string().describe('Readable one-liner, e.g. "Stage 25% started"'),
+}).meta({ id: "AuditEvent" });
+export const ReviewDecisionSchema = ReviewDecision.meta({ id: "ReviewDecision" });
+export const RolloutPolicySchema = RolloutPolicy.meta({ id: "RolloutPolicy" });
+
+export const PrincipalRefSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    kind: z.enum(["human", "agent", "system"]),
+    ownerId: z.string().nullable(),
+  })
+  .meta({ id: "PrincipalRef" });
+
+/** Names for every principal id a response mentions, so clients need no lookup per id. */
+export const PrincipalsMapSchema = z
+  .record(z.string(), PrincipalRefSchema)
+  .meta({ id: "PrincipalsMap" });
+
+export const PrincipalWithOwnerSchema = Principal.extend({ ownerName: z.string().optional() });
 export const RolloutStateSchema = RolloutState.meta({ id: "RolloutState" });
 export const ClassifyResultApiSchema = ClassifyResultSchema.meta({ id: "ClassifyResult" });
 
@@ -66,6 +93,7 @@ export const LaneCountsSchema = z
     awaitingReview: z.number().int(),
     rollingOut: z.number().int(),
     failing: z.number().int(),
+    plansAwaitingApproval: z.number().int(),
   })
   .meta({
     id: "LaneCounts",

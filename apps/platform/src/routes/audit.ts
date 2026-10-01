@@ -1,6 +1,11 @@
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
-import { AuditEventSchema, AuditQuery, ChainStatusSchema } from "../api/schemas.js";
+import {
+  AuditEventSchema,
+  AuditQuery,
+  ChainStatusSchema,
+  PrincipalsMapSchema,
+} from "../api/schemas.js";
 import { requirePrincipal } from "../auth/middleware.js";
 import { listAudit } from "../services/audit.js";
 import { type ApiApp, errors, json, SECURITY } from "./common.js";
@@ -19,6 +24,7 @@ const list = createRoute({
         events: z.array(AuditEventSchema),
         nextCursor: z.string().nullable(),
         chain: ChainStatusSchema,
+        principals: PrincipalsMapSchema,
       }),
       "Audit page",
     ),

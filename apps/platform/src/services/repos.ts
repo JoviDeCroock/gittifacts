@@ -22,14 +22,18 @@ export function shadowStats(repo: Repo, samples: readonly ShadowSample[]): Shado
 }
 
 export async function listRepoSummaries(svc: Services): Promise<RepoSummary[]> {
-  const [repos, counts, samples] = await Promise.all([
+  const [repos, counts, drafts, samples] = await Promise.all([
     svc.store.listRepos(),
     svc.store.laneCounts(),
+    svc.store.countDraftPlans(),
     svc.store.listShadowSamplesByRepo(),
   ]);
   return repos.map((repo) => ({
     ...repo,
-    counts: counts.get(repo.id) ?? { ...EMPTY_LANE_COUNTS },
+    counts: {
+      ...(counts.get(repo.id) ?? EMPTY_LANE_COUNTS),
+      plansAwaitingApproval: drafts.get(repo.id) ?? 0,
+    },
     shadow: shadowStats(repo, samples.get(repo.id) ?? []),
   }));
 }
@@ -39,15 +43,23 @@ export async function getRepoDetail(
   repoId: string,
 ): Promise<{ repo: Repo; shadow: ShadowStats; counts: LaneCounts }> {
   const repo = await svc.store.getRepo(repoId);
-  if (!repo) throw notFound(`repo ${repoId}`);
-  const [counts, samples] = await Promise.all([
+  if (!repo)
+    throw notFound(`repo ${repoId}`, {
+      explanation: "No repo with that id.",
+      call: "list_repos({})",
+    });
+  const [counts, drafts, samples] = await Promise.all([
     svc.store.laneCounts(repoId),
+    svc.store.countDraftPlans(repoId),
     svc.store.listShadowSamples(repoId),
   ]);
   return {
     repo,
     shadow: shadowStats(repo, samples),
-    counts: counts.get(repoId) ?? { ...EMPTY_LANE_COUNTS },
+    counts: {
+      ...(counts.get(repoId) ?? EMPTY_LANE_COUNTS),
+      plansAwaitingApproval: drafts.get(repoId) ?? 0,
+    },
   };
 }
 

@@ -145,6 +145,7 @@ export const plans = sqliteTable(
     /** Reviewer comment on approve/reject. */
     decisionComment: text("decision_comment"),
     decidedBy: text("decided_by"),
+    decidedAt: text("decided_at"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -153,6 +154,23 @@ export const plans = sqliteTable(
     index("plans_author_id_idx").on(t.authorId),
     index("plans_supersedes_idx").on(t.supersedes),
   ],
+);
+
+/**
+ * Every policy the coordinator evaluated from a default-branch sha (`Store.setRepoPolicy`), so a
+ * change's rollout can be explained with the policy from its BASE, not the repo's current one.
+ */
+export const repoPolicies = sqliteTable(
+  "repo_policies",
+  {
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
+    sha: text("sha").notNull(),
+    policy: text("policy", { mode: "json" }).$type<unknown>().notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.repoId, t.sha] })],
 );
 
 // ---------------------------------------------------------------- changes

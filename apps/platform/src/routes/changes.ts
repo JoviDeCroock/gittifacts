@@ -13,8 +13,11 @@ import {
   LinkedIssueSchema,
   PipelineRunSchema,
   PlanSchema,
+  PrincipalsMapSchema,
   RequestReviewBody,
   ReviewBody,
+  ReviewDecisionSchema,
+  RolloutPolicySchema,
   RolloutStateSchema,
   StartChangeBody,
   TourSchema,
@@ -30,6 +33,7 @@ import {
   getChangeTour,
   killChange,
   listChangeIssues,
+  listChangeReviews,
   refreshPushGrant,
   requestReview,
   startChange,
@@ -71,6 +75,7 @@ const detail = createRoute({
         plan: PlanSchema.nullable(),
         runs: z.array(PipelineRunSchema),
         classification: ClassifyResultApiSchema.nullable(),
+        principals: PrincipalsMapSchema,
       }),
       "Change",
     ),
@@ -126,7 +131,18 @@ const tour = createRoute({
   security: SECURITY,
   middleware: [read] as const,
   request: { params: ChangeIdParam },
-  responses: { 200: json(z.object({ tour: TourSchema }), "Tour"), ...errors(401, 403, 404) },
+  responses: {
+    200: json(
+      z.object({
+        tour: TourSchema,
+        stale: z
+          .boolean()
+          .describe("The tour was generated for an older head than the change's current one"),
+      }),
+      "Tour",
+    ),
+    ...errors(401, 403, 404),
+  },
 });
 
 const review = createRoute({
@@ -157,6 +173,23 @@ const requestReviewRoute = createRoute({
   },
 });
 
+const reviews = createRoute({
+  method: "get",
+  path: "/api/v1/changes/{changeId}/reviews",
+  tags: ["changes"],
+  summary: "Human reviews of a change, oldest first (each bound to a head)",
+  security: SECURITY,
+  middleware: [read] as const,
+  request: { params: ChangeIdParam },
+  responses: {
+    200: json(
+      z.object({ reviews: z.array(ReviewDecisionSchema), principals: PrincipalsMapSchema }),
+      "Reviews",
+    ),
+    ...errors(401, 403, 404),
+  },
+});
+
 const rollout = createRoute({
   method: "get",
   path: "/api/v1/changes/{changeId}/rollout",
@@ -167,7 +200,15 @@ const rollout = createRoute({
   request: { params: ChangeIdParam },
   responses: {
     200: json(
-      z.object({ rollout: RolloutStateSchema.nullable(), timeline: z.array(AuditEventSchema) }),
+      z.object({
+        rollout: RolloutStateSchema.nullable(),
+        timeline: z.array(AuditEventSchema),
+        policy: RolloutPolicySchema.describe(
+          "Rollout policy from the change's base, not the repo's current one",
+        ),
+        policySha: z.string().nullable().describe("Default-branch sha the policy was read from"),
+        principals: PrincipalsMapSchema,
+      }),
       "Rollout",
     ),
     ...errors(401, 403, 404),
@@ -230,7 +271,10 @@ export function registerChangeRoutes(app: ApiApp): void {
     c.json(await getChangeEvidence(c.get("services"), c.req.valid("param").changeId), 200),
   );
   app.openapi(tour, async (c) =>
-    c.json({ tour: await getChangeTour(c.get("services"), c.req.valid("param").changeId) }, 200),
+    c.json(await getChangeTour(c.get("services"), c.req.valid("param").changeId), 200),
+  );
+  app.openapi(reviews, async (c) =>
+    c.json(await listChangeReviews(c.get("services"), c.req.valid("param").changeId), 200),
   );
   app.openapi(review, async (c) => {
     const change = await submitReview(

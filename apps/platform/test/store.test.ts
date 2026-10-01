@@ -206,6 +206,8 @@ describe("D1Store", () => {
       awaitingReview: 1,
       rollingOut: 0,
       failing: 1,
+      plansAwaitingApproval: 0,
     });
+    expect((await s.countDraftPlans(repo.id)).get(repo.id)).toBe(1);
   });
 });

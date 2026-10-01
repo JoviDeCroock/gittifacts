@@ -5,13 +5,19 @@ import {
   IdempotencyHeaders,
   PrincipalIdParam,
   PrincipalSchema,
+  PrincipalWithOwnerSchema,
   RepoSchema,
   SessionUserSchema,
 } from "../api/schemas.js";
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
 import { capabilities, REPO_ACTIONS } from "../services/capabilities.js";
-import { createAgent, listPrincipals, revokeTokens } from "../services/identity.js";
+import {
+  createAgent,
+  getPrincipalDetail,
+  listPrincipals,
+  revokeTokens,
+} from "../services/identity.js";
 import { type ApiApp, body, errors, json, SECURITY } from "./common.js";
 
 const me = createRoute({
@@ -80,6 +86,20 @@ const principals = createRoute({
   },
 });
 
+const principalById = createRoute({
+  method: "get",
+  path: "/api/v1/principals/{id}",
+  tags: ["identity"],
+  summary: "A principal by id (agents include their owner's name)",
+  security: SECURITY,
+  middleware: [requirePrincipal(["repo:read"])] as const,
+  request: { params: PrincipalIdParam },
+  responses: {
+    200: json(z.object({ principal: PrincipalWithOwnerSchema }), "Principal"),
+    ...errors(401, 403, 404),
+  },
+});
+
 const createAgentRoute = createRoute({
   method: "post",
   path: "/api/v1/principals/agents",
@@ -121,6 +141,9 @@ export function registerIdentityRoutes(app: ApiApp): void {
   app.openapi(principals, async (c) => {
     return c.json({ principals: await listPrincipals(c.get("services"), callerOf(c)) }, 200);
   });
+  app.openapi(principalById, async (c) =>
+    c.json(await getPrincipalDetail(c.get("services"), c.req.valid("param").id), 200),
+  );
   app.openapi(createAgentRoute, async (c) => {
     const out = await createAgent(c.get("services"), callerOf(c), c.req.valid("json"));
     return c.json(out, 201);

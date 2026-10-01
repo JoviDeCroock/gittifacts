@@ -7,6 +7,7 @@ import {
   PlanDraftBody,
   PlanIdParam,
   PlanSchema,
+  PrincipalsMapSchema,
   RejectPlanBody,
 } from "../api/schemas.js";
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
@@ -37,7 +38,14 @@ const detail = createRoute({
   middleware: [requirePrincipal(["repo:read"])] as const,
   request: { params: PlanIdParam },
   responses: {
-    200: json(z.object({ plan: PlanSchema, changes: z.array(ChangeSchema) }), "Plan"),
+    200: json(
+      z.object({
+        plan: PlanSchema,
+        changes: z.array(ChangeSchema),
+        principals: PrincipalsMapSchema,
+      }),
+      "Plan",
+    ),
     ...errors(401, 403, 404),
   },
 });

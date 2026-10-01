@@ -123,6 +123,24 @@ export function planFromRow(r: PlanRow): Plan {
   );
 }
 
+/** Plan as the API returns it: the domain Plan plus who rejected it, when and why. */
+export type PlanView = Plan & {
+  rejectedBy: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+};
+
+export function planViewFromRow(r: PlanRow): PlanView {
+  const plan = planFromRow(r);
+  const rejected = plan.status === "rejected";
+  return {
+    ...plan,
+    rejectedBy: rejected ? r.decidedBy : null,
+    rejectedAt: rejected ? (r.decidedAt ?? r.updatedAt) : null,
+    rejectionReason: rejected ? r.decisionComment : null,
+  };
+}
+
 export function planToRow(plan: Plan, extra: { approvalKeyId?: string | null; updatedAt: string }) {
   const v = Plan.parse(plan);
   return {

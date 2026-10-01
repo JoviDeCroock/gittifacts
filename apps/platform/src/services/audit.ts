@@ -2,11 +2,28 @@ import type { AuditEvent } from "@app/domain";
 import type { Services } from "../app-env.js";
 import { auditLogStub } from "../audit/audit.js";
 import { verifyEntries } from "../audit/chain.js";
+import { summarizeAudit } from "../audit/summary.js";
+import type { PrincipalRef } from "../store/d1-store.js";
+
+/** An audit event as the API returns it: with a readable one-liner. */
+export type AuditEventView = AuditEvent & { summary: string };
+
+export async function withSummaries(
+  svc: Services,
+  events: readonly AuditEvent[],
+): Promise<AuditEventView[]> {
+  const payloads = await svc.store.auditPayloads(
+    svc.auditLog,
+    events.map((e) => e.seq),
+  );
+  return events.map((e) => ({ ...e, summary: summarizeAudit(e, payloads.get(e.seq)) }));
+}
 
 export interface AuditPage {
-  events: AuditEvent[];
+  events: AuditEventView[];
   nextCursor: string | null;
   chain: { verified: boolean; brokenAt?: number };
+  principals: Record<string, PrincipalRef>;
 }
 
 /**
@@ -43,5 +60,7 @@ export async function listAudit(
   const broken = [pageCheck, doCheck].filter((r) => !r.verified).map((r) => r.brokenAt ?? 0);
   const chain =
     broken.length === 0 ? { verified: true } : { verified: false, brokenAt: Math.min(...broken) };
-  return { events: page, nextCursor, chain };
+  const events2 = page.map((e) => ({ ...e, summary: summarizeAudit(e, payloads.get(e.seq)) }));
+  const principals = await svc.store.principalRefs(page.map((e) => e.principalId));
+  return { events: events2, nextCursor, chain, principals };
 }

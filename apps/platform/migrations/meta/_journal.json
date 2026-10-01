@@ -29,6 +29,13 @@
       "when": 1790872932320,
       "tag": "0003_onboarding_claim_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790874523063,
+      "tag": "0004_plan_decisions_policy_history",
+      "breakpoints": true
     }
   ]
 }

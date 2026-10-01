@@ -418,7 +418,7 @@ export function buildTools(backend: McpBackend) {
         const caller = callerOf(ctx);
         requireScope(caller, "repo:read");
         const { changeId } = parse(ChangeIdArgs, args);
-        const tour = await run(backend, () => backend.getTour(caller, changeId));
+        const { tour, stale } = await run(backend, () => backend.getTour(caller, changeId));
         return {
           tour: {
             id: tour.id,
@@ -439,6 +439,7 @@ export function buildTools(backend: McpBackend) {
             leastConfident: tour.leastConfident,
             notDone: tour.notDone,
           },
+          stale,
         };
       },
     },

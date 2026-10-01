@@ -732,10 +732,15 @@ export type introspection = {
               "leastConfident",
               "notDone"
             ]
+          },
+          "stale": {
+            "type": "boolean",
+            "description": "True when the tour was written for an older head; a new one follows the latest push."
           }
         },
         "required": [
-          "tour"
+          "tour",
+          "stale"
         ]
       },
       "annotations": {
