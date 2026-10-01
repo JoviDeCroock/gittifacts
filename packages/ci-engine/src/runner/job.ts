@@ -179,6 +179,7 @@ export const PlanJob = z
      * locks egress down to the git host when the gateway is available: it never needs more.
      */
     network: NetworkPolicy.default("open"),
+    instance: InstanceType.default("standard-1"),
   })
   .strict();
 export type PlanJob = z.output<typeof PlanJob>;

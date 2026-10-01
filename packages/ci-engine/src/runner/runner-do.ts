@@ -642,7 +642,7 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
         c,
         {
           from: { kind: "image" },
-          instance: "standard-1",
+          instance: job.instance,
           timeoutSeconds: job.timeoutSeconds,
           runId: job.runId,
           step: "plan",

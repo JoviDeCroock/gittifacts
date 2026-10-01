@@ -705,6 +705,7 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
     req: CiRunParams,
     sha: string,
   ): Promise<{ ok: true; pipeline: PipelineSpec } | { ok: false; error: string }> {
+    const planInstance = clampInstance("standard-1", resolveLimits(req).instance);
     const raw = await this.runner(req.runId, PLAN_RUNNER_STEP).plan({
       runId: req.runId,
       artifactsRepo: req.artifactsRepo,
@@ -714,6 +715,7 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       file: CI_PIPELINE_FILE,
       logKey: RunKeys.log(req.runId, PLAN_RUNNER_STEP),
       network: req.network,
+      instance: planInstance,
     });
     const outcome = PlanOutcome.safeParse(raw);
     if (!outcome.success) {
@@ -724,7 +726,7 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
     const o = outcome.data;
     await writeUsage(this.store(), req.runId, `plan-${Date.now()}`, {
       step: PLAN_RUNNER_STEP,
-      instance: "standard-1",
+      instance: planInstance,
       computeMs: o.computeMs,
       logBytes: 0,
     });
