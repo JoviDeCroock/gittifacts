@@ -15,3 +15,5 @@ reports/
 *.tsbuildinfo
 .vite/
 fixtures/.materialized/
+.gstack/
+.cloudflare/
