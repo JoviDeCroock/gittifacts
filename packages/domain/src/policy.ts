@@ -8,9 +8,19 @@ export const RolloutPolicy = z.object({
   /** Percent of traffic per stage; last stage must be 100. */
   stages: z.array(z.number().int().min(1).max(100)).min(1).default([5, 25, 100]),
   /** Minutes to hold each stage before advancing. */
-  stageMinutes: z.number().int().min(1).max(24 * 60).default(10),
+  stageMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60)
+    .default(10),
   /** Minutes to keep watching after reaching 100%. */
-  watchMinutes: z.number().int().min(1).max(7 * 24 * 60).default(30),
+  watchMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(7 * 24 * 60)
+    .default(30),
   /** Absolute error-rate increase (0..1) over the previous version that triggers a revert. */
   maxErrorRateIncrease: z.number().min(0).max(1).default(0.01),
   /** New Workers Issues groups for the change's version that trigger a revert. */
@@ -100,6 +110,12 @@ export const RepoPolicy = z.object({
     .default({ budgetUsdPerChange: 0.5, reviewerModel: "auto" }),
   /** Routes to screenshot for every change, in addition to plan-declared ones. */
   previewRoutes: z.array(z.string()).default([]),
+  /**
+   * Remote workspaces (`open_workspace`). A claimed project's workspaces get open egress unless
+   * this says `registries-only`; unclaimed projects are always `registries-only`. Optional (no
+   * default), so generated policy files and stored policies don't change.
+   */
+  sandbox: z.object({ network: z.enum(["open", "registries-only"]).optional() }).optional(),
 });
 export type RepoPolicy = z.infer<typeof RepoPolicy>;
 export type RepoPolicyInput = z.input<typeof RepoPolicy>;
