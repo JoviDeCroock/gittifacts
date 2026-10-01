@@ -141,3 +141,24 @@ A codemod added in the same change it claims to reproduce proves nothing: it cou
 The platform runs `.platform/transforms/<name>` **from the base tree** against a clean base checkout and compares
 the result byte-for-byte with head. A change that adds or edits a transform script touches `.platform/**`, which makes
 it Lane 2 with a human approval. Once that script is on main, later changes can use it to reach Lane 0.
+
+## 2026-10-01 — Evidence package semantics
+
+- **Document signatures.** These sign `{document, purpose}`, so a plan-approval signature can't be replayed as an
+  audit-entry or evidence signature.
+- **Raw-input verification.** `verifyEvidence` verifies over the raw input, so fields injected after signing are caught.
+- **Notes.** The last complete JSON document in a note wins. An appended forgery fails verification instead of falling
+  back to an older valid document.
+- **Unsigned fields.** `signedAt`, `signer` and `keyId` are not covered by the signature (the payload is exactly
+  `{changeId, headSha, items}`, per the spec). A leaked retired key could therefore backdate a signature past its
+  `notAfter`. Planned v2 note format: bind them.
+- **Fail closed.** Producers emit `error` items for an empty coverage report, an unparseable manifest, an unknown
+  mutant status or a bad glob. Changed files missing from a coverage report are listed as `unmeasuredFiles` instead of
+  silently counting as non-executable.
+- **Semver.** 0.x follows npm caret rules, so 0.2 → 0.3 counts as "major".
+- **Policy globs.** These are gitignore-style: a pattern without `/` matches at any depth, and matching a directory
+  matches everything under it.
+
+**Known mismatch to fix in integration.** A mutation run with no mutants on changed lines is emitted as `skipped`. The
+classifier never accepts a skipped mutation signal, so docs/type-only changes can't reach Lane 0. Planned fix: the
+classifier accepts `mutation: skipped` under the same docs-only allow-list it already uses for coverage/public-api.
