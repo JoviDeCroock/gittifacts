@@ -204,16 +204,13 @@ export const api = {
     request<AuditPage>("GET", `/api/v1/audit${query({ subject: q.subject, cursor: q.cursor, limit: q.limit })}`),
 };
 
-/**
- * GAP: evidence carries opaque `beforeRef` / `afterRef` / `logRef` pointers with no endpoint to
- * resolve them. The UI assumes `GET /api/v1/artifacts/:ref`.
- */
+/** Resolves opaque `beforeRef` / `afterRef` / `logRef` pointers: `GET /api/v1/blobs/:ref` (docs/api.md). */
 export async function artifactUrl(ref: string): Promise<string> {
   if (isMockMode()) {
     const mock = await import("./mock.js");
     return mock.artifactUrl(ref);
   }
-  return `/api/v1/artifacts/${enc(ref)}`;
+  return `/api/v1/blobs/${enc(ref)}`;
 }
 
 export interface ErrorCopy {
