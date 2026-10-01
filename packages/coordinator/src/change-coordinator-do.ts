@@ -11,9 +11,12 @@ import type {
   PushOutcome,
 } from "./bindings.js";
 import { ChangeCoordinatorCore } from "./change-coordinator.js";
+import type { RunSink } from "./ports.js";
+import { createRunSink, type SinkOutcome } from "./run-sink.js";
 import { resolveRuntime } from "./runtime.js";
 
-export class ChangeCoordinator extends DurableObject<unknown> implements ChangeCoordinatorClient {
+/** Also the CI engine's run sink: bind `COORDINATOR` (RunSinkNamespace) to this class. */
+export class ChangeCoordinator extends DurableObject<unknown> implements ChangeCoordinatorClient, RunSink {
   private coreInstance: ChangeCoordinatorCore | null = null;
 
   private get core(): ChangeCoordinatorCore {
@@ -86,6 +89,12 @@ export class ChangeCoordinator extends DurableObject<unknown> implements ChangeC
 
   releaseKey(input: { changeId: string; key: string }): Promise<void> {
     return this.core.releaseKey(input);
+  }
+
+  /** Called by the CI workflow's finalize step with the run summary. */
+  onRunFinished(summary: unknown): Promise<SinkOutcome> {
+    const { ports, bindings } = resolveRuntime(this.env, "default");
+    return createRunSink(ports, bindings).onRunFinished(summary);
   }
 
   override async alarm(): Promise<void> {

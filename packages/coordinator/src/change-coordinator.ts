@@ -150,7 +150,7 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
   private async supersedeRun(runId: string): Promise<void> {
     const { ci, store, clock } = this.deps.ports;
     try {
-      await ci.cancel(runId, "superseded by a newer push");
+      await ci.cancel(runId, "superseded: a newer head was pushed");
     } catch {
       // Already finished or unknown to the engine: marking it superseded is still right.
     }

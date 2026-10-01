@@ -149,53 +149,65 @@ export interface SandboxJobs {
 
 // ---------------------------------------------------------------- CI (@app/ci-engine)
 
-/** Where the run sink delivers `ci-finished` once a run is terminal. */
-export interface CiReplyTo {
-  workflow: "change";
-  instanceId: string;
-}
-
-export interface CiStartInput {
-  /** Chosen by the caller and deterministic, so `start` is idempotent per run id. */
+/**
+ * Structural mirror of `@app/ci-engine`'s `CiEngine` contract (engine.ts). Mirrored rather than
+ * imported so this package does not type-check (or load) the engine's Worker sources; the
+ * engine's `WorkflowsCiEngine` is assignable to it.
+ *
+ * Runs report back through `RunSink.onRunFinished(summary)`, which the CI workflow calls on
+ * `env.COORDINATOR.getByName(changeId)`: bind `COORDINATOR` to the ChangeCoordinator DO class.
+ */
+export interface CiRunRequest {
+  /** `[A-Za-z0-9][A-Za-z0-9_-]{0,99}`; start is idempotent per run id. */
   runId: string;
   changeId: string;
-  repoId: string;
-  /** Artifacts repo to check out (the change's fork). */
-  repo: string;
-  baseSha: string;
+  repo: { remote: string; tokenProvider: "artifacts" };
+  /** The change's fork. */
+  artifactsRepo: string;
   headSha: string;
-  /** Raw plan-mode output (the engine validates it as a PipelineSpec); null = engine defaults. */
-  pipeline: unknown;
-  /** full = user steps + evidence steps; cheap = typecheck + tests from the cached install snapshot. */
-  profile: "full" | "cheap";
-  replyTo: CiReplyTo | null;
+  baseSha: string;
+  /** A plan-mode PipelineSpec; omitted → the engine plans it from `pipelineFrom`. */
+  pipeline?: unknown;
+  /** Omitted → the engine's default evidence steps; [] → none (cheap re-checks). */
+  evidenceSteps?: unknown[];
+  pipelineFrom?: "base" | "head";
+  budget: { maxMinutes: number };
 }
 
-export interface CiRunReport {
-  run: PipelineRun;
-  /** Raw evidence items from the evidence steps; the coordinator validates each one. */
-  items: unknown[];
-  outputs: {
-    /** Worker bundle produced by the pipeline's `build` step (R2 key), if any. */
-    bundleRef: string | null;
-  };
-  replyTo: CiReplyTo | null;
+export type CiRunState = "queued" | "running" | "passed" | "failed" | "cancelled" | "superseded";
+
+export interface CiRunStatus {
+  id: string;
+  changeId: string;
+  headSha: string;
+  baseSha: string;
+  engine: string;
+  status: CiRunState;
+  startedAt: string | null;
+  finishedAt: string | null;
+  steps: Array<{
+    name: string;
+    kind: "user" | "evidence";
+    status: string;
+    durationMs: number | null;
+    logRef: string | null;
+    cacheHit?: boolean;
+  }>;
+  error?: string;
 }
 
 export interface CiEngine {
-  start(input: CiStartInput): Promise<{ runId: string }>;
-  /** Latest report for the run, or null when the engine does not know it. */
-  status(runId: string): Promise<CiRunReport | null>;
+  start(req: CiRunRequest): Promise<{ runId: string }>;
+  /** Throws when the engine does not know the run. */
+  status(runId: string): Promise<CiRunStatus>;
+  /** A reason starting with "superseded" reports the run as superseded. */
   cancel(runId: string, reason: string): Promise<void>;
   restartFrom(runId: string, step: string): Promise<void>;
 }
 
-/**
- * Implemented by the coordinator (`createRunSink`); the CI engine calls it whenever a run changes
- * state. Terminal reports with a `replyTo` are forwarded to that ChangeWorkflow as `ci-finished`.
- */
+/** What the CI workflow calls when a run finishes (payload validated by the coordinator). */
 export interface RunSink {
-  report(report: CiRunReport): Promise<void>;
+  onRunFinished(summary: unknown): Promise<unknown>;
 }
 
 // ---------------------------------------------------------------- review (AI Gateway)

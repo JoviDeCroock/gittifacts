@@ -49,9 +49,9 @@ import {
   resolvePolicy,
   unavailablePolicy,
 } from "./policy.js";
-import { type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
+import { type CiRunRequest, type CiRunStatus, type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
 import { verifyPureRevert } from "./revert.js";
-import { isTerminalRun } from "./run-sink.js";
+import { toPipelineRun } from "./run-sink.js";
 import { RETRY, type Step, waitOrTimeout } from "./step.js";
 
 export interface FlowDeps {
@@ -78,6 +78,8 @@ export interface ChangeWorkflowOutput {
 
 /** How long CI may take before the workflow asks the engine directly. */
 export const CI_TIMEOUT = "3 hours";
+/** Container-minute budget for one full run. */
+export const CI_BUDGET_MINUTES = 90;
 export const REVIEW_TIMEOUT = "7 days";
 /** Reminders before a review request expires (4 × 7 days). */
 export const REVIEW_ROUNDS = 4;
@@ -211,13 +213,13 @@ export async function runChangeWorkflow(
   }
   const policy: RepoPolicy = resolved.policy;
 
-  // ------------------------------------------------------------ 3. plan-ci (sandbox, plan mode)
+  // ------------------------------------------------------------ 3. plan-ci (sandbox, plan mode, at BASE)
   let pipeline: unknown = null;
   let planWarning: string | null = null;
   try {
     pipeline = (
       await step.do("plan-ci", RETRY.sandbox, async () => ({
-        spec: (await ports.sandbox.planPipeline({ repo: forkName, sha: headSha })) ?? null,
+        spec: (await ports.sandbox.planPipeline({ repo: forkName, sha: baseSha })) ?? null,
       }))
     ).spec;
   } catch (e) {
@@ -228,19 +230,28 @@ export async function runChangeWorkflow(
   // ------------------------------------------------------------ 4. ci
   const runId = ciRunIdFor(instanceId);
   await step.do("ci-start", RETRY.remote, async () => {
-    await ports.ci.start({
+    const request: CiRunRequest = {
       runId,
       changeId,
-      repoId,
-      repo: forkName,
-      baseSha,
+      repo: { remote: git.remoteOf(forkName), tokenProvider: "artifacts" },
+      artifactsRepo: forkName,
       headSha,
-      pipeline,
-      profile: "full",
-      replyTo: { workflow: "change", instanceId },
-    });
+      baseSha,
+      // The pipeline comes from BASE: a change must not edit the CI that judges it.
+      pipelineFrom: "base",
+      budget: { maxMinutes: CI_BUDGET_MINUTES },
+    };
+    let note = planWarning;
+    try {
+      await ports.ci.start(pipeline === null ? request : { ...request, pipeline });
+    } catch (e) {
+      if (pipeline === null) throw e;
+      // The engine rejected our planned spec: let it plan from base itself.
+      note = `planned pipeline rejected (${errorMessage(e)}); the engine plans it`;
+      await ports.ci.start(request);
+    }
     await bindings.changeCoordinator(changeId).registerRun({ changeId, instanceId, runId });
-    await log("change.ci-started", { runId, headSha, planWarning });
+    await log("change.ci-started", { runId, headSha, note });
     return { runId };
   });
 
@@ -250,23 +261,27 @@ export async function runChangeWorkflow(
   if (parsedReport?.success && parsedReport.data.run.id === runId) {
     report = parsedReport.data;
   } else {
-    // Timed out or malformed: ask the engine; a run we cannot account for is "errored" (unknown).
+    // Timed out or malformed: ask the engine. A run we cannot account for is "errored" (unknown),
+    // and without its summary the evidence is missing (which escalates).
     report = await step.do("ci-status", RETRY.remote, async (): Promise<CiFinishedEvent> => {
       const at = clock.now().toISOString();
-      const latest = await ports.ci.status(runId);
-      if (latest !== null && isTerminalRun(latest.run.status)) {
-        return { run: latest.run, items: latest.items, outputs: { bundleRef: latest.outputs.bundleRef } };
+      let latest: CiRunStatus | null = null;
+      try {
+        latest = await ports.ci.status(runId);
+      } catch {
+        latest = null;
+      }
+      const lost = [{ step: "*", message: "the run's evidence never reached the coordinator" }];
+      if (latest !== null && latest.status !== "queued" && latest.status !== "running") {
+        return { run: toPipelineRun(latest), items: [], evidenceErrors: lost, outputs: { bundleRef: null } };
       }
       try {
         await ports.ci.cancel(runId, "no result within the CI timeout");
       } catch {
         // best effort
       }
-      return {
-        run: { ...(latest?.run ?? placeholderRun(runId, changeId, headSha, at)), status: "errored", finishedAt: at },
-        items: [],
-        outputs: { bundleRef: null },
-      };
+      const run = latest === null ? placeholderRun(runId, changeId, headSha, at) : { ...toPipelineRun(latest), status: "errored" as const, finishedAt: at };
+      return { run, items: [], evidenceErrors: lost, outputs: { bundleRef: null } };
     });
   }
   const ciStatus = toCiStatus(report.run.status);
@@ -286,6 +301,7 @@ export async function runChangeWorkflow(
       runId,
       status: report.run.status,
       items: report.items.length,
+      evidenceErrors: report.evidenceErrors,
     });
     return ciStatus;
   });

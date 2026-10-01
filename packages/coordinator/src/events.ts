@@ -34,7 +34,10 @@ export const EVENT_ISSUE = "issue";
 
 export const CiFinishedEvent = z.object({
   run: PipelineRun,
+  /** Raw evidence items (validated one by one when the bundle is assembled). */
   items: z.array(z.unknown()).default([]),
+  /** Evidence steps that produced nothing valid: their signals stay missing (→ escalate). */
+  evidenceErrors: z.array(z.object({ step: z.string(), message: z.string() })).default([]),
   outputs: z.object({ bundleRef: z.string().nullable().default(null) }).default({ bundleRef: null }),
 });
 export type CiFinishedEvent = z.infer<typeof CiFinishedEvent>;

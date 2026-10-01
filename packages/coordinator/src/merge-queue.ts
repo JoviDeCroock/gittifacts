@@ -16,15 +16,14 @@
  * Node-safe: storage is behind `QueueStorage` (SQLite in the DO, memory in tests).
  */
 import type { Change, Repo } from "@app/domain";
-import { EvidenceItem, encodeNote, EVIDENCE_NOTES_REF } from "@app/evidence";
+import { encodeNote, EVIDENCE_NOTES_REF } from "@app/evidence";
 import type { CoordinatorBindings, EnqueueInput, MergeQueueClient, MergeQueueEntry } from "./bindings.js";
 import { sealEvidence } from "./evidence.js";
 import { EVENT_MERGE_CONFLICT, EVENT_MERGED, type MergeConflictEvent, type MergedEvent } from "./events.js";
 import { changeSubject, cheapRunIdFor, REBASE_BRANCH, stagingRefFor, ZERO_SHA } from "./ids.js";
 import { withChangeNotifications } from "./milestones.js";
 import { errorMessage } from "./policy.js";
-import { type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
-import { isTerminalRun } from "./run-sink.js";
+import { type CiRunStatus, type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
 
 export type QueuePhase = "ready" | "checking" | "merging" | "finalizing";
 
@@ -81,6 +80,9 @@ export const DEFAULT_QUEUE_OPTIONS: MergeQueueOptions = {
   checkTimeoutMs: 45 * 60_000,
   forkGcDelayMs: 24 * 60 * 60_000,
 };
+
+/** Container-minute budget for the re-check after a rebase. */
+export const CHEAP_CHECK_MINUTES = 30;
 
 /** null = idle (no alarm needed); otherwise run `tick` again after this many ms. */
 export type TickResult = { next: number | null; did: string };
@@ -253,16 +255,17 @@ export class MergeQueueCore implements MergeQueueClient {
       throw new ItemFailure("conflict", `rebase onto ${main.slice(0, 12)} conflicts`, result.files);
     }
     const runId = cheapRunIdFor(change.id, result.newSha);
+    // Cheap re-check: the user pipeline from base (install served from cache), no evidence steps.
     await ci.start({
       runId,
       changeId: change.id,
-      repoId: repo.id,
-      repo: change.forkName,
+      repo: { remote: this.deps.ports.git.remoteOf(change.forkName), tokenProvider: "artifacts" },
+      artifactsRepo: change.forkName,
       baseSha: main,
       headSha: result.newSha,
-      pipeline: null,
-      profile: "cheap",
-      replyTo: null,
+      pipelineFrom: "base",
+      evidenceSteps: [],
+      budget: { maxMinutes: CHEAP_CHECK_MINUTES },
     });
     await this.save({
       ...item,
@@ -291,8 +294,13 @@ export class MergeQueueCore implements MergeQueueClient {
       await this.save({ ...item, phase: "ready" });
       return { next: 0, did: "reset" };
     }
-    const report = await ci.status(runId);
-    if (report === null || !isTerminalRun(report.run.status)) {
+    let report: CiRunStatus | null = null;
+    try {
+      report = await ci.status(runId);
+    } catch {
+      report = null; // not visible yet
+    }
+    if (report === null || report.status === "queued" || report.status === "running") {
       const started = item.checkStartedAt === null ? 0 : Date.parse(item.checkStartedAt);
       if (clock.now().getTime() - started > this.options.checkTimeoutMs) {
         await this.quietly(() => ci.cancel(runId, "merge queue check timed out"));
@@ -300,21 +308,16 @@ export class MergeQueueCore implements MergeQueueClient {
       }
       return { next: this.options.pollMs, did: "waiting-checks" };
     }
-    if (report.run.status !== "passed") {
-      throw new ItemFailure("checks-failed", `checks after rebase ${report.run.status}`);
+    if (report.status !== "passed") {
+      throw new ItemFailure("checks-failed", `checks after rebase ${report.status}`);
     }
-    // Re-sign: the approved head's evidence plus the re-run's items, now for the rebased sha.
+    // Re-sign the approved head's evidence for the rebased sha.
     const original = await store.getEvidence(change.id, item.headSha);
-    const recheck: EvidenceItem[] = [];
-    for (const raw of report.items) {
-      const parsed = EvidenceItem.safeParse(raw);
-      if (parsed.success) recheck.push({ ...parsed.data, id: `rebase:${parsed.data.id}` });
-    }
     const sealed = await sealEvidence(this.deps.ports, {
       changeId: change.id,
       headSha: item.candidateSha,
       baseSha: item.rebasedOnto ?? change.baseSha,
-      items: [...(original?.items ?? []), ...recheck],
+      items: [...(original?.items ?? [])],
     });
     // The evidence payload's field set is fixed, so the rebase link is a separately signed record.
     const link = { changeId: change.id, headSha: item.candidateSha, rebasedFrom: item.headSha, onto: item.rebasedOnto, evidenceId: sealed.evidenceId };
@@ -325,7 +328,8 @@ export class MergeQueueCore implements MergeQueueClient {
       subject: changeSubject(change.id),
       payload: { ...link, verified: sealed.verified, signature, keyId: signer.keyId },
     });
-    const next: QueueItem = { ...item, phase: "merging", bundleRef: report.outputs.bundleRef, lastError: null };
+    // The engine does not report build outputs on status yet, so a rebased merge has no bundle.
+    const next: QueueItem = { ...item, phase: "merging", bundleRef: null, lastError: null };
     await this.save(next);
     return this.merge(next, change, repo);
   }
