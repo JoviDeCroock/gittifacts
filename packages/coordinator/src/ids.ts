@@ -2,9 +2,34 @@
  * Identifier conventions shared by the service, the Durable Objects and the Workflows.
  * Everything here is deterministic except `newId`.
  */
+import type { Change } from "@app/domain";
+import { SYSTEM_PRINCIPAL_ID } from "./ports.js";
 
 /** Change forks live next to the main repos as `task-<changeId>`. Main repos may not use the prefix. */
 export const FORK_PREFIX = "task-";
+
+/**
+ * Artifacts repos the platform keeps for itself (template cache seeding); no project may use the
+ * prefix.
+ */
+export const SEED_PREFIX = "seed-";
+
+/** Prefix of a repo's bootstrap Change (its first CI run and preview). */
+export const BOOTSTRAP_PREFIX = "bs-";
+
+/** The bootstrap Change of `repoId`: one per repo, so creating it is idempotent. */
+export function bootstrapChangeIdFor(repoId: string): string {
+  return `${BOOTSTRAP_PREFIX}${repoId}`;
+}
+
+/**
+ * A repo's bootstrap Change: platform-authored, base = head = the initial commit, checked out from
+ * the main repo itself (no fork). It has no lane and never reaches review or the merge queue.
+ * Regular change ids never contain "-", so the prefix cannot collide.
+ */
+export function isBootstrapChange(change: Pick<Change, "id" | "authorId">): boolean {
+  return change.id.startsWith(BOOTSTRAP_PREFIX) && change.authorId === SYSTEM_PRINCIPAL_ID;
+}
 
 /** Branch in a fork where the merge queue's sandbox pushes a rebased head (ignored by onPush). */
 export const REBASE_BRANCH = "gittifacts/rebased";

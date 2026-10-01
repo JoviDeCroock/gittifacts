@@ -53,12 +53,60 @@ export interface WaitResult {
   reason: "reached" | "timeout" | "unreachable";
 }
 
+/** What `createRepo` asks the platform for: the files of a new repo's initial commit. */
+export interface InitialCommitInput {
+  repoId: string;
+  name: string;
+  defaultBranch: string;
+  /** Template id, or null for an empty project. */
+  template: string | null;
+  description: string | null;
+  claimed: boolean;
+}
+
+export interface InitialCommit {
+  /** Repo path → content (mode 100644). */
+  files: Record<string, string | Uint8Array>;
+  message: string;
+  /**
+   * What `.platform/policy.ts` in `files` exports, when the provider generated it and so knows it.
+   * It is cached for the initial commit, so the bootstrap Change needs no policy sandbox job.
+   */
+  policy?: unknown;
+}
+
+/**
+ * The platform's source of initial commits (templates rendered with placeholders, `.platform/*`
+ * and AGENTS.md from @app/conventions). Throw a `CoordinatorError("invalid-input")` for an
+ * unknown template; it is called before anything is created.
+ */
+export type InitialCommitProvider = (input: InitialCommitInput) => Promise<InitialCommit>;
+
 export interface CoordinatorApi {
-  /** A human (or an agent with an owner) gets a claimed repo; an ownerless agent an unclaimed one. */
+  /**
+   * A human (or an agent with an owner) gets a claimed repo; an ownerless agent an unclaimed one.
+   * With an `initialCommit` provider configured, the repo starts with one commit on its default
+   * branch (the template, or a minimal project). With an idempotency key the repo id is derived
+   * from (actor, key): a retry returns the same repo.
+   */
   createRepo(
     actor: Principal,
-    input: { name: string; defaultBranch?: string; template?: string },
+    input: {
+      name: string;
+      defaultBranch?: string;
+      template?: string;
+      description?: string;
+      idempotencyKey?: string;
+    },
   ): Promise<Repo>;
+
+  /**
+   * The bootstrap Change of a repo: platform-authored (`system`), category chore, base = head =
+   * the initial commit. It runs the first CI and the first preview, then is released. It has no
+   * lane and never enters review or the merge queue; `wait_for_change` works on it. Idempotent
+   * per repo.
+   */
+  startBootstrapChange(actor: Principal, repoId: string): Promise<Change>;
   importRepo(
     actor: Principal,
     input: { name: string; url: string; branch?: string },

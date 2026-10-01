@@ -62,6 +62,14 @@ export interface ChangeCoordinatorState {
 
 export interface ChangeCoordinatorClient {
   onPush(input: PushInput): Promise<PushOutcome>;
+  /**
+   * Start the ChangeWorkflow of a bootstrap Change (no push: its head is the repo's initial
+   * commit). Idempotent: a second call finds the same instance.
+   */
+  startBootstrap(input: {
+    changeId: string;
+    headSha: string;
+  }): Promise<{ instanceId: string; created: boolean }>;
   /** The ChangeWorkflow for `instanceId` started CI run `runId` (ignored if superseded). */
   registerRun(input: { changeId: string; instanceId: string; runId: string }): Promise<void>;
   /** AI spend across every head of the change; returns the new total. */

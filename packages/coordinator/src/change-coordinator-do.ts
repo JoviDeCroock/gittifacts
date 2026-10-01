@@ -44,6 +44,13 @@ export class ChangeCoordinator
     return this.core.onPush(input);
   }
 
+  startBootstrap(input: {
+    changeId: string;
+    headSha: string;
+  }): Promise<{ instanceId: string; created: boolean }> {
+    return this.core.startBootstrap(input);
+  }
+
   registerRun(input: { changeId: string; instanceId: string; runId: string }): Promise<void> {
     return this.core.registerRun(input);
   }

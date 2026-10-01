@@ -4,6 +4,7 @@
  */
 import type { Change, WaitUntil } from "@app/domain";
 import type { CoordinatorBindings } from "./bindings.js";
+import { isBootstrapChange } from "./ids.js";
 import type { Ports, Store } from "./ports.js";
 
 export type MilestoneState = "reached" | "pending" | "unreachable";
@@ -20,6 +21,10 @@ const ROUTED: ReadonlySet<Change["status"]> = new Set([
 ]);
 
 export function milestoneState(change: Change, until: WaitUntil): MilestoneState {
+  // A bootstrap Change is never classified: no lane, no tour.
+  if (isBootstrapChange(change) && (until === "lane_assigned" || until === "tour_ready")) {
+    return "unreachable";
+  }
   let reached: boolean;
   switch (until) {
     case "evidence_ready":

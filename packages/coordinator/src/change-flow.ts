@@ -39,7 +39,7 @@ import {
   type SealedEvidence,
   sealEvidence,
 } from "./evidence.js";
-import { changeSubject, ciRunIdFor, rolloutWorkflowId } from "./ids.js";
+import { changeSubject, ciRunIdFor, isBootstrapChange, rolloutWorkflowId } from "./ids.js";
 import { PUSHABLE_STATUSES, toCiStatus } from "./lifecycle.js";
 import { withChangeNotifications } from "./milestones.js";
 import {
@@ -61,6 +61,7 @@ export interface FlowDeps {
 
 export type ChangeOutcome =
   | "skipped"
+  | "bootstrapped"
   | "blocked"
   | "changes-requested"
   | "rejected"
@@ -101,6 +102,8 @@ interface Loaded {
   title: string;
   /** Unclaimed projects never auto-merge and never deploy to production. */
   claimed: boolean;
+  /** The repo's bootstrap Change: CI + evidence + preview, then released (no lane, no review). */
+  bootstrap: boolean;
 }
 
 const SKIPPED: Omit<Loaded, "skip"> = {
@@ -115,6 +118,7 @@ const SKIPPED: Omit<Loaded, "skip"> = {
   agentTraceId: null,
   title: "",
   claimed: false,
+  bootstrap: false,
 };
 
 interface Classified {
@@ -189,6 +193,7 @@ export async function runChangeWorkflow(
       agentTraceId: change.agentTraceId,
       title: change.title,
       claimed: repo.claim.status === "claimed",
+      bootstrap: isBootstrapChange(change),
     };
   });
   if (ctx.skip !== null) return done("skipped", null, ctx.skip);
@@ -253,6 +258,8 @@ export async function runChangeWorkflow(
       limits: { maxMinutes: CI_BUDGET_MINUTES },
       // Unclaimed projects: sandbox egress to package registries only (onboarding §4).
       network: ctx.claimed ? "open" : "registries-only",
+      // A bootstrap has no diff (base = head): evidence steps would have nothing to measure.
+      ...(ctx.bootstrap ? { evidenceSteps: [] } : {}),
     };
     let note = planWarning;
     try {
@@ -353,6 +360,22 @@ export async function runChangeWorkflow(
     await log("change.evidence-signed", { ...out, dropped });
     return out;
   });
+
+  // ------------------------------------------------------------ bootstrap: released, never routed
+  if (ctx.bootstrap) {
+    // No judge (no diff), no note (the main repo is only written by the merge queue), no lane.
+    const released = await step.do("bootstrap-done", RETRY.quick, async () => {
+      const green = ciStatus === "passed";
+      if (green) await store.updateChange(changeId, { status: "released", mergedSha: headSha });
+      await log(green ? "change.bootstrap-released" : "change.bootstrap-failed", {
+        headSha,
+        ciStatus,
+        evidenceId: sealed.evidenceId,
+      });
+      return green;
+    });
+    return done(released ? "bootstrapped" : "blocked", null, released ? null : "ci failed");
+  }
 
   // ------------------------------------------------------------ 6. judge (raise-only, within budget)
   const coordinator = bindings.changeCoordinator(changeId);

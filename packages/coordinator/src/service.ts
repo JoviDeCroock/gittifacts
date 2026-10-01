@@ -22,24 +22,28 @@ import {
   CoordinatorError,
   type CoordinatorErrorCode,
   type GitRemoteGrant,
+  type InitialCommitProvider,
 } from "./api.js";
 import { type CoordinatorBindings, terminateQuietly } from "./bindings.js";
 import { EVENT_ISSUE, EVENT_REVIEW, type ReviewEvent } from "./events.js";
 import {
+  bootstrapChangeIdFor,
   changeSubject,
   changeWorkflowId,
   FORK_PREFIX,
   forkNameFor,
+  isBootstrapChange,
   isForkName,
   newId,
   repoSubject,
   rolloutWorkflowId,
+  SEED_PREFIX,
   ZERO_SHA,
 } from "./ids.js";
 import { normalizeIssue } from "./issues.js";
 import { FINAL_STATUSES, KILLABLE_STATUSES, PUSHABLE_STATUSES } from "./lifecycle.js";
 import { changeVersion, clampWait, withChangeNotifications } from "./milestones.js";
-import { errorMessage, resolvePolicy } from "./policy.js";
+import { errorMessage, parsePolicyExport, resolvePolicy } from "./policy.js";
 import { type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
 import { openRevertChange } from "./revert.js";
 
@@ -55,6 +59,8 @@ export interface CoordinatorOptions {
   unclaimedTtlMs?: number;
   /** How long an idempotency key is remembered (default 24 h). */
   idempotencyTtlMs?: number;
+  /** Files of a new repo's initial commit. Without it, `createRepo` creates an empty repo. */
+  initialCommit?: InitialCommitProvider;
 }
 
 const MAX_PUSH_TTL = 3600;
@@ -75,6 +81,8 @@ const CreateRepoInput = z.object({
     .refine((b) => !b.includes(".."), "invalid branch name")
     .default("main"),
   template: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional(),
+  idempotencyKey: z.string().min(1).max(200).optional(),
 });
 const ImportRepoInput = z.object({
   name: CreateRepoInput.shape.name,
@@ -195,12 +203,17 @@ export function createCoordinator(
   }
 
   async function assertNameFree(name: string): Promise<void> {
-    if (name.startsWith(FORK_PREFIX)) {
-      fail(
-        "invalid-input",
-        `repo names may not start with "${FORK_PREFIX}"`,
-        `Pick a name that does not start with "${FORK_PREFIX}" (reserved for change forks).`,
-      );
+    for (const [prefix, what] of [
+      [FORK_PREFIX, "change forks"],
+      [SEED_PREFIX, "the platform's template caches"],
+    ] as const) {
+      if (name.startsWith(prefix)) {
+        fail(
+          "invalid-input",
+          `repo names may not start with "${prefix}"`,
+          `Pick a name that does not start with "${prefix}" (reserved for ${what}).`,
+        );
+      }
     }
     if ((await store.getRepoByArtifactsName(name)) !== null) {
       fail(
@@ -224,21 +237,89 @@ export function createCoordinator(
 
   const api: CoordinatorApi = {
     async createRepo(actor, input) {
-      const { name, defaultBranch, template } = parse(CreateRepoInput, input, "repo");
+      const { name, defaultBranch, template, description, idempotencyKey } = parse(
+        CreateRepoInput,
+        input,
+        "repo",
+      );
+      // Idempotent: the same (actor, key) always names the same repo.
+      const id =
+        idempotencyKey === undefined ? makeId() : await derivedId("repo", actor.id, idempotencyKey);
+      if (idempotencyKey !== undefined) {
+        const existing = await store.getRepo(id);
+        if (existing !== null) {
+          if (existing.artifactsName !== name) {
+            fail(
+              "conflict",
+              "idempotency key already used for another repo",
+              "Use a fresh idempotency key for a new repo.",
+            );
+          }
+          return existing;
+        }
+      }
       await assertNameFree(name);
-      await upstream("create the repo", () => git.createRepo(name, { defaultBranch }));
+      const claim = claimFor(actor, clock.now(), unclaimedTtlMs);
+      // Before anything exists, so an unknown template fails without side effects.
+      const initial =
+        options.initialCommit === undefined
+          ? null
+          : await options.initialCommit({
+              repoId: id,
+              name,
+              defaultBranch,
+              template: template ?? null,
+              description: description ?? null,
+              claimed: claim.status === "claimed",
+            });
+      await upstream("create the repo", async () => {
+        try {
+          await git.createRepo(name, {
+            defaultBranch,
+            ...(description === undefined ? {} : { description }),
+          });
+        } catch (e) {
+          // A retry after a partial failure finds its own empty repo (the row above is still
+          // free): adopt it. Anything with history is someone else's.
+          const exists =
+            (e as { code?: unknown }).code === "ALREADY_EXISTS" ||
+            /ALREADY_EXISTS/.test(errorMessage(e));
+          if (!exists || (await git.branchHead(name, defaultBranch)) !== null) throw e;
+        }
+      });
+      let initialSha: string | null = null;
+      let policy = defaultPolicy();
+      let policySha: string | null = null;
+      if (initial !== null) {
+        const written = await upstream("write the initial commit", () =>
+          git.writeInitialCommit(name, {
+            branch: defaultBranch,
+            files: initial.files,
+            message: initial.message,
+          }),
+        );
+        initialSha = written.sha;
+        if (initial.policy !== undefined) {
+          // The generated policy file, parsed like the sandbox's evaluation would be.
+          const parsed = parsePolicyExport(initial.policy, false);
+          if (!("error" in parsed)) {
+            policy = parsed.policy;
+            policySha = initialSha;
+          }
+        }
+      }
       const repo: Repo = {
-        id: makeId(),
+        id,
         namespace: git.namespace,
         artifactsName: name,
         name,
         defaultBranch,
         jurisdiction,
         importedFrom: null,
-        policy: defaultPolicy(),
-        policySha: null,
+        policy,
+        policySha,
         deployTarget: null,
-        claim: claimFor(actor, clock.now(), unclaimedTtlMs),
+        claim,
         template: template ?? null,
         createdAt: now(),
       };
@@ -253,9 +334,89 @@ export function createCoordinator(
           namespace: repo.namespace,
           claim: repo.claim,
           template: repo.template,
+          initialSha,
+          files: initial === null ? 0 : Object.keys(initial.files).length,
         },
       });
       return repo;
+    },
+
+    async startBootstrapChange(actor, repoId) {
+      const repo = await requireRepo(repoId);
+      const owner = repo.claim.ownerId;
+      const allowed =
+        actor.id === SYSTEM_PRINCIPAL_ID ||
+        (owner === null
+          ? actor.scopes.includes("change:create")
+          : actor.id === owner || (actor.kind === "agent" && actor.ownerId === owner));
+      if (!allowed) {
+        fail("forbidden", "only the repo's owner (or its agents) can bootstrap it", {
+          explanation: "The bootstrap Change runs once, when the project is created.",
+          call: `get_change_status({ changeId: "${bootstrapChangeIdFor(repo.id)}" })`,
+        });
+      }
+      const id = bootstrapChangeIdFor(repo.id);
+      let change = await store.getChange(id);
+      if (change === null) {
+        const head = await upstream("read the default branch", () =>
+          git.branchHead(repo.artifactsName, repo.defaultBranch),
+        );
+        if (head === null) {
+          fail(
+            "invalid-state",
+            `${repo.name} has no commits on ${repo.defaultBranch}`,
+            "Create the project from a template (or push an initial commit) first.",
+          );
+        }
+        const createdAt = now();
+        const fresh: Change = {
+          id,
+          repoId: repo.id,
+          planId: null,
+          title: "Bootstrap: first CI run and preview",
+          claim: { category: "chore", summary: null },
+          baseSha: head,
+          headSha: head,
+          // No fork: CI checks out the main repo's initial commit (read token only).
+          forkName: repo.artifactsName,
+          authorId: SYSTEM_PRINCIPAL_ID,
+          status: "running",
+          computedLane: null,
+          lane: null,
+          laneReasons: [],
+          evidenceId: null,
+          tourId: null,
+          flagKey: null,
+          mergedSha: null,
+          rolloutState: null,
+          revertOf: null,
+          revertedBy: null,
+          agentTraceId: null,
+          createdAt,
+          updatedAt: createdAt,
+        };
+        try {
+          await store.insertChange(fresh);
+          change = fresh;
+          await audit.append({
+            principalId: actor.id,
+            action: "change.bootstrap-started",
+            subject: changeSubject(id),
+            payload: { repoId: repo.id, headSha: head },
+          });
+        } catch (e) {
+          change = await store.getChange(id);
+          if (change === null) throw e;
+        }
+      }
+      if (change.status === "running" && change.headSha !== null) {
+        // Idempotent: a retry after a failed start (or a lost race) starts the same instance.
+        const headSha = change.headSha;
+        await upstream("start the bootstrap pipeline", () =>
+          bindings.changeCoordinator(id).startBootstrap({ changeId: id, headSha }),
+        );
+      }
+      return change;
     },
 
     async importRepo(actor, input) {
@@ -572,6 +733,12 @@ export function createCoordinator(
       if (trimmed === "")
         fail("invalid-input", "a reason is required", "Say why the change is being killed.");
       const change = await requireChange(changeId);
+      if (isBootstrapChange(change)) {
+        fail("invalid-state", "a bootstrap change has nothing to roll back", {
+          explanation: "It only ran the first CI and preview of the initial commit.",
+          call: status(changeId),
+        });
+      }
       if (!KILLABLE_STATUSES.includes(change.status)) {
         fail("invalid-state", `change is ${change.status}; only merged changes can be killed`, {
           explanation: "Abandon an unmerged change instead.",
@@ -747,9 +914,12 @@ export function createCoordinator(
         bindings.mergeQueue(change.repoId).remove({ repoId: change.repoId, changeId }),
       );
       const updated = await store.updateChange(changeId, { status: "abandoned" });
-      await bindings
-        .changeCoordinator(changeId)
-        .scheduleForkGc({ changeId, forkName: change.forkName, delayMs: forkGcDelayMs });
+      // A bootstrap Change has no fork (it checks out the main repo).
+      if (isForkName(change.forkName)) {
+        await bindings
+          .changeCoordinator(changeId)
+          .scheduleForkGc({ changeId, forkName: change.forkName, delayMs: forkGcDelayMs });
+      }
       await audit.append({
         principalId: actor.id,
         action: "change.abandoned",

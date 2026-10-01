@@ -191,6 +191,8 @@ export interface FakeRunOutcome {
   evidence: unknown[];
   evidenceErrors?: Array<{ step: string; message: string }>;
   bundleRef?: string | null;
+  /** Step snapshots (default: install and build). */
+  snapshots?: Record<string, string>;
 }
 
 export class FakeCiEngine implements CiEngine {
@@ -267,6 +269,10 @@ export class FakeCiEngine implements CiEngine {
       evidence: out.evidence,
       evidenceErrors: out.evidenceErrors ?? [],
       ...(out.bundleRef === undefined ? {} : { outputs: { bundleRef: out.bundleRef } }),
+      snapshots: out.snapshots ?? {
+        install: `snap-install-${runId}`,
+        build: `snap-build-${runId}`,
+      },
     });
   }
 

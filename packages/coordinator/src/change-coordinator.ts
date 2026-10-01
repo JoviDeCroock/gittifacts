@@ -14,7 +14,7 @@ import type {
   PushOutcome,
 } from "./bindings.js";
 import { createOrGet, terminateQuietly } from "./bindings.js";
-import { changeSubject, changeWorkflowId, isForkName, ZERO_SHA } from "./ids.js";
+import { changeSubject, changeWorkflowId, isBootstrapChange, isForkName, ZERO_SHA } from "./ids.js";
 import { PUSHABLE_STATUSES } from "./lifecycle.js";
 import { changeVersion, clampWait, type MilestoneState, milestoneState } from "./milestones.js";
 import { errorMessage } from "./policy.js";
@@ -161,6 +161,36 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     await this.save({ ...state, headSha: tip, instanceId, runId: null });
     await this.changed(change.id);
     return { action: "started", headSha: tip, instanceId, superseded };
+  }
+
+  startBootstrap(input: {
+    changeId: string;
+    headSha: string;
+  }): Promise<{ instanceId: string; created: boolean }> {
+    return this.serial(async () => {
+      const instanceId = changeWorkflowId(input.changeId, input.headSha);
+      const state = await this.load();
+      if (state.instanceId === instanceId) return { instanceId, created: false };
+      const change = await this.deps.ports.store.getChange(input.changeId);
+      if (change === null || !isBootstrapChange(change) || change.headSha !== input.headSha) {
+        throw new Error(`${input.changeId} is not a bootstrap change at ${input.headSha}`);
+      }
+      const { created } = await createOrGet(this.deps.bindings.changeWorkflow, instanceId, {
+        changeId: change.id,
+        headSha: input.headSha,
+      });
+      // Saved before registerRun can run (both are serialized here), so the run is accepted.
+      await this.save({
+        ...state,
+        changeId: change.id,
+        forkName: change.forkName,
+        headSha: input.headSha,
+        instanceId,
+        runId: null,
+      });
+      await this.changed(change.id);
+      return { instanceId, created };
+    });
   }
 
   private async supersedeRun(runId: string): Promise<void> {
