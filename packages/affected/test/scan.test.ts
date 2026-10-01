@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { exportSurface, sameSurface } from "../src/exports.js";
-import { relativeStringLiterals, scanModule } from "../src/scan.js";
+import { relativeStringLiterals, scanModule, setupFileLiterals } from "../src/scan.js";
 
 const specs = (src: string): string[] =>
   scanModule(src).refs.map((r) => `${r.kind}:${r.specifier}`);
@@ -218,6 +218,30 @@ describe("relativeStringLiterals", () => {
         `export default { test: { setupFiles: ["./test/setup.ts"], name: "x", root: '../up' } }`,
       ),
     ).toEqual(["./test/setup.ts", "../up"]);
+  });
+});
+
+describe("setupFileLiterals", () => {
+  it("lists only files a runner config loads for every test", () => {
+    const src = `
+      import { fileURLToPath } from "node:url";
+      const src = (p) => fileURLToPath(new URL(p, import.meta.url));
+      export default defineConfig({
+        resolve: { alias: { "@x": src("./packages/x/src/index.ts") } },
+        test: {
+          include: ["./packages/*/test/**/*.test.ts"],
+          setupFiles: ["./test/setup.ts", "./test/dom.ts"],
+          globalSetup: "./test/global.ts",
+          "setupFilesAfterEnv": ['./jest.setup.js'],
+        },
+      });
+    `;
+    expect(setupFileLiterals(src)).toEqual([
+      "./test/setup.ts",
+      "./test/dom.ts",
+      "./test/global.ts",
+      "./jest.setup.js",
+    ]);
   });
 });
 

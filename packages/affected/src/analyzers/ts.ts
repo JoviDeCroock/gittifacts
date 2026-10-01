@@ -21,7 +21,7 @@ import {
 } from "../classify.js";
 import { dirOf, escapeRegExp, globToRegExp, joinPath } from "../paths.js";
 import { type FileSet, Resolver } from "../resolve.js";
-import { relativeStringLiterals, scanModule, type TemplateGlob } from "../scan.js";
+import { scanModule, setupFileLiterals, type TemplateGlob } from "../scan.js";
 import type { Analyzer, AnalyzerContext, Edge, PartialGraph } from "../types.js";
 
 export const TS_ANALYZER_NAME = "ts-js";
@@ -180,8 +180,8 @@ export function tsAnalyzer(): Analyzer & { analyze(ctx: AnalyzerContext): TsPart
             if (opaqueExamples.length < 3) opaqueExamples.push(`${path}:${scan.opaque[0]?.line}`);
           }
           if (isTestRunnerConfig(path)) {
-            // setupFiles / globalSetup / include roots: string literals that name files.
-            for (const lit of relativeStringLiterals(content)) {
+            // setupFiles / globalSetup: files every test below the config loads.
+            for (const lit of setupFileLiterals(content)) {
               const target = joinPath(dirOf(path), lit);
               if (target === null) continue;
               const hit = resolver.resolveFile(target);

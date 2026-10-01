@@ -50,6 +50,7 @@ export {
   type RefKind,
   relativeStringLiterals,
   scanModule,
+  setupFileLiterals,
   type TemplateGlob,
   type Token,
   tokenize,

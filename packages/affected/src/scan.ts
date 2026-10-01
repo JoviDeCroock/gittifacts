@@ -684,3 +684,49 @@ export function relativeStringLiterals(src: string): string[] {
   }
   return out;
 }
+
+/** Keys of test-runner configs whose values are files every test loads. */
+const SETUP_KEYS = new Set([
+  "setupFiles",
+  "globalSetup",
+  "setupFilesAfterEnv",
+  "globalTeardown",
+  "snapshotSerializers",
+  "snapshotResolver",
+  "testEnvironment",
+  "environment",
+]);
+
+/**
+ * Relative file names a test-runner config loads for every test: string values (or arrays of
+ * strings) of `setupFiles`, `globalSetup`, `setupFilesAfterEnv`, … Other strings (aliases,
+ * include globs) are not "loaded by every test".
+ */
+export function setupFileLiterals(src: string): string[] {
+  const { tokens } = tokenize(src);
+  const out: string[] = [];
+  const isText = (t: Token | undefined): boolean =>
+    t !== undefined && (t.k === "str" || (t.k === "tpl" && t.tp === "full"));
+  const relative = (t: Token | undefined): string | null =>
+    t !== undefined && isText(t) && /^\.{1,2}\//.test(t.v) ? t.v : null;
+  for (let i = 0; i < tokens.length; i++) {
+    const key = tokens[i];
+    if (key === undefined || !((key.k === "id" || key.k === "str") && SETUP_KEYS.has(key.v)))
+      continue;
+    if (!isP(tokens[i + 1], ":")) continue;
+    const value = tokens[i + 2];
+    const single = relative(value);
+    if (single !== null) {
+      out.push(single);
+      continue;
+    }
+    if (!isP(value, "[")) continue;
+    for (let j = i + 3; j < tokens.length; j++) {
+      const t = tokens[j];
+      const rel = relative(t);
+      if (rel !== null) out.push(rel);
+      else if (!isP(t, ",") && !isText(t)) break;
+    }
+  }
+  return out;
+}
