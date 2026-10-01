@@ -70,9 +70,12 @@ function Attestation({ ev, change }: { ev: EvidenceResponse; change: Change }) {
           {payload}
         </pre>
       ) : null}
-      <p class="attest__verify">
-        Verify it outside the platform from a clone: <code>verify-attestation --repo . --commit {shortSha(ev.evidence.headSha, 12)} --keys-url {window.location.origin}/.well-known/gittifacts-keys.json</code>
-      </p>
+      <div class="attest__verify">
+        <p>Verify it outside the platform, from a clone of the repository:</p>
+        <pre class="scroll-x" tabIndex={0}>
+          verify-attestation --repo . --commit {shortSha(ev.evidence.headSha, 12)} --keys-url {window.location.origin}/.well-known/gittifacts-keys.json
+        </pre>
+      </div>
     </section>
   );
 }

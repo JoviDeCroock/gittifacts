@@ -65,7 +65,7 @@
   place-items: center;
   inline-size: 24px;
   block-size: 24px;
-  border-radius: 5px;
+  border-radius: 6px;
   border: 1.5px solid var(--text-3);
   font-size: var(--text-meta);
   font-weight: var(--weight-bold);
@@ -97,7 +97,7 @@
 .risks__item {
   padding: var(--s-3) var(--s-4);
   border-radius: var(--r-control);
-  background: var(--warn-tint);
+  background: var(--panel);
 }
 .risks dt {
   display: flex;
@@ -106,7 +106,7 @@
   font-weight: var(--weight-bold);
 }
 .risks dt .icon {
-  color: var(--warn);
+  color: var(--text-2);
 }
 .risks dd {
   margin: 2px 0 0;

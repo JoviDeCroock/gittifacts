@@ -59,7 +59,14 @@ function ExcerptView({ ex }: { ex: Excerpt }) {
                   </tr>
                 ) : (
                   <tr key={i} class={`diff__line diff__line--${row.line.kind} ${row.cited ? "is-cited" : ""}`}>
-                    <td class="diff__no tnum">{row.line.kind === "del" ? row.line.oldNo : row.line.newNo}</td>
+                    <td class="diff__no tnum">
+                      <span class="diff__o" aria-label={row.line.oldNo ? `old line ${row.line.oldNo}` : undefined}>
+                        {row.line.oldNo ?? ""}
+                      </span>
+                      <span class="diff__n" aria-label={row.line.newNo ? `new line ${row.line.newNo}` : undefined}>
+                        {row.line.newNo ?? ""}
+                      </span>
+                    </td>
                     <td class="diff__sign" aria-label={row.line.kind === "add" ? "added" : row.line.kind === "del" ? "removed" : undefined}>
                       {row.line.kind === "add" ? "+" : row.line.kind === "del" ? "−" : ""}
                     </td>

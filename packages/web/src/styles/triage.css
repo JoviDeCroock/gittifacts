@@ -64,7 +64,17 @@ a.triage__msg:hover {
   background: color-mix(in oklch, var(--lane2-tint) 70%, transparent);
 }
 .triage__row--head .triage__cell {
-  padding-block: 8px;
+  padding-block: 8px 6px;
+}
+.triage__colhead {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+.triage__colword {
+  font-size: var(--text-meta);
+  color: var(--text-2);
+  font-weight: var(--weight-medium);
 }
 .triage__row--total {
   border-block-end-width: 0;

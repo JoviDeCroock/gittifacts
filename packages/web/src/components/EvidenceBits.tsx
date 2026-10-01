@@ -3,7 +3,7 @@
  */
 import type { EvidenceItem } from "@app/evidence";
 import { useSignal } from "@preact/signals";
-import { useEffect } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import { artifactUrl } from "../api/client.js";
 import { type ItemSummary, itemAnchor, summarize } from "../lib/evidence.js";
 import { pct } from "../lib/lanes.js";
@@ -134,8 +134,93 @@ function ShotImage({ refId, alt }: { refId: string | undefined; alt: string }) {
   return <img src={url} alt={alt} loading="lazy" decoding="async" />;
 }
 
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("image failed to load"));
+    img.src = url;
+  });
+}
+
+/**
+ * Registered difference: both captures drawn at the same scale, changed pixels marked in carmine
+ * over a faded copy of the "after" frame. Computed in the browser from the two images.
+ */
+function DiffFrame({ beforeRef, afterRef, label }: { beforeRef: string | undefined; afterRef: string | undefined; label: string }) {
+  const before = useArtifact(beforeRef);
+  const after = useArtifact(afterRef);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const ratio = useSignal<number | null>(null);
+  const failed = useSignal(false);
+  useEffect(() => {
+    if (!before || !after || !canvas.current) return;
+    let live = true;
+    Promise.all([loadImage(before), loadImage(after)]).then(
+      ([a, b]) => {
+        const c = canvas.current;
+        if (!live || !c) return;
+        const w = Math.min(a.naturalWidth, b.naturalWidth);
+        const h = Math.min(a.naturalHeight, b.naturalHeight);
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
+        ctx.drawImage(a, 0, 0, w, h);
+        const pa = ctx.getImageData(0, 0, w, h).data;
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(b, 0, 0, w, h);
+        const out = ctx.getImageData(0, 0, w, h);
+        const pb = out.data;
+        let changed = 0;
+        const hit = new Uint8Array(w * h);
+        for (let i = 0, px = 0; i < pb.length; i += 4, px++) {
+          const d = Math.abs(pa[i]! - pb[i]!) + Math.abs(pa[i + 1]! - pb[i + 1]!) + Math.abs(pa[i + 2]! - pb[i + 2]!);
+          if (d > 48) {
+            hit[px] = 1;
+            changed++;
+          }
+        }
+        for (let px = 0; px < w * h; px++) {
+          const i = px * 4;
+          const near = hit[px] || hit[px - 1] || hit[px + 1] || hit[px - w] || hit[px + w];
+          if (near) {
+            pb[i] = 200;
+            pb[i + 1] = 40;
+            pb[i + 2] = 50;
+            pb[i + 3] = 255;
+          } else {
+            const g = 0.299 * pb[i]! + 0.587 * pb[i + 1]! + 0.114 * pb[i + 2]!;
+            const v = 255 - (255 - g) * 0.28;
+            pb[i] = v;
+            pb[i + 1] = v;
+            pb[i + 2] = v;
+          }
+        }
+        ctx.putImageData(out, 0, 0);
+        ratio.value = changed / (w * h);
+      },
+      () => {
+        if (live) failed.value = true;
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [before, after, ratio, failed]);
+  if (!beforeRef || !afterRef) return <div class="shot__none">Needs both captures</div>;
+  return (
+    <>
+      <canvas ref={canvas} class="shot__canvas" role="img" aria-label={`${label}: changed pixels marked in red`} />
+      {failed.value ? <p class="shot__none">Could not compare the captures.</p> : null}
+      {ratio.value !== null ? <span class="sr-only">{pct(ratio.value, 1)} of pixels changed</span> : null}
+    </>
+  );
+}
+
 export function ShotPair({ shot }: { shot: Shot }) {
-  const side = useSignal<"before" | "after">("after");
+  const side = useSignal<"before" | "after" | "diff">("after");
   const label = `${shot.route} on ${shot.viewport}`;
   return (
     <figure class={`shot shot--${shot.viewport}`}>
@@ -147,24 +232,35 @@ export function ShotPair({ shot }: { shot: Shot }) {
       </figcaption>
       <div class="shot__toggle">
         <Segmented
-          label={`Show ${label} before or after`}
+          label={`Show ${label} before, after, or the difference`}
           size="sm"
           value={side.value}
           options={[
-            { id: "before", label: "Before (main)" },
-            { id: "after", label: "After (change)" },
+            { id: "before", label: "Before" },
+            { id: "after", label: "After" },
+            { id: "diff", label: "Difference" },
           ]}
           onChange={(v) => (side.value = v)}
         />
       </div>
       <div class="shot__frames" data-show={side.value}>
         <div class="shot__frame shot__frame--before">
-          <span class="shot__tag">Before</span>
-          <ShotImage refId={shot.beforeRef} alt={`${label}, before the change`} />
+          <span class="shot__tag">Before · main</span>
+          <div class="shot__img">
+            <ShotImage refId={shot.beforeRef} alt={`${label}, before the change`} />
+          </div>
         </div>
         <div class="shot__frame shot__frame--after">
-          <span class="shot__tag">After</span>
-          <ShotImage refId={shot.afterRef} alt={`${label}, after the change`} />
+          <span class="shot__tag">After · this change</span>
+          <div class="shot__img">
+            <ShotImage refId={shot.afterRef} alt={`${label}, after the change`} />
+          </div>
+        </div>
+        <div class="shot__frame shot__frame--diff">
+          <span class="shot__tag">Difference</span>
+          <div class="shot__img">
+            <DiffFrame beforeRef={shot.beforeRef} afterRef={shot.afterRef} label={label} />
+          </div>
         </div>
       </div>
     </figure>

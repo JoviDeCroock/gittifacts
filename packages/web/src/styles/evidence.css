@@ -180,8 +180,13 @@
   font-size: var(--text-meta);
   color: var(--text-3);
 }
-.attest__verify code {
-  overflow-wrap: anywhere;
+.attest__verify pre {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--r-control);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  color: var(--text-2);
 }
 
 /* items */
@@ -322,7 +327,7 @@
 .ev-code {
   display: inline-block;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--warn-tint);
   color: var(--text);
 }

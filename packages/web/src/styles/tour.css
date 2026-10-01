@@ -110,8 +110,8 @@
   padding: 0 10px;
   border: 0;
   border-radius: 8px;
-  background: var(--action-tint);
-  color: var(--action-ink);
+  background: var(--panel-strong);
+  color: var(--text);
   font-weight: var(--weight-medium);
   font-size: var(--text-small);
 }
@@ -222,7 +222,7 @@
 }
 .lane-block__why .triage {
   padding: var(--s-2) var(--s-3) var(--s-3);
-  border-radius: 10px;
+  border-radius: var(--r-panel);
   background: var(--surface);
 }
 .lane-block__why .disclosure__chev {
@@ -234,8 +234,9 @@
   margin-block: var(--s-5) var(--s-6);
   padding: var(--s-4) var(--s-4) var(--s-3);
   border-radius: var(--r-panel);
-  background: var(--warn-tint);
-  border: 1px solid var(--warn-line);
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  box-shadow: inset 0 3px 0 var(--text);
 }
 @media (min-width: 640px) {
   .handover {
@@ -264,7 +265,7 @@
   margin-block-end: var(--s-2);
 }
 .handover__sub .icon {
-  color: var(--warn);
+  color: var(--text-2);
 }
 .handover__list {
   list-style: none;
@@ -272,7 +273,7 @@
 }
 .handover__list li {
   padding-block: var(--s-2);
-  border-block-start: 1px solid var(--warn-line);
+  border-block-start: 1px solid var(--rule);
   text-wrap: pretty;
 }
 .handover__by {
@@ -294,6 +295,20 @@
   .stop {
     scroll-margin-block-start: 70px;
   }
+}
+/* The current stop owns attention; the rest recede (chrome only, prose keeps full contrast). */
+.stop__num,
+.stop__meta,
+.stop__evidence,
+.stop .excerpt__head,
+.stop .shot__head {
+  transition: opacity var(--dur-state) var(--ease-out);
+}
+.stops.has-current .stop:not(.is-current) :is(.stop__num, .stop__meta, .stop__evidence, .excerpt__head, .shot__head, .rg thead) {
+  opacity: 0.55;
+}
+.stops.has-current .stop:not(.is-current) .stop__title {
+  color: var(--text-2);
 }
 .stop__head {
   display: grid;
@@ -415,7 +430,7 @@
 .excerpt {
   margin: 0;
   border: 1px solid var(--rule-strong);
-  border-radius: 10px;
+  border-radius: var(--r-panel);
   overflow: hidden;
   background: var(--code-bg);
 }
@@ -458,7 +473,7 @@
 .excerpt__status {
   flex: none;
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--panel);
   font-size: var(--text-meta);
   color: var(--text-2);
@@ -483,14 +498,27 @@
   position: sticky;
   inset-inline-start: 0;
   z-index: 1;
-  min-inline-size: 4ch;
-  padding-inline: 8px 6px;
+  white-space: nowrap;
+  padding-inline: 6px 6px;
   border-inline-end: 1px solid var(--rule);
   background: var(--code-bg);
   color: var(--text-4);
   text-align: end;
   user-select: none;
   vertical-align: top;
+}
+.diff__o,
+.diff__n {
+  display: inline-block;
+  min-inline-size: 3ch;
+  text-align: end;
+}
+.diff__n {
+  margin-inline-start: 1ch;
+}
+.diff__line--del .diff__o,
+.diff__line--add .diff__n {
+  color: var(--text-2);
 }
 .diff__sign {
   inline-size: 2ch;
@@ -791,8 +819,55 @@ a.ctx-link:hover .ctx-link__value {
   align-items: flex-start;
 }
 .decision--done > .icon {
-  color: var(--ok);
+  color: var(--text-2);
   margin-block-start: 2px;
+}
+.decision--done {
+  align-items: center;
+  animation: signed-ground 700ms var(--ease-out) both;
+}
+.decision--done-approve {
+  background: var(--ok-tint);
+}
+@keyframes signed-ground {
+  from {
+    background-color: var(--surface);
+  }
+}
+/* The one authored moment: the approval seal draws itself once the server confirms. */
+.seal {
+  flex: none;
+}
+.seal__ring,
+.seal__check {
+  fill: none;
+  stroke: var(--ok);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.seal__ring {
+  stroke-width: 2.5;
+  stroke-dasharray: 107;
+  stroke-dashoffset: 107;
+  animation: seal-draw 520ms var(--ease-out) 60ms forwards;
+}
+.seal__check {
+  stroke-width: 3;
+  stroke-dasharray: 26;
+  stroke-dashoffset: 26;
+  animation: seal-draw 320ms var(--ease-out) 460ms forwards;
+}
+@keyframes seal-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .seal__ring,
+  .seal__check {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
 }
 .decision__done {
   font-weight: var(--weight-bold);
@@ -831,7 +906,7 @@ a.ctx-link:hover .ctx-link__value {
 }
 .lane-pick__computed {
   color: var(--text-3);
-  font-size: 11px;
+  font-size: var(--text-meta);
 }
 .lane-pick__skip {
   color: var(--text-2);

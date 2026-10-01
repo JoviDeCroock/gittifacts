@@ -113,7 +113,7 @@ svg {
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 [hidden] {
@@ -126,7 +126,7 @@ svg {
 
 .inline-code {
   padding: 0.05em 0.35em;
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--panel-strong);
   font-size: 0.86em;
   overflow-wrap: anywhere;

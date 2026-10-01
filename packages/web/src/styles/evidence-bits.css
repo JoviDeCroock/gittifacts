@@ -130,14 +130,20 @@ a.ev-chip:hover {
   gap: var(--s-3);
 }
 .shot__frame {
-  position: relative;
+  display: grid;
+  gap: 6px;
   inline-size: min(100%, 250px);
-  border-radius: 10px;
+}
+.shot__img {
+  border-radius: var(--r-panel);
   overflow: hidden;
   border: 1px solid var(--rule-strong);
   background: var(--panel);
+  line-height: 0;
 }
-.shot__frame img {
+.shot__img img,
+.shot__canvas {
+  display: block;
   inline-size: 100%;
   block-size: auto;
   aspect-ratio: 360 / 600;
@@ -148,20 +154,16 @@ a.ev-chip:hover {
   aspect-ratio: 360 / 600;
   color: var(--text-3);
   font-size: var(--text-small);
+  line-height: 1.4;
 }
 .shot__tag {
-  position: absolute;
-  inset-block-start: 8px;
-  inset-inline-start: 8px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--text);
-  color: var(--surface);
   font-size: var(--text-meta);
   font-weight: var(--weight-bold);
+  color: var(--text-2);
 }
-.shot__frames[data-show="after"] .shot__frame--before,
-.shot__frames[data-show="before"] .shot__frame--after {
+.shot__frames[data-show="after"] :is(.shot__frame--before, .shot__frame--diff),
+.shot__frames[data-show="before"] :is(.shot__frame--after, .shot__frame--diff),
+.shot__frames[data-show="diff"] :is(.shot__frame--before, .shot__frame--after) {
   display: none;
 }
 @media (min-width: 640px) {
@@ -169,10 +171,11 @@ a.ev-chip:hover {
     display: none;
   }
   .shot__frames {
-    grid-template-columns: repeat(2, 250px);
+    grid-template-columns: repeat(3, minmax(0, 200px));
   }
   .shot__frames[data-show] .shot__frame {
-    display: block;
+    display: grid;
+    inline-size: 100%;
   }
 }
 

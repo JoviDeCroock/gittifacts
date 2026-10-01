@@ -120,8 +120,9 @@
   min-inline-size: 22px;
   padding: 1px 7px;
   border-radius: 999px;
-  background: var(--action);
-  color: var(--action-text);
+  background: var(--panel-strong);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--rule-strong);
   font-size: var(--text-meta);
   font-weight: var(--weight-bold);
   text-align: center;
@@ -253,7 +254,7 @@
   max-inline-size: 46vw;
   block-size: var(--tap);
   padding-inline: 8px 10px;
-  border-radius: 10px;
+  border-radius: var(--r-control);
   color: var(--text);
   text-decoration: none;
 }
@@ -305,7 +306,7 @@
   inline-size: var(--tap);
   block-size: var(--tap);
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-control);
   background: transparent;
   color: var(--text);
   text-decoration: none;

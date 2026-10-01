@@ -247,12 +247,19 @@ function evidenceFor(stop: TourStop, items: EvidenceItem[]) {
   return stop.evidenceRefs.map((id) => ({ id, item: findItem(items, id) }));
 }
 
-function StopBody({ stop, data, items }: { stop: TourStop; data: TourData; items: EvidenceItem[] }) {
+/** The red/green table appears once per tour: on the proof stop if one cites it, else the behavior stop. */
+function testsStopIndex(tour: Tour): number {
+  const cites = (s: TourStop) => s.evidenceRefs.includes("red-green");
+  const proof = tour.stops.findIndex((s) => s.kind === "proof" && cites(s));
+  return proof >= 0 ? proof : tour.stops.findIndex((s) => s.kind === "behavior" && cites(s));
+}
+
+function StopBody({ stop, data, items, tests }: { stop: TourStop; data: TourData; items: EvidenceItem[]; tests: boolean }) {
   const refs = evidenceFor(stop, items);
   const redGreen = refs.find((r) => r.item?.kind === "red-green")?.item;
   const shots = refs.find((r) => r.item?.kind === "screenshots")?.item;
   const transform = refs.find((r) => r.item?.kind === "transform")?.item;
-  const showTests = redGreen?.kind === "red-green" && (stop.kind === "behavior" || stop.kind === "proof");
+  const showTests = tests && redGreen?.kind === "red-green";
   return (
     <>
       <p class="stop__why">
@@ -293,7 +300,15 @@ function StopBody({ stop, data, items }: { stop: TourStop; data: TourData; items
   );
 }
 
-function StopView({ stop, index, total, data, items }: { stop: TourStop; index: number; total: number; data: TourData; items: EvidenceItem[] }) {
+function StopView({
+  stop,
+  index,
+  total,
+  data,
+  items,
+  current,
+  tests,
+}: { stop: TourStop; index: number; total: number; data: TourData; items: EvidenceItem[]; current: boolean; tests: boolean }) {
   const head = (
     <div class="stop__head">
       <span class="stop__num tnum" aria-hidden="true">
@@ -315,7 +330,7 @@ function StopView({ stop, index, total, data, items }: { stop: TourStop; index: 
   );
   if (stop.kind === "transform") {
     return (
-      <li class={`stop stop--${stop.verdict} stop--transform`} id={`stop-${index + 1}`} data-stop={index}>
+      <li class={`stop stop--${stop.verdict} stop--transform ${current ? "is-current" : ""}`} id={`stop-${index + 1}`} data-stop={index}>
         <details class="stop__collapse">
           <summary>
             {head}
@@ -324,17 +339,17 @@ function StopView({ stop, index, total, data, items }: { stop: TourStop; index: 
             </span>
           </summary>
           <div class="stop__body">
-            <StopBody stop={stop} data={data} items={items} />
+            <StopBody stop={stop} data={data} items={items} tests={tests} />
           </div>
         </details>
       </li>
     );
   }
   return (
-    <li class={`stop stop--${stop.verdict}`} id={`stop-${index + 1}`} data-stop={index}>
+    <li class={`stop stop--${stop.verdict} ${current ? "is-current" : ""}`} id={`stop-${index + 1}`} data-stop={index}>
       {head}
       <div class="stop__body">
-        <StopBody stop={stop} data={data} items={items} />
+        <StopBody stop={stop} data={data} items={items} tests={tests} />
       </div>
     </li>
   );
@@ -453,6 +468,7 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
   const now = minuteClock.value;
   const stale = tour && change.headSha && tour.headSha !== change.headSha;
   const authorName = author?.name ?? "the author";
+  const testsAt = tour ? testsStopIndex(tour) : -1;
 
   const decision = (
     <DecisionPanel
@@ -512,9 +528,9 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
           {tour ? (
             <>
               <Handover tour={tour} reviewer="the reviewer agent" />
-              <ol class="stops" ref={listRef}>
+              <ol class="stops has-current" ref={listRef}>
                 {tour.stops.map((s, i) => (
-                  <StopView key={i} stop={s} index={i} total={tour.stops.length} data={data} items={items} />
+                  <StopView key={i} stop={s} index={i} total={tour.stops.length} data={data} items={items} current={i === current.value} tests={i === testsAt} />
                 ))}
               </ol>
               <TourEnd tour={tour} desktop={desktop} />
@@ -527,9 +543,9 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
         </div>
 
         {desktop ? (
-          <aside class="tour__rail" aria-label="Lane and decision">
-            <LaneBlock change={change} open rail />
+          <aside class="tour__rail" aria-label="Decision and lane">
             {decision}
+            <LaneBlock change={change} open rail />
             <ContextLinks data={data} />
           </aside>
         ) : null}

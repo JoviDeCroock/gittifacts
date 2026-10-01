@@ -300,7 +300,7 @@
 
 @media (min-width: 900px) {
   .change-row {
-    grid-template-columns: minmax(0, 2.2fr) minmax(150px, 1fr) minmax(0, 1.1fr) 48px;
+    grid-template-columns: minmax(0, 2.2fr) minmax(196px, 1fr) minmax(0, 1fr) 48px;
     grid-template-areas:
       "title who plan age"
       "status who plan age";

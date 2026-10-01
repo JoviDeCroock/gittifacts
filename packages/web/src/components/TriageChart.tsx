@@ -10,6 +10,7 @@ import { LaneTag } from "./ui.js";
 import "../styles/triage.css";
 
 const COLS: Lane[] = [0, 1, 2];
+const COL_WORD: Record<Lane, string> = { 0: "auto", 1: "glance", 2: "full" };
 
 function Marker({ row }: { row: ChartRow }) {
   const cls = row.unknown ? "tm tm--unknown" : row.decisive ? `tm tm--decisive tm--l${row.lane}` : "tm tm--minor";
@@ -43,8 +44,11 @@ export function TriageChart({ reasons, computedLane, lane, changeId, caption }: 
             Signal
           </span>
           {COLS.map((l) => (
-            <span key={l} class={`triage__cell triage__cell--l${l}`} role="columnheader">
+            <span key={l} class={`triage__cell triage__cell--l${l} triage__colhead`} role="columnheader">
               <LaneTag lane={l} size="sm" />
+              <span class="triage__colword" aria-hidden="true">
+                {COL_WORD[l]}
+              </span>
             </span>
           ))}
         </div>

@@ -131,8 +131,8 @@ a.btn:hover {
   color: var(--danger);
 }
 .chip--action {
-  background: var(--action-tint);
-  color: var(--action-ink);
+  background: var(--panel-strong);
+  color: var(--text);
 }
 .tone--ok {
   color: var(--ok);
@@ -144,7 +144,7 @@ a.btn:hover {
   color: var(--danger);
 }
 .tone--action {
-  color: var(--action-ink);
+  color: var(--text);
 }
 .tone--neutral {
   color: var(--text-2);
@@ -167,7 +167,7 @@ a.btn:hover {
   font-variant-numeric: tabular-nums;
 }
 .lane-tag--sm .lane-tag__num {
-  font-size: 11px;
+  font-size: 12px;
 }
 .lane-tag--md .lane-tag__num {
   font-size: 13px;
@@ -302,12 +302,12 @@ a.btn:hover {
   letter-spacing: 0;
 }
 .avatar--agent {
-  border-radius: 5px;
+  border-radius: 6px;
   background: var(--text);
   color: var(--surface);
 }
 .avatar--system {
-  border-radius: 5px;
+  border-radius: 6px;
   background: var(--panel);
   color: var(--text-2);
   box-shadow: inset 0 0 0 1px var(--rule-strong);
@@ -338,7 +338,7 @@ a.btn:hover {
   max-inline-size: 100%;
   overflow-x: auto;
   scrollbar-width: none;
-  border-radius: 10px;
+  border-radius: var(--r-panel);
   background: var(--panel-strong);
 }
 .segmented::-webkit-scrollbar {
@@ -383,21 +383,21 @@ a.btn:hover {
   font-size: var(--text-meta);
 }
 .segmented__opt[aria-checked="true"] .segmented__count {
-  background: var(--action-tint);
-  color: var(--action-ink);
+  background: var(--panel-strong);
+  color: var(--text);
 }
 
 /* ================================================================ meter */
 .meter__track {
   position: relative;
   block-size: 8px;
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--panel-strong);
   box-shadow: inset 0 0 0 1px var(--rule);
 }
 .meter__fill {
   block-size: 100%;
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--text-3);
   transition: inline-size var(--dur-state) var(--ease-out);
 }
@@ -419,7 +419,7 @@ a.btn:hover {
   inline-size: 2px;
   margin-inline-start: -1px;
   background: var(--text);
-  border-radius: 1px;
+  border-radius: 2px;
 }
 .meter__tick-label {
   position: absolute;
@@ -441,7 +441,7 @@ a.btn:hover {
 .skeleton__line {
   display: block;
   block-size: 14px;
-  border-radius: 4px;
+  border-radius: 3px;
   background: linear-gradient(90deg, var(--panel) 0%, var(--panel-strong) 50%, var(--panel) 100%);
   background-size: 200% 100%;
   animation: shimmer 1400ms ease-in-out infinite;

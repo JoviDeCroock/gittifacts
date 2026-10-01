@@ -270,6 +270,12 @@
 .health__facts .is-bad dd {
   color: var(--danger);
 }
+.health__rule {
+  display: block;
+  font-size: var(--text-small);
+  font-weight: var(--weight-regular);
+  color: var(--text-2);
+}
 
 /* issues */
 .issues ul {

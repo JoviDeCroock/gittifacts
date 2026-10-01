@@ -97,8 +97,15 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
 
   if (done.value) {
     return (
-      <div class={`decision decision--${layout} decision--done`} role="status">
-        <Icon name={done.value === "approve" ? "check-circle" : done.value === "reject" ? "ban" : "comment"} size={20} />
+      <div class={`decision decision--${layout} decision--done decision--done-${done.value}`} role="status">
+        {done.value === "approve" ? (
+          <svg class="seal" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+            <circle class="seal__ring" cx="20" cy="20" r="17" />
+            <path class="seal__check" d="m12.5 20.5 5 5 10-11" />
+          </svg>
+        ) : (
+          <Icon name={done.value === "reject" ? "ban" : "comment"} size={20} />
+        )}
         <div>
           <p class="decision__done">{COPY[done.value].done}</p>
           <p class="decision__fine">Signed as {me?.name ?? "you"} and recorded in the audit log.</p>

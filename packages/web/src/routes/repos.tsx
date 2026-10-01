@@ -4,7 +4,7 @@ import type { RepoSummary } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
 import { EmptyState, ErrorState, LaneTag, Loading, Meter } from "../components/ui.js";
-import { pct, shadowProgress } from "../lib/lanes.js";
+import { LANES, pct, shadowProgress } from "../lib/lanes.js";
 import { relative } from "../lib/time.js";
 import { plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
@@ -12,12 +12,13 @@ import { useResource } from "../state/resource.js";
 import "../styles/repos.css";
 
 function LaneCount({ lane, count, shadow = false }: { lane: Lane; count: number; shadow?: boolean }) {
+  const word = shadow ? "shadow" : LANES[lane].short.toLowerCase();
   return (
     <span class={`lane-count ${count === 0 ? "is-zero" : ""}`} aria-label={`Lane ${lane}${shadow ? " (shadow)" : ""}: ${count} open`}>
       <LaneTag lane={lane} size="sm" shadow={shadow} />
-      <b class="tnum" aria-hidden="true">
-        {count}
-      </b>
+      <span aria-hidden="true">
+        <b class="tnum">{count}</b> {word}
+      </span>
     </span>
   );
 }

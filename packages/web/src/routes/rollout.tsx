@@ -128,6 +128,7 @@ function Health({ r, policy, now }: { r: RolloutState; policy: RolloutPolicy; no
         <h2 id="health-title">Health</h2>
         <span class="health__when">
           Checked {relative(c.at, now)} · {num.format(c.requests)} requests
+          {tooFew ? <span class="tone--warn"> · fewer than the {policy.minRequests} needed to trust the rate</span> : null}
         </span>
       </div>
       <div class="rates" role="group" aria-label="Error rate against baseline">
@@ -157,13 +158,10 @@ function Health({ r, policy, now }: { r: RolloutState; policy: RolloutPolicy; no
         <div class={c.newIssueGroups > policy.maxNewIssueGroups ? "is-bad" : ""}>
           <dt>New issue groups</dt>
           <dd class="tnum">
-            {c.newIssueGroups} <span class="ev-sub">reverts at {policy.maxNewIssueGroups + 1}</span>
-          </dd>
-        </div>
-        <div>
-          <dt>Requests</dt>
-          <dd class="tnum">
-            {num.format(c.requests)} {tooFew ? <span class="tone--warn">below the {policy.minRequests} needed to trust the rate</span> : null}
+            {c.newIssueGroups}
+            <span class="health__rule">
+              {policy.maxNewIssueGroups === 0 ? "The first new group reverts the change." : `More than ${policy.maxNewIssueGroups} reverts the change.`}
+            </span>
           </dd>
         </div>
       </dl>

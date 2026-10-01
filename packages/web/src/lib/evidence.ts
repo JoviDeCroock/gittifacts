@@ -45,7 +45,7 @@ export function summarize(item: EvidenceItem): ItemSummary {
       };
     case "test-run":
       return {
-        label: item.step,
+        label: item.step.charAt(0).toUpperCase() + item.step.slice(1),
         value: item.failed > 0 ? `${item.failed} failing` : `${item.passed} passed`,
         tone: item.failed > 0 ? "danger" : "ok",
       };
@@ -74,7 +74,7 @@ export function summarize(item: EvidenceItem): ItemSummary {
     case "preview":
       return { label: "Preview", value: item.url ? "Deployed" : "No URL", tone: item.url ? "ok" : "warn" };
     case "screenshots":
-      return { label: "Screenshots", value: `${item.shots.length} routes`, tone: "neutral" };
+      return { label: "Screenshots", value: item.shots.length === 1 ? "1 route" : `${item.shots.length} routes`, tone: "neutral" };
     case "agent-trace":
       return { label: "Agent trace", value: item.provider, tone: "neutral" };
     case "transform":
