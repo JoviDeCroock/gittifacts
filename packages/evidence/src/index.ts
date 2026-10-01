@@ -3,4 +3,5 @@ export * from "./canonical.js";
 export * from "./encoding.js";
 export * from "./keys.js";
 export * from "./notes.js";
+export * from "./producers/index.js";
 export * from "./schema.js";

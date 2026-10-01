@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "1.0",
+  "thresholds": { "high": 80, "low": 60, "break": null },
+  "projectRoot": "/home/runner/work/app/app",
+  "files": {
+    "src/math.ts": {
+      "language": "typescript",
+      "source": "export function add(a: number, b: number): number {\n  return a + b;\n}\n\nexport function sub(a: number, b: number): number {\n  return a - b;\n}\n\nexport function div(a: number, b: number): number {\n  if (b === 0) throw new RangeError(\"division by zero\");\n  return a / b;\n}\n\nexport function mod(a: number, b: number): number {\n  return a % b;\n}\n",
+      "mutants": [
+        {
+          "id": "0",
+          "mutatorName": "ArithmeticOperator",
+          "replacement": "a - b",
+          "location": { "start": { "line": 2, "column": 10 }, "end": { "line": 2, "column": 15 } },
+          "status": "Killed",
+          "killedBy": ["0"],
+          "coveredBy": ["0"],
+          "testsCompleted": 1,
+          "static": false
+        },
+        {
+          "id": "1",
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "location": { "start": { "line": 5, "column": 52 }, "end": { "line": 7, "column": 2 } },
+          "status": "Survived",
+          "coveredBy": ["1"],
+          "testsCompleted": 1,
+          "static": false
+        },
+        {
+          "id": "2",
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "location": { "start": { "line": 9, "column": 52 }, "end": { "line": 12, "column": 2 } },
+          "status": "Killed",
+          "killedBy": ["2"],
+          "coveredBy": ["2", "3"],
+          "testsCompleted": 1,
+          "static": false
+        },
+        {
+          "id": "3",
+          "mutatorName": "ConditionalExpression",
+          "replacement": "false",
+          "location": { "start": { "line": 10, "column": 7 }, "end": { "line": 10, "column": 14 } },
+          "status": "Survived",
+          "coveredBy": ["2"],
+          "testsCompleted": 2,
+          "static": false
+        },
+        {
+          "id": "4",
+          "mutatorName": "EqualityOperator",
+          "replacement": "b !== 0",
+          "location": { "start": { "line": 10, "column": 7 }, "end": { "line": 10, "column": 14 } },
+          "status": "Killed",
+          "killedBy": ["3"],
+          "coveredBy": ["2", "3"],
+          "testsCompleted": 2,
+          "static": false
+        },
+        {
+          "id": "5",
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "location": {
+            "start": { "line": 10, "column": 37 },
+            "end": { "line": 10, "column": 55 }
+          },
+          "status": "Survived",
+          "coveredBy": ["3"],
+          "testsCompleted": 1,
+          "static": false
+        },
+        {
+          "id": "6",
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "location": { "start": { "line": 14, "column": 52 }, "end": { "line": 16, "column": 2 } },
+          "status": "NoCoverage",
+          "static": false
+        },
+        {
+          "id": "7",
+          "mutatorName": "ArithmeticOperator",
+          "replacement": "a * b",
+          "location": {
+            "start": { "line": 15, "column": 10 },
+            "end": { "line": 15, "column": 15 }
+          },
+          "status": "NoCoverage",
+          "static": false
+        },
+        {
+          "id": "8",
+          "mutatorName": "ArithmeticOperator",
+          "replacement": "a / b",
+          "location": {
+            "start": { "line": 15, "column": 10 },
+            "end": { "line": 15, "column": 15 }
+          },
+          "status": "Timeout",
+          "coveredBy": ["2"],
+          "static": false
+        },
+        {
+          "id": "9",
+          "mutatorName": "StringLiteral",
+          "replacement": "\"Stryker was here\"",
+          "location": {
+            "start": { "line": 15, "column": 10 },
+            "end": { "line": 15, "column": 15 }
+          },
+          "status": "CompileError",
+          "statusReason": "TS2365",
+          "static": false
+        }
+      ]
+    }
+  },
+  "testFiles": {
+    "test/math.test.ts": {
+      "tests": [
+        { "id": "0", "name": "add" },
+        { "id": "1", "name": "sub" },
+        { "id": "2", "name": "div" },
+        { "id": "3", "name": "div by zero" }
+      ]
+    }
+  },
+  "framework": {
+    "name": "StrykerJS",
+    "version": "8.7.1",
+    "branding": { "homepageUrl": "https://stryker-mutator.io" }
+  },
+  "system": {
+    "ci": true,
+    "os": { "platform": "linux" },
+    "cpu": { "model": "x", "logicalCores": 4 },
+    "ram": { "total": 16000 }
+  },
+  "performance": { "setup": 1200, "initialRun": 800, "mutation": 5400 }
+}

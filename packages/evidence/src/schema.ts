@@ -87,6 +87,13 @@ export const CoverageDelta = z.object({
       uncoveredLines: z.array(z.number().int().positive()).max(2000),
     }),
   ),
+  /**
+   * Changed files with no entry at all in the coverage report. Per the contract their
+   * lines count as non-executable, so they do not affect `ratio` — but a source file
+   * missing from the report usually means "never loaded by any test". Listed so a
+   * consumer can escalate instead of reading silence as safety.
+   */
+  unmeasuredFiles: z.array(z.string()).max(2000).optional(),
 });
 export type CoverageDelta = z.infer<typeof CoverageDelta>;
 
@@ -108,6 +115,8 @@ export const MutationScore = z.object({
         line: z.number().int().positive(),
         mutator: z.string(),
         replacement: z.string().max(500).optional(),
+        /** Survived = tests ran and passed; NoCoverage = no test exercised the mutant. */
+        status: z.enum(["Survived", "NoCoverage"]).optional(),
       }),
     )
     .max(500),
@@ -143,14 +152,34 @@ export type PublicApiDiff = z.infer<typeof PublicApiDiff>;
 export const SemverBump = z.enum(["major", "minor", "patch", "prerelease", "other"]);
 export type SemverBump = z.infer<typeof SemverBump>;
 
+export const DependencySection = z.enum([
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+]);
+export type DependencySection = z.infer<typeof DependencySection>;
+
 export const DependencyDiff = z.object({
   ...base,
   kind: z.literal("dependencies"),
   added: z.array(
-    z.object({ name: z.string(), version: z.string(), dev: z.boolean(), manifest: z.string() }),
+    z.object({
+      name: z.string(),
+      version: z.string(),
+      dev: z.boolean(),
+      manifest: z.string(),
+      section: DependencySection.optional(),
+    }),
   ),
   removed: z.array(
-    z.object({ name: z.string(), version: z.string(), dev: z.boolean(), manifest: z.string() }),
+    z.object({
+      name: z.string(),
+      version: z.string(),
+      dev: z.boolean(),
+      manifest: z.string(),
+      section: DependencySection.optional(),
+    }),
   ),
   changed: z.array(
     z.object({
@@ -160,11 +189,21 @@ export const DependencyDiff = z.object({
       bump: SemverBump,
       dev: z.boolean(),
       manifest: z.string(),
+      section: DependencySection.optional(),
     }),
   ),
-  /** Lifecycle scripts (preinstall/install/postinstall/prepare) that appear in head but not base. */
+  /**
+   * Lifecycle scripts (preinstall/install/postinstall/prepare) that appear in head but not
+   * base, or whose command changed. `name` is the package name (or the manifest path when
+   * the manifest has no name).
+   */
   newInstallScripts: z.array(
-    z.object({ name: z.string(), script: z.string(), command: z.string() }),
+    z.object({
+      name: z.string(),
+      script: z.string(),
+      command: z.string(),
+      manifest: z.string().optional(),
+    }),
   ),
   lockfileChanged: z.boolean(),
 });
