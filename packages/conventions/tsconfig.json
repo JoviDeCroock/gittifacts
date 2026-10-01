@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
+    "lib": ["ES2023"]
+  },
+  "include": ["src", "test", "*.ts"],
+  // These two import @cloudflare/ci, whose shipped TypeScript source fails this repo's strict
+  // flags; tsconfig.cloudflare.json checks them (and, through them, the package) instead.
+  "exclude": ["src/cloudflare/workflow.ts", "src/cloudflare/index.ts"]
+}

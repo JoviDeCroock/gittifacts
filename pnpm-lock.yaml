@@ -156,6 +156,15 @@ importers:
         specifier: ^4.0.0
         version: 4.0.3
 
+  packages/conventions:
+    dependencies:
+      '@app/domain':
+        specifier: workspace:*
+        version: link:../domain
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
   packages/coordinator:
     dependencies:
       '@app/ci-engine':
