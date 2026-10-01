@@ -1220,15 +1220,56 @@ describe("context and claim edge cases", () => {
     expect(r.computedLane).toBe(2);
   });
 
-  it("an unrecognised CI status at runtime is treated as unknown", () => {
-    const input = green();
+  it.each(["weird", "constructor", "toString"])(
+    "an unrecognised CI status at runtime (%s) is treated as unknown",
+    (status) => {
+      const input = green();
+      const r = run({
+        ...input,
+        context: { ...greenContext(), ciStatus: status as unknown as "passed" },
+      });
+      expect(r.computedLane).toBe(2);
+      expect(r.reasons.map((x) => x.code)).toContain("ci.unknown");
+    },
+  );
+
+  it("an unrecognised bump kind at runtime is treated as 'other' (Lane 2)", () => {
+    const weird = { ...bump("zod", "patch"), bump: "constructor" as unknown as "patch" };
+    const input = mutate(green(), (d) => {
+      d.evidence = {
+        items: [...(d.evidence?.items ?? []).filter((i) => i.kind !== "dependencies")],
+      };
+    });
     const r = run({
       ...input,
-      context: { ...greenContext(), ciStatus: "weird" as unknown as "passed" },
+      evidence: {
+        items: [...(input.evidence?.items ?? []), { ...dependencies(), changed: [weird] }],
+      },
     });
     expect(r.computedLane).toBe(2);
-    expect(r.reasons.map((x) => x.code)).toContain("ci.unknown");
+    expect(r.reasons.map((x) => x.code)).toContain("dependency.other-bump");
   });
+
+  it("an unrecognised LLM outcome at runtime is treated as a concern (Lane 2)", () => {
+    const judgment = { ...llm("unsure"), outcome: "maybe" as unknown as "unsure" };
+    const input = green();
+    const r = run({ ...input, evidence: { items: [...(input.evidence?.items ?? []), judgment] } });
+    expect(r.computedLane).toBe(2);
+    expect(r.reasons.map((x) => x.code)).toContain("llm.concern");
+  });
+
+  it.each(["added", "deleted"] as const)(
+    "a %s lockfile is not part of a dependency-patch",
+    (status) => {
+      const input = mutate(dependencyPatch(), (d) => {
+        const lock = d.diffStats?.files.find((f) => f.path === "pnpm-lock.yaml");
+        if (lock) lock.status = status;
+      });
+      const r = run(input);
+      expect(r.computedLane).toBe(1);
+      expect(r.reasons.map((x) => x.code)).toContain("plan.missing");
+    },
+  );
 
   it("an empty diff with all evidence ok is Lane 0", () => {
     const r = run(mutate(green(), (d) => (d.diffStats = diff([]))));

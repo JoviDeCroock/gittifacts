@@ -255,7 +255,7 @@ const isNonSource = compileGlobs(NON_SOURCE_GLOBS, "match-none");
 
 /**
  * dependency-patch, verified mechanically (the claimed category is ignored):
- * - every changed file is a package manifest or a lockfile (no renames/copies);
+ * - every changed file is a modified package manifest or lockfile (no adds/deletes/renames);
  * - dependency evidence is ok (none errored) and shows >= 1 change, all of them patch bumps,
  *   with nothing added or removed and no new install scripts;
  * - each changed manifest has no more added/deleted lines than patch bumps recorded against it,
@@ -275,8 +275,9 @@ function isDependencyPatchOnly(
   for (const f of diffStats.files) {
     const path = normalizePath(f.path);
     if (f.previousPath !== null && normalizePath(f.previousPath) !== path) return false;
+    if (f.status !== "modified") return false;
     if (isLockfile(path)) continue;
-    if (!isManifest(path) || f.status !== "modified") return false;
+    if (!isManifest(path)) return false;
     const bumps = changes.filter((c) => normalizePath(c.manifest) === path).length;
     if (bumps === 0 || f.additions > bumps || f.deletions > bumps) return false;
   }
@@ -314,16 +315,22 @@ function satisfiedPlanless(
 
 // ---------------------------------------------------------------- individual checks
 
+/** Own-property lookup, so unexpected runtime strings (even "constructor") fall back. */
+function lookup<T>(table: Readonly<Record<string, T>>, key: string, fallback: T): T {
+  return Object.hasOwn(table, key) ? (table[key] ?? fallback) : fallback;
+}
+
+const CI_CODES: Readonly<Record<CiStatus, ReasonCode>> = {
+  passed: "ci.passed",
+  failed: "ci.failed",
+  errored: "ci.errored",
+  cancelled: "ci.cancelled",
+  unknown: "ci.unknown",
+};
+
 function checkCi(out: Reasons, status: CiStatus): void {
-  const code: Record<CiStatus, ReasonCode> = {
-    passed: "ci.passed",
-    failed: "ci.failed",
-    errored: "ci.errored",
-    cancelled: "ci.cancelled",
-    unknown: "ci.unknown",
-  };
   // An unexpected runtime value (bypassing the type) is unknown, never "passed".
-  out.add(code[status] ?? "ci.unknown");
+  out.add(lookup<ReasonCode>(CI_CODES, status, "ci.unknown"));
 }
 
 function checkTests(out: Reasons, items: readonly TestRun[]): void {
@@ -473,7 +480,7 @@ function checkDependencies(out: Reasons, s: SignalRead<DependencyDiff>, policy: 
   const byCode = new Map<ReasonCode, string[]>();
   for (const c of changed) {
     // A bump kind this classifier does not know is treated like "other" (Lane 2).
-    const code = bumpCodes[c.bump] ?? "dependency.other-bump";
+    const code = lookup<ReasonCode>(bumpCodes, c.bump, "dependency.other-bump");
     const names = byCode.get(code) ?? [];
     names.push(`${c.name} ${c.from} → ${c.to}`);
     byCode.set(code, names);
@@ -716,9 +723,9 @@ function checkLlm(out: Reasons, items: readonly LlmJudgment[]): void {
     const params = { question: j.question, rationale: truncate(j.rationale) };
     // Model judgments may only RAISE: "no-concern" is listed for transparency at Lane 0 and can
     // never offset any other reason (the lane is a max).
-    if (j.outcome === "concern") out.add("llm.concern", params, j.id);
-    else if (j.outcome === "no-concern") out.add("llm.no-concern", params, j.id);
-    else out.add("llm.unsure", params, j.id); // "unsure" and anything unrecognised
+    if (j.outcome === "no-concern") out.add("llm.no-concern", params, j.id);
+    else if (j.outcome === "unsure") out.add("llm.unsure", params, j.id);
+    else out.add("llm.concern", params, j.id); // "concern" and anything unrecognised
   }
   if (s.ok.length === 0 && s.errored.length === 0) out.add("llm.none");
 }
