@@ -11,7 +11,7 @@ export const ZERO_SHA = "0".repeat(40);
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-export const utf8 = (s: string): Bytes => encoder.encode(s);
+export const utf8 = (s: string): Bytes => own(encoder.encode(s));
 export const text = (b: Uint8Array): string => decoder.decode(b);
 
 /** Returns `b` itself when it already owns an ArrayBuffer, else a copy (e.g. SharedArrayBuffer). */
