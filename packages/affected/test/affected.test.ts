@@ -415,6 +415,27 @@ describe("public API", () => {
 });
 
 describe("Workers", () => {
+  it("a build-output assets directory deploys the sources of the package that builds it", () => {
+    const base: Files = {
+      ...REPO,
+      "packages/app/wrangler.jsonc": json({
+        name: "app-worker",
+        main: "src/main.ts",
+        assets: { directory: "../ui/dist" },
+      }),
+      "packages/ui/package.json": json({ name: "@m/ui", private: true }),
+      "packages/ui/src/page.tsx": "export const Page = () => null;\n",
+      "packages/ui/src/main.tsx": 'import { Page } from "./page.js";\nPage();\n',
+      "packages/ui/test/page.test.tsx": 'import { Page } from "../src/page.js";\n',
+    };
+    expect(
+      affected(base, { "packages/ui/src/page.tsx": "export const Page = () => 1;\n" }).deploysTo,
+    ).toEqual(["app-worker"]);
+    expect(
+      affected(base, { "packages/ui/test/page.test.tsx": "// only a test\n" }).deploysTo,
+    ).toEqual([]);
+  });
+
   it("reads wrangler.toml and assets directories; ignores test-pool configs", () => {
     const base: Files = {
       ...REPO,

@@ -30,7 +30,7 @@ import {
 import { exportSurface, sameSurface } from "./exports.js";
 import { ModuleGraph } from "./graph.js";
 import { parseJsonc } from "./jsonc.js";
-import { baseName, isUnder, sortedUnique } from "./paths.js";
+import { ancestors, baseName, dirOf, isUnder, sortedUnique } from "./paths.js";
 import {
   type AffectedSet,
   ALL_TESTS,
@@ -490,8 +490,17 @@ function deploysTo(
       for (const f of allFiles) if (isUnder(f, scope) && !isTestSupportFile(f)) configSeeds.add(f);
   }
   const configReach = configSeeds.size > 0 ? graph.reverseClosure(configSeeds) : new Set<string>();
+  const manifests = new Set(allFiles.filter((f) => baseName(f) === "package.json").map(dirOf));
   for (const w of workers) {
-    const inWorker = (p: string): boolean => isUnder(p, w.dir) && !isTestSupportFile(p);
+    const roots = [w.dir];
+    // An assets directory that is a build output (nothing tracked under it) belongs to the
+    // package that builds it: its sources deploy with this Worker.
+    if (w.assets !== null && !allFiles.some((f) => isUnder(f, w.assets ?? ""))) {
+      const pkg = ancestors(`${w.assets}/x`).find((d) => manifests.has(d));
+      if (pkg !== undefined && pkg !== "" && !isUnder(w.dir, pkg)) roots.push(pkg);
+    }
+    const inWorker = (p: string): boolean =>
+      roots.some((r) => isUnder(p, r)) && !isTestSupportFile(p);
     if (
       rootConfig ||
       files.includes(w.config) ||
