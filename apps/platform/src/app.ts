@@ -4,6 +4,7 @@ import { type AppOptions, createServices } from "./app-env.js";
 import { authFor } from "./auth/middleware.js";
 import { getCoordinator } from "./coordinator.js";
 import { fixFor, toErrorResponse } from "./errors.js";
+import { handleMcp, MCP_PATH } from "./mcp/route.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerChangeRoutes } from "./routes/changes.js";
 import { type ApiApp, newApiApp } from "./routes/common.js";
@@ -64,6 +65,24 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerPlanRoutes(app);
   registerChangeRoutes(app);
   registerAuditRoutes(app);
+
+  // MCP: POST only (stateless); GET/DELETE are answered 405 by the SDK handler.
+  app.on(["GET", "POST", "DELETE"], MCP_PATH, handleMcp);
+  app.openAPIRegistry.registerPath({
+    method: "post",
+    path: MCP_PATH,
+    tags: ["mcp"],
+    summary: "MCP server (streamable HTTP, stateless)",
+    description:
+      "JSON-RPC MCP endpoint for agents. `Authorization: Bearer gtf_…` (agent token). Tools: whoami, list_repos, create_plan, start_change, get_change_status, get_evidence, get_tour, request_review, list_issues_for_change, refresh_push_token, wait_for_change.",
+    security: [{ Bearer: [] }],
+    request: { body: { content: { "application/json": { schema: z.unknown() } }, required: true } },
+    responses: {
+      200: { description: "JSON-RPC response (application/json or text/event-stream)" },
+      401: { description: "Missing or invalid agent token (WWW-Authenticate: Bearer)" },
+      403: { description: "Foreign Origin" },
+    },
+  });
 
   app.post(ISSUES_WEBHOOK_PATH, handleIssuesWebhook);
   app.openAPIRegistry.registerPath({
