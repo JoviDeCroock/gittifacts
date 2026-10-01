@@ -1,9 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    // "node": nodejs_compat is on, and @app/ci-engine's sources (bundled into this Worker) call
-    // clearTimeout(undefined), which only Node's timer typings accept.
-    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types", "node"],
+    // Workers types only: the Worker's code (and the @app/* sources it bundles) must type-check
+    // against the runtime it runs on. vitest.config.ts / drizzle.config.ts use tsconfig.node.json.
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
     "lib": ["ES2023"],
     "declaration": false
   },
