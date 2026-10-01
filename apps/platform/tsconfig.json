@@ -1,21 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": [
-      "@cloudflare/workers-types",
-      "@cloudflare/vitest-plugin/types"
-    ],
-    "lib": [
-      "ES2023"
-    ],
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
+    "lib": ["ES2023"],
     "declaration": false
   },
-  "include": [
-    "src",
-    "test",
-    "worker-configuration.d.ts"
-  ],
-  "exclude": [
-    "src/auth.cli.ts"
-  ]
+  "include": ["src", "test", "worker-configuration.d.ts"],
+  "exclude": ["src/auth.cli.ts"]
 }

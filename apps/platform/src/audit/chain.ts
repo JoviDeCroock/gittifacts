@@ -28,7 +28,10 @@ export async function payloadHashOf(payload: unknown): Promise<string> {
 }
 
 export async function entryHashOf(
-  e: Pick<AuditEvent, "seq" | "at" | "principalId" | "action" | "subject" | "payloadHash" | "prevHash">,
+  e: Pick<
+    AuditEvent,
+    "seq" | "at" | "principalId" | "action" | "subject" | "payloadHash" | "prevHash"
+  >,
 ): Promise<string> {
   return sha256Base64url(
     canonicalBytes({
@@ -107,7 +110,8 @@ export async function verifyEntries(
       const expectedSeq = prev ? prev.seq + 1 : 1;
       if (e.seq !== expectedSeq) return fail(e.seq, `expected seq ${expectedSeq}, found ${e.seq}`);
       const expectedPrev = prev ? prev.hash : GENESIS_HASH;
-      if (e.prevHash !== expectedPrev) return fail(e.seq, "prevHash does not link to the previous entry");
+      if (e.prevHash !== expectedPrev)
+        return fail(e.seq, "prevHash does not link to the previous entry");
     } else if (prev && e.seq === prev.seq + 1 && e.prevHash !== prev.hash) {
       return fail(e.seq, "prevHash does not link to the previous entry");
     } else if (!prev && e.seq === 1 && e.prevHash !== GENESIS_HASH) {

@@ -1,8 +1,8 @@
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { DoAudit, auditLogStub } from "../src/audit/audit.js";
-import { GENESIS_HASH, entryHashOf, payloadHashOf, verifyEntries } from "../src/audit/chain.js";
+import { auditLogStub, DoAudit } from "../src/audit/audit.js";
+import { entryHashOf, GENESIS_HASH, payloadHashOf, verifyEntries } from "../src/audit/chain.js";
 import { platformSigner } from "../src/signing.js";
 
 let counter = 0;
@@ -17,7 +17,12 @@ async function appendMany(n: number, log: string) {
   const out = [];
   for (let i = 0; i < n; i++) {
     out.push(
-      await audit.append({ principalId: "system", action: "test.event", subject: `change:c${i % 2}`, payload: { i } }),
+      await audit.append({
+        principalId: "system",
+        action: "test.event",
+        subject: `change:c${i % 2}`,
+        payload: { i },
+      }),
     );
   }
   return out;
@@ -36,19 +41,25 @@ describe("AuditLog DO", () => {
     const signer = await platformSigner(env);
     expect(events[0]!.keyId).toBe(signer.keyId);
     expect((await verifyEntries(events, signer)).verified).toBe(true);
-    expect(await auditLogStub(env, log).verifyChain()).toMatchObject({ verified: true, checked: 3, headSeq: 3 });
+    expect(await auditLogStub(env, log).verifyChain()).toMatchObject({
+      verified: true,
+      checked: 3,
+      headSeq: 3,
+    });
   });
 
   it("mirrors every entry to D1", async () => {
     const log = freshLog();
     await appendMany(2, log);
-    const rows = await env.DB.prepare("SELECT seq, hash, payload FROM audit_events WHERE log = ? ORDER BY seq")
+    const rows = await env.DB.prepare(
+      "SELECT seq, hash, payload FROM audit_events WHERE log = ? ORDER BY seq",
+    )
       .bind(log)
       .all<{
-      seq: number;
-      hash: string;
-      payload: string;
-    }>();
+        seq: number;
+        hash: string;
+        payload: string;
+      }>();
     expect(rows.results.map((r) => r.seq)).toEqual([1, 2]);
     expect(JSON.parse(rows.results[1]!.payload)).toEqual({ i: 1 });
   });
@@ -58,7 +69,12 @@ describe("AuditLog DO", () => {
     const audit = new DoAudit(env, log);
     const events = await Promise.all(
       Array.from({ length: 8 }, (_, i) =>
-        audit.append({ principalId: "system", action: "burst", subject: "repo:r1", payload: { i } }),
+        audit.append({
+          principalId: "system",
+          action: "burst",
+          subject: "repo:r1",
+          payload: { i },
+        }),
       ),
     );
     expect(events.map((e) => e.seq).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
@@ -70,12 +86,18 @@ describe("AuditLog DO", () => {
     await appendMany(4, log);
     const stub = auditLogStub(env, log);
     await runInDurableObject(stub, async (_i, state) => {
-      state.storage.sql.exec("UPDATE events SET payload = ? WHERE seq = 2", JSON.stringify({ i: 99 }));
+      state.storage.sql.exec(
+        "UPDATE events SET payload = ? WHERE seq = 2",
+        JSON.stringify({ i: 99 }),
+      );
     });
     expect(await stub.verifyChain()).toMatchObject({ verified: false, brokenAt: 2 });
 
     await runInDurableObject(stub, async (_i, state) => {
-      state.storage.sql.exec("UPDATE events SET payload = ? WHERE seq = 2", JSON.stringify({ i: 1 }));
+      state.storage.sql.exec(
+        "UPDATE events SET payload = ? WHERE seq = 2",
+        JSON.stringify({ i: 1 }),
+      );
     });
     expect((await stub.verifyChain()).verified).toBe(true);
 

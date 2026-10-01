@@ -6,8 +6,9 @@
  * queries; a failed mirror write is retried on the next append and by an alarm, so the mirror is
  * eventually complete and never reordered (rows are keyed by seq).
  */
-import type { AuditEvent } from "@app/domain";
+
 import { DurableObject } from "cloudflare:workers";
+import type { AuditEvent } from "@app/domain";
 import { platformSigner } from "../signing.js";
 import { AUDIT_LOG_NAME } from "./audit.js";
 import {
@@ -128,7 +129,11 @@ export class AuditLog extends DurableObject<Env> {
   /** Entries with seq > afterSeq, ascending. */
   async list(afterSeq = 0, limit = 100): Promise<AuditEvent[]> {
     return this.ctx.storage.sql
-      .exec<EventRow>("SELECT * FROM events WHERE seq > ? ORDER BY seq ASC LIMIT ?", afterSeq, limit)
+      .exec<EventRow>(
+        "SELECT * FROM events WHERE seq > ? ORDER BY seq ASC LIMIT ?",
+        afterSeq,
+        limit,
+      )
       .toArray()
       .map(toEvent);
   }
@@ -143,9 +148,19 @@ export class AuditLog extends DurableObject<Env> {
     let anchor: ChainLink | null = null;
     if (start > 1) {
       const a = this.ctx.storage.sql
-        .exec<{ seq: number; hash: string }>("SELECT seq, hash FROM events WHERE seq = ?", start - 1)
+        .exec<{ seq: number; hash: string }>(
+          "SELECT seq, hash FROM events WHERE seq = ?",
+          start - 1,
+        )
         .toArray()[0];
-      if (!a) return { verified: false, brokenAt: start - 1, reason: "anchor entry missing", checked: 0, headSeq: 0 };
+      if (!a)
+        return {
+          verified: false,
+          brokenAt: start - 1,
+          reason: "anchor entry missing",
+          checked: 0,
+          headSeq: 0,
+        };
       anchor = a;
     }
     const rows = this.ctx.storage.sql
@@ -156,7 +171,13 @@ export class AuditLog extends DurableObject<Env> {
       try {
         payloads.set(r.seq, parsePayload(r.payload));
       } catch {
-        return { verified: false, brokenAt: r.seq, reason: "payload is not JSON", checked: 0, headSeq: 0 };
+        return {
+          verified: false,
+          brokenAt: r.seq,
+          reason: "payload is not JSON",
+          checked: 0,
+          headSeq: 0,
+        };
       }
     }
     return verifyEntries(rows.map(toEvent), signer, { anchor, payloads });
@@ -194,7 +215,11 @@ export class AuditLog extends DurableObject<Env> {
           ),
         );
         const last = chunk[chunk.length - 1];
-        if (last) this.ctx.storage.sql.exec("UPDATE events SET mirrored = 1 WHERE mirrored = 0 AND seq <= ?", last.seq);
+        if (last)
+          this.ctx.storage.sql.exec(
+            "UPDATE events SET mirrored = 1 WHERE mirrored = 0 AND seq <= ?",
+            last.seq,
+          );
         done += chunk.length;
       }
     } catch (e) {

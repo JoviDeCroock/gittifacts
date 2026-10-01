@@ -23,7 +23,8 @@ export class DoAudit implements Audit {
   }): Promise<AuditEvent> {
     // Round-trip through JSON: RPC arguments must be structured-clonable and the chain hashes
     // canonical JSON anyway (drops undefined, rejects functions early with a clear error).
-    const payload = input.payload === undefined ? null : (JSON.parse(JSON.stringify(input.payload)) as unknown);
+    const payload =
+      input.payload === undefined ? null : (JSON.parse(JSON.stringify(input.payload)) as unknown);
     return auditLogStub(this.env, this.logName).append({ ...input, payload });
   }
 }

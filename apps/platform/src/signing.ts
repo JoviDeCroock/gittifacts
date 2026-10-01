@@ -83,7 +83,10 @@ export class PlatformSigner implements SignerPort {
     private readonly now: () => Date,
   ) {}
 
-  static async fromSecret(secret: string, now: () => Date = () => new Date()): Promise<PlatformSigner> {
+  static async fromSecret(
+    secret: string,
+    now: () => Date = () => new Date(),
+  ): Promise<PlatformSigner> {
     let json: unknown;
     try {
       json = JSON.parse(secret);
@@ -103,7 +106,9 @@ export class PlatformSigner implements SignerPort {
     }
     const keyId = await keyIdFor(publicKey);
     if (s.keyId !== undefined && s.keyId !== keyId) {
-      throw new SigningKeyConfigError(`PLATFORM_SIGNING_KEY keyId ${s.keyId} does not match its public key`);
+      throw new SigningKeyConfigError(
+        `PLATFORM_SIGNING_KEY keyId ${s.keyId} does not match its public key`,
+      );
     }
     const resolved = await resolveKeySet([
       { publicKey, ...(s.name ? { name: s.name } : {}) },
