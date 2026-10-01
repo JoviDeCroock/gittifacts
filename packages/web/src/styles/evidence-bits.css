@@ -1,0 +1,178 @@
+/* Evidence renderings shared by the tour and the evidence page. */
+/* evidence chips */
+.ev-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-small);
+  text-decoration: none;
+  transition: background-color var(--dur-feedback) var(--ease-out), border-color var(--dur-feedback) var(--ease-out);
+}
+@media (pointer: coarse) {
+  .ev-chip {
+    min-block-size: var(--tap);
+  }
+}
+a.ev-chip:hover {
+  background: var(--panel);
+  border-color: var(--control-border);
+  text-decoration: none;
+}
+.ev-chip .icon {
+  color: var(--text-3);
+}
+.ev-chip__label {
+  font-weight: var(--weight-medium);
+}
+.ev-chip__value {
+  font-weight: var(--weight-bold);
+}
+.ev-chip--ok .ev-chip__value {
+  color: var(--ok);
+}
+.ev-chip--warn .ev-chip__value {
+  color: var(--warn);
+}
+.ev-chip--danger .ev-chip__value,
+.ev-chip--danger .icon {
+  color: var(--danger);
+}
+
+/* red → green */
+.rg {
+  inline-size: 100%;
+  margin-block-start: var(--s-4);
+  border-collapse: collapse;
+  font-size: var(--text-small);
+}
+.rg th,
+.rg td {
+  padding: 8px 8px 8px 0;
+  border-block-end: 1px solid var(--rule);
+  text-align: start;
+  vertical-align: top;
+}
+.rg thead th {
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  color: var(--text-3);
+}
+.rg td {
+  inline-size: 78px;
+  white-space: nowrap;
+}
+.rg__name {
+  display: block;
+  font-weight: var(--weight-medium);
+  text-wrap: pretty;
+}
+.rg__file {
+  display: block;
+  font-family: var(--font-code);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-regular);
+  color: var(--text-3);
+}
+.rg-empty {
+  margin-block-start: var(--s-3);
+  padding: var(--s-3);
+  border-radius: 8px;
+  background: var(--warn-tint);
+  font-size: var(--text-small);
+}
+.outcome {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: var(--weight-bold);
+}
+.outcome--ok {
+  color: var(--ok);
+}
+.outcome--danger {
+  color: var(--danger);
+}
+.outcome--neutral {
+  color: var(--text-3);
+}
+
+/* screenshots: one frame at a time on phones, registered side by side when there is room */
+.stop__shots {
+  display: grid;
+  gap: var(--s-4);
+  margin-block-start: var(--s-4);
+}
+.shot {
+  margin: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+.shot__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px var(--s-3);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.shot__diff {
+  color: var(--text-3);
+}
+.shot__frames {
+  display: grid;
+  justify-content: start;
+  gap: var(--s-3);
+}
+.shot__frame {
+  position: relative;
+  inline-size: min(100%, 250px);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--rule-strong);
+  background: var(--panel);
+}
+.shot__frame img {
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 360 / 600;
+}
+.shot__none {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 360 / 600;
+  color: var(--text-3);
+  font-size: var(--text-small);
+}
+.shot__tag {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-start: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-bold);
+}
+.shot__frames[data-show="after"] .shot__frame--before,
+.shot__frames[data-show="before"] .shot__frame--after {
+  display: none;
+}
+@media (min-width: 640px) {
+  .shot__toggle {
+    display: none;
+  }
+  .shot__frames {
+    grid-template-columns: repeat(2, 250px);
+  }
+  .shot__frames[data-show] .shot__frame {
+    display: block;
+  }
+}
+

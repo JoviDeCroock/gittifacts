@@ -10,6 +10,7 @@ import { pct } from "../lib/lanes.js";
 import type { Tone } from "../lib/vocab.js";
 import { Icon, type IconId } from "./Icon.js";
 import { Segmented } from "./ui.js";
+import "../styles/evidence-bits.css";
 
 const KIND_ICON: Record<EvidenceItem["kind"], IconId> = {
   "red-green": "test-tube",
