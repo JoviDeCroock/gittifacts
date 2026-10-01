@@ -1,0 +1,51 @@
+{
+  "name": "semantic-conflict",
+  "description": "a makes formatCents print currency symbols (\"€3.50\") and updates its tests; b adds an invoice route whose test expects the old \"3.50 EUR\" format. Each passes alone and they merge cleanly, but together invoice.test.ts fails. a's closure never sees b's new file; the overlap comes from b's new import edge to @queue/money's barrel, which a's closure contains (modules). The queue must catch this by testing them together (batch bisection), and the resolver must name a as the upstream cause.",
+  "changes": [
+    { "id": "a", "title": "formatCents uses currency symbols", "dependsOn": null },
+    { "id": "b", "title": "api: invoice lines", "dependsOn": null }
+  ],
+  "expected": {
+    "affected": {
+      "a": {
+        "files": [
+          "packages/api/test/price.test.ts",
+          "packages/money/src/format.ts",
+          "packages/money/test/format.test.ts"
+        ],
+        "modules": [
+          "packages/api/src/routes/price.ts",
+          "packages/api/src/worker.ts",
+          "packages/api/test/price.test.ts",
+          "packages/money/src/format.ts",
+          "packages/money/src/index.ts",
+          "packages/money/test/format.test.ts"
+        ],
+        "testTargets": ["packages/api/test/price.test.ts", "packages/money/test/format.test.ts"],
+        "publicApi": false,
+        "deploysTo": ["queue-api"],
+        "complete": true
+      },
+      "b": {
+        "files": ["packages/api/src/routes/invoice.ts", "packages/api/test/invoice.test.ts"],
+        "modules": [
+          "packages/api/src/routes/invoice.ts",
+          "packages/api/test/invoice.test.ts",
+          "packages/money/src/index.ts"
+        ],
+        "testTargets": ["packages/api/test/invoice.test.ts"],
+        "publicApi": false,
+        "deploysTo": ["queue-api"],
+        "complete": true
+      }
+    },
+    "conflicts": [{ "pair": ["a", "b"], "reasons": ["modules"] }],
+    "merges": [{ "changes": ["a", "b"], "clean": true }],
+    "outcomes": [
+      { "changes": [], "pass": true },
+      { "changes": ["a"], "pass": true },
+      { "changes": ["b"], "pass": true },
+      { "changes": ["a", "b"], "pass": false, "failing": ["packages/api/test/invoice.test.ts"] }
+    ]
+  }
+}

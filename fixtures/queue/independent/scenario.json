@@ -1,0 +1,60 @@
+{
+  "name": "independent",
+  "description": "Three changes with disjoint closures and disjoint test targets: a slug fix in @queue/text, an additive rounding mode in @queue/money (public API, deploys queue-api) and a README edit. All three can advance in parallel tracks.",
+  "changes": [
+    { "id": "a", "title": "slugify trims leading and trailing dashes", "dependsOn": null },
+    { "id": "b", "title": "roundCents gains a 'down' rounding mode", "dependsOn": null },
+    { "id": "c", "title": "README: how to run the tests", "dependsOn": null }
+  ],
+  "expected": {
+    "affected": {
+      "a": {
+        "files": ["packages/text/src/slug.ts", "packages/text/test/slug.test.ts"],
+        "modules": ["packages/text/src/slug.ts", "packages/text/test/slug.test.ts"],
+        "testTargets": ["packages/text/test/headline.test.ts", "packages/text/test/slug.test.ts"],
+        "publicApi": false,
+        "deploysTo": [],
+        "complete": true
+      },
+      "b": {
+        "files": ["packages/money/src/round.ts", "packages/money/test/round.test.ts"],
+        "modules": [
+          "packages/api/src/routes/price.ts",
+          "packages/api/src/worker.ts",
+          "packages/money/src/format.ts",
+          "packages/money/src/index.ts",
+          "packages/money/src/round.ts",
+          "packages/money/test/round.test.ts"
+        ],
+        "testTargets": [
+          "packages/api/test/price.test.ts",
+          "packages/money/test/format.test.ts",
+          "packages/money/test/round.test.ts"
+        ],
+        "publicApi": true,
+        "deploysTo": ["queue-api"],
+        "complete": true
+      },
+      "c": {
+        "files": ["README.md"],
+        "modules": ["README.md"],
+        "testTargets": [],
+        "publicApi": false,
+        "deploysTo": [],
+        "complete": true
+      }
+    },
+    "conflicts": [
+      { "pair": ["a", "b"], "reasons": [] },
+      { "pair": ["a", "c"], "reasons": [] },
+      { "pair": ["b", "c"], "reasons": [] }
+    ],
+    "merges": [{ "changes": ["a", "b", "c"], "clean": true }],
+    "outcomes": [
+      { "changes": [], "pass": true },
+      { "changes": ["a"], "pass": true },
+      { "changes": ["b"], "pass": true },
+      { "changes": ["a", "b", "c"], "pass": true }
+    ]
+  }
+}

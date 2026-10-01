@@ -1,0 +1,55 @@
+{
+  "name": "textual-conflict",
+  "description": "Both changes rewrite the same lines of formatCents (a: thousands separators, b: currency symbols) and its test. Each passes alone; git cannot merge them. The resolver's job: combine both (\"€1,234.50\"). They share files, modules and test targets.",
+  "changes": [
+    { "id": "a", "title": "formatCents groups thousands", "dependsOn": null },
+    { "id": "b", "title": "formatCents uses currency symbols", "dependsOn": null }
+  ],
+  "expected": {
+    "affected": {
+      "a": {
+        "files": ["packages/money/src/format.ts", "packages/money/test/format.test.ts"],
+        "modules": [
+          "packages/api/src/routes/price.ts",
+          "packages/api/src/worker.ts",
+          "packages/money/src/format.ts",
+          "packages/money/src/index.ts",
+          "packages/money/test/format.test.ts"
+        ],
+        "testTargets": ["packages/api/test/price.test.ts", "packages/money/test/format.test.ts"],
+        "publicApi": false,
+        "deploysTo": ["queue-api"],
+        "complete": true
+      },
+      "b": {
+        "files": [
+          "packages/api/test/price.test.ts",
+          "packages/money/src/format.ts",
+          "packages/money/test/format.test.ts"
+        ],
+        "modules": [
+          "packages/api/src/routes/price.ts",
+          "packages/api/src/worker.ts",
+          "packages/api/test/price.test.ts",
+          "packages/money/src/format.ts",
+          "packages/money/src/index.ts",
+          "packages/money/test/format.test.ts"
+        ],
+        "testTargets": ["packages/api/test/price.test.ts", "packages/money/test/format.test.ts"],
+        "publicApi": false,
+        "deploysTo": ["queue-api"],
+        "complete": true
+      }
+    },
+    "conflicts": [{ "pair": ["a", "b"], "reasons": ["files", "modules", "tests"] }],
+    "merges": [
+      { "changes": ["a"], "clean": true },
+      { "changes": ["b"], "clean": true },
+      { "changes": ["a", "b"], "clean": false }
+    ],
+    "outcomes": [
+      { "changes": ["a"], "pass": true },
+      { "changes": ["b"], "pass": true }
+    ]
+  }
+}

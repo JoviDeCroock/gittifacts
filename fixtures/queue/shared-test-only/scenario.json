@@ -1,0 +1,31 @@
+{
+  "name": "shared-test-only",
+  "description": "a changes slugify, b changes titleCase. @queue/text has no barrel, so their module closures are disjoint; the only overlap is headline.test.ts, which imports both. They conflict on test targets alone.",
+  "changes": [
+    { "id": "a", "title": "slugify trims leading and trailing dashes", "dependsOn": null },
+    { "id": "b", "title": "titleCase keeps short acronyms", "dependsOn": null }
+  ],
+  "expected": {
+    "affected": {
+      "a": {
+        "files": ["packages/text/src/slug.ts", "packages/text/test/slug.test.ts"],
+        "modules": ["packages/text/src/slug.ts", "packages/text/test/slug.test.ts"],
+        "testTargets": ["packages/text/test/headline.test.ts", "packages/text/test/slug.test.ts"],
+        "publicApi": false,
+        "deploysTo": [],
+        "complete": true
+      },
+      "b": {
+        "files": ["packages/text/src/title.ts", "packages/text/test/title.test.ts"],
+        "modules": ["packages/text/src/title.ts", "packages/text/test/title.test.ts"],
+        "testTargets": ["packages/text/test/headline.test.ts", "packages/text/test/title.test.ts"],
+        "publicApi": false,
+        "deploysTo": [],
+        "complete": true
+      }
+    },
+    "conflicts": [{ "pair": ["a", "b"], "reasons": ["tests"] }],
+    "merges": [{ "changes": ["a", "b"], "clean": true }],
+    "outcomes": [{ "changes": ["a", "b"], "pass": true }]
+  }
+}

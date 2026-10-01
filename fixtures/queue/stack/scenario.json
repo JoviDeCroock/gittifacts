@@ -1,0 +1,51 @@
+{
+  "name": "stack",
+  "description": "A stack: a adds clampCents to @queue/money (new export: public API), b (branched from a) clamps prices in the api route. b's affected set is computed against a's head, its parent; branch change/b contains a, so b cannot land without a (b's diff alone would not even build on main). Their closures overlap anyway.",
+  "changes": [
+    { "id": "a", "title": "money: clampCents", "dependsOn": null },
+    { "id": "b", "title": "api: clamp prices into [0, 1,000,000.00]", "dependsOn": "a" }
+  ],
+  "expected": {
+    "affected": {
+      "a": {
+        "files": [
+          "packages/money/src/clamp.ts",
+          "packages/money/src/index.ts",
+          "packages/money/test/clamp.test.ts"
+        ],
+        "modules": [
+          "packages/api/src/routes/price.ts",
+          "packages/api/src/worker.ts",
+          "packages/money/src/clamp.ts",
+          "packages/money/src/index.ts",
+          "packages/money/test/clamp.test.ts"
+        ],
+        "testTargets": ["packages/api/test/price.test.ts", "packages/money/test/clamp.test.ts"],
+        "publicApi": true,
+        "deploysTo": ["queue-api"],
+        "complete": true
+      },
+      "b": {
+        "files": ["packages/api/src/routes/price.ts", "packages/api/test/price.test.ts"],
+        "modules": [
+          "packages/api/src/routes/price.ts",
+          "packages/api/src/worker.ts",
+          "packages/api/test/price.test.ts"
+        ],
+        "testTargets": ["packages/api/test/price.test.ts"],
+        "publicApi": false,
+        "deploysTo": ["queue-api"],
+        "complete": true
+      }
+    },
+    "conflicts": [{ "pair": ["a", "b"], "reasons": ["modules", "tests"] }],
+    "merges": [
+      { "changes": ["a"], "clean": true },
+      { "changes": ["b"], "clean": true }
+    ],
+    "outcomes": [
+      { "changes": ["a"], "pass": true },
+      { "changes": ["b"], "pass": true }
+    ]
+  }
+}

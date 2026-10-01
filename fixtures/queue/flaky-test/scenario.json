@@ -1,0 +1,54 @@
+{
+  "name": "flaky-test",
+  "description": "main already has a flaky test (packages/text/test/flaky.test.ts, fails ~20% of runs; QUEUE_FLAKE_SEED makes it deterministic). a changes titleCase, so the flaky test is one of a's test targets; b is unrelated. A failure of flaky.test.ts in a batch with a also fails on main's head with the same seed: suspected-flaky, quarantine, do not eject a.",
+  "changes": [
+    { "id": "a", "title": "titleCase keeps short acronyms", "dependsOn": null },
+    { "id": "b", "title": "formatCents upper-cases the currency code", "dependsOn": null }
+  ],
+  "flaky": {
+    "test": "packages/text/test/flaky.test.ts",
+    "env": "QUEUE_FLAKE_SEED",
+    "rate": 0.2,
+    "failingSeeds": [7, 8, 9, 19, 23],
+    "passingSeeds": [1, 2, 3, 4, 5, 6]
+  },
+  "expected": {
+    "affected": {
+      "a": {
+        "files": ["packages/text/src/title.ts", "packages/text/test/title.test.ts"],
+        "modules": ["packages/text/src/title.ts", "packages/text/test/title.test.ts"],
+        "testTargets": [
+          "packages/text/test/flaky.test.ts",
+          "packages/text/test/headline.test.ts",
+          "packages/text/test/title.test.ts"
+        ],
+        "publicApi": false,
+        "deploysTo": [],
+        "complete": true
+      },
+      "b": {
+        "files": ["packages/money/src/format.ts", "packages/money/test/format.test.ts"],
+        "modules": [
+          "packages/api/src/routes/price.ts",
+          "packages/api/src/worker.ts",
+          "packages/money/src/format.ts",
+          "packages/money/src/index.ts",
+          "packages/money/test/format.test.ts"
+        ],
+        "testTargets": ["packages/api/test/price.test.ts", "packages/money/test/format.test.ts"],
+        "publicApi": false,
+        "deploysTo": ["queue-api"],
+        "complete": true
+      }
+    },
+    "conflicts": [{ "pair": ["a", "b"], "reasons": [] }],
+    "merges": [{ "changes": ["a", "b"], "clean": true }],
+    "outcomes": [
+      { "changes": [], "env": { "QUEUE_FLAKE_SEED": "1" }, "pass": true },
+      { "changes": [], "env": { "QUEUE_FLAKE_SEED": "7" }, "pass": false, "failing": ["packages/text/test/flaky.test.ts"] },
+      { "changes": ["a"], "env": { "QUEUE_FLAKE_SEED": "2" }, "pass": true },
+      { "changes": ["a"], "env": { "QUEUE_FLAKE_SEED": "8" }, "pass": false, "failing": ["packages/text/test/flaky.test.ts"] },
+      { "changes": ["a", "b"], "env": { "QUEUE_FLAKE_SEED": "3" }, "pass": true }
+    ]
+  }
+}

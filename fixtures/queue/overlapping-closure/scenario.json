@@ -1,0 +1,52 @@
+{
+  "name": "overlapping-closure",
+  "description": "a switches roundCents to banker's rounding; b changes formatCents (which imports roundCents) to accounting-style negatives. No shared file and a clean merge, but a's reverse-dependency closure contains b's file, so they conflict on modules (and on the tests that cover formatCents).",
+  "changes": [
+    { "id": "a", "title": "roundCents rounds ties to even", "dependsOn": null },
+    { "id": "b", "title": "formatCents shows negatives in parentheses", "dependsOn": null }
+  ],
+  "expected": {
+    "affected": {
+      "a": {
+        "files": ["packages/money/src/round.ts", "packages/money/test/round.test.ts"],
+        "modules": [
+          "packages/api/src/routes/price.ts",
+          "packages/api/src/worker.ts",
+          "packages/money/src/format.ts",
+          "packages/money/src/index.ts",
+          "packages/money/src/round.ts",
+          "packages/money/test/round.test.ts"
+        ],
+        "testTargets": [
+          "packages/api/test/price.test.ts",
+          "packages/money/test/format.test.ts",
+          "packages/money/test/round.test.ts"
+        ],
+        "publicApi": false,
+        "deploysTo": ["queue-api"],
+        "complete": true
+      },
+      "b": {
+        "files": ["packages/money/src/format.ts", "packages/money/test/format.test.ts"],
+        "modules": [
+          "packages/api/src/routes/price.ts",
+          "packages/api/src/worker.ts",
+          "packages/money/src/format.ts",
+          "packages/money/src/index.ts",
+          "packages/money/test/format.test.ts"
+        ],
+        "testTargets": ["packages/api/test/price.test.ts", "packages/money/test/format.test.ts"],
+        "publicApi": false,
+        "deploysTo": ["queue-api"],
+        "complete": true
+      }
+    },
+    "conflicts": [{ "pair": ["a", "b"], "reasons": ["modules", "tests"] }],
+    "merges": [{ "changes": ["a", "b"], "clean": true }],
+    "outcomes": [
+      { "changes": ["a"], "pass": true },
+      { "changes": ["b"], "pass": true },
+      { "changes": ["a", "b"], "pass": true }
+    ]
+  }
+}

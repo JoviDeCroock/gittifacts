@@ -558,3 +558,340 @@ export async function materializeFixture(
 
   return { dir, baseSha, headSha, fixture };
 }
+
+// ---------------------------------------------------------------- merge-queue scenarios
+
+/**
+ * Merge-queue scenarios (fixtures/queue/README.md): one base tree and several Changes, each an
+ * overlay on the base (or on the Change it depends on, for stacks).
+ *
+ *   fixtures/queue/_base/                        shared base tree
+ *   fixtures/queue/<name>/scenario.json          changes + expectations
+ *   fixtures/queue/<name>/base/                  optional overlay on _base
+ *   fixtures/queue/<name>/changes/<id>/          overlay forming Change <id>
+ *   fixtures/queue/<name>/changes/<id>.deleted.txt  optional paths deleted by Change <id>
+ */
+export const QUEUE_FIXTURES_DIR = join(FIXTURES_DIR, "queue");
+export const QUEUE_BASE_DIR = join(QUEUE_FIXTURES_DIR, "_base");
+
+export type QueueConflictReason = "incomplete" | "config" | "files" | "modules" | "tests";
+export const QUEUE_CONFLICT_REASONS: readonly QueueConflictReason[] = [
+  "incomplete",
+  "config",
+  "files",
+  "modules",
+  "tests",
+];
+
+export interface QueueChange {
+  /** Short id, also the branch suffix: `change/<id>`. */
+  id: string;
+  title: string;
+  /** The Change this one is stacked on (its branch starts there), or null for main. */
+  dependsOn: string | null;
+}
+
+/** The AffectedSet fields a scenario pins down (analyzer reports are not compared). */
+export interface QueueExpectedAffected {
+  files: string[];
+  modules: string[];
+  testTargets: string[];
+  publicApi: boolean;
+  deploysTo: string[];
+  complete: boolean;
+}
+
+export interface QueueConflictExpectation {
+  pair: [string, string];
+  /** Empty = independent. Order follows QUEUE_CONFLICT_REASONS. */
+  reasons: QueueConflictReason[];
+}
+
+export interface QueueMergeExpectation {
+  changes: string[];
+  /** Does `git merge` of these branches onto main succeed without textual conflicts? */
+  clean: boolean;
+}
+
+export interface QueueOutcomeExpectation {
+  /** Changes merged onto main before running the tests ([] = main itself). */
+  changes: string[];
+  env?: Record<string, string>;
+  pass: boolean;
+  /** Test files that fail (only when pass is false). */
+  failing?: string[];
+}
+
+export interface QueueFlaky {
+  test: string;
+  env: string;
+  rate: number;
+  failingSeeds: number[];
+  passingSeeds: number[];
+}
+
+export interface QueueScenario {
+  name: string;
+  description: string;
+  changes: QueueChange[];
+  flaky?: QueueFlaky;
+  expected: {
+    /** Per Change, computed against its parent (main, or the Change it depends on). */
+    affected: Record<string, QueueExpectedAffected>;
+    /** Every unordered pair of Changes. */
+    conflicts: QueueConflictExpectation[];
+    merges: QueueMergeExpectation[];
+    outcomes: QueueOutcomeExpectation[];
+  };
+}
+
+const ID_RE = /^[a-z][a-z0-9-]{0,30}$/;
+
+/** Validates a parsed scenario.json. Throws a descriptive error on the first problem. */
+export function parseQueueScenario(raw: unknown, file: string): QueueScenario {
+  const r = reader(file);
+  const fail = (path: string, message: string): never => {
+    throw new FixtureSpecError(file, path, message);
+  };
+  const root = r.object(raw, "");
+  r.keys(root, "", ["name", "description", "changes", "flaky", "expected"]);
+  if (!Array.isArray(root.changes) || root.changes.length < 2) fail("changes", "needs 2+ changes");
+  const changes: QueueChange[] = (root.changes as unknown[]).map((item, i) => {
+    const path = `changes[${i}]`;
+    const c = r.object(item, path);
+    r.keys(c, path, ["id", "title", "dependsOn"]);
+    const id = r.string(c.id, `${path}.id`, 1, 31);
+    if (!ID_RE.test(id)) fail(`${path}.id`, "must match [a-z][a-z0-9-]*");
+    return {
+      id,
+      title: r.string(c.title, `${path}.title`, 3, 200),
+      dependsOn: c.dependsOn === null ? null : r.string(c.dependsOn, `${path}.dependsOn`, 1),
+    };
+  });
+  const ids = changes.map((c) => c.id);
+  if (new Set(ids).size !== ids.length) fail("changes", "ids must be unique");
+  changes.forEach((c, i) => {
+    if (c.dependsOn !== null && !ids.slice(0, i).includes(c.dependsOn))
+      fail(`changes[${i}].dependsOn`, "must name an earlier change");
+  });
+  const known = (id: unknown, path: string): string => {
+    const s = r.string(id, path, 1);
+    if (!ids.includes(s)) fail(path, `unknown change "${s}"`);
+    return s;
+  };
+  const strings = (v: unknown, path: string): string[] => {
+    if (!Array.isArray(v)) return fail(path, "must be an array of strings");
+    return v.map((x, i) => r.string(x, `${path}[${i}]`, 1));
+  };
+
+  let flaky: QueueFlaky | undefined;
+  if (root.flaky !== undefined) {
+    const f = r.object(root.flaky, "flaky");
+    r.keys(f, "flaky", ["test", "env", "rate", "failingSeeds", "passingSeeds"]);
+    const seeds = (v: unknown, path: string): number[] => {
+      if (!Array.isArray(v) || v.length === 0 || !v.every((n) => Number.isInteger(n)))
+        return fail(path, "must be a non-empty array of integers");
+      return v as number[];
+    };
+    if (typeof f.rate !== "number" || f.rate <= 0 || f.rate >= 1)
+      fail("flaky.rate", "must be in (0, 1)");
+    flaky = {
+      test: r.string(f.test, "flaky.test", 1),
+      env: r.string(f.env, "flaky.env", 1),
+      rate: f.rate as number,
+      failingSeeds: seeds(f.failingSeeds, "flaky.failingSeeds"),
+      passingSeeds: seeds(f.passingSeeds, "flaky.passingSeeds"),
+    };
+  }
+
+  const e = r.object(root.expected, "expected");
+  r.keys(e, "expected", ["affected", "conflicts", "merges", "outcomes"]);
+  const aff = r.object(e.affected, "expected.affected");
+  const affected: Record<string, QueueExpectedAffected> = {};
+  for (const id of ids) {
+    const path = `expected.affected.${id}`;
+    const a = r.object(aff[id], path);
+    r.keys(a, path, ["files", "modules", "testTargets", "publicApi", "deploysTo", "complete"]);
+    affected[id] = {
+      files: strings(a.files, `${path}.files`),
+      modules: strings(a.modules, `${path}.modules`),
+      testTargets: strings(a.testTargets, `${path}.testTargets`),
+      publicApi: r.boolean(a.publicApi, `${path}.publicApi`),
+      deploysTo: strings(a.deploysTo, `${path}.deploysTo`),
+      complete: r.boolean(a.complete, `${path}.complete`),
+    };
+  }
+  r.keys(aff, "expected.affected", ids);
+
+  if (!Array.isArray(e.conflicts)) fail("expected.conflicts", "must be an array");
+  const conflicts = (e.conflicts as unknown[]).map((item, i): QueueConflictExpectation => {
+    const path = `expected.conflicts[${i}]`;
+    const c = r.object(item, path);
+    r.keys(c, path, ["pair", "reasons"]);
+    if (!Array.isArray(c.pair) || c.pair.length !== 2) fail(`${path}.pair`, "must be two ids");
+    const pair = c.pair as unknown[];
+    const reasons = strings(c.reasons, `${path}.reasons`).map((x, j) =>
+      r.oneOf(x, `${path}.reasons[${j}]`, QUEUE_CONFLICT_REASONS),
+    );
+    return {
+      pair: [known(pair[0], `${path}.pair[0]`), known(pair[1], `${path}.pair[1]`)],
+      reasons,
+    };
+  });
+  const pairKey = (a: string, b: string) => [a, b].sort().join("|");
+  const listed = new Set(conflicts.map((c) => pairKey(c.pair[0], c.pair[1])));
+  for (let i = 0; i < ids.length; i++)
+    for (let j = i + 1; j < ids.length; j++)
+      if (!listed.has(pairKey(ids[i] ?? "", ids[j] ?? "")))
+        fail("expected.conflicts", `pair ${ids[i]}/${ids[j]} is missing (list every pair)`);
+
+  const changeList = (v: unknown, path: string): string[] => {
+    if (!Array.isArray(v)) return fail(path, "must be an array of change ids");
+    return v.map((x, i) => known(x, `${path}[${i}]`));
+  };
+  if (!Array.isArray(e.merges)) fail("expected.merges", "must be an array");
+  const merges = (e.merges as unknown[]).map((item, i): QueueMergeExpectation => {
+    const path = `expected.merges[${i}]`;
+    const m = r.object(item, path);
+    r.keys(m, path, ["changes", "clean"]);
+    return {
+      changes: changeList(m.changes, `${path}.changes`),
+      clean: r.boolean(m.clean, `${path}.clean`),
+    };
+  });
+  if (!Array.isArray(e.outcomes)) fail("expected.outcomes", "must be an array");
+  const outcomes = (e.outcomes as unknown[]).map((item, i): QueueOutcomeExpectation => {
+    const path = `expected.outcomes[${i}]`;
+    const o = r.object(item, path);
+    r.keys(o, path, ["changes", "env", "pass", "failing"]);
+    const out: QueueOutcomeExpectation = {
+      changes: changeList(o.changes, `${path}.changes`),
+      pass: r.boolean(o.pass, `${path}.pass`),
+    };
+    if (o.env !== undefined) {
+      const env = r.object(o.env, `${path}.env`);
+      out.env = Object.fromEntries(
+        Object.entries(env).map(([k, v]) => [k, r.string(v, `${path}.env.${k}`)]),
+      );
+    }
+    if (o.failing !== undefined) out.failing = strings(o.failing, `${path}.failing`);
+    if (out.pass && out.failing !== undefined) fail(`${path}.failing`, "only for failing outcomes");
+    return out;
+  });
+
+  const scenario: QueueScenario = {
+    name: r.string(root.name, "name", 1),
+    description: r.string(root.description, "description", 1),
+    changes,
+    expected: { affected, conflicts, merges, outcomes },
+  };
+  if (flaky !== undefined) scenario.flaky = flaky;
+  return scenario;
+}
+
+/** Names of all queue scenarios (directories under fixtures/queue with a scenario.json), sorted. */
+export function listQueueScenarioNames(): string[] {
+  return readdirSync(QUEUE_FIXTURES_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !/^[._]/.test(entry.name))
+    .filter((entry) => existsSync(join(QUEUE_FIXTURES_DIR, entry.name, "scenario.json")))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+export function loadQueueScenario(name: string): QueueScenario {
+  const file = join(QUEUE_FIXTURES_DIR, name, "scenario.json");
+  if (!existsSync(file)) {
+    throw new Error(
+      `unknown queue scenario "${name}" (known: ${listQueueScenarioNames().join(", ")})`,
+    );
+  }
+  const scenario = parseQueueScenario(
+    JSON.parse(readFileSync(file, "utf8")),
+    relative(REPO_ROOT, file),
+  );
+  if (scenario.name !== name) {
+    throw new Error(`${file}: name "${scenario.name}" does not match its directory "${name}"`);
+  }
+  return scenario;
+}
+
+export interface MaterializedQueueChange {
+  /** `change/<id>`. */
+  branch: string;
+  sha: string;
+  /** The commit the Change was made on: main's base commit, or its dependency's head. */
+  parentSha: string;
+}
+
+export interface MaterializedQueueScenario {
+  /** Absolute path of the git repository (`main` checked out). */
+  dir: string;
+  /** The base commit on `main`. */
+  baseSha: string;
+  changes: Record<string, MaterializedQueueChange>;
+  scenario: QueueScenario;
+}
+
+function readPathList(file: string): string[] {
+  if (!existsSync(file)) return [];
+  return readFileSync(file, "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"));
+}
+
+/**
+ * Creates a fresh repository for a queue scenario: `_base` (plus the scenario's `base/`) on
+ * `main`, then one branch `change/<id>` per Change, branched from main or from the Change it
+ * depends on. Identities and dates are fixed, so SHAs are stable across runs and machines.
+ */
+export async function materializeQueueScenario(
+  name: string,
+  options: MaterializeOptions = {},
+): Promise<MaterializedQueueScenario> {
+  const scenario = loadQueueScenario(name);
+  const dir = resolve(options.outDir ?? join(DEFAULT_OUT_DIR, "queue"), name);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+
+  await git(dir, ["init", "-q"]);
+  applyOverlay(QUEUE_BASE_DIR, dir);
+  const baseOverlay = join(QUEUE_FIXTURES_DIR, name, "base");
+  if (existsSync(baseOverlay)) applyOverlay(baseOverlay, dir);
+  await git(dir, ["add", "-A"]);
+  await git(dir, ["commit", "-q", "-m", `Queue scenario base: ${name}`]);
+  const baseSha = await git(dir, ["rev-parse", "HEAD"]);
+
+  const changes: Record<string, MaterializedQueueChange> = {};
+  for (const change of scenario.changes) {
+    const parent = change.dependsOn === null ? null : changes[change.dependsOn];
+    const parentSha = parent?.sha ?? baseSha;
+    const branch = `change/${change.id}`;
+    await git(dir, ["checkout", "-q", "-b", branch, parentSha], HEAD_IDENTITY);
+    const overlay = join(QUEUE_FIXTURES_DIR, name, "changes", change.id);
+    if (existsSync(overlay)) applyOverlay(overlay, dir);
+    const deletedFile = join(QUEUE_FIXTURES_DIR, name, "changes", `${change.id}.deleted.txt`);
+    for (const path of readPathList(deletedFile)) {
+      const target = join(dir, path);
+      if (!existsSync(target))
+        throw new Error(`${name}/${change.id}.deleted.txt: "${path}" does not exist`);
+      rmSync(target, { recursive: true });
+    }
+    await git(dir, ["add", "-A"], HEAD_IDENTITY);
+    const staged = await git(dir, ["diff", "--cached", "--name-only"], HEAD_IDENTITY);
+    if (staged === "")
+      throw new Error(`queue scenario "${name}": change "${change.id}" changes nothing`);
+    await git(
+      dir,
+      ["commit", "-q", "-m", `${change.title}\n\nQueue scenario: ${name}/${change.id}\n`],
+      HEAD_IDENTITY,
+    );
+    changes[change.id] = {
+      branch,
+      sha: await git(dir, ["rev-parse", "HEAD"], HEAD_IDENTITY),
+      parentSha,
+    };
+  }
+  await git(dir, ["checkout", "-q", "main"]);
+  return { dir, baseSha, changes, scenario };
+}

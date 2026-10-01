@@ -1,0 +1,10 @@
+{
+  "name": "@queue/text",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./slug": "./src/slug.ts",
+    "./title": "./src/title.ts"
+  }
+}
