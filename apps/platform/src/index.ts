@@ -18,13 +18,14 @@ configureCoordinatorRuntime<Bindings>({
 
 export { CiEgressGateway, CiRunWorkflow, Runner } from "@app/ci-engine";
 export {
-  ChangeCoordinator,
   ChangeWorkflow,
   MergeQueue,
   PushRouter,
   RolloutWorkflow,
 } from "@app/coordinator/workers";
 export { AuditLog } from "./audit/audit-log-do.js";
+// The coordinator's DO with the CI engine's build artifact mapped onto its run sink.
+export { ChangeCoordinator } from "./runtime/change-coordinator.js";
 
 const app = createApp();
 
