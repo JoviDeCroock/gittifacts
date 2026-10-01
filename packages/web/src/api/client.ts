@@ -5,7 +5,7 @@
  * Review-critical payloads (plans, tours, evidence) are validated at runtime with the domain zod
  * schemas: a malformed tour must fail loudly, never render as "proven".
  */
-import { Evidence, Plan, Tour } from "@app/domain";
+import type { Plan } from "@app/domain";
 import type { z } from "zod";
 import { isMockMode } from "./mode.js";
 import type {
@@ -127,6 +127,9 @@ export async function request<T>(method: Method, path: string, body?: unknown, i
   throw new ApiError(res.status, `http_${res.status}`, `The server answered ${res.status}.`);
 }
 
+/** zod and the domain schemas load on first use, keeping them out of the entry chunk. */
+const schemas = () => import("@app/domain").then((m) => ({ Evidence: m.Evidence, Plan: m.Plan, Tour: m.Tour }));
+
 function validated<S extends z.ZodType>(schema: S, value: unknown, what: string): z.infer<S> {
   const result = schema.safeParse(value);
   if (!result.success) {
@@ -161,11 +164,11 @@ export const api = {
 
   // plans
   repoPlans: async (repoId: string) => {
-    const res = await request<{ plans: unknown[] }>("GET", `/api/v1/repos/${enc(repoId)}/plans`);
+    const [res, { Plan }] = await Promise.all([request<{ plans: unknown[] }>("GET", `/api/v1/repos/${enc(repoId)}/plans`), schemas()]);
     return { plans: res.plans.map((p) => validated(Plan, p, "plan")) };
   },
   plan: async (planId: string) => {
-    const res = await request<{ plan: unknown; changes: Change[] }>("GET", `/api/v1/plans/${enc(planId)}`);
+    const [res, { Plan }] = await Promise.all([request<{ plan: unknown; changes: Change[] }>("GET", `/api/v1/plans/${enc(planId)}`), schemas()]);
     return { plan: validated(Plan, res.plan, "plan"), changes: res.changes };
   },
   approvePlan: (planId: string, comment?: string, key?: string) =>
@@ -179,14 +182,14 @@ export const api = {
   change: (changeId: string) => request<ChangeDetail>("GET", `/api/v1/changes/${enc(changeId)}`),
   diff: (changeId: string) => request<{ diff: ChangeDiff }>("GET", `/api/v1/changes/${enc(changeId)}/diff`),
   evidence: async (changeId: string): Promise<EvidenceResponse> => {
-    const res = await request<{ evidence: unknown; verification: EvidenceResponse["verification"] }>(
-      "GET",
-      `/api/v1/changes/${enc(changeId)}/evidence`,
-    );
+    const [res, { Evidence }] = await Promise.all([
+      request<{ evidence: unknown; verification: EvidenceResponse["verification"] }>("GET", `/api/v1/changes/${enc(changeId)}/evidence`),
+      schemas(),
+    ]);
     return { evidence: validated(Evidence, res.evidence, "evidence bundle"), verification: res.verification };
   },
   tour: async (changeId: string) => {
-    const res = await request<{ tour: unknown }>("GET", `/api/v1/changes/${enc(changeId)}/tour`);
+    const [res, { Tour }] = await Promise.all([request<{ tour: unknown }>("GET", `/api/v1/changes/${enc(changeId)}/tour`), schemas()]);
     return { tour: validated(Tour, res.tour, "tour") };
   },
   review: (changeId: string, input: ReviewInput, key?: string) =>

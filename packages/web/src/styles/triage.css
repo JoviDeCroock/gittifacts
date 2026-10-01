@@ -124,6 +124,8 @@ a.triage__msg:hover {
   position: absolute;
   inset-inline-end: -1px;
   inset-block-start: -4px;
-  border-block: 5px solid transparent;
-  border-inline-start: 7px solid var(--text-3);
+  inline-size: 7px;
+  block-size: 10px;
+  background: var(--text-3);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
