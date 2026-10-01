@@ -72,3 +72,27 @@ route definitions and served at `GET /api/v1/openapi.json`.
 ## Webhooks & machine endpoints
 - `POST /webhooks/workers-issues` — Workers Issues generic webhook (shared-secret verified).
 - `POST /mcp` — MCP server (streamable HTTP), agent bearer token.
+
+## Additions (2026-10-01, from building the UI against this contract)
+
+| Method | Path | Response |
+|---|---|---|
+| GET | /api/v1/principals/:id | `{ principal: Principal & { ownerName?: string } }` |
+| GET | /api/v1/blobs/:ref | Raw bytes of an R2-backed reference (`logRef`, `beforeRef`, `afterRef`), with Content-Type; authorized by the repo the ref belongs to |
+| GET | /api/v1/changes/:changeId/reviews | `{ reviews: ReviewDecision[] }` |
+| GET | /api/v1/repos/:repoId/... | `RepoSummary.counts` gains `plansAwaitingApproval` |
+
+- `ClassifyResult` (in `GET /changes/:id`) is `@app/classifier`'s `ClassifyResult`:
+  `{ lane, computedLane, reasons, shadow, blocked, requiresHumanApproval, checklist: { gate, passed: boolean|null, detail }[] }`.
+- Responses that carry principal ids (plans, changes, audit, reviews) also include `principals: Record<id, { name, kind, ownerId }>`
+  so clients don't need one lookup per id.
+- `AuditEvent` responses add `summary: string`, a readable one-liner such as "Stage 25% started" or
+  "Error rate 3.1% exceeded the 1.0% limit". It is generated server-side from the payload.
+- `Plan` adds `rejectedBy`, `rejectedAt`, `rejectionReason`.
+- `ShadowStats.needed` is the number of additional agreeing Lane-0 reviews needed before Lane 0 can be enabled,
+  or `null` if that can no longer be reached.
+- `GET /changes/:id/rollout` adds `policy: RolloutPolicy`, the rollout policy from the change's **base**, not the repo's current one.
+- A tour is stale when `tour.headSha !== change.headSha`. `GET /changes/:id/tour` adds `stale: boolean`.
+- Policy: an agent's owner may approve that agent's change (allowed, recorded in the audit log). Agents can never hold
+  `plan:approve` or `change:review`.
+- `ChangeDiff`, `PipelineRun` and `LinkedIssue` are defined by `@app/domain`. Where this document differs, the domain package wins.
