@@ -100,7 +100,10 @@ describe("workspace packages", () => {
     "packages/str/src/index.ts": "",
     "packages/cond/package.json": json({
       name: "@w/cond",
-      exports: { ".": { types: "./src/index.ts", import: "./src/index.ts" }, "./node": "./src/node.ts" },
+      exports: {
+        ".": { types: "./src/index.ts", import: "./src/index.ts" },
+        "./node": "./src/node.ts",
+      },
     }),
     "packages/cond/src/index.ts": "",
     "packages/cond/src/node.ts": "",
@@ -112,9 +115,14 @@ describe("workspace packages", () => {
     "packages/pattern/src/deep/b.ts": "",
     "packages/built/package.json": json({
       name: "@w/built",
-      exports: { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" }, "./x": "./dist/x/index.js" },
+      exports: {
+        ".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
+        "./x": "./dist/x/index.js",
+      },
     }),
-    "packages/built/tsconfig.json": json({ compilerOptions: { outDir: "dist", rootDir: "lib-src" } }),
+    "packages/built/tsconfig.json": json({
+      compilerOptions: { outDir: "dist", rootDir: "lib-src" },
+    }),
     "packages/built/lib-src/index.ts": "",
     "packages/built/lib-src/x/index.ts": "",
     "packages/legacy/package.json": json({ name: "legacy", main: "dist/main.js" }),

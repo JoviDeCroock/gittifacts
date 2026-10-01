@@ -496,7 +496,8 @@ export class Resolver {
     const cfg = this.loadTsconfig(file);
     if (cfg === null) return {};
     let merged: ReturnType<Resolver["effectiveCompilerOptions"]> = {};
-    const exts = cfg.extends === undefined ? [] : Array.isArray(cfg.extends) ? cfg.extends : [cfg.extends];
+    const exts =
+      cfg.extends === undefined ? [] : Array.isArray(cfg.extends) ? cfg.extends : [cfg.extends];
     for (const ext of exts) {
       const target = this.extendsFile(file, ext);
       if (target !== null) merged = { ...merged, ...this.effectiveCompilerOptions(target, seen) };

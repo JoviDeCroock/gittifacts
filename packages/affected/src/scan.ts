@@ -448,7 +448,8 @@ const STATEMENT_KEYWORDS = new Set([
   "declare",
 ]);
 
-const isP = (t: Token | undefined, v: string): boolean => t !== undefined && t.k === "p" && t.v === v;
+const isP = (t: Token | undefined, v: string): boolean =>
+  t !== undefined && t.k === "p" && t.v === v;
 const isId = (t: Token | undefined, v: string): boolean =>
   t !== undefined && t.k === "id" && t.v === v;
 const isMemberAccess = (prev: Token | undefined): boolean => isP(prev, ".") || isP(prev, "?.");

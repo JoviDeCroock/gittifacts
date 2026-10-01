@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { exportSurface, sameSurface } from "../src/exports.js";
 import { relativeStringLiterals, scanModule } from "../src/scan.js";
 
-const specs = (src: string): string[] => scanModule(src).refs.map((r) => `${r.kind}:${r.specifier}`);
+const specs = (src: string): string[] =>
+  scanModule(src).refs.map((r) => `${r.kind}:${r.specifier}`);
 
 describe("scanModule: static forms", () => {
   it("finds every import/export form", () => {
@@ -52,7 +53,9 @@ describe("scanModule: static forms", () => {
   });
 
   it("reports line numbers", () => {
-    const refs = scanModule(`// header\n\nimport a from "./a";\n\n\nconst b = require("./b");`).refs;
+    const refs = scanModule(
+      `// header\n\nimport a from "./a";\n\n\nconst b = require("./b");`,
+    ).refs;
     expect(refs.map((r) => r.line)).toEqual([3, 6]);
   });
 });
@@ -114,7 +117,9 @@ describe("scanModule: dynamic forms", () => {
   });
 
   it("reads triple-slash references", () => {
-    const refs = scanModule(`/// <reference path="globals.d.ts" />\n/// <reference types="vite/client" />\n`).refs;
+    const refs = scanModule(
+      `/// <reference path="globals.d.ts" />\n/// <reference types="vite/client" />\n`,
+    ).refs;
     expect(refs.map((r) => [r.specifier, r.typeOnly])).toEqual([
       ["./globals.d.ts", false],
       ["vite/client", true],
@@ -188,7 +193,15 @@ describe("scanModule: things that are not imports", () => {
   });
 
   it("never throws on malformed input", () => {
-    for (const src of ["`unterminated ${", "'open", "/* open", "import {", 'import x from "', "}}}{{{", "/"]) {
+    for (const src of [
+      "`unterminated ${",
+      "'open",
+      "/* open",
+      "import {",
+      'import x from "',
+      "}}}{{{",
+      "/",
+    ]) {
       expect(() => scanModule(src)).not.toThrow();
     }
   });
@@ -201,7 +214,9 @@ describe("scanModule: things that are not imports", () => {
 describe("relativeStringLiterals", () => {
   it("lists relative string literals (test-runner setup files)", () => {
     expect(
-      relativeStringLiterals(`export default { test: { setupFiles: ["./test/setup.ts"], name: "x", root: '../up' } }`),
+      relativeStringLiterals(
+        `export default { test: { setupFiles: ["./test/setup.ts"], name: "x", root: '../up' } }`,
+      ),
     ).toEqual(["./test/setup.ts", "../up"]);
   });
 });
@@ -216,21 +231,37 @@ describe("exportSurface", () => {
         "// doc\nexport function f(a: number): string {\n  const x = a * 2; // changed\n  return String(x);\n}",
       ),
     ).toBe(true);
-    expect(same("export const g = (a: number) => { return a; };", "export const g = (a: number) => { return a + 1; };")).toBe(true);
+    expect(
+      same(
+        "export const g = (a: number) => { return a; };",
+        "export const g = (a: number) => { return a + 1; };",
+      ),
+    ).toBe(true);
   });
 
   it("sees signature, type and value changes", () => {
-    expect(same("export function f(a: number): string { return ''; }", "export function f(a: number, b?: string): string { return ''; }")).toBe(false);
-    expect(same("export interface I { a: number }", "export interface I { a: number; b: string }")).toBe(false);
+    expect(
+      same(
+        "export function f(a: number): string { return ''; }",
+        "export function f(a: number, b?: string): string { return ''; }",
+      ),
+    ).toBe(false);
+    expect(
+      same("export interface I { a: number }", "export interface I { a: number; b: string }"),
+    ).toBe(false);
     expect(same("export const VERSION = '1';", "export const VERSION = '2';")).toBe(false);
     expect(same("export type T = 'a' | 'b';", "export type T = 'a';")).toBe(false);
   });
 
   it("tracks additions, removals and re-exports", () => {
-    expect(exportSurface("export function a() {}\nexport const b = 1;\nexport default class {}").size).toBe(3);
+    expect(
+      exportSurface("export function a() {}\nexport const b = 1;\nexport default class {}").size,
+    ).toBe(3);
     expect(same("export * from './a';", "export * from './b';")).toBe(false);
     expect(same("export { x } from './a';", "export { x, y } from './a';")).toBe(false);
-    expect(same("export function a() {}", "export function a() {}\nexport function b() {}")).toBe(false);
+    expect(same("export function a() {}", "export function a() {}\nexport function b() {}")).toBe(
+      false,
+    );
   });
 
   it("describes local export lists through their declarations", () => {
@@ -258,7 +289,11 @@ describe("exportSurface", () => {
 
   it("compares class member signatures, not method bodies", () => {
     const a = "export class A extends B { x = 1; m(a: number): void { run(a); } }";
-    expect(same(a, "export class A extends B { x = 1; m(a: number): void { run(a + 1); } }")).toBe(true);
-    expect(same(a, "export class A extends B { x = 1; m(a: string): void { run(a); } }")).toBe(false);
+    expect(same(a, "export class A extends B { x = 1; m(a: number): void { run(a + 1); } }")).toBe(
+      true,
+    );
+    expect(same(a, "export class A extends B { x = 1; m(a: string): void { run(a); } }")).toBe(
+      false,
+    );
   });
 });

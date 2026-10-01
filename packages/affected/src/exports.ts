@@ -36,7 +36,23 @@ const STATEMENT_START = new Set([
   "namespace",
 ]);
 /** A `{` after one of these is a type/object literal, not a function body. */
-const TYPE_CONTEXT = new Set([":", "|", "&", "<", ",", "(", "=", "=>", "?", "[", "keyof", "typeof", "extends", "in", "readonly"]);
+const TYPE_CONTEXT = new Set([
+  ":",
+  "|",
+  "&",
+  "<",
+  ",",
+  "(",
+  "=",
+  "=>",
+  "?",
+  "[",
+  "keyof",
+  "typeof",
+  "extends",
+  "in",
+  "readonly",
+]);
 
 interface Depthed {
   tokens: Token[];
@@ -124,7 +140,8 @@ function declName(dt: Depthed, i: number): { name: string | null; keyword: strin
   while (j < dt.tokens.length && MODIFIERS.has(dt.tokens[j]?.v ?? "") && dt.tokens[j]?.k === "id")
     j++;
   const kw = dt.tokens[j];
-  if (kw === undefined || kw.k !== "id" || !DECL_KEYWORDS.has(kw.v)) return { name: null, keyword: null };
+  if (kw === undefined || kw.k !== "id" || !DECL_KEYWORDS.has(kw.v))
+    return { name: null, keyword: null };
   let n = j + 1;
   if (dt.tokens[n]?.v === "*") n++; // function*
   if (kw.v === "const" && dt.tokens[n]?.v === "enum") n++;
@@ -150,9 +167,15 @@ export function exportSurface(src: string): ExportSurface {
   for (let i = 0; i < tokens.length; i++) {
     if (depth[i] !== 0) continue;
     const t = tokens[i] as Token;
-    if (t.k !== "id" || !(DECL_KEYWORDS.has(t.v) || t.v === "declare" || t.v === "abstract" || t.v === "async"))
+    if (
+      t.k !== "id" ||
+      !(DECL_KEYWORDS.has(t.v) || t.v === "declare" || t.v === "abstract" || t.v === "async")
+    )
       continue;
-    if (tokens[i - 1]?.v === "export" || (tokens[i - 1]?.k === "id" && MODIFIERS.has(tokens[i - 1]?.v ?? "")))
+    if (
+      tokens[i - 1]?.v === "export" ||
+      (tokens[i - 1]?.k === "id" && MODIFIERS.has(tokens[i - 1]?.v ?? ""))
+    )
       continue;
     const { name } = declName(dt, i);
     if (name === null) continue;
@@ -172,7 +195,11 @@ export function exportSurface(src: string): ExportSurface {
     const end = statementEnd(dt, i);
     const text = signatureText(dt, i, end);
     let k = i + 1;
-    if (next.k === "id" && next.v === "type" && (tokens[i + 2]?.v === "{" || tokens[i + 2]?.v === "*"))
+    if (
+      next.k === "id" &&
+      next.v === "type" &&
+      (tokens[i + 2]?.v === "{" || tokens[i + 2]?.v === "*")
+    )
       k = i + 2;
     const head = tokens[k] as Token;
     if (head.k === "p" && (head.v === "*" || head.v === "{")) {
@@ -202,7 +229,10 @@ export function exportSurface(src: string): ExportSurface {
             exported = tokens[j + 2]?.v ?? exported;
             j += 2;
           }
-          add(exported, `${isType ? "type " : ""}${locals.get(localName) ?? `binding ${localName}`}`);
+          add(
+            exported,
+            `${isType ? "type " : ""}${locals.get(localName) ?? `binding ${localName}`}`,
+          );
           j++;
           while (j < close && tokens[j]?.v !== ",") j++;
           j++;
