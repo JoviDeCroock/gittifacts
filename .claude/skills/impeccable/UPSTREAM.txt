@@ -1,0 +1,7 @@
+Source:   https://github.com/pbakaus/impeccable  (path: .claude/skills/impeccable/, Claude Code provider build)
+Commit:   c74755d920985f7a92cef691ca970ba95f90126e (main, 2026-10-01)
+Skill:    v4.4.0   Engine pin (scripts/VERSION): 0.1.9
+License:  Apache License 2.0 (see LICENSE); third-party notice in NOTICE.md (ios.md / android.md derived from ehmo/platform-design-skills, MIT)
+Not installed from upstream: .claude/agents/impeccable-*.md (4 subagents) and .claude/settings.json (PostToolUse/Stop design-detector hooks).
+The skill falls back to reference/degraded/*.md when those subagents are absent.
+Copied verbatim; no files modified.

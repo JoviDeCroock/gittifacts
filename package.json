@@ -1,0 +1,23 @@
+{
+  "name": "gittifacts",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.27.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "fixtures:materialize": "tsx scripts/materialize-fixtures.ts",
+    "verify-attestation": "tsx packages/evidence/src/cli/verify.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11",
+    "@types/node": "^22.10.0"
+  }
+}
