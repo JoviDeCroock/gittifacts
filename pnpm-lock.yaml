@@ -273,6 +273,24 @@ importers:
         specifier: 4.10.2
         version: 4.10.2
 
+  packages/resolver:
+    dependencies:
+      '@app/classifier':
+        specifier: workspace:*
+        version: link:../classifier
+      '@app/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@app/evidence':
+        specifier: workspace:*
+        version: link:../evidence
+      '@app/tour':
+        specifier: workspace:*
+        version: link:../tour
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
   packages/tour:
     dependencies:
       '@app/classifier':
