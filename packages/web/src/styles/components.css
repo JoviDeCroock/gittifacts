@@ -643,3 +643,14 @@ a.btn:hover {
   color: var(--text-3);
   font-size: var(--text-small);
 }
+
+/* Standalone text links get a 44px hit area on touch without moving the layout. */
+@media (pointer: coarse) {
+  .timeline__seq,
+  a.audit__subject,
+  .ev-link {
+    display: inline-block;
+    padding-block: 11px;
+    margin-block: -11px;
+  }
+}

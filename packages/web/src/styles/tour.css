@@ -296,19 +296,30 @@
     scroll-margin-block-start: 70px;
   }
 }
-/* The current stop owns attention; the rest recede (chrome only, prose keeps full contrast). */
+/*
+ * The current stop owns attention; the rest recede through colour steps that stay AA
+ * (titles to ink-2, chrome borders to hairline). Verdict marks and words never fade.
+ */
+.stop__title,
 .stop__num,
-.stop__meta,
-.stop__evidence,
-.stop .excerpt__head,
-.stop .shot__head {
-  transition: opacity var(--dur-state) var(--ease-out);
-}
-.stops.has-current .stop:not(.is-current) :is(.stop__num, .stop__meta, .stop__evidence, .excerpt__head, .shot__head, .rg thead) {
-  opacity: 0.55;
+.stop .ev-chip,
+.stop .excerpt {
+  transition:
+    color var(--dur-state) var(--ease-out),
+    border-color var(--dur-state) var(--ease-out),
+    background-color var(--dur-state) var(--ease-out);
 }
 .stops.has-current .stop:not(.is-current) .stop__title {
   color: var(--text-2);
+}
+.stops.has-current .stop:not(.is-current) .stop__num {
+  border-color: var(--rule-strong);
+  border-style: solid;
+  background: var(--surface);
+  color: var(--text-2);
+}
+.stops.has-current .stop:not(.is-current) :is(.ev-chip, .excerpt, .shot__img) {
+  border-color: var(--rule);
 }
 .stop__head {
   display: grid;

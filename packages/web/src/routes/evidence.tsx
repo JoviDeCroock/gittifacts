@@ -237,9 +237,9 @@ function ApiBody({ item }: { item: Item<"public-api"> }) {
           ).map(([key, label, list, icon]) =>
             list.length > 0 ? (
               <div key={key} class={`api-group api-group--${key}`}>
-                <h4 class="api-group__title">
+                <h3 class="api-group__title">
                   <Icon name={icon} size={15} /> {label} <span class="tnum">{list.length}</span>
-                </h4>
+                </h3>
                 <ul class="api-list">
                   {list.map((s) => (
                     <li key={s.symbol}>

@@ -118,7 +118,7 @@
 .plan-row__icon {
   grid-row: span 2;
   margin-block-start: 2px;
-  color: var(--action-ink);
+  color: var(--text-3);
 }
 .plan-row__title {
   font-weight: var(--weight-bold);
@@ -300,10 +300,10 @@
 
 @media (min-width: 900px) {
   .change-row {
-    grid-template-columns: minmax(0, 2.2fr) minmax(196px, 1fr) minmax(0, 1fr) 48px;
+    grid-template-columns: minmax(0, 1fr) 228px 44px;
     grid-template-areas:
-      "title who plan age"
-      "status who plan age";
+      "title who age"
+      "status plan age";
     align-items: start;
     column-gap: var(--s-5);
     padding-block: var(--s-3);

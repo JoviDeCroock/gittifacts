@@ -92,6 +92,8 @@
 /* attestation */
 .attest {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-inline-size: 0;
   gap: var(--s-3);
   padding: var(--s-4);
   border-radius: var(--r-panel);
@@ -180,7 +182,12 @@
   font-size: var(--text-meta);
   color: var(--text-3);
 }
+.attest__verify {
+  min-inline-size: 0;
+}
 .attest__verify pre {
+  max-inline-size: 100%;
+  overflow-x: auto;
   margin: 4px 0 0;
   padding: 8px 10px;
   border-radius: var(--r-control);
