@@ -209,3 +209,27 @@ Work order:
   (breaking export first) a guarantee rather than a hope.
 - **Author summary.** The prompt input types have no field for the author's summary; only id, title and SHAs are
   copied from the Change.
+
+## 2026-10-01 — CI engine: hermetic global cache, egress gateway, per-step tokens
+
+- **Global cache, hermetic steps.**
+  - Install-like root steps default to `cacheScope: "global"`. The key is image, command, cwd, env and input blob SHAs;
+    the repo is left out.
+  - Global steps run *hermetically*, with only their cache-input files in `/workspace`. A shared snapshot therefore never
+    contains another repo's source or `.git`, and a repo can't poison a shared entry through files outside the inputs.
+  - If the hermetic run fails, the step falls back to a repo-scoped run.
+  - `cache.global` is `read-write | read-only | off` per run; unclaimed projects get `read-only`.
+  - `seedCache(template)` pre-publishes template installs, which is what the 60-second time-to-first-green target needs.
+- **Egress.** `network: "registries-only"` starts containers with internet off and sends every HTTP(S) request
+  through a `CiEgressGateway` Worker entrypoint (`interceptAllOutboundHttp` + `interceptOutboundHttps("*")`).
+  - Allowed: GET/HEAD to the npm/yarn registries and codeload.github.com, plus git fetch (not push) to the repo's own
+    git host. Everything else gets a 403 and a log line.
+  - It needs Cloudflare's interception CA, which goes in via `NODE_EXTRA_CA_CERTS`; non-Node tools with their own CA
+    bundles fail closed.
+  - The `@cloudflare/ci` engine refuses `registries-only`, so unclaimed projects always use `WorkflowsCiEngine`.
+- **Tokens.** Each Runner step mints its own 15-minute read token. Tokens never sit in Workflow state, where they could
+  outlive `restartFrom`.
+- **Retries and cancellation.** A non-zero exit is not retried; only infrastructure errors are. `cancel()` terminates
+  the Workflow and aborts every Runner DO, because terminating the Workflow alone leaves containers running.
+- **Plan-mode inference** is exact for sequential awaits, fan-out/fan-in and chaining. Interleaved independent chains
+  inside one `Promise.all` may gain extra ordering edges, which costs parallelism but never correctness.
