@@ -119,7 +119,7 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
       why: "One call creates the repo from a template, writes .platform/ci.ts, .platform/policy.ts and AGENTS.md, runs the first CI and starts a preview. It returns at once.",
       call: call("create_project", { template: DEFAULT_TEMPLATE, name: "my-api" }),
       returns:
-        "{ projectId, remote, token, mcpUrl, previewUrl, claimUrl?, nextSteps }. Use token as the Bearer token from now on; nextSteps[0] names the first Change.",
+        "{ projectId, remote, token, mcpUrl, previewUrl, claimUrl?, nextSteps }. remote is a push grant (url, token, branch) for your first Change's fork: push there right away. token is set only for unclaimed projects: use it as the Bearer token from then on. nextSteps[0] names the bootstrap Change running the first CI and preview.",
     },
     {
       step: 2,

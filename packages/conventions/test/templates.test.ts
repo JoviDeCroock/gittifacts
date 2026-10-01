@@ -27,12 +27,13 @@ describe("templates/", () => {
   it("is not part of the monorepo workspace", () => {
     const workspace = readText(join(REPO_ROOT, "pnpm-workspace.yaml"));
     const packages = /^packages:\n((?:\s+- .+\n)+)/m.exec(workspace)?.[1] ?? "";
-    expect(
-      packages
-        .trim()
-        .split("\n")
-        .map((l) => l.replace(/^\s*-\s*/, "").replace(/["']/g, "")),
-    ).toEqual(["packages/*", "apps/*"]);
+    const globs = packages
+      .trim()
+      .split("\n")
+      .map((l) => l.replace(/^\s*-\s*/, "").replace(/["']/g, ""));
+    expect(globs).toEqual(expect.arrayContaining(["packages/*", "apps/*"]));
+    // Each template is a standalone pnpm project: no workspace glob may reach templates/.
+    expect(globs.filter((g) => g === "**" || g.startsWith("templates"))).toEqual([]);
   });
 });
 

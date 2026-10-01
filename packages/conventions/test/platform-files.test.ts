@@ -9,6 +9,7 @@ import {
 import {
   defaultCiTs,
   defaultPolicyTs,
+  defaultPolicyValue,
   detectProject,
   TEMPLATE_IDS,
   TEMPLATES,
@@ -151,6 +152,16 @@ describe("defaultPolicyTs", () => {
     );
     expect(file.text).toContain("// Shadow mode");
     for (const line of file.text.split("\n")) expect(line.length).toBeLessThanOrEqual(110);
+  });
+
+  it("defaultPolicyValue is exactly what the generated file exports (cached at create time)", async () => {
+    for (const id of TEMPLATE_IDS) {
+      const opts = { previewRoutes: TEMPLATES[id].previewRoutes };
+      expect(RepoPolicy.parse(await load(defaultPolicyTs(opts).text))).toEqual(
+        defaultPolicyValue(opts),
+      );
+    }
+    expect(RepoPolicy.parse(await load(defaultPolicyTs().text))).toEqual(defaultPolicyValue());
   });
 
   it("flags unknown preview routes for imported Workers", () => {

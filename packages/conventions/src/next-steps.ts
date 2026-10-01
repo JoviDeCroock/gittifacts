@@ -13,6 +13,8 @@ export interface NextStepContexts {
     projectId: string;
     /** The Change running the first CI + preview, if create_project started one. */
     changeId?: string | undefined;
+    /** The Change create_project opened for the caller, and its fork (push there right away). */
+    firstChange?: { changeId: string; remote: { url: string; branch: string } } | undefined;
     remoteUrl?: string | undefined;
     previewUrl?: string | null | undefined;
     claimUrl?: string | null | undefined;
@@ -176,7 +178,29 @@ export function nextStepsFor<E extends NextStepEvent>(
       }
       if (c.previewUrl)
         steps.push({ title: "Open the preview", command: `curl -s ${c.previewUrl}` });
-      if (c.remoteUrl !== undefined) {
+      if (c.firstChange !== undefined) {
+        const f = c.firstChange;
+        steps.push(
+          {
+            title: "Clone your first Change's fork (it starts at the initial commit)",
+            why: "remote.token is a push token for this fork only; main is written by the merge queue.",
+            command: `git -c http.extraHeader="Authorization: Bearer <remote.token>" clone ${f.remote.url}`,
+          },
+          {
+            title: "Commit your work and push it to the fork",
+            why: "CI, signed evidence, a lane and a preview of your head follow automatically.",
+            command: PUSH(f.remote),
+          },
+          {
+            title: "Wait for your Change's evidence",
+            call: call("wait_for_change", {
+              changeId: f.changeId,
+              until: "evidence_ready",
+              timeoutSec: 300,
+            }),
+          },
+        );
+      } else if (c.remoteUrl !== undefined) {
         steps.push({
           title: "Clone the repo (read it; push only to a Change's fork)",
           command: `git -c http.extraHeader="Authorization: Bearer <token>" clone ${c.remoteUrl}`,

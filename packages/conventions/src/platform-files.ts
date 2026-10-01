@@ -186,13 +186,21 @@ const POLICY_COMMENTS: Record<string, string[]> = {
   ],
 };
 
-/** `.platform/policy.ts`: the domain defaults (shadow mode on), plus preview routes. */
-export function defaultPolicyTs(opts: PolicyOptions = {}): GeneratedFile {
+/**
+ * What the generated `.platform/policy.ts` exports, as a value. The platform caches it for a new
+ * repo's initial commit, so the first Change does not have to evaluate the file in a sandbox.
+ */
+export function defaultPolicyValue(opts: PolicyOptions = {}): RepoPolicy {
   const defaults = RepoPolicy.parse({});
-  const policy = RepoPolicy.parse({
+  return RepoPolicy.parse({
     sensitivePaths: [...defaults.sensitivePaths, ...(opts.extraSensitivePaths ?? [])],
     previewRoutes: opts.previewRoutes ?? [],
   });
+}
+
+/** `.platform/policy.ts`: the domain defaults (shadow mode on), plus preview routes. */
+export function defaultPolicyTs(opts: PolicyOptions = {}): GeneratedFile {
+  const policy = defaultPolicyValue(opts);
   const uncertain: string[] = [];
   if (opts.worker === true && opts.previewRoutes === undefined) {
     uncertain.push(

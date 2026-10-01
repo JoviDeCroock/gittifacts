@@ -30,6 +30,19 @@ const cases: Case[] = [
     },
   ],
   ["project_created", { projectId: "rep_1", claimed: true }],
+  [
+    "project_created",
+    {
+      projectId: "rep_1",
+      changeId: "bs-rep_1",
+      firstChange: {
+        changeId: "chg_2",
+        remote: { url: "https://git.example/task-chg_2.git", branch: "main" },
+      },
+      previewUrl: "https://p-bs-rep_1.preview.example",
+      claimed: true,
+    },
+  ],
   ["project_created", { projectId: "rep_1", claimed: false, claimUrl: null, previewUrl: null }],
   [
     "change_started",
@@ -114,6 +127,26 @@ describe("nextStepsFor", () => {
         s.title.includes("claim"),
       ),
     ).toBe(false);
+  });
+
+  it("hands a new project's first Change fork to the agent", () => {
+    const steps = nextStepsFor("project_created", {
+      projectId: "rep_1",
+      changeId: "bs-rep_1",
+      firstChange: {
+        changeId: "chg_2",
+        remote: { url: "https://git.example/task-chg_2.git", branch: "main" },
+      },
+      claimed: true,
+    });
+    expect(steps.map((s) => s.call ?? s.command)).toEqual([
+      'wait_for_change({ changeId: "bs-rep_1", until: "evidence_ready", timeoutSec: 120 })',
+      'git -c http.extraHeader="Authorization: Bearer <remote.token>" clone https://git.example/task-chg_2.git',
+      'git -c http.extraHeader="Authorization: Bearer <remote.token>" push https://git.example/task-chg_2.git HEAD:main',
+      'wait_for_change({ changeId: "chg_2", until: "evidence_ready", timeoutSec: 300 })',
+      expect.stringContaining("create_plan("),
+      expect.stringContaining("start_change("),
+    ]);
   });
 
   it("tells a new Change to push to its fork", () => {
