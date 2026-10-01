@@ -338,3 +338,86 @@ export const AuditEvent = z.object({
   keyId: z.string(),
 });
 export type AuditEvent = z.infer<typeof AuditEvent>;
+
+// ---------------------------------------------------------------- diffs & runs (API shapes)
+
+export const DiffLine = z.object({
+  kind: z.enum(["add", "del", "ctx"]),
+  oldNo: z.number().int().positive().nullable(),
+  newNo: z.number().int().positive().nullable(),
+  text: z.string(),
+});
+export type DiffLine = z.infer<typeof DiffLine>;
+
+export const DiffHunk = z.object({
+  header: z.string(),
+  oldStart: z.number().int().nonnegative(),
+  oldLines: z.number().int().nonnegative(),
+  newStart: z.number().int().nonnegative(),
+  newLines: z.number().int().nonnegative(),
+  lines: z.array(DiffLine),
+});
+export type DiffHunk = z.infer<typeof DiffHunk>;
+
+export const ChangeDiffFile = FileDiffStat.extend({
+  /** Every hunk of this file was reproduced by a verified transform. */
+  transformVerified: z.boolean(),
+  /** Hunks are omitted for binary or very large files. */
+  hunks: z.array(DiffHunk),
+  truncated: z.boolean(),
+});
+export type ChangeDiffFile = z.infer<typeof ChangeDiffFile>;
+
+export const ChangeDiff = z.object({
+  baseSha: Sha,
+  headSha: Sha,
+  files: z.array(ChangeDiffFile),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+});
+export type ChangeDiff = z.infer<typeof ChangeDiff>;
+
+export function diffStatsOf(diff: ChangeDiff): DiffStats {
+  return {
+    baseSha: diff.baseSha,
+    headSha: diff.headSha,
+    additions: diff.additions,
+    deletions: diff.deletions,
+    files: diff.files.map(({ transformVerified: _t, hunks: _h, truncated: _x, ...stat }) => stat),
+  };
+}
+
+export const RunStatus = z.enum(["queued", "running", "passed", "failed", "cancelled", "superseded", "errored"]);
+export type RunStatus = z.infer<typeof RunStatus>;
+
+export const PipelineRun = z.object({
+  id: Id,
+  changeId: Id,
+  headSha: Sha,
+  engine: z.enum(["cloudflare-ci", "workflows"]),
+  status: RunStatus,
+  startedAt: IsoDate.nullable(),
+  finishedAt: IsoDate.nullable(),
+  steps: z.array(
+    z.object({
+      name: z.string(),
+      kind: z.enum(["user", "evidence"]),
+      status: z.enum(["pending", "running", "passed", "failed", "skipped", "cancelled", "cached"]),
+      durationMs: z.number().nonnegative().nullable(),
+      logRef: z.string().nullable(),
+    }),
+  ),
+});
+export type PipelineRun = z.infer<typeof PipelineRun>;
+
+export const LinkedIssue = z.object({
+  id: z.string(),
+  changeId: Id.nullable(),
+  title: z.string(),
+  count: z.number().int().nonnegative(),
+  firstSeen: IsoDate,
+  lastSeen: IsoDate,
+  versionId: z.string().nullable(),
+  url: z.string().url().nullable(),
+});
+export type LinkedIssue = z.infer<typeof LinkedIssue>;
