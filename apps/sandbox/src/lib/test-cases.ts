@@ -8,7 +8,8 @@
  * title isn't a static string (`it.each`, template literals with substitutions, computed
  * titles), the whole file is used instead: we would rather run too many tests than miss one.
  */
-import ts from "typescript";
+import type * as TS from "typescript";
+import { lazyTs as ts } from "./typescript.js";
 
 export interface StaticTestCase {
   /** Describe titles and the test title. */
@@ -39,10 +40,10 @@ interface Callee {
   each: boolean;
 }
 
-function calleeOf(expr: ts.Expression): Callee | null {
+function calleeOf(expr: TS.Expression): Callee | null {
   const modifiers: string[] = [];
   let each = false;
-  let e: ts.Expression = expr;
+  let e: TS.Expression = expr;
   for (;;) {
     if (ts.isIdentifier(e)) return { root: e.text, modifiers: modifiers.reverse(), each };
     if (ts.isPropertyAccessExpression(e)) {
@@ -65,15 +66,15 @@ function calleeOf(expr: ts.Expression): Callee | null {
   }
 }
 
-function staticTitle(arg: ts.Expression | undefined): string | null {
+function staticTitle(arg: TS.Expression | undefined): string | null {
   if (arg === undefined) return null;
   if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) return arg.text;
   return null;
 }
 
-function parseBlocks(source: ts.SourceFile): Block[] {
+function parseBlocks(source: TS.SourceFile): Block[] {
   const line = (pos: number) => source.getLineAndCharacterOfPosition(pos).line + 1;
-  const visit = (node: ts.Node, into: Block[]): void => {
+  const visit = (node: TS.Node, into: Block[]): void => {
     if (ts.isCallExpression(node)) {
       const callee = calleeOf(node.expression);
       if (callee !== null && (TEST_FNS.has(callee.root) || SUITE_FNS.has(callee.root))) {
@@ -118,7 +119,7 @@ function isIgnorableLine(text: string): boolean {
   return t === "" || t.startsWith("//") || t.startsWith("/*") || t.startsWith("*") || t === "*/";
 }
 
-function importLines(source: ts.SourceFile): Set<number> {
+function importLines(source: TS.SourceFile): Set<number> {
   const lines = new Set<number>();
   for (const stmt of source.statements) {
     if (ts.isImportDeclaration(stmt) || ts.isImportEqualsDeclaration(stmt)) {
@@ -138,7 +139,7 @@ export function allStaticTests(fileName: string, text: string): StaticTestCase[]
   return out.some((t) => t === null) ? null : (out as StaticTestCase[]);
 }
 
-function scriptKind(fileName: string): ts.ScriptKind {
+function scriptKind(fileName: string): TS.ScriptKind {
   if (/\.tsx$/.test(fileName)) return ts.ScriptKind.TSX;
   if (/\.jsx$/.test(fileName)) return ts.ScriptKind.JSX;
   if (/\.[cm]?js$/.test(fileName)) return ts.ScriptKind.JS;
