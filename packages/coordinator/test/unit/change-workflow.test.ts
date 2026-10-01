@@ -7,6 +7,15 @@ import { push, reload, scenario, startAndPush } from "./helpers.js";
 const lane0 = { lane0Enabled: true } as const;
 
 describe("ChangeWorkflow (node, fake ports)", () => {
+  it("asks the reviewer for the base policy's ai.reviewerModel", async () => {
+    const s = await scenario({
+      policy: { ai: { budgetUsdPerChange: 0.5, reviewerModel: "small" } },
+    });
+    await startAndPush(s);
+    expect(s.ports.reviewer.judgeCalls.map((c) => c.model)).toEqual(["small"]);
+    expect(s.ports.reviewer.tourCalls.map((c) => c.model)).toEqual(["small"]);
+  });
+
   it("lane 1 (shadow) → review → merge queue → merged → rollout → released", async () => {
     const s = await scenario({ deployTarget: "my-worker" });
     s.ports.deployer.live.set("my-worker", [{ versionId: "v0", percentage: 100 }]);

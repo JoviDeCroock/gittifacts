@@ -256,9 +256,13 @@ export interface Budget {
   spentUsd: number;
 }
 
+/**
+ * The reviewer agent. `model` is the base policy's `ai.reviewerModel` ("auto" = the platform's
+ * routing); implementations pick their model client by it.
+ */
 export interface Reviewer {
   /** Model judgments about scope/conformance. Raise-only signals. Never sees the author's summary. */
-  judge(input: { plan: Plan | null; diff: ChangeDiff; budget: Budget }): Promise<{
+  judge(input: { plan: Plan | null; diff: ChangeDiff; budget: Budget; model?: string }): Promise<{
     items: LlmJudgment[];
     costUsd: number;
     budgetExceeded: boolean;
@@ -271,6 +275,7 @@ export interface Reviewer {
     evidence: SignedEvidence;
     classification: ClassifyResult;
     budget: Budget;
+    model?: string;
   }): Promise<
     | { status: "ok"; tour: Tour; costUsd: number; budgetExceeded: boolean }
     | { status: "failed"; reason: string; costUsd: number; budgetExceeded: boolean }

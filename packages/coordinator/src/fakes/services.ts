@@ -229,14 +229,20 @@ export class FakeReviewer implements Reviewer {
   tourOutcome: "ok" | "failed" = "ok";
   tourCostUsd = 0.02;
   budgetExceeded = false;
-  readonly judgeCalls: Array<{ plan: Plan | null; diff: ChangeDiff; budget: Budget }> = [];
+  readonly judgeCalls: Array<{
+    plan: Plan | null;
+    diff: ChangeDiff;
+    budget: Budget;
+    model?: string;
+  }> = [];
   readonly tourCalls: Array<{
     change: Pick<Change, "id" | "title" | "headSha" | "baseSha">;
     classification: ClassifyResult;
     budget: Budget;
+    model?: string | undefined;
   }> = [];
 
-  async judge(input: { plan: Plan | null; diff: ChangeDiff; budget: Budget }) {
+  async judge(input: { plan: Plan | null; diff: ChangeDiff; budget: Budget; model?: string }) {
     this.judgeCalls.push(structuredClone(input));
     if (this.judgeError !== null) throw this.judgeError;
     return {
@@ -253,12 +259,14 @@ export class FakeReviewer implements Reviewer {
     evidence: SignedEvidence;
     classification: ClassifyResult;
     budget: Budget;
+    model?: string;
   }) {
     this.tourCalls.push(
       structuredClone({
         change: input.change,
         classification: input.classification,
         budget: input.budget,
+        model: input.model,
       }),
     );
     if (this.tourOutcome === "failed") {

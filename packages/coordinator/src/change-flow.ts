@@ -379,6 +379,7 @@ export async function runChangeWorkflow(
         plan,
         diff,
         budget: { changeId, limitUsd, spentUsd },
+        model: policy.ai.reviewerModel,
       });
       const total = await coordinator.recordSpend({ changeId, usd: out.costUsd });
       const items = judgmentItems(out.items);
@@ -535,6 +536,7 @@ export async function runChangeWorkflow(
           evidence,
           classification,
           budget: { changeId, limitUsd, spentUsd },
+          model: policy.ai.reviewerModel,
         });
         const total = await coordinator.recordSpend({ changeId, usd: out.costUsd });
         const overBudget = out.budgetExceeded || total > limitUsd;
