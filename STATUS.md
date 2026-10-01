@@ -18,7 +18,7 @@ Specs:
 | O1 Front door + templates | conventions + 4 templates done; `create_project` + preview gateway next |
 | O2 Ergonomics | errors with `fix`, idempotency, `wait_for_change`, `whoami` done; CLI in progress |
 | O3 Claimable projects + abuse limits | next after integration |
-| O4 Delegated auth (MCP OAuth, device flow) | in progress |
+| O4 Delegated auth (MCP OAuth, device flow) | **built and tested locally**: MCP OAuth (code + PKCE S256, CIMD, RFC 8707 audience), device flow, per-session agent principals with repo scoping, consent/device/sessions screens; deploy pending |
 | O5 Import detection + remote workspaces | planned |
 | O6 Onboarding eval | planned |
 | Q1–Q6 Merge queue | core + simulator, affected-set analyzer in progress; Q3 resolver built (corpus green with a scripted model; real-model eval pending credentials) |

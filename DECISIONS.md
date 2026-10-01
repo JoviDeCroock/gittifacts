@@ -433,3 +433,71 @@ gateway route.
   exhausted budget it ejects with `fix.call = open_workspace({ changeId })`.
 - **Real-model eval pending.** The ≥ 80% resolver gate needs live AI Gateway access. `packages/resolver/scripts/eval.ts`
   runs it after the deploy; the scripted-model pipeline test passes all 14 corpus cases with 0 downgrades.
+
+## 2026-10-01 — Delegated auth for agents (O4): MCP OAuth + device flow
+
+- **The platform is its own authorization server, hand-rolled for the code flow.** `@better-auth/oauth-provider`
+  / `@better-auth/mcp` were read and not used for authorization code + PKCE:
+  - Their tokens are issued to the better-auth *user* (the human). Every O4 grant must instead become a **new agent
+    principal** with the scopes, repos and expiry the human picked. The plugin caches consent per (user, client) and
+    re-issues codes without showing consent again, so there would be no new principal and no repo choice. Mapping
+    tokens back to principals through `postLogin.consentReferenceId` is fragile, and a slip would hand a client
+    the human's identity.
+  - CIMD needs `@better-auth/cimd`, which isn't installed. Without it, `mcp()` only offers DCR (deprecated by MCP
+    2026-07-28) or pre-registered clients.
+  - JWT access tokens need the `jwt` plugin (JWKS table, key rotation). Immediate revocation needs a DB check
+    anyway, so they'd add a second token format next to `gtf_` for no gain.
+  - What we built (`apps/platform/src/oauth/*`) is about 1,500 lines with 35 Workers tests. It has one token type
+    (`gtf_` in `agent_tokens`, now with an RFC 8707 `audience` and a `session_id`) and one verification path.
+- **Device flow uses better-auth `device-authorization`, with session minting cut off.** The plugin's
+  `/device/token` returns a *session for the approving human* (all scopes, including `plan:approve`), so as shipped
+  it is a way for a CLI to act as the human. Two guards stop that:
+  1. A `grant` whose `assertSessionRedemption` always throws.
+  2. `disabledPaths` for `/device/token`, `/device/approve`, `/device/deny` and `/device`.
+
+  Codes come from the plugin's `/api/auth/device/code`. Redemption goes through a server-only endpoint that runs
+  the plugin's `redeemDeviceCode` state machine (expiry, `slow_down`, denial, atomic claim). Our token endpoint then
+  issues an agent token. Approval only happens through `/api/v1/oauth/device/{userCode}/approve`, which records the
+  human's choices before calling the plugin.
+- **One principal per session.** The first token exchange creates `Principal { kind: "agent", ownerId: human,
+  scopes, repoIds }` and an `agent_sessions` row, re-checking that the scopes are still delegable and still held by
+  the human. Scopes and repos live on the principal; the session holds the client, audience and hard end.
+- **Scope model.** Only `repo:read`, `plan:create` and `change:create` can be delegated (`AGENT_ALLOWED_SCOPES`).
+  - `plan:approve`, `change:review`, `policy:admin` and `repo:admin` are rejected everywhere: authorize, device
+    code, consent body and refresh. `createAgentPrincipal` throws as a last line of defence.
+  - Generic OIDC scopes (`openid profile email offline_access`) are ignored.
+  - Default: `repo:read change:create`, i.e. "can open Changes on repo X".
+- **Per-repo scoping.** `Principal.repoIds?: string[] | null` (additive and optional in `@app/domain`; absent or
+  `null` means every repo the owner can access). The consent API *requires* `repoIds` (specific ids, or `null`
+  picked on purpose). It is enforced in:
+  - `requirePrincipal`: `{repoId|planId|changeId}` params, a JSON body's `repoId/planId/changeId`, and the audit
+    `subject`. The global audit list is refused.
+  - The MCP backend, for every tool that names a repo, plan or change.
+  - The services: capabilities/whoami, list_repos, blobs and create_plan.
+
+  Violations get `403 repo-not-granted` with a fix.
+- **Audience.** OAuth `resource` must be `<origin>/mcp` (the default for the code flow) or `<origin>/api`. Device
+  tokens cover both by default. `/mcp` refuses tokens not bound to it, and the HTTP API refuses tokens bound only to
+  `/mcp`. Manual tokens (`audience` NULL) work on both, as before.
+- **Clients.** Client ID Metadata Documents (an https `client_id`, fetched with no redirects, max 16 KB, 5 s
+  timeout, `client_id` must equal the URL, public clients only) plus one first-party client, `gittifacts-cli`.
+  DCR is not offered and `registration_endpoint` is not advertised.
+- **Tokens.** Access tokens last 1 h and never outlive the session; sessions last 1, 7, 30 or 90 days, as the human
+  picks. Refresh tokens (`gtr_`, which never pass as a bearer token) rotate on every use. Replaying a rotated one
+  revokes the whole session (strict, with no grace window). A replayed authorization code revokes the session it
+  created. Codes are single-use and live 5 minutes; requests last 10 minutes.
+- **Revocation.** One click (`POST /api/v1/agent-sessions/{principalId}/revoke`) revokes the access and refresh
+  tokens and sets `principals.disabled_at`, and it is audit-logged. `verifyAgentToken` joins `disabled_at`, so the
+  next request fails. RFC 7009 `/api/oauth/revoke` with a refresh token ends the session too.
+- **Errors.** Platform JSON endpoints use `{ error: { code, message, fix } }` (fixes from `@app/conventions`
+  `fixFor`). OAuth protocol endpoints answer in RFC 6749 form (`{ error, error_description }`) plus a `fix`
+  extension member, because stock OAuth clients parse `error` as a string.
+- **Deviations from the MCP 2026-07-28 authorization spec:**
+  - Insufficient scope or a repo outside the grant comes back as an MCP *tool* error (`insufficient-scope` /
+    `repo-not-granted`), not an HTTP 403 `insufficient_scope` step-up challenge. Scopes are checked per tool, after
+    JSON-RPC parsing.
+  - A missing `resource` at authorize defaults to the MCP server instead of being rejected.
+  - The root PRM (`/.well-known/oauth-protected-resource`) keeps `resource=<origin>/mcp`, as documented in mcp-discovery.md.
+  - Refresh reuse is strict (no overlap window).
+- **Known follow-ups.** Expired `agent_tokens` rows (one per refresh) need a periodic purge. The sessions list
+  aggregates in SQL, so the extra rows only cost storage.
