@@ -413,3 +413,23 @@ gateway route.
   it with a scripted model through the real runner and the cases' checks (all pass, 0 downgrades).
   The real-model `eval` script gates on ≥ 80% textual success and 0 downgrades. It has **not been
   run yet**: no AI Gateway credentials were available in this environment.
+
+## 2026-10-01 — Conflict resolution (Q3) semantics
+
+- **Evidence items.** `conflict-resolution` and `quarantine` are separate kinds (not fields on `test-run`): the
+  quarantine list and the affected set belong to the queue, not to the test runner.
+- **"Within the conflict hunks" is decided mechanically.** A resolution is *within* only if it equals the mechanical
+  merge with each conflict region replaced and every clean line kept in order. Edits outside the regions, to
+  non-conflicted files, or with unparseable markers count as *outside*, and so does every semantic fix.
+- **Lanes only rise.** The queue shell must classify a resolved Change with `reclassifyAfterResolution(previous, …)`,
+  which is `neverLower(previous, classify(...))`. The pure merge-queue core keeps the max lane as a second guard.
+- **Human approvals bind to what lands (lead decision).** A Lane ≥ 1 approval covers `(headSha, resolutionSha)`.
+  - A within-hunk resolution with **zero novel lines** (purely picking/combining existing lines) keeps the approval.
+  - A resolution with novel lines, outside-hunk edits, or a semantic fix **invalidates** the earlier approval. The
+    change goes back to `awaiting-review` with a tour whose `resolution` stop comes first.
+  - Lane-0 changes keep Lane 0 for within-hunk resolutions (per spec); novel lines are shown in the tour.
+- **Resolver identity.** The resolver always acts as `system:resolver`. It never sees the author's summary, claim or
+  trace, and it may answer `cannot-resolve` or (semantic only) `not-a-conflict`. After two failed attempts or an
+  exhausted budget it ejects with `fix.call = open_workspace({ changeId })`.
+- **Real-model eval pending.** The ≥ 80% resolver gate needs live AI Gateway access. `packages/resolver/scripts/eval.ts`
+  runs it after the deploy; the scripted-model pipeline test passes all 14 corpus cases with 0 downgrades.
