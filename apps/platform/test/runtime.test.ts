@@ -4,10 +4,17 @@
  */
 import { env } from "cloudflare:workers";
 import { PlanJob, RunnerJob } from "@app/ci-engine";
+import type { Reviewer } from "@app/coordinator";
 import { GitWriteForbiddenError } from "@app/coordinator/adapters";
 import { describe, expect, it } from "vitest";
 import { BundleError, bundleFromEntries, parseTar, r2BundleLoader } from "../src/runtime/bundle.js";
-import { buildPorts, LazySigner, lazyCiEngine, type PortsEnv } from "../src/runtime/ports.js";
+import {
+  buildPorts,
+  LazySigner,
+  lazyCiEngine,
+  lazyReviewer,
+  type PortsEnv,
+} from "../src/runtime/ports.js";
 
 const SHA = "c".repeat(40);
 
@@ -161,6 +168,40 @@ describe("buildPorts", () => {
       lazyCiEngine({ ...env, CI_ENGINE: "cloudflare-ci" } as PortsEnv).start(run),
     ).rejects.toThrow(/opt-in/);
     expect(env.CI_ENGINE).toBe("workflows");
+  });
+});
+
+describe("lazyReviewer", () => {
+  it("builds one reviewer per policy ai.reviewerModel and strips the model from the call", async () => {
+    const built: string[] = [];
+    const seen: unknown[] = [];
+    const reviewer = lazyReviewer({}, "auto", (model): Reviewer => {
+      built.push(model);
+      return {
+        judge: async (input) => {
+          seen.push(input);
+          return { items: [], costUsd: 0, budgetExceeded: false };
+        },
+        tour: async () => ({ status: "failed", reason: "n/a", costUsd: 0, budgetExceeded: false }),
+      };
+    });
+    const input = {
+      plan: null,
+      diff: {
+        baseSha: "a".repeat(40),
+        headSha: "b".repeat(40),
+        files: [],
+        additions: 0,
+        deletions: 0,
+      },
+      budget: { changeId: "c", limitUsd: 1, spentUsd: 0 },
+    } as unknown as Parameters<Reviewer["judge"]>[0];
+    await reviewer.judge({ ...input, model: "small" });
+    await reviewer.judge({ ...input, model: "small" });
+    await reviewer.judge({ ...input, model: "auto" });
+    await reviewer.judge(input);
+    expect(built).toEqual(["small", "auto"]);
+    expect(seen.every((i) => typeof i === "object" && i !== null && !("model" in i))).toBe(true);
   });
 });
 

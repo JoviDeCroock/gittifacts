@@ -111,18 +111,29 @@ function declaredKeyId(secret: string | undefined): string | null {
   return null;
 }
 
-/** `Reviewer` (@app/tour) whose model client is built on first use. */
-export function lazyReviewer(env: unknown, model: string = DEFAULT_REVIEWER_MODEL): Reviewer {
-  let reviewer: Reviewer | null = null;
-  const get = (): Reviewer => {
-    reviewer ??= createReviewer(reviewerLlmFromEnv(env, { model }), {
-      principalId: "reviewer-agent",
-    });
+/**
+ * `Reviewer` (@app/tour) that honours the base policy's `ai.reviewerModel` (passed by the
+ * coordinator as `input.model`). One model client per model, each built on first use.
+ */
+export function lazyReviewer(
+  env: unknown,
+  defaultModel: string = DEFAULT_REVIEWER_MODEL,
+  factory: (model: string) => Reviewer = (model) =>
+    createReviewer(reviewerLlmFromEnv(env, { model }), { principalId: "reviewer-agent" }),
+): Reviewer {
+  const reviewers = new Map<string, Reviewer>();
+  const get = (model: string | undefined): Reviewer => {
+    const key = model === undefined || model.trim() === "" ? defaultModel : model;
+    let reviewer = reviewers.get(key);
+    if (reviewer === undefined) {
+      reviewer = factory(key);
+      reviewers.set(key, reviewer);
+    }
     return reviewer;
   };
   return {
-    judge: async (input) => get().judge(input),
-    tour: async (input) => get().tour(input),
+    judge: async ({ model, ...input }) => get(model).judge(input),
+    tour: async ({ model, ...input }) => get(model).tour(input),
   };
 }
 
