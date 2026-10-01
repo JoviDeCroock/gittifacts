@@ -193,3 +193,19 @@ Work order:
 
 `projectId` is the repo id: a project is a repo plus its preview, claim state and quotas. One source of truth
 (`packages/conventions`) generates `AGENTS.md`, `/start`, `/llms.txt` and the `nextSteps` texts.
+
+## 2026-10-01 — Reviewer agent (`@app/tour`) choices
+
+- **Planless judgments.** With no plan, the judge marks the plan-conformance questions `skipped` (not `unsure`), so planless
+  Lane-0 categories stay possible. A `concern` still raises the lane.
+- **Gateway 429.** A gateway HTTP 429 counts as budget exceeded: spend-limit and rate-limit 429s are indistinguishable,
+  and treating it as exceeded escalates.
+- **Cost estimate.** Cost is tokens × a price table for the routed model. Unknown models are charged at the most
+  expensive known price (a conservative estimate).
+- **Readability.** `estimatedReadSeconds` is words/180 wpm + 3 s per stop, carried in a wrapper around the domain `Tour`.
+  With the Lane-1 caps (450 words, 7 stops) the worst case is 171 s, under the 3-minute target.
+- **Riskiest stop.** When the top-ranked hunk is anchored to a Lane-2 reason, the first `risk` stop must reference it.
+  Post-processing moves the model's stop up, or inserts a deterministic one. That makes the M3 acceptance
+  (breaking export first) a guarantee rather than a hope.
+- **Author summary.** The prompt input types have no field for the author's summary; only id, title and SHAs are
+  copied from the Change.
