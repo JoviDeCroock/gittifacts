@@ -300,3 +300,29 @@ DO, live ≤ 300 s, and are never returned. `refs/queue/*` are written only by t
 
 **Preview DNS.** `*.preview.resynapse.dev` AAAA `100::` (proxied) was created on the resynapse.dev zone for the preview
 gateway route.
+
+## 2026-10-01 — Platform integration: one Worker wires coordinator, CI engine and sandbox
+
+- **Ports per role** (`apps/platform/src/runtime/ports.ts`). `buildPorts(env, role)` builds every port from
+  bindings. Only `role: "merge-queue"` gets `ArtifactsGitHost({ canWrite: () => true })`; every other role keeps
+  the adapter's default fork-only guard, so "only the merge queue writes main" holds in one place.
+- **Lazy ports.** The CI engine (`selectCiEngine` by `CI_ENGINE`), the reviewer (`createReviewer(reviewerLlmFromEnv)`)
+  and the signer (`PLATFORM_SIGNING_KEY`) are built on first use. A missing binding or secret fails the call
+  that needs it, and the coordinator treats that as an errored signal (escalate), not every request.
+- **Reviewer model.** The `Reviewer` port takes no policy, so the platform uses `"auto"` (the policy default).
+  A repo's `ai.reviewerModel` is not honoured yet.
+- **One bucket.** `CI_BUCKET` is a second binding to `gittifacts-blobs` (eu), so the engine's `ci-logs/<runId>/…`
+  refs are served by `GET /api/v1/blobs/:ref` through `BLOBS`. `PipelineRun.id` is the CI run id the coordinator
+  gives the engine (`run-<changeId>-<head12>`), which is what makes those refs attributable to a change.
+- **Bundle seam.** The engine reports the build artifact as `RunSummary.artifacts.bundle.key`; the coordinator's
+  run sink reads `outputs.bundleRef`. The platform's `ChangeCoordinator` subclass maps one onto the other until
+  the coordinator reads the engine's field itself. `loadBundle` only accepts `ci-artifacts/<runId>/<step>/<name>.tgz`.
+- **SSE.** `GET /api/v1/changes/:id/events` streams the change (`event: change`, `id` = change version, resumable with
+  `Last-Event-ID`), built on `watchChange` so the DO holds each long-poll; it ends after 15 minutes or at a final status.
+- **Node types in the platform tsconfig.** `@app/ci-engine`'s sources call `clearTimeout(undefined)`, which only Node's
+  timer typings accept; the Worker runs with `nodejs_compat`.
+- **Integration test fakes** (apps/platform/test/integration). Real: Hono app, MCP server, auth, D1, AuditLog,
+  signing key, coordinator facade, ChangeCoordinator/MergeQueue DOs, PushRouter/ChangeWorkflow. Fake:
+  Artifacts (`FakeGitHost`; no local simulator), containers (`FakeSandboxJobs` and a CI fake that reports a
+  schema-checked ci-engine `RunSummary` through `COORDINATOR.onRunFinished` exactly like `CiRunWorkflow`, and
+  validates requests against the engine's strict `RunRequest`), and the reviewer model (`FakeReviewer`).
