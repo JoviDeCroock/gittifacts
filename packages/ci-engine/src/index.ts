@@ -62,8 +62,10 @@ export {
   checkoutEnv,
   RUNNER_HOME,
   RUNNER_USER,
+  ROOT_USER,
   shellQuote,
   timedCommandArgv,
+  trustCaScript,
   WORKSPACE,
 } from "./runner/shell.js";
 export * from "./select.js";
