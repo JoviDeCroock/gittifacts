@@ -4,7 +4,8 @@
  */
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder("utf-8", { fatal: true });
+// ignoreBOM is spelled out: workers-types requires it (false = default, strip a leading BOM).
+const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false });
 
 export function utf8Encode(s: string): Uint8Array {
   return encoder.encode(s);

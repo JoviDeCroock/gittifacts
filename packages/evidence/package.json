@@ -4,11 +4,19 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./node": "./src/node/index.ts"
+  },
+  "bin": {
+    "verify-attestation": "./dist/verify-attestation.mjs",
+    "evidence-keygen": "./dist/keygen.mjs"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.workers.json",
+    "test": "vitest run --passWithNoTests",
+    "build:cli": "node scripts/build-cli.mjs",
+    "keygen": "tsx src/cli/keygen.ts",
+    "verify-attestation": "tsx src/cli/verify.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"
