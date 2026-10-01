@@ -36,6 +36,12 @@ export const Principal = z.object({
   ownerId: Id.nullable(),
   keys: z.array(PrincipalKey),
   scopes: z.array(Scope),
+  /**
+   * Agents only: the repos this principal may act on. `null` (or absent) means every repo its
+   * owner can access; a delegated session only gets `null` when the human picks "all repos"
+   * explicitly. Humans and the system principal leave it absent.
+   */
+  repoIds: z.array(Id).nullable().optional(),
 });
 export type Principal = z.infer<typeof Principal>;
 
