@@ -1,0 +1,21 @@
+{
+  "name": "@app/ci-engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cloudflare": "./src/cloudflare/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@app/domain": "workspace:*",
+    "@app/evidence": "workspace:*",
+    "@cloudflare/ci": "0.2.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {}
+}
