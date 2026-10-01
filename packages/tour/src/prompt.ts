@@ -21,6 +21,11 @@ export function neutralize(text: string): string {
   return text.replace(CLOSING_TAG, "<\\/$1>");
 }
 
+/** `<tag attrs>` + neutralized body + `</tag>`: only the data is neutralized, never our own tags. */
+function section(open: string, tag: string, body: readonly string[]): string {
+  return `${open}\n${neutralize(body.join("\n"))}\n</${tag}>`;
+}
+
 function attr(value: string): string {
   return value.replace(/[\r\n]+/g, " ").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
@@ -41,7 +46,6 @@ function list<T>(items: readonly T[], max: number, render: (t: T) => string): st
 export function renderPlan(plan: Plan | null): string {
   if (plan === null) return "<plan>\nNo plan is attached to this change.\n</plan>";
   const lines = [
-    `<plan id="${attr(plan.id)}" status="${plan.status}">`,
     `Title: ${oneLine(plan.title, 200)}`,
     `Intent: ${plan.intent.trim()}`,
     "Acceptance criteria:",
@@ -53,8 +57,7 @@ export function renderPlan(plan: Plan | null): string {
   }
   lines.push(`Scope paths: ${plan.scopePaths.length > 0 ? plan.scopePaths.join(", ") : "(not declared)"}`);
   if (plan.affectedRoutes.length > 0) lines.push(`Affected routes: ${plan.affectedRoutes.join(", ")}`);
-  lines.push("</plan>");
-  return neutralize(lines.join("\n"));
+  return section(`<plan id="${attr(plan.id)}" status="${plan.status}">`, "plan", lines);
 }
 
 /** One compact line per evidence item. Ids are what the tour must cite. */
@@ -140,7 +143,7 @@ export function summarizeEvidenceItem(item: EvidenceItem): string {
 
 export function renderEvidence(items: readonly EvidenceItem[]): string {
   if (items.length === 0) return "<evidence>\nNo evidence items.\n</evidence>";
-  return neutralize(["<evidence>", ...items.map(summarizeEvidenceItem), "</evidence>"].join("\n"));
+  return section("<evidence>", "evidence", items.map(summarizeEvidenceItem));
 }
 
 export function renderClassification(c: {
@@ -150,19 +153,20 @@ export function renderClassification(c: {
   reasons: readonly LaneReason[];
 }): string {
   const raised = c.reasons.filter((r) => r.lane > 0);
-  const lines = [
-    `<classification lane="${c.lane}" computedLane="${c.computedLane}" requiresHumanApproval="${c.requiresHumanApproval}">`,
-    ...(raised.length > 0
+  const lines =
+    raised.length > 0
       ? raised.map((r) => `- [lane ${r.lane}] ${r.code}: ${oneLine(r.message, 300)}${r.evidenceRef ? ` (evidence "${r.evidenceRef}")` : ""}`)
-      : ["- No reason raised the lane."]),
-    "</classification>",
-  ];
-  return neutralize(lines.join("\n"));
+      : ["- No reason raised the lane."];
+  return section(
+    `<classification lane="${c.lane}" computedLane="${c.computedLane}" requiresHumanApproval="${c.requiresHumanApproval}">`,
+    "classification",
+    lines,
+  );
 }
 
 export function renderCandidates(ranking: readonly RankedHunk[], max = 8): string {
   const shown = ranking.filter((r) => r.factors.length > 0).slice(0, max);
-  const lines = ["<risk-candidates>"];
+  const lines: string[] = [];
   if (shown.length === 0) {
     const biggest = ranking.slice(0, 3);
     lines.push("No hunk has a risk signal beyond its size. Largest hunks:");
@@ -173,8 +177,7 @@ export function renderCandidates(ranking: readonly RankedHunk[], max = 8): strin
       lines.push(`${r.rank}. ${r.path} ${r.ref.side} ${r.ref.startLine}-${r.ref.endLine} — ${oneLine(factors, 400)}`);
     }
   }
-  lines.push("</risk-candidates>");
-  return neutralize(lines.join("\n"));
+  return section("<risk-candidates>", "risk-candidates", lines);
 }
 
 // ---------------------------------------------------------------- tour
@@ -247,9 +250,9 @@ export function buildTourUserPrompt(input: TourPromptInput): string {
   ];
   if (input.collapsed.files > 0) {
     sections.push(
-      neutralize(
-        `<mechanical>\n${input.collapsed.files} file(s) were reproduced byte-for-byte by the verified transform(s) ${input.collapsed.transforms.map((t) => `"${t}"`).join(", ")} and are not shown. The platform adds one stop for them; do not describe them.\n</mechanical>`,
-      ),
+      section("<mechanical>", "mechanical", [
+        `${input.collapsed.files} file(s) were reproduced byte-for-byte by the verified transform(s) ${input.collapsed.transforms.map((t) => `"${t}"`).join(", ")} and are not shown. The platform adds one stop for them; do not describe them.`,
+      ]),
     );
   }
   sections.push(`<diff>\n${neutralize(input.diffText === "" ? "(no reviewable hunks)" : input.diffText)}\n</diff>`);

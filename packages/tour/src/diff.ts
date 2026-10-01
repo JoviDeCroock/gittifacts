@@ -142,7 +142,9 @@ function fileHeader(f: ChangeDiffFile): string {
 
 function hunkHeader(h: DiffHunk, index: number, rank: number | undefined): string {
   const r = rank === undefined ? "" : ` · risk rank ${rank}`;
-  const header = h.header.trim() === "" ? "" : ` ${h.header.trim()}`;
+  // Keep only the section context git prints after "@@ -a,b +c,d @@" (e.g. the function name).
+  const context = h.header.replace(/^@@[^@]*@@/, "").trim();
+  const header = context === "" ? "" : ` ${context}`;
   return `@@ hunk ${index + 1}${r} · ${rangeLabel(h)} @@${header}`;
 }
 
