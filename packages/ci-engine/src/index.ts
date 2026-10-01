@@ -26,6 +26,7 @@ export {
   UsageRecord,
 } from "./run-store.js";
 export type { ContainerLike, ExecProcessLike } from "./runner/container.js";
+export { pumpText } from "./runner/container.js";
 export {
   CONTAINERS_CA_PATH,
   EGRESS_GATEWAY_EXPORT,
@@ -55,6 +56,16 @@ export {
 export { createStreamRedactor, REDACTED, redactText } from "./runner/redact.js";
 export type { RunnerEnv } from "./runner/runner-do.js";
 export { Runner, snapshotName, stepEnv } from "./runner/runner-do.js";
+// The image's shell contract, for other `ctx.container` hosts on the same image (previews).
+export {
+  CHECKOUT_SCRIPT,
+  checkoutEnv,
+  RUNNER_HOME,
+  RUNNER_USER,
+  shellQuote,
+  timedCommandArgv,
+  WORKSPACE,
+} from "./runner/shell.js";
 export * from "./select.js";
 export type { ObjectStore } from "./storage.js";
 export type {

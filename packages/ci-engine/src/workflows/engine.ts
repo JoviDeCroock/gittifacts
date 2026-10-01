@@ -184,7 +184,7 @@ export abstract class WorkflowBackedEngine<P> implements CiEngine {
         timer = setTimeout(resolve, this.opts.cancelTimeoutMs ?? 10_000);
       }),
     ]);
-    clearTimeout(timer);
+    if (timer !== undefined) clearTimeout(timer);
   }
 
   async restartFrom(runId: string, step: string): Promise<void> {

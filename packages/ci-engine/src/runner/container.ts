@@ -98,7 +98,12 @@ export function deadline(
   });
   // Avoid unhandled rejections when nobody races it any more.
   promise.catch(() => {});
-  return { promise, clear: () => clearTimeout(timer) };
+  return {
+    promise,
+    clear: () => {
+      if (timer !== undefined) clearTimeout(timer);
+    },
+  };
 }
 
 export class DeadlineError extends Error {

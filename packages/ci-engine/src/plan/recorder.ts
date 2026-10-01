@@ -373,7 +373,7 @@ export async function recordPipeline(
       deadline,
     ]);
   } finally {
-    clearTimeout(timer);
+    if (timer !== undefined) clearTimeout(timer);
     recording.close();
   }
 
