@@ -86,7 +86,17 @@ const PM_RUN = /^(pnpm|npm|yarn|bun)$/;
 
 /** Flags (with a value) kept from a test script, per runner. */
 const KEEP_FLAGS: Record<RunnerKind, readonly string[]> = {
-  vitest: ["--config", "-c", "--project", "--dir", "--root", "-r", "--environment", "--pool", "--mode"],
+  vitest: [
+    "--config",
+    "-c",
+    "--project",
+    "--dir",
+    "--root",
+    "-r",
+    "--environment",
+    "--pool",
+    "--mode",
+  ],
   jest: ["--config", "-c", "--selectProjects", "--rootDir", "--roots", "--testEnvironment"],
 };
 
@@ -117,7 +127,10 @@ function scanCommand(command: string, pkg: PackageJson | null, depth = 0): Comma
     // Skip env assignments and wrappers.
     let i = 0;
     while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i] ?? "")) i++;
-    while (i < words.length && ["npx", "cross-env", "dotenv", "--", "exec", "dlx"].includes(words[i] ?? "")) {
+    while (
+      i < words.length &&
+      ["npx", "cross-env", "dotenv", "--", "exec", "dlx"].includes(words[i] ?? "")
+    ) {
       i++;
       while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i] ?? "")) i++;
     }
@@ -169,12 +182,19 @@ export function detectTestRunner(dir: string, testCommand?: string | null): Dete
   }
   if (scan.kind === null) {
     const deps = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) };
-    if ("vitest" in deps) scan = { kind: "vitest", args: [], via: "vitest in package.json dependencies" };
-    else if ("jest" in deps) scan = { kind: "jest", args: [], via: "jest in package.json dependencies" };
+    if ("vitest" in deps)
+      scan = { kind: "vitest", args: [], via: "vitest in package.json dependencies" };
+    else if ("jest" in deps)
+      scan = { kind: "jest", args: [], via: "jest in package.json dependencies" };
   }
   if (scan.kind === null) {
-    const what = testCommand ? `test command ${JSON.stringify(testCommand)}` : "package.json test script";
-    return { ok: false, reason: `could not find a supported test runner (vitest or jest) in the ${what}` };
+    const what = testCommand
+      ? `test command ${JSON.stringify(testCommand)}`
+      : "package.json test script";
+    return {
+      ok: false,
+      reason: `could not find a supported test runner (vitest or jest) in the ${what}`,
+    };
   }
   const resolved = resolveBin(dir, scan.kind);
   if (resolved === null) {
@@ -185,7 +205,13 @@ export function detectTestRunner(dir: string, testCommand?: string | null): Dete
   }
   return {
     ok: true,
-    runner: { kind: scan.kind, bin: resolved.bin, version: resolved.version, args: scan.args, source: scan.via },
+    runner: {
+      kind: scan.kind,
+      bin: resolved.bin,
+      version: resolved.version,
+      args: scan.args,
+      source: scan.via,
+    },
   };
 }
 
@@ -280,7 +306,10 @@ function outcomeOf(status: string): CaseOutcome {
   return "skip";
 }
 
-export function parseJsonReport(json: unknown, root: string): { files: TestFileResult[]; tests: TestCaseResult[] } {
+export function parseJsonReport(
+  json: unknown,
+  root: string,
+): { files: TestFileResult[]; tests: TestCaseResult[] } {
   const report = JsonReport.parse(json);
   const files: TestFileResult[] = [];
   const tests: TestCaseResult[] = [];
@@ -288,7 +317,10 @@ export function parseJsonReport(json: unknown, root: string): { files: TestFileR
     const file = toPosixRelative(root, f.name);
     const assertions = f.assertionResults ?? [];
     const failedToLoad = assertions.length === 0 && f.status === "failed";
-    files.push({ file, loadError: failedToLoad ? (f.message ?? "test file failed to run").slice(0, 2000) : null });
+    files.push({
+      file,
+      loadError: failedToLoad ? (f.message ?? "test file failed to run").slice(0, 2000) : null,
+    });
     for (const a of assertions) {
       const path = [...(a.ancestorTitles ?? []), a.title];
       const message = (a.failureMessages ?? []).join("\n").slice(0, 2000);
@@ -352,7 +384,9 @@ export function runnerArgs(opts: RunTestsOptions): string[] {
 export async function runTests(opts: RunTestsOptions): Promise<TestRunOutput> {
   rmSync(opts.reportPath, { force: true });
   const args = runnerArgs(opts);
-  log(`running ${opts.runner.kind} in ${opts.dir}${opts.files?.length ? ` (${opts.files.length} file(s))` : ""}`);
+  log(
+    `running ${opts.runner.kind} in ${opts.dir}${opts.files?.length ? ` (${opts.files.length} file(s))` : ""}`,
+  );
   let result: Awaited<ReturnType<typeof run>>;
   try {
     result = await run(process.execPath, args, {
@@ -380,7 +414,13 @@ export async function runTests(opts: RunTestsOptions): Promise<TestRunOutput> {
     outputTail,
   };
   if (result.timedOut) {
-    return { ...base, ok: false, error: `${opts.runner.kind} timed out after ${Math.round(result.durationMs / 1000)}s`, files: [], tests: [] };
+    return {
+      ...base,
+      ok: false,
+      error: `${opts.runner.kind} timed out after ${Math.round(result.durationMs / 1000)}s`,
+      files: [],
+      tests: [],
+    };
   }
   if (!existsSync(opts.reportPath)) {
     return {
@@ -395,6 +435,12 @@ export async function runTests(opts: RunTestsOptions): Promise<TestRunOutput> {
     const parsed = parseJsonReport(JSON.parse(readFileSync(opts.reportPath, "utf8")), opts.dir);
     return { ...base, ok: true, ...parsed };
   } catch (error) {
-    return { ...base, ok: false, error: `unreadable ${opts.runner.kind} JSON report: ${errorMessage(error)}`, files: [], tests: [] };
+    return {
+      ...base,
+      ok: false,
+      error: `unreadable ${opts.runner.kind} JSON report: ${errorMessage(error)}`,
+      files: [],
+      tests: [],
+    };
   }
 }

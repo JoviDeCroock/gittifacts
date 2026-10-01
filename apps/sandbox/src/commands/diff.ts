@@ -2,7 +2,13 @@
  * `diff`: the base..head diff as `ChangeDiff` (packages/domain) — per-file stats plus hunks with
  * line text — for local testing and for callers that want the sandbox's view of the diff.
  */
-import { ChangeDiff, type ChangeDiffFile, type DiffHunk, type DiffLine, type FileDiffStat } from "@app/domain";
+import {
+  ChangeDiff,
+  type ChangeDiffFile,
+  type DiffHunk,
+  type DiffLine,
+  type FileDiffStat,
+} from "@app/domain";
 import { type DiffFile, parseUnifiedDiff } from "@app/evidence";
 import type { Context } from "../lib/context.js";
 import { gitText } from "../lib/git.js";

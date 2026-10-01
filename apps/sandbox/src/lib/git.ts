@@ -50,7 +50,11 @@ export interface GitOptions {
   allowFail?: boolean;
 }
 
-export async function git(repo: string, args: readonly string[], opts: GitOptions = {}): Promise<RunResult> {
+export async function git(
+  repo: string,
+  args: readonly string[],
+  opts: GitOptions = {},
+): Promise<RunResult> {
   const result = await run("git", [...BASE_CONFIG, "-C", repo, ...args], {
     cwd: repo,
     echo: false,
@@ -59,19 +63,28 @@ export async function git(repo: string, args: readonly string[], opts: GitOption
     timeoutMs: opts.timeoutMs ?? 10 * 60_000,
   });
   if (result.code !== 0 && !opts.allowFail) {
-    throw new GitError(`git ${args.slice(0, 3).join(" ")} failed (${result.code}): ${result.stderr.trim().slice(0, 2000)}`, result);
+    throw new GitError(
+      `git ${args.slice(0, 3).join(" ")} failed (${result.code}): ${result.stderr.trim().slice(0, 2000)}`,
+      result,
+    );
   }
   return result;
 }
 
-export async function gitText(repo: string, args: readonly string[], opts: GitOptions = {}): Promise<string> {
+export async function gitText(
+  repo: string,
+  args: readonly string[],
+  opts: GitOptions = {},
+): Promise<string> {
   return (await git(repo, args, opts)).stdout;
 }
 
 /** Full commit id for `rev`, or null when it does not name a commit available locally. */
 export async function resolveCommit(repo: string, rev: string): Promise<string | null> {
   if (rev === "" || rev.startsWith("-") || /[\s\0]/.test(rev)) return null;
-  const r = await git(repo, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`], { allowFail: true });
+  const r = await git(repo, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`], {
+    allowFail: true,
+  });
   const sha = r.stdout.trim();
   return r.code === 0 && isSha(sha) ? sha : null;
 }
@@ -125,7 +138,9 @@ export async function readBlob(repo: string, rev: string, path: string): Promise
 
 /** Blob id of `path` at `rev`, or null when it is absent. */
 export async function blobId(repo: string, rev: string, path: string): Promise<string | null> {
-  const r = await git(repo, ["rev-parse", "--verify", "--quiet", `${rev}:${path}`], { allowFail: true });
+  const r = await git(repo, ["rev-parse", "--verify", "--quiet", `${rev}:${path}`], {
+    allowFail: true,
+  });
   const id = r.stdout.trim();
   return r.code === 0 && isSha(id) ? id : null;
 }
@@ -138,7 +153,11 @@ export interface TreeEntry {
 }
 
 /** Every entry of the tree at `rev`, recursively (`git ls-tree -r -z`). */
-export async function listTree(repo: string, rev: string, paths: readonly string[] = []): Promise<TreeEntry[]> {
+export async function listTree(
+  repo: string,
+  rev: string,
+  paths: readonly string[] = [],
+): Promise<TreeEntry[]> {
   const out = await gitText(repo, ["ls-tree", "-r", "-z", "--full-tree", rev, "--", ...paths]);
   const entries: TreeEntry[] = [];
   for (const record of out.split("\0")) {
@@ -151,7 +170,12 @@ export async function listTree(repo: string, rev: string, paths: readonly string
 }
 
 /** `git diff` text in the format `parseUnifiedDiff` expects. */
-export async function unifiedDiff(repo: string, base: string, head: string, context = 0): Promise<string> {
+export async function unifiedDiff(
+  repo: string,
+  base: string,
+  head: string,
+  context = 0,
+): Promise<string> {
   return gitText(repo, [
     "diff",
     `--unified=${context}`,
@@ -175,7 +199,16 @@ export interface NameStatus {
 
 /** `git diff --name-status -z -M base head`. */
 export async function nameStatus(repo: string, base: string, head: string): Promise<NameStatus[]> {
-  const out = await gitText(repo, ["diff", "--name-status", "-z", "-M", "--no-ext-diff", base, head, "--"]);
+  const out = await gitText(repo, [
+    "diff",
+    "--name-status",
+    "-z",
+    "-M",
+    "--no-ext-diff",
+    base,
+    head,
+    "--",
+  ]);
   const parts = out.split("\0");
   const result: NameStatus[] = [];
   for (let i = 0; i < parts.length; ) {

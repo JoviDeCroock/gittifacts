@@ -17,12 +17,20 @@ export async function testRun(ctx: Context): Promise<TestRun> {
   const detected = detectTestRunner(ctx.repo, ctx.testCommand);
   if (!detected.ok) return testRunError(ctx.head, detected.reason);
   const runner = detected.runner;
-  const result = await runTests({ runner, dir: ctx.repo, reportPath: join(ctx.tmp, "test-run.json") });
+  const result = await runTests({
+    runner,
+    dir: ctx.repo,
+    reportPath: join(ctx.tmp, "test-run.json"),
+  });
   const runnerName = `${runner.kind}${runner.version ? `@${runner.version}` : ""}`;
   if (!result.ok) return testRunError(ctx.head, result.error ?? "the test run failed", runnerName);
   const failures = [
-    ...result.files.filter((f) => f.loadError !== null).map((f) => ({ name: f.file, message: (f.loadError ?? "").slice(0, 4000) })),
-    ...result.tests.filter((t) => t.outcome === "fail").map((t) => ({ name: t.id, message: (t.message ?? "failed").slice(0, 4000) })),
+    ...result.files
+      .filter((f) => f.loadError !== null)
+      .map((f) => ({ name: f.file, message: (f.loadError ?? "").slice(0, 4000) })),
+    ...result.tests
+      .filter((t) => t.outcome === "fail")
+      .map((t) => ({ name: t.id, message: (t.message ?? "failed").slice(0, 4000) })),
   ];
   const item: TestRun = {
     id: "test-run",
@@ -38,8 +46,12 @@ export async function testRun(ctx: Context): Promise<TestRun> {
     failures: failures.slice(0, MAX_FAILURES),
   };
   const note = joinNotes([
-    failures.length > MAX_FAILURES ? `${failures.length - MAX_FAILURES} more failures not listed` : null,
-    result.exitCode !== 0 && failures.length === 0 ? `the runner exited ${result.exitCode} although no test failed` : null,
+    failures.length > MAX_FAILURES
+      ? `${failures.length - MAX_FAILURES} more failures not listed`
+      : null,
+    result.exitCode !== 0 && failures.length === 0
+      ? `the runner exited ${result.exitCode} although no test failed`
+      : null,
     wd.note,
   ]);
   if (note !== undefined) item.note = note;

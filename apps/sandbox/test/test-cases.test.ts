@@ -32,7 +32,10 @@ describe("add", () => {
 describe("changedTestCases", () => {
   it("selects the test containing a changed line", () => {
     const r = changedTestCases("t.test.ts", FILE, [12]);
-    expect(r).toEqual({ kind: "tests", tests: [{ path: ["add", "adds negatives"], start: 11, end: 13 }] });
+    expect(r).toEqual({
+      kind: "tests",
+      tests: [{ path: ["add", "adds negatives"], start: 11, end: 13 }],
+    });
   });
 
   it("ignores import, blank and comment lines", () => {
@@ -41,7 +44,10 @@ describe("changedTestCases", () => {
 
   it("widens to the whole suite for a change in shared suite code", () => {
     const r = changedTestCases("t.test.ts", FILE, [16]);
-    expect(r).toEqual({ kind: "tests", tests: [{ path: ["add", "nested", "deep"], start: 17, end: 19 }] });
+    expect(r).toEqual({
+      kind: "tests",
+      tests: [{ path: ["add", "nested", "deep"], start: 17, end: 19 }],
+    });
   });
 
   it("falls back to the whole file for top-level helpers", () => {
@@ -58,7 +64,9 @@ describe("changedTestCases", () => {
 
   it("selects a suite's tests when its header line changes (new describe block)", () => {
     const r = changedTestCases("t.test.ts", FILE, [15]);
-    expect(r.kind === "tests" && r.tests.map((t) => t.path.join(" > "))).toEqual(["add > nested > deep"]);
+    expect(r.kind === "tests" && r.tests.map((t) => t.path.join(" > "))).toEqual([
+      "add > nested > deep",
+    ]);
   });
 });
 
@@ -69,6 +77,9 @@ describe("allStaticTests", () => {
 
   it("lists every runnable test", () => {
     const text = `describe("a", () => { it("x", () => {}); it.todo("y"); test("z", () => {}); });`;
-    expect(allStaticTests("t.test.ts", text)?.map((t) => t.path.join(" > "))).toEqual(["a > x", "a > z"]);
+    expect(allStaticTests("t.test.ts", text)?.map((t) => t.path.join(" > "))).toEqual([
+      "a > x",
+      "a > z",
+    ]);
   });
 });

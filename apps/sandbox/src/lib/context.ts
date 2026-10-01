@@ -59,7 +59,8 @@ export async function createContext(input: ContextInput): Promise<Context> {
       .split("\n")
       .filter((l) => l.trim() !== "")
       .map((l) => l.slice(3));
-    if (dirtyFiles.length > 0) log(`warning: tracked files differ from head: ${dirtyFiles.slice(0, 10).join(", ")}`);
+    if (dirtyFiles.length > 0)
+      log(`warning: tracked files differ from head: ${dirtyFiles.slice(0, 10).join(", ")}`);
   }
   const tmp = mkdtempSync(join(process.env.GITTIFACTS_TMPDIR ?? tmpdir(), "gittifacts-"));
   return {
@@ -87,8 +88,15 @@ export function disposeContext(ctx: Context): void {
  * else a note when tracked files were modified (null when clean).
  */
 export function workdirCheck(ctx: Context): { error: string | null; note: string | null } {
-  if (!ctx.atHead) return { error: `the working tree ${ctx.repo} is not checked out at head ${ctx.head}`, note: null };
+  if (!ctx.atHead)
+    return {
+      error: `the working tree ${ctx.repo} is not checked out at head ${ctx.head}`,
+      note: null,
+    };
   if (ctx.dirtyFiles.length === 0) return { error: null, note: null };
   const shown = ctx.dirtyFiles.slice(0, 10).join(", ");
-  return { error: null, note: `measured with tracked files modified in the working tree: ${shown}${ctx.dirtyFiles.length > 10 ? ", …" : ""}` };
+  return {
+    error: null,
+    note: `measured with tracked files modified in the working tree: ${shown}${ctx.dirtyFiles.length > 10 ? ", …" : ""}`,
+  };
 }

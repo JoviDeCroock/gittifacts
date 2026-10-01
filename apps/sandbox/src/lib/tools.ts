@@ -4,8 +4,8 @@
  * in development. Repositories don't need to depend on any of them.
  */
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { availableParallelism, totalmem } from "node:os";
 import { createRequire } from "node:module";
+import { availableParallelism, totalmem } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 const require = createRequire(import.meta.url);
@@ -49,7 +49,13 @@ function versionAt(dir: string | null): string | null {
   if (dir === null) return null;
   try {
     const json: unknown = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
-    if (json !== null && typeof json === "object" && "version" in json && typeof json.version === "string") return json.version;
+    if (
+      json !== null &&
+      typeof json === "object" &&
+      "version" in json &&
+      typeof json.version === "string"
+    )
+      return json.version;
   } catch {
     // ignore
   }
@@ -87,7 +93,7 @@ export function strykerVitestRunnerPlugin(): string | null {
 }
 
 /** Entry module of our @vitest/coverage-v8 (a CoverageProviderModule as its default export). */
-export function coverageV8Module(): Tool & { entry: string } | null {
+export function coverageV8Module(): (Tool & { entry: string }) | null {
   const tool = ownTool("@vitest/coverage-v8");
   if (tool === null) return null;
   const entry = join(tool.dir, "dist", "index.js");

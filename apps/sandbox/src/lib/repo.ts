@@ -7,12 +7,23 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { LOCKFILE_NAMES } from "@app/evidence";
-import { detectPackageManager, installCommand, lockfileFor, type PackageManager } from "./ci-engine.js";
+import {
+  detectPackageManager,
+  installCommand,
+  lockfileFor,
+  type PackageManager,
+} from "./ci-engine.js";
 import { addWorktree, listTree, readBlob } from "./git.js";
 import { errorMessage, log, tail } from "./log.js";
 import { runShell } from "./proc.js";
 
-export const PACKAGE_MANAGERS: readonly PackageManager[] = ["pnpm", "npm", "yarn", "yarn-berry", "bun"];
+export const PACKAGE_MANAGERS: readonly PackageManager[] = [
+  "pnpm",
+  "npm",
+  "yarn",
+  "yarn-berry",
+  "bun",
+];
 
 export function isPackageManager(value: string): value is PackageManager {
   return (PACKAGE_MANAGERS as readonly string[]).includes(value);
@@ -35,7 +46,10 @@ export function packageManagerOf(dir: string, override?: PackageManager): Packag
   } catch {
     return null;
   }
-  return detectPackageManager({ rootEntries: entries, packageJson: readJson(join(dir, "package.json")) });
+  return detectPackageManager({
+    rootEntries: entries,
+    packageJson: readJson(join(dir, "package.json")),
+  });
 }
 
 const IGNORED_DIRS = /(^|\/)(node_modules|\.git)\//;
@@ -44,7 +58,9 @@ const IGNORED_DIRS = /(^|\/)(node_modules|\.git)\//;
 export async function manifestPaths(repo: string, rev: string): Promise<string[]> {
   const tree = await listTree(repo, rev);
   return tree
-    .filter((e) => e.type === "blob" && (e.path === "package.json" || e.path.endsWith("/package.json")))
+    .filter(
+      (e) => e.type === "blob" && (e.path === "package.json" || e.path.endsWith("/package.json")),
+    )
     .map((e) => e.path)
     .filter((p) => !IGNORED_DIRS.test(p))
     .sort();
@@ -85,14 +101,24 @@ function installProjection(text: string): string {
   }
 }
 
-const INSTALL_CONFIG_FILES = [...LOCKFILE_NAMES, "pnpm-workspace.yaml", ".npmrc", ".yarnrc.yml", "bunfig.toml"];
+const INSTALL_CONFIG_FILES = [
+  ...LOCKFILE_NAMES,
+  "pnpm-workspace.yaml",
+  ".npmrc",
+  ".yarnrc.yml",
+  "bunfig.toml",
+];
 
 /**
  * True when base and head would install the same dependency graph: identical lockfiles and
  * install config at the root (both absent counts as identical) and identical dependency
  * fields in every package.json.
  */
-export async function sameDependencyGraph(repo: string, base: string, head: string): Promise<boolean> {
+export async function sameDependencyGraph(
+  repo: string,
+  base: string,
+  head: string,
+): Promise<boolean> {
   const [baseTree, headTree] = await Promise.all([listTree(repo, base), listTree(repo, head)]);
   const pick = (tree: typeof baseTree) => {
     const m = new Map<string, string>();
@@ -120,9 +146,14 @@ export async function sameDependencyGraph(repo: string, base: string, head: stri
  * Link every `node_modules` directory of the head checkout (root and workspace packages) into
  * `target` at the same relative location. Returns the linked relative dirs.
  */
-export function linkNodeModules(headDir: string, target: string, manifests: readonly string[]): string[] {
+export function linkNodeModules(
+  headDir: string,
+  target: string,
+  manifests: readonly string[],
+): string[] {
   const dirs = new Set<string>([""]);
-  for (const m of manifests) dirs.add(m === "package.json" ? "" : m.slice(0, -"/package.json".length));
+  for (const m of manifests)
+    dirs.add(m === "package.json" ? "" : m.slice(0, -"/package.json".length));
   const linked: string[] = [];
   for (const dir of [...dirs].sort()) {
     const from = join(headDir, dir, "node_modules");
@@ -178,9 +209,14 @@ export async function prepareBaseWorktree(opts: PrepareOptions): Promise<Prepare
   const command = installCommand(pm, lockfileFor(pm, entries) !== null);
   log(`base worktree: dependencies differ from head, running ${command}`);
   try {
-    const r = await runShell(command, { cwd: dir, timeoutMs: opts.installTimeoutMs ?? 15 * 60_000 });
+    const r = await runShell(command, {
+      cwd: dir,
+      timeoutMs: opts.installTimeoutMs ?? 15 * 60_000,
+    });
     if (r.code !== 0) {
-      notes.push(`installing base dependencies failed (${command}, exit ${r.code}${r.timedOut ? ", timed out" : ""}): ${tail(r.stdout + r.stderr, 8)}`);
+      notes.push(
+        `installing base dependencies failed (${command}, exit ${r.code}${r.timedOut ? ", timed out" : ""}): ${tail(r.stdout + r.stderr, 8)}`,
+      );
       return { dir, deps: "install-failed", notes };
     }
   } catch (error) {

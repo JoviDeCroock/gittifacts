@@ -45,7 +45,12 @@ export function scrubbedEnv(extra: Record<string, string | undefined> = {}): Nod
     if (SCRUBBED.includes(key)) continue;
     if (key.startsWith("GIT_CONFIG_KEY_") || key.startsWith("GIT_CONFIG_VALUE_")) continue;
     // Vitest sets these in its own workers; a nested vitest must not inherit them.
-    if (key === "VITEST" || key.startsWith("VITEST_") || key === "TEST" || key === "NODE_V8_COVERAGE")
+    if (
+      key === "VITEST" ||
+      key.startsWith("VITEST_") ||
+      key === "TEST" ||
+      key === "NODE_V8_COVERAGE"
+    )
       continue;
     env[key] = value;
   }
@@ -92,7 +97,11 @@ class Capture {
   }
 }
 
-export function run(command: string, args: readonly string[], opts: RunOptions): Promise<RunResult> {
+export function run(
+  command: string,
+  args: readonly string[],
+  opts: RunOptions,
+): Promise<RunResult> {
   const started = Date.now();
   const echo = opts.echo ?? true;
   const max = opts.maxCapture ?? 8 * 1024 * 1024;

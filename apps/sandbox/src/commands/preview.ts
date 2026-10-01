@@ -27,7 +27,17 @@ import { run } from "../lib/proc.js";
 
 export const WRANGLER_CONFIGS = ["wrangler.jsonc", "wrangler.json", "wrangler.toml"];
 export const STATIC_DIRS = ["dist", "build", "out", "public", "_site", "site"];
-const MODULE_EXT = new Set([".js", ".mjs", ".cjs", ".wasm", ".bin", ".txt", ".html", ".sql", ".py"]);
+const MODULE_EXT = new Set([
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".wasm",
+  ".bin",
+  ".txt",
+  ".html",
+  ".sql",
+  ".py",
+]);
 
 /** Compatibility date for assets-only previews (a static site has no config to carry one). */
 export const STATIC_COMPATIBILITY_DATE = "2026-09-01";
@@ -105,7 +115,15 @@ export function detectPreview(opts: DetectOptions): PreviewDetection {
         if (parsed.success) {
           const target = resolve(join(opts.dir, ".wrangler", "deploy"), parsed.data.configPath);
           if (isFile(target)) {
-            return { ok: true, plan: { kind: "worker", mode: "redirected-config", args: ["dev", "-c", target, ...common], notes } };
+            return {
+              ok: true,
+              plan: {
+                kind: "worker",
+                mode: "redirected-config",
+                args: ["dev", "-c", target, ...common],
+                notes,
+              },
+            };
           }
           notes.push(`redirected config ${parsed.data.configPath} does not exist; ignoring it`);
         }
@@ -115,37 +133,66 @@ export function detectPreview(opts: DetectOptions): PreviewDetection {
     }
     const outDir = join(opts.dir, opts.outDir ?? "dist");
     const modules = builtModules(outDir);
-    const looksBuilt = isFile(join(outDir, "README.md")) && /built output/i.test(readFileSync(join(outDir, "README.md"), "utf8"));
+    const looksBuilt =
+      isFile(join(outDir, "README.md")) &&
+      /built output/i.test(readFileSync(join(outDir, "README.md"), "utf8"));
     if (modules.length === 1 && (looksBuilt || opts.outDir !== undefined)) {
       const entry = join(outDir, modules[0] ?? "index.js");
       return {
         ok: true,
-        plan: { kind: "worker", mode: "built-output", args: ["dev", entry, "--no-bundle", "-c", config, ...common], notes },
+        plan: {
+          kind: "worker",
+          mode: "built-output",
+          args: ["dev", entry, "--no-bundle", "-c", config, ...common],
+          notes,
+        },
       };
     }
     if (modules.length > 1 && looksBuilt) {
-      notes.push(`build output ${relative(opts.dir, outDir)} has ${modules.length} modules; letting wrangler bundle from source instead`);
+      notes.push(
+        `build output ${relative(opts.dir, outDir)} has ${modules.length} modules; letting wrangler bundle from source instead`,
+      );
     } else if (modules.length === 0) {
-      notes.push(`no build output in ${relative(opts.dir, outDir) || "."}; wrangler bundles from source`);
+      notes.push(
+        `no build output in ${relative(opts.dir, outDir) || "."}; wrangler bundles from source`,
+      );
     }
-    return { ok: true, plan: { kind: "worker", mode: "source", args: ["dev", "-c", config, ...common], notes } };
+    return {
+      ok: true,
+      plan: { kind: "worker", mode: "source", args: ["dev", "-c", config, ...common], notes },
+    };
   }
   const candidates = opts.outDir !== undefined ? [opts.outDir] : [...STATIC_DIRS, "."];
   const withIndex = candidates.find((d) => isFile(join(opts.dir, d, "index.html")));
-  const assets = withIndex ?? (opts.outDir !== undefined && isDir(join(opts.dir, opts.outDir)) ? opts.outDir : undefined);
+  const assets =
+    withIndex ??
+    (opts.outDir !== undefined && isDir(join(opts.dir, opts.outDir)) ? opts.outDir : undefined);
   if (assets === undefined) {
     return {
       ok: false,
       error: `nothing to preview in ${opts.dir}: no ${WRANGLER_CONFIGS.join("/")} and no index.html in ${candidates.join(", ")}`,
     };
   }
-  const name = basename(resolve(opts.dir)).toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "") || "preview";
+  const name =
+    basename(resolve(opts.dir))
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/^-+|-+$/g, "") || "preview";
   return {
     ok: true,
     plan: {
       kind: "static",
       mode: "assets",
-      args: ["dev", "--assets", join(opts.dir, assets), "--name", name, "--compatibility-date", STATIC_COMPATIBILITY_DATE, ...common],
+      args: [
+        "dev",
+        "--assets",
+        join(opts.dir, assets),
+        "--name",
+        name,
+        "--compatibility-date",
+        STATIC_COMPATIBILITY_DATE,
+        ...common,
+      ],
       notes,
     },
   };
@@ -197,7 +244,13 @@ export async function preview(opts: PreviewOptions): Promise<number> {
   }
   const { plan } = detected;
   const url = `http://${opts.ip === "0.0.0.0" ? "127.0.0.1" : opts.ip}:${opts.port}`;
-  const base = { kind: plan.kind, mode: plan.mode, command: [opts.wrangler, ...plan.args], port: opts.port, notes: plan.notes };
+  const base = {
+    kind: plan.kind,
+    mode: plan.mode,
+    command: [opts.wrangler, ...plan.args],
+    port: opts.port,
+    notes: plan.notes,
+  };
   if (opts.dryRun) {
     opts.emit({ status: "planned", ...base });
     return 0;
@@ -217,11 +270,23 @@ export async function preview(opts: PreviewOptions): Promise<number> {
   const ready = await waitForHttp(url, () => exited, opts.readyTimeoutMs ?? 60_000);
   if (!ready) {
     if (exited) {
-      const r = await server.catch((error: unknown) => ({ code: 127, stderr: errorMessage(error), stdout: "" }));
-      opts.emit({ status: "error", ...base, error: `wrangler exited ${r.code} before serving: ${(r.stderr || r.stdout).trim().slice(-1500)}` });
+      const r = await server.catch((error: unknown) => ({
+        code: 127,
+        stderr: errorMessage(error),
+        stdout: "",
+      }));
+      opts.emit({
+        status: "error",
+        ...base,
+        error: `wrangler exited ${r.code} before serving: ${(r.stderr || r.stdout).trim().slice(-1500)}`,
+      });
       return r.code === 0 ? 1 : r.code;
     }
-    opts.emit({ status: "error", ...base, error: `nothing answered on ${url} within ${(opts.readyTimeoutMs ?? 60_000) / 1000} s` });
+    opts.emit({
+      status: "error",
+      ...base,
+      error: `nothing answered on ${url} within ${(opts.readyTimeoutMs ?? 60_000) / 1000} s`,
+    });
     return 1;
   }
   opts.emit({ status: "ready", ...base, url: `http://${opts.ip}:${opts.port}` });

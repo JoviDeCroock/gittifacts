@@ -21,7 +21,12 @@ import type { Context } from "../lib/context.js";
 import { git, listTree, removeWorktree } from "../lib/git.js";
 import { errorMessage, log, tail } from "../lib/log.js";
 import { run } from "../lib/proc.js";
-import { linkNodeModules, manifestPaths, prepareBaseWorktree, sameDependencyGraph } from "../lib/repo.js";
+import {
+  linkNodeModules,
+  manifestPaths,
+  prepareBaseWorktree,
+  sameDependencyGraph,
+} from "../lib/repo.js";
 import { joinNotes } from "./items.js";
 
 export const TRANSFORMS_DIR = ".platform/transforms/";
@@ -41,8 +46,12 @@ const RUNNABLE: Array<[RegExp, (p: string) => string[]]> = [
 ];
 
 /** Transform scripts in the base tree: direct children files, or `<dir>/index.{mjs,js,ts}`. */
-export async function transformScripts(ctx: Context): Promise<{ scripts: TransformScript[]; ignored: string[] }> {
-  const entries = (await listTree(ctx.repo, ctx.base)).filter((e) => e.type === "blob" && e.path.startsWith(TRANSFORMS_DIR));
+export async function transformScripts(
+  ctx: Context,
+): Promise<{ scripts: TransformScript[]; ignored: string[] }> {
+  const entries = (await listTree(ctx.repo, ctx.base)).filter(
+    (e) => e.type === "blob" && e.path.startsWith(TRANSFORMS_DIR),
+  );
   const scripts: TransformScript[] = [];
   const ignored: string[] = [];
   const dirsWithIndex = new Set<string>();
@@ -54,7 +63,11 @@ export async function transformScripts(ctx: Context): Promise<{ scripts: Transfo
     if (parts.length === 1) {
       file = e.path;
       name = rest.replace(/\.[^.]+$/, "");
-    } else if (parts.length === 2 && /^index\.(mjs|cjs|js|ts|mts)$/.test(parts[1] ?? "") && !dirsWithIndex.has(parts[0] ?? "")) {
+    } else if (
+      parts.length === 2 &&
+      /^index\.(mjs|cjs|js|ts|mts)$/.test(parts[1] ?? "") &&
+      !dirsWithIndex.has(parts[0] ?? "")
+    ) {
       file = e.path;
       name = parts[0] ?? rest;
       dirsWithIndex.add(name);
@@ -77,7 +90,8 @@ interface TreeMap {
 
 async function treeBlobs(repo: string, rev: string): Promise<TreeMap> {
   const out: TreeMap = {};
-  for (const e of await listTree(repo, rev)) if (e.type === "blob" || e.type === "commit") out[e.path] = `${e.mode}:${e.object}`;
+  for (const e of await listTree(repo, rev))
+    if (e.type === "blob" || e.type === "commit") out[e.path] = `${e.mode}:${e.object}`;
   return out;
 }
 
@@ -110,7 +124,13 @@ function transformError(script: TransformScript, note: string): ReproducibleTran
   };
 }
 
-async function runOne(ctx: Context, script: TransformScript, head: TreeMap, baseTree: TreeMap, deps: { linked: boolean; differs: boolean }): Promise<ReproducibleTransform> {
+async function runOne(
+  ctx: Context,
+  script: TransformScript,
+  head: TreeMap,
+  baseTree: TreeMap,
+  deps: { linked: boolean; differs: boolean },
+): Promise<ReproducibleTransform> {
   const wtPath = join(ctx.tmp, `transform-${script.name.replace(/[^A-Za-z0-9._-]/g, "_")}`);
   try {
     const prepared = await prepareBaseWorktree({
@@ -123,15 +143,35 @@ async function runOne(ctx: Context, script: TransformScript, head: TreeMap, base
       needDeps: false,
     });
     const notes: string[] = [];
-    if (deps.linked) linkNodeModules(ctx.repo, prepared.dir, await manifestPaths(ctx.repo, ctx.base));
-    else if (deps.differs) notes.push("dependencies differ between base and head, so the transform ran without node_modules");
+    if (deps.linked)
+      linkNodeModules(ctx.repo, prepared.dir, await manifestPaths(ctx.repo, ctx.base));
+    else if (deps.differs)
+      notes.push(
+        "dependencies differ between base and head, so the transform ran without node_modules",
+      );
     log(`transform ${script.name}: ${script.command} on a clean base worktree`);
     const timeoutMs = Number(process.env.GITTIFACTS_TRANSFORM_TIMEOUT_MS) || 10 * 60_000;
     const [cmd = "node", ...args] = script.argv;
-    const r = await run(cmd === "node" ? process.execPath : cmd, args, { cwd: prepared.dir, timeoutMs, env: { NODE_OPTIONS: undefined } });
-    if (r.timedOut) return transformError(script, `the transform did not finish within ${Math.round(timeoutMs / 1000)} s`);
-    if (r.code !== 0) return transformError(script, `the transform exited ${r.code}: ${tail(r.stdout + r.stderr, 10)}`);
-    const produced = await snapshotTree(prepared.dir, join(ctx.tmp, `snapshot-${script.name.replace(/[^A-Za-z0-9._-]/g, "_")}`), ctx.base);
+    const r = await run(cmd === "node" ? process.execPath : cmd, args, {
+      cwd: prepared.dir,
+      timeoutMs,
+      env: { NODE_OPTIONS: undefined },
+    });
+    if (r.timedOut)
+      return transformError(
+        script,
+        `the transform did not finish within ${Math.round(timeoutMs / 1000)} s`,
+      );
+    if (r.code !== 0)
+      return transformError(
+        script,
+        `the transform exited ${r.code}: ${tail(r.stdout + r.stderr, 10)}`,
+      );
+    const produced = await snapshotTree(
+      prepared.dir,
+      join(ctx.tmp, `snapshot-${script.name.replace(/[^A-Za-z0-9._-]/g, "_")}`),
+      ctx.base,
+    );
     const after = await treeBlobs(ctx.repo, produced);
     const paths = new Set([...Object.keys(baseTree), ...Object.keys(after)]);
     const touched = [...paths].filter((p) => baseTree[p] !== after[p]).sort();
@@ -150,7 +190,10 @@ async function runOne(ctx: Context, script: TransformScript, head: TreeMap, base
       command: script.command,
     };
     if (touched.length === 0 || reproduced.length === 0) {
-      const why = touched.length === 0 ? "the transform changes nothing on base" : `none of the ${touched.length} file(s) it rewrites on base match head`;
+      const why =
+        touched.length === 0
+          ? "the transform changes nothing on base"
+          : `none of the ${touched.length} file(s) it rewrites on base match head`;
       return {
         ...base,
         status: "skipped",
@@ -162,8 +205,10 @@ async function runOne(ctx: Context, script: TransformScript, head: TreeMap, base
     }
     // Partially applied: the paths head left untouched count as mismatches (head ≠ transform output).
     const mismatchedFiles = [...mismatched, ...unapplied].sort();
-    if (unapplied.length > 0) notes.push(`head did not apply the transform to: ${unapplied.join(", ")}`);
-    if (mismatched.length > 0) notes.push(`head differs from the transform's output in: ${mismatched.join(", ")}`);
+    if (unapplied.length > 0)
+      notes.push(`head did not apply the transform to: ${unapplied.join(", ")}`);
+    if (mismatched.length > 0)
+      notes.push(`head differs from the transform's output in: ${mismatched.join(", ")}`);
     const item: ReproducibleTransform = {
       ...base,
       status: "ok",
@@ -171,7 +216,10 @@ async function runOne(ctx: Context, script: TransformScript, head: TreeMap, base
       files: reproduced,
       mismatchedFiles,
     };
-    const note = joinNotes([...notes, `reproduced ${reproduced.length} of ${touched.length} file(s) the transform rewrites`]);
+    const note = joinNotes([
+      ...notes,
+      `reproduced ${reproduced.length} of ${touched.length} file(s) the transform rewrites`,
+    ]);
     if (note !== undefined) item.note = note;
     return item;
   } catch (error) {
@@ -185,7 +233,10 @@ export async function transforms(ctx: Context): Promise<ReproducibleTransform[]>
   const { scripts, ignored } = await transformScripts(ctx);
   for (const p of ignored) log(`transforms: ignoring ${p} (not a .mjs/.js/.cjs/.ts/.sh script)`);
   if (scripts.length === 0) return [];
-  const [head, baseTree] = await Promise.all([treeBlobs(ctx.repo, ctx.head), treeBlobs(ctx.repo, ctx.base)]);
+  const [head, baseTree] = await Promise.all([
+    treeBlobs(ctx.repo, ctx.head),
+    treeBlobs(ctx.repo, ctx.base),
+  ]);
   const same = await sameDependencyGraph(ctx.repo, ctx.base, ctx.head);
   const items: ReproducibleTransform[] = [];
   for (const script of scripts) {
@@ -193,4 +244,3 @@ export async function transforms(ctx: Context): Promise<ReproducibleTransform[]>
   }
   return items;
 }
-

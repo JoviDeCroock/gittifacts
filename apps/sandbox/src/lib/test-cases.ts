@@ -80,10 +80,15 @@ function parseBlocks(source: TS.SourceFile): Block[] {
       if (callee !== null && (TEST_FNS.has(callee.root) || SUITE_FNS.has(callee.root))) {
         const isSuite = SUITE_FNS.has(callee.root);
         const inert =
-          callee.root.startsWith("x") || callee.modifiers.some((m) => INERT.has(m)) || callee.root === "bench";
+          callee.root.startsWith("x") ||
+          callee.modifiers.some((m) => INERT.has(m)) ||
+          callee.root === "bench";
         const block: Block = {
           kind: isSuite ? "suite" : "test",
-          title: callee.each || callee.modifiers.includes("each") ? null : staticTitle(node.arguments[0]),
+          title:
+            callee.each || callee.modifiers.includes("each")
+              ? null
+              : staticTitle(node.arguments[0]),
           start: line(node.getStart(source)),
           end: line(node.getEnd()),
           children: [],
@@ -101,18 +106,28 @@ function parseBlocks(source: TS.SourceFile): Block[] {
   return blocks;
 }
 
-function collectTests(blocks: readonly Block[], prefix: string[], out: Array<StaticTestCase | null>): void {
+function collectTests(
+  blocks: readonly Block[],
+  prefix: string[],
+  out: Array<StaticTestCase | null>,
+): void {
   for (const b of blocks) {
     if (b.inert) continue;
     if (b.kind === "test") {
-      out.push(b.title === null || prefix.includes("\0") ? null : { path: [...prefix, b.title], start: b.start, end: b.end });
+      out.push(
+        b.title === null || prefix.includes("\0")
+          ? null
+          : { path: [...prefix, b.title], start: b.start, end: b.end },
+      );
     } else {
       collectTests(b.children, [...prefix, b.title ?? "\0"], out);
     }
   }
 }
 
-export type ChangedTests = { kind: "whole-file"; reason: string } | { kind: "tests"; tests: StaticTestCase[] };
+export type ChangedTests =
+  | { kind: "whole-file"; reason: string }
+  | { kind: "tests"; tests: StaticTestCase[] };
 
 function isIgnorableLine(text: string): boolean {
   const t = text.trim();
@@ -133,7 +148,13 @@ function importLines(source: TS.SourceFile): Set<number> {
 
 /** Every runnable test with a static name in the file, or null if some name is dynamic. */
 export function allStaticTests(fileName: string, text: string): StaticTestCase[] | null {
-  const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, scriptKind(fileName));
+  const source = ts.createSourceFile(
+    fileName,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKind(fileName),
+  );
   const out: Array<StaticTestCase | null> = [];
   collectTests(parseBlocks(source), [], out);
   return out.some((t) => t === null) ? null : (out as StaticTestCase[]);
@@ -150,8 +171,18 @@ function scriptKind(fileName: string): TS.ScriptKind {
  * The tests of a modified test file touched by `lines` (head line numbers of added lines, plus
  * the head positions where lines were removed).
  */
-export function changedTestCases(fileName: string, text: string, lines: readonly number[]): ChangedTests {
-  const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, scriptKind(fileName));
+export function changedTestCases(
+  fileName: string,
+  text: string,
+  lines: readonly number[],
+): ChangedTests {
+  const source = ts.createSourceFile(
+    fileName,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKind(fileName),
+  );
   const blocks = parseBlocks(source);
   const imports = importLines(source);
   const textLines = text.split("\n");
@@ -190,14 +221,18 @@ export function changedTestCases(fileName: string, text: string, lines: readonly
     }
     if (hit !== null) {
       if (hit.inert) continue;
-      if (hit.title === null || dynamicSuite) return { kind: "whole-file", reason: "a changed test has a dynamic title" };
+      if (hit.title === null || dynamicSuite)
+        return { kind: "whole-file", reason: "a changed test has a dynamic title" };
       const t: StaticTestCase = { path: [...prefix, hit.title], start: hit.start, end: hit.end };
       selected.set(t.path.join("\0"), t);
       continue;
     }
     if (suite === null) {
       // Top-level code outside any suite (helpers, hooks, setup): every test may depend on it.
-      return { kind: "whole-file", reason: `line ${lineNo} changes top-level code shared by every test` };
+      return {
+        kind: "whole-file",
+        reason: `line ${lineNo} changes top-level code shared by every test`,
+      };
     }
     if (suite.inert) continue;
     const problem = addAll([suite], suitePrefix);

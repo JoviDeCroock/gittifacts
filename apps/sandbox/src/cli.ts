@@ -14,9 +14,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { EvidenceItem, type ReproducibleTransform } from "@app/evidence";
-import { changeDiff } from "./commands/diff.js";
-import { dependencies } from "./commands/dependencies.js";
 import { coverage } from "./commands/coverage.js";
+import { dependencies } from "./commands/dependencies.js";
+import { changeDiff } from "./commands/diff.js";
 import {
   coverageError,
   dependenciesError,
@@ -169,7 +169,12 @@ function emit(prefix: string, doc: unknown, out: string | undefined): void {
 }
 
 /** Error document for `kind` when the measurement itself could not run. */
-export function errorDocument(kind: EvidenceCommand | "policy-document", note: string, base: string, head: string): unknown {
+export function errorDocument(
+  kind: EvidenceCommand | "policy-document",
+  note: string,
+  base: string,
+  head: string,
+): unknown {
   switch (kind) {
     case "red-green":
       return {
@@ -261,7 +266,12 @@ function validated(kind: EvidenceCommand, doc: unknown, base: string, head: stri
     const r = EvidenceItem.safeParse(item);
     if (!r.success) {
       const issue = r.error.issues[0];
-      return errorDocument(kind, `internal error: the runner produced an invalid ${kind} item (${issue?.path.join(".")}: ${issue?.message})`, base, head);
+      return errorDocument(
+        kind,
+        `internal error: the runner produced an invalid ${kind} item (${issue?.path.join(".")}: ${issue?.message})`,
+        base,
+        head,
+      );
     }
   }
   return doc;
@@ -320,7 +330,10 @@ export async function main(argv: readonly string[]): Promise<number> {
       ip: opts.ip,
       port: opts.port,
       ...(opts.dir === undefined ? {} : { outDir: opts.dir }),
-      persistTo: join(process.env.GITTIFACTS_PREVIEW_STATE ?? join(tmpdir(), "gittifacts-preview"), "state"),
+      persistTo: join(
+        process.env.GITTIFACTS_PREVIEW_STATE ?? join(tmpdir(), "gittifacts-preview"),
+        "state",
+      ),
       dryRun: opts.dryRun,
       wrangler: wranglerBinary(),
       emit: (doc) => emit(PREVIEW_PREFIX, doc, opts.out),
@@ -349,7 +362,9 @@ export async function main(argv: readonly string[]): Promise<number> {
   if (command === "evidence") {
     const k = rest[0];
     if (k === undefined || !(EVIDENCE_KINDS as readonly string[]).includes(k)) {
-      process.stderr.write(`unknown evidence kind ${k ?? "(none)"}; one of: ${EVIDENCE_KINDS.join(", ")}\n`);
+      process.stderr.write(
+        `unknown evidence kind ${k ?? "(none)"}; one of: ${EVIDENCE_KINDS.join(", ")}\n`,
+      );
       return 2;
     }
     kind = k as EvidenceCommand;
@@ -378,9 +393,24 @@ export async function main(argv: readonly string[]): Promise<number> {
       return 2;
     }
     // Without both commits nothing can be measured; still report it when we can name them.
-    if (kind !== "diff" && opts.base !== undefined && opts.head !== undefined && isSha(opts.base) && isSha(opts.head)) {
+    if (
+      kind !== "diff" &&
+      opts.base !== undefined &&
+      opts.head !== undefined &&
+      isSha(opts.base) &&
+      isSha(opts.head)
+    ) {
       log(`cannot prepare the checkout: ${errorMessage(error)}`);
-      emit(EVIDENCE_PREFIX, errorDocument(kind, `cannot prepare the checkout: ${errorMessage(error)}`, opts.base, opts.head), opts.out);
+      emit(
+        EVIDENCE_PREFIX,
+        errorDocument(
+          kind,
+          `cannot prepare the checkout: ${errorMessage(error)}`,
+          opts.base,
+          opts.head,
+        ),
+        opts.out,
+      );
       return 0;
     }
     throw error;
@@ -396,8 +426,15 @@ export async function main(argv: readonly string[]): Promise<number> {
       try {
         policyDoc = await policy(ctx);
       } catch (error) {
-        log(`policy failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
-        policyDoc = errorDocument(kind, `evaluating the base policy failed: ${errorMessage(error)}`, ctx.base, ctx.head);
+        log(
+          `policy failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+        );
+        policyDoc = errorDocument(
+          kind,
+          `evaluating the base policy failed: ${errorMessage(error)}`,
+          ctx.base,
+          ctx.head,
+        );
       }
       emit(EVIDENCE_PREFIX, policyDoc, opts.out);
       return 0;
@@ -406,8 +443,15 @@ export async function main(argv: readonly string[]): Promise<number> {
     try {
       doc = await measure(kind, ctx);
     } catch (error) {
-      log(`${kind} failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
-      doc = errorDocument(kind, `${kind} measurement failed: ${errorMessage(error)}`, ctx.base, ctx.head);
+      log(
+        `${kind} failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+      );
+      doc = errorDocument(
+        kind,
+        `${kind} measurement failed: ${errorMessage(error)}`,
+        ctx.base,
+        ctx.head,
+      );
     }
     emit(EVIDENCE_PREFIX, validated(kind, doc, ctx.base, ctx.head), opts.out);
     return 0;

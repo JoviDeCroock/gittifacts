@@ -37,7 +37,9 @@ export const definePolicy = (value) => value;
 export default { definePipeline, definePolicy };
 `;
 
-export type ModuleSource = { kind: "fs"; path: string } | { kind: "git"; repo: string; rev: string; path: string };
+export type ModuleSource =
+  | { kind: "fs"; path: string }
+  | { kind: "git"; repo: string; rev: string; path: string };
 
 export type BundleResult = { ok: true; file: string } | { ok: false; error: string };
 
@@ -51,7 +53,12 @@ function gitPlugin(repo: string, rev: string): Plugin {
         return { path: joined, namespace: "git" };
       });
       build.onLoad({ filter: /.*/, namespace: "git" }, async (args) => {
-        const candidates = [args.path, ...[".ts", ".mts", ".js", ".mjs", "/index.ts", "/index.js"].map((e) => `${args.path}${e}`)];
+        const candidates = [
+          args.path,
+          ...[".ts", ".mts", ".js", ".mjs", "/index.ts", "/index.js"].map(
+            (e) => `${args.path}${e}`,
+          ),
+        ];
         if (/\.(m?js)$/.test(args.path)) candidates.push(args.path.replace(/\.(m?)js$/, ".$1ts"));
         for (const c of candidates) {
           const text = await readBlob(repo, rev, c);
@@ -69,9 +76,14 @@ function gitPlugin(repo: string, rev: string): Plugin {
 const shimPlugin: Plugin = {
   name: "platform-shims",
   setup(build) {
-    const filter = new RegExp(`^(${SHIMMED_MODULES.map((m) => m.replace(/[/@.]/g, "\\$&")).join("|")})$`);
+    const filter = new RegExp(
+      `^(${SHIMMED_MODULES.map((m) => m.replace(/[/@.]/g, "\\$&")).join("|")})$`,
+    );
     build.onResolve({ filter }, (args) => ({ path: args.path, namespace: "shim" }));
-    build.onLoad({ filter: /.*/, namespace: "shim" }, () => ({ contents: SHIM_SOURCE, loader: "js" }));
+    build.onLoad({ filter: /.*/, namespace: "shim" }, () => ({
+      contents: SHIM_SOURCE,
+      loader: "js",
+    }));
   },
 };
 
@@ -93,7 +105,10 @@ export async function bundleModule(source: ModuleSource, outDir: string): Promis
       plugins.unshift({
         name: "git-entry",
         setup(build) {
-          build.onResolve({ filter: /^gittifacts-entry:/ }, (args) => ({ path: args.path.slice("gittifacts-entry:".length), namespace: "git" }));
+          build.onResolve({ filter: /^gittifacts-entry:/ }, (args) => ({
+            path: args.path.slice("gittifacts-entry:".length),
+            namespace: "git",
+          }));
         },
       });
       entryPoints = [`gittifacts-entry:${source.path}`];
@@ -117,7 +132,9 @@ export async function bundleModule(source: ModuleSource, outDir: string): Promis
     writeFileSync(outfile, out.contents);
     return { ok: true, file: outfile };
   } catch (error) {
-    const failure = error as { errors?: Array<{ text: string; location?: { file: string; line: number } | null }> };
+    const failure = error as {
+      errors?: Array<{ text: string; location?: { file: string; line: number } | null }>;
+    };
     if (Array.isArray(failure.errors) && failure.errors.length > 0) {
       return {
         ok: false,
@@ -136,22 +153,38 @@ export type EvalResult = { ok: true; value: unknown } | { ok: false; error: stri
 const RESULT_PREFIX = "::gittifacts-eval::";
 
 /** Import `file` in a child process and return its JSON-serialized default export. */
-export async function evaluateDefaultExport(file: string, cwd: string, timeoutMs = 15_000): Promise<EvalResult> {
+export async function evaluateDefaultExport(
+  file: string,
+  cwd: string,
+  timeoutMs = 15_000,
+): Promise<EvalResult> {
   const script = [
     `const mod = await import(${JSON.stringify(pathToFileURL(file).href)});`,
     "const value = mod.default;",
     `process.stdout.write("\\n${RESULT_PREFIX}" + JSON.stringify(value === undefined ? null : value) + "\\n");`,
   ].join("\n");
-  const r = await run(process.execPath, ["--input-type=module", "-e", script], { cwd, timeoutMs, echo: false, env: { NODE_OPTIONS: undefined } });
-  if (r.timedOut) return { ok: false, error: `evaluating the module did not finish within ${timeoutMs} ms` };
+  const r = await run(process.execPath, ["--input-type=module", "-e", script], {
+    cwd,
+    timeoutMs,
+    echo: false,
+    env: { NODE_OPTIONS: undefined },
+  });
+  if (r.timedOut)
+    return { ok: false, error: `evaluating the module did not finish within ${timeoutMs} ms` };
   const line = r.stdout.split("\n").find((l) => l.startsWith(RESULT_PREFIX));
   if (r.code !== 0 || line === undefined) {
-    return { ok: false, error: `evaluating the module failed (exit ${r.code}): ${(r.stderr || r.stdout).trim().slice(-1500)}` };
+    return {
+      ok: false,
+      error: `evaluating the module failed (exit ${r.code}): ${(r.stderr || r.stdout).trim().slice(-1500)}`,
+    };
   }
   try {
     return { ok: true, value: JSON.parse(line.slice(RESULT_PREFIX.length)) };
   } catch (error) {
-    return { ok: false, error: `the default export is not JSON-serializable: ${errorMessage(error)}` };
+    return {
+      ok: false,
+      error: `the default export is not JSON-serializable: ${errorMessage(error)}`,
+    };
   }
 }
 

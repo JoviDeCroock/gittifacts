@@ -49,23 +49,53 @@ export interface BasePolicy {
 export async function readPolicyAt(ctx: Context, rev: string): Promise<BasePolicy> {
   const text = await readBlob(ctx.repo, rev, POLICY_PATH);
   if (text === null) {
-    return { source: "default", raw: null, resolved: RepoPolicy.parse({}), issues: [], error: null };
+    return {
+      source: "default",
+      raw: null,
+      resolved: RepoPolicy.parse({}),
+      issues: [],
+      error: null,
+    };
   }
-  const bundled = await bundleModule({ kind: "git", repo: ctx.repo, rev, path: POLICY_PATH }, join(ctx.tmp, "policy"));
-  if (!bundled.ok) return { source: "file", raw: null, resolved: null, issues: [], error: `cannot compile ${POLICY_PATH}: ${bundled.error}` };
+  const bundled = await bundleModule(
+    { kind: "git", repo: ctx.repo, rev, path: POLICY_PATH },
+    join(ctx.tmp, "policy"),
+  );
+  if (!bundled.ok)
+    return {
+      source: "file",
+      raw: null,
+      resolved: null,
+      issues: [],
+      error: `cannot compile ${POLICY_PATH}: ${bundled.error}`,
+    };
   const evaluated = await evaluateDefaultExport(bundled.file, ctx.tmp);
-  if (!evaluated.ok) return { source: "file", raw: null, resolved: null, issues: [], error: evaluated.error };
+  if (!evaluated.ok)
+    return { source: "file", raw: null, resolved: null, issues: [], error: evaluated.error };
   const raw = evaluated.value;
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-    return { source: "file", raw, resolved: null, issues: [], error: `${POLICY_PATH} must \`export default\` an object` };
+    return {
+      source: "file",
+      raw,
+      resolved: null,
+      issues: [],
+      error: `${POLICY_PATH} must \`export default\` an object`,
+    };
   }
   const issues: string[] = [];
   const unknown = Object.keys(raw).filter((k) => !(k in RepoPolicy.shape));
   if (unknown.length > 0) issues.push(`unknown keys (ignored): ${unknown.join(", ")}`);
   const parsed = RepoPolicy.safeParse(raw);
   if (!parsed.success) {
-    for (const i of parsed.error.issues.slice(0, 20)) issues.push(`${i.path.join(".") || "(root)"}: ${i.message}`);
-    return { source: "file", raw, resolved: null, issues, error: `${POLICY_PATH} at ${rev.slice(0, 12)} is not a valid policy` };
+    for (const i of parsed.error.issues.slice(0, 20))
+      issues.push(`${i.path.join(".") || "(root)"}: ${i.message}`);
+    return {
+      source: "file",
+      raw,
+      resolved: null,
+      issues,
+      error: `${POLICY_PATH} at ${rev.slice(0, 12)} is not a valid policy`,
+    };
   }
   return { source: "file", raw, resolved: parsed.data, issues, error: null };
 }
@@ -86,7 +116,10 @@ export async function policy(ctx: Context): Promise<PolicyDocument> {
     platformPaths,
     policyChanged: platformPaths.includes(POLICY_PATH),
   };
-  const note = [base.error, base.source === "default" ? `no ${POLICY_PATH} at base; platform defaults apply` : null]
+  const note = [
+    base.error,
+    base.source === "default" ? `no ${POLICY_PATH} at base; platform defaults apply` : null,
+  ]
     .filter((n): n is string => n !== null)
     .join("; ");
   if (note !== "") doc.note = note.slice(0, 4000);

@@ -21,11 +21,15 @@ const GIT_ENV: NodeJS.ProcessEnv = {
 };
 
 export function gitSync(dir: string, args: readonly string[]): string {
-  return execFileSync("git", ["-c", "init.defaultBranch=main", "-c", "commit.gpgSign=false", ...args], {
-    cwd: dir,
-    env: { ...process.env, ...GIT_ENV },
-    encoding: "utf8",
-  }).trim();
+  return execFileSync(
+    "git",
+    ["-c", "init.defaultBranch=main", "-c", "commit.gpgSign=false", ...args],
+    {
+      cwd: dir,
+      env: { ...process.env, ...GIT_ENV },
+      encoding: "utf8",
+    },
+  ).trim();
 }
 
 export type Files = Record<string, string | null>;
@@ -65,7 +69,12 @@ export function tempRepo(base: Files, head: Files): TempRepo {
   gitSync(dir, ["add", "-A"]);
   gitSync(dir, ["commit", "-q", "--allow-empty", "-m", "head"]);
   const headSha = gitSync(dir, ["rev-parse", "HEAD"]);
-  return { dir, base: baseSha, head: headSha, cleanup: () => rmSync(root, { recursive: true, force: true }) };
+  return {
+    dir,
+    base: baseSha,
+    head: headSha,
+    cleanup: () => rmSync(root, { recursive: true, force: true }),
+  };
 }
 
 export interface CliResult {
@@ -74,13 +83,27 @@ export interface CliResult {
   stderr: string;
 }
 
-export function cli(args: readonly string[], cwd: string, env: NodeJS.ProcessEnv = {}): Promise<CliResult> {
+export function cli(
+  args: readonly string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv = {},
+): Promise<CliResult> {
   return new Promise((resolve) => {
     const clean: NodeJS.ProcessEnv = {};
-    for (const [k, v] of Object.entries(process.env)) if (!k.startsWith("VITEST") && k !== "TEST") clean[k] = v;
-    execFile(process.execPath, [BUNDLE, ...args], { cwd, env: { ...clean, ...env }, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
-      resolve({ code: error ? (typeof error.code === "number" ? error.code : 1) : 0, stdout, stderr });
-    });
+    for (const [k, v] of Object.entries(process.env))
+      if (!k.startsWith("VITEST") && k !== "TEST") clean[k] = v;
+    execFile(
+      process.execPath,
+      [BUNDLE, ...args],
+      { cwd, env: { ...clean, ...env }, maxBuffer: 32 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        resolve({
+          code: error ? (typeof error.code === "number" ? error.code : 1) : 0,
+          stdout,
+          stderr,
+        });
+      },
+    );
   });
 }
 
@@ -88,7 +111,9 @@ export function cli(args: readonly string[], cwd: string, env: NodeJS.ProcessEnv
 export function document(result: CliResult, prefix = "::evidence::"): unknown {
   const lines = result.stdout.split("\n").filter((l) => l !== "");
   if (lines.length !== 1 || !lines[0]?.startsWith(prefix)) {
-    throw new Error(`expected exactly one ${prefix} line, got:\n${result.stdout}\nstderr:\n${result.stderr}`);
+    throw new Error(
+      `expected exactly one ${prefix} line, got:\n${result.stdout}\nstderr:\n${result.stderr}`,
+    );
   }
   return JSON.parse(lines[0].slice(prefix.length));
 }

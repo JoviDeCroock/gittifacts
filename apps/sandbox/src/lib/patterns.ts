@@ -41,7 +41,9 @@ export function isMeasuredSource(path: string): boolean {
 }
 
 /** Restrict a `path → lines` map to measured source files. */
-export function measuredChangedLines(changed: Readonly<Record<string, readonly number[]>>): Record<string, number[]> {
+export function measuredChangedLines(
+  changed: Readonly<Record<string, readonly number[]>>,
+): Record<string, number[]> {
   const out: Record<string, number[]> = {};
   for (const [path, lines] of Object.entries(changed)) {
     if (isMeasuredSource(path) && lines.length > 0) out[path] = [...lines];
