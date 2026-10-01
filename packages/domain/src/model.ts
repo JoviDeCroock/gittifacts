@@ -291,7 +291,17 @@ export type HunkRef = z.infer<typeof HunkRef>;
 export const TourVerdict = z.enum(["proven", "unproven", "risk"]);
 export type TourVerdict = z.infer<typeof TourVerdict>;
 
-export const TourStopKind = z.enum(["intent", "behavior", "risk", "proof", "uncovered", "transform", "other"]);
+/** "transform" and "resolution" (a merge-queue conflict resolution) are written by the platform only. */
+export const TourStopKind = z.enum([
+  "intent",
+  "behavior",
+  "risk",
+  "proof",
+  "uncovered",
+  "transform",
+  "resolution",
+  "other",
+]);
 
 export const TourStop = z.object({
   kind: TourStopKind,

@@ -37,6 +37,7 @@ import {
   type PostprocessReport,
   postprocessTour,
   type Readability,
+  resolutionStopFor,
 } from "./postprocess.js";
 import {
   buildRetryPrompt,
@@ -273,9 +274,13 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
     hasRisk: hasRisk(r),
   }));
 
-  const transformWords = collapse.stop
-    ? countWords(collapse.stop.title) + countWords(collapse.stop.why)
-    : 0;
+  // Merge-queue conflict resolution: one platform-written stop (computed, not the model's).
+  const resolutionStop = resolutionStopFor(input.diff, items);
+  const platformStops = [collapse.stop, resolutionStop].filter((s) => s !== null);
+  const transformWords = platformStops.reduce(
+    (n, s) => n + countWords(s.title) + countWords(s.why),
+    0,
+  );
   const promptInput: TourPromptInput = {
     change: subject,
     plan: input.plan,
@@ -289,10 +294,11 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
     ranking,
     diffText: "",
     collapsed: { transforms: collapse.transforms, files: collapse.paths.size },
+    resolution: resolutionStop !== null,
     omittedHunks: 0,
     limits: {
       lane: caps.lane,
-      maxStops: caps.maxStops - (collapse.stop ? 1 : 0),
+      maxStops: caps.maxStops - platformStops.length,
       maxWords: Math.max(150, caps.maxWords - transformWords - PLATFORM_WORD_RESERVE),
     },
   };
@@ -428,6 +434,7 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
     reasons: input.classification.reasons,
     ranking,
     transformStop: collapse.stop,
+    resolutionStop,
     caps,
     notDoneNotes: notDoneNotes(rendered.omitted, rendered.partial.length),
   });

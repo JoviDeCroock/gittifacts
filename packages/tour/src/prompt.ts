@@ -11,7 +11,7 @@ import type { EvidenceItem } from "@app/evidence";
 import type { RankedHunk } from "./rank.js";
 import { JUDGE_JSON_SCHEMA, type JudgeQuestion, TOUR_JSON_SCHEMA } from "./schema.js";
 
-export const PROMPT_VERSION = "tour-2026-10-01.1";
+export const PROMPT_VERSION = "tour-2026-10-01.2";
 
 const DATA_TAGS = [
   "change",
@@ -172,6 +172,16 @@ export function summarizeEvidenceItem(item: EvidenceItem): string {
     case "llm-judgment":
       body = ` · ${item.question}: ${item.outcome} · ${oneLine(item.rationale, 300)}`;
       break;
+    case "conflict-resolution":
+      body = ` · merge-queue resolution by ${item.resolver.principalId} against ${list(item.upstreamChanges, 6, (u) => u.changeId) || "no upstream change"} · ${item.conflictHunks.length} conflict hunk(s) · ${item.touchesOutsideConflictHunks ? "EDITS OUTSIDE the conflict hunks" : "only inside the conflict hunks"}${
+        item.semanticConflictWith !== null
+          ? ` · semantic conflict caused by ${item.semanticConflictWith}`
+          : ""
+      }`;
+      break;
+    case "quarantine":
+      body = ` · ${item.tests.length} quarantined test(s), not counted as passing · in this change's affected set: ${list(item.inAffectedSet, 6, (t) => oneLine(t, 120)) || "none"}`;
+      break;
   }
   return `${head}${body}${note}`;
 }
@@ -252,6 +262,8 @@ export interface TourPromptInput {
   diffText: string;
   /** Files collapsed into the platform's transform stop. */
   collapsed: { transforms: readonly string[]; files: number };
+  /** The platform adds a "Conflict resolution" stop (merge queue). */
+  resolution?: boolean;
   /** Hunks the model will not see in full (budget). */
   omittedHunks: number;
   limits: TourLimits;
@@ -296,13 +308,18 @@ export function buildTourUserPrompt(input: TourPromptInput): string {
     renderEvidence(input.evidence),
     renderCandidates(input.ranking),
   ];
+  const mechanical: string[] = [];
   if (input.collapsed.files > 0) {
-    sections.push(
-      section("<mechanical>", "mechanical", [
-        `${input.collapsed.files} file(s) were reproduced byte-for-byte by the verified transform(s) ${input.collapsed.transforms.map((t) => `"${t}"`).join(", ")} and are not shown. The platform adds one stop for them; do not describe them.`,
-      ]),
+    mechanical.push(
+      `${input.collapsed.files} file(s) were reproduced byte-for-byte by the verified transform(s) ${input.collapsed.transforms.map((t) => `"${t}"`).join(", ")} and are not shown. The platform adds one stop for them; do not describe them.`,
     );
   }
+  if (input.resolution) {
+    mechanical.push(
+      "The merge queue's resolver agent resolved conflicts between this change and upstream changes (see the conflict-resolution evidence). The platform adds one stop for the resolution itself; do not write a separate stop about it, but do flag risks in the resolved lines.",
+    );
+  }
+  if (mechanical.length > 0) sections.push(section("<mechanical>", "mechanical", mechanical));
   sections.push(
     `<diff>\n${neutralize(input.diffText === "" ? "(no reviewable hunks)" : input.diffText)}\n</diff>`,
   );

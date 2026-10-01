@@ -63,6 +63,7 @@ export const STOP_KIND: Record<TourStop["kind"], string> = {
   proof: "Proof",
   uncovered: "Not covered",
   transform: "Verified transform",
+  resolution: "Conflict resolution",
   other: "Note",
 };
 

@@ -136,6 +136,13 @@ Claude Fable 5 at $10 / $50:
 - Stops are ordered intent → behavior → risk/proof → other → transform → uncovered.
 - A `proven` verdict needs a usable evidence id. Unknown refs are dropped and noted.
 - Verified-transform files become one stop written by the platform.
+- A merge-queue conflict resolution (`conflict-resolution` evidence) becomes one platform-written
+  `resolution` stop, placed right after the riskiest stop and never dropped by the stop cap. It
+  lists the upstream changes, whether the resolver edited lines outside the conflict hunks, and
+  the semantic-conflict culprit. Its verdict is `risk` when the resolution edited outside its
+  hunks, was semantic or failed; otherwise `proven` only when the merged tree's tests passed
+  (`mergedTreeTestsPassed`), else `unproven`. The model is told the stop exists and gets one stop
+  less.
 - The riskiest hunk leads the risk stops whenever a Lane-2 reason is anchored to it.
 - Caps: Lane 1 is ≤ 450 words and ≤ 7 stops (≈ 171 s on a phone at most); Lane 2 is ≤ 900
   words and ≤ 12 stops.
