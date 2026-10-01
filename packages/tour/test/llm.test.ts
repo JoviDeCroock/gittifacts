@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AiGatewayClient,
+  DEFAULT_REVIEWER_POOL,
   FakeLlmClient,
   LlmError,
   type LlmRequest,
@@ -157,7 +158,7 @@ describe("AiGatewayClient (chat completions, Auto Router)", () => {
     await expect(client.complete(REQ)).rejects.toBeInstanceOf(LlmError);
   });
 
-  it("refuses the Anthropic schema for the Auto Router", () => {
+  it("refuses the Anthropic schema when the router really routes (full pool)", () => {
     expect(
       () =>
         new AiGatewayClient({
@@ -165,9 +166,47 @@ describe("AiGatewayClient (chat completions, Auto Router)", () => {
           gatewayId: "g",
           apiToken: "t",
           model: "auto",
+          allowedModels: [],
           format: "anthropic-messages",
         }),
     ).toThrow(/Auto Router/);
+  });
+
+  it('defaults "auto" to the cheap reviewer pool and calls a one-model pool directly', () => {
+    const client = new AiGatewayClient({
+      accountId: "a",
+      gatewayId: "g",
+      apiToken: "t",
+      model: "auto",
+    });
+    expect(client.model).toBe("cloudflare/auto");
+    expect(client.allowedModels).toEqual(DEFAULT_REVIEWER_POOL);
+    const { headers, body } = client.buildRequest(REQ);
+    expect(body.model).toBe("anthropic/claude-sonnet-5");
+    expect(headers["cf-aig-allowed-models"]).toBeUndefined();
+  });
+
+  it("an empty allow-list means the router's full pool", () => {
+    const client = new AiGatewayClient({
+      accountId: "a",
+      gatewayId: "g",
+      apiToken: "t",
+      model: "auto",
+      allowedModels: [],
+    });
+    expect(client.allowedModels).toBeUndefined();
+    expect(client.buildRequest(REQ).body.model).toBe("cloudflare/auto");
+  });
+
+  it("an explicit model is never given a pool", () => {
+    const client = new AiGatewayClient({
+      accountId: "a",
+      gatewayId: "g",
+      apiToken: "t",
+      model: "anthropic/claude-opus-5-5",
+    });
+    expect(client.allowedModels).toBeUndefined();
+    expect(client.buildRequest(REQ).body.model).toBe("anthropic/claude-opus-5-5");
   });
 });
 

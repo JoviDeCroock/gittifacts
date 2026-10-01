@@ -49,6 +49,8 @@ export interface LlmResponse {
   stopReason?: string;
   /** AI Gateway log id (`cf-aig-log-id`), for audit links. */
   logId?: string;
+  /** The provider returned no token usage; tokens (and cost) were estimated from text length. */
+  usageEstimated?: boolean;
 }
 
 export interface LlmClient {
@@ -79,6 +81,41 @@ export class LlmError extends Error {
 export function resolveReviewerModel(policyModel: string): string {
   const m = policyModel.trim();
   return m === "" || m === "auto" ? AUTO_ROUTER_MODEL : m;
+}
+
+/**
+ * The pool the reviewer routes within when the policy says "auto" and no pool is configured.
+ *
+ * Claude Sonnet 5 ($2 / $10 per MTok) is the cheapest Anthropic model in the Auto Router's
+ * documented default pool (docs/research/release-observability.md §6, verified 2026-10-01).
+ * Claude Sonnet 5.5 (same price) and Claude Haiku 4.5 ($1 / $5) are not listed in the router pool
+ * yet, and an allow-list entry the pool does not contain makes every request fail with HTTP 400,
+ * so they are not the default. Swapping them in later keeps the $2 / $10 ceiling, so the budget
+ * arithmetic in README.md does not change. Pass `allowedModels: []` to use the router's full pool.
+ */
+export const DEFAULT_REVIEWER_POOL: readonly string[] = ["anthropic/claude-sonnet-5"];
+
+/** `allowedModels` for a client: the default pool for the Auto Router, unless configured. */
+export function defaultAllowedModels(
+  model: string,
+  allowedModels: readonly string[] | undefined,
+): readonly string[] | undefined {
+  if (allowedModels !== undefined) return allowedModels.length > 0 ? allowedModels : undefined;
+  return model === AUTO_ROUTER_MODEL ? DEFAULT_REVIEWER_POOL : undefined;
+}
+
+/**
+ * The model id actually sent. A one-model Auto Router pool needs no routing, so that model is
+ * called directly: this avoids relying on `cloudflare/auto` support on the unified endpoint and
+ * the binding, and on the binding forwarding allow-list headers (both unverified, research §9.6).
+ */
+export function effectiveModel(
+  model: string,
+  allowedModels: readonly string[] | undefined,
+): string {
+  if (model !== AUTO_ROUTER_MODEL || allowedModels?.length !== 1) return model;
+  const only = allowedModels[0]!;
+  return only.includes("*") ? model : only;
 }
 
 // ---------------------------------------------------------------- JSON helpers
@@ -208,6 +245,8 @@ const AnthropicMessagesResponse = z.object({
 export class AiGatewayClient implements LlmClient {
   readonly model: string;
   readonly allowedModels?: readonly string[];
+  /** The model id put on the wire (see {@link effectiveModel}). */
+  readonly sentModel: string;
   readonly format: GatewayFormat;
   private readonly opts: AiGatewayClientOptions;
   private readonly prices: PriceTable;
@@ -216,12 +255,14 @@ export class AiGatewayClient implements LlmClient {
   constructor(opts: AiGatewayClientOptions) {
     this.opts = opts;
     this.model = resolveReviewerModel(opts.model);
-    if (opts.allowedModels !== undefined) this.allowedModels = opts.allowedModels;
+    const allowed = defaultAllowedModels(this.model, opts.allowedModels);
+    if (allowed !== undefined) this.allowedModels = allowed;
+    this.sentModel = effectiveModel(this.model, allowed);
     this.format = opts.format ?? "openai-chat";
     this.prices = opts.prices ?? DEFAULT_PRICES;
     // Bind: calling an unbound global fetch as a method throws "Illegal invocation" in workerd.
     this.fetchImpl = opts.fetch ?? ((input, init) => fetch(input, init));
-    if (this.format === "anthropic-messages" && this.model === AUTO_ROUTER_MODEL) {
+    if (this.format === "anthropic-messages" && this.sentModel === AUTO_ROUTER_MODEL) {
       throw new Error("The Auto Router (cloudflare/auto) only speaks the chat-completions format");
     }
     if (opts.endpoint === undefined && (opts.accountId === undefined || opts.accountId === "")) {
@@ -280,9 +321,9 @@ export class AiGatewayClient implements LlmClient {
     if (this.opts.maxAttempts !== undefined)
       headers["cf-aig-max-attempts"] = String(this.opts.maxAttempts);
     if (this.opts.skipCache) headers["cf-aig-skip-cache"] = "true";
-    if (this.model === AUTO_ROUTER_MODEL) {
-      if (this.opts.allowedModels?.length)
-        headers["cf-aig-allowed-models"] = this.opts.allowedModels.join(",");
+    if (this.sentModel === AUTO_ROUTER_MODEL) {
+      if (this.allowedModels?.length)
+        headers["cf-aig-allowed-models"] = this.allowedModels.join(",");
       if (this.opts.allowedProviders?.length) {
         headers["cf-aig-allowed-providers"] = this.opts.allowedProviders.join(",");
       }
@@ -295,7 +336,7 @@ export class AiGatewayClient implements LlmClient {
         outputConfig.format = { type: "json_schema", schema: req.jsonSchema.schema };
       if (this.opts.effort) outputConfig.effort = this.opts.effort;
       const body: Record<string, unknown> = {
-        model: this.model,
+        model: this.sentModel,
         max_tokens: req.maxTokens,
         system: req.system,
         messages: req.messages.map((m) => ({ role: m.role, content: m.content })),
@@ -306,7 +347,7 @@ export class AiGatewayClient implements LlmClient {
     }
 
     const body: Record<string, unknown> = {
-      model: this.model,
+      model: this.sentModel,
       messages: [
         { role: "system", content: req.system },
         ...req.messages.map((m) => ({ role: m.role, content: m.content })),
@@ -362,7 +403,7 @@ export class AiGatewayClient implements LlmClient {
     const logId = res.headers.get("cf-aig-log-id") ?? undefined;
     const parsed =
       this.format === "anthropic-messages" ? parseAnthropic(payload) : parseOpenAi(payload);
-    const model = routed ?? parsed.model ?? this.model;
+    const model = routed ?? parsed.model ?? this.sentModel;
     const costUsd = costOfUsage(model, parsed.usage, this.prices);
     const json = parsed.text === "" ? undefined : parseJsonLoose(parsed.text);
     const out: LlmResponse = {
@@ -378,14 +419,14 @@ export class AiGatewayClient implements LlmClient {
   }
 }
 
-interface ParsedCompletion {
+export interface ParsedCompletion {
   text: string;
   usage: TokenUsage;
   model: string | undefined;
   stopReason: string | undefined;
 }
 
-function parseOpenAi(payload: unknown): ParsedCompletion {
+export function parseOpenAi(payload: unknown): ParsedCompletion {
   const r = OpenAiChatResponse.safeParse(payload);
   if (!r.success)
     throw new LlmError("bad-response", `Unexpected chat-completions response: ${r.error.message}`);
@@ -407,7 +448,7 @@ function parseOpenAi(payload: unknown): ParsedCompletion {
   };
 }
 
-function parseAnthropic(payload: unknown): ParsedCompletion {
+export function parseAnthropic(payload: unknown): ParsedCompletion {
   const r = AnthropicMessagesResponse.safeParse(payload);
   if (!r.success)
     throw new LlmError("bad-response", `Unexpected messages response: ${r.error.message}`);
@@ -429,7 +470,7 @@ function parseAnthropic(payload: unknown): ParsedCompletion {
   return { text, usage, model: r.data.model, stopReason: r.data.stop_reason ?? undefined };
 }
 
-function errorMessage(err: unknown): string {
+export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 

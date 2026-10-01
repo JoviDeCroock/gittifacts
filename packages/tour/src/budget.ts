@@ -57,10 +57,17 @@ function ceilingOf(prices: readonly ModelPrice[]): ModelPrice {
 }
 
 /** `anthropic/claude-opus-5-5` → `claude-opus-5-5`; `@cf/x/y` stays as is. */
-function bareModelId(model: string): string {
+/**
+ * Canonical price-table key: `anthropic/claude-opus-5.5` (AI Gateway catalog spelling) and
+ * `claude-haiku-4-5-20251001` (dated snapshot) both map to the Anthropic API id
+ * (`claude-opus-5-5`, `claude-haiku-4-5`). `@cf/…` ids are kept as they are.
+ */
+export function canonicalModelId(model: string): string {
   if (model.startsWith("@cf/")) return model;
   const slash = model.indexOf("/");
-  return slash === -1 ? model : model.slice(slash + 1);
+  let id = slash === -1 ? model : model.slice(slash + 1);
+  if (id.startsWith("claude-")) id = id.replace(/\./g, "-").replace(/-\d{8}$/, "");
+  return id;
 }
 
 export interface PriceLookup {
@@ -81,14 +88,14 @@ export function priceFor(
 ): PriceLookup {
   if (model === AUTO_ROUTER_MODEL) {
     if (allowedModels && allowedModels.length > 0 && !allowedModels.some((m) => m.includes("*"))) {
-      const prices = allowedModels.map((m) => table[bareModelId(m)] ?? table[m]);
+      const prices = allowedModels.map((m) => table[m] ?? table[canonicalModelId(m)]);
       if (prices.every((p): p is ModelPrice => p !== undefined)) {
         return { price: ceilingOf(prices), known: true };
       }
     }
     return { price: ceilingOf([CEILING_PRICE, ...Object.values(table)]), known: false };
   }
-  const price = table[model] ?? table[bareModelId(model)];
+  const price = table[model] ?? table[canonicalModelId(model)];
   if (price !== undefined) return { price, known: true };
   return { price: ceilingOf([CEILING_PRICE, ...Object.values(table)]), known: false };
 }
