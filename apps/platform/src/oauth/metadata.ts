@@ -9,7 +9,12 @@
  *   check before they proceed; `client_id_metadata_document_supported` advertises CIMD; there is
  *   no `registration_endpoint` because DCR is not offered.
  */
-import { type JsonValue, mcpDiscovery, type WellKnownDocument } from "@app/conventions";
+import {
+  type AuthHints,
+  type JsonValue,
+  mcpDiscovery,
+  type WellKnownDocument,
+} from "@app/conventions";
 import { DELEGABLE_SCOPES } from "./scopes.js";
 import { OAUTH_PATHS, type OAuthUrls } from "./urls.js";
 
@@ -57,3 +62,15 @@ export function protectedResourceDocuments(urls: OAuthUrls, version: string): We
 }
 
 export const AS_METADATA_PATH = OAUTH_PATHS.asMetadata;
+
+/**
+ * The CLI login (`packages/cli`): RFC 8628 against `device_authorization_endpoint`
+ * (POST /api/auth/device/code, client_id=gittifacts-cli) and `token_endpoint` (/api/oauth/token),
+ * both discovered from /.well-known/oauth-authorization-server.
+ */
+export const DEVICE_FLOW_COMMAND = "npx gittifacts login";
+
+/** The delegated-auth part of `/start` and `/llms.txt` (@app/conventions `authHints`). */
+export function delegatedAuthHints(): Pick<AuthHints, "oauth" | "deviceFlowCommand"> {
+  return { oauth: true, deviceFlowCommand: DEVICE_FLOW_COMMAND };
+}
