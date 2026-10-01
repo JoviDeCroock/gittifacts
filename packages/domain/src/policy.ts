@@ -78,6 +78,11 @@ export const RepoPolicy = z.object({
     })
     .default({ allowPatchBumpsInLane0: true }),
   planlessLane0: z.array(PlanlessCategory).default([]),
+  /**
+   * A revert the platform has mechanically verified to be the exact inverse of a change it
+   * merged restores an already-approved state, so it may auto-merge even in shadow mode.
+   */
+  autoMergeVerifiedReverts: z.boolean().default(true),
   rollout: RolloutPolicy.default({
     stages: [5, 25, 100],
     stageMinutes: 10,
