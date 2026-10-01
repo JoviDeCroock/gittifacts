@@ -7,6 +7,7 @@ export * from "./agents-md.js";
 export * from "./calls.js";
 export * from "./catalog.js";
 export * from "./fixes.js";
+export * from "./inspect.js";
 export * from "./llms-txt.js";
 export * from "./mcp-discovery.js";
 export * from "./next-steps.js";
