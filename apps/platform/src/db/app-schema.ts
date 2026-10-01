@@ -34,6 +34,10 @@ export const principals = sqliteTable(
     /** Humans: the better-auth user behind this principal. */
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     scopes: text("scopes", { mode: "json" }).$type<string[]>().notNull(),
+    /** Agents: repos it may act on; NULL = every repo its owner can access (see Principal.repoIds). */
+    repoIds: text("repo_ids", { mode: "json" }).$type<string[] | null>(),
+    /** Set when the owner revokes the agent's session; a disabled principal authenticates nowhere. */
+    disabledAt: text("disabled_at"),
     createdAt: text("created_at").notNull(),
   },
   (t) => [
@@ -75,10 +79,18 @@ export const agentTokens = sqliteTable(
     expiresAt: text("expires_at"),
     lastUsedAt: text("last_used_at"),
     revokedAt: text("revoked_at"),
+    /**
+     * RFC 8707 audience: the resource URIs (`<origin>/mcp`, `<origin>/api`) this token is valid
+     * for. NULL = any platform resource (tokens a human creates directly on the Agents screen).
+     */
+    audience: text("audience", { mode: "json" }).$type<string[] | null>(),
+    /** OAuth / device-flow session that minted this token (agent_sessions.id), if any. */
+    sessionId: text("session_id"),
   },
   (t) => [
     uniqueIndex("agent_tokens_token_hash_uq").on(t.tokenHash),
     index("agent_tokens_principal_id_idx").on(t.principalId),
+    index("agent_tokens_session_id_idx").on(t.sessionId),
   ],
 );
 
