@@ -21,5 +21,8 @@ GITHUB_CLIENT_SECRET=
 ISSUES_WEBHOOK_SECRET=
 
 # Cloudflare API access for Workers Versions/Deployments, Flagship, Observability and Issues APIs.
+# (CF_ACCOUNT_ID is a var in wrangler.jsonc.)
 CF_API_TOKEN=
-CF_ACCOUNT_ID=
+
+# Optional: AI Gateway token for the reviewer's HTTP fallback when the AI binding fails.
+AI_GATEWAY_TOKEN=
