@@ -31,8 +31,10 @@ export class RefUpdateError extends GitWireError {
   constructor(
     readonly ref: string,
     readonly reason: string,
+    /** Server messages from sideband channel 2 (git explains lock/CAS failures there). */
+    readonly detail = "",
   ) {
-    super(`${ref}: ${reason}`);
+    super(`${ref}: ${reason}${detail ? ` (${detail.trim().replace(/\s+/g, " ")})` : ""}`);
   }
 }
 

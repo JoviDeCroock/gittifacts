@@ -117,20 +117,21 @@ export function parseReport(res: Uint8Array): PushReport {
  * classification is by keyword.
  */
 export function assertRefUpdated(report: PushReport, ref: string): RefResult {
+  const detail = report.progress;
   if (!report.unpackOk) {
     const reason = `unpack ${report.unpackError ?? "failed"}`;
-    if (/missing/i.test(reason)) throw new MissingObjectError(ref, reason);
-    throw new RejectedError(ref, reason);
+    if (/missing/i.test(reason)) throw new MissingObjectError(ref, reason, detail);
+    throw new RejectedError(ref, reason, detail);
   }
   const result = report.refs.find((r) => r.ref === ref);
   if (!result) throw new GitProtocolError(`no status reported for ${ref}`);
   if (result.ok) return result;
   const reason = result.reason ?? "";
-  if (/missing|bad pack/i.test(reason)) throw new MissingObjectError(ref, reason);
+  if (/missing|bad pack/i.test(reason)) throw new MissingObjectError(ref, reason, detail);
   if (/stale|lock|expected|fetch first|failed to (update|delete)/i.test(reason)) {
-    throw new StaleRefError(ref, reason);
+    throw new StaleRefError(ref, reason, detail);
   }
-  throw new RejectedError(ref, reason);
+  throw new RejectedError(ref, reason, detail);
 }
 
 /**
