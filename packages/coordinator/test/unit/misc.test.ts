@@ -14,7 +14,7 @@ import {
   withLane0Toggle,
 } from "../../src/policy.js";
 import { parsePushEvent } from "../../src/push-router.js";
-import { createRunSink, toPipelineRun } from "../../src/run-sink.js";
+import { bundleRefOf, CiRunSummary, createRunSink, toPipelineRun } from "../../src/run-sink.js";
 import { fromWorkflowStep, waitOrTimeout } from "../../src/step.js";
 
 const SHA_A = "a".repeat(40);
@@ -296,6 +296,71 @@ describe("run sink", () => {
     });
     expect(await sink.onRunFinished({ nope: true })).toMatchObject({ accepted: false });
     expect(toPipelineRun({ ...summary, status: "weird", steps: [] }).status).toBe("errored");
+  });
+
+  it("forwards the engine's build artifact and step snapshots to the change workflow", async () => {
+    const env = createFakeEnvironment({ runWorkflows: false });
+    const repo = await env.seedRepo();
+    const base = {
+      id: "run-x",
+      changeId: "c2",
+      headSha: SHA_B,
+      status: "passed",
+      steps: [],
+    };
+    const key = "ci-artifacts/run-x/build/bundle.tgz";
+    // The engine reports the bundle as artifacts.bundle.key; nothing maps it onto outputs.
+    expect(
+      bundleRefOf(CiRunSummary.parse({ ...base, artifacts: { bundle: { key, bytes: 1 } } })),
+    ).toBe(key);
+    expect(bundleRefOf(CiRunSummary.parse({ ...base, outputs: { bundleRef: "legacy" } }))).toBe(
+      "legacy",
+    );
+    expect(bundleRefOf(CiRunSummary.parse(base))).toBeNull();
+    // A malformed artifacts map is ignored (no bundle), not a rejected summary.
+    expect(bundleRefOf(CiRunSummary.parse({ ...base, artifacts: "nope" }))).toBeNull();
+
+    await env.ports.store.insertChange({
+      id: "c2",
+      repoId: repo.id,
+      planId: null,
+      title: "t",
+      claim: { category: "fix", summary: null },
+      baseSha: SHA_A,
+      headSha: SHA_B,
+      forkName: "task-c2",
+      authorId: "a",
+      status: "running",
+      computedLane: null,
+      lane: null,
+      laneReasons: [],
+      evidenceId: null,
+      tourId: null,
+      flagKey: null,
+      mergedSha: null,
+      rolloutState: null,
+      revertOf: null,
+      revertedBy: null,
+      agentTraceId: null,
+      createdAt: "2026-10-01T12:00:00.000Z",
+      updatedAt: "2026-10-01T12:00:00.000Z",
+    });
+    const instanceId = changeWorkflowId("c2", SHA_B);
+    const instance = await env.bindings.changeWorkflow.create({
+      id: instanceId,
+      params: { changeId: "c2", headSha: SHA_B },
+    });
+    const sink = createRunSink(env.ports, env.bindings);
+    await sink.onRunFinished({
+      ...base,
+      id: ciRunIdFor(instanceId),
+      artifacts: { bundle: { key, bytes: 1, sha256: "0".repeat(64), step: "build" } },
+      snapshots: { install: "snap-i", build: "snap-b" },
+    });
+    expect(instance.received[0]).toMatchObject({
+      type: "ci-finished",
+      payload: { outputs: { bundleRef: key, snapshots: { install: "snap-i", build: "snap-b" } } },
+    });
   });
 });
 

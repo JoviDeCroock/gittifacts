@@ -39,8 +39,12 @@ export const CiFinishedEvent = z.object({
   /** Evidence steps that produced nothing valid: their signals stay missing (→ escalate). */
   evidenceErrors: z.array(z.object({ step: z.string(), message: z.string() })).default([]),
   outputs: z
-    .object({ bundleRef: z.string().nullable().default(null) })
-    .default({ bundleRef: null }),
+    .object({
+      bundleRef: z.string().nullable().default(null),
+      /** Container snapshot per passed step (`build` is what previews start from). */
+      snapshots: z.record(z.string(), z.string()).default({}),
+    })
+    .default({ bundleRef: null, snapshots: {} }),
 });
 export type CiFinishedEvent = z.infer<typeof CiFinishedEvent>;
 

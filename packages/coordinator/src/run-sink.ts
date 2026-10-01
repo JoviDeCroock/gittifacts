@@ -64,9 +64,16 @@ export const CiRunSummary = z
     evidenceErrors: z
       .array(z.object({ step: z.string(), message: z.string() }).passthrough())
       .default([]),
-    /** Bundle produced by the pipeline's `build` step (not yet emitted by the engine). */
+    /** Legacy: a bundle reference set directly (older engines / tests). */
     outputs: z.object({ bundleRef: z.string().nullable().optional() }).passthrough().optional(),
     bundleRef: z.string().nullable().optional(),
+    /** Build artifacts of passed steps by name; the build step's deployable is `bundle`. */
+    artifacts: z
+      .record(z.string(), z.object({ key: z.string().min(1) }).passthrough())
+      .optional()
+      .catch(undefined),
+    /** Container snapshot of each passed step (`build` → previews start from it). */
+    snapshots: z.record(z.string(), z.string().min(1)).optional().catch(undefined),
     error: z.string().optional(),
   })
   .passthrough();
@@ -122,8 +129,17 @@ export function toPipelineRun(
   };
 }
 
+/** `@app/ci-engine`'s `DEFAULT_BUNDLE_ARTIFACT` (mirrored: see ports.ts on engine imports). */
+export const BUNDLE_ARTIFACT = "bundle";
+
+/** The deployable the pipeline built: the engine's `artifacts.bundle.key`, else a legacy ref. */
 export function bundleRefOf(summary: CiRunSummary): string | null {
-  return summary.outputs?.bundleRef ?? summary.bundleRef ?? null;
+  return (
+    summary.artifacts?.[BUNDLE_ARTIFACT]?.key ??
+    summary.outputs?.bundleRef ??
+    summary.bundleRef ??
+    null
+  );
 }
 
 export type SinkOutcome =
@@ -164,7 +180,7 @@ export function createRunSink(
           step: e.step,
           message: e.message.slice(0, 4000),
         })),
-        outputs: { bundleRef: bundleRefOf(summary) },
+        outputs: { bundleRef: bundleRefOf(summary), snapshots: summary.snapshots ?? {} },
       };
       const instance = await bindings.changeWorkflow.get(instanceId);
       await instance.sendEvent({ type: EVENT_CI_FINISHED, payload });

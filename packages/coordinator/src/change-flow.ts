@@ -303,7 +303,7 @@ export async function runChangeWorkflow(
           run: toPipelineRun(latest),
           items: [],
           evidenceErrors: lost,
-          outputs: { bundleRef: null },
+          outputs: { bundleRef: null, snapshots: {} },
         };
       }
       try {
@@ -315,7 +315,7 @@ export async function runChangeWorkflow(
         latest === null
           ? placeholderRun(runId, changeId, headSha, at)
           : { ...toPipelineRun(latest), status: "errored" as const, finishedAt: at };
-      return { run, items: [], evidenceErrors: lost, outputs: { bundleRef: null } };
+      return { run, items: [], evidenceErrors: lost, outputs: { bundleRef: null, snapshots: {} } };
     });
   }
   const ciStatus = toCiStatus(report.run.status);
