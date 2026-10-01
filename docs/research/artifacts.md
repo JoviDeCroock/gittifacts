@@ -324,3 +324,20 @@ Creating resources was off-limits, and the only namespace (`keelhaul`) belongs t
 10. **Billing scope.** Do binding reads, token mints, and git `ls-refs` count as billable operations? Does the control-plane rate limit include binding calls?
 11. **Git LFS.** Mentioned as an "extensible" goal [B1]; not documented as supported.
 12. **Event triggers API.** The REST shape of `PUT /accounts/{id}/triggers/{script}` is not in the `cf` CLI schema list. It is known only from wrangler source.
+
+## 12. Live probe results (2026-10-01, namespace `gittifacts-eu`, jurisdiction eu)
+
+Ran against the real service from this machine (git 2.39, Node 22). The probe repo was deleted afterwards.
+
+| Question | Result |
+|---|---|
+| EU namespace create | `cf artifacts namespaces create --body '{"namespace":"gittifacts-eu","jurisdiction":"eu"}'` works. |
+| Token format | EU tokens are `art_v2_e_<hex>?expires=<unix>`. **Not** `art_v1_` as documented. Treat tokens as opaque. |
+| Push branch + `refs/notes/*` with Bearer | Works. `git push $REMOTE main 'refs/notes/*:refs/notes/*'`. |
+| Basic auth (password = token without `?expires=`) | Works for clone + notes fetch. |
+| Blobless clone `--filter=blob:none` | **Works.** Missing blobs are promisor objects fetched lazily, so ArtifactFS-style lazy checkout is viable. |
+| Raw receive-pack fast-forward (no objects, empty pack) from `fetch` | **Works**: `unpack ok` / `ok refs/heads/main`. |
+| Compare-and-swap semantics | Wrong old SHA → HTTP 200 with `ng refs/heads/main stale ref`. So the CAS is real. |
+| Fast-forward to a commit absent from the repo | `unpack reachable object is missing` / `ng … missing object`. Objects have to be transferred first. |
+| REST/CLI fork | `POST …/repos/:src/fork` rejects every body shape tried (`name`, `target`, `fork_name`, …) with `10101 Invalid repo name`. Use the **Workers binding** `repo.fork(name, opts)` instead (to be verified from the deployed Worker). |
+| Wrong-repo token | Untested: the fork could not be created via CLI. |

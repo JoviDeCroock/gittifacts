@@ -35,3 +35,26 @@ itself force Lane 2.
 **Decision.** The policy that governs a Change is the one in `.platform/policy.ts` on the default
 branch at `baseSha`, never the head. A Change that modifies the policy file is always Lane 2 and
 needs a human approval from someone other than the author.
+
+## 2026-10-01 — Git writes over raw smart HTTP from the Worker (`@app/gitwire`); containers only for running code
+
+**Context.** Artifacts has no write API: no ref update, merge, or notes endpoint. A live probe confirmed
+that a raw `git-receive-pack` request from `fetch` can fast-forward a branch with real compare-and-swap
+(`ng … stale ref` on a wrong old SHA), and that it rejects updates whose objects are missing.
+
+**Decision.** Ship a small pure-TS git wire client (`packages/gitwire`): pkt-line, sideband, receive-pack
+with report-status, upload-pack v2 fetch, non-delta pack writer, and a notes writer. The Worker uses it
+to (a) write `refs/notes/evidence`, (b) transfer a Change's objects from its fork into the main repo
+under `refs/merge-queue/<changeId>`, and (c) fast-forward `refs/heads/main` with CAS from the merge-queue
+Durable Object. Containers are only for steps that execute repository code (CI, evidence tools) and
+for rebases when main moved.
+
+**Consequences.** Merges and notes don't pay a container cold start. "Only the merge queue writes main"
+is enforced in one place, the merge-queue DO, which is the only code path that sends a receive-pack
+for `refs/heads/<default>`.
+
+## 2026-10-01 — Artifacts namespace `gittifacts-eu` (EU jurisdiction), created explicitly
+
+Implicitly created namespaces are unrestricted and the jurisdiction is immutable, so the platform
+namespace is created explicitly with `jurisdiction: "eu"`. Tokens are treated as opaque strings: the
+probe got `art_v2_e_…` while the docs show `art_v1_…`.
