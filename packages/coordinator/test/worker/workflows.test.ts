@@ -21,6 +21,7 @@ import { resetFakePorts } from "./fixture.js";
 type TestEnv = CoordinatorEnv & {
   CHANGE_WORKFLOW: Workflow<ChangeWorkflowParams>;
   ROLLOUT_WORKFLOW: Workflow<RolloutParams>;
+  PUSH_ROUTER: Workflow<unknown>;
 };
 const testEnv = env as unknown as TestEnv;
 
@@ -99,6 +100,42 @@ describe("ChangeWorkflow (workerd)", () => {
     // DO state: the instance and run are tracked per change.
     const state = await bindings.changeCoordinator(change.id).state(change.id);
     expect(state).toMatchObject({ headSha: head, instanceId, runId: ciRunIdFor(instanceId) });
+  });
+});
+
+describe("PushRouter (workerd)", () => {
+  it("routes an Artifacts push event to the change's coordinator, which starts the ChangeWorkflow", async () => {
+    const bindings = cloudflareBindings(testEnv);
+    const coordinator = createCoordinator(portsForRole(ports, "default"), bindings);
+    const repo = await seedRepo();
+    const agent = ports.store.addPrincipal(principal({ kind: "agent", ownerId: "owner" }));
+    const { change } = await coordinator.startChange(agent, { repoId: repo.id, title: "t", category: "feature" });
+    const head = ports.git.commit(change.forkName, "main", { "src/b.ts": "export const b = 1;\n" });
+
+    await using changeWorkflows = await introspectWorkflow(testEnv.CHANGE_WORKFLOW);
+    await using router = await introspectWorkflowInstance(testEnv.PUSH_ROUTER, "push-1");
+    await testEnv.PUSH_ROUTER.create({
+      id: "push-1",
+      params: {
+        type: "cf.artifacts.repo.pushed",
+        source: { type: "artifacts.repo", namespace: ports.git.namespace, repoName: change.forkName },
+        payload: { ref: "refs/heads/main", before: change.baseSha, after: head, commits: [], totalCommitsCount: 1 },
+        metadata: { eventSchemaVersion: 1 },
+      },
+    });
+    await router.waitForStatus("complete");
+    expect(await router.getOutput()).toEqual({ routed: true, reason: null });
+    expect((await changeWorkflows.get()).length).toBe(1);
+    expect(await ports.store.getChange(change.id)).toMatchObject({ headSha: head, status: "running" });
+
+    // Events for other namespaces or main repos are ignored without touching any change.
+    await using other = await introspectWorkflowInstance(testEnv.PUSH_ROUTER, "push-2");
+    await testEnv.PUSH_ROUTER.create({
+      id: "push-2",
+      params: { type: "cf.artifacts.repo.pushed", source: { namespace: "keelhaul", repoName: "x" }, payload: { ref: "refs/heads/main", before: head, after: head } },
+    });
+    await other.waitForStatus("complete");
+    expect(await other.getOutput()).toMatchObject({ routed: false });
   });
 });
 
