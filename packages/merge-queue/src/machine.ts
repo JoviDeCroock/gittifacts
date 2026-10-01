@@ -5,7 +5,7 @@
  * `MergeQueue` DO and the simulator run exactly this code. See protocol.ts for the vocabulary and
  * README-level notes in each section below for the mechanics (§ refer to 03-merge-queue.md).
  */
-import { ConflictIndex, conflicts, isWildcard, unionAffected } from "./conflict.js";
+import { ConflictIndex, conflicts, needsAllTests, unionAffected } from "./conflict.js";
 import { ejectReason, type EjectInput } from "./eject.js";
 import { InvariantViolation, invariant } from "./invariants.js";
 import { predict } from "./predict.js";
@@ -1149,7 +1149,7 @@ class Machine {
     const out = new Set<string>();
     for (const id of changeIds) {
       const a = this.entry(id)?.affected ?? null;
-      if (isWildcard(a) || a === null) {
+      if (a === null || needsAllTests(a)) {
         for (const t of q) out.add(t);
         continue;
       }
@@ -1446,7 +1446,7 @@ class Machine {
     const parentId = this.s.landing[this.s.landing.length - 1] ?? null;
     const own = members.flatMap((m) => ownEntries(m));
     const affected = unionAffected(own.map((x) => this.entry(x)?.affected ?? null));
-    const targets: TestScope = isWildcard(affected) ? "all" : [...new Set(affected.testTargets)].sort();
+    const targets: TestScope = needsAllTests(affected) ? "all" : [...new Set(affected.testTargets)].sort();
     this.s.batches[id] = {
       id,
       kind: "landing",
@@ -1601,7 +1601,7 @@ class Machine {
           const a = this.entry(id)?.affected ?? null;
           ahead.push({ changeId: id, affected: a });
           aheadIds.add(id);
-          if (isWildcard(a) || a === null) all = true;
+          if (a === null || needsAllTests(a)) all = true;
           else for (const t of a.testTargets) needed.add(t);
         }
       }

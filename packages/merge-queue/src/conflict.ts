@@ -1,27 +1,42 @@
 /**
- * Conflict graph (§4.1/4.2). Two Changes conflict when their affected sets share a file, a module
- * of the reverse-dependency closure, or a test target. An incomplete (unknown) affected set, or
- * one whose tests fell back to "all tests", conflicts with everything: never default to parallel.
+ * Conflict graph (§4.1/4.2), with exactly the semantics of `@app/affected`'s `conflictBetween`:
+ * two Changes conflict when either set is incomplete, either touched config (`*config*` in
+ * modules), or they share a file, a module, or a test target — where `*` (all tests) meets any
+ * non-empty test set. An unknown set (null: not computed) conflicts with everything. Never default
+ * to parallel.
  */
-import { ALL_TESTS, type AffectedSet } from "./schema.js";
+import { ALL_TESTS, type AffectedSet, CONFIG_SENTINEL } from "./schema.js";
 
 /** True when the set must be treated as conflicting with every other set. */
-export function isWildcard(a: AffectedSet | null): boolean {
-  return a === null || !a.complete || a.testTargets.includes(ALL_TESTS);
+export function conflictsWithEverything(a: AffectedSet | null): boolean {
+  return a === null || !a.complete || a.modules.includes(CONFIG_SENTINEL);
 }
 
-/** Index keys of a (non-wildcard) affected set. */
+/** True when a revalidation of this Change must run every test. */
+export function needsAllTests(a: AffectedSet | null): boolean {
+  return a === null || conflictsWithEverything(a) || a.testTargets.includes(ALL_TESTS);
+}
+
+function hasTests(a: AffectedSet): boolean {
+  return a.testTargets.length > 0;
+}
+
+function allTests(a: AffectedSet): boolean {
+  return a.testTargets.includes(ALL_TESTS);
+}
+
+/** Index keys of a set that doesn't conflict with everything (sentinels excluded). */
 export function conflictKeys(a: AffectedSet): string[] {
   const keys: string[] = [];
   for (const f of a.files) keys.push(`f:${f}`);
-  for (const m of a.modules) keys.push(`m:${m}`);
-  for (const t of a.testTargets) keys.push(`t:${t}`);
+  for (const m of a.modules) if (m !== CONFIG_SENTINEL) keys.push(`m:${m}`);
+  for (const t of a.testTargets) if (t !== ALL_TESTS) keys.push(`t:${t}`);
   return keys;
 }
 
 export function conflicts(a: AffectedSet | null, b: AffectedSet | null): boolean {
-  if (isWildcard(a) || isWildcard(b)) return true;
-  if (a === null || b === null) return true;
+  if (a === null || b === null || conflictsWithEverything(a) || conflictsWithEverything(b)) return true;
+  if ((allTests(a) && hasTests(b)) || (allTests(b) && hasTests(a))) return true;
   const keys = new Set(conflictKeys(a));
   for (const k of conflictKeys(b)) if (keys.has(k)) return true;
   return false;
@@ -55,24 +70,29 @@ export function unionAffected(sets: (AffectedSet | null)[]): AffectedSet {
     publicApi,
     deploysTo: [...deploys],
     complete,
+    analyzers: [],
   };
 }
 
 /**
- * A set of labelled groups (tracks, blocked units) indexed by affected-set keys, answering "which
- * groups does this affected set conflict with?" in time proportional to its keys.
+ * Labelled groups (tracks, blocked units) indexed by affected-set keys, answering "which groups
+ * does this set conflict with?" in time proportional to its keys.
  */
 export class ConflictIndex {
   private readonly byKey = new Map<string, Set<string>>();
   private readonly wild = new Set<string>();
+  private readonly withTests = new Set<string>();
+  private readonly withAllTests = new Set<string>();
   private readonly labels = new Set<string>();
 
   add(label: string, a: AffectedSet | null): void {
     this.labels.add(label);
-    if (isWildcard(a) || a === null) {
+    if (a === null || conflictsWithEverything(a)) {
       this.wild.add(label);
       return;
     }
+    if (hasTests(a)) this.withTests.add(label);
+    if (allTests(a)) this.withAllTests.add(label);
     for (const k of conflictKeys(a)) {
       let set = this.byKey.get(k);
       if (set === undefined) {
@@ -87,10 +107,12 @@ export class ConflictIndex {
     return this.labels.has(label);
   }
 
-  /** Labels conflicting with `a`. A wildcard conflicts with every label. */
+  /** Labels conflicting with `a`. */
   query(a: AffectedSet | null): Set<string> {
-    if (isWildcard(a) || a === null) return new Set(this.labels);
+    if (a === null || conflictsWithEverything(a)) return new Set(this.labels);
     const out = new Set(this.wild);
+    if (hasTests(a)) for (const l of this.withAllTests) out.add(l);
+    if (allTests(a)) for (const l of this.withTests) out.add(l);
     for (const k of conflictKeys(a)) {
       const set = this.byKey.get(k);
       if (set !== undefined) for (const l of set) out.add(l);
@@ -123,21 +145,25 @@ export function components<T>(items: T[], affected: (t: T) => AffectedSet | null
     if (ra !== rb) parent[Math.max(ra, rb)] = Math.min(ra, rb);
   };
   const owner = new Map<string, number>();
-  let wildcard: number | null = null;
+  const wild: number[] = [];
+  const testers: number[] = [];
+  const allers: number[] = [];
   items.forEach((item, i) => {
     const a = affected(item);
-    if (isWildcard(a) || a === null) {
-      if (wildcard === null) wildcard = i;
-      else union(wildcard, i);
+    if (a === null || conflictsWithEverything(a)) {
+      wild.push(i);
       return;
     }
+    if (hasTests(a)) testers.push(i);
+    if (allTests(a)) allers.push(i);
     for (const k of conflictKeys(a)) {
       const o = owner.get(k);
       if (o === undefined) owner.set(k, i);
       else union(o, i);
     }
   });
-  if (wildcard !== null) for (let i = 0; i < items.length; i++) union(wildcard, i);
+  for (const w of wild) for (let i = 0; i < items.length; i++) union(w, i);
+  for (const a of allers) for (const t of testers) union(a, t);
   const groups = new Map<number, T[]>();
   items.forEach((item, i) => {
     const r = find(i);

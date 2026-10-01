@@ -3,7 +3,7 @@
  * non-negotiable rule (§1) — the step is then rejected as a whole and must not be persisted. The
  * shell alerts; it never "fixes" the state by hand.
  */
-import { conflicts, isWildcard } from "./conflict.js";
+import { conflicts, conflictsWithEverything } from "./conflict.js";
 import { TERMINAL_STATES } from "./schema.js";
 import type { QueueState } from "./state.js";
 
@@ -93,7 +93,7 @@ export function checkStateInvariants(s: QueueState): void {
             const ay = s.entries[y]?.affected ?? null;
             invariant(
               !conflicts(ax, ay),
-              isWildcard(ax) || isWildcard(ay) ? "parallel.unknown" : "parallel.conflict",
+              conflictsWithEverything(ax) || conflictsWithEverything(ay) ? "parallel.unknown" : "parallel.conflict",
               `${x} (track ${tracks[i]?.id}) conflicts with ${y} (track ${tracks[j]?.id})`,
             );
           }

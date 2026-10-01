@@ -75,6 +75,7 @@ export function affected(keys: { files?: string[]; modules?: string[]; tests?: s
     publicApi: false,
     deploysTo: keys.deploysTo ?? [],
     complete: true,
+    analyzers: [],
   };
 }
 
@@ -93,6 +94,8 @@ export interface WorldOptions {
   checkInvariants?: boolean;
   /** Pass the affected set in the Enqueued event instead of answering ComputeAffectedSet. */
   precompute?: boolean;
+  /** Names of the flaky tests (default flaky:0..2, always run). */
+  flakyTests?: string[];
 }
 
 export class World {
@@ -139,6 +142,7 @@ export class World {
       seed: opts.seed ?? 1,
       checkInvariants: opts.checkInvariants ?? true,
       precompute: opts.precompute ?? false,
+      flakyTests: opts.flakyTests ?? ["flaky:0", "flaky:1", "flaky:2"],
     };
   }
 
@@ -309,6 +313,10 @@ export class World {
     return targets === "all" || targets.includes(t) || t.startsWith("flaky:");
   }
 
+  private isFlaky(t: string): boolean {
+    return this.opts.flakyTests.includes(t);
+  }
+
   /** Number of outstanding IO operations. */
   get outstanding(): number {
     return this.pending.length;
@@ -366,7 +374,11 @@ export class World {
       case "StartBatchRun": {
         const content = this.contentOf(c.commitSha);
         const failing = this.realFailures(content).filter((t) => this.testsCovered(c.targets, t));
-        if (this.rand("flake", c.runId) < this.opts.flakeRate) failing.push(`flaky:${Math.floor(this.rand("which", c.runId) * 3)}`);
+        if (this.rand("flake", c.runId) < this.opts.flakeRate) {
+          const names = this.opts.flakyTests;
+          const t = names[Math.floor(this.rand("which", c.runId) * names.length)];
+          if (t !== undefined && this.testsCovered(c.targets, t) && !failing.includes(t)) failing.push(t);
+        }
         const runs = this.runs.get(c.treeSha) ?? [];
         runs.push({ runId: c.runId, scope: c.targets, failed: failing });
         this.runs.set(c.treeSha, runs);
@@ -386,7 +398,7 @@ export class World {
         const real = new Set(this.realFailures(this.contentOf(c.commitSha)));
         const mainReal = new Set(this.realFailures(this.contentOf(c.mainSha)));
         const results = c.tests.map((t) => {
-          const flaky = t.startsWith("flaky:");
+          const flaky = this.isFlaky(t);
           const onBatch = real.has(t) || (flaky && this.rand("rb", c.runId, t) < this.opts.flakeRepeat) || t === WHOLE_RUN ? "failed" : "passed";
           const onMain = mainReal.has(t) || (flaky && this.rand("rm", c.runId, t) < this.opts.flakeRepeat) ? "failed" : "passed";
           if (onBatch === "passed") {

@@ -16,24 +16,38 @@ export type Sha = z.infer<typeof Sha>;
 export const ChangeId = z.string().min(1).max(64);
 export type ChangeId = z.infer<typeof ChangeId>;
 
-/** Sentinel test target: "every test" (test impact analysis fell back because coverage is missing). */
+/**
+ * The AffectedSet contract, structurally identical to `@app/affected`'s (the analyzer that produces
+ * it). Kept as a copy because this package doesn't depend on `@app/affected` yet; the tests prove
+ * the two schemas and their conflict semantics are identical.
+ */
+
+/** `testTargets` value meaning "every test" (coverage missing): meets any non-empty test set. */
 export const ALL_TESTS = "*";
+/** `modules` sentinel: a config file changed; the Change conflicts with everything. */
+export const CONFIG_SENTINEL = "*config*";
+
+export const AnalyzerReport = z.object({
+  name: z.string().min(1),
+  version: z.string().min(1),
+  complete: z.boolean(),
+  note: z.string().optional(),
+});
+export type AnalyzerReport = z.infer<typeof AnalyzerReport>;
 
 /**
- * What a Change can affect (§4.1). Two Changes conflict when their affected sets share a file, a
- * module of the reverse-dependency closure, or a test target.
- *
- * `complete: false` means the analyzer could not compute the set (or timed out). An incomplete set
- * conflicts with everything: the queue never defaults to parallel. `testTargets` containing
- * `ALL_TESTS` also conflicts with everything (it shares every test target).
+ * What a Change can affect (§4.1). Two Changes conflict when either is incomplete, either touched
+ * config (`*config*`), or they share a file, a module of the reverse-dependency closure, or a test
+ * target (`*` meets any non-empty set). Incomplete/unknown never defaults to parallel.
  */
 export const AffectedSet = z.object({
-  files: z.array(z.string().min(1).max(500)).max(10_000),
-  modules: z.array(z.string().min(1).max(500)).max(10_000),
-  testTargets: z.array(z.string().min(1).max(500)).max(10_000),
+  files: z.array(z.string()),
+  modules: z.array(z.string()),
+  testTargets: z.array(z.string()),
   publicApi: z.boolean(),
-  deploysTo: z.array(z.string().min(1).max(100)).max(50),
+  deploysTo: z.array(z.string()),
   complete: z.boolean(),
+  analyzers: z.array(AnalyzerReport).default([]),
 });
 export type AffectedSet = z.infer<typeof AffectedSet>;
 
@@ -41,11 +55,12 @@ export type AffectedSet = z.infer<typeof AffectedSet>;
 export function unknownAffectedSet(): AffectedSet {
   return {
     files: [],
-    modules: [],
+    modules: [CONFIG_SENTINEL],
     testTargets: [ALL_TESTS],
     publicApi: true,
     deploysTo: [],
     complete: false,
+    analyzers: [],
   };
 }
 

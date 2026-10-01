@@ -5,7 +5,7 @@
  */
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { type AffectedSet, queueConfig, TERMINAL_STATES } from "../src/index.js";
+import { ALL_TESTS, type AffectedSet, CONFIG_SENTINEL, queueConfig, TERMINAL_STATES } from "../src/index.js";
 import { affected, type TestChange, World } from "./harness.js";
 
 const FILES = ["f0", "f1", "f2", "f3", "f4", "f5"];
@@ -23,6 +23,9 @@ const affectedArb: fc.Arbitrary<AffectedSet | null | "incomplete"> = fc.oneof(
   },
   { weight: 1, arbitrary: fc.constant(null) },
   { weight: 1, arbitrary: fc.constant("incomplete" as const) },
+  // Config change (conflicts with everything) and "all tests" (meets any non-empty test set).
+  { weight: 1, arbitrary: fc.subarray(FILES, { minLength: 1, maxLength: 1 }).map((files) => affected({ files, modules: [CONFIG_SENTINEL], tests: [ALL_TESTS] })) },
+  { weight: 1, arbitrary: fc.subarray(FILES, { minLength: 1, maxLength: 1 }).map((files) => affected({ files, tests: [ALL_TESTS] })) },
 );
 
 const specArb = fc.record({
