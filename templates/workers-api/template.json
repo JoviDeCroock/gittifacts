@@ -4,9 +4,6 @@
   "description": "A JSON API on Cloudflare Workers: GET / returns { now }, GET /health. Vitest tests, esbuild bundle.",
   "previewCommand": "wrangler dev --ip 0.0.0.0 --port $PORT",
   "buildOutput": "dist",
-  "routes": [
-    "/",
-    "/health"
-  ],
+  "routes": ["/", "/health"],
   "expectedCiSeconds": 30
 }

@@ -171,22 +171,32 @@ export function detectProject(facts: RepoFacts): Detection {
   const parsed = PackageJson.safeParse(facts.packageJson);
   const pkg = has("package.json") && parsed.success ? parsed.data : null;
   if (!has("package.json")) {
-    uncertain.push("No package.json at the root: the generated pipeline has no steps. Write .platform/ci.ts by hand.");
+    uncertain.push(
+      "No package.json at the root: the generated pipeline has no steps. Write .platform/ci.ts by hand.",
+    );
   } else if (pkg === null) {
     uncertain.push("package.json could not be parsed, so no scripts were detected.");
   }
 
-  const declared = /^(pnpm|npm|yarn|bun)@/.exec(pkg?.packageManager ?? "")?.[1] as PackageManager | undefined;
+  const declared = /^(pnpm|npm|yarn|bun)@/.exec(pkg?.packageManager ?? "")?.[1] as
+    | PackageManager
+    | undefined;
   const locks = LOCKFILES.filter(([file]) => has(file));
   const packageManager: PackageManager = declared ?? locks[0]?.[1] ?? "npm";
   if (declared === undefined && locks.length === 0 && pkg !== null) {
-    uncertain.push("No lockfile and no packageManager field: assuming npm, and installs are not reproducible.");
+    uncertain.push(
+      "No lockfile and no packageManager field: assuming npm, and installs are not reproducible.",
+    );
   }
   if (declared === undefined && new Set(locks.map(([, pm]) => pm)).size > 1) {
-    uncertain.push(`Several lockfiles (${locks.map(([f]) => f).join(", ")}): picked ${packageManager}.`);
+    uncertain.push(
+      `Several lockfiles (${locks.map(([f]) => f).join(", ")}): picked ${packageManager}.`,
+    );
   }
   if (declared !== undefined && locks.length > 0 && !locks.some(([, pm]) => pm === declared)) {
-    uncertain.push(`packageManager says ${declared} but the lockfile is ${locks[0]?.[0]}: using ${declared} without a frozen install.`);
+    uncertain.push(
+      `packageManager says ${declared} but the lockfile is ${locks[0]?.[0]}: using ${declared} without a frozen install.`,
+    );
   }
   const lockfile = locks.find(([, pm]) => pm === packageManager)?.[0] ?? null;
 
@@ -202,18 +212,26 @@ export function detectProject(facts: RepoFacts): Detection {
   const worker = WRANGLER_CONFIGS.some(has);
 
   if (pkg !== null && scripts.test === null) {
-    uncertain.push("No test script: CI runs no tests, every Change lacks test evidence and is at least Lane 2 until one exists.");
+    uncertain.push(
+      "No test script: CI runs no tests, every Change lacks test evidence and is at least Lane 2 until one exists.",
+    );
   } else if (testRunner === "unknown") {
-    uncertain.push("The test runner is neither vitest nor jest: red/green proof and coverage may be unavailable (raises lanes).");
+    uncertain.push(
+      "The test runner is neither vitest nor jest: red/green proof and coverage may be unavailable (raises lanes).",
+    );
   }
   if (typescript && scripts.typecheck === null) {
     uncertain.push("No typecheck script: CI runs `tsc --noEmit` with the root tsconfig.json.");
   }
   if (worker && scripts.build === null) {
-    uncertain.push("A Worker without a build script: previews rely on wrangler bundling `main` directly.");
+    uncertain.push(
+      "A Worker without a build script: previews rely on wrangler bundling `main` directly.",
+    );
   }
   if (pkg !== null) {
-    uncertain.push("Step caching is off (which files affect each step is unknown); every push runs every step.");
+    uncertain.push(
+      "Step caching is off (which files affect each step is unknown); every push runs every step.",
+    );
   }
 
   const features: ProjectFeatures = {
@@ -228,6 +246,7 @@ export function detectProject(facts: RepoFacts): Detection {
   };
   // Step caching being off is a speed note, not a correctness doubt.
   const doubts = uncertain.filter((u) => !u.startsWith("Step caching"));
-  const confidence: Confidence = pkg === null ? "low" : doubts.length === 0 ? "high" : doubts.length <= 2 ? "medium" : "low";
+  const confidence: Confidence =
+    pkg === null ? "low" : doubts.length === 0 ? "high" : doubts.length <= 2 ? "medium" : "low";
   return { features, confidence, uncertain };
 }

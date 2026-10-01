@@ -34,7 +34,13 @@ export function isToolName(name: string): name is ToolName {
   return (TOOL_NAMES as readonly string[]).includes(name);
 }
 
-export type CallValue = string | number | boolean | null | readonly CallValue[] | { readonly [key: string]: CallValue };
+export type CallValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly CallValue[]
+  | { readonly [key: string]: CallValue };
 export type CallArgs = { readonly [key: string]: CallValue | undefined };
 
 const IDENT = /^[A-Za-z_$][\w$]*$/;
@@ -46,9 +52,7 @@ function formatValue(value: CallValue): string {
 }
 
 function formatObject(args: CallArgs): string {
-  const entries = Object.entries(args).filter(
-    (e): e is [string, CallValue] => e[1] !== undefined,
-  );
+  const entries = Object.entries(args).filter((e): e is [string, CallValue] => e[1] !== undefined);
   if (entries.length === 0) return "{}";
   const body = entries
     .map(([key, value]) => `${IDENT.test(key) ? key : JSON.stringify(key)}: ${formatValue(value)}`)

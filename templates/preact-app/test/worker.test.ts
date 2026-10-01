@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import worker, { type Env } from "../src/worker.js";
 
-const assets: Env["ASSETS"] = { fetch: async () => new Response("<!doctype html>", { status: 200 }) };
+const assets: Env["ASSETS"] = {
+  fetch: async () => new Response("<!doctype html>", { status: 200 }),
+};
 const get = (path: string, method = "GET") =>
   worker.fetch(new Request(`https://example.test${path}`, { method }), { ASSETS: assets });
 

@@ -18,7 +18,10 @@ describe("src/ is pure TypeScript", () => {
   it("imports only zod, @app/domain and relative modules", () => {
     for (const file of files) {
       for (const m of readText(join(SRC, file)).matchAll(/from\s+["']([^"']+)["']/g)) {
-        expect(["zod", "@app/domain"].includes(m[1] ?? "") || m[1]?.startsWith("./"), `${file}: ${m[1]}`).toBe(true);
+        expect(
+          ["zod", "@app/domain"].includes(m[1] ?? "") || m[1]?.startsWith("./"),
+          `${file}: ${m[1]}`,
+        ).toBe(true);
       }
     }
   });

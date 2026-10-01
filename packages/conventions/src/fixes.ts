@@ -171,17 +171,20 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
       };
     case "scope-not-allowed":
       return {
-        explanation: "Agents may hold only repo:read, plan:create and change:create, and a human can only delegate scopes they hold. Request a subset.",
+        explanation:
+          "Agents may hold only repo:read, plan:create and change:create, and a human can only delegate scopes they hold. Request a subset.",
         call: call("whoami", {}),
       };
     case "forbidden":
       return {
-        explanation: "Only a human may do this. Agents never approve Plans or review Changes; ask a human instead.",
+        explanation:
+          "Only a human may do this. Agents never approve Plans or review Changes; ask a human instead.",
         call: call("request_review", { changeId: P.change(c) }),
       };
     case "self-approval":
       return {
-        explanation: "No principal approves its own Plan or Change, and agents approve nothing. Ask a different human to review it.",
+        explanation:
+          "No principal approves its own Plan or Change, and agents approve nothing. Ask a different human to review it.",
         call: call("request_review", { changeId: P.change(c) }),
       };
     case "push-to-main":
@@ -210,11 +213,13 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
           `The Change moved on${c.currentHeadSha === undefined ? "" : ` (head is now ${c.currentHeadSha.slice(0, 12)})`}: ` +
           "a newer push or a merge-queue rebase. Reviews and results bind to one head. Re-read the status; if your push was rejected, pull the fork and rebase onto it.",
         call: call("get_change_status", { changeId: P.change(c) }),
-        command: 'git -c http.extraHeader="Authorization: Bearer <remote.token>" pull --rebase <remote.url> <remote.branch>',
+        command:
+          'git -c http.extraHeader="Authorization: Bearer <remote.token>" pull --rebase <remote.url> <remote.branch>',
       };
     case "invalid-state":
       return {
-        explanation: "The resource's current status doesn't allow this. Read it again and act on its current status.",
+        explanation:
+          "The resource's current status doesn't allow this. Read it again and act on its current status.",
         call: call("get_change_status", { changeId: P.change(c) }),
       };
     case "threshold-not-met":
@@ -225,7 +230,8 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
       };
     case "quota-exceeded": {
       const q = c.quota;
-      const what = q === undefined ? "a quota" : `the ${q.name} quota (${q.used ?? q.limit}/${q.limit})`;
+      const what =
+        q === undefined ? "a quota" : `the ${q.name} quota (${q.used ?? q.limit}/${q.limit})`;
       return {
         explanation:
           `You hit ${what}${q?.resetsAt === undefined ? "" : `; it resets at ${q.resetsAt}`}. ` +
@@ -261,44 +267,55 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
       };
     case "idempotency-key-in-flight":
       return {
-        explanation: "The first request with this Idempotency-Key is still running. Retry the same request in a second.",
+        explanation:
+          "The first request with this Idempotency-Key is still running. Retry the same request in a second.",
         command: `sleep ${c.retryAfterSec ?? 1}`,
       };
     case "invalid-request":
       return {
-        explanation: "The request failed validation. `details` lists each field and what is wrong; fix them and resend. Tool schemas: search_tools.",
+        explanation:
+          "The request failed validation. `details` lists each field and what is wrong; fix them and resend. Tool schemas: search_tools.",
         call: call("search_tools", { query: "<tool name>" }),
       };
     case "invalid-input":
       return {
-        explanation: "The platform rejected an input. Read `message`, correct that field and resend.",
+        explanation:
+          "The platform rejected an input. Read `message`, correct that field and resend.",
         call: call("search_tools", { query: "<tool name>" }),
       };
     case "not-found": {
       const what = c.resource ?? "resource";
       return {
         explanation: `No ${what} with that id exists, or you can't see it (it may also not be ready yet). List what exists and use one of those ids.`,
-        call: what === "change" || what === "tour" || what === "evidence" ? call("get_change_status", { changeId: P.change(c) }) : call("list_repos", {}),
+        call:
+          what === "change" || what === "tour" || what === "evidence"
+            ? call("get_change_status", { changeId: P.change(c) })
+            : call("list_repos", {}),
       };
     }
     case "conflict":
       return {
-        explanation: "The request conflicts with the current state. Read the resource again and act on what is there now.",
+        explanation:
+          "The request conflicts with the current state. Read the resource again and act on what is there now.",
         call: call("get_change_status", { changeId: P.change(c) }),
       };
     case "payload-too-large":
       return {
-        explanation: "The body is too large. Send less: push code with git instead of in a request, and split large Changes.",
-        command: 'git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>',
+        explanation:
+          "The body is too large. Send less: push code with git instead of in a request, and split large Changes.",
+        command:
+          'git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>',
       };
     case "http-error":
       return {
-        explanation: "The HTTP request was not acceptable. Check the method, the path and `Content-Type: application/json`.",
+        explanation:
+          "The HTTP request was not acceptable. Check the method, the path and `Content-Type: application/json`.",
         command: `curl -s ${host}/openapi.json`,
       };
     case "upstream":
       return {
-        explanation: "A platform dependency failed or isn't ready yet. Retry in a few seconds with the same Idempotency-Key; the retry is safe.",
+        explanation:
+          "A platform dependency failed or isn't ready yet. Retry in a few seconds with the same Idempotency-Key; the retry is safe.",
         command: "sleep 5",
       };
     case "internal":
@@ -323,7 +340,13 @@ export function fixFor(code: string, ctx: FixContext = {}): ErrorFix {
   const known = resolveErrorCode(code);
   const fix: ErrorFix =
     known === null
-      ? { explanation: "Read `message` for what went wrong; whoami shows who you are and what you may do.", call: call("whoami", {}) }
+      ? {
+          explanation:
+            "Read `message` for what went wrong; whoami shows who you are and what you may do.",
+          call: call("whoami", {}),
+        }
       : build(known, ctx);
-  return ctx.host === undefined ? fix : { ...fix, docsUrl: `${ctx.host.replace(/\/+$/, "")}/start` };
+  return ctx.host === undefined
+    ? fix
+    : { ...fix, docsUrl: `${ctx.host.replace(/\/+$/, "")}/start` };
 }

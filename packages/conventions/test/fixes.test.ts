@@ -1,6 +1,13 @@
 import { ErrorFix } from "@app/domain";
 import { describe, expect, it } from "vitest";
-import { ERROR_CODE_ALIASES, ERROR_CODES, ERROR_STATUS, fixFor, parseCall, resolveErrorCode } from "../src/index.js";
+import {
+  ERROR_CODE_ALIASES,
+  ERROR_CODES,
+  ERROR_STATUS,
+  fixFor,
+  parseCall,
+  resolveErrorCode,
+} from "../src/index.js";
 import { expectValidCall, HOST } from "./helpers.js";
 
 describe("fixFor", () => {
@@ -37,7 +44,10 @@ describe("fixFor", () => {
 
   it("answers a push to main with start_change({ planId })", () => {
     const fix = fixFor("push-to-main", { repoId: "rep_1", planId: "pln_9" });
-    expect(parseCall(fix.call ?? "")).toEqual({ tool: "start_change", args: { repoId: "rep_1", planId: "pln_9", title: "<what you changed>", category: "feature" } });
+    expect(parseCall(fix.call ?? "")).toEqual({
+      tool: "start_change",
+      args: { repoId: "rep_1", planId: "pln_9", title: "<what you changed>", category: "feature" },
+    });
   });
 
   it("says which test must fail on base", () => {
@@ -45,25 +55,43 @@ describe("fixFor", () => {
     expect(none.explanation).toMatch(/adds or changes no test/);
     expect(none.explanation).toMatch(/fails on the base commit and passes on your head/);
     const passing = fixFor("fix-without-red-green", {
-      redGreen: { baseSha: "b".repeat(40), testFiles: ["test/money.test.ts"], passingOnBase: ["test/money.test.ts"] },
+      redGreen: {
+        baseSha: "b".repeat(40),
+        testFiles: ["test/money.test.ts"],
+        passingOnBase: ["test/money.test.ts"],
+      },
     });
     expect(passing.explanation).toContain("already pass on base bbbbbbbbbbbb");
     expect(passing.explanation).toContain("`test/money.test.ts`");
     expect(passing.command).toBe("pnpm exec vitest run test/money.test.ts");
-    const red = fixFor("red-green-missing", { redGreen: { testFiles: ["test/a.test.ts"], failingOnHead: ["test/a.test.ts"] }, testFileCommand: "npx jest" });
+    const red = fixFor("red-green-missing", {
+      redGreen: { testFiles: ["test/a.test.ts"], failingOnHead: ["test/a.test.ts"] },
+      testFileCommand: "npx jest",
+    });
     expect(red.explanation).toMatch(/still fail on your head/);
     expect(red.command).toBe("npx jest test/a.test.ts");
   });
 
   it("fills in specifics from the context", () => {
-    expect(fixFor("insufficient-scope", { requiredScopes: ["change:create"] }).explanation).toContain("`change:create`");
-    expect(fixFor("quota-exceeded", { quota: { name: "ci-minutes", limit: 60, used: 60, resetsAt: "2026-10-02T00:00:00Z" } }).explanation).toContain(
-      "the ci-minutes quota (60/60); it resets at 2026-10-02T00:00:00Z",
-    );
-    expect(fixFor("unclaimed-limit", { refused: "deploy to production", claimUrl: "https://h/claim/x" }).explanation).toContain("https://h/claim/x");
+    expect(
+      fixFor("insufficient-scope", { requiredScopes: ["change:create"] }).explanation,
+    ).toContain("`change:create`");
+    expect(
+      fixFor("quota-exceeded", {
+        quota: { name: "ci-minutes", limit: 60, used: 60, resetsAt: "2026-10-02T00:00:00Z" },
+      }).explanation,
+    ).toContain("the ci-minutes quota (60/60); it resets at 2026-10-02T00:00:00Z");
+    expect(
+      fixFor("unclaimed-limit", { refused: "deploy to production", claimUrl: "https://h/claim/x" })
+        .explanation,
+    ).toContain("https://h/claim/x");
     expect(fixFor("rate-limited", { retryAfterSec: 30 }).command).toBe("sleep 30");
-    expect(fixFor("plan-not-approved", { planId: "pln_1", planStatus: "draft" }).explanation).toContain("Plan pln_1 is draft");
-    expect(fixFor("not-found", { resource: "change", changeId: "chg_1" }).call).toBe('get_change_status({ changeId: "chg_1" })');
+    expect(
+      fixFor("plan-not-approved", { planId: "pln_1", planStatus: "draft" }).explanation,
+    ).toContain("Plan pln_1 is draft");
+    expect(fixFor("not-found", { resource: "change", changeId: "chg_1" }).call).toBe(
+      'get_change_status({ changeId: "chg_1" })',
+    );
   });
 
   it("adds docsUrl only when the host is known", () => {

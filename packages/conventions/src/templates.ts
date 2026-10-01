@@ -53,7 +53,10 @@ export interface TemplateFileOptions extends PlaceholderValues {
  * The files the platform writes into a new project on top of the template's own files:
  * `.platform/ci.ts`, `.platform/policy.ts` and `AGENTS.md`. Keys are repo paths.
  */
-export function templateGeneratedFiles(id: TemplateId, opts: TemplateFileOptions): Record<string, string> {
+export function templateGeneratedFiles(
+  id: TemplateId,
+  opts: TemplateFileOptions,
+): Record<string, string> {
   const spec = TEMPLATES[id];
   const ci = defaultCiTs(spec.features);
   const policy = defaultPolicyTs({ previewRoutes: spec.previewRoutes });
@@ -71,10 +74,21 @@ export function templateGeneratedFiles(id: TemplateId, opts: TemplateFileOptions
   };
 }
 
+/** `template.json` text: one key per line, arrays inline (the repo formatter's JSON style). */
+export function templateManifestJson(id: TemplateId): string {
+  const entries = Object.entries(TEMPLATES[id].manifest).map(([key, value]) => {
+    const text = Array.isArray(value)
+      ? `[${value.map((v) => JSON.stringify(v)).join(", ")}]`
+      : JSON.stringify(value);
+    return `  ${JSON.stringify(key)}: ${text}`;
+  });
+  return `{\n${entries.join(",\n")}\n}\n`;
+}
+
 /** What `templates/<id>/` holds for the generated files: rendered with placeholders, unclaimed. */
 export function templateFilesOnDisk(id: TemplateId): Record<string, string> {
   return {
     ...templateGeneratedFiles(id, { ...PLACEHOLDER_SELF, claimed: false }),
-    "template.json": `${JSON.stringify(TEMPLATES[id].manifest, null, 2)}\n`,
+    "template.json": templateManifestJson(id),
   };
 }

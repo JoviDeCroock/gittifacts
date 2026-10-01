@@ -34,7 +34,12 @@ export function createServerClock(fetchJson: FetchJson = defaultFetchJson) {
     async refresh(): Promise<void> {
       try {
         const body = await fetchJson("/api/time");
-        if (typeof body !== "object" || body === null || !("now" in body) || typeof body.now !== "string") {
+        if (
+          typeof body !== "object" ||
+          body === null ||
+          !("now" in body) ||
+          typeof body.now !== "string"
+        ) {
           throw new Error("unexpected response from /api/time");
         }
         now.value = body.now;

@@ -4,9 +4,6 @@
   "description": "Plain HTML and CSS served by Workers static assets. Tests check every page's title and links.",
   "previewCommand": "wrangler dev --ip 0.0.0.0 --port $PORT",
   "buildOutput": "dist",
-  "routes": [
-    "/",
-    "/about/"
-  ],
+  "routes": ["/", "/about/"],
   "expectedCiSeconds": 25
 }

@@ -57,7 +57,8 @@ export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
     manifest: {
       id: "workers-api",
       title: "Workers API (TypeScript)",
-      description: "A JSON API on Cloudflare Workers: GET / returns { now }, GET /health. Vitest tests, esbuild bundle.",
+      description:
+        "A JSON API on Cloudflare Workers: GET / returns { now }, GET /health. Vitest tests, esbuild bundle.",
       previewCommand: PREVIEW,
       buildOutput: "dist",
       routes: ["/", "/health"],
@@ -70,7 +71,8 @@ export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
     manifest: {
       id: "preact-app",
       title: "Preact + signals app on Workers",
-      description: "A Preact + @preact/signals single-page app on Workers static assets, with a JSON API under /api/*.",
+      description:
+        "A Preact + @preact/signals single-page app on Workers static assets, with a JSON API under /api/*.",
       previewCommand: PREVIEW,
       buildOutput: "dist",
       routes: ["/", "/api/time"],
@@ -83,7 +85,8 @@ export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
     manifest: {
       id: "ts-library",
       title: "TypeScript library",
-      description: "An npm library with Vitest and emitted .d.ts, so every Change gets a public-API diff (none/additive/breaking).",
+      description:
+        "An npm library with Vitest and emitted .d.ts, so every Change gets a public-API diff (none/additive/breaking).",
       previewCommand: null,
       buildOutput: "dist",
       routes: [],
@@ -96,7 +99,8 @@ export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
     manifest: {
       id: "static-site",
       title: "Static site",
-      description: "Plain HTML and CSS served by Workers static assets. Tests check every page's title and links.",
+      description:
+        "Plain HTML and CSS served by Workers static assets. Tests check every page's title and links.",
       previewCommand: PREVIEW,
       buildOutput: "dist",
       routes: ["/", "/about/"],

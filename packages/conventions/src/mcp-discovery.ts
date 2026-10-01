@@ -14,7 +14,13 @@
 import { MCP_PROTOCOL_VERSION } from "./start.js";
 import { hostnameOf, join, normalizeOrigin, pathOf } from "./urls.js";
 
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 export interface WellKnownDocument {
   /** Path on the platform host. */
@@ -30,7 +36,8 @@ export interface WellKnownDocument {
 /** Scopes an agent session can hold. Approval scopes are never delegated to agents. */
 export const AGENT_SCOPES = ["repo:read", "plan:create", "change:create"] as const;
 
-export const SERVER_CARD_SCHEMA = "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json";
+export const SERVER_CARD_SCHEMA =
+  "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json";
 export const SERVER_CARD_MEDIA_TYPE = "application/mcp-server-card+json";
 export const AI_CATALOG_MEDIA_TYPE = "application/ai-catalog+json";
 
@@ -126,7 +133,8 @@ export function mcpDiscovery(opts: McpDiscoveryOptions): WellKnownDocument[] {
           headers: [
             {
               name: "Authorization",
-              description: "Bearer token from create_project or a human. Omit it to use OAuth via the 401 challenge.",
+              description:
+                "Bearer token from create_project or a human. Omit it to use OAuth via the 401 challenge.",
               isRequired: false,
               isSecret: true,
               value: "Bearer {token}",
@@ -146,7 +154,11 @@ export function mcpDiscovery(opts: McpDiscoveryOptions): WellKnownDocument[] {
     headers: CORS,
     body: {
       specVersion: "1.0",
-      host: { displayName: "gittifacts", identifier: hostnameOf(host), documentationUrl: join(host, "/start") },
+      host: {
+        displayName: "gittifacts",
+        identifier: hostnameOf(host),
+        documentationUrl: join(host, "/start"),
+      },
       entries: [
         {
           identifier: `urn:air:${hostnameOf(host)}:mcp:gittifacts`,
@@ -167,16 +179,23 @@ export function mcpDiscovery(opts: McpDiscoveryOptions): WellKnownDocument[] {
  */
 export function mcpAuthChallenge(
   opts: Pick<McpDiscoveryOptions, "host" | "mcpUrl" | "authorizationServers" | "scopes">,
-  error?: { code: "invalid_token" | "insufficient_scope"; description?: string; scopes?: readonly string[] },
+  error?: {
+    code: "invalid_token" | "insufficient_scope";
+    description?: string;
+    scopes?: readonly string[];
+  },
 ): string {
   const parts: string[] = [];
   if (error !== undefined) parts.push(`error="${error.code}"`);
   if (opts.authorizationServers.length > 0) {
-    parts.push(`resource_metadata="${join(opts.host, protectedResourceMetadataPath(opts.mcpUrl))}"`);
+    parts.push(
+      `resource_metadata="${join(opts.host, protectedResourceMetadataPath(opts.mcpUrl))}"`,
+    );
   }
   const scopes = error?.scopes ?? opts.scopes ?? AGENT_SCOPES;
   parts.push(`scope="${scopes.join(" ")}"`);
-  if (error?.description !== undefined) parts.push(`error_description="${error.description.replace(/["\\]/g, "")}"`);
+  if (error?.description !== undefined)
+    parts.push(`error_description="${error.description.replace(/["\\]/g, "")}"`);
   return `Bearer ${parts.join(", ")}`;
 }
 

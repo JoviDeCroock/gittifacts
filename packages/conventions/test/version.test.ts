@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { CONVENTIONS_MARKER, CONVENTIONS_VERSION, conventionsVersionOf, isOutdated } from "../src/index.js";
+import {
+  CONVENTIONS_MARKER,
+  CONVENTIONS_VERSION,
+  conventionsVersionOf,
+  isOutdated,
+} from "../src/index.js";
 
 describe("conventions marker", () => {
   it("is an HTML comment with the version", () => {

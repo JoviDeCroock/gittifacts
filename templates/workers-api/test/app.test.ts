@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { handle } from "../src/app.js";
 import worker from "../src/index.js";
 
-const get = (path: string, method = "GET") => handle(new Request(`https://example.test${path}`, { method }));
+const get = (path: string, method = "GET") =>
+  handle(new Request(`https://example.test${path}`, { method }));
 
 describe("GET /", () => {
   it("returns the current time as an ISO string", async () => {

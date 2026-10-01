@@ -52,12 +52,20 @@ describe("mcpDiscovery", () => {
     const card = byPath.get("/mcp/server-card");
     expect(card?.contentType).toBe("application/mcp-server-card+json");
     expect(card?.headers["access-control-allow-origin"]).toBe("*");
-    const body = card?.body as Record<string, unknown> & { remotes: { type: string; url: string; supportedProtocolVersions: string[] }[] };
+    const body = card?.body as Record<string, unknown> & {
+      remotes: { type: string; url: string; supportedProtocolVersions: string[] }[];
+    };
     expect(body.$schema).toBe(SERVER_CARD_SCHEMA);
     expect(body.name).toMatch(/^[a-zA-Z0-9.-]+\/[a-zA-Z0-9._-]+$/);
     expect(body.version).toBe("1.2.3");
     expect(String(body.description).length).toBeLessThanOrEqual(100);
-    expect(body.remotes).toEqual([expect.objectContaining({ type: "streamable-http", url: MCP_URL, supportedProtocolVersions: ["2026-07-28"] })]);
+    expect(body.remotes).toEqual([
+      expect.objectContaining({
+        type: "streamable-http",
+        url: MCP_URL,
+        supportedProtocolVersions: ["2026-07-28"],
+      }),
+    ]);
     expect(JSON.parse(JSON.stringify(body))).toEqual(body);
   });
 
@@ -71,10 +79,20 @@ describe("mcpDiscovery", () => {
   });
 
   it("handles an MCP endpoint at the root and hosts with ports", () => {
-    const root = mcpDiscovery({ ...opts, host: "http://localhost:8787", mcpUrl: "http://localhost:8787/" });
-    expect(root.map((d) => d.path)).toEqual(["/.well-known/oauth-protected-resource", "/server-card", "/.well-known/ai-catalog.json"]);
+    const root = mcpDiscovery({
+      ...opts,
+      host: "http://localhost:8787",
+      mcpUrl: "http://localhost:8787/",
+    });
+    expect(root.map((d) => d.path)).toEqual([
+      "/.well-known/oauth-protected-resource",
+      "/server-card",
+      "/.well-known/ai-catalog.json",
+    ]);
     expect(serverCardName("http://localhost:8787")).toBe("localhost/gittifacts");
-    expect(serverCardName("https://gittifacts.resynapse.dev")).toBe("dev.resynapse.gittifacts/gittifacts");
+    expect(serverCardName("https://gittifacts.resynapse.dev")).toBe(
+      "dev.resynapse.gittifacts/gittifacts",
+    );
   });
 });
 
@@ -86,7 +104,13 @@ describe("mcpAuthChallenge", () => {
   });
 
   it("describes insufficient scope on a 403", () => {
-    expect(mcpAuthChallenge(opts, { code: "insufficient_scope", scopes: ["change:create"], description: 'needs "change:create"' })).toBe(
+    expect(
+      mcpAuthChallenge(opts, {
+        code: "insufficient_scope",
+        scopes: ["change:create"],
+        description: 'needs "change:create"',
+      }),
+    ).toBe(
       `Bearer error="insufficient_scope", resource_metadata="${HOST}/.well-known/oauth-protected-resource/mcp", scope="change:create", error_description="needs change:create"`,
     );
   });
@@ -98,6 +122,8 @@ describe("mcpAuthChallenge", () => {
   });
 
   it("builds the ai-catalog Link header", () => {
-    expect(aiCatalogLinkHeader(`${HOST}/`)).toBe(`<${HOST}/.well-known/ai-catalog.json>; rel="ai-catalog"`);
+    expect(aiCatalogLinkHeader(`${HOST}/`)).toBe(
+      `<${HOST}/.well-known/ai-catalog.json>; rel="ai-catalog"`,
+    );
   });
 });

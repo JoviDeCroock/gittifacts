@@ -35,7 +35,8 @@ const DEFAULT_COMMANDS: Commands = {
 
 function commandsOf(opts: AgentsMdOptions): Commands {
   if (opts.commands !== undefined) return opts.commands;
-  if (opts.template !== undefined && isTemplateId(opts.template)) return commandsFor(TEMPLATES[opts.template].features);
+  if (opts.template !== undefined && isTemplateId(opts.template))
+    return commandsFor(TEMPLATES[opts.template].features);
   return DEFAULT_COMMANDS;
 }
 
@@ -64,7 +65,12 @@ export function agentsMd(opts: AgentsMdOptions): string {
     ["test (all)", code(cmd.test)],
     ["test (one file)", code(cmd.testFile === null ? null : `${cmd.testFile} test/<name>.test.ts`)],
     ["build", code(cmd.build)],
-    ["local preview", cmd.dev === null ? null : `\`${cmd.dev}\` (wrangler isn't a dependency: install it globally or use \`npx wrangler dev\`)`],
+    [
+      "local preview",
+      cmd.dev === null
+        ? null
+        : `\`${cmd.dev}\` (wrangler isn't a dependency: install it globally or use \`npx wrangler dev\`)`,
+    ],
   ];
 
   const lines = [
@@ -138,7 +144,7 @@ export function agentsMd(opts: AgentsMdOptions): string {
     "- Each stop has a verdict: `proven` (backed by evidence), `unproven` (a claim with no evidence), `risk`.",
     "- `leastConfident` and `notDone` list what the reviewer doubts or didn't check.",
     "To improve it, turn `unproven` stops into `proven` ones (add tests or evidence) and push again; the tour",
-    "is regenerated for the new head. Evidence details: `" + call("get_evidence", { changeId: ch }) + "`.",
+    `is regenerated for the new head. Evidence details: \`${call("get_evidence", { changeId: ch })}\`.`,
     "",
     "## Waiting for results",
     `\`${call("wait_for_change", { changeId: ch, until: "<until>", timeoutSec: 300 })}\` long-polls; it returns`,
@@ -159,7 +165,9 @@ export function agentsMd(opts: AgentsMdOptions): string {
     "## Commands",
     "| Step | Command |",
     "|---|---|",
-    ...commandRows.filter((r): r is [string, string] => r[1] !== null).map(([step, c]) => `| ${step} | ${c} |`),
+    ...commandRows
+      .filter((r): r is [string, string] => r[1] !== null)
+      .map(([step, c]) => `| ${step} | ${c} |`),
     "",
     "## Files the platform owns",
     "- `.platform/ci.ts` (pipeline) and `.platform/policy.ts` (lanes, thresholds, sensitive paths) are read",

@@ -27,7 +27,11 @@ export function llmsTxt(opts: LlmsTxtOptions): string {
     "No account is needed: create_project without credentials returns an unclaimed project, a token and a claim link for a human.",
     "",
     "## Start",
-    link("Start guide", join(host, "/start"), "what the platform is, auth, the 3 calls to ship something (JSON with Accept: application/json)"),
+    link(
+      "Start guide",
+      join(host, "/start"),
+      "what the platform is, auth, the 3 calls to ship something (JSON with Accept: application/json)",
+    ),
     link(
       "MCP server",
       opts.mcpUrl,
@@ -36,9 +40,21 @@ export function llmsTxt(opts: LlmsTxtOptions): string {
     link("OpenAPI", opts.openapiUrl, "the HTTP API; every endpoint mirrors an MCP tool"),
     "",
     "## Discovery",
-    link("MCP server card", `${opts.mcpUrl.replace(/\/+$/, "")}/server-card`, "name, version and remote endpoint of the MCP server (draft SEP-2127)"),
-    link("AI catalog", join(host, "/.well-known/ai-catalog.json"), "domain-level index pointing at the server card (draft)"),
-    link("OAuth protected resource metadata", prm, "RFC 9728: which authorization server issues tokens for the MCP server"),
+    link(
+      "MCP server card",
+      `${opts.mcpUrl.replace(/\/+$/, "")}/server-card`,
+      "name, version and remote endpoint of the MCP server (draft SEP-2127)",
+    ),
+    link(
+      "AI catalog",
+      join(host, "/.well-known/ai-catalog.json"),
+      "domain-level index pointing at the server card (draft)",
+    ),
+    link(
+      "OAuth protected resource metadata",
+      prm,
+      "RFC 9728: which authorization server issues tokens for the MCP server",
+    ),
     "",
     "## Optional",
     link(
@@ -46,7 +62,11 @@ export function llmsTxt(opts: LlmsTxtOptions): string {
       `${join(host, "/start")}#templates`,
       `create_project({ template }) accepts ${TEMPLATE_IDS.map((id) => `"${id}"`).join(", ")}`,
     ),
-    link("Signing keys", join(host, "/.well-known/gittifacts-keys.json"), "Ed25519 keys that sign evidence, plan approvals and audit entries"),
+    link(
+      "Signing keys",
+      join(host, "/.well-known/gittifacts-keys.json"),
+      "Ed25519 keys that sign evidence, plan approvals and audit entries",
+    ),
     "",
   ].join("\n");
 }

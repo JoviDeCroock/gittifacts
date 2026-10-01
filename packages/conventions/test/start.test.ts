@@ -8,7 +8,12 @@ const opts = {
   host: `${HOST}/`,
   mcpUrl: MCP_URL,
   openapiUrl: `${HOST}/openapi.json`,
-  authHints: { unclaimedProjects: true, unclaimedTtlDays: 7, oauth: true, deviceFlowCommand: "npx gittifacts login" },
+  authHints: {
+    unclaimedProjects: true,
+    unclaimedTtlDays: 7,
+    oauth: true,
+    deviceFlowCommand: "npx gittifacts login",
+  },
 };
 
 describe("startGuide JSON", () => {
@@ -20,9 +25,15 @@ describe("startGuide JSON", () => {
   });
 
   it("converts to a JSON Schema the platform can publish", () => {
-    const schema = z.toJSONSchema(StartDoc) as { type: string; required: string[]; properties: Record<string, unknown> };
+    const schema = z.toJSONSchema(StartDoc) as {
+      type: string;
+      required: string[];
+      properties: Record<string, unknown>;
+    };
     expect(schema.type).toBe("object");
-    expect(schema.required).toEqual(expect.arrayContaining(["platform", "auth", "mcp", "ship", "links"]));
+    expect(schema.required).toEqual(
+      expect.arrayContaining(["platform", "auth", "mcp", "ship", "links"]),
+    );
     expect(Object.keys(schema.properties)).toContain("ship");
   });
 
@@ -32,9 +43,15 @@ describe("startGuide JSON", () => {
   });
 
   it("ships something in exactly 3 calls: create_project → wait_for_change → get_change_status", () => {
-    expect(json.ship.map((s) => s.call?.split("(")[0])).toEqual(["create_project", "wait_for_change", "get_change_status"]);
+    expect(json.ship.map((s) => s.call?.split("(")[0])).toEqual([
+      "create_project",
+      "wait_for_change",
+      "get_change_status",
+    ]);
     expect(json.ship.map((s) => s.step)).toEqual([1, 2, 3]);
-    expect(json.ship[1]?.command).toMatch(/^git -c http\.extraHeader="Authorization: Bearer <remote\.token>" push /);
+    expect(json.ship[1]?.command).toMatch(
+      /^git -c http\.extraHeader="Authorization: Bearer <remote\.token>" push /,
+    );
     for (const s of [...json.ship, ...json.loop]) {
       expect(() => NextStep.parse(s)).not.toThrow();
       expect(s.call ?? s.command).toBeDefined();
@@ -44,9 +61,14 @@ describe("startGuide JSON", () => {
 
   it("covers auth with and without an account", () => {
     expect(json.auth.anonymous).toMatchObject({ available: true, ttlDays: 7 });
-    expect(json.auth.oauth.resourceMetadata).toBe(`${HOST}/.well-known/oauth-protected-resource/mcp`);
+    expect(json.auth.oauth.resourceMetadata).toBe(
+      `${HOST}/.well-known/oauth-protected-resource/mcp`,
+    );
     expect(json.auth.deviceFlow).toEqual({ available: true, command: "npx gittifacts login" });
-    const off = startGuide({ ...opts, authHints: { unclaimedProjects: false, unclaimedTtlDays: 7, oauth: false } }).json;
+    const off = startGuide({
+      ...opts,
+      authHints: { unclaimedProjects: false, unclaimedTtlDays: 7, oauth: false },
+    }).json;
     expect(off.auth.anonymous.available).toBe(false);
     expect(off.auth.anonymous.how).toMatch(/Disabled/);
     expect(off.auth.deviceFlow).toEqual({ available: false });
@@ -58,10 +80,20 @@ describe("startGuide JSON", () => {
       llmsTxt: `${HOST}/llms.txt`,
       openapi: `${HOST}/openapi.json`,
       mcp: MCP_URL,
-      discovery: [`${HOST}/.well-known/oauth-protected-resource/mcp`, `${MCP_URL}/server-card`, `${HOST}/.well-known/ai-catalog.json`],
+      discovery: [
+        `${HOST}/.well-known/oauth-protected-resource/mcp`,
+        `${MCP_URL}/server-card`,
+        `${HOST}/.well-known/ai-catalog.json`,
+      ],
     });
     expect(json.templates.map((t) => t.id)).toEqual([...TEMPLATE_IDS]);
-    expect(json.waitUntil).toEqual(["evidence_ready", "lane_assigned", "tour_ready", "merged", "reverted"]);
+    expect(json.waitUntil).toEqual([
+      "evidence_ready",
+      "lane_assigned",
+      "tour_ready",
+      "merged",
+      "reverted",
+    ]);
   });
 });
 
@@ -80,6 +112,7 @@ describe("startGuide markdown", () => {
 
   it("mentions the JSON variant and every link", () => {
     expect(markdown).toContain("Accept: application/json");
-    for (const url of [json.links.llmsTxt, json.links.openapi, json.mcp.serverCard]) expect(markdown).toContain(url);
+    for (const url of [json.links.llmsTxt, json.links.openapi, json.mcp.serverCard])
+      expect(markdown).toContain(url);
   });
 });

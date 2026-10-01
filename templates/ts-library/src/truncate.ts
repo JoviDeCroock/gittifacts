@@ -12,5 +12,10 @@ export function truncate(text: string, maxLength: number, options: TruncateOptio
   if (chars.length <= maxLength) return text;
   const ellipsis = Array.from(options.ellipsis ?? "…");
   if (ellipsis.length >= maxLength) return ellipsis.slice(0, maxLength).join("");
-  return chars.slice(0, maxLength - ellipsis.length).join("").trimEnd() + ellipsis.join("");
+  return (
+    chars
+      .slice(0, maxLength - ellipsis.length)
+      .join("")
+      .trimEnd() + ellipsis.join("")
+  );
 }

@@ -35,4 +35,8 @@ for (const id of TEMPLATE_IDS) {
   }
 }
 if (check && stale > 0) process.exit(1);
-console.log(stale === 0 ? "templates are up to date" : `${stale} file(s) ${check ? "out of date" : "written"}`);
+console.log(
+  stale === 0
+    ? "templates are up to date"
+    : `${stale} file(s) ${check ? "out of date" : "written"}`,
+);

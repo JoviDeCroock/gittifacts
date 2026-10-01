@@ -4,7 +4,13 @@
  * time) and for imports (proposed in a Plan + Change a human approves; never applied silently).
  */
 import { CI_PATH, POLICY_PATH, RepoPolicy } from "@app/domain";
-import { type Commands, type Confidence, commandsFor, type Detection, type ProjectFeatures } from "./project.js";
+import {
+  type Commands,
+  type Confidence,
+  commandsFor,
+  type Detection,
+  type ProjectFeatures,
+} from "./project.js";
 import { CONVENTIONS_VERSION } from "./version.js";
 
 export interface GeneratedFile {
@@ -19,7 +25,13 @@ const LINE_WIDTH = 100;
 
 // ---------------------------------------------------------------- JS literal printer
 
-type Literal = string | number | boolean | null | readonly Literal[] | { readonly [key: string]: Literal };
+type Literal =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly Literal[]
+  | { readonly [key: string]: Literal };
 
 const IDENT = /^[A-Za-z_$][\w$]*$/;
 
@@ -48,7 +60,9 @@ function literal(value: Literal, indent: number, prefixWidth: number): string {
     return `[\n${items.join("\n")}\n${close}]`;
   }
   if (value !== null && typeof value === "object") {
-    const items = Object.entries(value).map(([k, v]) => `${pad}${key(k)}: ${literal(v, indent + 2, k.length + 3)},`);
+    const items = Object.entries(value).map(
+      ([k, v]) => `${pad}${key(k)}: ${literal(v, indent + 2, k.length + 3)},`,
+    );
     return `{\n${items.join("\n")}\n${close}}`;
   }
   return flat;
@@ -95,7 +109,10 @@ export function ciSteps(commands: Commands): { name: string; command: string }[]
  * `.platform/ci.ts`: install, then lint/typecheck/test/build in parallel from the install
  * snapshot (the fastest DAG: every check starts as soon as dependencies are in place).
  */
-export function defaultCiTs(features: ProjectFeatures, detection?: Pick<Detection, "confidence" | "uncertain">): GeneratedFile {
+export function defaultCiTs(
+  features: ProjectFeatures,
+  detection?: Pick<Detection, "confidence" | "uncertain">,
+): GeneratedFile {
   const uncertain = [...(detection?.uncertain ?? [])];
   const confidence = detection?.confidence ?? "high";
   if (!features.hasPackageJson) {
@@ -117,7 +134,9 @@ export default async (_ci: Ci) => {
   lines.push("export default async (ci: Ci) => {");
   lines.push(
     `  const install = ci.runner({\n    name: "install",\n    command: ${JSON.stringify(commands.install)},${
-      install.length === 0 ? "" : `\n    cache: { inputs: ${literal(install, 4, "cache: { inputs: ".length)} },`
+      install.length === 0
+        ? ""
+        : `\n    cache: { inputs: ${literal(install, 4, "cache: { inputs: ".length)} },`
     }\n  });`,
   );
   if (steps.length > 0) {
@@ -125,7 +144,8 @@ export default async (_ci: Ci) => {
     lines.push("");
     lines.push("  // Independent checks run in parallel, each from the install snapshot.");
     lines.push("  await Promise.all([");
-    for (const step of steps) lines.push(`    ${runnerCall("install", step.name, step.command, cache)},`);
+    for (const step of steps)
+      lines.push(`    ${runnerCall("install", step.name, step.command, cache)},`);
     lines.push("  ]);");
   } else {
     lines.push("  await install;");
@@ -158,9 +178,13 @@ const POLICY_COMMENTS: Record<string, string[]> = {
     "records whether humans agree; the owner can enable it once agreement passes `shadow`.",
   ],
   sensitivePaths: ["Changes touching these paths are Lane 2 (full human review)."],
-  thresholds: ["Lane 0 needs coverage/mutation at or above these on changed lines and a diff below the size limits."],
+  thresholds: [
+    "Lane 0 needs coverage/mutation at or above these on changed lines and a diff below the size limits.",
+  ],
   planlessLane0: ["Categories that may reach Lane 0 without an approved Plan (none by default)."],
-  previewRoutes: ["Routes screenshotted before/after on every Change's preview, plus the Plan's routes."],
+  previewRoutes: [
+    "Routes screenshotted before/after on every Change's preview, plus the Plan's routes.",
+  ],
 };
 
 /** `.platform/policy.ts`: the domain defaults (shadow mode on), plus preview routes. */
@@ -172,7 +196,9 @@ export function defaultPolicyTs(opts: PolicyOptions = {}): GeneratedFile {
   });
   const uncertain: string[] = [];
   if (opts.worker === true && opts.previewRoutes === undefined) {
-    uncertain.push("Which routes to screenshot is unknown: previewRoutes is empty, so only Plan-declared routes get screenshots.");
+    uncertain.push(
+      "Which routes to screenshot is unknown: previewRoutes is empty, so only Plan-declared routes get screenshots.",
+    );
   }
   const lines = [POLICY_HEADER, "export default {"];
   for (const [k, v] of Object.entries(policy)) {
@@ -180,5 +206,10 @@ export function defaultPolicyTs(opts: PolicyOptions = {}): GeneratedFile {
     lines.push(`  ${key(k)}: ${literal(v as Literal, 2, k.length + 2)},`);
   }
   lines.push("};", "");
-  return { path: POLICY_PATH, text: lines.join("\n"), confidence: uncertain.length === 0 ? "high" : "medium", uncertain };
+  return {
+    path: POLICY_PATH,
+    text: lines.join("\n"),
+    confidence: uncertain.length === 0 ? "high" : "medium",
+    uncertain,
+  };
 }

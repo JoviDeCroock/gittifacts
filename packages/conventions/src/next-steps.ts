@@ -39,7 +39,12 @@ export interface NextStepContexts {
   };
   tour_ready: { changeId: string; lane: Lane };
   merged: { changeId: string; repoId: string; rollout: boolean };
-  reverted: { changeId: string; repoId: string; revertChangeId?: string | undefined; reason?: string | undefined };
+  reverted: {
+    changeId: string;
+    repoId: string;
+    revertChangeId?: string | undefined;
+    reason?: string | undefined;
+  };
 }
 export type NextStepEvent = keyof NextStepContexts;
 export const NEXT_STEP_EVENTS = [
@@ -54,7 +59,8 @@ export const NEXT_STEP_EVENTS = [
   "reverted",
 ] as const satisfies readonly NextStepEvent[];
 
-const clip = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1)}…`);
+const clip = (text: string, max: number) =>
+  text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 
 /** Step names the default pipelines use, with what usually fixes them. */
 export function ciFailureHint(step: string, logTail = ""): string {
@@ -65,10 +71,14 @@ export function ciFailureHint(step: string, logTail = ""): string {
     return "Dependencies failed to install: check package names and versions; unclaimed projects can only reach package registries.";
   }
   if (step === "lint") return "Lint failed: run the lint command locally and fix what it reports.";
-  if (step === "typecheck") return "Type errors: run the typecheck command locally; fix the first error first.";
-  if (step === "test") return "Tests failed: the log names the failing tests; run that file locally, fix the code (or the test if it is wrong).";
-  if (step === "build") return "The build failed: run the build command locally; it must write the build output directory.";
-  if (step.startsWith("evidence:")) return "A platform evidence step errored: this raises the lane but is not your bug. Read the log; push again if it looks transient.";
+  if (step === "typecheck")
+    return "Type errors: run the typecheck command locally; fix the first error first.";
+  if (step === "test")
+    return "Tests failed: the log names the failing tests; run that file locally, fix the code (or the test if it is wrong).";
+  if (step === "build")
+    return "The build failed: run the build command locally; it must write the build output directory.";
+  if (step.startsWith("evidence:"))
+    return "A platform evidence step errored: this raises the lane but is not your bug. Read the log; push again if it looks transient.";
   return `Step "${step}" failed: run its command locally and fix what it reports.`;
 }
 
@@ -83,16 +93,32 @@ const LOCAL_COMMANDS: Record<string, string> = {
 function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
   const { changeId } = c;
   const raised = (c.reasons ?? []).filter((r) => r.lane >= Math.max(c.lane, 1));
-  const why = raised.length === 0 ? undefined : clip(`Raised by: ${raised.map((r) => r.code).join(", ")}.`, 600);
+  const why =
+    raised.length === 0
+      ? undefined
+      : clip(`Raised by: ${raised.map((r) => r.code).join(", ")}.`, 600);
   if (c.lane === 0 && c.lane0Enabled) {
     return [
-      { title: "Lane 0: the merge queue merges it without a human", why: "Every Lane 0 gate passed.", call: call("wait_for_change", { changeId, until: "merged", timeoutSec: 600 }) },
+      {
+        title: "Lane 0: the merge queue merges it without a human",
+        why: "Every Lane 0 gate passed.",
+        call: call("wait_for_change", { changeId, until: "merged", timeoutSec: 600 }),
+      },
     ];
   }
   const review = [
-    { title: "Wait for the reviewer's tour", call: call("wait_for_change", { changeId, until: "tour_ready", timeoutSec: 300 }) },
-    { title: "Ask a human to review it (you can't approve)", call: call("request_review", { changeId }) },
-    { title: "Wait until it merges", call: call("wait_for_change", { changeId, until: "merged", timeoutSec: 3600 }) },
+    {
+      title: "Wait for the reviewer's tour",
+      call: call("wait_for_change", { changeId, until: "tour_ready", timeoutSec: 300 }),
+    },
+    {
+      title: "Ask a human to review it (you can't approve)",
+      call: call("request_review", { changeId }),
+    },
+    {
+      title: "Wait until it merges",
+      call: call("wait_for_change", { changeId, until: "merged", timeoutSec: 3600 }),
+    },
   ];
   if (c.lane === 0) {
     return [
@@ -105,7 +131,14 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
     ];
   }
   if (c.lane === 1) {
-    return [{ ...review[0]!, title: "Lane 1 (async glance): wait for the tour", ...(why === undefined ? {} : { why }) }, ...review.slice(1)];
+    return [
+      {
+        ...review[0]!,
+        title: "Lane 1 (async glance): wait for the tour",
+        ...(why === undefined ? {} : { why }),
+      },
+      ...review.slice(1),
+    ];
   }
   return [
     {
@@ -122,7 +155,10 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
   ];
 }
 
-export function nextStepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): NextStep[] {
+export function nextStepsFor<E extends NextStepEvent>(
+  event: E,
+  ctx: NextStepContexts[E],
+): NextStep[] {
   switch (event) {
     case "project_created": {
       const c = ctx as NextStepContexts["project_created"];
@@ -131,16 +167,30 @@ export function nextStepsFor<E extends NextStepEvent>(event: E, ctx: NextStepCon
         steps.push({
           title: "Wait for the first CI run and preview",
           why: "create_project returns at once; CI and the preview finish in the background.",
-          call: call("wait_for_change", { changeId: c.changeId, until: "evidence_ready", timeoutSec: 120 }),
+          call: call("wait_for_change", {
+            changeId: c.changeId,
+            until: "evidence_ready",
+            timeoutSec: 120,
+          }),
         });
       }
-      if (c.previewUrl) steps.push({ title: "Open the preview", command: `curl -s ${c.previewUrl}` });
+      if (c.previewUrl)
+        steps.push({ title: "Open the preview", command: `curl -s ${c.previewUrl}` });
       if (c.remoteUrl !== undefined) {
-        steps.push({ title: "Clone the repo (read it; push only to a Change's fork)", command: `git -c http.extraHeader="Authorization: Bearer <token>" clone ${c.remoteUrl}` });
+        steps.push({
+          title: "Clone the repo (read it; push only to a Change's fork)",
+          command: `git -c http.extraHeader="Authorization: Bearer <token>" clone ${c.remoteUrl}`,
+        });
       }
       steps.push({
         title: "Plan your first change (a human approves Plans)",
-        call: call("create_plan", { repoId: c.projectId, title: "<what>", intent: "<why>", acceptanceCriteria: ["<observable result>"], scopePaths: ["src/**", "test/**"] }),
+        call: call("create_plan", {
+          repoId: c.projectId,
+          title: "<what>",
+          intent: "<why>",
+          acceptanceCriteria: ["<observable result>"],
+          scopePaths: ["src/**", "test/**"],
+        }),
       });
       steps.push({
         title: "Or start a Change right away (can't reach Lane 0 without an approved Plan)",
@@ -161,8 +211,19 @@ export function nextStepsFor<E extends NextStepEvent>(event: E, ctx: NextStepCon
     case "change_started": {
       const c = ctx as NextStepContexts["change_started"];
       return [
-        { title: "Commit your work and push it to the Change's fork", why: "Never push to main; this remote only accepts this Change.", command: PUSH(c.remote) },
-        { title: "Wait for CI and evidence", call: call("wait_for_change", { changeId: c.changeId, until: "evidence_ready", timeoutSec: 300 }) },
+        {
+          title: "Commit your work and push it to the Change's fork",
+          why: "Never push to main; this remote only accepts this Change.",
+          command: PUSH(c.remote),
+        },
+        {
+          title: "Wait for CI and evidence",
+          call: call("wait_for_change", {
+            changeId: c.changeId,
+            until: "evidence_ready",
+            timeoutSec: 300,
+          }),
+        },
       ];
     }
     case "push_received": {
@@ -171,31 +232,72 @@ export function nextStepsFor<E extends NextStepEvent>(event: E, ctx: NextStepCon
         {
           title: `Pipeline started${c.headSha === undefined ? "" : ` for ${c.headSha.slice(0, 12)}`}: wait for evidence`,
           why: "An older run for this Change is superseded.",
-          call: call("wait_for_change", { changeId: c.changeId, until: "evidence_ready", timeoutSec: 300 }),
+          call: call("wait_for_change", {
+            changeId: c.changeId,
+            until: "evidence_ready",
+            timeoutSec: 300,
+          }),
         },
       ];
     }
     case "ci_failed": {
       const c = ctx as NextStepContexts["ci_failed"];
       const hint = ciFailureHint(c.step, c.logTail);
-      const tail = c.logTail === undefined ? "" : ` Log: ${c.logTail.trim().split("\n").slice(-3).join(" | ")}`;
+      const tail =
+        c.logTail === undefined
+          ? ""
+          : ` Log: ${c.logTail.trim().split("\n").slice(-3).join(" | ")}`;
       return [
-        { title: `Read the "${c.step}" step log`, why: clip(`${hint}${tail}`, 600), call: call("get_change_status", { changeId: c.changeId }) },
-        { title: `Reproduce "${c.step}" locally`, command: c.command ?? LOCAL_COMMANDS[c.step] ?? "pnpm run test" },
-        { title: "Push the fix and wait again", call: call("wait_for_change", { changeId: c.changeId, until: "evidence_ready", timeoutSec: 300 }) },
+        {
+          title: `Read the "${c.step}" step log`,
+          why: clip(`${hint}${tail}`, 600),
+          call: call("get_change_status", { changeId: c.changeId }),
+        },
+        {
+          title: `Reproduce "${c.step}" locally`,
+          command: c.command ?? LOCAL_COMMANDS[c.step] ?? "pnpm run test",
+        },
+        {
+          title: "Push the fix and wait again",
+          call: call("wait_for_change", {
+            changeId: c.changeId,
+            until: "evidence_ready",
+            timeoutSec: 300,
+          }),
+        },
       ];
     }
     case "evidence_ready": {
       const c = ctx as NextStepContexts["evidence_ready"];
       if (!c.ciPassed) {
         return [
-          { title: "CI failed: find the failing step", call: call("get_change_status", { changeId: c.changeId }) },
-          { title: "Fix it, push again and wait", call: call("wait_for_change", { changeId: c.changeId, until: "evidence_ready", timeoutSec: 300 }) },
+          {
+            title: "CI failed: find the failing step",
+            call: call("get_change_status", { changeId: c.changeId }),
+          },
+          {
+            title: "Fix it, push again and wait",
+            call: call("wait_for_change", {
+              changeId: c.changeId,
+              until: "evidence_ready",
+              timeoutSec: 300,
+            }),
+          },
         ];
       }
       return [
-        { title: "CI is green: wait for the lane", call: call("wait_for_change", { changeId: c.changeId, until: "lane_assigned", timeoutSec: 120 }) },
-        { title: "Inspect the signed evidence", call: call("get_evidence", { changeId: c.changeId }) },
+        {
+          title: "CI is green: wait for the lane",
+          call: call("wait_for_change", {
+            changeId: c.changeId,
+            until: "lane_assigned",
+            timeoutSec: 120,
+          }),
+        },
+        {
+          title: "Inspect the signed evidence",
+          call: call("get_evidence", { changeId: c.changeId }),
+        },
       ];
     }
     case "lane_assigned":
@@ -203,9 +305,22 @@ export function nextStepsFor<E extends NextStepEvent>(event: E, ctx: NextStepCon
     case "tour_ready": {
       const c = ctx as NextStepContexts["tour_ready"];
       return [
-        { title: "Read the tour; unproven stops are what a reviewer will question", call: call("get_tour", { changeId: c.changeId }) },
-        { title: "Ask a human to review it", call: call("request_review", { changeId: c.changeId }) },
-        { title: "Wait until it merges", call: call("wait_for_change", { changeId: c.changeId, until: "merged", timeoutSec: 3600 }) },
+        {
+          title: "Read the tour; unproven stops are what a reviewer will question",
+          call: call("get_tour", { changeId: c.changeId }),
+        },
+        {
+          title: "Ask a human to review it",
+          call: call("request_review", { changeId: c.changeId }),
+        },
+        {
+          title: "Wait until it merges",
+          call: call("wait_for_change", {
+            changeId: c.changeId,
+            until: "merged",
+            timeoutSec: 3600,
+          }),
+        },
       ];
     }
     case "merged": {
@@ -217,20 +332,41 @@ export function nextStepsFor<E extends NextStepEvent>(event: E, ctx: NextStepCon
           call: call("get_change_status", { changeId: c.changeId }),
         });
       }
-      steps.push({ title: "Start the next change from a fresh Plan", call: call("create_plan", { repoId: c.repoId, title: "<what>", intent: "<why>", acceptanceCriteria: ["<observable result>"] }) });
+      steps.push({
+        title: "Start the next change from a fresh Plan",
+        call: call("create_plan", {
+          repoId: c.repoId,
+          title: "<what>",
+          intent: "<why>",
+          acceptanceCriteria: ["<observable result>"],
+        }),
+      });
       return steps;
     }
     case "reverted": {
       const c = ctx as NextStepContexts["reverted"];
       return [
-        { title: "See which production errors triggered the revert", why: c.reason === undefined ? undefined : clip(c.reason, 600), call: call("list_issues_for_change", { changeId: c.changeId }) },
+        {
+          title: "See which production errors triggered the revert",
+          why: c.reason === undefined ? undefined : clip(c.reason, 600),
+          call: call("list_issues_for_change", { changeId: c.changeId }),
+        },
         ...(c.revertChangeId === undefined
           ? []
-          : [{ title: "Follow the revert Change", call: call("get_change_status", { changeId: c.revertChangeId }) }]),
+          : [
+              {
+                title: "Follow the revert Change",
+                call: call("get_change_status", { changeId: c.revertChangeId }),
+              },
+            ]),
         {
           title: "Fix forward in a new Change with a regression test",
           why: 'Claim category "fix": the new test must fail on base and pass on head.',
-          call: call("start_change", { repoId: c.repoId, title: "<fix for the reverted change>", category: "fix" }),
+          call: call("start_change", {
+            repoId: c.repoId,
+            title: "<fix for the reverted change>",
+            category: "fix",
+          }),
         },
       ].map(dropUndefined);
     }

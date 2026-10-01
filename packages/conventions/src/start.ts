@@ -71,7 +71,14 @@ export const StartDoc = z
     /** The loop for every later change. */
     loop: z.array(NextStep).min(1),
     waitUntil: z.array(WaitUntil).min(1),
-    templates: z.array(z.object({ id: TemplateId, title: z.string(), description: z.string(), preview: z.boolean() })),
+    templates: z.array(
+      z.object({
+        id: TemplateId,
+        title: z.string(),
+        description: z.string(),
+        preview: z.boolean(),
+      }),
+    ),
     rules: z.array(z.string().min(1)).min(1),
     links: z.object({
       start: z.string().url(),
@@ -98,7 +105,10 @@ export const RULES = [
 export function startGuide(opts: StartGuideOptions): { markdown: string; json: StartDoc } {
   const host = normalizeOrigin(opts.host);
   const mcp = opts.mcpUrl;
-  const prm = join(host, `/.well-known/oauth-protected-resource${pathOf(mcp) === "/" ? "" : pathOf(mcp)}`);
+  const prm = join(
+    host,
+    `/.well-known/oauth-protected-resource${pathOf(mcp) === "/" ? "" : pathOf(mcp)}`,
+  );
   const serverCard = `${mcp.replace(/\/+$/, "")}/server-card`;
   const a = opts.authHints;
 
@@ -108,15 +118,17 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
       title: "Create a project",
       why: "One call creates the repo from a template, writes .platform/ci.ts, .platform/policy.ts and AGENTS.md, runs the first CI and starts a preview. It returns at once.",
       call: call("create_project", { template: DEFAULT_TEMPLATE, name: "my-api" }),
-      returns: "{ projectId, remote, token, mcpUrl, previewUrl, claimUrl?, nextSteps }. Use token as the Bearer token from now on; nextSteps[0] names the first Change.",
+      returns:
+        "{ projectId, remote, token, mcpUrl, previewUrl, claimUrl?, nextSteps }. Use token as the Bearer token from now on; nextSteps[0] names the first Change.",
     },
     {
       step: 2,
       title: "Push and wait for evidence",
       why: "Wait for the first CI run (the changeId is in nextSteps). For your own edits: start_change, git push to the returned fork remote, then wait the same way.",
       call: call("wait_for_change", { changeId: CH, until: "evidence_ready", timeoutSec: 120 }),
-      command: 'git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>',
-      returns: "{ change, reached, reason }. reason \"timeout\": call again.",
+      command:
+        'git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>',
+      returns: '{ change, reached, reason }. reason "timeout": call again.',
     },
     {
       step: 3,
@@ -128,12 +140,39 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
   ];
 
   const loop: NextStep[] = [
-    { title: "Draft a Plan (a human approves it)", call: call("create_plan", { repoId: "<projectId>", title: "<what>", intent: "<why>", acceptanceCriteria: ["<observable result>"], scopePaths: ["src/**", "test/**"] }) },
-    { title: "Open a Change; it returns a fork remote", call: call("start_change", { repoId: "<projectId>", planId: "<planId>", title: "<what>", category: "feature" }) },
-    { title: "Push to the fork", command: 'git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>' },
-    { title: "Wait for the lane", call: call("wait_for_change", { changeId: CH, until: "lane_assigned", timeoutSec: 300 }) },
+    {
+      title: "Draft a Plan (a human approves it)",
+      call: call("create_plan", {
+        repoId: "<projectId>",
+        title: "<what>",
+        intent: "<why>",
+        acceptanceCriteria: ["<observable result>"],
+        scopePaths: ["src/**", "test/**"],
+      }),
+    },
+    {
+      title: "Open a Change; it returns a fork remote",
+      call: call("start_change", {
+        repoId: "<projectId>",
+        planId: "<planId>",
+        title: "<what>",
+        category: "feature",
+      }),
+    },
+    {
+      title: "Push to the fork",
+      command:
+        'git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>',
+    },
+    {
+      title: "Wait for the lane",
+      call: call("wait_for_change", { changeId: CH, until: "lane_assigned", timeoutSec: 300 }),
+    },
     { title: "Ask a human to review (Lane 1/2)", call: call("request_review", { changeId: CH }) },
-    { title: "Wait until merged", call: call("wait_for_change", { changeId: CH, until: "merged", timeoutSec: 600 }) },
+    {
+      title: "Wait until merged",
+      call: call("wait_for_change", { changeId: CH, until: "merged", timeoutSec: 600 }),
+    },
   ];
 
   const limits = [
@@ -149,7 +188,12 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
     conventionsVersion: CONVENTIONS_VERSION,
     platform: { name: "gittifacts", summary: PLATFORM_SUMMARY },
     host,
-    mcp: { url: mcp, transport: "streamable-http", protocolVersion: MCP_PROTOCOL_VERSION, serverCard },
+    mcp: {
+      url: mcp,
+      transport: "streamable-http",
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      serverCard,
+    },
     auth: {
       header: "Authorization: Bearer <token>",
       anonymous: {
@@ -161,7 +205,10 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
         limits,
       },
       oauth: { available: a.oauth, resourceMetadata: prm },
-      deviceFlow: a.deviceFlowCommand === undefined ? { available: false } : { available: true, command: a.deviceFlowCommand },
+      deviceFlow:
+        a.deviceFlowCommand === undefined
+          ? { available: false }
+          : { available: true, command: a.deviceFlowCommand },
       agentToken: `A human creates one for you (POST ${host}/api/v1/principals/agents) with the scopes they choose.`,
     },
     ship,
@@ -206,17 +253,25 @@ export function renderStartMarkdown(doc: StartDoc): string {
     "## Authenticate (or don't)",
     `- **No account:** ${a.anonymous.how}`,
     ...(a.anonymous.available
-      ? [`  Unclaimed projects expire after ${a.anonymous.ttlDays} days unless claimed. Limits: ${a.anonymous.limits.join("; ")}.`]
+      ? [
+          `  Unclaimed projects expire after ${a.anonymous.ttlDays} days unless claimed. Limits: ${a.anonymous.limits.join("; ")}.`,
+        ]
       : []),
     `- **Logged-in human:** ${a.oauth.available ? `MCP OAuth. Connect to ${doc.mcp.url}; the 401 points to ${a.oauth.resourceMetadata}.` : "MCP OAuth is not available yet; use an agent token."}`,
-    ...(a.deviceFlow.available && a.deviceFlow.command !== undefined ? [`- **CLI:** \`${a.deviceFlow.command}\` (OAuth device flow).`] : []),
+    ...(a.deviceFlow.available && a.deviceFlow.command !== undefined
+      ? [`- **CLI:** \`${a.deviceFlow.command}\` (OAuth device flow).`]
+      : []),
     `- **Agent token:** ${a.agentToken}`,
     `- Send \`${a.header}\` on every MCP and API call.`,
     "",
     "## Ship something in 3 calls",
   ];
   for (const s of doc.ship) {
-    lines.push(`${s.step}. **${s.title}.** ${s.why ?? ""}`.trimEnd(), ...step(s), `   Returns ${s.returns}`);
+    lines.push(
+      `${s.step}. **${s.title}.** ${s.why ?? ""}`.trimEnd(),
+      ...step(s),
+      `   Returns ${s.returns}`,
+    );
   }
   lines.push("", "## Then, for every change");
   doc.loop.forEach((s, i) => {
@@ -230,7 +285,9 @@ export function renderStartMarkdown(doc: StartDoc): string {
     ...doc.rules.map((r) => `- ${r}`),
     "",
     "## Templates",
-    ...doc.templates.map((t) => `- \`${t.id}\`: ${t.description}${t.preview ? "" : " (no preview)"}`),
+    ...doc.templates.map(
+      (t) => `- \`${t.id}\`: ${t.description}${t.preview ? "" : " (no preview)"}`,
+    ),
     "",
     "## More",
     `- [llms.txt](${doc.links.llmsTxt}) · [OpenAPI](${doc.links.openapi}) · [MCP server card](${doc.mcp.serverCard})`,

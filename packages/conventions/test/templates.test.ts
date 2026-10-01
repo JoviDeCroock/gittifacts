@@ -17,7 +17,9 @@ const SKIP = /(^|\/)(node_modules|dist|\.wrangler)(\/|$)/;
 
 describe("templates/", () => {
   it("holds exactly the catalogued templates", () => {
-    const dirs = readdirSync(TEMPLATES_DIR, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    const dirs = readdirSync(TEMPLATES_DIR, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
     expect(dirs.sort()).toEqual([...TEMPLATE_IDS].sort());
     expect(existsSync(join(TEMPLATES_DIR, "README.md"))).toBe(true);
   });
@@ -25,7 +27,12 @@ describe("templates/", () => {
   it("is not part of the monorepo workspace", () => {
     const workspace = readText(join(REPO_ROOT, "pnpm-workspace.yaml"));
     const packages = /^packages:\n((?:\s+- .+\n)+)/m.exec(workspace)?.[1] ?? "";
-    expect(packages.trim().split("\n").map((l) => l.replace(/^\s*-\s*/, "").replace(/["']/g, ""))).toEqual(["packages/*", "apps/*"]);
+    expect(
+      packages
+        .trim()
+        .split("\n")
+        .map((l) => l.replace(/^\s*-\s*/, "").replace(/["']/g, "")),
+    ).toEqual(["packages/*", "apps/*"]);
   });
 });
 
@@ -43,7 +50,10 @@ describe.each([...TEMPLATE_IDS])("templates/%s", (id) => {
   it("has generated files identical to what @app/conventions produces (run sync-templates)", () => {
     for (const [path, text] of Object.entries(templateFilesOnDisk(id))) {
       expect(existsSync(join(dir, path)), path).toBe(true);
-      expect(read(path), `templates/${id}/${path} is stale: pnpm --filter @app/conventions sync-templates`).toBe(text);
+      expect(
+        read(path),
+        `templates/${id}/${path} is stale: pnpm --filter @app/conventions sync-templates`,
+      ).toBe(text);
     }
   });
 
@@ -55,8 +65,14 @@ describe.each([...TEMPLATE_IDS])("templates/%s", (id) => {
   });
 
   it("has lint, typecheck, test and build scripts", () => {
-    for (const script of ["lint", "typecheck", "test", "build"]) expect(pkg.scripts?.[script], script).toBeTruthy();
-    expect(TEMPLATES[id].features.scripts).toEqual({ lint: "lint", typecheck: "typecheck", test: "test", build: "build" });
+    for (const script of ["lint", "typecheck", "test", "build"])
+      expect(pkg.scripts?.[script], script).toBeTruthy();
+    expect(TEMPLATES[id].features.scripts).toEqual({
+      lint: "lint",
+      typecheck: "typecheck",
+      test: "test",
+      build: "build",
+    });
   });
 
   it("keeps dependencies minimal and pinned (no wrangler, no packageManager download)", () => {
@@ -75,7 +91,9 @@ describe.each([...TEMPLATE_IDS])("templates/%s", (id) => {
     expect(lock.startsWith("lockfileVersion: '9.0'")).toBe(true);
     const importer = /^importers:\n\n {2}\.:\n([\s\S]*?)\n\npackages:/m.exec(lock)?.[1] ?? "";
     for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
-      expect(importer, `${name} missing from pnpm-lock.yaml`).toContain(`${name.includes("@") ? `'${name}'` : name}:\n        specifier: ${version}`);
+      expect(importer, `${name} missing from pnpm-lock.yaml`).toContain(
+        `${name.includes("@") ? `'${name}'` : name}:\n        specifier: ${version}`,
+      );
     }
   });
 
@@ -84,12 +102,15 @@ describe.each([...TEMPLATE_IDS])("templates/%s", (id) => {
     expect(ignore).toEqual(expect.arrayContaining(["node_modules/", "dist/"]));
   });
 
-  it.runIf(isWorker)("has a wrangler.jsonc with the name placeholder and the pinned compatibility date", () => {
-    const config = read("wrangler.jsonc");
-    expect(config).toContain('"name": "{{projectName}}"');
-    expect(config).toContain('"compatibility_date": "2026-09-30"');
-    expect(config).toMatch(/"build": \{ "command": "pnpm run build"/);
-  });
+  it.runIf(isWorker)(
+    "has a wrangler.jsonc with the name placeholder and the pinned compatibility date",
+    () => {
+      const config = read("wrangler.jsonc");
+      expect(config).toContain('"name": "{{projectName}}"');
+      expect(config).toContain('"compatibility_date": "2026-09-30"');
+      expect(config).toMatch(/"build": \{ "command": "pnpm run build"/);
+    },
+  );
 
   it("only uses known placeholders", () => {
     for (const file of listFiles(dir)) {
@@ -102,7 +123,13 @@ describe.each([...TEMPLATE_IDS])("templates/%s", (id) => {
   });
 
   it("renders a project's generated files without placeholders left", () => {
-    const files = templateGeneratedFiles(id, { projectName: "my-app", host: "https://h.example", mcpUrl: "https://h.example/mcp", repoId: "rep_1", claimed: true });
+    const files = templateGeneratedFiles(id, {
+      projectName: "my-app",
+      host: "https://h.example",
+      mcpUrl: "https://h.example/mcp",
+      repoId: "rep_1",
+      claimed: true,
+    });
     for (const [path, text] of Object.entries(files)) expect(text, path).not.toMatch(/\{\{\w+\}\}/);
     expect(renderPlaceholders(read("README.md"), { projectName: "my-app" })).toMatch(/^# my-app\n/);
   });
@@ -110,7 +137,9 @@ describe.each([...TEMPLATE_IDS])("templates/%s", (id) => {
 
 describe("placeholders", () => {
   it("renders known names and leaves unknown ones", () => {
-    expect(renderPlaceholders("{{projectName}} {{host}} {{other}}", { projectName: "a", host: "b" })).toBe("a b {{other}}");
+    expect(
+      renderPlaceholders("{{projectName}} {{host}} {{other}}", { projectName: "a", host: "b" }),
+    ).toBe("a b {{other}}");
   });
 
   it("slugs project names into Worker-safe names", () => {

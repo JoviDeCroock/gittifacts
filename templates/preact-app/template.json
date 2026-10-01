@@ -4,9 +4,6 @@
   "description": "A Preact + @preact/signals single-page app on Workers static assets, with a JSON API under /api/*.",
   "previewCommand": "wrangler dev --ip 0.0.0.0 --port $PORT",
   "buildOutput": "dist",
-  "routes": [
-    "/",
-    "/api/time"
-  ],
+  "routes": ["/", "/api/time"],
   "expectedCiSeconds": 30
 }
