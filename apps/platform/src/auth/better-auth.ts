@@ -2,15 +2,24 @@
  * better-auth for humans: email + password, GitHub (when configured), optional passkeys,
  * and the bearer plugin so a session token also works as `Authorization: Bearer`.
  *
- * Agents do NOT use better-auth. They hold platform tokens (`gtf_…`, see ./agent-tokens.ts)
- * bound to an agent Principal. See that module for why we don't use the api-key plugin.
+ * Agents do NOT use better-auth sessions. They hold platform tokens (`gtf_…`, see
+ * ./agent-tokens.ts) bound to an agent Principal. See that module for why we don't use the
+ * api-key plugin. The device-authorization plugin runs the RFC 8628 code state machine for the
+ * CLI login, but its session-minting endpoints are disabled (see ../oauth/device.ts).
  */
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { bearer } from "better-auth/plugins";
+import { bearer, deviceAuthorization } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema.js";
+import {
+  agentDeviceGrant,
+  agentDeviceRedemption,
+  DEVICE_CODE_TTL,
+  DEVICE_DISABLED_PATHS,
+  DEVICE_POLL_INTERVAL,
+} from "../oauth/device.js";
 
 export interface AuthBindings {
   DB: D1Database;
@@ -53,7 +62,19 @@ export function createAuth(env: AuthBindings, rt: AuthRuntime) {
     // Per-isolate memory rate limiting is meaningless on Workers; use Cloudflare rate limiting rules.
     rateLimit: { enabled: false },
     advanced: waitUntil ? { backgroundTasks: { handler: (p) => waitUntil(p) } } : {},
-    plugins: [bearer(), passkey({ rpID: url.hostname, rpName: "gittifacts", origin: url.origin })],
+    // Device codes must never turn into human sessions; approval goes through our consent API.
+    disabledPaths: [...DEVICE_DISABLED_PATHS],
+    plugins: [
+      bearer(),
+      passkey({ rpID: url.hostname, rpName: "gittifacts", origin: url.origin }),
+      deviceAuthorization({
+        expiresIn: DEVICE_CODE_TTL,
+        interval: DEVICE_POLL_INTERVAL,
+        verificationUri: "/device",
+        grant: agentDeviceGrant,
+      }),
+      agentDeviceRedemption(),
+    ],
   });
 }
 
