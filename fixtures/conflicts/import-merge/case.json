@@ -1,0 +1,38 @@
+{
+  "name": "import-merge",
+  "kind": "textual",
+  "description": "Both sides import one more helper on the same import line and append a new function at the end of the file. The import must name both helpers.",
+  "change": {
+    "changeId": "chg_report_peak",
+    "title": "Report the peak value",
+    "dir": "change",
+    "plan": {
+      "title": "Report the peak value",
+      "intent": "Dashboards need the largest value of a series next to the total.",
+      "acceptanceCriteria": [
+        "peak([1, 5, 2]) returns 5"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_report_average",
+      "title": "Report the average",
+      "dir": "upstream",
+      "plan": {
+        "title": "Report the average",
+        "intent": "Reports show the mean of a series; empty series average to 0.",
+        "acceptanceCriteria": [
+          "average([2, 4]) returns 3",
+          "average([]) returns 0"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "conflicted": [
+      "src/report.ts"
+    ],
+    "outsideHunks": false
+  }
+}

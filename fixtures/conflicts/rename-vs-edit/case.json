@@ -1,0 +1,38 @@
+{
+  "name": "rename-vs-edit",
+  "kind": "textual",
+  "description": "Upstream renames the helper lineTotal to subtotal; the change adds a discount next to the line that calls it. The resolved loop must call the new name.",
+  "change": {
+    "changeId": "chg_cart_discount",
+    "title": "Cart discount",
+    "dir": "change",
+    "plan": {
+      "title": "Cart discount",
+      "intent": "cartTotal takes an optional discount that is subtracted from the total, never going below zero.",
+      "acceptanceCriteria": [
+        "cartTotal(items, 5) subtracts 5",
+        "the total never goes below 0"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_rename_subtotal",
+      "title": "Rename lineTotal to subtotal",
+      "dir": "upstream",
+      "plan": {
+        "title": "Rename lineTotal to subtotal",
+        "intent": "Use the accounting term subtotal for price times quantity.",
+        "acceptanceCriteria": [
+          "no function is called lineTotal any more"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "conflicted": [
+      "src/cart.ts"
+    ],
+    "outsideHunks": false
+  }
+}

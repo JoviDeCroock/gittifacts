@@ -1,0 +1,38 @@
+{
+  "name": "signature-and-body",
+  "kind": "textual",
+  "description": "Upstream adds an optional greeting parameter; the change rewrites the body to clean up the name. The resolution needs the new signature and the new body together (one combined line).",
+  "change": {
+    "changeId": "chg_clean_names",
+    "title": "Clean up names in greetings",
+    "dir": "change",
+    "plan": {
+      "title": "Clean up names in greetings",
+      "intent": "Names arrive with stray spaces and lower-case initials; greet() should trim them and capitalize the first letter.",
+      "acceptanceCriteria": [
+        "greet('  ada ') returns 'Hello, Ada!'"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_custom_greeting",
+      "title": "Custom greeting word",
+      "dir": "upstream",
+      "plan": {
+        "title": "Custom greeting word",
+        "intent": "Let callers choose the greeting word; it defaults to Hello.",
+        "acceptanceCriteria": [
+          "greet('Bob', 'Hi') returns 'Hi, Bob!'",
+          "greet('Bob') still returns 'Hello, Bob!'"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "conflicted": [
+      "src/greet.ts"
+    ],
+    "outsideHunks": false
+  }
+}

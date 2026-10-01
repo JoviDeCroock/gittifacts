@@ -1,0 +1,38 @@
+{
+  "name": "handler-registry",
+  "kind": "textual",
+  "description": "Both sides register a new text handler right after `lower`: two conflict regions (definition and map entry). Keep both handlers.",
+  "change": {
+    "changeId": "chg_trim_handler",
+    "title": "Add a trim handler",
+    "dir": "change",
+    "plan": {
+      "title": "Add a trim handler",
+      "intent": "Callers need to strip surrounding whitespace through the handler registry.",
+      "acceptanceCriteria": [
+        "run('trim', '  a ') returns 'a'",
+        "existing handlers keep working"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_reverse_handler",
+      "title": "Add a reverse handler",
+      "dir": "upstream",
+      "plan": {
+        "title": "Add a reverse handler",
+        "intent": "Support reversing strings through the handler registry, unicode-safe.",
+        "acceptanceCriteria": [
+          "run('reverse', 'abc') returns 'cba'"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "conflicted": [
+      "src/handlers.ts"
+    ],
+    "outsideHunks": false
+  }
+}
