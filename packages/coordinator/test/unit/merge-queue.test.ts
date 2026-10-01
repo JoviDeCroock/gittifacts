@@ -4,7 +4,11 @@
  */
 import type { Change } from "@app/domain";
 import { describe, expect, it } from "vitest";
-import { createFakeEnvironment, FakeWorkflowInstance, portsForRole } from "../../src/fakes/index.js";
+import {
+  createFakeEnvironment,
+  type FakeWorkflowInstance,
+  portsForRole,
+} from "../../src/fakes/index.js";
 import { changeWorkflowId, forkNameFor, REBASE_BRANCH, ZERO_SHA } from "../../src/ids.js";
 import { MemoryQueueStorage, MergeQueueCore } from "../../src/merge-queue.js";
 
@@ -12,7 +16,12 @@ async function setup() {
   const env = createFakeEnvironment({ runWorkflows: false });
   const repo = await env.seedRepo({ files: { "src/a.ts": "a\n", "src/b.ts": "b\n" } });
   const storage = new MemoryQueueStorage();
-  const queue = new MergeQueueCore({ ports: portsForRole(env.ports, "merge-queue"), bindings: env.bindings, storage, options: { pollMs: 0 } });
+  const queue = new MergeQueueCore({
+    ports: portsForRole(env.ports, "merge-queue"),
+    bindings: env.bindings,
+    storage,
+    options: { pollMs: 0 },
+  });
   let n = 0;
 
   /** A change approved at its current head, with signed evidence, as the workflow leaves it. */
@@ -49,14 +58,28 @@ async function setup() {
     };
     await env.ports.store.insertChange(change);
     const signed = await env.ports.signer.signEvidence({ changeId: id, headSha, items: [] });
-    await env.ports.store.putEvidence({ ...signed, id: `ev-${id}`, baseSha, createdAt: change.createdAt, notesWritten: true });
+    await env.ports.store.putEvidence({
+      ...signed,
+      id: `ev-${id}`,
+      baseSha,
+      createdAt: change.createdAt,
+      notesWritten: true,
+    });
     // The workflow instance that waits for "merged".
-    await env.bindings.changeWorkflow.create({ id: changeWorkflowId(id, headSha), params: { changeId: id, headSha } });
+    await env.bindings.changeWorkflow.create({
+      id: changeWorkflowId(id, headSha),
+      params: { changeId: id, headSha },
+    });
     return change;
   }
 
   async function enqueue(c: Change) {
-    return queue.enqueue({ repoId: repo.id, changeId: c.id, headSha: c.headSha ?? "", workflowInstanceId: changeWorkflowId(c.id, c.headSha ?? "") });
+    return queue.enqueue({
+      repoId: repo.id,
+      changeId: c.id,
+      headSha: c.headSha ?? "",
+      workflowInstanceId: changeWorkflowId(c.id, c.headSha ?? ""),
+    });
   }
 
   async function drain(max = 50): Promise<string[]> {
@@ -70,8 +93,21 @@ async function setup() {
     return did;
   }
 
-  const instanceOf = (c: Change) => env.bindings.changeWorkflow.instances.get(changeWorkflowId(c.id, c.headSha ?? "")) as FakeWorkflowInstance;
-  return { env, repo, queue, storage, approved, enqueue, drain, instanceOf, main: () => env.ports.git.head(repo.artifactsName) };
+  const instanceOf = (c: Change) =>
+    env.bindings.changeWorkflow.instances.get(
+      changeWorkflowId(c.id, c.headSha ?? ""),
+    ) as FakeWorkflowInstance;
+  return {
+    env,
+    repo,
+    queue,
+    storage,
+    approved,
+    enqueue,
+    drain,
+    instanceOf,
+    main: () => env.ports.git.head(repo.artifactsName),
+  };
 }
 
 describe("MergeQueue", () => {
@@ -85,12 +121,25 @@ describe("MergeQueue", () => {
     const git = t.env.ports.git;
     expect(git.repo(t.repo.artifactsName).refs.has(`refs/merge-queue/${c.id}`)).toBe(false); // staging ref deleted
     expect(await git.readNote(t.repo.artifactsName, c.headSha ?? "")).toContain(c.headSha); // evidence note copied
-    expect(await t.env.ports.store.getChange(c.id)).toMatchObject({ status: "merged", mergedSha: c.headSha });
-    expect(t.instanceOf(c).received).toEqual([{ type: "merged", payload: { mergedSha: c.headSha, rebasedFrom: null, bundleRef: null } }]);
+    expect(await t.env.ports.store.getChange(c.id)).toMatchObject({
+      status: "merged",
+      mergedSha: c.headSha,
+    });
+    expect(t.instanceOf(c).received).toEqual([
+      { type: "merged", payload: { mergedSha: c.headSha, rebasedFrom: null, bundleRef: null } },
+    ]);
     expect(t.env.bindings.alarms.map((a) => a.changeId)).toContain(c.id); // fork GC scheduled
-    expect(t.env.ports.audit.actions(`change:${c.id}`)).toEqual(["merge-queue.enqueued", "change.merged"]);
+    expect(t.env.ports.audit.actions(`change:${c.id}`)).toEqual([
+      "merge-queue.enqueued",
+      "change.merged",
+    ]);
     // Order of main-repo writes: transfer into a staging ref, CAS the branch, note, delete staging.
-    expect(git.writes.filter((w) => w.repo === t.repo.artifactsName).map((w) => w.op)).toEqual(["transfer", "update-ref", "note", "update-ref"]);
+    expect(git.writes.filter((w) => w.repo === t.repo.artifactsName).map((w) => w.op)).toEqual([
+      "transfer",
+      "update-ref",
+      "note",
+      "update-ref",
+    ]);
   });
 
   it("is FIFO: one change at a time", async () => {
@@ -107,31 +156,59 @@ describe("MergeQueue", () => {
     // b's base moved under it (a merged first), so it was rebased onto a.
     expect(mergedB?.status).toBe("merged");
     expect(t.env.ports.git.commits.get(mergedB?.mergedSha ?? "")?.parents).toEqual([a.headSha]);
-    expect(t.env.ports.git.filesAt(t.main() ?? "")).toMatchObject({ "src/a.ts": "a2\n", "src/b.ts": "b2\n" });
+    expect(t.env.ports.git.filesAt(t.main() ?? "")).toMatchObject({
+      "src/a.ts": "a2\n",
+      "src/b.ts": "b2\n",
+    });
   });
 
   it("rebase path: rebases in the sandbox, re-runs cheap checks, re-signs evidence with rebasedFrom", async () => {
     const t = await setup();
     const c = await t.approved({ "src/a.ts": "a2\n" });
-    const moved = t.env.ports.git.commit(t.repo.artifactsName, "main", { "src/b.ts": "b-main\n" }, "someone else's merge");
+    const moved = t.env.ports.git.commit(
+      t.repo.artifactsName,
+      "main",
+      { "src/b.ts": "b-main\n" },
+      "someone else's merge",
+    );
     await t.enqueue(c);
     const did = await t.drain();
     expect(did).toContain("rebased");
 
     const rebase = t.env.ports.sandbox.calls.find((x) => x.op === "rebase");
-    expect(rebase?.input).toMatchObject({ fork: c.forkName, headSha: c.headSha, ontoSha: moved, branch: REBASE_BRANCH });
+    expect(rebase?.input).toMatchObject({
+      fork: c.forkName,
+      headSha: c.headSha,
+      ontoSha: moved,
+      branch: REBASE_BRANCH,
+    });
     const check = t.env.ports.ci.starts.find((r) => r.runId.startsWith("mq-"));
-    expect(check).toMatchObject({ evidenceSteps: [], pipelineFrom: "base", baseSha: moved, artifactsRepo: c.forkName });
+    expect(check).toMatchObject({
+      evidenceSteps: [],
+      pipelineFrom: "base",
+      baseSha: moved,
+      artifactsRepo: c.forkName,
+    });
 
     const merged = await t.env.ports.store.getChange(c.id);
     expect(merged?.mergedSha).not.toBe(c.headSha);
     expect(t.main()).toBe(merged?.mergedSha);
     expect(t.env.ports.git.commits.get(merged?.mergedSha ?? "")?.parents).toEqual([moved]);
-    expect(await t.env.ports.store.getEvidence(c.id, merged?.mergedSha ?? "")).toMatchObject({ baseSha: moved });
+    expect(await t.env.ports.store.getEvidence(c.id, merged?.mergedSha ?? "")).toMatchObject({
+      baseSha: moved,
+    });
     expect(t.env.ports.signer.documents).toContainEqual(
-      expect.objectContaining({ purpose: "evidence-rebase", rebasedFrom: c.headSha, headSha: merged?.mergedSha, onto: moved }),
+      expect.objectContaining({
+        purpose: "evidence-rebase",
+        rebasedFrom: c.headSha,
+        headSha: merged?.mergedSha,
+        onto: moved,
+      }),
     );
-    expect(t.instanceOf(c).received[0]).toEqual({ type: "merged", payload: { mergedSha: merged?.mergedSha, rebasedFrom: c.headSha, bundleRef: null } });
+    expect(t.instanceOf(c).received[0]).toEqual({
+      type: "merged",
+      payload: { mergedSha: merged?.mergedSha, rebasedFrom: c.headSha, bundleRef: null },
+    });
   });
 
   it("conflict: the change fails, the workflow hears merge-conflict, the queue moves on", async () => {
@@ -144,7 +221,14 @@ describe("MergeQueue", () => {
     expect(t.main()).toBe(before);
     expect((await t.env.ports.store.getChange(c.id))?.status).toBe("failing");
     expect(t.instanceOf(c).received).toEqual([
-      { type: "merge-conflict", payload: { reason: "conflict", detail: expect.stringContaining("conflicts"), files: ["src/a.ts"] } },
+      {
+        type: "merge-conflict",
+        payload: {
+          reason: "conflict",
+          detail: expect.stringContaining("conflicts"),
+          files: ["src/a.ts"],
+        },
+      },
     ]);
     expect(t.env.ports.notifier.kinds(c.id)).toEqual(["failing"]);
     expect(await t.queue.list(t.repo.id)).toEqual([]);
@@ -155,14 +239,17 @@ describe("MergeQueue", () => {
     const c = await t.approved({ "src/a.ts": "a2\n" });
     let stale = 2;
     t.env.ports.git.updateRefHook = (_repo, ref) =>
-      ref === "refs/heads/main" && stale-- > 0 ? { ok: false, reason: "stale", detail: "ng refs/heads/main stale ref" } : undefined;
+      ref === "refs/heads/main" && stale-- > 0
+        ? { ok: false, reason: "stale", detail: "ng refs/heads/main stale ref" }
+        : undefined;
     await t.enqueue(c);
     expect(await t.drain()).toEqual(["stale", "stale", "merged", "idle"]);
     expect(t.main()).toBe(c.headSha);
 
     const t2 = await setup();
     const d = await t2.approved({ "src/a.ts": "a3\n" });
-    t2.env.ports.git.updateRefHook = (_repo, ref) => (ref === "refs/heads/main" ? { ok: false, reason: "stale", detail: "racing" } : undefined);
+    t2.env.ports.git.updateRefHook = (_repo, ref) =>
+      ref === "refs/heads/main" ? { ok: false, reason: "stale", detail: "racing" } : undefined;
     await t2.enqueue(d);
     const did = await t2.drain();
     expect(did.filter((x) => x === "stale")).toHaveLength(5);
@@ -209,19 +296,36 @@ describe("MergeQueue", () => {
     const c = await t.approved({ "src/a.ts": "a2\n" });
     await t.enqueue(c);
     // Simulate: a previous tick transferred + fast-forwarded, then the DO restarted.
-    await t.env.ports.git.transferObjects(c.forkName, t.repo.artifactsName, c.headSha ?? "", `refs/merge-queue/${c.id}`);
-    await t.env.ports.git.updateRef(t.repo.artifactsName, "refs/heads/main", c.baseSha, c.headSha ?? "");
+    await t.env.ports.git.transferObjects(
+      c.forkName,
+      t.repo.artifactsName,
+      c.headSha ?? "",
+      `refs/merge-queue/${c.id}`,
+    );
+    await t.env.ports.git.updateRef(
+      t.repo.artifactsName,
+      "refs/heads/main",
+      c.baseSha,
+      c.headSha ?? "",
+    );
     expect(await t.drain()).toEqual(["merged", "idle"]);
-    expect(await t.env.ports.store.getChange(c.id)).toMatchObject({ status: "merged", mergedSha: c.headSha });
+    expect(await t.env.ports.store.getChange(c.id)).toMatchObject({
+      status: "merged",
+      mergedSha: c.headSha,
+    });
   });
 
   it("only the merge-queue role may write main; every other role writes forks only", async () => {
     const t = await setup();
     const c = await t.approved({ "src/a.ts": "a2\n" });
     const fork = portsForRole(t.env.ports, "default").git;
-    expect(() => fork.updateRef(t.repo.artifactsName, "refs/heads/main", c.baseSha, c.headSha ?? "")).toThrow(/forbidden/);
+    expect(() =>
+      fork.updateRef(t.repo.artifactsName, "refs/heads/main", c.baseSha, c.headSha ?? ""),
+    ).toThrow(/forbidden/);
     expect(() => fork.mintToken(t.repo.artifactsName, "write", 60)).toThrow(/forbidden/);
-    expect(() => fork.transferObjects(c.forkName, t.repo.artifactsName, c.headSha ?? "", "refs/x")).toThrow(/forbidden/);
+    expect(() =>
+      fork.transferObjects(c.forkName, t.repo.artifactsName, c.headSha ?? "", "refs/x"),
+    ).toThrow(/forbidden/);
     await expect(fork.writeNote(c.forkName, c.headSha ?? "", "ok")).resolves.toBeUndefined();
     // Main-repo write tokens are capped at five minutes even for the queue.
     const { token } = await t.env.ports.git.mintToken(t.repo.artifactsName, "write", 3600);

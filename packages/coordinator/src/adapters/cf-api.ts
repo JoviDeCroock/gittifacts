@@ -16,7 +16,11 @@ const Envelope = z
   .object({
     success: z.boolean().optional(),
     result: z.unknown().optional(),
-    errors: z.array(z.object({ code: z.number().optional(), message: z.string().optional() }).passthrough()).optional(),
+    errors: z
+      .array(
+        z.object({ code: z.number().optional(), message: z.string().optional() }).passthrough(),
+      )
+      .optional(),
   })
   .passthrough();
 
@@ -43,7 +47,11 @@ export interface CfRequest {
   form?: FormData;
 }
 
-export async function cfRequest<T>(opts: CfApiOptions, req: CfRequest, schema: z.ZodType<T>): Promise<T> {
+export async function cfRequest<T>(
+  opts: CfApiOptions,
+  req: CfRequest,
+  schema: z.ZodType<T>,
+): Promise<T> {
   const base = (opts.baseUrl ?? "https://api.cloudflare.com/client/v4").replace(/\/+$/, "");
   const qs = req.query ? `?${new URLSearchParams(req.query).toString()}` : "";
   const url = `${base}/accounts/${opts.accountId}${req.path}${qs}`;
@@ -54,7 +62,11 @@ export async function cfRequest<T>(opts: CfApiOptions, req: CfRequest, schema: z
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(req.json);
   }
-  const res = await (opts.fetch ?? fetch)(url, { method: req.method, headers, ...(body === undefined ? {} : { body }) });
+  const res = await (opts.fetch ?? fetch)(url, {
+    method: req.method,
+    headers,
+    ...(body === undefined ? {} : { body }),
+  });
   const text = await res.text();
   let parsed: unknown = null;
   try {
@@ -65,12 +77,21 @@ export async function cfRequest<T>(opts: CfApiOptions, req: CfRequest, schema: z
   const envelope = Envelope.safeParse(parsed);
   const errors = envelope.success ? (envelope.data.errors ?? []) : [];
   if (!res.ok || (envelope.success && envelope.data.success === false)) {
-    const detail = errors.map((e) => `${e.code ?? "?"}: ${e.message ?? ""}`).join("; ") || text.slice(0, 300);
-    throw new CfApiError(res.status, errors, `${req.method} ${req.path} → ${res.status}: ${detail}`);
+    const detail =
+      errors.map((e) => `${e.code ?? "?"}: ${e.message ?? ""}`).join("; ") || text.slice(0, 300);
+    throw new CfApiError(
+      res.status,
+      errors,
+      `${req.method} ${req.path} → ${res.status}: ${detail}`,
+    );
   }
   const result = schema.safeParse(envelope.success ? envelope.data.result : parsed);
   if (!result.success) {
-    throw new CfApiError(res.status, [], `${req.method} ${req.path}: unexpected response: ${result.error.issues[0]?.message ?? "invalid"}`);
+    throw new CfApiError(
+      res.status,
+      [],
+      `${req.method} ${req.path}: unexpected response: ${result.error.issues[0]?.message ?? "invalid"}`,
+    );
   }
   return result.data;
 }

@@ -5,7 +5,7 @@
  * Summaries are validated leniently (the engine's schema is still moving); a summary for a
  * superseded head or for a merge-queue re-check run is stored but not forwarded.
  */
-import { type PipelineRun, type RunStatus } from "@app/domain";
+import type { PipelineRun, RunStatus } from "@app/domain";
 import { Sha } from "@app/evidence";
 import { z } from "zod";
 import type { CoordinatorBindings } from "./bindings.js";
@@ -13,13 +13,27 @@ import { type CiFinishedEvent, EVENT_CI_FINISHED } from "./events.js";
 import { changeWorkflowId, ciRunIdFor } from "./ids.js";
 import type { CiRunStatus, Ports, RunSink } from "./ports.js";
 
-const TERMINAL: ReadonlySet<RunStatus> = new Set(["passed", "failed", "cancelled", "superseded", "errored"]);
+const TERMINAL: ReadonlySet<RunStatus> = new Set([
+  "passed",
+  "failed",
+  "cancelled",
+  "superseded",
+  "errored",
+]);
 
 export function isTerminalRun(status: RunStatus): boolean {
   return TERMINAL.has(status);
 }
 
-const RUN_STATES = ["queued", "running", "passed", "failed", "cancelled", "superseded", "errored"] as const;
+const RUN_STATES = [
+  "queued",
+  "running",
+  "passed",
+  "failed",
+  "cancelled",
+  "superseded",
+  "errored",
+] as const;
 
 /** The subset of the engine's `RunSummary` the coordinator relies on. */
 export const CiRunSummary = z
@@ -47,7 +61,9 @@ export const CiRunSummary = z
       )
       .default([]),
     evidence: z.array(z.unknown()).default([]),
-    evidenceErrors: z.array(z.object({ step: z.string(), message: z.string() }).passthrough()).default([]),
+    evidenceErrors: z
+      .array(z.object({ step: z.string(), message: z.string() }).passthrough())
+      .default([]),
     /** Bundle produced by the pipeline's `build` step (not yet emitted by the engine). */
     outputs: z.object({ bundleRef: z.string().nullable().optional() }).passthrough().optional(),
     bundleRef: z.string().nullable().optional(),
@@ -69,11 +85,22 @@ const STEP_STATUS: Record<string, PipelineRun["steps"][number]["status"]> = {
 };
 
 /** Engine run (summary or status) → the domain `PipelineRun` the API serves. */
-export function toPipelineRun(run: Pick<CiRunStatus, "id" | "changeId" | "headSha" | "engine" | "startedAt" | "finishedAt"> & {
-  status: string;
-  steps: ReadonlyArray<{ name: string; kind: "user" | "evidence"; status: string; durationMs: number | null; logRef: string | null; cacheHit?: boolean }>;
-}): PipelineRun {
-  const status: RunStatus = (RUN_STATES as readonly string[]).includes(run.status) ? (run.status as RunStatus) : "errored";
+export function toPipelineRun(
+  run: Pick<CiRunStatus, "id" | "changeId" | "headSha" | "engine" | "startedAt" | "finishedAt"> & {
+    status: string;
+    steps: ReadonlyArray<{
+      name: string;
+      kind: "user" | "evidence";
+      status: string;
+      durationMs: number | null;
+      logRef: string | null;
+      cacheHit?: boolean;
+    }>;
+  },
+): PipelineRun {
+  const status: RunStatus = (RUN_STATES as readonly string[]).includes(run.status)
+    ? (run.status as RunStatus)
+    : "errored";
   return {
     id: run.id,
     changeId: run.changeId,
@@ -85,7 +112,10 @@ export function toPipelineRun(run: Pick<CiRunStatus, "id" | "changeId" | "headSh
     steps: run.steps.map((s) => ({
       name: s.name,
       kind: s.kind,
-      status: s.cacheHit === true && s.status === "passed" ? "cached" : (STEP_STATUS[s.status] ?? "failed"),
+      status:
+        s.cacheHit === true && s.status === "passed"
+          ? "cached"
+          : (STEP_STATUS[s.status] ?? "failed"),
       durationMs: s.durationMs,
       logRef: s.logRef,
     })),
@@ -104,25 +134,36 @@ export interface CoordinatorRunSink extends RunSink {
   onRunFinished(summary: unknown): Promise<SinkOutcome>;
 }
 
-export function createRunSink(ports: Pick<Ports, "store">, bindings: CoordinatorBindings): CoordinatorRunSink {
+export function createRunSink(
+  ports: Pick<Ports, "store">,
+  bindings: CoordinatorBindings,
+): CoordinatorRunSink {
   return {
     async onRunFinished(raw: unknown): Promise<SinkOutcome> {
       const parsed = CiRunSummary.safeParse(raw);
       if (!parsed.success) {
-        return { accepted: false, reason: `invalid run summary: ${parsed.error.issues[0]?.message ?? "invalid"}` };
+        return {
+          accepted: false,
+          reason: `invalid run summary: ${parsed.error.issues[0]?.message ?? "invalid"}`,
+        };
       }
       const summary = parsed.data;
       const run = toPipelineRun(summary);
       await ports.store.upsertRun(run);
       const instanceId = changeWorkflowId(summary.changeId, summary.headSha);
       // Only the full run of a ChangeWorkflow instance is forwarded (not merge-queue re-checks).
-      if (summary.id !== ciRunIdFor(instanceId)) return { accepted: true, forwarded: false, reason: "not a change workflow run" };
+      if (summary.id !== ciRunIdFor(instanceId))
+        return { accepted: true, forwarded: false, reason: "not a change workflow run" };
       const change = await ports.store.getChange(summary.changeId);
-      if (change?.headSha !== summary.headSha) return { accepted: true, forwarded: false, reason: "head superseded" };
+      if (change?.headSha !== summary.headSha)
+        return { accepted: true, forwarded: false, reason: "head superseded" };
       const payload: CiFinishedEvent = {
         run,
         items: summary.evidence,
-        evidenceErrors: summary.evidenceErrors.map((e) => ({ step: e.step, message: e.message.slice(0, 4000) })),
+        evidenceErrors: summary.evidenceErrors.map((e) => ({
+          step: e.step,
+          message: e.message.slice(0, 4000),
+        })),
         outputs: { bundleRef: bundleRefOf(summary) },
       };
       const instance = await bindings.changeWorkflow.get(instanceId);

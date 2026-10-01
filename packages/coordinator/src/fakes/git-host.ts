@@ -53,7 +53,12 @@ export class FakeGitHost implements GitHost {
   readonly repos = new Map<string, FakeRepo>();
   readonly commits = new Map<string, FakeCommit>();
   readonly trees = new Map<string, Files>();
-  readonly tokens: Array<{ repo: string; scope: "read" | "write"; ttlSeconds: number; token: string }> = [];
+  readonly tokens: Array<{
+    repo: string;
+    scope: "read" | "write";
+    ttlSeconds: number;
+    token: string;
+  }> = [];
   /** Every write: op + repo (+ ref). */
   readonly writes: Array<{ op: string; repo: string; ref?: string }> = [];
   readonly deleted: string[] = [];
@@ -62,7 +67,9 @@ export class FakeGitHost implements GitHost {
   /** Write guard, like ArtifactsGitHost's (default: anything). */
   canWrite: (repo: string) => boolean = () => true;
   /** Return a result to short-circuit an updateRef (e.g. one injected stale). */
-  updateRefHook: ((repo: string, ref: string, oldSha: string, newSha: string) => FastForwardResult | undefined) | null = null;
+  updateRefHook:
+    | ((repo: string, ref: string, oldSha: string, newSha: string) => FastForwardResult | undefined)
+    | null = null;
   private counter = 0;
   private tokenCounter = 0;
 
@@ -82,7 +89,9 @@ export class FakeGitHost implements GitHost {
   }
 
   private newCommit(tree: string, parents: string[], message: string): string {
-    const sha = hex40(`commit\u0000${++this.counter}\u0000${tree}\u0000${parents.join(",")}\u0000${message}`);
+    const sha = hex40(
+      `commit\u0000${++this.counter}\u0000${tree}\u0000${parents.join(",")}\u0000${message}`,
+    );
     this.commits.set(sha, { sha, tree, parents, message });
     return sha;
   }
@@ -94,10 +103,20 @@ export class FakeGitHost implements GitHost {
   }
 
   /** Create `name` with one commit holding `files`. Returns the commit sha. */
-  seed(name: string, files: Files, opts: { defaultBranch?: string; message?: string } = {}): string {
+  seed(
+    name: string,
+    files: Files,
+    opts: { defaultBranch?: string; message?: string } = {},
+  ): string {
     const branch = opts.defaultBranch ?? "main";
     if (!this.repos.has(name)) {
-      this.repos.set(name, { name, defaultBranch: branch, refs: new Map(), objects: new Set(), notes: new Map() });
+      this.repos.set(name, {
+        name,
+        defaultBranch: branch,
+        refs: new Map(),
+        objects: new Set(),
+        notes: new Map(),
+      });
     }
     const sha = this.newCommit(this.treeSha(files), [], opts.message ?? "initial commit");
     const repo = this.repo(name);
@@ -107,7 +126,12 @@ export class FakeGitHost implements GitHost {
   }
 
   /** A push: commit `changes` (null deletes a path) on top of `branch` in `repo`. */
-  commit(repoName: string, branch: string, changes: Record<string, string | null>, message = "change"): string {
+  commit(
+    repoName: string,
+    branch: string,
+    changes: Record<string, string | null>,
+    message = "change",
+  ): string {
     const repo = this.repo(repoName);
     const parent = repo.refs.get(`refs/heads/${branch}`) ?? null;
     const files: Record<string, string> = parent === null ? {} : { ...this.filesAt(parent) };
@@ -174,11 +198,21 @@ export class FakeGitHost implements GitHost {
 
   async createRepo(name: string, opts: { defaultBranch: string }): Promise<{ remote: string }> {
     if (this.repos.has(name)) throw new FakeGitError("ALREADY_EXISTS", name);
-    this.repos.set(name, { name, defaultBranch: opts.defaultBranch, refs: new Map(), objects: new Set(), notes: new Map() });
+    this.repos.set(name, {
+      name,
+      defaultBranch: opts.defaultBranch,
+      refs: new Map(),
+      objects: new Set(),
+      notes: new Map(),
+    });
     return { remote: this.remoteOf(name) };
   }
 
-  async importRepo(name: string, url: string, opts: { branch?: string } = {}): Promise<{ remote: string; defaultBranch: string }> {
+  async importRepo(
+    name: string,
+    url: string,
+    opts: { branch?: string } = {},
+  ): Promise<{ remote: string; defaultBranch: string }> {
     const source = this.importSources.get(url);
     if (source === undefined) throw new FakeGitError("REMOTE_AUTH_REQUIRED", url);
     const defaultBranch = opts.branch ?? source.defaultBranch ?? "main";
@@ -207,10 +241,15 @@ export class FakeGitHost implements GitHost {
     this.deleted.push(name);
   }
 
-  async mintToken(repo: string, scope: "read" | "write", ttlSeconds: number): Promise<{ token: string; expiresAt: string }> {
+  async mintToken(
+    repo: string,
+    scope: "read" | "write",
+    ttlSeconds: number,
+  ): Promise<{ token: string; expiresAt: string }> {
     this.repo(repo);
     if (scope === "write") this.guard(repo, "mint write token");
-    const capped = scope === "write" ? Math.min(ttlSeconds, isForkName(repo) ? 3600 : 300) : ttlSeconds;
+    const capped =
+      scope === "write" ? Math.min(ttlSeconds, isForkName(repo) ? 3600 : 300) : ttlSeconds;
     const token = `fake_${scope}_${repo}_${++this.tokenCounter}`;
     this.tokens.push({ repo, scope, ttlSeconds: capped, token });
     return { token, expiresAt: new Date(Date.UTC(2030, 0, 1) + capped * 1000).toISOString() };
@@ -232,7 +271,8 @@ export class FakeGitHost implements GitHost {
 
   async readFile(repo: string, ref: string, path: string): Promise<Uint8Array | null> {
     const r = this.repo(repo);
-    const sha = r.refs.get(ref) ?? r.refs.get(`refs/heads/${ref}`) ?? (r.objects.has(ref) ? ref : undefined);
+    const sha =
+      r.refs.get(ref) ?? r.refs.get(`refs/heads/${ref}`) ?? (r.objects.has(ref) ? ref : undefined);
     if (sha === undefined) return null;
     const content = this.filesAt(sha)[path];
     return content === undefined ? null : new TextEncoder().encode(content);
@@ -240,11 +280,16 @@ export class FakeGitHost implements GitHost {
 
   async diff(repo: string, baseSha: string, headSha: string): Promise<ChangeDiff> {
     const r = this.repo(repo);
-    for (const s of [baseSha, headSha]) if (!r.objects.has(s)) throw new FakeGitError("NOT_FOUND", `commit ${s} in ${repo}`);
+    for (const s of [baseSha, headSha])
+      if (!r.objects.has(s)) throw new FakeGitError("NOT_FOUND", `commit ${s} in ${repo}`);
     return diffFiles(baseSha, headSha, this.filesAt(baseSha), this.filesAt(headSha));
   }
 
-  async readNote(repo: string, targetSha: string, notesRef = "refs/notes/evidence"): Promise<string | null> {
+  async readNote(
+    repo: string,
+    targetSha: string,
+    notesRef = "refs/notes/evidence",
+  ): Promise<string | null> {
     return this.repo(repo).notes.get(notesRef)?.get(targetSha) ?? null;
   }
 
@@ -264,22 +309,39 @@ export class FakeGitHost implements GitHost {
     this.writes.push({ op: "note", repo, ref });
   }
 
-  async transferObjects(fromRepo: string, toRepo: string, sha: string, toRef: string): Promise<void> {
+  async transferObjects(
+    fromRepo: string,
+    toRepo: string,
+    sha: string,
+    toRef: string,
+  ): Promise<void> {
     this.guard(toRepo, "transfer");
-    if (!this.repo(fromRepo).objects.has(sha)) throw new FakeGitError("NOT_FOUND", `${sha} in ${fromRepo}`);
+    if (!this.repo(fromRepo).objects.has(sha))
+      throw new FakeGitError("NOT_FOUND", `${sha} in ${fromRepo}`);
     this.copyObjects(toRepo, sha);
     this.repo(toRepo).refs.set(toRef, sha);
     this.writes.push({ op: "transfer", repo: toRepo, ref: toRef });
   }
 
-  async updateRef(repo: string, ref: string, oldSha: string, newSha: string): Promise<FastForwardResult> {
+  async updateRef(
+    repo: string,
+    ref: string,
+    oldSha: string,
+    newSha: string,
+  ): Promise<FastForwardResult> {
     this.guard(repo, "update ref");
     const hooked = this.updateRefHook?.(repo, ref, oldSha, newSha);
     if (hooked !== undefined) return hooked;
     const r = this.repo(repo);
     const current = r.refs.get(ref) ?? ZERO_SHA;
-    if (current !== oldSha) return { ok: false, reason: "stale", detail: `ng ${ref} stale ref (is ${current.slice(0, 12)})` };
-    if (newSha !== ZERO_SHA && !r.objects.has(newSha)) return { ok: false, reason: "missing-object", detail: `ng ${ref} missing object` };
+    if (current !== oldSha)
+      return {
+        ok: false,
+        reason: "stale",
+        detail: `ng ${ref} stale ref (is ${current.slice(0, 12)})`,
+      };
+    if (newSha !== ZERO_SHA && !r.objects.has(newSha))
+      return { ok: false, reason: "missing-object", detail: `ng ${ref} missing object` };
     if (newSha === ZERO_SHA) r.refs.delete(ref);
     else r.refs.set(ref, newSha);
     this.writes.push({ op: "update-ref", repo, ref });
@@ -288,13 +350,21 @@ export class FakeGitHost implements GitHost {
 
   async commitTree(
     repo: string,
-    input: { treeSha: string; parents: string[]; message: string; branch: string; expectedOld: string },
+    input: {
+      treeSha: string;
+      parents: string[];
+      message: string;
+      branch: string;
+      expectedOld: string;
+    },
   ): Promise<{ sha: string }> {
     this.guard(repo, "commit");
     const r = this.repo(repo);
     const ref = `refs/heads/${input.branch}`;
-    if ((r.refs.get(ref) ?? ZERO_SHA) !== input.expectedOld) throw new FakeGitError("STALE", `${ref} moved`);
-    if (!this.trees.has(input.treeSha)) throw new FakeGitError("NOT_FOUND", `tree ${input.treeSha}`);
+    if ((r.refs.get(ref) ?? ZERO_SHA) !== input.expectedOld)
+      throw new FakeGitError("STALE", `${ref} moved`);
+    if (!this.trees.has(input.treeSha))
+      throw new FakeGitError("NOT_FOUND", `tree ${input.treeSha}`);
     const sha = this.newCommit(input.treeSha, input.parents, input.message);
     r.objects.add(sha);
     r.refs.set(ref, sha);
@@ -322,7 +392,17 @@ export function diffFiles(baseSha: string, headSha: string, base: Files, head: F
     if (before === after) continue;
     const from = renamedFrom.get(path);
     if (from !== undefined) {
-      files.push({ path, previousPath: from, status: "renamed", additions: 0, deletions: 0, binary: false, transformVerified: false, hunks: [], truncated: false });
+      files.push({
+        path,
+        previousPath: from,
+        status: "renamed",
+        additions: 0,
+        deletions: 0,
+        binary: false,
+        transformVerified: false,
+        hunks: [],
+        truncated: false,
+      });
       continue;
     }
     const d = diffText(before ?? "", after ?? "");

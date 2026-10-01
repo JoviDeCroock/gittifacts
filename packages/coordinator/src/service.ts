@@ -17,7 +17,12 @@ import {
   WaitUntil,
 } from "@app/domain";
 import { z } from "zod";
-import { type CoordinatorApi, CoordinatorError, type CoordinatorErrorCode, type GitRemoteGrant } from "./api.js";
+import {
+  type CoordinatorApi,
+  CoordinatorError,
+  type CoordinatorErrorCode,
+  type GitRemoteGrant,
+} from "./api.js";
 import { type CoordinatorBindings, terminateQuietly } from "./bindings.js";
 import { EVENT_ISSUE, EVENT_REVIEW, type ReviewEvent } from "./events.js";
 import {
@@ -58,7 +63,12 @@ const REPO_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{1,62}$/;
 const IdempotencyKey = z.string().min(1).max(200);
 
 const CreateRepoInput = z.object({
-  name: z.string().regex(REPO_NAME, "2-63 chars: letters, digits, '.', '_', '-'; must start with a letter or digit"),
+  name: z
+    .string()
+    .regex(
+      REPO_NAME,
+      "2-63 chars: letters, digits, '.', '_', '-'; must start with a letter or digit",
+    ),
   defaultBranch: z
     .string()
     .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$/)
@@ -68,12 +78,18 @@ const CreateRepoInput = z.object({
 });
 const ImportRepoInput = z.object({
   name: CreateRepoInput.shape.name,
-  url: z.string().url().refine((u) => u.startsWith("https://"), "only public https:// remotes can be imported"),
+  url: z
+    .string()
+    .url()
+    .refine((u) => u.startsWith("https://"), "only public https:// remotes can be imported"),
   branch: z.string().min(1).max(100).optional(),
 });
 const StartInput = StartChangeInput.extend({ idempotencyKey: IdempotencyKey.optional() });
 const ReviewInput = z.object({
-  headSha: z.string().regex(/^[0-9a-f]{40}$/).optional(),
+  headSha: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .optional(),
   decision: z.enum(["approve", "request-changes", "reject"]),
   humanLane: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
   comment: z.string().max(10_000).optional(),
@@ -89,7 +105,9 @@ function fail(code: CoordinatorErrorCode, message: string, fix: ErrorFix | strin
 function parse<T>(schema: z.ZodType<T>, input: unknown, what: string): T {
   const r = schema.safeParse(input);
   if (!r.success) {
-    const msg = r.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ");
+    const msg = r.error.issues
+      .map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`)
+      .join("; ");
     fail("invalid-input", msg, `Fix the ${what} fields listed in the message and retry.`);
   }
   return r.data;
@@ -109,7 +127,9 @@ async function upstream<T>(what: string, fn: () => Promise<T>): Promise<T> {
 
 /** Deterministic 20-char id from parts (idempotent creates). */
 async function derivedId(...parts: string[]): Promise<string> {
-  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join("\u0000"))));
+  const bytes = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join("\u0000"))),
+  );
   const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
   let out = "";
   for (let i = 0; i < 20; i++) out += alphabet[(bytes[i] ?? 0) % alphabet.length];
@@ -119,8 +139,13 @@ async function derivedId(...parts: string[]): Promise<string> {
 /** Who owns a repo created by `actor`: humans own theirs, agents' owners own theirs, otherwise unclaimed. */
 function claimFor(actor: Principal, now: Date, ttlMs: number): Repo["claim"] {
   if (actor.kind === "human") return { status: "claimed", ownerId: actor.id, expiresAt: null };
-  if (actor.kind === "agent" && actor.ownerId !== null) return { status: "claimed", ownerId: actor.ownerId, expiresAt: null };
-  return { status: "unclaimed", ownerId: null, expiresAt: new Date(now.getTime() + ttlMs).toISOString() };
+  if (actor.kind === "agent" && actor.ownerId !== null)
+    return { status: "claimed", ownerId: actor.ownerId, expiresAt: null };
+  return {
+    status: "unclaimed",
+    ownerId: null,
+    expiresAt: new Date(now.getTime() + ttlMs).toISOString(),
+  };
 }
 
 export function createCoordinator(
@@ -140,29 +165,49 @@ export function createCoordinator(
   const now = () => clock.now().toISOString();
 
   async function requireRepo(id: string): Promise<Repo> {
-    return (await store.getRepo(id)) ?? fail("not-found", `repo ${id} not found`, "Check the repo id; list your repos to find it.");
+    return (
+      (await store.getRepo(id)) ??
+      fail("not-found", `repo ${id} not found`, "Check the repo id; list your repos to find it.")
+    );
   }
 
   async function requireChange(id: string): Promise<Change> {
     return (
       (await store.getChange(id)) ??
-      fail("not-found", `change ${id} not found`, { explanation: "Check the change id.", call: status(id) })
+      fail("not-found", `change ${id} not found`, {
+        explanation: "Check the change id.",
+        call: status(id),
+      })
     );
   }
 
-  async function pushGrant(change: Pick<Change, "forkName">, branch: string): Promise<GitRemoteGrant> {
+  async function pushGrant(
+    change: Pick<Change, "forkName">,
+    branch: string,
+  ): Promise<GitRemoteGrant> {
     // The token is for the fork ONLY; agents never get a token for the main repo.
-    if (!isForkName(change.forkName)) fail("forbidden", "push grants are for change forks only", "Push to your change's fork.");
-    const { token, expiresAt } = await upstream("mint a push token", () => git.mintToken(change.forkName, "write", pushTtl));
+    if (!isForkName(change.forkName))
+      fail("forbidden", "push grants are for change forks only", "Push to your change's fork.");
+    const { token, expiresAt } = await upstream("mint a push token", () =>
+      git.mintToken(change.forkName, "write", pushTtl),
+    );
     return { url: git.remoteOf(change.forkName), username: "x", token, expiresAt, branch };
   }
 
   async function assertNameFree(name: string): Promise<void> {
     if (name.startsWith(FORK_PREFIX)) {
-      fail("invalid-input", `repo names may not start with "${FORK_PREFIX}"`, `Pick a name that does not start with "${FORK_PREFIX}" (reserved for change forks).`);
+      fail(
+        "invalid-input",
+        `repo names may not start with "${FORK_PREFIX}"`,
+        `Pick a name that does not start with "${FORK_PREFIX}" (reserved for change forks).`,
+      );
     }
     if ((await store.getRepoByArtifactsName(name)) !== null) {
-      fail("conflict", `a repo named ${name} already exists`, "Pick another name, or open a change on the existing repo.");
+      fail(
+        "conflict",
+        `a repo named ${name} already exists`,
+        "Pick another name, or open a change on the existing repo.",
+      );
     }
   }
 
@@ -202,7 +247,13 @@ export function createCoordinator(
         principalId: actor.id,
         action: "repo.created",
         subject: repoSubject(repo.id),
-        payload: { name, defaultBranch, namespace: repo.namespace, claim: repo.claim, template: repo.template },
+        payload: {
+          name,
+          defaultBranch,
+          namespace: repo.namespace,
+          claim: repo.claim,
+          template: repo.template,
+        },
       });
       return repo;
     },
@@ -214,11 +265,18 @@ export function createCoordinator(
         git.importRepo(name, url, branch === undefined ? {} : { branch }),
       );
       const claim = claimFor(actor, clock.now(), unclaimedTtlMs);
-      const head = await upstream("read the default branch", () => git.branchHead(name, imported.defaultBranch));
+      const head = await upstream("read the default branch", () =>
+        git.branchHead(name, imported.defaultBranch),
+      );
       const resolved =
         head === null
           ? { policy: defaultPolicy(), source: "default" as const, error: null }
-          : await resolvePolicy(ports, { repo: null, claim: claim.status, repoName: name, sha: head });
+          : await resolvePolicy(ports, {
+              repo: null,
+              claim: claim.status,
+              repoName: name,
+              sha: head,
+            });
       const repo: Repo = {
         id: makeId(),
         namespace: git.namespace,
@@ -240,7 +298,15 @@ export function createCoordinator(
         principalId: actor.id,
         action: "repo.imported",
         subject: repoSubject(repo.id),
-        payload: { name, url, defaultBranch: repo.defaultBranch, head, policy: resolved.source, policyError: resolved.error, claim },
+        payload: {
+          name,
+          url,
+          defaultBranch: repo.defaultBranch,
+          head,
+          policy: resolved.source,
+          policyError: resolved.error,
+          claim,
+        },
       });
       return repo;
     },
@@ -249,18 +315,35 @@ export function createCoordinator(
       const parsed = parse(StartInput, input, "change");
       const repo = await requireRepo(parsed.repoId);
       // Idempotent: the same (actor, key) always names the same change.
-      const id = parsed.idempotencyKey === undefined ? makeId() : await derivedId("change", actor.id, parsed.idempotencyKey);
+      const id =
+        parsed.idempotencyKey === undefined
+          ? makeId()
+          : await derivedId("change", actor.id, parsed.idempotencyKey);
       const existing = parsed.idempotencyKey === undefined ? null : await store.getChange(id);
       if (existing !== null) {
         if (existing.authorId !== actor.id || existing.repoId !== repo.id) {
-          fail("conflict", "idempotency key already used for another change", "Use a fresh idempotency key for a new change.");
+          fail(
+            "conflict",
+            "idempotency key already used for another change",
+            "Use a fresh idempotency key for a new change.",
+          );
         }
         return { change: existing, remote: await grantFor(existing) };
       }
       if (parsed.planId !== undefined) {
         const plan = await store.getPlan(parsed.planId);
-        if (plan === null) fail("not-found", `plan ${parsed.planId} not found`, "Create a plan first with create_plan, then pass its id.");
-        if (plan.repoId !== repo.id) fail("invalid-input", "plan belongs to another repo", "Pass a plan created for this repo.");
+        if (plan === null)
+          fail(
+            "not-found",
+            `plan ${parsed.planId} not found`,
+            "Create a plan first with create_plan, then pass its id.",
+          );
+        if (plan.repoId !== repo.id)
+          fail(
+            "invalid-input",
+            "plan belongs to another repo",
+            "Pass a plan created for this repo.",
+          );
         if (plan.status === "rejected" || plan.status === "superseded") {
           fail("invalid-state", `plan ${plan.id} is ${plan.status}`, {
             explanation: "Start the change from the plan's current approved version.",
@@ -268,9 +351,15 @@ export function createCoordinator(
           });
         }
       }
-      const baseSha = await upstream("read the default branch", () => git.branchHead(repo.artifactsName, repo.defaultBranch));
+      const baseSha = await upstream("read the default branch", () =>
+        git.branchHead(repo.artifactsName, repo.defaultBranch),
+      );
       if (baseSha === null) {
-        fail("invalid-state", `${repo.name} has no commits on ${repo.defaultBranch}`, "Push an initial commit (or create the repo from a template) before starting a change.");
+        fail(
+          "invalid-state",
+          `${repo.name} has no commits on ${repo.defaultBranch}`,
+          "Push an initial commit (or create the repo from a template) before starting a change.",
+        );
       }
       const forkName = forkNameFor(id);
       await upstream("fork the repo", () => git.forkRepo(repo.artifactsName, forkName));
@@ -313,7 +402,14 @@ export function createCoordinator(
         principalId: actor.id,
         action: "change.started",
         subject: changeSubject(id),
-        payload: { repoId: repo.id, planId: change.planId, baseSha, forkName, category: parsed.category, tokenExpiresAt: remote.expiresAt },
+        payload: {
+          repoId: repo.id,
+          planId: change.planId,
+          baseSha,
+          forkName,
+          category: parsed.category,
+          tokenExpiresAt: remote.expiresAt,
+        },
       });
       return { change, remote };
     },
@@ -360,7 +456,8 @@ export function createCoordinator(
       const change = await requireChange(changeId);
       if (actor.kind !== "human") {
         fail("forbidden", "only humans review changes; agents prove conformance", {
-          explanation: "Ask a human reviewer to look at the tour; agents can never approve a change.",
+          explanation:
+            "Ask a human reviewer to look at the tour; agents can never approve a change.",
           call: status(changeId),
         });
       }
@@ -371,27 +468,40 @@ export function createCoordinator(
         });
       }
       if (!actor.scopes.includes("change:review")) {
-        fail("forbidden", "missing scope change:review", "Ask a repo admin to grant you change:review.");
+        fail(
+          "forbidden",
+          "missing scope change:review",
+          "Ask a repo admin to grant you change:review.",
+        );
       }
       const coordinator = bindings.changeCoordinator(changeId);
-      const key = review.idempotencyKey === undefined ? null : `review:${actor.id}:${review.idempotencyKey}`;
-      if (key !== null && !(await coordinator.claimKey({ changeId, key, ttlMs: idempotencyTtlMs }))) {
+      const key =
+        review.idempotencyKey === undefined ? null : `review:${actor.id}:${review.idempotencyKey}`;
+      if (
+        key !== null &&
+        !(await coordinator.claimKey({ changeId, key, ttlMs: idempotencyTtlMs }))
+      ) {
         return requireChange(changeId); // a retry of a review we already accepted
       }
       try {
         if (change.status !== "awaiting-review" || change.headSha === null) {
           fail("invalid-state", `change is ${change.status}, not awaiting review`, {
-            explanation: "Only changes in awaiting-review can be reviewed; check where this one is.",
+            explanation:
+              "Only changes in awaiting-review can be reviewed; check where this one is.",
             call: status(changeId),
           });
         }
         const headSha = review.headSha ?? change.headSha;
         if (headSha !== change.headSha) {
           // Reviews bind to a head: approving an older head does nothing.
-          fail("conflict", `review is for ${headSha.slice(0, 12)} but the change's head is ${change.headSha.slice(0, 12)}`, {
-            explanation: "The author pushed again. Review the tour for the current head.",
-            call: status(changeId),
-          });
+          fail(
+            "conflict",
+            `review is for ${headSha.slice(0, 12)} but the change's head is ${change.headSha.slice(0, 12)}`,
+            {
+              explanation: "The author pushed again. Review the tour for the current head.",
+              call: status(changeId),
+            },
+          );
         }
         const classification = await store.getClassification(changeId, headSha);
         if (classification === null) {
@@ -431,11 +541,18 @@ export function createCoordinator(
             approvedByAgentOwner: viaOwner,
           },
         });
-        const event: ReviewEvent = { reviewId: decision.id, headSha, reviewerId: actor.id, decision: decision.decision };
+        const event: ReviewEvent = {
+          reviewId: decision.id,
+          headSha,
+          reviewerId: actor.id,
+          decision: decision.decision,
+        };
         const instance = await upstream("find the change's workflow", () =>
           bindings.changeWorkflow.get(changeWorkflowId(changeId, headSha)),
         );
-        await upstream("deliver the review", () => instance.sendEvent({ type: EVENT_REVIEW, payload: event }));
+        await upstream("deliver the review", () =>
+          instance.sendEvent({ type: EVENT_REVIEW, payload: event }),
+        );
       } catch (e) {
         if (key !== null) await coordinator.releaseKey({ changeId, key }).catch(() => undefined);
         throw e;
@@ -445,10 +562,15 @@ export function createCoordinator(
 
     async kill(actor, changeId, reason) {
       if (actor.kind !== "human" || !actor.scopes.includes("change:review")) {
-        fail("forbidden", "the kill switch is for humans with change:review", "Ask a human reviewer to use the kill switch.");
+        fail(
+          "forbidden",
+          "the kill switch is for humans with change:review",
+          "Ask a human reviewer to use the kill switch.",
+        );
       }
       const trimmed = reason.trim();
-      if (trimmed === "") fail("invalid-input", "a reason is required", "Say why the change is being killed.");
+      if (trimmed === "")
+        fail("invalid-input", "a reason is required", "Say why the change is being killed.");
       const change = await requireChange(changeId);
       if (!KILLABLE_STATUSES.includes(change.status)) {
         fail("invalid-state", `change is ${change.status}; only merged changes can be killed`, {
@@ -467,7 +589,8 @@ export function createCoordinator(
       const stopped = await terminateQuietly(bindings.rolloutWorkflow, rolloutWorkflowId(changeId));
       const state = change.rolloutState;
       const flagKey = change.flagKey ?? state?.flagKey ?? null;
-      if (flagKey !== null) await upstream("disable the change's flag", () => ports.flags.setEnabled(flagKey, false));
+      if (flagKey !== null)
+        await upstream("disable the change's flag", () => ports.flags.setEnabled(flagKey, false));
       const script = repo.deployTarget;
       const previous = state?.previousVersionId ?? null;
       const ours = state?.versionId ?? null;
@@ -476,10 +599,16 @@ export function createCoordinator(
       if (script !== null && previous !== null && ours !== null) {
         // Only roll back while this change's version still serves traffic: after later
         // releases, "previous" would also drop their code. The revert change handles that case.
-        const live = await upstream("read the deployment", () => ports.deployer.currentVersions(script));
+        const live = await upstream("read the deployment", () =>
+          ports.deployer.currentVersions(script),
+        );
         if (live.some((v) => v.versionId === ours && v.percentage > 0)) {
           await upstream("roll back the deployment", () =>
-            ports.deployer.rollback(script, previous, `kill switch: ${changeId}: ${trimmed}`.slice(0, 1000)),
+            ports.deployer.rollback(
+              script,
+              previous,
+              `kill switch: ${changeId}: ${trimmed}`.slice(0, 1000),
+            ),
           );
           rolledBack = true;
         } else {
@@ -487,19 +616,34 @@ export function createCoordinator(
         }
       }
       if (state !== null) {
-        await store.updateChange(changeId, { rolloutState: { ...state, status: rolledBack ? "rolled-back" : state.status } });
+        await store.updateChange(changeId, {
+          rolloutState: { ...state, status: rolledBack ? "rolled-back" : state.status },
+        });
       }
       await audit.append({
         principalId: actor.id,
         action: "change.killed",
         subject: changeSubject(changeId),
-        payload: { reason: trimmed, flagKey, rolledBack, rollbackSkipped, previousVersionId: previous, rolloutStopped: stopped },
+        payload: {
+          reason: trimmed,
+          flagKey,
+          rolledBack,
+          rollbackSkipped,
+          previousVersionId: previous,
+          rolloutStopped: stopped,
+        },
       });
       const fresh = await requireChange(changeId);
       const revert = await upstream("open the revert change", () =>
-        openRevertChange({ ports, bindings }, { original: fresh, reason: `kill switch: ${trimmed}`, actorId: actor.id }),
+        openRevertChange(
+          { ports, bindings },
+          { original: fresh, reason: `kill switch: ${trimmed}`, actorId: actor.id },
+        ),
       );
-      const updated = await store.updateChange(changeId, { status: "reverted", revertedBy: revert.change.id });
+      const updated = await store.updateChange(changeId, {
+        status: "reverted",
+        revertedBy: revert.change.id,
+      });
       await ports.notifier.notify({
         kind: "reverted",
         changeId,
@@ -511,24 +655,36 @@ export function createCoordinator(
 
     async setLane0(actor, repoId, enabled) {
       if (actor.kind !== "human" || !actor.scopes.includes("policy:admin")) {
-        fail("forbidden", "turning Lane 0 on or off needs a human with policy:admin", "Ask a policy admin.");
+        fail(
+          "forbidden",
+          "turning Lane 0 on or off needs a human with policy:admin",
+          "Ask a policy admin.",
+        );
       }
       const repo = await requireRepo(repoId);
       if (enabled && repo.claim.status !== "claimed") {
-        fail("forbidden", "Lane 0 is off for unclaimed projects", "Claim the project (log in and open its claim link) first.");
+        fail(
+          "forbidden",
+          "Lane 0 is off for unclaimed projects",
+          "Claim the project (log in and open its claim link) first.",
+        );
       }
       const samples = await store.listShadowSamples(repoId);
       const agreement = shadowAgreement(samples, repo.policy);
       if (enabled && !agreement.eligibleToEnableLane0) {
         const needed =
-          agreement.needed === null ? "agreement can no longer reach the threshold" : `${agreement.needed} more agreeing reviews needed`;
+          agreement.needed === null
+            ? "agreement can no longer reach the threshold"
+            : `${agreement.needed} more agreeing reviews needed`;
         fail(
           "threshold-not-met",
           `shadow agreement ${(agreement.ratio * 100).toFixed(1)}% over ${agreement.samples} Lane-0 candidates (threshold ${(repo.policy.shadow.agreementThreshold * 100).toFixed(1)}%, min ${repo.policy.shadow.minSamples}); ${needed}`,
           "Keep reviewing Lane-0 candidates in shadow mode until humans agree often enough.",
         );
       }
-      const updated = await store.updateRepo(repoId, { policy: { ...repo.policy, lane0Enabled: enabled } });
+      const updated = await store.updateRepo(repoId, {
+        policy: { ...repo.policy, lane0Enabled: enabled },
+      });
       await audit.append({
         principalId: actor.id,
         action: enabled ? "repo.lane0-enabled" : "repo.lane0-disabled",
@@ -544,7 +700,8 @@ export function createCoordinator(
       const { issue, scriptName, resolved, raw } = normalized;
       let change: Change | null = null;
       if (issue.versionId !== null) change = await store.getChangeByRolloutVersion(issue.versionId);
-      if (change === null && issue.changeId !== null) change = await store.getChange(issue.changeId);
+      if (change === null && issue.changeId !== null)
+        change = await store.getChange(issue.changeId);
       const linked = { ...issue, changeId: change?.id ?? issue.changeId };
       await store.putIssue({ ...linked, scriptName, raw });
       if (resolved || change === null || change.status !== "rolling-out") return;
@@ -567,20 +724,32 @@ export function createCoordinator(
       if (change.status === "abandoned") return change;
       const author = await store.getPrincipal(change.authorId);
       if (!canActOnChange(actor, change, author)) {
-        fail("forbidden", "only the author, its owner or a reviewer can abandon a change", { explanation: "Ask the change's author.", call: status(changeId) });
-      }
-      if (FINAL_STATUSES.includes(change.status)) {
-        fail("invalid-state", `change is ${change.status}`, {
-          explanation: change.status === "merged" || change.status === "rolling-out" || change.status === "released"
-            ? "A merged change cannot be abandoned; a human can kill it to revert it."
-            : "The change has already ended.",
+        fail("forbidden", "only the author, its owner or a reviewer can abandon a change", {
+          explanation: "Ask the change's author.",
           call: status(changeId),
         });
       }
-      await upstream("stop the change's workflow", () => bindings.changeCoordinator(changeId).abandon(changeId));
-      await upstream("leave the merge queue", () => bindings.mergeQueue(change.repoId).remove({ repoId: change.repoId, changeId }));
+      if (FINAL_STATUSES.includes(change.status)) {
+        fail("invalid-state", `change is ${change.status}`, {
+          explanation:
+            change.status === "merged" ||
+            change.status === "rolling-out" ||
+            change.status === "released"
+              ? "A merged change cannot be abandoned; a human can kill it to revert it."
+              : "The change has already ended.",
+          call: status(changeId),
+        });
+      }
+      await upstream("stop the change's workflow", () =>
+        bindings.changeCoordinator(changeId).abandon(changeId),
+      );
+      await upstream("leave the merge queue", () =>
+        bindings.mergeQueue(change.repoId).remove({ repoId: change.repoId, changeId }),
+      );
       const updated = await store.updateChange(changeId, { status: "abandoned" });
-      await bindings.changeCoordinator(changeId).scheduleForkGc({ changeId, forkName: change.forkName, delayMs: forkGcDelayMs });
+      await bindings
+        .changeCoordinator(changeId)
+        .scheduleForkGc({ changeId, forkName: change.forkName, delayMs: forkGcDelayMs });
       await audit.append({
         principalId: actor.id,
         action: "change.abandoned",
@@ -593,14 +762,18 @@ export function createCoordinator(
     async waitFor(_actor, changeId, until, timeoutMs) {
       const milestone = parse(WaitUntil, until, "wait");
       await requireChange(changeId);
-      const r = await bindings.changeCoordinator(changeId).waitFor({ changeId, until: milestone, timeoutMs: clampWait(timeoutMs) });
+      const r = await bindings
+        .changeCoordinator(changeId)
+        .waitFor({ changeId, until: milestone, timeoutMs: clampWait(timeoutMs) });
       const change = r.change ?? (await requireChange(changeId));
       return { change, reached: r.reached, reason: r.reason };
     },
 
     async watchChange(_actor, changeId, opts) {
       await requireChange(changeId);
-      const r = await bindings.changeCoordinator(changeId).watch({ changeId, since: opts.since, timeoutMs: clampWait(opts.timeoutMs) });
+      const r = await bindings
+        .changeCoordinator(changeId)
+        .watch({ changeId, since: opts.since, timeoutMs: clampWait(opts.timeoutMs) });
       const change = r.change ?? (await requireChange(changeId));
       return { change, changed: r.changed, version: changeVersion(change) };
     },
@@ -620,7 +793,10 @@ export async function* subscribeToChange(
 ): AsyncGenerator<Change> {
   let since: string | null = null;
   while (opts.signal?.aborted !== true) {
-    const { change, changed, version } = await api.watchChange(actor, changeId, { since, timeoutMs: opts.pollMs ?? 60_000 });
+    const { change, changed, version } = await api.watchChange(actor, changeId, {
+      since,
+      timeoutMs: opts.pollMs ?? 60_000,
+    });
     if (changed || since === null) yield change;
     since = version;
   }

@@ -30,9 +30,21 @@ const FlagDefinition = z
 type FlagDefinition = z.infer<typeof FlagDefinition>;
 
 /** Fields the API sets itself; never sent back on PUT. */
-const READ_ONLY = new Set(["id", "created_at", "updated_at", "created_by", "updated_by", "version", "app_id"]);
+const READ_ONLY = new Set([
+  "id",
+  "created_at",
+  "updated_at",
+  "created_by",
+  "updated_by",
+  "version",
+  "app_id",
+]);
 
-export function changeFlagDefinition(key: string, enabled: boolean, description: string): FlagDefinition {
+export function changeFlagDefinition(
+  key: string,
+  enabled: boolean,
+  description: string,
+): FlagDefinition {
   return {
     key,
     enabled,
@@ -65,17 +77,28 @@ export class FlagshipFlags implements Flags {
   }
 
   private async put(def: FlagDefinition): Promise<void> {
-    await cfRequest(this.opts, { method: "PUT", path: this.path(def.key), json: writable(def) }, z.unknown());
+    await cfRequest(
+      this.opts,
+      { method: "PUT", path: this.path(def.key), json: writable(def) },
+      z.unknown(),
+    );
   }
 
-  async ensureChangeFlag(changeId: string, opts: { enabled: boolean; description: string }): Promise<string> {
+  async ensureChangeFlag(
+    changeId: string,
+    opts: { enabled: boolean; description: string },
+  ): Promise<string> {
     const key = flagKeyFor(changeId);
     const existing = await this.get(key);
     if (existing === null) {
       try {
         await cfRequest(
           this.opts,
-          { method: "POST", path: this.path(), json: changeFlagDefinition(key, opts.enabled, opts.description) },
+          {
+            method: "POST",
+            path: this.path(),
+            json: changeFlagDefinition(key, opts.enabled, opts.description),
+          },
           z.unknown(),
         );
         return key;
@@ -85,7 +108,8 @@ export class FlagshipFlags implements Flags {
       }
     }
     const current = existing ?? (await this.get(key));
-    if (current !== null && current.enabled !== opts.enabled) await this.put({ ...current, enabled: opts.enabled });
+    if (current !== null && current.enabled !== opts.enabled)
+      await this.put({ ...current, enabled: opts.enabled });
     return key;
   }
 
@@ -96,7 +120,11 @@ export class FlagshipFlags implements Flags {
       if (!enabled) {
         await cfRequest(
           this.opts,
-          { method: "POST", path: this.path(), json: changeFlagDefinition(flagKey, false, "created disabled by the kill switch") },
+          {
+            method: "POST",
+            path: this.path(),
+            json: changeFlagDefinition(flagKey, false, "created disabled by the kill switch"),
+          },
           z.unknown(),
         );
       }

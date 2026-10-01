@@ -102,7 +102,9 @@ export class FakeStore implements Store {
     return clone(next);
   }
   async listChanges(repoId: string, statuses: Change["status"][]) {
-    return [...this.changes.values()].filter((c) => c.repoId === repoId && statuses.includes(c.status)).map(clone);
+    return [...this.changes.values()]
+      .filter((c) => c.repoId === repoId && statuses.includes(c.status))
+      .map(clone);
   }
   async getChangeByRolloutVersion(versionId: string) {
     const c = [...this.changes.values()].find((x) => x.rolloutState?.versionId === versionId);

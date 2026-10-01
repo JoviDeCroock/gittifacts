@@ -74,7 +74,10 @@ export function assembleEvidence(input: {
   input.ciItems.forEach((raw, index) => {
     const parsed = EvidenceItem.safeParse(raw);
     if (!parsed.success) {
-      const kind = typeof raw === "object" && raw !== null ? String((raw as { kind?: unknown }).kind) : typeof raw;
+      const kind =
+        typeof raw === "object" && raw !== null
+          ? String((raw as { kind?: unknown }).kind)
+          : typeof raw;
       dropped.push(`item ${index} (${kind}): ${parsed.error.issues[0]?.message ?? "invalid"}`);
       return;
     }
@@ -165,7 +168,13 @@ export interface SealedEvidence {
 /** Sign {changeId, headSha, items}, verify the attestation, store it, link it on the change. */
 export async function sealEvidence(
   ports: Pick<Ports, "signer" | "store" | "clock">,
-  input: { changeId: string; headSha: string; baseSha: string; items: EvidenceItem[]; notesWritten?: boolean },
+  input: {
+    changeId: string;
+    headSha: string;
+    baseSha: string;
+    items: EvidenceItem[];
+    notesWritten?: boolean;
+  },
 ): Promise<SealedEvidence> {
   const signed = await ports.signer.signEvidence({
     changeId: input.changeId,

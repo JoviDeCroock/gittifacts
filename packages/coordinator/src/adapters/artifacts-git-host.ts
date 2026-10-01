@@ -56,8 +56,17 @@ export interface GitWire {
       mode?: "replace" | "append";
     },
   ): Promise<unknown>;
-  transferObjects(from: WireRemote, to: WireRemote, opts: { sha: string; toRef: string }): Promise<WireRefResult>;
-  fastForward(remote: WireRemote, ref: string, oldSha: string, newSha: string): Promise<WireRefResult>;
+  transferObjects(
+    from: WireRemote,
+    to: WireRemote,
+    opts: { sha: string; toRef: string },
+  ): Promise<WireRefResult>;
+  fastForward(
+    remote: WireRemote,
+    ref: string,
+    oldSha: string,
+    newSha: string,
+  ): Promise<WireRefResult>;
   receivePack(
     remote: WireRemote,
     updates: Array<{ ref: string; oldSha: string; newSha: string }>,
@@ -77,19 +86,33 @@ export interface GitWire {
 
 /** Structural slice of the Artifacts repo handle (`ArtifactsRepo` satisfies it). */
 export interface ArtifactsRepoLike {
-  createToken(scope?: "write" | "read", ttl?: number): Promise<{ plaintext: string; expiresAt: string }>;
+  createToken(
+    scope?: "write" | "read",
+    ttl?: number,
+  ): Promise<{ plaintext: string; expiresAt: string }>;
   info(): Promise<{ defaultBranch: string; remote: string }>;
   readBlob(hash: string): Promise<Blob | null>;
-  readTree(hash: string): Promise<Array<{ name: string; mode: string; hash: string; type: "tree" | "blob" | "symlink" | "gitlink" | "exec" }> | null>;
+  readTree(hash: string): Promise<Array<{
+    name: string;
+    mode: string;
+    hash: string;
+    type: "tree" | "blob" | "symlink" | "gitlink" | "exec";
+  }> | null>;
   readCommit(hash: string): Promise<{ hash: string; treeHash: string; parents: string[] } | null>;
   readFile(args: { ref: string; path: string }): Promise<Blob | null>;
   log(opts?: { ref?: string; limit?: number; offset?: number }): Promise<Array<{ hash: string }>>;
-  fork(name: string, opts?: { description?: string; readOnly?: boolean; defaultBranchOnly?: boolean }): Promise<{ remote: string }>;
+  fork(
+    name: string,
+    opts?: { description?: string; readOnly?: boolean; defaultBranchOnly?: boolean },
+  ): Promise<{ remote: string }>;
 }
 
 /** Structural slice of the `Artifacts` binding. */
 export interface ArtifactsBindingLike {
-  create(name: string, opts?: { readOnly?: boolean; description?: string; setDefaultBranch?: string }): Promise<{ remote: string; defaultBranch: string }>;
+  create(
+    name: string,
+    opts?: { readOnly?: boolean; description?: string; setDefaultBranch?: string },
+  ): Promise<{ remote: string; defaultBranch: string }>;
   get(name: string): Promise<ArtifactsRepoLike>;
   import(params: {
     source: { url: string; branch?: string; depth?: number };
@@ -125,15 +148,25 @@ export class GitWriteForbiddenError extends Error {
 }
 
 function errorCode(e: unknown): string | null {
-  if (typeof e === "object" && e !== null && "code" in e && typeof (e as { code: unknown }).code === "string") {
+  if (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    typeof (e as { code: unknown }).code === "string"
+  ) {
     return (e as { code: string }).code;
   }
-  const m = e instanceof Error ? /\b(ALREADY_EXISTS|NOT_FOUND|[A-Z]+_IN_PROGRESS)\b/.exec(e.message) : null;
+  const m =
+    e instanceof Error ? /\b(ALREADY_EXISTS|NOT_FOUND|[A-Z]+_IN_PROGRESS)\b/.exec(e.message) : null;
   return m?.[1] ?? null;
 }
 
 function refErrorReason(e: unknown): string {
-  if (typeof e === "object" && e !== null && typeof (e as { reason?: unknown }).reason === "string") {
+  if (
+    typeof e === "object" &&
+    e !== null &&
+    typeof (e as { reason?: unknown }).reason === "string"
+  ) {
     return (e as { reason: string }).reason;
   }
   return e instanceof Error ? e.message : String(e);
@@ -171,7 +204,9 @@ export class ArtifactsGitHost implements GitHost {
 
   private guardWrite(repo: string): void {
     if (!this.canWrite(repo)) {
-      throw new GitWriteForbiddenError(`this GitHost may not write to ${repo} (only the merge queue writes main repos)`);
+      throw new GitWriteForbiddenError(
+        `this GitHost may not write to ${repo} (only the merge queue writes main repos)`,
+      );
     }
   }
 
@@ -199,13 +234,21 @@ export class ArtifactsGitHost implements GitHost {
     const key = `${scope}:${repo}`;
     const cached = this.tokens.get(key);
     if (cached !== undefined && cached.until > Date.now()) return cached.token;
-    const { plaintext } = await this.withRepo(repo, (r) => r.createToken(scope, INTERNAL_TOKEN_TTL));
-    this.tokens.set(key, { token: plaintext, until: Date.now() + (INTERNAL_TOKEN_TTL - 30) * 1000 });
+    const { plaintext } = await this.withRepo(repo, (r) =>
+      r.createToken(scope, INTERNAL_TOKEN_TTL),
+    );
+    this.tokens.set(key, {
+      token: plaintext,
+      until: Date.now() + (INTERNAL_TOKEN_TTL - 30) * 1000,
+    });
     return plaintext;
   }
 
   private async remote(repo: string, scope: "read" | "write"): Promise<WireRemote> {
-    const remote: WireRemote = { url: this.remoteOf(repo), auth: { bearer: await this.internalToken(repo, scope) } };
+    const remote: WireRemote = {
+      url: this.remoteOf(repo),
+      auth: { bearer: await this.internalToken(repo, scope) },
+    };
     if (this.opts.fetch) remote.fetch = this.opts.fetch;
     return remote;
   }
@@ -216,7 +259,10 @@ export class ArtifactsGitHost implements GitHost {
     return `https://${this.opts.accountId}.artifacts.cloudflare.net/git/${this.namespace}/${name}.git`;
   }
 
-  async createRepo(name: string, opts: { defaultBranch: string; description?: string }): Promise<{ remote: string }> {
+  async createRepo(
+    name: string,
+    opts: { defaultBranch: string; description?: string },
+  ): Promise<{ remote: string }> {
     const created = await this.opts.binding.create(name, {
       setDefaultBranch: opts.defaultBranch,
       ...(opts.description === undefined ? {} : { description: opts.description }),
@@ -224,7 +270,11 @@ export class ArtifactsGitHost implements GitHost {
     return { remote: created.remote };
   }
 
-  async importRepo(name: string, url: string, opts: { branch?: string } = {}): Promise<{ remote: string; defaultBranch: string }> {
+  async importRepo(
+    name: string,
+    url: string,
+    opts: { branch?: string } = {},
+  ): Promise<{ remote: string; defaultBranch: string }> {
     try {
       await this.opts.binding.import({
         source: { url, ...(opts.branch === undefined ? {} : { branch: opts.branch }) },
@@ -237,10 +287,17 @@ export class ArtifactsGitHost implements GitHost {
     return { remote: info.remote, defaultBranch: info.defaultBranch };
   }
 
-  async forkRepo(source: string, target: string, opts: { readOnly?: boolean } = {}): Promise<{ remote: string }> {
+  async forkRepo(
+    source: string,
+    target: string,
+    opts: { readOnly?: boolean } = {},
+  ): Promise<{ remote: string }> {
     try {
       await this.withRepo(source, (r) =>
-        r.fork(target, { defaultBranchOnly: true, ...(opts.readOnly === undefined ? {} : { readOnly: opts.readOnly }) }),
+        r.fork(target, {
+          defaultBranchOnly: true,
+          ...(opts.readOnly === undefined ? {} : { readOnly: opts.readOnly }),
+        }),
       );
     } catch (e) {
       // Idempotent: a retried fork finds its target already there (or still being created).
@@ -256,7 +313,11 @@ export class ArtifactsGitHost implements GitHost {
     await this.opts.binding.delete(name);
   }
 
-  async mintToken(repo: string, scope: "read" | "write", ttlSeconds: number): Promise<{ token: string; expiresAt: string }> {
+  async mintToken(
+    repo: string,
+    scope: "read" | "write",
+    ttlSeconds: number,
+  ): Promise<{ token: string; expiresAt: string }> {
     let ttl = Math.max(60, Math.trunc(ttlSeconds));
     if (scope === "write") {
       this.guardWrite(repo);
@@ -269,7 +330,10 @@ export class ArtifactsGitHost implements GitHost {
   // ------------------------------------------------------------ reads
 
   async branchHead(repo: string, branch: string): Promise<string | null> {
-    return this.withRepo(repo, async (r) => (await r.log({ ref: branch, limit: 1 }))[0]?.hash ?? null);
+    return this.withRepo(
+      repo,
+      async (r) => (await r.log({ ref: branch, limit: 1 }))[0]?.hash ?? null,
+    );
   }
 
   async commitParents(repo: string, sha: string): Promise<string[] | null> {
@@ -287,15 +351,23 @@ export class ArtifactsGitHost implements GitHost {
     });
   }
 
-  async diff(repo: string, baseSha: string, headSha: string, opts: { maxFileBytes?: number } = {}): Promise<ChangeDiff> {
+  async diff(
+    repo: string,
+    baseSha: string,
+    headSha: string,
+    opts: { maxFileBytes?: number } = {},
+  ): Promise<ChangeDiff> {
     return this.withRepo(repo, async (r) => {
       const [base, head] = await Promise.all([r.readCommit(baseSha), r.readCommit(headSha)]);
-      if (base === null || head === null) throw new Error(`commit ${base === null ? baseSha : headSha} not found in ${repo}`);
+      if (base === null || head === null)
+        throw new Error(`commit ${base === null ? baseSha : headSha} not found in ${repo}`);
       const reader: TreeReader = {
         readTree: (hash) => r.readTree(hash),
         readBlob: async (hash) => {
           const blob = await r.readBlob(hash);
-          return blob === null ? null : { size: blob.size, bytes: async () => new Uint8Array(await blob.arrayBuffer()) };
+          return blob === null
+            ? null
+            : { size: blob.size, bytes: async () => new Uint8Array(await blob.arrayBuffer()) };
         },
       };
       return diffTrees(
@@ -306,7 +378,11 @@ export class ArtifactsGitHost implements GitHost {
     });
   }
 
-  async readNote(repo: string, targetSha: string, notesRef = "refs/notes/evidence"): Promise<string | null> {
+  async readNote(
+    repo: string,
+    targetSha: string,
+    notesRef = "refs/notes/evidence",
+  ): Promise<string | null> {
     return this.opts.wire.readNote(await this.remote(repo, "read"), notesRef, targetSha);
   }
 
@@ -327,13 +403,27 @@ export class ArtifactsGitHost implements GitHost {
     });
   }
 
-  async transferObjects(fromRepo: string, toRepo: string, sha: string, toRef: string): Promise<void> {
-    const [from, to] = await Promise.all([this.remote(fromRepo, "read"), this.remote(toRepo, "write")]);
+  async transferObjects(
+    fromRepo: string,
+    toRepo: string,
+    sha: string,
+    toRef: string,
+  ): Promise<void> {
+    const [from, to] = await Promise.all([
+      this.remote(fromRepo, "read"),
+      this.remote(toRepo, "write"),
+    ]);
     const result = await this.opts.wire.transferObjects(from, to, { sha, toRef });
-    if (!result.ok) throw new Error(`transfer to ${toRepo} ${toRef} failed: ${result.reason ?? "unknown"}`);
+    if (!result.ok)
+      throw new Error(`transfer to ${toRepo} ${toRef} failed: ${result.reason ?? "unknown"}`);
   }
 
-  async updateRef(repo: string, ref: string, oldSha: string, newSha: string): Promise<FastForwardResult> {
+  async updateRef(
+    repo: string,
+    ref: string,
+    oldSha: string,
+    newSha: string,
+  ): Promise<FastForwardResult> {
     const remote = await this.remote(repo, "write");
     try {
       await this.opts.wire.fastForward(remote, ref, oldSha, newSha);
@@ -350,7 +440,13 @@ export class ArtifactsGitHost implements GitHost {
 
   async commitTree(
     repo: string,
-    input: { treeSha: string; parents: string[]; message: string; branch: string; expectedOld: string },
+    input: {
+      treeSha: string;
+      parents: string[];
+      message: string;
+      branch: string;
+      expectedOld: string;
+    },
   ): Promise<{ sha: string }> {
     const remote = await this.remote(repo, "write");
     const now = Math.floor(Date.now() / 1000);
@@ -359,11 +455,21 @@ export class ArtifactsGitHost implements GitHost {
     const { wire } = this.opts;
     const commit: WireObject = {
       type: "commit",
-      data: wire.encodeCommit({ tree: input.treeSha, parents: input.parents, author: signature, committer: signature, message }),
+      data: wire.encodeCommit({
+        tree: input.treeSha,
+        parents: input.parents,
+        author: signature,
+        committer: signature,
+        message,
+      }),
     };
     const sha = await wire.hashObject(commit);
     const ref = `refs/heads/${input.branch}`;
-    const report = await wire.receivePack(remote, [{ ref, oldSha: input.expectedOld, newSha: sha }], await wire.buildPack([commit]));
+    const report = await wire.receivePack(
+      remote,
+      [{ ref, oldSha: input.expectedOld, newSha: sha }],
+      await wire.buildPack([commit]),
+    );
     wire.assertRefUpdated(report, ref);
     return { sha };
   }

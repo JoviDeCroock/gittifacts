@@ -2,8 +2,9 @@
  * `ChangeCoordinator` Durable Object (one per change, addressed by change id). All logic lives in
  * `ChangeCoordinatorCore`; this class wires DO storage and the GC alarm.
  */
-import type { Change, WaitUntil } from "@app/domain";
+
 import { DurableObject } from "cloudflare:workers";
+import type { Change, WaitUntil } from "@app/domain";
 import type {
   ChangeCoordinatorClient,
   ChangeCoordinatorState,
@@ -16,7 +17,10 @@ import { createRunSink, type SinkOutcome } from "./run-sink.js";
 import { resolveRuntime } from "./runtime.js";
 
 /** Also the CI engine's run sink: bind `COORDINATOR` (RunSinkNamespace) to this class. */
-export class ChangeCoordinator extends DurableObject<unknown> implements ChangeCoordinatorClient, RunSink {
+export class ChangeCoordinator
+  extends DurableObject<unknown>
+  implements ChangeCoordinatorClient, RunSink
+{
   private coreInstance: ChangeCoordinatorCore | null = null;
 
   private get core(): ChangeCoordinatorCore {

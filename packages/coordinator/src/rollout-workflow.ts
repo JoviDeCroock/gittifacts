@@ -8,7 +8,10 @@ import { fromWorkflowStep } from "./step.js";
 export { evaluateHealth } from "./health.js";
 
 export class RolloutWorkflow extends WorkflowEntrypoint<unknown, RolloutParams> {
-  override async run(event: Readonly<WorkflowEvent<RolloutParams>>, step: WorkflowStep): Promise<RolloutOutput> {
+  override async run(
+    event: Readonly<WorkflowEvent<RolloutParams>>,
+    step: WorkflowStep,
+  ): Promise<RolloutOutput> {
     const { ports, bindings } = resolveRuntime(this.env, "default");
     return runRollout({ ports, bindings }, event.payload, fromWorkflowStep(step));
   }

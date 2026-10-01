@@ -8,8 +8,18 @@ import {
   type SignedEvidence,
   sha256Base64url,
 } from "@app/evidence";
-import type { Audit, Budget, Clock, Deployer, Flags, Notifier, Reviewer, Signer, Telemetry } from "../ports.js";
 import { flagKeyFor } from "../ids.js";
+import type {
+  Audit,
+  Budget,
+  Clock,
+  Deployer,
+  Flags,
+  Notifier,
+  Reviewer,
+  Signer,
+  Telemetry,
+} from "../ports.js";
 
 // ---------------------------------------------------------------- clock
 
@@ -59,8 +69,11 @@ export class FakeSigner implements Signer {
 
   async verifyEvidence(signed: SignedEvidence): Promise<{ ok: boolean; reason?: string }> {
     if (this.failVerification) return { ok: false, reason: "verification disabled by the test" };
-    const digest = await sha256Base64url(canonicalBytes({ changeId: signed.changeId, headSha: signed.headSha, items: signed.items }));
-    return digest === signed.attestation.payloadDigest && signed.attestation.signature === `fake.${digest}`
+    const digest = await sha256Base64url(
+      canonicalBytes({ changeId: signed.changeId, headSha: signed.headSha, items: signed.items }),
+    );
+    return digest === signed.attestation.payloadDigest &&
+      signed.attestation.signature === `fake.${digest}`
       ? { ok: true }
       : { ok: false, reason: "digest mismatch" };
   }
@@ -78,7 +91,12 @@ export class FakeAudit implements Audit {
   readonly payloads: unknown[] = [];
   constructor(private readonly clock: Clock) {}
 
-  async append(input: { principalId: string; action: string; subject: string; payload: unknown }): Promise<AuditEvent> {
+  async append(input: {
+    principalId: string;
+    action: string;
+    subject: string;
+    payload: unknown;
+  }): Promise<AuditEvent> {
     const seq = this.events.length;
     const prevHash = this.events[seq - 1]?.hash ?? "A".repeat(43);
     const event: AuditEvent = {
@@ -99,7 +117,9 @@ export class FakeAudit implements Audit {
   }
 
   actions(subject?: string): string[] {
-    return this.events.filter((e) => subject === undefined || e.subject === subject).map((e) => e.action);
+    return this.events
+      .filter((e) => subject === undefined || e.subject === subject)
+      .map((e) => e.action);
   }
 
   payloadOf(action: string): unknown {
@@ -114,7 +134,9 @@ export class FakeNotifier implements Notifier {
     this.sent.push(input);
   }
   kinds(changeId?: string): string[] {
-    return this.sent.filter((n) => changeId === undefined || n.changeId === changeId).map((n) => n.kind);
+    return this.sent
+      .filter((n) => changeId === undefined || n.changeId === changeId)
+      .map((n) => n.kind);
   }
 }
 
@@ -122,12 +144,27 @@ export class FakeNotifier implements Notifier {
 
 export class FakeDeployer implements Deployer {
   readonly live = new Map<string, Array<{ versionId: string; percentage: number }>>();
-  readonly uploads: Array<{ script: string; changeId: string; sha: string; bundleRef: string; versionId: string }> = [];
-  readonly splits: Array<{ script: string; split: Array<{ versionId: string; percentage: number }> }> = [];
+  readonly uploads: Array<{
+    script: string;
+    changeId: string;
+    sha: string;
+    bundleRef: string;
+    versionId: string;
+  }> = [];
+  readonly splits: Array<{
+    script: string;
+    split: Array<{ versionId: string; percentage: number }>;
+  }> = [];
   readonly rollbacks: Array<{ script: string; versionId: string; message: string }> = [];
   private n = 0;
 
-  async uploadVersion(input: { script: string; changeId: string; sha: string; bundleRef: string; message: string }) {
+  async uploadVersion(input: {
+    script: string;
+    changeId: string;
+    sha: string;
+    bundleRef: string;
+    message: string;
+  }) {
     const versionId = `v${++this.n}-${input.changeId}`;
     this.uploads.push({ ...input, versionId });
     return { versionId };
@@ -167,7 +204,13 @@ export type TelemetryResult = Awaited<ReturnType<Telemetry["check"]>>;
 /** Scripted telemetry: queued results (or errors) first, then `fallback`. */
 export class FakeTelemetry implements Telemetry {
   readonly queue: Array<Partial<TelemetryResult> | Error> = [];
-  fallback: TelemetryResult = { requests: 1000, errorRate: 0.001, baselineErrorRate: 0.001, newIssueGroups: 0, issues: [] };
+  fallback: TelemetryResult = {
+    requests: 1000,
+    errorRate: 0.001,
+    baselineErrorRate: 0.001,
+    newIssueGroups: 0,
+    issues: [],
+  };
   readonly calls: Array<Parameters<Telemetry["check"]>[0]> = [];
   async check(input: Parameters<Telemetry["check"]>[0]): Promise<TelemetryResult> {
     this.calls.push(input);
@@ -187,12 +230,20 @@ export class FakeReviewer implements Reviewer {
   tourCostUsd = 0.02;
   budgetExceeded = false;
   readonly judgeCalls: Array<{ plan: Plan | null; diff: ChangeDiff; budget: Budget }> = [];
-  readonly tourCalls: Array<{ change: Pick<Change, "id" | "title" | "headSha" | "baseSha">; classification: ClassifyResult; budget: Budget }> = [];
+  readonly tourCalls: Array<{
+    change: Pick<Change, "id" | "title" | "headSha" | "baseSha">;
+    classification: ClassifyResult;
+    budget: Budget;
+  }> = [];
 
   async judge(input: { plan: Plan | null; diff: ChangeDiff; budget: Budget }) {
     this.judgeCalls.push(structuredClone(input));
     if (this.judgeError !== null) throw this.judgeError;
-    return { items: structuredClone(this.judgeItems), costUsd: this.judgeCostUsd, budgetExceeded: this.budgetExceeded };
+    return {
+      items: structuredClone(this.judgeItems),
+      costUsd: this.judgeCostUsd,
+      budgetExceeded: this.budgetExceeded,
+    };
   }
 
   async tour(input: {
@@ -203,9 +254,20 @@ export class FakeReviewer implements Reviewer {
     classification: ClassifyResult;
     budget: Budget;
   }) {
-    this.tourCalls.push(structuredClone({ change: input.change, classification: input.classification, budget: input.budget }));
+    this.tourCalls.push(
+      structuredClone({
+        change: input.change,
+        classification: input.classification,
+        budget: input.budget,
+      }),
+    );
     if (this.tourOutcome === "failed") {
-      return { status: "failed" as const, reason: "schema validation failed twice", costUsd: this.tourCostUsd, budgetExceeded: this.budgetExceeded };
+      return {
+        status: "failed" as const,
+        reason: "schema validation failed twice",
+        costUsd: this.tourCostUsd,
+        budgetExceeded: this.budgetExceeded,
+      };
     }
     const headSha = input.change.headSha ?? "0".repeat(40);
     const tour: Tour = {
@@ -224,10 +286,21 @@ export class FakeReviewer implements Reviewer {
       ],
       leastConfident: ["Nothing in particular."],
       notDone: ["Nothing left out."],
-      generatedBy: { principalId: "reviewer-agent", model: "fake", promptVersion: "1", attempts: 1, costUsd: this.tourCostUsd },
+      generatedBy: {
+        principalId: "reviewer-agent",
+        model: "fake",
+        promptVersion: "1",
+        attempts: 1,
+        costUsd: this.tourCostUsd,
+      },
       createdAt: "2026-10-01T12:00:00.000Z",
     };
-    return { status: "ok" as const, tour, costUsd: this.tourCostUsd, budgetExceeded: this.budgetExceeded };
+    return {
+      status: "ok" as const,
+      tour,
+      costUsd: this.tourCostUsd,
+      budgetExceeded: this.budgetExceeded,
+    };
   }
 }
 

@@ -20,18 +20,11 @@ import {
   type RolloutState,
   Tour,
 } from "@app/domain";
-import { encodeNote, EVIDENCE_NOTES_REF, type EvidenceItem } from "@app/evidence";
+import { EVIDENCE_NOTES_REF, type EvidenceItem, encodeNote } from "@app/evidence";
 import { type CoordinatorBindings, createOrGet } from "./bindings.js";
 import {
-  assembleEvidence,
-  erroredJudgment,
-  judgmentItems,
-  type SealedEvidence,
-  sealEvidence,
-} from "./evidence.js";
-import {
-  CiFinishedEvent,
   ChangeWorkflowParams,
+  CiFinishedEvent,
   EVENT_CI_FINISHED,
   EVENT_MERGED,
   EVENT_REVIEW,
@@ -39,6 +32,13 @@ import {
   ReviewEvent,
   type RolloutParams,
 } from "./events.js";
+import {
+  assembleEvidence,
+  erroredJudgment,
+  judgmentItems,
+  type SealedEvidence,
+  sealEvidence,
+} from "./evidence.js";
 import { changeSubject, ciRunIdFor, rolloutWorkflowId } from "./ids.js";
 import { PUSHABLE_STATUSES, toCiStatus } from "./lifecycle.js";
 import { withChangeNotifications } from "./milestones.js";
@@ -151,7 +151,11 @@ export async function runChangeWorkflow(
   const params = ChangeWorkflowParams.parse(rawParams);
   const { changeId, headSha } = params;
   const subject = changeSubject(changeId);
-  const done = (outcome: ChangeOutcome, lane: Lane | null, detail: string | null = null): ChangeWorkflowOutput => ({
+  const done = (
+    outcome: ChangeOutcome,
+    lane: Lane | null,
+    detail: string | null = null,
+  ): ChangeWorkflowOutput => ({
     outcome,
     lane,
     detail,
@@ -164,8 +168,10 @@ export async function runChangeWorkflow(
   const ctx = await step.do("load", RETRY.quick, async (): Promise<Loaded> => {
     const change = await store.getChange(changeId);
     if (change === null) return { ...SKIPPED, skip: "change not found" };
-    if (change.headSha !== headSha) return { ...SKIPPED, skip: `superseded by ${change.headSha ?? "nothing"}` };
-    if (!PUSHABLE_STATUSES.includes(change.status)) return { ...SKIPPED, skip: `change is ${change.status}` };
+    if (change.headSha !== headSha)
+      return { ...SKIPPED, skip: `superseded by ${change.headSha ?? "nothing"}` };
+    if (!PUSHABLE_STATUSES.includes(change.status))
+      return { ...SKIPPED, skip: `change is ${change.status}` };
     const repo = await store.getRepo(change.repoId);
     if (repo === null) return { ...SKIPPED, skip: "repo not found" };
     if (change.status !== "running") await store.updateChange(changeId, { status: "running" });
@@ -201,7 +207,12 @@ export async function runChangeWorkflow(
     resolved = await step.do("policy", RETRY.sandbox, async () => {
       const repo = await store.getRepo(repoId);
       if (repo === null) throw new Error(`repo ${repoId} not found`);
-      return resolvePolicy(ports, { repo, repoName: ctx.mainRepo, sha: baseSha, onSandboxError: "throw" });
+      return resolvePolicy(ports, {
+        repo,
+        repoName: ctx.mainRepo,
+        sha: baseSha,
+        onSandboxError: "throw",
+      });
     });
   } catch (e) {
     const reason = errorMessage(e);
@@ -254,14 +265,23 @@ export async function runChangeWorkflow(
     }
     // Visible in the API right away; the run sink replaces it when the run finishes.
     if ((await store.getRun(runId)) === null) {
-      await store.upsertRun({ ...placeholderRun(runId, changeId, headSha, clock.now().toISOString()), status: "running", finishedAt: null });
+      await store.upsertRun({
+        ...placeholderRun(runId, changeId, headSha, clock.now().toISOString()),
+        status: "running",
+        finishedAt: null,
+      });
     }
     await bindings.changeCoordinator(changeId).registerRun({ changeId, instanceId, runId });
     await log("change.ci-started", { runId, headSha, note });
     return { runId };
   });
 
-  const finished = await waitOrTimeout<unknown>(step, EVENT_CI_FINISHED, EVENT_CI_FINISHED, CI_TIMEOUT);
+  const finished = await waitOrTimeout<unknown>(
+    step,
+    EVENT_CI_FINISHED,
+    EVENT_CI_FINISHED,
+    CI_TIMEOUT,
+  );
   let report: CiFinishedEvent;
   const parsedReport = finished === null ? null : CiFinishedEvent.safeParse(finished.payload);
   if (parsedReport?.success && parsedReport.data.run.id === runId) {
@@ -279,14 +299,22 @@ export async function runChangeWorkflow(
       }
       const lost = [{ step: "*", message: "the run's evidence never reached the coordinator" }];
       if (latest !== null && latest.status !== "queued" && latest.status !== "running") {
-        return { run: toPipelineRun(latest), items: [], evidenceErrors: lost, outputs: { bundleRef: null } };
+        return {
+          run: toPipelineRun(latest),
+          items: [],
+          evidenceErrors: lost,
+          outputs: { bundleRef: null },
+        };
       }
       try {
         await ports.ci.cancel(runId, "no result within the CI timeout");
       } catch {
         // best effort
       }
-      const run = latest === null ? placeholderRun(runId, changeId, headSha, at) : { ...toPipelineRun(latest), status: "errored" as const, finishedAt: at };
+      const run =
+        latest === null
+          ? placeholderRun(runId, changeId, headSha, at)
+          : { ...toPipelineRun(latest), status: "errored" as const, finishedAt: at };
       return { run, items: [], evidenceErrors: lost, outputs: { bundleRef: null } };
     });
   }
@@ -347,11 +375,19 @@ export async function runChangeWorkflow(
         store.getDiff(changeId, headSha),
       ]);
       if (diff === null) throw new Error("diff missing");
-      const out = await ports.reviewer.judge({ plan, diff, budget: { changeId, limitUsd, spentUsd } });
+      const out = await ports.reviewer.judge({
+        plan,
+        diff,
+        budget: { changeId, limitUsd, spentUsd },
+      });
       const total = await coordinator.recordSpend({ changeId, usd: out.costUsd });
       const items = judgmentItems(out.items);
       const resealed = items.length > 0 ? await reseal(items) : null;
-      await log("change.judged", { judgments: items.length, costUsd: out.costUsd, totalUsd: total });
+      await log("change.judged", {
+        judgments: items.length,
+        costUsd: out.costUsd,
+        totalUsd: total,
+      });
       return {
         sealed: resealed,
         budgetExceeded: out.budgetExceeded || total > limitUsd,
@@ -375,7 +411,10 @@ export async function runChangeWorkflow(
     await step.do("evidence-note", RETRY.remote, async () => {
       const evidence = await store.getEvidence(changeId, headSha);
       if (evidence === null) throw new Error("evidence missing");
-      await git.writeNote(forkName, headSha, encodeNote(evidence), { notesRef: EVIDENCE_NOTES_REF, mode: "replace" });
+      await git.writeNote(forkName, headSha, encodeNote(evidence), {
+        notesRef: EVIDENCE_NOTES_REF,
+        mode: "replace",
+      });
       await store.putEvidence({ ...evidence, notesWritten: true });
       return true;
     });
@@ -395,8 +434,17 @@ export async function runChangeWorkflow(
       pureRevertVerified = await step.do("verify-revert", RETRY.remote, async () => {
         const original = await store.getChange(revertOf);
         if (original?.mergedSha == null || original.repoId !== repoId) return false;
-        const ok = await verifyPureRevert(git, { repo: forkName, baseSha, headSha, mergedSha: original.mergedSha });
-        await log("change.revert-verified", { revertOf, mergedSha: original.mergedSha, pureRevertVerified: ok });
+        const ok = await verifyPureRevert(git, {
+          repo: forkName,
+          baseSha,
+          headSha,
+          mergedSha: original.mergedSha,
+        });
+        await log("change.revert-verified", {
+          revertOf,
+          mergedSha: original.mergedSha,
+          pureRevertVerified: ok,
+        });
         return ok;
       });
     } catch {
@@ -405,7 +453,12 @@ export async function runChangeWorkflow(
   }
 
   // ------------------------------------------------------------ 7. classify (pure)
-  const classifyStep = (name: string, tourStatus: TourStatus, overBudget: boolean, verified: boolean) =>
+  const classifyStep = (
+    name: string,
+    tourStatus: TourStatus,
+    overBudget: boolean,
+    verified: boolean,
+  ) =>
     step.do(name, RETRY.quick, async (): Promise<Classified> => {
       const [evidence, diff, plan] = await Promise.all([
         store.getEvidence(changeId, headSha),
@@ -418,7 +471,13 @@ export async function runChangeWorkflow(
         plan,
         diff === null ? null : diffStatsOf(diff),
         { category: ctx.category },
-        { ciStatus, evidenceVerified: verified, budgetExceeded: overBudget, tourStatus, pureRevertVerified },
+        {
+          ciStatus,
+          evidenceVerified: verified,
+          budgetExceeded: overBudget,
+          tourStatus,
+          pureRevertVerified,
+        },
       );
       const result = escalateForPolicy(raw, resolved);
       await store.putClassification(changeId, headSha, result);
@@ -456,7 +515,8 @@ export async function runChangeWorkflow(
     try {
       tour = await step.do("tour", RETRY.model, async () => {
         const spentUsd = await coordinator.spent(changeId);
-        if (spentUsd >= limitUsd) return { status: "failed" as const, reason: "AI budget exhausted", budgetExceeded: true };
+        if (spentUsd >= limitUsd)
+          return { status: "failed" as const, reason: "AI budget exhausted", budgetExceeded: true };
         const [change, plan, diff, evidence, classification] = await Promise.all([
           store.getChange(changeId),
           ctx.planId === null ? null : store.getPlan(ctx.planId),
@@ -484,12 +544,18 @@ export async function runChangeWorkflow(
         }
         const valid = Tour.safeParse(out.tour);
         if (!valid.success || valid.data.changeId !== changeId || valid.data.headSha !== headSha) {
-          await log("change.tour-failed", { reason: "tour failed schema validation or is for another head" });
+          await log("change.tour-failed", {
+            reason: "tour failed schema validation or is for another head",
+          });
           return { status: "failed" as const, reason: "invalid tour", budgetExceeded: overBudget };
         }
         await store.putTour(valid.data);
         await store.updateChange(changeId, { tourId: valid.data.id });
-        await log("change.tour-generated", { tourId: valid.data.id, stops: valid.data.stops.length, costUsd: out.costUsd });
+        await log("change.tour-generated", {
+          tourId: valid.data.id,
+          stops: valid.data.stops.length,
+          costUsd: out.costUsd,
+        });
         return { status: "ok" as const, reason: null, budgetExceeded: overBudget };
       });
     } catch (e) {
@@ -530,11 +596,17 @@ export async function runChangeWorkflow(
     return done("blocked", cls.lane, ciStatus === "failed" ? "ci failed" : "evidence unverified");
   }
 
-  const enqueue = (name: string, via: "lane-0" | "verified-revert" | "review", reviewId: string | null) =>
+  const enqueue = (
+    name: string,
+    via: "lane-0" | "verified-revert" | "review",
+    reviewId: string | null,
+  ) =>
     step.do(name, RETRY.quick, async () => {
       // Queued before the RPC: the queue may merge (and set "merged") before this step returns.
       await store.updateChange(changeId, { status: "queued" });
-      const { position } = await bindings.mergeQueue(repoId).enqueue({ repoId, changeId, headSha, workflowInstanceId: instanceId });
+      const { position } = await bindings
+        .mergeQueue(repoId)
+        .enqueue({ repoId, changeId, headSha, workflowInstanceId: instanceId });
       await log("change.queued", { via, reviewId, position, lane: cls.lane });
       return position;
     });
@@ -563,7 +635,12 @@ export async function runChangeWorkflow(
     let waits = 0;
     for (let round = 1; review === null && round <= REVIEW_ROUNDS && waits < REVIEW_ROUNDS + 50; ) {
       waits++;
-      const event = await waitOrTimeout<unknown>(step, `review-${waits}`, EVENT_REVIEW, REVIEW_TIMEOUT);
+      const event = await waitOrTimeout<unknown>(
+        step,
+        `review-${waits}`,
+        EVENT_REVIEW,
+        REVIEW_TIMEOUT,
+      );
       if (event === null) {
         if (round < REVIEW_ROUNDS) {
           const n = round;
@@ -595,7 +672,10 @@ export async function runChangeWorkflow(
     if (decided.decision === "request-changes") {
       await step.do("changes-requested", RETRY.quick, async () => {
         await store.updateChange(changeId, { status: "awaiting-push" });
-        await log("change.changes-requested", { reviewId: decided.reviewId, reviewerId: decided.reviewerId });
+        await log("change.changes-requested", {
+          reviewId: decided.reviewId,
+          reviewerId: decided.reviewerId,
+        });
         return true;
       });
       return done("changes-requested", cls.lane);
@@ -604,7 +684,10 @@ export async function runChangeWorkflow(
       await step.do("rejected", RETRY.quick, async () => {
         await store.updateChange(changeId, { status: "rejected" });
         await coordinator.scheduleForkGc({ changeId, forkName, delayMs: 60 * 60_000 });
-        await log("change.rejected", { reviewId: decided.reviewId, reviewerId: decided.reviewerId });
+        await log("change.rejected", {
+          reviewId: decided.reviewId,
+          reviewerId: decided.reviewerId,
+        });
         return true;
       });
       return done("rejected", cls.lane);
@@ -632,8 +715,15 @@ export async function runChangeWorkflow(
       const change = await store.getChange(changeId);
       return { status: change?.status ?? "missing", mergedSha: change?.mergedSha ?? null };
     });
-    if (status.mergedSha !== null && (status.status === "merged" || status.status === "rolling-out")) {
-      merged = { mergedSha: status.mergedSha, rebasedFrom: status.mergedSha === headSha ? null : headSha, bundleRef: null };
+    if (
+      status.mergedSha !== null &&
+      (status.status === "merged" || status.status === "rolling-out")
+    ) {
+      merged = {
+        mergedSha: status.mergedSha,
+        rebasedFrom: status.mergedSha === headSha ? null : headSha,
+        bundleRef: null,
+      };
     } else if (status.status !== "queued" && status.status !== "approved") {
       failure = `merge queue gave up: change is ${status.status}`;
     }
@@ -661,18 +751,30 @@ export async function runChangeWorkflow(
     });
     if (repo?.deployTarget == null) {
       await store.updateChange(changeId, { status: "released" });
-      await log("change.released", { mergedSha: mergedEvent.mergedSha, reason: "no deploy target" });
+      await log("change.released", {
+        mergedSha: mergedEvent.mergedSha,
+        reason: "no deploy target",
+      });
       return "none" as const;
     }
     if (repo.claim.status !== "claimed") {
       // Previews only: unclaimed projects never get a production deploy.
-      await log("rollout.skipped", { reason: "unclaimed project (previews only)", mergedSha: mergedEvent.mergedSha });
+      await log("rollout.skipped", {
+        reason: "unclaimed project (previews only)",
+        mergedSha: mergedEvent.mergedSha,
+      });
       return "skipped" as const;
     }
     // A rebased merge must deploy a bundle built from the merged sha, never the pre-rebase head.
-    const bundleRef = mergedEvent.rebasedFrom !== null ? mergedEvent.bundleRef : (mergedEvent.bundleRef ?? report.outputs.bundleRef);
+    const bundleRef =
+      mergedEvent.rebasedFrom !== null
+        ? mergedEvent.bundleRef
+        : (mergedEvent.bundleRef ?? report.outputs.bundleRef);
     if (bundleRef === null) {
-      await log("rollout.skipped", { reason: "no bundle for the merged sha", mergedSha: mergedEvent.mergedSha });
+      await log("rollout.skipped", {
+        reason: "no bundle for the merged sha",
+        mergedSha: mergedEvent.mergedSha,
+      });
       await notifier.notify({
         kind: "rollout-stage",
         changeId,
@@ -682,19 +784,30 @@ export async function runChangeWorkflow(
       return "skipped" as const;
     }
     const params: RolloutParams = { changeId, bundleRef, rollout: policy.rollout };
-    const { created } = await createOrGet(bindings.rolloutWorkflow, rolloutWorkflowId(changeId), params);
+    const { created } = await createOrGet(
+      bindings.rolloutWorkflow,
+      rolloutWorkflowId(changeId),
+      params,
+    );
     const pending: RolloutState = {
       status: "pending",
       versionId: null,
       previousVersionId: null,
-      stages: policy.rollout.stages.map((percent) => ({ percent, startedAt: null, completedAt: null })),
+      stages: policy.rollout.stages.map((percent) => ({
+        percent,
+        startedAt: null,
+        completedAt: null,
+      })),
       watchUntil: null,
       flagKey: null,
       lastCheck: null,
     };
     const change = await store.getChange(changeId);
     if (change?.status === "merged") {
-      await store.updateChange(changeId, { status: "rolling-out", rolloutState: change.rolloutState ?? pending });
+      await store.updateChange(changeId, {
+        status: "rolling-out",
+        rolloutState: change.rolloutState ?? pending,
+      });
     }
     await log("change.rollout-started", { mergedSha: mergedEvent.mergedSha, bundleRef, created });
     return "started" as const;

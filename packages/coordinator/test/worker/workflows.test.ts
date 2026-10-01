@@ -9,8 +9,14 @@ import type { Change, Repo } from "@app/domain";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ChangeWorkflowOutput } from "../../src/change-flow.js";
 import { type CoordinatorEnv, cloudflareBindings } from "../../src/cloudflare-bindings.js";
-import { type ChangeWorkflowParams, type RolloutParams } from "../../src/events.js";
-import { approvedPlan, type FakePorts, linkedIssue, portsForRole, principal } from "../../src/fakes/index.js";
+import type { ChangeWorkflowParams, RolloutParams } from "../../src/events.js";
+import {
+  approvedPlan,
+  type FakePorts,
+  linkedIssue,
+  portsForRole,
+  principal,
+} from "../../src/fakes/index.js";
 import { changeWorkflowId, ciRunIdFor, revertIdFor, rolloutWorkflowId } from "../../src/ids.js";
 import { withChangeNotifications } from "../../src/milestones.js";
 import type { RolloutOutput } from "../../src/rollout-flow.js";
@@ -66,7 +72,12 @@ describe("ChangeWorkflow (workerd)", () => {
     const reviewer = ports.store.addPrincipal(principal({ kind: "human" }));
     ports.store.addPlan(approvedPlan(repo.id));
 
-    const { change } = await coordinator.startChange(agent, { repoId: repo.id, planId: `plan-${repo.id}`, title: "Fix a", category: "fix" });
+    const { change } = await coordinator.startChange(agent, {
+      repoId: repo.id,
+      planId: `plan-${repo.id}`,
+      title: "Fix a",
+      category: "fix",
+    });
     const head = ports.git.commit(change.forkName, "main", { "src/a.ts": "export const a = 2;\n" });
     const instanceId = changeWorkflowId(change.id, head);
     await using instance = await introspectWorkflowInstance(testEnv.CHANGE_WORKFLOW, instanceId);
@@ -76,7 +87,12 @@ describe("ChangeWorkflow (workerd)", () => {
     });
 
     // The push event → ChangeCoordinator DO → ChangeWorkflow instance for this head.
-    await coordinator.onPush({ repoName: change.forkName, ref: "refs/heads/main", before: change.baseSha, after: head });
+    await coordinator.onPush({
+      repoName: change.forkName,
+      ref: "refs/heads/main",
+      before: change.baseSha,
+      after: head,
+    });
     await instance.waitForStepResult({ name: "ci-start" });
 
     // The CI engine reports the run to its sink → "ci-finished" on this instance.
@@ -95,7 +111,14 @@ describe("ChangeWorkflow (workerd)", () => {
     expect(merged).toMatchObject({ status: "released", mergedSha: head });
     expect(ports.git.head("app")).toBe(head);
     expect(ports.audit.actions(`change:${change.id}`)).toEqual(
-      expect.arrayContaining(["change.pushed", "change.classified", "change.reviewed", "change.queued", "change.merged", "change.released"]),
+      expect.arrayContaining([
+        "change.pushed",
+        "change.classified",
+        "change.reviewed",
+        "change.queued",
+        "change.merged",
+        "change.released",
+      ]),
     );
     // DO state: the instance and run are tracked per change.
     const state = await bindings.changeCoordinator(change.id).state(change.id);
@@ -109,7 +132,11 @@ describe("PushRouter (workerd)", () => {
     const coordinator = createCoordinator(portsForRole(ports, "default"), bindings);
     const repo = await seedRepo();
     const agent = ports.store.addPrincipal(principal({ kind: "agent", ownerId: "owner" }));
-    const { change } = await coordinator.startChange(agent, { repoId: repo.id, title: "t", category: "feature" });
+    const { change } = await coordinator.startChange(agent, {
+      repoId: repo.id,
+      title: "t",
+      category: "feature",
+    });
     const head = ports.git.commit(change.forkName, "main", { "src/b.ts": "export const b = 1;\n" });
 
     await using changeWorkflows = await introspectWorkflow(testEnv.CHANGE_WORKFLOW);
@@ -118,21 +145,38 @@ describe("PushRouter (workerd)", () => {
       id: "push-1",
       params: {
         type: "cf.artifacts.repo.pushed",
-        source: { type: "artifacts.repo", namespace: ports.git.namespace, repoName: change.forkName },
-        payload: { ref: "refs/heads/main", before: change.baseSha, after: head, commits: [], totalCommitsCount: 1 },
+        source: {
+          type: "artifacts.repo",
+          namespace: ports.git.namespace,
+          repoName: change.forkName,
+        },
+        payload: {
+          ref: "refs/heads/main",
+          before: change.baseSha,
+          after: head,
+          commits: [],
+          totalCommitsCount: 1,
+        },
         metadata: { eventSchemaVersion: 1 },
       },
     });
     await router.waitForStatus("complete");
     expect(await router.getOutput()).toEqual({ routed: true, reason: null });
     expect((await changeWorkflows.get()).length).toBe(1);
-    expect(await ports.store.getChange(change.id)).toMatchObject({ headSha: head, status: "running" });
+    expect(await ports.store.getChange(change.id)).toMatchObject({
+      headSha: head,
+      status: "running",
+    });
 
     // Events for other namespaces or main repos are ignored without touching any change.
     await using other = await introspectWorkflowInstance(testEnv.PUSH_ROUTER, "push-2");
     await testEnv.PUSH_ROUTER.create({
       id: "push-2",
-      params: { type: "cf.artifacts.repo.pushed", source: { namespace: "keelhaul", repoName: "x" }, payload: { ref: "refs/heads/main", before: head, after: head } },
+      params: {
+        type: "cf.artifacts.repo.pushed",
+        source: { namespace: "keelhaul", repoName: "x" },
+        payload: { ref: "refs/heads/main", before: head, after: head },
+      },
     });
     await other.waitForStatus("complete");
     expect(await other.getOutput()).toMatchObject({ routed: false });
@@ -144,7 +188,12 @@ describe("RolloutWorkflow (workerd)", () => {
     const repo = await seedRepo({ deployTarget: "api" });
     ports.deployer.live.set("api", [{ versionId: "v0", percentage: 100 }]);
     // A merged change at the tip of main.
-    const mergedSha = ports.git.commit("app", "main", { "src/a.ts": "export const a = 2;\n" }, "merge c1");
+    const mergedSha = ports.git.commit(
+      "app",
+      "main",
+      { "src/a.ts": "export const a = 2;\n" },
+      "merge c1",
+    );
     const change: Change = {
       id: "c1",
       repoId: repo.id,
@@ -194,16 +243,31 @@ describe("RolloutWorkflow (workerd)", () => {
     expect(output).toMatchObject({ outcome: "rolled-back", revertChangeId: revertIdFor("c1") });
 
     expect(ports.flags.flags.get("change-c1")).toBe(false);
-    expect(ports.deployer.rollbacks).toEqual([expect.objectContaining({ script: "api", versionId: "v0" })]);
+    expect(ports.deployer.rollbacks).toEqual([
+      expect.objectContaining({ script: "api", versionId: "v0" }),
+    ]);
     const original = await ports.store.getChange("c1");
     expect(original).toMatchObject({ status: "reverted", revertedBy: revertIdFor("c1") });
     expect(original?.rolloutState?.status).toBe("rolled-back");
     const revert = await ports.store.getChange(revertIdFor("c1"));
-    expect(revert).toMatchObject({ revertOf: "c1", claim: { category: "revert" }, authorId: "system", planId: null });
+    expect(revert).toMatchObject({
+      revertOf: "c1",
+      claim: { category: "revert" },
+      authorId: "system",
+      planId: null,
+    });
     // The revert commit restores the pre-merge tree exactly.
-    expect(ports.git.commits.get(revert?.headSha ?? "")?.tree).toBe(ports.git.commits.get(change.baseSha)?.tree);
+    expect(ports.git.commits.get(revert?.headSha ?? "")?.tree).toBe(
+      ports.git.commits.get(change.baseSha)?.tree,
+    );
     expect(ports.audit.actions("change:c1")).toEqual(
-      expect.arrayContaining(["rollout.regression", "rollout.flag-off", "rollout.rolled-back", "change.revert-opened", "rollout.reverted"]),
+      expect.arrayContaining([
+        "rollout.regression",
+        "rollout.flag-off",
+        "rollout.rolled-back",
+        "change.revert-opened",
+        "rollout.reverted",
+      ]),
     );
     // The revert entered the normal pipeline (its own ChangeWorkflow instance).
     expect((await revertWorkflows.get()).length).toBe(1);

@@ -11,6 +11,11 @@ export class ChangeWorkflow extends WorkflowEntrypoint<unknown, ChangeWorkflowPa
     step: WorkflowStep,
   ): Promise<ChangeWorkflowOutput> {
     const { ports, bindings } = resolveRuntime(this.env, "default");
-    return runChangeWorkflow({ ports, bindings }, event.payload, fromWorkflowStep(step), event.instanceId);
+    return runChangeWorkflow(
+      { ports, bindings },
+      event.payload,
+      fromWorkflowStep(step),
+      event.instanceId,
+    );
   }
 }

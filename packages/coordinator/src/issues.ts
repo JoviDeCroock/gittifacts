@@ -61,7 +61,11 @@ function toIso(v: string | null, fallback: Date): string {
   return Number.isNaN(d.getTime()) ? fallback.toISOString() : d.toISOString();
 }
 
-const ChangeIdLike = z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);
+const ChangeIdLike = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9_-]+$/);
 const UrlLike = z.string().url();
 
 export function normalizeIssue(payload: unknown, now: Date): NormalizedIssue | null {
@@ -70,10 +74,23 @@ export function normalizeIssue(payload: unknown, now: Date): NormalizedIssue | n
   const nested = isObj(data.issue) ? data.issue : {};
   const sources = [nested, data, payload];
 
-  const id = firstString(sources, ["issueId", "issue_id", "id", "fingerprint", "alert_correlation_id"]);
+  const id = firstString(sources, [
+    "issueId",
+    "issue_id",
+    "id",
+    "fingerprint",
+    "alert_correlation_id",
+  ]);
   if (id === null) return null;
   const scriptName =
-    firstString(sources, ["service", "scriptName", "script_name", "worker", "workerName", "$metadata.service"]) ?? "";
+    firstString(sources, [
+      "service",
+      "scriptName",
+      "script_name",
+      "worker",
+      "workerName",
+      "$metadata.service",
+    ]) ?? "";
   const title =
     firstString(sources, ["title", "message", "error.message", "text", "name"]) ?? "Workers issue";
   const versionId = firstString(sources, [
@@ -86,9 +103,32 @@ export function normalizeIssue(payload: unknown, now: Date): NormalizedIssue | n
   ]);
   const tag = firstString(sources, ["scriptVersion.tag", "versionTag", "version_tag", "changeId"]);
   const changeId = tag !== null && ChangeIdLike.safeParse(tag).success ? tag : null;
-  const count = Math.max(0, Math.trunc(firstNumber(sources, ["count", "occurrences", "occurrenceCount"]) ?? 1));
-  const firstSeen = toIso(firstString(sources, ["firstObserved", "first_observed", "firstSeen", "first_seen", "created", "ts"]), now);
-  const lastSeen = toIso(firstString(sources, ["lastObserved", "last_observed", "lastSeen", "last_seen", "updated", "ts"]), now);
+  const count = Math.max(
+    0,
+    Math.trunc(firstNumber(sources, ["count", "occurrences", "occurrenceCount"]) ?? 1),
+  );
+  const firstSeen = toIso(
+    firstString(sources, [
+      "firstObserved",
+      "first_observed",
+      "firstSeen",
+      "first_seen",
+      "created",
+      "ts",
+    ]),
+    now,
+  );
+  const lastSeen = toIso(
+    firstString(sources, [
+      "lastObserved",
+      "last_observed",
+      "lastSeen",
+      "last_seen",
+      "updated",
+      "ts",
+    ]),
+    now,
+  );
   const urlRaw = firstString(sources, ["url", "link", "dashboardUrl"]);
   const url = urlRaw !== null && UrlLike.safeParse(urlRaw).success ? urlRaw : null;
 
@@ -103,6 +143,7 @@ export function normalizeIssue(payload: unknown, now: Date): NormalizedIssue | n
     url,
   });
   if (!parsed.success) return null;
-  const resolved = payload.alert_event === "ALERT_STATE_EVENT_END" || at(data, "status") === "resolved";
+  const resolved =
+    payload.alert_event === "ALERT_STATE_EVENT_END" || at(data, "status") === "resolved";
   return { issue: parsed.data, scriptName, resolved, raw: payload };
 }

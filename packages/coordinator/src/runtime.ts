@@ -30,7 +30,9 @@ export function configureCoordinatorRuntime<Env>(runtime: CoordinatorRuntime<Env
 
 export function getCoordinatorRuntime(): CoordinatorRuntime<unknown> {
   if (current === null) {
-    throw new Error("coordinator runtime not configured: call configureCoordinatorRuntime() in the Worker entry");
+    throw new Error(
+      "coordinator runtime not configured: call configureCoordinatorRuntime() in the Worker entry",
+    );
   }
   return current;
 }
@@ -43,6 +45,8 @@ export interface ResolvedRuntime {
 
 export function resolveRuntime(env: unknown, role: PortsRole): ResolvedRuntime {
   const runtime = getCoordinatorRuntime();
-  const bindings = runtime.bindings ? runtime.bindings(env) : cloudflareBindings(env as CoordinatorEnv);
+  const bindings = runtime.bindings
+    ? runtime.bindings(env)
+    : cloudflareBindings(env as CoordinatorEnv);
   return { ports: runtime.ports(env, role), bindings, runtime };
 }

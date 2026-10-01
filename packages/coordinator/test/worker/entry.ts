@@ -5,7 +5,13 @@ import { fakePorts } from "./fixture.js";
 
 configureCoordinatorRuntime({ ports: (_env, role) => portsForRole(fakePorts(), role) });
 
-export { ChangeCoordinator, ChangeWorkflow, MergeQueue, PushRouter, RolloutWorkflow } from "../../src/workers.js";
+export {
+  ChangeCoordinator,
+  ChangeWorkflow,
+  MergeQueue,
+  PushRouter,
+  RolloutWorkflow,
+} from "../../src/workers.js";
 
 export default {
   fetch(): Response {

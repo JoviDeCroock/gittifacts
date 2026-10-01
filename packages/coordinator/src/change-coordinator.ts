@@ -15,10 +15,10 @@ import type {
 } from "./bindings.js";
 import { createOrGet, terminateQuietly } from "./bindings.js";
 import { changeSubject, changeWorkflowId, isForkName, ZERO_SHA } from "./ids.js";
-import { errorMessage } from "./policy.js";
-import { type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
 import { PUSHABLE_STATUSES } from "./lifecycle.js";
 import { changeVersion, clampWait, type MilestoneState, milestoneState } from "./milestones.js";
+import { errorMessage } from "./policy.js";
+import { type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
 
 /** Minimal async KV (Durable Object storage satisfies it). */
 export interface KvStorage {
@@ -41,7 +41,15 @@ interface Waiter {
 }
 
 export function emptyState(): ChangeCoordinatorState {
-  return { changeId: null, forkName: null, headSha: null, instanceId: null, runId: null, spentUsd: 0, gcAt: null };
+  return {
+    changeId: null,
+    forkName: null,
+    headSha: null,
+    instanceId: null,
+    runId: null,
+    spentUsd: 0,
+    gcAt: null,
+  };
 }
 
 export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
@@ -66,7 +74,10 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
   }
 
   private async load(): Promise<ChangeCoordinatorState> {
-    return { ...emptyState(), ...((await this.deps.storage.get<ChangeCoordinatorState>(STATE_KEY)) ?? {}) };
+    return {
+      ...emptyState(),
+      ...((await this.deps.storage.get<ChangeCoordinatorState>(STATE_KEY)) ?? {}),
+    };
   }
 
   private async save(state: ChangeCoordinatorState): Promise<void> {
@@ -92,7 +103,8 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     const repo = await store.getRepo(change.repoId);
     if (repo === null) return { action: "ignored", reason: "unknown repo" };
     const branchRef = `refs/heads/${repo.defaultBranch}`;
-    if (input.ref !== branchRef) return { action: "ignored", reason: `push to ${input.ref}, not ${branchRef}` };
+    if (input.ref !== branchRef)
+      return { action: "ignored", reason: `push to ${input.ref}, not ${branchRef}` };
     if (input.after === ZERO_SHA) return { action: "ignored", reason: "branch deleted" };
 
     let state = await this.load();
@@ -101,8 +113,10 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     // Events can arrive out of order or twice: the fork's actual tip is the truth.
     const tip = (await git.branchHead(change.forkName, repo.defaultBranch)) ?? null;
     if (tip === null) return { action: "ignored", reason: "branch no longer exists" };
-    if (tip === state.headSha) return { action: "duplicate", headSha: tip, instanceId: state.instanceId };
-    if (tip === change.baseSha) return { action: "ignored", reason: "no commits on top of the base" };
+    if (tip === state.headSha)
+      return { action: "duplicate", headSha: tip, instanceId: state.instanceId };
+    if (tip === change.baseSha)
+      return { action: "ignored", reason: "no commits on top of the base" };
 
     // Supersede the in-flight workflow for the older head.
     const superseded = state.instanceId;
@@ -111,7 +125,9 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     }
     if (state.runId !== null) await this.supersedeRun(state.runId);
     if (change.status === "approved" || change.status === "queued") {
-      await bindings.mergeQueue(change.repoId).remove({ repoId: change.repoId, changeId: change.id });
+      await bindings
+        .mergeQueue(change.repoId)
+        .remove({ repoId: change.repoId, changeId: change.id });
     }
 
     const instanceId = changeWorkflowId(change.id, tip);
@@ -156,7 +172,11 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     }
     const run = await store.getRun(runId);
     if (run !== null && (run.status === "queued" || run.status === "running")) {
-      await store.upsertRun({ ...run, status: "superseded", finishedAt: clock.now().toISOString() });
+      await store.upsertRun({
+        ...run,
+        status: "superseded",
+        finishedAt: clock.now().toISOString(),
+      });
     }
   }
 
@@ -194,7 +214,10 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     const test = (change: Change | null): MilestoneState =>
       change === null ? "unreachable" : milestoneState(change, input.until);
     const now = await this.deps.ports.store.getChange(input.changeId);
-    let result: { change: Change | null; state: MilestoneState | "timeout" } = { change: now, state: test(now) };
+    let result: { change: Change | null; state: MilestoneState | "timeout" } = {
+      change: now,
+      state: test(now),
+    };
     if (result.state === "pending" && clampWait(input.timeoutMs) > 0) {
       result = await this.wait(input.changeId, input.timeoutMs, test);
     }
@@ -274,7 +297,8 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
   abandon(changeId: string): Promise<void> {
     return this.serial(async () => {
       const state = await this.load();
-      if (state.instanceId !== null) await terminateQuietly(this.deps.bindings.changeWorkflow, state.instanceId);
+      if (state.instanceId !== null)
+        await terminateQuietly(this.deps.bindings.changeWorkflow, state.instanceId);
       if (state.runId !== null) await this.supersedeRun(state.runId);
       await this.save({ ...state, changeId, instanceId: null, runId: null });
     });
@@ -282,7 +306,8 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
 
   scheduleForkGc(input: { changeId: string; forkName: string; delayMs: number }): Promise<void> {
     return this.serial(async () => {
-      if (!isForkName(input.forkName)) throw new Error(`refusing to garbage-collect ${input.forkName}: not a fork`);
+      if (!isForkName(input.forkName))
+        throw new Error(`refusing to garbage-collect ${input.forkName}: not a fork`);
       const state = await this.load();
       const gcAt = this.deps.ports.clock.now().getTime() + Math.max(0, input.delayMs);
       await this.save({ ...state, changeId: input.changeId, forkName: input.forkName, gcAt });

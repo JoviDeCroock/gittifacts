@@ -25,7 +25,14 @@ const Aggregates = z
                   .object({
                     count: z.number().optional(),
                     value: z.number().optional(),
-                    groups: z.array(z.object({ key: z.string(), value: z.union([z.string(), z.number(), z.boolean(), z.null()]) })).optional(),
+                    groups: z
+                      .array(
+                        z.object({
+                          key: z.string(),
+                          value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+                        }),
+                      )
+                      .optional(),
                   })
                   .passthrough(),
               )
@@ -54,7 +61,12 @@ export function telemetryQuery(input: {
   ];
   if (input.serverErrorsOnly) {
     filters.push({ key: OUTCOME_KEY, operation: "eq", type: "string", value: "ok" });
-    filters.push({ key: "$workers.event.response.status", operation: "gte", type: "number", value: 500 });
+    filters.push({
+      key: "$workers.event.response.status",
+      operation: "gte",
+      type: "number",
+      value: 500,
+    });
   }
   return {
     queryId: input.queryId,
@@ -83,17 +95,41 @@ export class ObservabilityTelemetry implements Telemetry {
   constructor(private readonly opts: ObservabilityTelemetryOptions) {}
 
   private async query(body: Record<string, unknown>): Promise<z.infer<typeof Aggregates>> {
-    return cfRequest(this.opts, { method: "POST", path: "/workers/observability/telemetry/query", json: body }, Aggregates);
+    return cfRequest(
+      this.opts,
+      { method: "POST", path: "/workers/observability/telemetry/query", json: body },
+      Aggregates,
+    );
   }
 
-  async check(input: { script: string; versionId: string; baselineVersionId: string | null; since: string }) {
+  async check(input: {
+    script: string;
+    versionId: string;
+    baselineVersionId: string | null;
+    since: string;
+  }) {
     const to = this.opts.clock.now().getTime();
     const from = Math.min(Date.parse(input.since), to - 60_000);
-    const versionIds = input.baselineVersionId === null ? [input.versionId] : [input.versionId, input.baselineVersionId];
+    const versionIds =
+      input.baselineVersionId === null
+        ? [input.versionId]
+        : [input.versionId, input.baselineVersionId];
     const base = { script: input.script, from, to, versionIds };
     const [byOutcome, serverErrors] = await Promise.all([
-      this.query(telemetryQuery({ ...base, queryId: `gittifacts-${input.versionId}-outcomes`, serverErrorsOnly: false })),
-      this.query(telemetryQuery({ ...base, queryId: `gittifacts-${input.versionId}-5xx`, serverErrorsOnly: true })),
+      this.query(
+        telemetryQuery({
+          ...base,
+          queryId: `gittifacts-${input.versionId}-outcomes`,
+          serverErrorsOnly: false,
+        }),
+      ),
+      this.query(
+        telemetryQuery({
+          ...base,
+          queryId: `gittifacts-${input.versionId}-5xx`,
+          serverErrorsOnly: true,
+        }),
+      ),
     ]);
     const tallies = new Map<string, Tally>();
     const tally = (v: string) => {
@@ -114,11 +150,18 @@ export class ObservabilityTelemetry implements Telemetry {
       const version = String((agg.groups ?? []).find((g) => g.key === VERSION_KEY)?.value ?? "");
       if (version !== "") tally(version).errors += agg.count ?? agg.value ?? 0;
     }
-    const rate = (t: Tally | undefined) => (t === undefined || t.total === 0 ? null : Math.min(1, t.errors / t.total));
+    const rate = (t: Tally | undefined) =>
+      t === undefined || t.total === 0 ? null : Math.min(1, t.errors / t.total);
     const mine = tallies.get(input.versionId);
-    const baseline = input.baselineVersionId === null ? undefined : tallies.get(input.baselineVersionId);
-    const issues = await this.opts.store.listIssues({ versionId: input.versionId, since: input.since });
-    const newIssueGroups = issues.filter((i) => i.versionId === input.versionId && i.firstSeen >= input.since).length;
+    const baseline =
+      input.baselineVersionId === null ? undefined : tallies.get(input.baselineVersionId);
+    const issues = await this.opts.store.listIssues({
+      versionId: input.versionId,
+      since: input.since,
+    });
+    const newIssueGroups = issues.filter(
+      (i) => i.versionId === input.versionId && i.firstSeen >= input.since,
+    ).length;
     return {
       requests: mine?.total ?? 0,
       errorRate: rate(mine),

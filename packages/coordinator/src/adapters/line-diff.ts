@@ -38,7 +38,15 @@ export function diffLines(
   }
   const out: Edit[] = [];
   for (let i = 0; i < start; i++) out.push(eq(i, i));
-  const middle = myers(a, b, start, endA, start, endB, opts.maxEditDistance ?? DEFAULT_MAX_EDIT_DISTANCE);
+  const middle = myers(
+    a,
+    b,
+    start,
+    endA,
+    start,
+    endB,
+    opts.maxEditDistance ?? DEFAULT_MAX_EDIT_DISTANCE,
+  );
   if (middle === null) {
     for (let i = start; i < endA; i++) out.push(del(i));
     for (let j = start; j < endB; j++) out.push(add(j));
@@ -86,7 +94,13 @@ function myers(
   return null;
 }
 
-function backtrack(trace: readonly Int32Array[], n: number, m: number, aLo: number, bLo: number): Edit[] {
+function backtrack(
+  trace: readonly Int32Array[],
+  n: number,
+  m: number,
+  aLo: number,
+  bLo: number,
+): Edit[] {
   const edits: Edit[] = [];
   let x = n;
   let y = m;
@@ -200,7 +214,12 @@ export function toHunks(
           text: display(oldLines[o] ?? ""),
         });
       } else {
-        lines.push({ kind: "add", oldNo: null, newNo: (e.newIndex ?? 0) + 1, text: display(newLines[e.newIndex ?? 0] ?? "") });
+        lines.push({
+          kind: "add",
+          oldNo: null,
+          newNo: (e.newIndex ?? 0) + 1,
+          text: display(newLines[e.newIndex ?? 0] ?? ""),
+        });
       }
       if (e.kind === "eq" || e.kind === "add") {
         const nIdx = e.newIndex ?? 0;
@@ -223,15 +242,27 @@ export function toHunks(
 }
 
 /** Diff two texts into hunks. */
-export function diffText(oldText: string, newText: string, opts: { context?: number; maxEditDistance?: number } = {}): LineDiff {
+export function diffText(
+  oldText: string,
+  newText: string,
+  opts: { context?: number; maxEditDistance?: number } = {},
+): LineDiff {
   const a = splitLines(oldText);
   const b = splitLines(newText);
-  const edits = diffLines(a, b, opts.maxEditDistance === undefined ? {} : { maxEditDistance: opts.maxEditDistance });
+  const edits = diffLines(
+    a,
+    b,
+    opts.maxEditDistance === undefined ? {} : { maxEditDistance: opts.maxEditDistance },
+  );
   return toHunks(a, b, edits, opts.context ?? 3);
 }
 
 /** Apply an edit script (for tests): rebuild `b` from `a`, `b` and the script. */
-export function applyEdits(a: readonly string[], b: readonly string[], edits: readonly Edit[]): string[] {
+export function applyEdits(
+  a: readonly string[],
+  b: readonly string[],
+  edits: readonly Edit[],
+): string[] {
   const out: string[] = [];
   for (const e of edits) {
     if (e.kind === "eq") out.push(a[e.oldIndex ?? 0] ?? "");

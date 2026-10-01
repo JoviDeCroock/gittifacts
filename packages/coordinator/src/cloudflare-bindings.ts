@@ -84,7 +84,8 @@ export function cloudflareBindings(env: CoordinatorEnv): CoordinatorBindings {
     changeWorkflow: workflowHandle(env.CHANGE_WORKFLOW),
     rolloutWorkflow: workflowHandle(env.ROLLOUT_WORKFLOW),
     // The DO classes implement exactly these client interfaces, so their RPC stubs do too.
-    changeCoordinator: (changeId) => env.CHANGE_COORDINATOR.getByName(changeId) as ChangeCoordinatorClient,
+    changeCoordinator: (changeId) =>
+      env.CHANGE_COORDINATOR.getByName(changeId) as ChangeCoordinatorClient,
     mergeQueue: (repoId) => env.MERGE_QUEUE.getByName(repoId) as MergeQueueClient,
   };
 }

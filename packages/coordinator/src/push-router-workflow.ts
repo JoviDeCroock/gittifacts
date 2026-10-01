@@ -19,14 +19,22 @@ export interface PushRouterOutput {
 }
 
 export class PushRouter extends WorkflowEntrypoint<unknown, unknown> {
-  override async run(event: Readonly<WorkflowEvent<unknown>>, workflowStep: WorkflowStep): Promise<PushRouterOutput> {
+  override async run(
+    event: Readonly<WorkflowEvent<unknown>>,
+    workflowStep: WorkflowStep,
+  ): Promise<PushRouterOutput> {
     const { ports, bindings, runtime } = resolveRuntime(this.env, "default");
     const parsed = parsePushEvent(event.payload, ports.git.namespace);
     if (!parsed.ok) return { routed: false, reason: parsed.reason };
     const step = fromWorkflowStep(workflowStep);
     await step.do("route", RETRY.quick, async () => {
       const coordinator = createCoordinator(ports, bindings, runtime.coordinatorOptions);
-      await coordinator.onPush({ repoName: parsed.repoName, ref: parsed.ref, before: parsed.before, after: parsed.after });
+      await coordinator.onPush({
+        repoName: parsed.repoName,
+        ref: parsed.ref,
+        before: parsed.before,
+        after: parsed.after,
+      });
       return true;
     });
     return { routed: true, reason: null };

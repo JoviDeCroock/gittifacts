@@ -3,8 +3,9 @@
  * head. `lane0Enabled` is owned by the platform toggle (`setLane0`, which requires shadow-mode
  * agreement): a policy file can force Lane 0 off (`lane0Enabled: false`) but cannot turn it on.
  */
-import { defaultPolicy, type LaneReason, type Repo, RepoPolicy } from "@app/domain";
+
 import type { ClassifyResult } from "@app/classifier";
+import { defaultPolicy, type LaneReason, type Repo, RepoPolicy } from "@app/domain";
 import type { Ports } from "./ports.js";
 
 export type PolicySource = "cache" | "file" | "default" | "unavailable";
@@ -28,7 +29,9 @@ export function restrictForClaim(policy: RepoPolicy, claim: Repo["claim"]["statu
 /** Apply the platform toggle to a parsed file policy. */
 export function withLane0Toggle(policy: RepoPolicy, raw: unknown, toggle: boolean): RepoPolicy {
   const fileForcesOff =
-    typeof raw === "object" && raw !== null && (raw as { lane0Enabled?: unknown }).lane0Enabled === false;
+    typeof raw === "object" &&
+    raw !== null &&
+    (raw as { lane0Enabled?: unknown }).lane0Enabled === false;
   return { ...policy, lane0Enabled: toggle && !fileForcesOff };
 }
 
@@ -55,7 +58,10 @@ export function parsePolicyExport(
  * A policy we could not read is unknown: fall back to the cached (or default) policy with Lane 0
  * off, and the caller raises the lane (see `escalateForPolicy`).
  */
-export function unavailablePolicy(repo: Pick<Repo, "policy"> | null, error: string): ResolvedPolicy {
+export function unavailablePolicy(
+  repo: Pick<Repo, "policy"> | null,
+  error: string,
+): ResolvedPolicy {
   const base = repo?.policy ?? defaultPolicy();
   return { policy: { ...base, lane0Enabled: false }, source: "unavailable", error };
 }
@@ -84,7 +90,13 @@ export async function resolvePolicy(
 
 async function resolveRaw(
   ports: Pick<Ports, "sandbox" | "store" | "git">,
-  input: { repo: Repo | null; repoName: string; sha: string; cache?: boolean; onSandboxError?: "unavailable" | "throw" },
+  input: {
+    repo: Repo | null;
+    repoName: string;
+    sha: string;
+    cache?: boolean;
+    onSandboxError?: "unavailable" | "throw";
+  },
 ): Promise<ResolvedPolicy> {
   const { repo, sha } = input;
   if (repo !== null && repo.policySha === sha) {
@@ -114,7 +126,10 @@ export const POLICY_UNAVAILABLE_CODE = "policy.unavailable";
  * (never auto-merge under a policy we could not see). `computedLane` stays what the classifier
  * computed so shadow-mode statistics are not skewed.
  */
-export function escalateForPolicy(result: ClassifyResult, resolved: ResolvedPolicy): ClassifyResult {
+export function escalateForPolicy(
+  result: ClassifyResult,
+  resolved: ResolvedPolicy,
+): ClassifyResult {
   if (resolved.source !== "unavailable") return result;
   const reason: LaneReason = {
     code: POLICY_UNAVAILABLE_CODE,

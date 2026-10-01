@@ -10,6 +10,7 @@ import type {
   AuditEvent,
   Change,
   ChangeDiff,
+  Evidence,
   LinkedIssue,
   PipelineRun,
   Plan,
@@ -19,7 +20,6 @@ import type {
   ReviewDecision,
   Tour,
 } from "@app/domain";
-import type { Evidence } from "@app/domain";
 import type { EvidencePayload, LlmJudgment, SignedEvidence } from "@app/evidence";
 
 // ---------------------------------------------------------------- store (D1)
@@ -39,7 +39,10 @@ export interface Store {
   getChangeByFork(forkName: string): Promise<Change | null>;
   insertChange(change: Change): Promise<void>;
   /** Shallow-merges `patch`, bumps `updatedAt`, returns the new row. */
-  updateChange(id: string, patch: Partial<Omit<Change, "id" | "repoId" | "createdAt">>): Promise<Change>;
+  updateChange(
+    id: string,
+    patch: Partial<Omit<Change, "id" | "repoId" | "createdAt">>,
+  ): Promise<Change>;
   /** Changes in a repo with any of the given statuses (merge queue recovery, GC). */
   listChanges(repoId: string, statuses: Change["status"][]): Promise<Change[]>;
   /** The change whose `rolloutState.versionId` is `versionId` (Workers Issues → rollout). */
@@ -64,7 +67,11 @@ export interface Store {
   listShadowSamples(repoId: string): Promise<ShadowSample[]>;
 
   putIssue(issue: LinkedIssue & { scriptName: string; raw: unknown }): Promise<void>;
-  listIssues(filter: { versionId?: string; changeId?: string; since?: string }): Promise<LinkedIssue[]>;
+  listIssues(filter: {
+    versionId?: string;
+    changeId?: string;
+    since?: string;
+  }): Promise<LinkedIssue[]>;
 
   getPrincipal(id: string): Promise<Principal | null>;
 }
@@ -84,14 +91,29 @@ export type FastForwardResult =
 export interface GitHost {
   /** Artifacts namespace this host operates on (e.g. "gittifacts-eu"). */
   readonly namespace: string;
-  createRepo(name: string, opts: { defaultBranch: string; description?: string }): Promise<{ remote: string }>;
+  createRepo(
+    name: string,
+    opts: { defaultBranch: string; description?: string },
+  ): Promise<{ remote: string }>;
   /** Import from a public https git URL. Resolves when the repo is ready (polls *_IN_PROGRESS). */
-  importRepo(name: string, url: string, opts?: { branch?: string }): Promise<{ remote: string; defaultBranch: string }>;
+  importRepo(
+    name: string,
+    url: string,
+    opts?: { branch?: string },
+  ): Promise<{ remote: string; defaultBranch: string }>;
   /** Fork `source` → `target`. Resolves when ready. */
-  forkRepo(source: string, target: string, opts?: { readOnly?: boolean }): Promise<{ remote: string }>;
+  forkRepo(
+    source: string,
+    target: string,
+    opts?: { readOnly?: boolean },
+  ): Promise<{ remote: string }>;
   deleteRepo(name: string): Promise<void>;
   remoteOf(name: string): string;
-  mintToken(repo: string, scope: "read" | "write", ttlSeconds: number): Promise<{ token: string; expiresAt: string }>;
+  mintToken(
+    repo: string,
+    scope: "read" | "write",
+    ttlSeconds: number,
+  ): Promise<{ token: string; expiresAt: string }>;
   /** Tip of a branch, or null if the branch does not exist. */
   branchHead(repo: string, branch: string): Promise<string | null>;
   /** Parent shas of a commit (null if the commit is unknown in this repo). */
@@ -99,7 +121,12 @@ export interface GitHost {
   treeOf(repo: string, sha: string): Promise<string | null>;
   readFile(repo: string, ref: string, path: string): Promise<Uint8Array | null>;
   /** Unified diff between two commits that both exist in `repo`. */
-  diff(repo: string, baseSha: string, headSha: string, opts?: { maxFileBytes?: number }): Promise<ChangeDiff>;
+  diff(
+    repo: string,
+    baseSha: string,
+    headSha: string,
+    opts?: { maxFileBytes?: number },
+  ): Promise<ChangeDiff>;
   readNote(repo: string, targetSha: string, notesRef?: string): Promise<string | null>;
   writeNote(
     repo: string,
@@ -114,7 +141,13 @@ export interface GitHost {
   /** Create a commit whose tree is `treeSha` (used for pure reverts) and push it to `branch`. */
   commitTree(
     repo: string,
-    input: { treeSha: string; parents: string[]; message: string; branch: string; expectedOld: string },
+    input: {
+      treeSha: string;
+      parents: string[];
+      message: string;
+      branch: string;
+      expectedOld: string;
+    },
   ): Promise<{ sha: string }>;
 }
 
@@ -278,7 +311,10 @@ export interface Deployer {
 
 export interface Flags {
   /** Idempotent; returns the flag key (e.g. "change-<id>"). */
-  ensureChangeFlag(changeId: string, opts: { enabled: boolean; description: string }): Promise<string>;
+  ensureChangeFlag(
+    changeId: string,
+    opts: { enabled: boolean; description: string },
+  ): Promise<string>;
   setEnabled(flagKey: string, enabled: boolean): Promise<void>;
 }
 
@@ -305,7 +341,12 @@ export interface Telemetry {
 // ---------------------------------------------------------------- audit, notify, clock
 
 export interface Audit {
-  append(input: { principalId: string; action: string; subject: string; payload: unknown }): Promise<AuditEvent>;
+  append(input: {
+    principalId: string;
+    action: string;
+    subject: string;
+    payload: unknown;
+  }): Promise<AuditEvent>;
 }
 
 export interface Notifier {

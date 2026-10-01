@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyEdits, diffLines, diffText, splitLines, toHunks } from "../../src/adapters/line-diff.js";
+import {
+  applyEdits,
+  diffLines,
+  diffText,
+  splitLines,
+  toHunks,
+} from "../../src/adapters/line-diff.js";
 
 const lines = (s: string) => (s === "" ? [] : s.split(""));
 
@@ -33,23 +39,38 @@ describe("diffLines (Myers)", () => {
   it("falls back to replacing the middle block past maxEditDistance (over-reports, never under)", () => {
     const a = Array.from({ length: 50 }, (_, i) => `a${i}`);
     const b = Array.from({ length: 50 }, (_, i) => `b${i}`);
-    const edits = diffLines(["head", ...a, "tail"], ["head", ...b, "tail"], { maxEditDistance: 10 });
+    const edits = diffLines(["head", ...a, "tail"], ["head", ...b, "tail"], {
+      maxEditDistance: 10,
+    });
     expect(edits.filter((e) => e.kind === "del")).toHaveLength(50);
     expect(edits.filter((e) => e.kind === "add")).toHaveLength(50);
-    expect(applyEdits(["head", ...a, "tail"], ["head", ...b, "tail"], edits)).toEqual(["head", ...b, "tail"]);
+    expect(applyEdits(["head", ...a, "tail"], ["head", ...b, "tail"], edits)).toEqual([
+      "head",
+      ...b,
+      "tail",
+    ]);
   });
 });
 
 describe("hunks", () => {
   it("produces git-style headers with 3 lines of context", () => {
-    const old = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n") + "\n";
+    const old = `${Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n")}\n`;
     const neu = old.replace("line 10\n", "line ten\n");
     const d = diffText(old, neu);
     expect(d.additions).toBe(1);
     expect(d.deletions).toBe(1);
     expect(d.hunks).toHaveLength(1);
     expect(d.hunks[0]?.header).toBe("@@ -7,7 +7,7 @@");
-    expect(d.hunks[0]?.lines.map((l) => l.kind)).toEqual(["ctx", "ctx", "ctx", "del", "add", "ctx", "ctx", "ctx"]);
+    expect(d.hunks[0]?.lines.map((l) => l.kind)).toEqual([
+      "ctx",
+      "ctx",
+      "ctx",
+      "del",
+      "add",
+      "ctx",
+      "ctx",
+      "ctx",
+    ]);
     expect(d.hunks[0]?.lines[3]).toEqual({ kind: "del", oldNo: 10, newNo: null, text: "line 10" });
     expect(d.hunks[0]?.lines[4]).toEqual({ kind: "add", oldNo: null, newNo: 10, text: "line ten" });
   });

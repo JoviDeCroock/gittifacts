@@ -70,7 +70,9 @@ async function walk(
     const lTree = l?.type === "tree";
     const rTree = r?.type === "tree";
     if (lTree || rTree) {
-      subtrees.push(walk(reader, lTree ? (l?.hash ?? null) : null, rTree ? (r?.hash ?? null) : null, path, out));
+      subtrees.push(
+        walk(reader, lTree ? (l?.hash ?? null) : null, rTree ? (r?.hash ?? null) : null, path, out),
+      );
       // A file replaced by a directory (or vice versa): the file side changes too.
       if (l !== null && !lTree) out.push(change(path, l, null));
       if (r !== null && !rTree) out.push(change(path, null, r));
@@ -85,7 +87,10 @@ function change(path: string, l: TreeEntryLike | null, r: TreeEntryLike | null):
   let status: FileDiffStat["status"] = "modified";
   if (l === null) status = "added";
   else if (r === null) status = "deleted";
-  else if ((l.type === "symlink") !== (r.type === "symlink") || (l.type === "gitlink") !== (r.type === "gitlink")) {
+  else if (
+    (l.type === "symlink") !== (r.type === "symlink") ||
+    (l.type === "gitlink") !== (r.type === "gitlink")
+  ) {
     status = "type-changed";
   }
   return {
@@ -117,7 +122,13 @@ function detectRenames(changes: RawChange[]): RawChange[] {
       if (target !== undefined) {
         consumed.add(target);
         consumed.add(c);
-        out.push({ ...target, status: "renamed", previousPath: c.path, oldHash: c.oldHash, oldType: c.oldType });
+        out.push({
+          ...target,
+          status: "renamed",
+          previousPath: c.path,
+          oldHash: c.oldHash,
+          oldType: c.oldType,
+        });
       }
     }
   }
@@ -147,15 +158,25 @@ interface Side {
   size: number;
 }
 
-async function readSide(reader: TreeReader, hash: string | null, type: EntryType | null, maxRead: number): Promise<Side> {
+async function readSide(
+  reader: TreeReader,
+  hash: string | null,
+  type: EntryType | null,
+  maxRead: number,
+): Promise<Side> {
   if (hash === null || type === "gitlink") return { bytes: null, estimatedLines: null, size: 0 };
   const blob = await reader.readBlob(hash);
   if (blob === null) throw new Error(`blob ${hash} not found`);
-  if (blob.size > maxRead) return { bytes: null, estimatedLines: Math.ceil(blob.size / 32), size: blob.size };
+  if (blob.size > maxRead)
+    return { bytes: null, estimatedLines: Math.ceil(blob.size / 32), size: blob.size };
   return { bytes: await blob.bytes(), estimatedLines: null, size: blob.size };
 }
 
-async function fileDiff(reader: TreeReader, c: RawChange, opts: Required<DiffOptions>): Promise<ChangeDiffFile> {
+async function fileDiff(
+  reader: TreeReader,
+  c: RawChange,
+  opts: Required<DiffOptions>,
+): Promise<ChangeDiffFile> {
   const base: Omit<ChangeDiffFile, "additions" | "deletions" | "binary" | "hunks" | "truncated"> = {
     path: c.path,
     previousPath: c.previousPath,
@@ -182,13 +203,28 @@ async function fileDiff(reader: TreeReader, c: RawChange, opts: Required<DiffOpt
     const additions = neu.estimatedLines ?? (neu.bytes === null ? 0 : countLines(neu.bytes));
     return { ...base, additions, deletions, binary: false, hunks: [], truncated: true };
   }
-  const d = diffText(old.bytes === null ? "" : decoder.decode(old.bytes), neu.bytes === null ? "" : decoder.decode(neu.bytes), {
-    context: opts.context,
-  });
-  return { ...base, additions: d.additions, deletions: d.deletions, binary: false, hunks: d.hunks, truncated: false };
+  const d = diffText(
+    old.bytes === null ? "" : decoder.decode(old.bytes),
+    neu.bytes === null ? "" : decoder.decode(neu.bytes),
+    {
+      context: opts.context,
+    },
+  );
+  return {
+    ...base,
+    additions: d.additions,
+    deletions: d.deletions,
+    binary: false,
+    hunks: d.hunks,
+    truncated: false,
+  };
 }
 
-async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+async function mapLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -202,7 +238,11 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) 
   return out;
 }
 
-export function buildChangeDiff(baseSha: string, headSha: string, files: ChangeDiffFile[]): ChangeDiff {
+export function buildChangeDiff(
+  baseSha: string,
+  headSha: string,
+  files: ChangeDiffFile[],
+): ChangeDiff {
   const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return {
     baseSha,

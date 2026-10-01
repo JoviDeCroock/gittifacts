@@ -57,9 +57,13 @@ export function evaluateHealth(
   const okSamples = samples.filter((s): s is Extract<HealthSample, { ok: true }> => s.ok);
   const latest = okSamples[okSamples.length - 1];
   if (latest === undefined) {
-    return { status: "insufficient-data", reasons: [`telemetry unavailable (${failures} failed checks)`] };
+    return {
+      status: "insufficient-data",
+      reasons: [`telemetry unavailable (${failures} failed checks)`],
+    };
   }
-  const notes = failures > 0 ? [`latest ${failures} check(s) failed; judging the last good sample`] : [];
+  const notes =
+    failures > 0 ? [`latest ${failures} check(s) failed; judging the last good sample`] : [];
 
   if (latest.newIssueGroups > policy.maxNewIssueGroups) {
     return {
@@ -73,7 +77,10 @@ export function evaluateHealth(
   if (latest.requests < policy.minRequests) {
     return {
       status: "insufficient-data",
-      reasons: [...notes, `${latest.requests} request(s) so far; error rates are trusted from ${policy.minRequests}`],
+      reasons: [
+        ...notes,
+        `${latest.requests} request(s) so far; error rates are trusted from ${policy.minRequests}`,
+      ],
     };
   }
 

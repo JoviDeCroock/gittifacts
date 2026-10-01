@@ -28,7 +28,11 @@ export function changeFlagKey(changeId: string): string {
   return `change-${changeId}`;
 }
 
-export async function isChangeEnabled(flags: FlagshipLike, changeId: string, context?: FlagContext): Promise<boolean> {
+export async function isChangeEnabled(
+  flags: FlagshipLike,
+  changeId: string,
+  context?: FlagContext,
+): Promise<boolean> {
   try {
     return await flags.getBooleanValue(changeFlagKey(changeId), true, context);
   } catch {

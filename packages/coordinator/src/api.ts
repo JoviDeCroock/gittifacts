@@ -3,7 +3,15 @@
  * talk to Durable Objects or Workflows directly. Every method takes the acting principal and
  * enforces the lifecycle rules (e.g. no self-approval); the HTTP layer only enforces scopes.
  */
-import type { Change, ClaimedCategory, ErrorFix, Lane, Principal, Repo, WaitUntil } from "@app/domain";
+import type {
+  Change,
+  ClaimedCategory,
+  ErrorFix,
+  Lane,
+  Principal,
+  Repo,
+  WaitUntil,
+} from "@app/domain";
 
 export interface GitRemoteGrant {
   url: string;
@@ -51,7 +59,10 @@ export interface CoordinatorApi {
     actor: Principal,
     input: { name: string; defaultBranch?: string; template?: string },
   ): Promise<Repo>;
-  importRepo(actor: Principal, input: { name: string; url: string; branch?: string }): Promise<Repo>;
+  importRepo(
+    actor: Principal,
+    input: { name: string; url: string; branch?: string },
+  ): Promise<Repo>;
 
   /**
    * Forks the repo to `task-<changeId>` and returns a push grant for that fork only.
@@ -105,7 +116,12 @@ export interface CoordinatorApi {
    * `wait_for_change`: long-poll (backed by the change's Durable Object) until the change reaches
    * `until`, becomes unable to reach it, or `timeoutMs` (capped at 10 minutes) passes.
    */
-  waitFor(actor: Principal, changeId: string, until: WaitUntil, timeoutMs: number): Promise<WaitResult>;
+  waitFor(
+    actor: Principal,
+    changeId: string,
+    until: WaitUntil,
+    timeoutMs: number,
+  ): Promise<WaitResult>;
 
   /**
    * Subscription hook (SSE/webhooks): resolves with the change as soon as its `version` differs

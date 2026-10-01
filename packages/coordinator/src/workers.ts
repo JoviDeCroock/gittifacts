@@ -4,10 +4,10 @@
  */
 export { ChangeCoordinator } from "./change-coordinator-do.js";
 export { ChangeWorkflow } from "./change-workflow.js";
-export { MergeQueue } from "./merge-queue-do.js";
-export { type PushRouterOutput, PushRouter } from "./push-router-workflow.js";
-export { RolloutWorkflow } from "./rollout-workflow.js";
 export { BINDING_NAMES, type CoordinatorEnv, cloudflareBindings } from "./cloudflare-bindings.js";
+export { MergeQueue } from "./merge-queue-do.js";
+export { PushRouter, type PushRouterOutput } from "./push-router-workflow.js";
+export { RolloutWorkflow } from "./rollout-workflow.js";
 export {
   type CoordinatorRuntime,
   configureCoordinatorRuntime,

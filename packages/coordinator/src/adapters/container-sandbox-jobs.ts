@@ -37,13 +37,21 @@ export const RESULT_PREFIX = "::gittifacts-job::";
 const ONTO_REF = "refs/gittifacts/onto";
 
 const PlanOutcome = z.discriminatedUnion("ok", [
-  z.object({ ok: z.literal(true), stdout: z.string(), stderr: z.string(), exitCode: z.number() }).passthrough(),
-  z.object({ ok: z.literal(false), code: z.string(), message: z.string(), stderr: z.string() }).passthrough(),
+  z
+    .object({ ok: z.literal(true), stdout: z.string(), stderr: z.string(), exitCode: z.number() })
+    .passthrough(),
+  z
+    .object({ ok: z.literal(false), code: z.string(), message: z.string(), stderr: z.string() })
+    .passthrough(),
 ]);
 
 const RunOutcome = z.discriminatedUnion("ok", [
-  z.object({ ok: z.literal(true), exitCode: z.number(), timedOut: z.boolean(), tail: z.string() }).passthrough(),
-  z.object({ ok: z.literal(false), code: z.string(), message: z.string(), tail: z.string() }).passthrough(),
+  z
+    .object({ ok: z.literal(true), exitCode: z.number(), timedOut: z.boolean(), tail: z.string() })
+    .passthrough(),
+  z
+    .object({ ok: z.literal(false), code: z.string(), message: z.string(), tail: z.string() })
+    .passthrough(),
 ]);
 
 const PolicyDocument = z
@@ -80,7 +88,7 @@ export function rebaseScript(): string {
   return [
     "set -eu",
     "cd /workspace",
-    'git fetch -q --no-tags --unshallow origin 2>/dev/null || git fetch -q --no-tags --deepen=100000 origin || true',
+    "git fetch -q --no-tags --unshallow origin 2>/dev/null || git fetch -q --no-tags --deepen=100000 origin || true",
     'git fetch -q --no-tags origin "$GJ_ONTO_REF"',
     'base="$(git merge-base "$GJ_ONTO" "$GJ_HEAD")"',
     'git -c advice.detachedHead=false checkout -q --detach "$GJ_HEAD"',
@@ -152,9 +160,13 @@ export class ContainerSandboxJobs implements SandboxJobs {
       logKey: this.opts.logKey(runId, input.kind),
     });
     const outcome = RunOutcome.parse(raw);
-    if (!outcome.ok) throw new Error(`sandbox ${input.kind} job failed (${outcome.code}): ${outcome.message}`);
+    if (!outcome.ok)
+      throw new Error(`sandbox ${input.kind} job failed (${outcome.code}): ${outcome.message}`);
     if (outcome.timedOut) throw new Error(`sandbox ${input.kind} job timed out`);
-    if (outcome.exitCode !== 0) throw new Error(`sandbox ${input.kind} job exited ${outcome.exitCode}: ${outcome.tail.slice(-500)}`);
+    if (outcome.exitCode !== 0)
+      throw new Error(
+        `sandbox ${input.kind} job exited ${outcome.exitCode}: ${outcome.tail.slice(-500)}`,
+      );
     return outcome.tail;
   }
 
@@ -184,7 +196,8 @@ export class ContainerSandboxJobs implements SandboxJobs {
     const outcome = PlanOutcome.parse(raw);
     if (!outcome.ok) throw new Error(`plan job failed (${outcome.code}): ${outcome.message}`);
     const doc = lastMarked(outcome.stdout, PLAN_PREFIX);
-    if (doc === undefined) throw new Error(`plan job printed no ${PLAN_PREFIX} line (exit ${outcome.exitCode})`);
+    if (doc === undefined)
+      throw new Error(`plan job printed no ${PLAN_PREFIX} line (exit ${outcome.exitCode})`);
     if (typeof doc === "object" && doc !== null && "error" in doc) {
       throw new Error(`.platform/ci.ts: ${String((doc as { error: unknown }).error)}`);
     }
@@ -200,11 +213,18 @@ export class ContainerSandboxJobs implements SandboxJobs {
       timeoutSeconds: 300,
     });
     const doc = PolicyDocument.parse(lastMarked(tail, EVIDENCE_PREFIX));
-    if (doc.status === "error") throw new Error(`policy at ${input.sha.slice(0, 12)}: ${doc.note ?? doc.issues.join("; ")}`);
+    if (doc.status === "error")
+      throw new Error(`policy at ${input.sha.slice(0, 12)}: ${doc.note ?? doc.issues.join("; ")}`);
     return doc.source === "default" ? null : doc.policy;
   }
 
-  async rebase(input: { fork: string; mainRepo: string; headSha: string; ontoSha: string; branch: string }): Promise<JobResult> {
+  async rebase(input: {
+    fork: string;
+    mainRepo: string;
+    headSha: string;
+    ontoSha: string;
+    branch: string;
+  }): Promise<JobResult> {
     // Bring the new main into the fork so the sandbox only ever talks to the fork.
     await this.opts.git.transferObjects(input.mainRepo, input.fork, input.ontoSha, ONTO_REF);
     const tail = await this.exec({
@@ -224,7 +244,13 @@ export class ContainerSandboxJobs implements SandboxJobs {
     return JobResult.parse(lastMarked(tail, RESULT_PREFIX));
   }
 
-  async revert(input: { fork: string; sha: string; ontoSha: string; branch: string; message: string }): Promise<JobResult> {
+  async revert(input: {
+    fork: string;
+    sha: string;
+    ontoSha: string;
+    branch: string;
+    message: string;
+  }): Promise<JobResult> {
     const tail = await this.exec({
       kind: "revert",
       repo: input.fork,

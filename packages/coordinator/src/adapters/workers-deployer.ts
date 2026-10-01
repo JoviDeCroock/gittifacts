@@ -50,7 +50,9 @@ const Deployments = z
       z
         .object({
           created_on: z.string().optional(),
-          versions: z.array(z.object({ version_id: z.string(), percentage: z.number() }).passthrough()),
+          versions: z.array(
+            z.object({ version_id: z.string(), percentage: z.number() }).passthrough(),
+          ),
         })
         .passthrough(),
     ),
@@ -64,7 +66,13 @@ export class WorkersDeployer implements Deployer {
     return `/workers/scripts/${encodeURIComponent(script)}/${tail}`;
   }
 
-  async uploadVersion(input: { script: string; changeId: string; sha: string; bundleRef: string; message: string }): Promise<{ versionId: string }> {
+  async uploadVersion(input: {
+    script: string;
+    changeId: string;
+    sha: string;
+    bundleRef: string;
+    message: string;
+  }): Promise<{ versionId: string }> {
     const bundle = await this.opts.loadBundle(input.bundleRef);
     const metadata = {
       ...bundle.metadata,
@@ -79,7 +87,11 @@ export class WorkersDeployer implements Deployer {
     form.set("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
     for (const m of bundle.modules) {
       const bytes = typeof m.content === "string" ? new TextEncoder().encode(m.content) : m.content;
-      form.set(m.name, new Blob([new Uint8Array(bytes)], { type: m.contentType ?? moduleContentType(m.name) }), m.name);
+      form.set(
+        m.name,
+        new Blob([new Uint8Array(bytes)], { type: m.contentType ?? moduleContentType(m.name) }),
+        m.name,
+      );
     }
     const result = await cfRequest(
       this.opts,
@@ -90,16 +102,31 @@ export class WorkersDeployer implements Deployer {
   }
 
   async currentVersions(script: string): Promise<Array<{ versionId: string; percentage: number }>> {
-    const result = await cfRequest(this.opts, { method: "GET", path: this.scriptPath(script, "deployments") }, Deployments);
+    const result = await cfRequest(
+      this.opts,
+      { method: "GET", path: this.scriptPath(script, "deployments") },
+      Deployments,
+    );
     // The newest deployment (by created_on) is the active one.
-    const latest = [...result.deployments].sort((a, b) => (b.created_on ?? "").localeCompare(a.created_on ?? ""))[0];
-    return (latest?.versions ?? []).map((v) => ({ versionId: v.version_id, percentage: v.percentage }));
+    const latest = [...result.deployments].sort((a, b) =>
+      (b.created_on ?? "").localeCompare(a.created_on ?? ""),
+    )[0];
+    return (latest?.versions ?? []).map((v) => ({
+      versionId: v.version_id,
+      percentage: v.percentage,
+    }));
   }
 
-  async setSplit(script: string, split: Array<{ versionId: string; percentage: number }>, message: string): Promise<void> {
+  async setSplit(
+    script: string,
+    split: Array<{ versionId: string; percentage: number }>,
+    message: string,
+  ): Promise<void> {
     const total = split.reduce((n, s) => n + s.percentage, 0);
-    if (Math.abs(total - 100) > 1e-9) throw new Error(`deployment split must total 100, got ${total}`);
-    if (split.length > 2) throw new Error("a deployment can split traffic between at most 2 versions");
+    if (Math.abs(total - 100) > 1e-9)
+      throw new Error(`deployment split must total 100, got ${total}`);
+    if (split.length > 2)
+      throw new Error("a deployment can split traffic between at most 2 versions");
     await this.deploy(script, split, message, false);
   }
 
@@ -126,8 +153,13 @@ export class WorkersDeployer implements Deployer {
         ...(force ? { query: { force: "true" } } : {}),
         json: {
           strategy: "percentage",
-          versions: split.filter((s) => s.percentage > 0).map((s) => ({ version_id: s.versionId, percentage: s.percentage })),
-          annotations: { "workers/message": message.slice(0, 1000), "workers/triggered_by": "gittifacts" },
+          versions: split
+            .filter((s) => s.percentage > 0)
+            .map((s) => ({ version_id: s.versionId, percentage: s.percentage })),
+          annotations: {
+            "workers/message": message.slice(0, 1000),
+            "workers/triggered_by": "gittifacts",
+          },
         },
       },
       z.unknown(),

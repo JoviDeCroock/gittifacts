@@ -30,7 +30,11 @@ export function milestoneState(change: Change, until: WaitUntil): MilestoneState
       break;
     case "tour_ready":
       reached = change.tourId !== null;
-      if (!reached && change.lane !== null && (ROUTED.has(change.status) || change.status === "failing")) {
+      if (
+        !reached &&
+        change.lane !== null &&
+        (ROUTED.has(change.status) || change.status === "failing")
+      ) {
         // Auto-merged (lane 0 / verified revert) or blocked: no tour is coming for this head.
         return "unreachable";
       }
@@ -94,7 +98,9 @@ export function withChangeNotifications(ports: Ports, bindings: CoordinatorBindi
         return update;
       }
       const value: unknown = Reflect.get(target, prop, receiver);
-      return typeof value === "function" ? (value as (...a: unknown[]) => unknown).bind(target) : value;
+      return typeof value === "function"
+        ? (value as (...a: unknown[]) => unknown).bind(target)
+        : value;
     },
   });
   return { ...ports, store: wrapped };

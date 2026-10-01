@@ -22,15 +22,24 @@ export interface Step {
   do<T>(name: string, config: StepConfig, callback: () => Promise<T>): Promise<T>;
   sleep(name: string, duration: Duration): Promise<void>;
   /** Rejects when `timeout` elapses without a matching event. */
-  waitForEvent<T>(name: string, options: { type: string; timeout?: Duration }): Promise<StepEvent<T>>;
+  waitForEvent<T>(
+    name: string,
+    options: { type: string; timeout?: Duration },
+  ): Promise<StepEvent<T>>;
 }
 
 /** Retry presets. Every external call gets its own step; steps must be idempotent. */
 export const RETRY = {
   /** Store/audit/notify: fast, cheap, safe to repeat. */
-  quick: { retries: { limit: 5, delay: "2 seconds", backoff: "exponential" }, timeout: "2 minutes" },
+  quick: {
+    retries: { limit: 5, delay: "2 seconds", backoff: "exponential" },
+    timeout: "2 minutes",
+  },
   /** Artifacts / gitwire / Cloudflare REST. */
-  remote: { retries: { limit: 5, delay: "10 seconds", backoff: "exponential" }, timeout: "10 minutes" },
+  remote: {
+    retries: { limit: 5, delay: "10 seconds", backoff: "exponential" },
+    timeout: "10 minutes",
+  },
   /** Container jobs (plan mode, policy evaluation, rebase). */
   sandbox: { retries: { limit: 2, delay: "30 seconds", backoff: "linear" }, timeout: "20 minutes" },
   /** Model calls: retries cost money, so keep them few. */

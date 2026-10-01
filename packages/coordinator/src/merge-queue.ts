@@ -16,10 +16,20 @@
  * Node-safe: storage is behind `QueueStorage` (SQLite in the DO, memory in tests).
  */
 import type { Change, Repo } from "@app/domain";
-import { encodeNote, EVIDENCE_NOTES_REF } from "@app/evidence";
-import type { CoordinatorBindings, EnqueueInput, MergeQueueClient, MergeQueueEntry } from "./bindings.js";
+import { EVIDENCE_NOTES_REF, encodeNote } from "@app/evidence";
+import type {
+  CoordinatorBindings,
+  EnqueueInput,
+  MergeQueueClient,
+  MergeQueueEntry,
+} from "./bindings.js";
+import {
+  EVENT_MERGE_CONFLICT,
+  EVENT_MERGED,
+  type MergeConflictEvent,
+  type MergedEvent,
+} from "./events.js";
 import { sealEvidence } from "./evidence.js";
-import { EVENT_MERGE_CONFLICT, EVENT_MERGED, type MergeConflictEvent, type MergedEvent } from "./events.js";
 import { changeSubject, cheapRunIdFor, REBASE_BRANCH, stagingRefFor, ZERO_SHA } from "./ids.js";
 import { withChangeNotifications } from "./milestones.js";
 import { errorMessage } from "./policy.js";
@@ -153,7 +163,10 @@ export class MergeQueueCore implements MergeQueueClient {
   async remove(input: { repoId: string; changeId: string }): Promise<boolean> {
     const item = await this.deps.storage.get(input.changeId);
     if (item === null) return false;
-    if (item.checkRunId !== null) await this.quietly(() => this.deps.ports.ci.cancel(item.checkRunId ?? "", "removed from queue"));
+    if (item.checkRunId !== null)
+      await this.quietly(() =>
+        this.deps.ports.ci.cancel(item.checkRunId ?? "", "removed from queue"),
+      );
     await this.deps.storage.delete(input.changeId);
     await this.audit(input.changeId, "merge-queue.removed", { phase: item.phase });
     return true;
@@ -208,7 +221,10 @@ export class MergeQueueCore implements MergeQueueClient {
     if (change === null || !ACCEPTING.has(change.status) || change.headSha !== item.headSha) {
       await this.deps.storage.delete(item.changeId);
       await this.audit(item.changeId, "merge-queue.dropped", {
-        reason: change === null ? "change missing" : `change is ${change.status} at ${change.headSha ?? "no head"}`,
+        reason:
+          change === null
+            ? "change missing"
+            : `change is ${change.status} at ${change.headSha ?? "no head"}`,
       });
       return { next: 0, did: "dropped" };
     }
@@ -321,7 +337,13 @@ export class MergeQueueCore implements MergeQueueClient {
       items: [...(original?.items ?? [])],
     });
     // The evidence payload's field set is fixed, so the rebase link is a separately signed record.
-    const link = { changeId: change.id, headSha: item.candidateSha, rebasedFrom: item.headSha, onto: item.rebasedOnto, evidenceId: sealed.evidenceId };
+    const link = {
+      changeId: change.id,
+      headSha: item.candidateSha,
+      rebasedFrom: item.headSha,
+      onto: item.rebasedOnto,
+      evidenceId: sealed.evidenceId,
+    };
     const signature = await signer.signDocument({ purpose: "evidence-rebase", ...link });
     await audit.append({
       principalId: SYSTEM_PRINCIPAL_ID,
@@ -341,7 +363,12 @@ export class MergeQueueCore implements MergeQueueClient {
     const staging = stagingRefFor(change.id);
     await git.transferObjects(change.forkName, repo.artifactsName, item.candidateSha, staging);
     const expectedOld = item.rebasedOnto ?? change.baseSha;
-    const result = await git.updateRef(repo.artifactsName, `refs/heads/${repo.defaultBranch}`, expectedOld, item.candidateSha);
+    const result = await git.updateRef(
+      repo.artifactsName,
+      `refs/heads/${repo.defaultBranch}`,
+      expectedOld,
+      item.candidateSha,
+    );
     if (result.ok) {
       const next = { ...item, phase: "finalizing" as const };
       await this.save(next);
@@ -351,13 +378,21 @@ export class MergeQueueCore implements MergeQueueClient {
       // Someone else's merge won the race (or main moved): retry from the top, bounded.
       const staleRetries = item.staleRetries + 1;
       if (staleRetries > this.options.maxStaleRetries) {
-        throw new ItemFailure("stale-exhausted", `main kept moving (${staleRetries} stale updates)`);
+        throw new ItemFailure(
+          "stale-exhausted",
+          `main kept moving (${staleRetries} stale updates)`,
+        );
       }
       await this.save({ ...item, phase: "ready", staleRetries, lastError: result.detail });
-      await this.audit(change.id, "merge-queue.stale", { expectedOld, detail: result.detail, staleRetries });
+      await this.audit(change.id, "merge-queue.stale", {
+        expectedOld,
+        detail: result.detail,
+        staleRetries,
+      });
       return { next: 0, did: "stale" };
     }
-    if (result.reason === "missing-object") throw new Error(`objects missing after transfer: ${result.detail}`);
+    if (result.reason === "missing-object")
+      throw new Error(`objects missing after transfer: ${result.detail}`);
     throw new ItemFailure("rejected", `fast-forward rejected: ${result.detail}`);
   }
 
@@ -369,7 +404,10 @@ export class MergeQueueCore implements MergeQueueClient {
     let noteCopied = false;
     if (evidence !== null) {
       noteCopied = await this.quietly(() =>
-        git.writeNote(repo.artifactsName, sha, encodeNote(evidence), { notesRef: EVIDENCE_NOTES_REF, mode: "replace" }),
+        git.writeNote(repo.artifactsName, sha, encodeNote(evidence), {
+          notesRef: EVIDENCE_NOTES_REF,
+          mode: "replace",
+        }),
       );
     }
     const stagingDeleted = await this.quietly(async () => {
@@ -378,9 +416,11 @@ export class MergeQueueCore implements MergeQueueClient {
     });
     await store.updateChange(change.id, { status: "merged", mergedSha: sha });
     await this.quietly(() =>
-      this.deps.bindings
-        .changeCoordinator(change.id)
-        .scheduleForkGc({ changeId: change.id, forkName: change.forkName, delayMs: this.options.forkGcDelayMs }),
+      this.deps.bindings.changeCoordinator(change.id).scheduleForkGc({
+        changeId: change.id,
+        forkName: change.forkName,
+        delayMs: this.options.forkGcDelayMs,
+      }),
     );
     const rebasedFrom = item.rebasedOnto === null ? null : item.headSha;
     await audit.append({
@@ -402,9 +442,15 @@ export class MergeQueueCore implements MergeQueueClient {
     return { next: 0, did: "merged" };
   }
 
-  private async fail(item: QueueItem, reason: MergeConflictEvent["reason"], detail: string, files: string[] = []): Promise<void> {
+  private async fail(
+    item: QueueItem,
+    reason: MergeConflictEvent["reason"],
+    detail: string,
+    files: string[] = [],
+  ): Promise<void> {
     const { store, notifier, ci, git } = this.deps.ports;
-    if (item.checkRunId !== null) await this.quietly(() => ci.cancel(item.checkRunId ?? "", "merge failed"));
+    if (item.checkRunId !== null)
+      await this.quietly(() => ci.cancel(item.checkRunId ?? "", "merge failed"));
     const change = await store.getChange(item.changeId);
     if (change !== null) {
       const repo = await store.getRepo(change.repoId);
@@ -422,7 +468,12 @@ export class MergeQueueCore implements MergeQueueClient {
         message: `${change.title} could not merge (${reason}): ${detail}${files.length ? ` [${files.join(", ")}]` : ""}`,
       });
     }
-    await this.audit(item.changeId, "merge-queue.failed", { reason, detail, files, phase: item.phase });
+    await this.audit(item.changeId, "merge-queue.failed", {
+      reason,
+      detail,
+      files,
+      phase: item.phase,
+    });
     const event: MergeConflictEvent = { reason, detail, files };
     await this.deliver(item, EVENT_MERGE_CONFLICT, event);
     await this.deps.storage.delete(item.changeId);
@@ -435,12 +486,20 @@ export class MergeQueueCore implements MergeQueueClient {
     });
     if (!delivered) {
       // The workflow also polls the change row, so it will still see the outcome.
-      await this.audit(item.changeId, "merge-queue.event-undelivered", { type, instanceId: item.workflowInstanceId });
+      await this.audit(item.changeId, "merge-queue.event-undelivered", {
+        type,
+        instanceId: item.workflowInstanceId,
+      });
     }
   }
 
   private async audit(changeId: string, action: string, payload: unknown): Promise<void> {
-    await this.deps.ports.audit.append({ principalId: SYSTEM_PRINCIPAL_ID, action, subject: changeSubject(changeId), payload });
+    await this.deps.ports.audit.append({
+      principalId: SYSTEM_PRINCIPAL_ID,
+      action,
+      subject: changeSubject(changeId),
+      payload,
+    });
   }
 
   private async quietly(fn: () => Promise<unknown>): Promise<boolean> {
@@ -477,14 +536,21 @@ export class MemoryQueueStorage implements QueueStorage {
 
 /** Structural slice of the Durable Object `SqlStorage` API. */
 export interface SqlLike {
-  exec(query: string, ...bindings: (string | number | null)[]): { toArray(): Record<string, unknown>[] };
+  exec(
+    query: string,
+    ...bindings: (string | number | null)[]
+  ): { toArray(): Record<string, unknown>[] };
 }
 
 /** QueueStorage on Durable Object SQLite: one row per item, JSON payload, FIFO by `seq`. */
 export class SqlQueueStorage implements QueueStorage {
   constructor(private readonly sql: SqlLike) {
-    sql.exec("CREATE TABLE IF NOT EXISTS merge_queue (change_id TEXT PRIMARY KEY, seq INTEGER NOT NULL, data TEXT NOT NULL)");
-    sql.exec("CREATE TABLE IF NOT EXISTS merge_queue_meta (k TEXT PRIMARY KEY, v INTEGER NOT NULL)");
+    sql.exec(
+      "CREATE TABLE IF NOT EXISTS merge_queue (change_id TEXT PRIMARY KEY, seq INTEGER NOT NULL, data TEXT NOT NULL)",
+    );
+    sql.exec(
+      "CREATE TABLE IF NOT EXISTS merge_queue_meta (k TEXT PRIMARY KEY, v INTEGER NOT NULL)",
+    );
   }
 
   private rows(query: string, ...bindings: (string | number | null)[]): QueueItem[] {

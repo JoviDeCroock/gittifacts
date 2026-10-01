@@ -4,7 +4,7 @@
  * the real service, cores and workflow bodies — an end-to-end coordinator with no Cloudflare.
  */
 import type { Plan, Principal, Repo, Scope } from "@app/domain";
-import { defaultPolicy, type RepoPolicyInput, RepoPolicy } from "@app/domain";
+import { defaultPolicy, RepoPolicy, type RepoPolicyInput } from "@app/domain";
 import type { CoordinatorApi } from "../api.js";
 import { isForkName } from "../ids.js";
 import type { MergeQueueOptions } from "../merge-queue.js";
@@ -82,7 +82,10 @@ function forkOnlyGit(git: FakeGitHost): FakeGitHost {
       return (...args: unknown[]) => {
         const name = String(prop);
         const repo = name === "transferObjects" ? args[1] : args[0];
-        const writes = guarded.has(name) || name === "transferObjects" || (name === "mintToken" && args[1] === "write");
+        const writes =
+          guarded.has(name) ||
+          name === "transferObjects" ||
+          (name === "mintToken" && args[1] === "write");
         if (writes && typeof repo === "string" && !isForkName(repo)) {
           throw new Error(`forbidden: ${name} on main repo ${repo} outside the merge queue`);
         }
@@ -97,7 +100,15 @@ let principalCounter = 0;
 export function principal(overrides: Partial<Principal> & { kind: Principal["kind"] }): Principal {
   const scopes: Scope[] =
     overrides.kind === "human"
-      ? ["repo:read", "repo:admin", "plan:create", "plan:approve", "change:create", "change:review", "policy:admin"]
+      ? [
+          "repo:read",
+          "repo:admin",
+          "plan:create",
+          "plan:approve",
+          "change:create",
+          "change:review",
+          "policy:admin",
+        ]
       : ["repo:read", "change:create"];
   return {
     id: `${overrides.kind}-${++principalCounter}`,
@@ -148,13 +159,23 @@ export interface FakeEnvironment {
 }
 
 export function createFakeEnvironment(
-  opts: { coordinator?: CoordinatorOptions; queue?: Partial<MergeQueueOptions>; runWorkflows?: boolean } = {},
+  opts: {
+    coordinator?: CoordinatorOptions;
+    queue?: Partial<MergeQueueOptions>;
+    runWorkflows?: boolean;
+  } = {},
 ): FakeEnvironment {
   const ports = createFakePorts();
-  const bindings = new FakeBindings((role) => portsForRole(ports, role), { pollMs: 0, ...opts.queue });
+  const bindings = new FakeBindings((role) => portsForRole(ports, role), {
+    pollMs: 0,
+    ...opts.queue,
+  });
   if (opts.runWorkflows !== false) bindings.runWorkflows();
   // Rollout waits ("issue" for one minute) time out at once and move the fake clock.
-  bindings.rolloutWorkflow.stepOptions = { timeout: (_name, type) => type === "issue", onElapse: (ms) => ports.clock.advance(ms) };
+  bindings.rolloutWorkflow.stepOptions = {
+    timeout: (_name, type) => type === "issue",
+    onElapse: (ms) => ports.clock.advance(ms),
+  };
   ports.ci.sink = createRunSink(withChangeNotifications(ports, bindings), bindings);
   const coordinator = createCoordinator(portsForRole(ports, "default"), bindings, opts.coordinator);
   let repoCounter = 0;
@@ -166,7 +187,10 @@ export function createFakeEnvironment(
     async seedRepo(input = {}) {
       const n = ++repoCounter;
       const name = input.name ?? `repo${n}`;
-      const head = ports.git.seed(name, input.files ?? { "src/a.ts": "export const a = 1;\n", "README.md": "# repo\n" });
+      const head = ports.git.seed(
+        name,
+        input.files ?? { "src/a.ts": "export const a = 1;\n", "README.md": "# repo\n" },
+      );
       const policy = RepoPolicy.parse({ ...input.policy });
       const repo: Repo = {
         id: `r${n}`,
@@ -197,9 +221,10 @@ export function createFakeEnvironment(
         const busy =
           ports.ci.pendingDeliveries > 0 ||
           bindings.pendingDrains > 0 ||
-          [...bindings.changeWorkflow.instances.values(), ...bindings.rolloutWorkflow.instances.values()].some(
-            (inst) => inst.state === "running" && inst.waiting.length === 0,
-          );
+          [
+            ...bindings.changeWorkflow.instances.values(),
+            ...bindings.rolloutWorkflow.instances.values(),
+          ].some((inst) => inst.state === "running" && inst.waiting.length === 0);
         quiet = busy ? 0 : quiet + 1;
       }
     },

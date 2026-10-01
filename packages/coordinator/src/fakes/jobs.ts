@@ -1,7 +1,7 @@
 /** Fakes for the sandbox jobs and the CI engine, built on FakeGitHost. */
 import type { EvidenceItem } from "@app/evidence";
 import type { CiEngine, CiRunRequest, CiRunStatus, RunSink, SandboxJobs } from "../ports.js";
-import { type FakeGitHost, type Files } from "./git-host.js";
+import type { FakeGitHost, Files } from "./git-host.js";
 
 // ---------------------------------------------------------------- sandbox
 
@@ -30,7 +30,13 @@ export class FakeSandboxJobs implements SandboxJobs {
   }
 
   /** File-level three-way rebase: conflicts when main and the change both touched a file differently. */
-  async rebase(input: { fork: string; mainRepo: string; headSha: string; ontoSha: string; branch: string }): Promise<JobResult> {
+  async rebase(input: {
+    fork: string;
+    mainRepo: string;
+    headSha: string;
+    ontoSha: string;
+    branch: string;
+  }): Promise<JobResult> {
     this.calls.push({ op: "rebase", input });
     const git = this.git;
     const main = git.repo(input.mainRepo);
@@ -49,12 +55,24 @@ export class FakeSandboxJobs implements SandboxJobs {
     }
     if (conflicts.length > 0) return { status: "conflict", files: conflicts.sort() };
     git.copyObjects(input.fork, input.ontoSha);
-    const sha = await this.commitOn(input.fork, input.branch, merged, [input.ontoSha], `rebase of ${input.headSha.slice(0, 12)}`);
+    const sha = await this.commitOn(
+      input.fork,
+      input.branch,
+      merged,
+      [input.ontoSha],
+      `rebase of ${input.headSha.slice(0, 12)}`,
+    );
     return { status: "clean", newSha: sha };
   }
 
   /** File-level revert of `sha` on top of `ontoSha`. */
-  async revert(input: { fork: string; sha: string; ontoSha: string; branch: string; message: string }): Promise<JobResult> {
+  async revert(input: {
+    fork: string;
+    sha: string;
+    ontoSha: string;
+    branch: string;
+    message: string;
+  }): Promise<JobResult> {
     this.calls.push({ op: "revert", input });
     const git = this.git;
     const parent = git.commits.get(input.sha)?.parents[0];
@@ -74,14 +92,33 @@ export class FakeSandboxJobs implements SandboxJobs {
     }
     if (conflicts.length > 0) return { status: "conflict", files: conflicts.sort() };
     const fork = git.repo(input.fork);
-    if (fork.refs.get(`refs/heads/${input.branch}`) !== input.ontoSha) throw new Error("fork branch moved");
-    const sha = await this.commitOn(input.fork, input.branch, result, [input.ontoSha], input.message);
+    if (fork.refs.get(`refs/heads/${input.branch}`) !== input.ontoSha)
+      throw new Error("fork branch moved");
+    const sha = await this.commitOn(
+      input.fork,
+      input.branch,
+      result,
+      [input.ontoSha],
+      input.message,
+    );
     return { status: "clean", newSha: sha };
   }
 
-  private async commitOn(repo: string, branch: string, files: Files, parents: string[], message: string): Promise<string> {
+  private async commitOn(
+    repo: string,
+    branch: string,
+    files: Files,
+    parents: string[],
+    message: string,
+  ): Promise<string> {
     const expectedOld = this.git.repo(repo).refs.get(`refs/heads/${branch}`) ?? "0".repeat(40);
-    const { sha } = await this.git.commitTree(repo, { treeSha: this.git.treeSha(files), parents, message, branch, expectedOld });
+    const { sha } = await this.git.commitTree(repo, {
+      treeSha: this.git.treeSha(files),
+      parents,
+      message,
+      branch,
+      expectedOld,
+    });
     return sha;
   }
 }
@@ -113,7 +150,15 @@ export function greenEvidence(baseSha: string, headSha: string): EvidenceItem[] 
       head: { sha: headSha, results: [{ id: "t1", outcome: "pass" }] },
       verdict: "proven",
     },
-    { id: "coverage", kind: "coverage", status: "ok", changedLines: 10, coveredChangedLines: 10, ratio: 1, files: [] },
+    {
+      id: "coverage",
+      kind: "coverage",
+      status: "ok",
+      changedLines: 10,
+      coveredChangedLines: 10,
+      ratio: 1,
+      files: [],
+    },
     {
       id: "mutation",
       kind: "mutation",
@@ -149,7 +194,10 @@ export interface FakeRunOutcome {
 }
 
 export class FakeCiEngine implements CiEngine {
-  readonly runs = new Map<string, { request: CiRunRequest; status: CiRunStatus; cancelReason: string | null }>();
+  readonly runs = new Map<
+    string,
+    { request: CiRunRequest; status: CiRunStatus; cancelReason: string | null }
+  >();
   readonly starts: CiRunRequest[] = [];
   readonly restarts: Array<{ runId: string; step: string }> = [];
   /** Where finished full runs are reported (the coordinator's run sink). */
@@ -159,7 +207,10 @@ export class FakeCiEngine implements CiEngine {
   /** Result per request (default: green evidence, bundle `bundle/<runId>`). */
   outcome: (req: CiRunRequest) => FakeRunOutcome = (req) => ({
     status: "passed",
-    evidence: req.evidenceSteps !== undefined && req.evidenceSteps.length === 0 ? [] : greenEvidence(req.baseSha, req.headSha),
+    evidence:
+      req.evidenceSteps !== undefined && req.evidenceSteps.length === 0
+        ? []
+        : greenEvidence(req.baseSha, req.headSha),
     bundleRef: `bundle/${req.runId}`,
   });
   private pending: Promise<unknown>[] = [];
@@ -200,7 +251,15 @@ export class FakeCiEngine implements CiEngine {
       ...run.status,
       status: out.status,
       finishedAt: "2026-10-01T12:05:00.000Z",
-      steps: [{ name: "test", kind: "user", status: out.status === "passed" ? "passed" : "failed", durationMs: 1000, logRef: null }],
+      steps: [
+        {
+          name: "test",
+          kind: "user",
+          status: out.status === "passed" ? "passed" : "failed",
+          durationMs: 1000,
+          logRef: null,
+        },
+      ],
     };
     if (this.sink === null) return null;
     return this.sink.onRunFinished({
@@ -221,7 +280,10 @@ export class FakeCiEngine implements CiEngine {
     const run = this.runs.get(runId);
     if (run === undefined || run.status.status !== "running") return;
     run.cancelReason = reason;
-    run.status = { ...run.status, status: reason.startsWith("superseded") ? "superseded" : "cancelled" };
+    run.status = {
+      ...run.status,
+      status: reason.startsWith("superseded") ? "superseded" : "cancelled",
+    };
   }
 
   async restartFrom(runId: string, step: string): Promise<void> {

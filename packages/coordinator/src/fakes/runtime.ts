@@ -6,7 +6,7 @@
  *   them), resolves `sleep` immediately, and serves `waitForEvent` from buffered events;
  * - `FakeBindings`: ChangeCoordinatorCore / MergeQueueCore instances per change / repo.
  */
-import type { ChangeWorkflowParams, RolloutParams } from "../events.js";
+
 import type {
   ChangeCoordinatorClient,
   CoordinatorBindings,
@@ -18,6 +18,7 @@ import type {
 } from "../bindings.js";
 import { ChangeCoordinatorCore, MemoryKv } from "../change-coordinator.js";
 import { runChangeWorkflow } from "../change-flow.js";
+import type { ChangeWorkflowParams, RolloutParams } from "../events.js";
 import { MemoryQueueStorage, MergeQueueCore, type MergeQueueOptions } from "../merge-queue.js";
 import type { Ports } from "../ports.js";
 import { runRollout } from "../rollout-flow.js";
@@ -128,7 +129,13 @@ export interface FakeStepOptions {
   onElapse?: (ms: number) => void;
 }
 
-const UNIT_MS: Record<string, number> = { second: 1000, minute: 60_000, hour: 3_600_000, day: 86_400_000, week: 604_800_000 };
+const UNIT_MS: Record<string, number> = {
+  second: 1000,
+  minute: 60_000,
+  hour: 3_600_000,
+  day: 86_400_000,
+  week: 604_800_000,
+};
 
 export function durationMs(d: Duration): number {
   if (typeof d === "number") return d;
@@ -181,14 +188,18 @@ export class FakeStep implements Step {
     this.opts.onElapse?.(durationMs(duration));
   }
 
-  async waitForEvent<T>(name: string, options: { type: string; timeout?: Duration }): Promise<StepEvent<T>> {
+  async waitForEvent<T>(
+    name: string,
+    options: { type: string; timeout?: Duration },
+  ): Promise<StepEvent<T>> {
     this.check();
     this.instance.waits.push(name);
     const timeout = this.opts.timeout?.(name, options.type) ?? false;
     try {
       return (await this.instance.nextEvent(options.type, timeout)) as StepEvent<T>;
     } catch (e) {
-      if (e instanceof EventTimeoutError) this.opts.onElapse?.(durationMs(options.timeout ?? "1 day"));
+      if (e instanceof EventTimeoutError)
+        this.opts.onElapse?.(durationMs(options.timeout ?? "1 day"));
       throw e;
     }
   }
@@ -201,7 +212,12 @@ export class FakeWorkflows<P> implements WorkflowHandle<P> {
 
   async create(options: { id: string; params: P }): Promise<FakeWorkflowInstance<P>> {
     if (this.instances.has(options.id)) throw new Error(`instance.already_exists: ${options.id}`);
-    const instance = new FakeWorkflowInstance<P>(options.id, structuredClone(options.params), this.runner, this.stepOptions);
+    const instance = new FakeWorkflowInstance<P>(
+      options.id,
+      structuredClone(options.params),
+      this.runner,
+      this.stepOptions,
+    );
     this.instances.set(options.id, instance);
     instance.start();
     return instance;
@@ -236,8 +252,10 @@ export class FakeBindings implements CoordinatorBindings {
 
   /** Run the real workflow bodies inside the fake instances. */
   runWorkflows(): this {
-    this.changeWorkflow.runner = (params, step, id) => runChangeWorkflow({ ports: this.portsFor("default"), bindings: this }, params, step, id);
-    this.rolloutWorkflow.runner = (params, step) => runRollout({ ports: this.portsFor("default"), bindings: this }, params, step);
+    this.changeWorkflow.runner = (params, step, id) =>
+      runChangeWorkflow({ ports: this.portsFor("default"), bindings: this }, params, step, id);
+    this.rolloutWorkflow.runner = (params, step) =>
+      runRollout({ ports: this.portsFor("default"), bindings: this }, params, step);
     return this;
   }
 

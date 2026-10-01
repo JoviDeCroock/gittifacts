@@ -1,7 +1,7 @@
 /** Which statuses allow which lifecycle actions. */
-import type { ChangeStatus } from "@app/domain";
+
 import type { CiStatus } from "@app/classifier";
-import type { RunStatus } from "@app/domain";
+import type { ChangeStatus, RunStatus } from "@app/domain";
 
 /** Statuses in which an agent may still push new heads to its fork. */
 export const PUSHABLE_STATUSES: readonly ChangeStatus[] = [

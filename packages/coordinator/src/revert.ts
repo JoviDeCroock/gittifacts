@@ -41,7 +41,8 @@ export async function openRevertChange(
   const revertId = revertIdFor(original.id);
   const existing = await store.getChange(revertId);
   if (existing !== null && existing.headSha !== null) {
-    if (original.revertedBy !== revertId) await store.updateChange(original.id, { revertedBy: revertId });
+    if (original.revertedBy !== revertId)
+      await store.updateChange(original.id, { revertedBy: revertId });
     return { change: existing, method: "existing", conflictFiles: [] };
   }
 
@@ -134,7 +135,15 @@ export async function openRevertChange(
     principalId: actorId,
     action: "change.revert-opened",
     subject: changeSubject(original.id),
-    payload: { revertId, method, reason, mergedSha: original.mergedSha, baseSha, headSha, conflictFiles },
+    payload: {
+      revertId,
+      method,
+      reason,
+      mergedSha: original.mergedSha,
+      baseSha,
+      headSha,
+      conflictFiles,
+    },
   });
 
   if (headSha !== null) {
@@ -222,7 +231,8 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
 /** `backward` undoes exactly what `forward` did, file by file and line by line. Pure. */
 export function isInverseDiff(forward: ChangeDiff, backward: ChangeDiff): boolean {
   if (forward.files.length === 0 || forward.files.length !== backward.files.length) return false;
-  if (forward.additions !== backward.deletions || forward.deletions !== backward.additions) return false;
+  if (forward.additions !== backward.deletions || forward.deletions !== backward.additions)
+    return false;
   const byPath = new Map(backward.files.map((f) => [f.path, f] as const));
   for (const f of forward.files) {
     // A rename a→b is undone by a rename b→a, which lands at a.

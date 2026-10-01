@@ -15,11 +15,11 @@ import type { FlowDeps } from "./change-flow.js";
 import { EVENT_ISSUE, RolloutParams } from "./events.js";
 import { evaluateHealth, type HealthSample, type HealthVerdict } from "./health.js";
 import { changeSubject } from "./ids.js";
+import { withChangeNotifications } from "./milestones.js";
 import { errorMessage } from "./policy.js";
 import { SYSTEM_PRINCIPAL_ID } from "./ports.js";
 import { openRevertChange } from "./revert.js";
 import { RETRY, type Step, waitOrTimeout } from "./step.js";
-import { withChangeNotifications } from "./milestones.js";
 
 export type RolloutOutcome = "skipped" | "released" | "rolled-back";
 
@@ -44,7 +44,11 @@ interface Loaded {
   flagKey: string | null;
 }
 
-export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step: Step): Promise<RolloutOutput> {
+export async function runRollout(
+  deps: FlowDeps,
+  rawParams: RolloutParams,
+  step: Step,
+): Promise<RolloutOutput> {
   const ports = withChangeNotifications(deps.ports, deps.bindings);
   const { store, audit, notifier, clock, deployer, flags, telemetry } = ports;
   const params = RolloutParams.parse(rawParams);
@@ -73,8 +77,10 @@ export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step:
   const ctx = await step.do("load", RETRY.quick, async (): Promise<Loaded> => {
     const change = await store.getChange(changeId);
     const none = { script: "", mergedSha: "", title: "", repoId: "", flagKey: null };
-    if (change === null || change.mergedSha === null) return { ...none, skip: "change is not merged" };
-    if (change.status !== "rolling-out" && change.status !== "merged") return { ...none, skip: `change is ${change.status}` };
+    if (change === null || change.mergedSha === null)
+      return { ...none, skip: "change is not merged" };
+    if (change.status !== "rolling-out" && change.status !== "merged")
+      return { ...none, skip: `change is ${change.status}` };
     const repo = await store.getRepo(change.repoId);
     if (repo?.deployTarget == null) return { ...none, skip: "repo has no deploy target" };
     if (repo.claim.status !== "claimed") {
@@ -87,9 +93,17 @@ export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step:
       return { ...none, skip: "no bundle" };
     }
     if (change.status === "merged") await store.updateChange(changeId, { status: "rolling-out" });
-    return { skip: null, script: repo.deployTarget, mergedSha: change.mergedSha, title: change.title, repoId: repo.id, flagKey: change.flagKey };
+    return {
+      skip: null,
+      script: repo.deployTarget,
+      mergedSha: change.mergedSha,
+      title: change.title,
+      repoId: repo.id,
+      flagKey: change.flagKey,
+    };
   });
-  if (ctx.skip !== null) return { outcome: "skipped", versionId: null, revertChangeId: null, reasons: [ctx.skip] };
+  if (ctx.skip !== null)
+    return { outcome: "skipped", versionId: null, revertChangeId: null, reasons: [ctx.skip] };
   const { script } = ctx;
   const bundleRef = params.bundleRef ?? "";
 
@@ -110,11 +124,23 @@ export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step:
       // Never deploy over someone else's split: give up visibly instead.
       await step.do("slot-timeout", RETRY.quick, async () => {
         await patchState({ status: "failed" });
-        await log("rollout.blocked", { reason: "another rollout kept the script split for 2 hours" });
-        await notifier.notify({ kind: "rollout-stage", changeId, repoId: ctx.repoId, message: `Rollout of ${ctx.title} blocked: ${script} is mid-rollout.` });
+        await log("rollout.blocked", {
+          reason: "another rollout kept the script split for 2 hours",
+        });
+        await notifier.notify({
+          kind: "rollout-stage",
+          changeId,
+          repoId: ctx.repoId,
+          message: `Rollout of ${ctx.title} blocked: ${script} is mid-rollout.`,
+        });
         return true;
       });
-      return { outcome: "skipped", versionId: null, revertChangeId: null, reasons: ["deployment slot busy"] };
+      return {
+        outcome: "skipped",
+        versionId: null,
+        revertChangeId: null,
+        reasons: ["deployment slot busy"],
+      };
     }
     await step.sleep(`slot-wait-${round}`, CHECK_INTERVAL);
   }
@@ -124,7 +150,10 @@ export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step:
 
   // ------------------------------------------------------------ 1. flag
   const flagKey = await step.do("flag", RETRY.remote, async () => {
-    const key = await flags.ensureChangeFlag(changeId, { enabled: true, description: `change ${changeId}: ${ctx.title}`.slice(0, 500) });
+    const key = await flags.ensureChangeFlag(changeId, {
+      enabled: true,
+      description: `change ${changeId}: ${ctx.title}`.slice(0, 500),
+    });
     await store.updateChange(changeId, { flagKey: key });
     await patchState({ flagKey: key });
     await log("rollout.flag-ready", { flagKey: key });
@@ -155,26 +184,52 @@ export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step:
   let checks = 0;
   const checkOnce = async (label: string, since: string): Promise<HealthVerdict> => {
     checks++;
-    const sample = await step.do(`${label}-check-${checks}`, RETRY.quick, async (): Promise<HealthSample> => {
-      const at = clock.now().toISOString();
-      let s: HealthSample;
-      try {
-        const r = await telemetry.check({ script, versionId, baselineVersionId: previousVersionId, since });
-        s = { ok: true, at, requests: r.requests, errorRate: r.errorRate, baselineErrorRate: r.baselineErrorRate, newIssueGroups: r.newIssueGroups };
-        await patchState({
-          lastCheck: { at, errorRate: r.errorRate, baselineErrorRate: r.baselineErrorRate, requests: Math.trunc(r.requests), newIssueGroups: Math.trunc(r.newIssueGroups) },
-        });
-      } catch (e) {
-        s = { ok: false, at, error: errorMessage(e) };
-      }
-      return s;
-    });
+    const sample = await step.do(
+      `${label}-check-${checks}`,
+      RETRY.quick,
+      async (): Promise<HealthSample> => {
+        const at = clock.now().toISOString();
+        let s: HealthSample;
+        try {
+          const r = await telemetry.check({
+            script,
+            versionId,
+            baselineVersionId: previousVersionId,
+            since,
+          });
+          s = {
+            ok: true,
+            at,
+            requests: r.requests,
+            errorRate: r.errorRate,
+            baselineErrorRate: r.baselineErrorRate,
+            newIssueGroups: r.newIssueGroups,
+          };
+          await patchState({
+            lastCheck: {
+              at,
+              errorRate: r.errorRate,
+              baselineErrorRate: r.baselineErrorRate,
+              requests: Math.trunc(r.requests),
+              newIssueGroups: Math.trunc(r.newIssueGroups),
+            },
+          });
+        } catch (e) {
+          s = { ok: false, at, error: errorMessage(e) };
+        }
+        return s;
+      },
+    );
     samples.push(sample);
     return evaluateHealth(policy, samples);
   };
 
   /** Watch until `minutes` have elapsed since `since` (by step-recorded time). */
-  const watchFor = async (label: string, since: string, minutes: number): Promise<HealthVerdict | null> => {
+  const watchFor = async (
+    label: string,
+    since: string,
+    minutes: number,
+  ): Promise<HealthVerdict | null> => {
     const until = Date.parse(since) + minutes * CHECK_INTERVAL_MS;
     let waits = 0;
     // Bounded even if issue events arrive in a flood.
@@ -205,10 +260,19 @@ export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step:
       const at = clock.now().toISOString();
       const change = await store.getChange(changeId);
       const stagesState = (change?.rolloutState?.stages ?? []).map((s, j) =>
-        j === i ? { ...s, startedAt: at } : j === i - 1 && s.completedAt === null ? { ...s, completedAt: at } : s,
+        j === i
+          ? { ...s, startedAt: at }
+          : j === i - 1 && s.completedAt === null
+            ? { ...s, completedAt: at }
+            : s,
       );
       await patchState({ status: "rolling", stages: stagesState });
-      await notifier.notify({ kind: "rollout-stage", changeId, repoId: ctx.repoId, message: `${ctx.title}: ${percent}% of traffic on ${versionId}.` });
+      await notifier.notify({
+        kind: "rollout-stage",
+        changeId,
+        repoId: ctx.repoId,
+        message: `${ctx.title}: ${percent}% of traffic on ${versionId}.`,
+      });
       await log("rollout.stage", { stage: i + 1, percent, split });
       return at;
     });
@@ -220,8 +284,14 @@ export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step:
     const since = await step.do("watch", RETRY.quick, async () => {
       const at = clock.now();
       const change = await store.getChange(changeId);
-      const stagesState = (change?.rolloutState?.stages ?? []).map((s) => (s.completedAt === null ? { ...s, completedAt: at.toISOString() } : s));
-      await patchState({ status: "watching", stages: stagesState, watchUntil: new Date(at.getTime() + policy.watchMinutes * CHECK_INTERVAL_MS).toISOString() });
+      const stagesState = (change?.rolloutState?.stages ?? []).map((s) =>
+        s.completedAt === null ? { ...s, completedAt: at.toISOString() } : s,
+      );
+      await patchState({
+        status: "watching",
+        stages: stagesState,
+        watchUntil: new Date(at.getTime() + policy.watchMinutes * CHECK_INTERVAL_MS).toISOString(),
+      });
       await log("rollout.watching", { minutes: policy.watchMinutes });
       return at.toISOString();
     });
@@ -234,7 +304,12 @@ export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step:
       await patchState({ status: "released" });
       await store.updateChange(changeId, { status: "released" });
       await log("rollout.released", { versionId, checks, verdict });
-      await notifier.notify({ kind: "rollout-stage", changeId, repoId: ctx.repoId, message: `${ctx.title} is released (${verdict.reasons.join("; ")}).` });
+      await notifier.notify({
+        kind: "rollout-stage",
+        changeId,
+        repoId: ctx.repoId,
+        message: `${ctx.title} is released (${verdict.reasons.join("; ")}).`,
+      });
       return true;
     });
     return { outcome: "released", versionId, revertChangeId: null, reasons: verdict.reasons };
@@ -244,8 +319,17 @@ export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step:
   const reasons = regression.reasons;
   await step.do("regression", RETRY.quick, async () => {
     await patchState({ status: "rolling-back" });
-    await log("rollout.regression", { versionId, reasons, sample: samples[samples.length - 1] ?? null });
-    await notifier.notify({ kind: "regression-detected", changeId, repoId: ctx.repoId, message: `${ctx.title}: ${reasons.join("; ")}. Rolling back.` });
+    await log("rollout.regression", {
+      versionId,
+      reasons,
+      sample: samples[samples.length - 1] ?? null,
+    });
+    await notifier.notify({
+      kind: "regression-detected",
+      changeId,
+      repoId: ctx.repoId,
+      message: `${ctx.title}: ${reasons.join("; ")}. Rolling back.`,
+    });
     return true;
   });
   await step.do("flag-off", RETRY.remote, async () => {
@@ -255,10 +339,16 @@ export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step:
   });
   await step.do("rollback", RETRY.remote, async () => {
     if (previousVersionId === null) {
-      await log("rollout.rollback-impossible", { reason: "no previous version; the flag is the only mitigation" });
+      await log("rollout.rollback-impossible", {
+        reason: "no previous version; the flag is the only mitigation",
+      });
       return false;
     }
-    await deployer.rollback(script, previousVersionId, `auto-revert change ${changeId}: ${reasons.join("; ")}`.slice(0, 1000));
+    await deployer.rollback(
+      script,
+      previousVersionId,
+      `auto-revert change ${changeId}: ${reasons.join("; ")}`.slice(0, 1000),
+    );
     await patchState({ status: "rolled-back" });
     await log("rollout.rolled-back", { to: previousVersionId });
     return true;
@@ -266,10 +356,18 @@ export async function runRollout(deps: FlowDeps, rawParams: RolloutParams, step:
   const revertChangeId = await step.do("revert", RETRY.remote, async () => {
     const original = await store.getChange(changeId);
     if (original === null) throw new Error("change disappeared");
-    const result = await openRevertChange({ ports, bindings: deps.bindings }, { original, reason: `rollout regression: ${reasons.join("; ")}` });
+    const result = await openRevertChange(
+      { ports, bindings: deps.bindings },
+      { original, reason: `rollout regression: ${reasons.join("; ")}` },
+    );
     await store.updateChange(changeId, { status: "reverted", revertedBy: result.change.id });
     if (previousVersionId === null) await patchState({ status: "failed" });
-    await notifier.notify({ kind: "reverted", changeId, repoId: ctx.repoId, message: `${ctx.title} was rolled back; revert change ${result.change.id} (${result.method}).` });
+    await notifier.notify({
+      kind: "reverted",
+      changeId,
+      repoId: ctx.repoId,
+      message: `${ctx.title} was rolled back; revert change ${result.change.id} (${result.method}).`,
+    });
     await log("rollout.reverted", { revertChangeId: result.change.id, method: result.method });
     return result.change.id;
   });
