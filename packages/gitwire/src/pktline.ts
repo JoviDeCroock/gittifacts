@@ -86,9 +86,9 @@ export function demuxSideband(payloads: Iterable<Uint8Array>): { data: Bytes; pr
 }
 
 /** Data payloads up to (not including) the first flush; throws on an `ERR <msg>` line. */
-export function payloadsUntilFlush(buf: Uint8Array): Bytes[] {
+export function payloadsUntilFlush(lines: Iterable<PktLine>): Bytes[] {
   const out: Bytes[] = [];
-  for (const line of readPktLines(buf)) {
+  for (const line of lines) {
     if (line.type === "flush") break;
     if (line.type !== "data") continue;
     throwIfErr(line.data);
@@ -99,7 +99,5 @@ export function payloadsUntilFlush(buf: Uint8Array): Bytes[] {
 
 /** gitprotocol-pack.txt "Pack Protocol": a server may answer with `ERR <explanation>`. */
 export function throwIfErr(data: Uint8Array): void {
-  if (data.length >= 4 && data[0] === 0x45 && data[1] === 0x52 && data[2] === 0x52 && data[3] === 0x20) {
-    throw new RemoteError(pktText(data).slice(4));
-  }
+  if (text(data.subarray(0, 4)) === "ERR ") throw new RemoteError(pktText(data).slice(4));
 }

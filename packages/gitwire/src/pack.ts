@@ -3,10 +3,10 @@
  * Format: git Documentation/gitformat-pack.txt "pack-*.pack files have the following format" and
  * "Deltified representation".
  */
-import { type Bytes, concat, deflate, equalBytes, sha1, toHex, utf8 } from "./bytes.js";
+import { type Bytes, concat, deflate, sha1, text, toHex, utf8 } from "./bytes.js";
 import { GitProtocolError } from "./errors.js";
 import { inflateAt } from "./inflate.js";
-import { type GitObject, type ObjectType, hashObject } from "./objects.js";
+import { type GitObject, hashObject, type ObjectType } from "./objects.js";
 
 export interface PackedObject extends GitObject {
   sha: string;
@@ -64,7 +64,7 @@ interface RawEntry {
  * the same pack: a thin pack (gitprotocol-capabilities.txt "thin-pack") fails with a clear error.
  */
 export async function parsePack(pack: Uint8Array): Promise<PackedObject[]> {
-  if (pack.length < 32 || !equalBytes(pack.subarray(0, 4), utf8("PACK"))) {
+  if (pack.length < 32 || text(pack.subarray(0, 4)) !== "PACK") {
     throw new GitProtocolError("not a packfile");
   }
   const view = new DataView(pack.buffer, pack.byteOffset, pack.byteLength);
@@ -72,7 +72,7 @@ export async function parsePack(pack: Uint8Array): Promise<PackedObject[]> {
   if (version !== 2 && version !== 3) throw new GitProtocolError(`unsupported pack v${version}`);
   const count = view.getUint32(8);
   const end = pack.length - 20;
-  if (!equalBytes(await sha1(pack.subarray(0, end)), pack.subarray(end))) {
+  if (toHex(await sha1(pack.subarray(0, end))) !== toHex(pack.subarray(end))) {
     throw new GitProtocolError("pack checksum mismatch");
   }
 
@@ -119,7 +119,11 @@ export async function parsePack(pack: Uint8Array): Promise<PackedObject[]> {
   // chains resolve in O(n) whatever order the bases appear in.
   const byOffset = new Map<number, PackedObject>();
   const waiting = new Map<string, RawEntry[]>();
-  const wait = (key: string, e: RawEntry) => waiting.set(key, [...(waiting.get(key) ?? []), e]);
+  const wait = (key: string, e: RawEntry) => {
+    const list = waiting.get(key);
+    if (list) list.push(e);
+    else waiting.set(key, [e]);
+  };
   const ready: Array<[RawEntry, ObjectType, Bytes]> = [];
   for (const e of raw) {
     if (e.baseOffset !== undefined) wait(`@${e.baseOffset}`, e);

@@ -53,12 +53,21 @@ export function git(cwd: string, args: string[], opts: GitOptions = {}): string 
  * Async variant for git commands that talk to the in-process HTTP server: a synchronous child
  * would block the event loop the server needs to answer it.
  */
-export function gitAsync(cwd: string, args: string[], opts: Pick<GitOptions, "env"> = {}): Promise<string> {
+export function gitAsync(
+  cwd: string,
+  args: string[],
+  opts: Pick<GitOptions, "env"> = {},
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile("git", args, { cwd, env: gitEnv(cwd, opts.env), maxBuffer: 256 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) reject(new Error(`git ${args.join(" ")} failed: ${stderr || err.message}`));
-      else resolve(stdout.trim());
-    });
+    execFile(
+      "git",
+      args,
+      { cwd, env: gitEnv(cwd, opts.env), maxBuffer: 256 * 1024 * 1024 },
+      (err, stdout, stderr) => {
+        if (err) reject(new Error(`git ${args.join(" ")} failed: ${stderr || err.message}`));
+        else resolve(stdout.trim());
+      },
+    );
   });
 }
 

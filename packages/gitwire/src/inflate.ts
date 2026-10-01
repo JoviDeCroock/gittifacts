@@ -19,7 +19,9 @@ const LEN_BASE = [
   3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131,
   163, 195, 227, 258,
 ];
-const LEN_EXTRA = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
+const LEN_EXTRA = [
+  0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
+];
 const DIST_BASE = [
   1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049,
   3073, 4097, 6145, 8193, 12289, 16385, 24577,
@@ -51,15 +53,9 @@ function huffman(lengths: Uint8Array): Huffman {
   return { count, symbol };
 }
 
-let fixed: { lit: Huffman; dist: Huffman } | undefined;
-function fixedTables(): { lit: Huffman; dist: Huffman } {
-  if (!fixed) {
-    const lit = new Uint8Array(288);
-    lit.fill(8, 0, 144).fill(9, 144, 256).fill(7, 256, 280).fill(8, 280, 288);
-    fixed = { lit: huffman(lit), dist: huffman(new Uint8Array(30).fill(5)) };
-  }
-  return fixed;
-}
+// Fixed Huffman codes (RFC 1951 3.2.6).
+const FIXED_LIT = huffman(new Uint8Array(288).fill(8).fill(9, 144, 256).fill(7, 256, 280));
+const FIXED_DIST = huffman(new Uint8Array(30).fill(5));
 
 class Inflater {
   private bitBuf = 0;
@@ -199,7 +195,11 @@ function adler32(data: Uint8Array): number {
  * Inflates the zlib stream starting at `src[pos]`, which must decompress to exactly `size`
  * bytes. Returns the data and the offset just past the stream (after its Adler-32 trailer).
  */
-export function inflateAt(src: Uint8Array, pos: number, size: number): { data: Bytes; end: number } {
+export function inflateAt(
+  src: Uint8Array,
+  pos: number,
+  size: number,
+): { data: Bytes; end: number } {
   const cmf = src[pos];
   const flg = src[pos + 1];
   if (cmf === undefined || flg === undefined) return fail("truncated zlib header");
@@ -212,7 +212,7 @@ export function inflateAt(src: Uint8Array, pos: number, size: number): { data: B
     last = inf.bits(1);
     const type = inf.bits(2);
     if (type === 0) inf.stored();
-    else if (type === 1) inf.codes(fixedTables().lit, fixedTables().dist);
+    else if (type === 1) inf.codes(FIXED_LIT, FIXED_DIST);
     else if (type === 2) inf.dynamic();
     else fail("invalid block type 3");
   }

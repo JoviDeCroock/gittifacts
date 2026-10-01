@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { concat, text, utf8 } from "../src/bytes.js";
 import {
   DELIM,
+  demuxSideband,
   FLUSH,
   GitProtocolError,
   MAX_PKT_LEN,
-  RESPONSE_END,
-  RemoteError,
-  demuxSideband,
   parseReport,
   pktLine,
   pktText,
+  RESPONSE_END,
+  RemoteError,
   readPktLines,
 } from "../src/index.js";
-import { concat, text, utf8 } from "../src/bytes.js";
 
 const ascii = (b: Uint8Array) => Buffer.from(b).toString("latin1");
 
@@ -29,9 +29,23 @@ describe("pkt-line", () => {
 
   it("round-trips data, binary payloads and special packets", () => {
     const binary = new Uint8Array(1000).map((_, i) => i % 256);
-    const buf = concat([pktLine("hello\n"), DELIM, pktLine(binary), FLUSH, pktLine(""), RESPONSE_END]);
+    const buf = concat([
+      pktLine("hello\n"),
+      DELIM,
+      pktLine(binary),
+      FLUSH,
+      pktLine(""),
+      RESPONSE_END,
+    ]);
     const lines = [...readPktLines(buf)];
-    expect(lines.map((l) => l.type)).toEqual(["data", "delim", "data", "flush", "data", "response-end"]);
+    expect(lines.map((l) => l.type)).toEqual([
+      "data",
+      "delim",
+      "data",
+      "flush",
+      "data",
+      "response-end",
+    ]);
     const [first, , second, , empty] = lines;
     expect(first?.type === "data" && pktText(first.data)).toBe("hello");
     expect(second?.type === "data" && Array.from(second.data)).toEqual(Array.from(binary));
@@ -56,7 +70,12 @@ describe("side-band-64k", () => {
     concat([new Uint8Array([n]), typeof s === "string" ? utf8(s) : s]);
 
   it("joins channel 1 and collects channel 2 progress", () => {
-    const { data, progress } = demuxSideband([band(1, "PACK"), band(2, "Counting\r"), band(1, "rest"), band(2, "done\n")]);
+    const { data, progress } = demuxSideband([
+      band(1, "PACK"),
+      band(2, "Counting\r"),
+      band(1, "rest"),
+      band(2, "done\n"),
+    ]);
     expect(text(data)).toBe("PACKrest");
     expect(progress).toBe("Counting\rdone\n");
   });
@@ -101,12 +120,21 @@ describe("report-status parsing", () => {
   });
 
   it("surfaces unpack failures", () => {
-    const failed = concat([pktLine("unpack reachable object is missing\n"), pktLine("ng refs/heads/main missing object\n"), FLUSH]);
-    expect(parseReport(failed)).toMatchObject({ unpackOk: false, unpackError: "reachable object is missing" });
+    const failed = concat([
+      pktLine("unpack reachable object is missing\n"),
+      pktLine("ng refs/heads/main missing object\n"),
+      FLUSH,
+    ]);
+    expect(parseReport(failed)).toMatchObject({
+      unpackOk: false,
+      unpackError: "reachable object is missing",
+    });
   });
 
   it("rejects responses without an unpack line", () => {
-    expect(() => parseReport(concat([pktLine("ok refs/heads/main\n"), FLUSH]))).toThrow(GitProtocolError);
+    expect(() => parseReport(concat([pktLine("ok refs/heads/main\n"), FLUSH]))).toThrow(
+      GitProtocolError,
+    );
     expect(() => parseReport(concat([pktLine("ERR access denied\n")]))).toThrow(RemoteError);
   });
 });

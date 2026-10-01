@@ -19,19 +19,19 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  type GitRemote,
-  MissingObjectError,
-  type RefUpdate,
-  StaleRefError,
-  ZERO_SHA,
   fastForward,
   fetchPack,
+  type GitRemote,
   listRefs,
+  MissingObjectError,
   parsePack,
+  type RefUpdate,
   readNote,
   receivePack,
+  StaleRefError,
   transferObjects,
   writeNote,
+  ZERO_SHA,
 } from "../src/index.js";
 
 function requireEnv(name: string): string {
@@ -83,7 +83,9 @@ async function step<T>(name: string, fn: () => Promise<T>): Promise<T | undefine
     return result;
   } catch (err) {
     failures++;
-    console.log(`FAIL  ${name}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
+    console.log(
+      `FAIL  ${name}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`,
+    );
     return undefined;
   }
 }
@@ -111,7 +113,10 @@ async function main(): Promise<void> {
   await step("listRefs v2 (ls-refs)", async () => {
     const refs = await listRefs(remote, { prefixes: [`refs/heads/gitwire-smoke/${run}/`] });
     console.log(`      protocol ${refs.protocol}; caps: ${[...refs.capabilities].join(", ")}`);
-    check(refs.get(branch) === a && refs.get(next) === b, `unexpected refs ${JSON.stringify([...refs])}`);
+    check(
+      refs.get(branch) === a && refs.get(next) === b,
+      `unexpected refs ${JSON.stringify([...refs])}`,
+    );
   });
   await step("listRefs v1", async () => {
     const refs = await listRefs(remote, { protocol: 1 });
@@ -131,18 +136,30 @@ async function main(): Promise<void> {
     check((await readNote(remote, notesRef, a)) === content, "readNote mismatch");
   });
   await step("writeNote (append) + git notes show", async () => {
-    await writeNote(remote, { notesRef, targetSha: a, content: "appended\n", author, mode: "append" });
+    await writeNote(remote, {
+      notesRef,
+      targetSha: a,
+      content: "appended\n",
+      author,
+      mode: "append",
+    });
     const expected = `${JSON.stringify({ run, kind: "smoke" })}\n\nappended\n`;
     check((await readNote(remote, notesRef, a)) === expected, "readNote after append mismatch");
     git("fetch", "-q", url, `${notesRef}:${notesRef}`);
-    const viaGit = execFileSync("git", ["notes", `--ref=${notesRef}`, "show", a], { cwd: dir, encoding: "utf8" });
+    const viaGit = execFileSync("git", ["notes", `--ref=${notesRef}`, "show", a], {
+      cwd: dir,
+      encoding: "utf8",
+    });
     check(viaGit === expected, `git notes show returned ${JSON.stringify(viaGit)}`);
   });
 
   // 4. Compare-and-swap fast-forward.
   await step("fastForward A -> B", async () => {
     await fastForward(remote, branch, a, b);
-    check((await listRefs(remote, { prefixes: [branch] })).get(branch) === b, "branch did not move");
+    check(
+      (await listRefs(remote, { prefixes: [branch] })).get(branch) === b,
+      "branch did not move",
+    );
   });
   await step("fastForward with stale old SHA -> StaleRefError", async () => {
     const err = await fastForward(remote, branch, a, b).catch((e: unknown) => e);
@@ -150,7 +167,12 @@ async function main(): Promise<void> {
     console.log(`      ${(err as Error).message}`);
   });
   await step("fastForward to an absent commit -> MissingObjectError", async () => {
-    const err = await fastForward(remote, branch, b, "1234567890123456789012345678901234567890").catch((e: unknown) => e);
+    const err = await fastForward(
+      remote,
+      branch,
+      b,
+      "1234567890123456789012345678901234567890",
+    ).catch((e: unknown) => e);
     check(err instanceof MissingObjectError, `expected MissingObjectError, got ${String(err)}`);
     console.log(`      ${(err as Error).message}`);
   });
@@ -158,31 +180,51 @@ async function main(): Promise<void> {
   // 5. Fetch.
   await step("fetchPack (full) + parsePack", async () => {
     const objects = await parsePack(await fetchPack(remote, { wants: [b], haves: [] }));
-    check(objects.some((o) => o.sha === b) && objects.some((o) => o.sha === a), "commits missing from pack");
+    check(
+      objects.some((o) => o.sha === b) && objects.some((o) => o.sha === a),
+      "commits missing from pack",
+    );
     console.log(`      ${objects.length} objects`);
   });
   await step("fetchPack depth 1 + blob:none", async () => {
-    const objects = await parsePack(await fetchPack(remote, { wants: [b], depth: 1, filter: "blob:none" }));
+    const objects = await parsePack(
+      await fetchPack(remote, { wants: [b], depth: 1, filter: "blob:none" }),
+    );
     check(!objects.some((o) => o.type === "blob"), "blob:none returned blobs");
-    check(objects.filter((o) => o.type === "commit").length === 1, "depth 1 returned more than one commit");
+    check(
+      objects.filter((o) => o.type === "commit").length === 1,
+      "depth 1 returned more than one commit",
+    );
   });
 
   // 6. Cross-repo transfer (optional).
   if (remote2) {
     await step("transferObjects remote -> remote2", async () => {
       await transferObjects(remote, remote2, { sha: b, toRef: mq });
-      check((await listRefs(remote2, { prefixes: [mq] })).get(mq) === b, "mq ref not created on remote2");
+      check(
+        (await listRefs(remote2, { prefixes: [mq] })).get(mq) === b,
+        "mq ref not created on remote2",
+      );
     });
   }
 
   // 7. Cleanup (delete-only receive-pack: no pack is sent).
   if (process.env.GITWIRE_KEEP !== "1") {
     await step("delete created refs", async () => {
-      const refs = await listRefs(remote, { prefixes: [`refs/heads/gitwire-smoke/${run}/`, notesRef] });
-      const updates: RefUpdate[] = [...refs].map(([ref, sha]) => ({ ref, oldSha: sha, newSha: ZERO_SHA }));
+      const refs = await listRefs(remote, {
+        prefixes: [`refs/heads/gitwire-smoke/${run}/`, notesRef],
+      });
+      const updates: RefUpdate[] = [...refs].map(([ref, sha]) => ({
+        ref,
+        oldSha: sha,
+        newSha: ZERO_SHA,
+      }));
       if (updates.length) {
         const report = await receivePack(remote, updates);
-        check(report.refs.every((r) => r.ok), `delete failed: ${JSON.stringify(report.refs)}`);
+        check(
+          report.refs.every((r) => r.ok),
+          `delete failed: ${JSON.stringify(report.refs)}`,
+        );
       }
       if (remote2) {
         const mqSha = (await listRefs(remote2, { prefixes: [mq] })).get(mq);

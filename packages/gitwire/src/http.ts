@@ -3,17 +3,9 @@
  * See git Documentation/gitprotocol-http.txt "Smart Clients" / "Smart Service git-upload-pack",
  * gitprotocol-pack.txt "Reference Discovery" (v0/v1) and gitprotocol-v2.txt "ls-refs".
  */
-import { type Bytes, ZERO_SHA, base64, isSha, own } from "./bytes.js";
+import { type Bytes, base64, isSha, own, ZERO_SHA } from "./bytes.js";
 import { GitHttpError, GitProtocolError } from "./errors.js";
-import {
-  DELIM,
-  FLUSH,
-  encodeLines,
-  payloadsUntilFlush,
-  pktText,
-  readPktLines,
-  throwIfErr,
-} from "./pktline.js";
+import { DELIM, encodeLines, FLUSH, payloadsUntilFlush, pktText, readPktLines } from "./pktline.js";
 
 export type GitAuth = { bearer: string } | { basic: { username: string; password: string } };
 
@@ -30,57 +22,42 @@ export type GitService = "git-upload-pack" | "git-receive-pack";
 /** Sent as `agent=` (gitprotocol-capabilities.txt "agent"); also the User-Agent prefix. */
 export const AGENT = "gittifacts/0";
 
-function headers(remote: GitRemote, extra: Record<string, string>): Headers {
+/**
+ * One smart-HTTP exchange. Without a body: GET `info/refs?service=…` (the v1 ref advertisement or
+ * the v2 capability advertisement). With a body: POST a stateless RPC request to `/<service>`.
+ */
+export async function request(
+  remote: GitRemote,
+  service: GitService,
+  v2: boolean,
+  body?: Uint8Array,
+): Promise<Bytes> {
+  const type = `application/x-${service}-${body ? "result" : "advertisement"}`;
   // Some hosts only speak the smart protocol to user agents starting with "git/".
-  const h = new Headers({ "User-Agent": `git/${AGENT}`, ...extra });
-  if (remote.auth && "bearer" in remote.auth) h.set("Authorization", `Bearer ${remote.auth.bearer}`);
-  else if (remote.auth) {
-    const { username, password } = remote.auth.basic;
-    h.set("Authorization", `Basic ${base64(`${username}:${password}`)}`);
-  }
-  return h;
-}
-
-async function send(remote: GitRemote, path: string, init: RequestInit, type: string): Promise<Bytes> {
-  const url = `${remote.url.replace(/\/+$/, "")}/${path}`;
-  const res = await (remote.fetch ?? fetch)(url, init);
-  const body = new Uint8Array(await res.arrayBuffer());
-  const snippet = () => new TextDecoder().decode(body.subarray(0, 512));
-  if (!res.ok) {
-    throw new GitHttpError(res.status, `${init.method} ${path}: HTTP ${res.status}`, snippet());
-  }
+  const headers = new Headers({ "User-Agent": `git/${AGENT}`, Accept: type });
+  if (body) headers.set("Content-Type", `application/x-${service}-request`);
+  if (v2) headers.set("Git-Protocol", "version=2");
+  const auth = remote.auth;
+  if (auth && "bearer" in auth) headers.set("Authorization", `Bearer ${auth.bearer}`);
+  else if (auth)
+    headers.set(
+      "Authorization",
+      `Basic ${base64(`${auth.basic.username}:${auth.basic.password}`)}`,
+    );
+  const path = body ? service : `info/refs?service=${service}`;
+  const init: RequestInit = { method: body ? "POST" : "GET", headers };
+  if (body) init.body = own(body);
+  const res = await (remote.fetch ?? fetch)(`${remote.url.replace(/\/+$/, "")}/${path}`, init);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const snippet = new TextDecoder().decode(bytes.subarray(0, 512));
+  if (!res.ok)
+    throw new GitHttpError(res.status, `${init.method} ${path}: HTTP ${res.status}`, snippet);
   // gitprotocol-http.txt: clients MUST check the Content-Type of smart responses.
   const ct = res.headers.get("Content-Type");
   if (ct && !ct.startsWith(type)) {
-    throw new GitHttpError(res.status, `${path}: expected ${type}, got ${ct}`, snippet());
+    throw new GitHttpError(res.status, `${path}: expected ${type}, got ${ct}`, snippet);
   }
-  return body;
-}
-
-/** GET `info/refs?service=…` — the v1 ref advertisement, or the v2 capability advertisement. */
-export function advertise(remote: GitRemote, service: GitService, v2: boolean): Promise<Bytes> {
-  const extra: Record<string, string> = v2 ? { "Git-Protocol": "version=2" } : {};
-  return send(
-    remote,
-    `info/refs?service=${service}`,
-    { method: "GET", headers: headers(remote, extra) },
-    `application/x-${service}-advertisement`,
-  );
-}
-
-/** POST a stateless RPC request to `/<service>`. */
-export function rpc(remote: GitRemote, service: GitService, body: Uint8Array, v2: boolean): Promise<Bytes> {
-  const extra: Record<string, string> = {
-    "Content-Type": `application/x-${service}-request`,
-    Accept: `application/x-${service}-result`,
-  };
-  if (v2) extra["Git-Protocol"] = "version=2";
-  return send(
-    remote,
-    service,
-    { method: "POST", headers: headers(remote, extra), body: own(body) },
-    `application/x-${service}-result`,
-  );
+  return bytes;
 }
 
 /** Refs → SHA. Peeled tags appear as `refs/tags/x^{}` (like `git ls-remote`). */
@@ -109,28 +86,14 @@ function refMap(protocol: 1 | 2): RefMap {
   });
 }
 
-/**
- * Advertisement payloads, minus the "# service=<name>" line + flush that smart HTTP prepends
- * (gitprotocol-http.txt "Smart Clients"), up to the closing flush.
- */
+/** Advertisement payloads, minus the "# service=<name>" line + flush smart HTTP prepends. */
 function advertisedLines(buf: Uint8Array): Bytes[] {
-  const out: Bytes[] = [];
-  let index = 0;
-  let header = false;
-  for (const line of readPktLines(buf)) {
-    index++;
-    if (line.type === "flush") {
-      if (header && index === 2) continue;
-      break;
-    }
-    if (line.type !== "data") continue;
-    if (index === 1 && pktText(line.data).startsWith("# service=")) header = true;
-    else {
-      throwIfErr(line.data);
-      out.push(line.data);
-    }
+  const lines = [...readPktLines(buf)];
+  const first = lines[0];
+  if (first?.type === "data" && pktText(first.data).startsWith("# service=")) {
+    lines.splice(0, lines[1]?.type === "flush" ? 2 : 1); // gitprotocol-http.txt "Smart Clients"
   }
-  return out;
+  return payloadsUntilFlush(lines);
 }
 
 /** gitprotocol-pack.txt "Reference Discovery": `<sha> <ref>[\0<caps>]` lines. */
@@ -140,7 +103,8 @@ function parseV1(lines: Bytes[], out: RefMap): void {
     if (i === 0) {
       const nul = line.indexOf("\0");
       if (nul >= 0) {
-        for (const cap of line.slice(nul + 1).split(" ").filter(Boolean)) {
+        for (const cap of line.slice(nul + 1).split(" ")) {
+          if (!cap) continue;
           out.capabilities.add(cap);
           const m = /^symref=([^:]+):(.+)$/.exec(cap);
           if (m) out.symrefs.set(m[1]!, m[2]!);
@@ -162,7 +126,7 @@ export async function listRefs(remote: GitRemote, opts: ListRefsOptions = {}): P
   const service = opts.service ?? "git-upload-pack";
   // receive-pack is v1 only on Artifacts (and in git itself), so never ask it for v2.
   const wantV2 = opts.protocol !== 1 && service === "git-upload-pack";
-  const adv = advertisedLines(await advertise(remote, service, wantV2));
+  const adv = advertisedLines(await request(remote, service, wantV2));
   let refs: RefMap;
   if (wantV2 && adv[0] && pktText(adv[0]) === "version 2") {
     refs = refMap(2);
@@ -170,9 +134,11 @@ export async function listRefs(remote: GitRemote, opts: ListRefsOptions = {}): P
     const args = ["peel\n", "symrefs\n", ...(opts.prefixes ?? []).map((p) => `ref-prefix ${p}\n`)];
     const body = encodeLines(["command=ls-refs\n", `agent=${AGENT}\n`, DELIM, ...args, FLUSH]);
     // gitprotocol-v2.txt "ls-refs": `<oid> <ref>[ symref-target:<t>][ peeled:<oid>]`.
-    for (const raw of payloadsUntilFlush(await rpc(remote, "git-upload-pack", body, true))) {
+    const res = await request(remote, "git-upload-pack", true, body);
+    for (const raw of payloadsUntilFlush(readPktLines(res))) {
       const [sha, ref, ...attrs] = pktText(raw).split(" ");
-      if (!sha || !ref || !isSha(sha)) throw new GitProtocolError(`bad ls-refs line: ${pktText(raw)}`);
+      if (!sha || !ref || !isSha(sha))
+        throw new GitProtocolError(`bad ls-refs line: ${pktText(raw)}`);
       refs.set(ref, sha);
       for (const a of attrs) {
         if (a.startsWith("symref-target:")) refs.symrefs.set(ref, a.slice(14));

@@ -3,11 +3,18 @@
  * See git Documentation/gitprotocol-pack.txt "Pushing Data To a Server" and "Report Status",
  * and gitprotocol-capabilities.txt "report-status" / "side-band-64k" / "atomic".
  */
-import { type Bytes, ZERO_SHA, assertSha, own } from "./bytes.js";
+import { assertSha, type Bytes, own, ZERO_SHA } from "./bytes.js";
 import { GitProtocolError, MissingObjectError, RejectedError, StaleRefError } from "./errors.js";
-import { AGENT, type GitRemote, listRefs, rpc } from "./http.js";
+import { AGENT, type GitRemote, listRefs, request } from "./http.js";
 import { buildPack } from "./pack.js";
-import { FLUSH, demuxSideband, encodeLines, payloadsUntilFlush, pktText, readPktLines } from "./pktline.js";
+import {
+  demuxSideband,
+  encodeLines,
+  FLUSH,
+  payloadsUntilFlush,
+  pktText,
+  readPktLines,
+} from "./pktline.js";
 import { fetchPack } from "./upload.js";
 
 export interface RefUpdate {
@@ -68,7 +75,7 @@ export async function receivePack(
   );
   const tail: Bytes[] = deleteOnly ? [] : [pack ? own(pack) : await buildPack([])];
   const body = encodeLines([...commands, FLUSH, ...tail]);
-  return parseReport(await rpc(remote, "git-receive-pack", body, false));
+  return parseReport(await request(remote, "git-receive-pack", false, body));
 }
 
 /**
@@ -78,35 +85,28 @@ export async function receivePack(
  * payload tells the two apart.
  */
 export function parseReport(res: Uint8Array): PushReport {
-  let payloads = payloadsUntilFlush(res);
+  let payloads = payloadsUntilFlush(readPktLines(res));
   let progress = "";
   const band = payloads[0]?.[0];
   if (band !== undefined && band >= 1 && band <= 3) {
     const demuxed = demuxSideband(payloads);
     progress = demuxed.progress;
-    payloads = [];
-    for (const line of readPktLines(demuxed.data)) {
-      if (line.type === "flush") break;
-      if (line.type === "data") payloads.push(line.data);
-    }
+    payloads = payloadsUntilFlush(readPktLines(demuxed.data));
   }
   const [first, ...rest] = payloads.map(pktText);
   if (!first?.startsWith("unpack ")) {
-    throw new GitProtocolError(`missing unpack status in push response${progress ? `: ${progress.trim()}` : ""}`);
+    throw new GitProtocolError(
+      `missing unpack status in push response${progress ? `: ${progress.trim()}` : ""}`,
+    );
   }
   const unpack = first.slice(7);
   const report: PushReport = { unpackOk: unpack === "ok", refs: [], progress };
   if (unpack !== "ok") report.unpackError = unpack;
   for (const line of rest) {
-    if (line.startsWith("ok ")) report.refs.push({ ref: line.slice(3), ok: true });
-    else if (line.startsWith("ng ")) {
-      const sp = line.indexOf(" ", 3);
-      report.refs.push(
-        sp < 0
-          ? { ref: line.slice(3), ok: false, reason: "" }
-          : { ref: line.slice(3, sp), ok: false, reason: line.slice(sp + 1) },
-      );
-    }
+    // command-status = "ok" SP refname / "ng" SP refname SP error-msg (refnames have no spaces)
+    const m = /^(ok|ng) (\S+)(?: (.*))?$/.exec(line);
+    if (m?.[1] === "ok") report.refs.push({ ref: m[2]!, ok: true });
+    else if (m) report.refs.push({ ref: m[2]!, ok: false, reason: m[3] ?? "" });
   }
   return report;
 }
@@ -153,6 +153,8 @@ export interface TransferOptions {
   sha: string;
   /** Ref to point at it in the target, e.g. refs/merge-queue/<changeId>. */
   toRef: string;
+  /** CAS expectation for `toRef` (ZERO_SHA = must not exist). Default: its current value. */
+  oldSha?: string;
   /** Objects the target is known to have. Default: every tip the target advertises. */
   haves?: string[];
 }
@@ -169,8 +171,9 @@ export async function transferObjects(
 ): Promise<RefResult> {
   assertSha(opts.sha, "sha");
   const target = await listRefs(to, { service: "git-receive-pack" });
-  const oldSha = target.get(opts.toRef) ?? ZERO_SHA;
-  if (oldSha === opts.sha) return { ref: opts.toRef, ok: true };
+  const current = target.get(opts.toRef) ?? ZERO_SHA;
+  const oldSha = opts.oldSha ?? current;
+  if (current === opts.sha && oldSha === current) return { ref: opts.toRef, ok: true };
   const tips = [...target].filter(([ref]) => !ref.endsWith("^{}")).map(([, sha]) => sha);
   const haves = opts.haves ?? [...new Set(tips)];
   const pack = await fetchPack(from, {

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { utf8 } from "../src/bytes.js";
 import {
   type Commit,
-  type TreeEntry,
   decodeCommit,
   decodeTree,
   encodeCommit,
@@ -9,8 +9,8 @@ import {
   formatSignature,
   hashObject,
   parseSignature,
+  type TreeEntry,
 } from "../src/index.js";
-import { utf8 } from "../src/bytes.js";
 import { git, gitBytes, tempDir } from "./support/git.js";
 
 let dir: string;
@@ -54,13 +54,25 @@ describe("trees", () => {
       { mode: "100644", name: "Z", sha: b },
     ];
     const mktreeInput = entries
-      .map((e) => `${e.mode === "40000" ? "040000" : e.mode} ${e.mode === "40000" ? "tree" : e.mode === "160000" ? "commit" : "blob"} ${e.sha}\t${e.name}\n`)
+      .map(
+        (e) =>
+          `${e.mode === "40000" ? "040000" : e.mode} ${e.mode === "40000" ? "tree" : e.mode === "160000" ? "commit" : "blob"} ${e.sha}\t${e.name}\n`,
+      )
       .join("");
     const expected = git(dir, ["mktree", "--missing"], { input: mktreeInput });
     const data = encodeTree(entries);
     expect(await hashObject({ type: "tree", data })).toBe(expected);
     expect(Buffer.from(data).equals(gitBytes(dir, ["cat-file", "tree", expected]))).toBe(true);
-    expect(decodeTree(data).map((e) => e.name)).toEqual(["Z", "foo-bar", "foo.txt", "foo", "foo0", "link", "submodule", "é.txt"]);
+    expect(decodeTree(data).map((e) => e.name)).toEqual([
+      "Z",
+      "foo-bar",
+      "foo.txt",
+      "foo",
+      "foo0",
+      "link",
+      "submodule",
+      "é.txt",
+    ]);
   });
 
   it("decodes git's raw tree bytes", () => {
@@ -74,7 +86,9 @@ describe("trees", () => {
 
   it("rejects invalid entries", () => {
     const sha = "a".repeat(40);
-    expect(() => encodeTree([{ mode: "100644", name: "a/b", sha }])).toThrow(/invalid tree entry name/);
+    expect(() => encodeTree([{ mode: "100644", name: "a/b", sha }])).toThrow(
+      /invalid tree entry name/,
+    );
     expect(() => encodeTree([{ mode: "100644", name: "", sha }])).toThrow();
     expect(() => encodeTree([{ mode: "100644", name: "x", sha: "nope" }])).toThrow(/SHA-1/);
     expect(() =>
@@ -87,8 +101,18 @@ describe("trees", () => {
 });
 
 describe("commits", () => {
-  const author = { name: "Ada Lovelace", email: "ada@example.com", timestamp: 1700000000, timezone: "+0100" };
-  const committer = { name: "Bot", email: "bot@example.com", timestamp: 1700000123, timezone: "-0730" };
+  const author = {
+    name: "Ada Lovelace",
+    email: "ada@example.com",
+    timestamp: 1700000000,
+    timezone: "+0100",
+  };
+  const committer = {
+    name: "Bot",
+    email: "bot@example.com",
+    timestamp: 1700000123,
+    timezone: "-0730",
+  };
 
   it("encodes exactly like git commit-tree", async () => {
     const tree = git(dir, ["mktree"], { input: "" });
@@ -126,7 +150,9 @@ describe("commits", () => {
     ].join("\n");
     const sha = git(dir, ["hash-object", "-t", "commit", "-w", "--stdin"], { input: raw });
     const decoded = decodeCommit(utf8(raw));
-    expect(decoded.extraHeaders).toEqual([["gpgsig", "-----BEGIN PGP SIGNATURE-----\n\niQEzBAABCAAdFiEE\n-----END PGP SIGNATURE-----"]]);
+    expect(decoded.extraHeaders).toEqual([
+      ["gpgsig", "-----BEGIN PGP SIGNATURE-----\n\niQEzBAABCAAdFiEE\n-----END PGP SIGNATURE-----"],
+    ]);
     expect(await hashObject({ type: "commit", data: encodeCommit(decoded) })).toBe(sha);
   });
 

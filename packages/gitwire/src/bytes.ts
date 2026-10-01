@@ -31,12 +31,6 @@ export function concat(parts: readonly Uint8Array[]): Bytes {
   return out;
 }
 
-export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
-
 const HEX_DIGITS = "0123456789abcdef";
 
 export function toHex(b: Uint8Array): string {

@@ -2,7 +2,7 @@
  * Loose git object encodings: blob/tree/commit bodies and their SHA-1 ids.
  * See git Documentation/gitformat-pack.txt "Object types" and the `git cat-file` formats.
  */
-import { type Bytes, assertSha, concat, fromHex, sha1, text, toHex, utf8 } from "./bytes.js";
+import { assertSha, type Bytes, concat, fromHex, sha1, text, toHex, utf8 } from "./bytes.js";
 import { GitProtocolError } from "./errors.js";
 
 export type ObjectType = "blob" | "tree" | "commit" | "tag";
@@ -49,7 +49,11 @@ export function encodeTree(entries: readonly TreeEntry[]): Bytes {
     const mode = e.mode === "040000" ? "40000" : e.mode;
     const name = utf8(e.name);
     const key = isTreeMode(mode) ? concat([name, utf8("/")]) : name;
-    return { key, name, bytes: concat([utf8(`${mode} `), name, new Uint8Array([0]), fromHex(e.sha)]) };
+    return {
+      key,
+      name,
+      bytes: concat([utf8(`${mode} `), name, new Uint8Array([0]), fromHex(e.sha)]),
+    };
   });
   rows.sort((a, b) => compareBytes(a.key, b.key));
   for (let i = 1; i < rows.length; i++) {

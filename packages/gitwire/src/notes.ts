@@ -5,21 +5,22 @@
  * `load_subtree`. We read every layout, write new notes flat at the root, and rewrite an
  * existing note in place so fanout trees written by git are preserved.
  */
-import { ZERO_SHA, assertSha, concat, text, utf8 } from "./bytes.js";
+import { assertSha, concat, text, utf8, ZERO_SHA } from "./bytes.js";
 import { GitProtocolError, StaleRefError } from "./errors.js";
 import { type GitRemote, listRefs } from "./http.js";
 import {
-  type GitObject,
-  type Signature,
-  type TreeEntry,
   decodeCommit,
   decodeTree,
   encodeCommit,
   encodeTree,
+  type GitObject,
   hashObject,
   isTreeMode,
+  type ObjectType,
+  type Signature,
+  type TreeEntry,
 } from "./objects.js";
-import { type PackedObject, buildPack, parsePack } from "./pack.js";
+import { buildPack, type PackedObject, parsePack } from "./pack.js";
 import { assertRefUpdated, receivePack } from "./receive.js";
 import { fetchPack } from "./upload.js";
 
@@ -72,16 +73,17 @@ async function remoteReader(remote: GitRemote, notesRef: string): Promise<Object
   return {
     resolveRef: (ref) => store.resolveRef(ref),
     async readObject(sha) {
-      if (!(await store.readObject(sha))) store.add(await parsePack(await fetchPack(remote, { wants: [sha] })));
+      if (!(await store.readObject(sha)))
+        store.add(await parsePack(await fetchPack(remote, { wants: [sha] })));
       return store.readObject(sha);
     },
   };
 }
 
-async function read(reader: ObjectReader, sha: string, type: GitObject["type"]): Promise<Uint8Array> {
+async function read(reader: ObjectReader, sha: string, type: ObjectType): Promise<Uint8Array> {
   const obj = await reader.readObject(sha);
-  if (obj?.type !== type) throw new GitProtocolError(`expected ${type} ${sha}, got ${obj?.type ?? "nothing"}`);
-  return obj.data;
+  if (obj?.type === type) return obj.data;
+  throw new GitProtocolError(`expected ${type} ${sha}, got ${obj?.type ?? "nothing"}`);
 }
 
 /** Path of the note for `target` under `tree` (e.g. ["ab", "cdef…"]) and its blob id. */
@@ -137,7 +139,10 @@ async function putPath(
   const entry: TreeEntry = rest.length
     ? { mode: "40000", name, sha: await putPath(reader, existing?.sha, rest, blob, created) }
     : { mode: "100644", name, sha: blob };
-  const obj: GitObject = { type: "tree", data: encodeTree([...entries.filter((e) => e !== existing), entry]) };
+  const obj: GitObject = {
+    type: "tree",
+    data: encodeTree([...entries.filter((e) => e !== existing), entry]),
+  };
   created.push(obj);
   return hashObject(obj);
 }
@@ -167,9 +172,10 @@ export interface WriteNoteResult {
 }
 
 const sig = (s: SignatureInput, now: number): Signature => ({
-  timestamp: now,
-  timezone: "+0000",
-  ...s,
+  name: s.name,
+  email: s.email,
+  timestamp: s.timestamp ?? now,
+  timezone: s.timezone ?? "+0000",
 });
 
 async function writeOnce(remote: GitRemote, opts: WriteNoteOptions, notesRef: string) {
@@ -212,7 +218,10 @@ async function writeOnce(remote: GitRemote, opts: WriteNoteOptions, notesRef: st
  * Adds/replaces/appends the note for `targetSha` and pushes a new notes commit whose parent is
  * the current tip, with CAS on the notes ref. A lost race (StaleRefError) re-reads and retries.
  */
-export async function writeNote(remote: GitRemote, opts: WriteNoteOptions): Promise<WriteNoteResult> {
+export async function writeNote(
+  remote: GitRemote,
+  opts: WriteNoteOptions,
+): Promise<WriteNoteResult> {
   assertSha(opts.targetSha, "targetSha");
   const notesRef = opts.notesRef ?? DEFAULT_NOTES_REF;
   const maxRetries = opts.maxRetries ?? 3;

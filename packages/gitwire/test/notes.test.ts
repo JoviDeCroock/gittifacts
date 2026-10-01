@@ -1,21 +1,26 @@
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  type GitRemote,
-  MemoryObjectStore,
-  StaleRefError,
   fetchPack,
+  type GitRemote,
   listRefs,
+  MemoryObjectStore,
   parsePack,
   readNote,
+  StaleRefError,
   writeNote,
 } from "../src/index.js";
-import { type GitHttpServer, startGitHttpServer } from "./support/git-http-server.js";
 import { commitFiles, git, gitAsync, gitBytes, initRepo, tempDir } from "./support/git.js";
+import { type GitHttpServer, startGitHttpServer } from "./support/git-http-server.js";
 
 const TOKEN = "notes-token";
 const NOTES = "refs/notes/evidence";
-const author = { name: "gittifacts", email: "bot@gittifacts.dev", timestamp: 1700001000, timezone: "+0000" };
+const author = {
+  name: "gittifacts",
+  email: "bot@gittifacts.dev",
+  timestamp: 1700001000,
+  timezone: "+0000",
+};
 
 let server: GitHttpServer;
 let tmp: { path: string; cleanup: () => void };
@@ -73,15 +78,28 @@ describe("writeNote / readNote", () => {
   it("creates the notes ref and git reads the note from a clone", async () => {
     const r = repo();
     const content = '{"format":"gittifacts.evidence/v1"}\n';
-    const result = await writeNote(r.remote, { targetSha: c2, content, author, message: "evidence for c2\n" });
+    const result = await writeNote(r.remote, {
+      targetSha: c2,
+      content,
+      author,
+      message: "evidence for c2\n",
+    });
     expect(result).toMatchObject({ changed: true, attempts: 1 });
     expect(git(r.path, ["rev-parse", NOTES])).toBe(result.notesCommit);
     git(r.path, ["fsck", "--full", "--strict"]);
-    expect(git(r.path, ["log", "-1", "--format=%an <%ae>|%P|%B", NOTES])).toBe("gittifacts <bot@gittifacts.dev>||evidence for c2");
+    expect(git(r.path, ["log", "-1", "--format=%an <%ae>|%P|%B", NOTES])).toBe(
+      "gittifacts <bot@gittifacts.dev>||evidence for c2",
+    );
 
     const clone = join(tmp.path, `clone-${counter}`);
     await gitAsync(tmp.path, [...server.gitAuthArgs(), "clone", "-q", server.url(r.name), clone]);
-    await gitAsync(clone, [...server.gitAuthArgs(), "fetch", "-q", "origin", "refs/notes/*:refs/notes/*"]);
+    await gitAsync(clone, [
+      ...server.gitAuthArgs(),
+      "fetch",
+      "-q",
+      "origin",
+      "refs/notes/*:refs/notes/*",
+    ]);
     expect(gitNote(clone, c2)).toBe(content);
     expect(await readNote(r.remote, NOTES, c2)).toBe(content);
   });
@@ -90,7 +108,8 @@ describe("writeNote / readNote", () => {
     const r = repo();
     expect(await readNote(r.remote, NOTES, c1)).toBeNull(); // no notes ref yet
     const first = await writeNote(r.remote, { targetSha: c1, content: "v1\n", author });
-    const second = await writeNote(r.remote, { targetSha: c1, content: "v2\n", author });
+    const unset = { name: "a", email: "a@x", timestamp: undefined }; // defaults to now / +0000
+    const second = await writeNote(r.remote, { targetSha: c1, content: "v2\n", author: unset });
     await writeNote(r.remote, { targetSha: c3, content: "other\n", author });
     expect(git(r.path, ["rev-parse", `${NOTES}~1`])).toBe(second.notesCommit);
     expect(git(r.path, ["rev-parse", `${NOTES}~2`])).toBe(first.notesCommit);
@@ -119,7 +138,10 @@ describe("writeNote / readNote", () => {
       if (init?.method === "POST") posts.push(String(input));
       return fetch(input, init);
     };
-    const again = await writeNote({ ...r.remote, fetch: spy }, { targetSha: c1, content: "same\n", author });
+    const again = await writeNote(
+      { ...r.remote, fetch: spy },
+      { targetSha: c1, content: "same\n", author },
+    );
     expect(again).toEqual({ notesCommit: first.notesCommit, changed: false, attempts: 1 });
     expect(posts.some((u) => u.endsWith("git-receive-pack"))).toBe(false);
   });
@@ -128,7 +150,10 @@ describe("writeNote / readNote", () => {
     const r = repo();
     const [d1, rest1] = [c1.slice(0, 2), c1.slice(2)];
     const [d3a, d3b, rest3] = [c3.slice(0, 2), c3.slice(2, 4), c3.slice(4)];
-    const tip = gitNotesCommit(r.path, { [`${d1}/${rest1}`]: "fanout note\n", [`${d3a}/${d3b}/${rest3}`]: "deep note\n" });
+    const tip = gitNotesCommit(r.path, {
+      [`${d1}/${rest1}`]: "fanout note\n",
+      [`${d3a}/${d3b}/${rest3}`]: "deep note\n",
+    });
     git(r.path, ["update-ref", NOTES, tip]);
     expect(gitNote(r.path, c1)).toBe("fanout note\n"); // git agrees this is a valid fanout layout
     expect(await readNote(r.remote, NOTES, c1)).toBe("fanout note\n");
@@ -179,18 +204,32 @@ describe("writeNote / readNote", () => {
     const racer: typeof fetch = async (input, init) => {
       if (!interfered && String(input).endsWith("git-receive-pack")) {
         interfered = true; // another writer lands first, between our read and our push
-        await writeNote(r.remote, { targetSha: c2, content: races++ ? `racer ${races}\n` : "racer\n", author });
+        await writeNote(r.remote, {
+          targetSha: c2,
+          content: races++ ? `racer ${races}\n` : "racer\n",
+          author,
+        });
       }
       return fetch(input, init);
     };
-    const result = await writeNote({ ...r.remote, fetch: racer }, { targetSha: c3, content: "mine\n", author });
+    const result = await writeNote(
+      { ...r.remote, fetch: racer },
+      { targetSha: c3, content: "mine\n", author },
+    );
     expect(result.attempts).toBe(2);
-    expect([gitNote(r.path, c1), gitNote(r.path, c2), gitNote(r.path, c3)]).toEqual(["base\n", "racer\n", "mine\n"]);
+    expect([gitNote(r.path, c1), gitNote(r.path, c2), gitNote(r.path, c3)]).toEqual([
+      "base\n",
+      "racer\n",
+      "mine\n",
+    ]);
 
     // With retries disabled the lost race surfaces as StaleRefError.
     interfered = false;
     await expect(
-      writeNote({ ...r.remote, fetch: racer }, { targetSha: c3, content: "again\n", author, maxRetries: 0 }),
+      writeNote(
+        { ...r.remote, fetch: racer },
+        { targetSha: c3, content: "again\n", author, maxRetries: 0 },
+      ),
     ).rejects.toBeInstanceOf(StaleRefError);
   });
 
@@ -198,7 +237,9 @@ describe("writeNote / readNote", () => {
     const r = repo();
     const targets = [c1, c2, c3];
     const results = await Promise.all(
-      targets.map((targetSha) => writeNote(r.remote, { targetSha, content: `note ${targetSha}\n`, author, maxRetries: 6 })),
+      targets.map((targetSha) =>
+        writeNote(r.remote, { targetSha, content: `note ${targetSha}\n`, author, maxRetries: 6 }),
+      ),
     );
     expect(results.every((x) => x.changed)).toBe(true);
     for (const t of targets) expect(gitNote(r.path, t)).toBe(`note ${t}\n`);
@@ -209,7 +250,10 @@ describe("writeNote / readNote", () => {
     const r = repo();
     await writeNote(r.remote, { targetSha: c2, content: "via reader\n", author });
     const tip = (await listRefs(r.remote)).get(NOTES)!;
-    const store = new MemoryObjectStore(await parsePack(await fetchPack(r.remote, { wants: [tip] })), new Map([[NOTES, tip]]));
+    const store = new MemoryObjectStore(
+      await parsePack(await fetchPack(r.remote, { wants: [tip] })),
+      new Map([[NOTES, tip]]),
+    );
     expect(await readNote(store, NOTES, c2)).toBe("via reader\n");
     expect(await readNote(store, "refs/notes/other", c2)).toBeNull();
   });

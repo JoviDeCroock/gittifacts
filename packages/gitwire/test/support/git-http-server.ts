@@ -59,7 +59,11 @@ function runCgi(env: NodeJS.ProcessEnv, body: Buffer): Promise<CgiResult> {
 }
 
 /** Splits CGI output into status, headers and body (RFC 3875 §6). */
-function parseCgi(stdout: Buffer): { status: number; headers: Record<string, string>; body: Buffer } {
+function parseCgi(stdout: Buffer): {
+  status: number;
+  headers: Record<string, string>;
+  body: Buffer;
+} {
   let sep = stdout.indexOf("\r\n\r\n");
   let sepLen = 4;
   if (sep < 0) {
@@ -99,14 +103,23 @@ export async function startGitHttpServer(opts: { token?: string } = {}): Promise
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const gitProtocol = req.headers["git-protocol"] as string | undefined;
-    const entry: RequestLogEntry = { method: req.method ?? "GET", path: url.pathname + url.search, gitProtocol, status: 0 };
+    const entry: RequestLogEntry = {
+      method: req.method ?? "GET",
+      path: url.pathname + url.search,
+      gitProtocol,
+      status: 0,
+    };
     log.push(entry);
     const reply = (status: number, headers: Record<string, string>, body: Buffer | string) => {
       entry.status = status;
       res.writeHead(status, headers).end(body);
     };
     if (opts.token && !authorized(req.headers.authorization, opts.token)) {
-      reply(401, { "WWW-Authenticate": 'Basic realm="gitwire"', "Content-Type": "text/plain" }, "unauthorized\n");
+      reply(
+        401,
+        { "WWW-Authenticate": 'Basic realm="gitwire"', "Content-Type": "text/plain" },
+        "unauthorized\n",
+      );
       return;
     }
     const chunks: Buffer[] = [];
@@ -132,7 +145,8 @@ export async function startGitHttpServer(opts: { token?: string } = {}): Promise
       runCgi(env, body).then(
         ({ stdout, stderr }) => {
           const cgi = parseCgi(stdout);
-          if (cgi.status >= 500 && stderr) cgi.headers["X-Backend-Stderr"] = stderr.replace(/\s+/g, " ").slice(0, 500);
+          if (cgi.status >= 500 && stderr)
+            cgi.headers["X-Backend-Stderr"] = stderr.replace(/\s+/g, " ").slice(0, 500);
           reply(cgi.status, cgi.headers, cgi.body);
         },
         (err: Error) => reply(500, { "Content-Type": "text/plain" }, String(err)),
@@ -164,7 +178,8 @@ export async function startGitHttpServer(opts: { token?: string } = {}): Promise
       for (const [k, v] of Object.entries(settings)) git(path, ["config", k, v]);
       return path;
     },
-    gitAuthArgs: () => (opts.token ? ["-c", `http.extraHeader=Authorization: Bearer ${opts.token}`] : []),
+    gitAuthArgs: () =>
+      opts.token ? ["-c", `http.extraHeader=Authorization: Bearer ${opts.token}`] : [],
     async close() {
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));

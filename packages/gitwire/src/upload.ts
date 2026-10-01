@@ -3,10 +3,18 @@
  * One stateless round trip: we send wants + haves + `done`, so the server skips negotiation and
  * replies with optional `shallow-info` and then the `packfile` section, multiplexed on sideband.
  */
-import { type Bytes, assertSha } from "./bytes.js";
+import { assertSha, type Bytes } from "./bytes.js";
 import { GitProtocolError } from "./errors.js";
-import { AGENT, type GitRemote, rpc } from "./http.js";
-import { DELIM, FLUSH, demuxSideband, encodeLines, pktText, readPktLines, throwIfErr } from "./pktline.js";
+import { AGENT, type GitRemote, request } from "./http.js";
+import {
+  DELIM,
+  demuxSideband,
+  encodeLines,
+  FLUSH,
+  pktText,
+  readPktLines,
+  throwIfErr,
+} from "./pktline.js";
 
 export interface FetchPackOptions {
   wants: string[];
@@ -40,7 +48,7 @@ export async function fetchPack(remote: GitRemote, opts: FetchPackOptions): Prom
   for (const h of new Set(opts.haves)) args.push(`have ${h}\n`);
   args.push("done\n");
   const body = encodeLines(["command=fetch\n", `agent=${AGENT}\n`, DELIM, ...args, FLUSH]);
-  const res = await rpc(remote, "git-upload-pack", body, true);
+  const res = await request(remote, "git-upload-pack", true, body);
 
   // Response: sections separated by delim-pkt, each starting with its name; ends with flush.
   let section: string | undefined;

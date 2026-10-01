@@ -1,27 +1,27 @@
 import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { utf8 } from "../src/bytes.js";
 import {
-  GitHttpError,
-  MissingObjectError,
-  RejectedError,
-  RemoteError,
-  StaleRefError,
-  ZERO_SHA,
   buildPack,
   encodeCommit,
   encodeTree,
   fastForward,
   fetchPack,
+  GitHttpError,
   hashObject,
   listRefs,
+  MissingObjectError,
   parsePack,
+  RejectedError,
+  RemoteError,
   receivePack,
+  StaleRefError,
   transferObjects,
+  ZERO_SHA,
 } from "../src/index.js";
-import { utf8 } from "../src/bytes.js";
-import { type GitHttpServer, startGitHttpServer } from "./support/git-http-server.js";
 import { commitFiles, git, initRepo, lorem, tempDir } from "./support/git.js";
+import { type GitHttpServer, startGitHttpServer } from "./support/git-http-server.js";
 
 const TOKEN = "art_v2_e_test?expires=9999999999";
 
@@ -81,7 +81,9 @@ describe("listRefs", () => {
     expect(new Map(refs)).toEqual(lsRemote(name));
     expect(refs.get("refs/tags/v1^{}")).toBe(c1);
     expect(refs.symrefs.get("HEAD")).toBe("refs/heads/main");
-    expect(server.log.filter((r) => r.gitProtocol === "version=2").length).toBeGreaterThanOrEqual(2);
+    expect(server.log.filter((r) => r.gitProtocol === "version=2").length).toBeGreaterThanOrEqual(
+      2,
+    );
   });
 
   it("falls back to (or can force) the v1 advertisement", async () => {
@@ -97,7 +99,11 @@ describe("listRefs", () => {
     const name = seededRepo();
     for (const protocol of [1, 2] as const) {
       const refs = await listRefs(server.remote(name), { protocol, prefixes: ["refs/tags/"] });
-      expect([...refs.keys()].sort()).toEqual(["refs/tags/light", "refs/tags/v1", "refs/tags/v1^{}"]);
+      expect([...refs.keys()].sort()).toEqual([
+        "refs/tags/light",
+        "refs/tags/v1",
+        "refs/tags/v1^{}",
+      ]);
     }
   });
 
@@ -122,7 +128,9 @@ describe("listRefs", () => {
 
   it("authenticates with Bearer or Basic and surfaces 401s", async () => {
     const name = seededRepo();
-    const basic = server.remote(name, { basic: { username: "x", password: TOKEN.split("?expires=")[0]! } });
+    const basic = server.remote(name, {
+      basic: { username: "x", password: TOKEN.split("?expires=")[0]! },
+    });
     expect((await listRefs(basic)).get("refs/heads/main")).toBe(c1);
     const err = await listRefs(server.remote(name, null)).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(GitHttpError);
@@ -141,7 +149,9 @@ describe("receivePack / fastForward", () => {
 
   it("throws StaleRefError when the old SHA does not match", async () => {
     const name = seededRepo();
-    const err = await fastForward(server.remote(name), "refs/heads/main", c2, c1).catch((e: unknown) => e);
+    const err = await fastForward(server.remote(name), "refs/heads/main", c2, c1).catch(
+      (e: unknown) => e,
+    );
     expect(err).toBeInstanceOf(StaleRefError);
     expect((err as StaleRefError).ref).toBe("refs/heads/main");
     expect(git(server.repoPath(name), ["rev-parse", "main"])).toBe(c1);
@@ -150,9 +160,13 @@ describe("receivePack / fastForward", () => {
   it("throws MissingObjectError when the new tip is not in the repo", async () => {
     const name = seededRepo(["main"]);
     const unknown = "1234567890123456789012345678901234567890";
-    await expect(fastForward(server.remote(name), "refs/heads/main", c1, unknown)).rejects.toBeInstanceOf(MissingObjectError);
+    await expect(
+      fastForward(server.remote(name), "refs/heads/main", c1, unknown),
+    ).rejects.toBeInstanceOf(MissingObjectError);
     // c2 is a real commit, but this repo only has main (c1): still missing.
-    await expect(fastForward(server.remote(name), "refs/heads/main", c1, c2)).rejects.toBeInstanceOf(MissingObjectError);
+    await expect(
+      fastForward(server.remote(name), "refs/heads/main", c1, c2),
+    ).rejects.toBeInstanceOf(MissingObjectError);
   });
 
   it("creates and deletes refs; delete-only pushes send no pack", async () => {
@@ -160,7 +174,9 @@ describe("receivePack / fastForward", () => {
     const rec = recordingFetch();
     const remote = server.remote(name, undefined, rec.fetch);
     const ref = "refs/merge-queue/7";
-    expect((await receivePack(remote, [{ ref, oldSha: ZERO_SHA, newSha: c2 }])).refs).toEqual([{ ref, ok: true }]);
+    expect((await receivePack(remote, [{ ref, oldSha: ZERO_SHA, newSha: c2 }])).refs).toEqual([
+      { ref, ok: true },
+    ]);
     expect(rec.calls.at(-1)?.body).toContain("PACK");
     await expect(fastForward(remote, ref, ZERO_SHA, c2)).rejects.toBeInstanceOf(StaleRefError); // already exists
     await expect(fastForward(remote, ref, c1, ZERO_SHA)).rejects.toBeInstanceOf(StaleRefError); // wrong old
@@ -175,16 +191,35 @@ describe("receivePack / fastForward", () => {
     const name = seededRepo();
     const blob = { type: "blob" as const, data: utf8("written over the wire\n") };
     const base = git(server.repoPath(name), ["rev-parse", `${c2}^{tree}`]);
-    const entries = git(server.repoPath(name), ["ls-tree", base]).split("\n").map((l) => {
-      const [meta, entryName] = l.split("\t") as [string, string];
-      const [mode, , sha] = meta.split(" ") as [string, string, string];
-      return { mode: mode === "040000" ? "40000" : mode, name: entryName, sha };
-    });
-    const tree = { type: "tree" as const, data: encodeTree([...entries, { mode: "100644", name: "wire.txt", sha: await hashObject(blob) }]) };
-    const sig = { name: "gitwire", email: "gitwire@example.com", timestamp: 1700000500, timezone: "+0000" };
+    const entries = git(server.repoPath(name), ["ls-tree", base])
+      .split("\n")
+      .map((l) => {
+        const [meta, entryName] = l.split("\t") as [string, string];
+        const [mode, , sha] = meta.split(" ") as [string, string, string];
+        return { mode: mode === "040000" ? "40000" : mode, name: entryName, sha };
+      });
+    const tree = {
+      type: "tree" as const,
+      data: encodeTree([
+        ...entries,
+        { mode: "100644", name: "wire.txt", sha: await hashObject(blob) },
+      ]),
+    };
+    const sig = {
+      name: "gitwire",
+      email: "gitwire@example.com",
+      timestamp: 1700000500,
+      timezone: "+0000",
+    };
     const commit = {
       type: "commit" as const,
-      data: encodeCommit({ tree: await hashObject(tree), parents: [c2], author: sig, committer: sig, message: "wire commit\n" }),
+      data: encodeCommit({
+        tree: await hashObject(tree),
+        parents: [c2],
+        author: sig,
+        committer: sig,
+        message: "wire commit\n",
+      }),
     };
     const sha = await hashObject(commit);
     const report = await receivePack(
@@ -192,7 +227,10 @@ describe("receivePack / fastForward", () => {
       [{ ref: "refs/heads/feature", oldSha: c2, newSha: sha }],
       await buildPack([blob, tree, commit]),
     );
-    expect(report).toMatchObject({ unpackOk: true, refs: [{ ref: "refs/heads/feature", ok: true }] });
+    expect(report).toMatchObject({
+      unpackOk: true,
+      refs: [{ ref: "refs/heads/feature", ok: true }],
+    });
     git(server.repoPath(name), ["fsck", "--full", "--strict"]);
     expect(git(server.repoPath(name), ["show", "feature:wire.txt"])).toBe("written over the wire");
   });
@@ -217,9 +255,13 @@ describe("receivePack / fastForward", () => {
     const hook = join(server.repoPath(name), "hooks", "pre-receive");
     writeFileSync(hook, "#!/bin/sh\necho 'policy: only the merge queue writes main' >&2\nexit 1\n");
     chmodSync(hook, 0o755);
-    const report = await receivePack(server.remote(name), [{ ref: "refs/heads/main", oldSha: c1, newSha: c2 }]);
+    const report = await receivePack(server.remote(name), [
+      { ref: "refs/heads/main", oldSha: c1, newSha: c2 },
+    ]);
     expect(report.progress).toContain("only the merge queue writes main");
-    await expect(fastForward(server.remote(name), "refs/heads/main", c1, c2)).rejects.toBeInstanceOf(RejectedError);
+    await expect(
+      fastForward(server.remote(name), "refs/heads/main", c1, c2),
+    ).rejects.toBeInstanceOf(RejectedError);
   });
 
   it("rejects invalid input before touching the network", async () => {
@@ -227,13 +269,23 @@ describe("receivePack / fastForward", () => {
     await expect(receivePack(remote, [])).rejects.toThrow(TypeError);
     await expect(fastForward(remote, "main", c1, c2)).rejects.toThrow(/invalid ref name/);
     await expect(fastForward(remote, "refs/heads/x", "abc", c2)).rejects.toThrow(/SHA-1/);
-    await expect(receivePack(remote, [{ ref: "refs/heads/x", oldSha: c1, newSha: ZERO_SHA }], await buildPack([]))).rejects.toThrow(/delete-only/);
+    await expect(
+      receivePack(
+        remote,
+        [{ ref: "refs/heads/x", oldSha: c1, newSha: ZERO_SHA }],
+        await buildPack([]),
+      ),
+    ).rejects.toThrow(/delete-only/);
   });
 });
 
 describe("fetchPack", () => {
   const objectsOf = (name: string, revs: string[]) =>
-    new Set(git(server.repoPath(name), ["rev-list", "--objects", ...revs]).split("\n").map((l) => l.split(" ")[0]!));
+    new Set(
+      git(server.repoPath(name), ["rev-list", "--objects", ...revs])
+        .split("\n")
+        .map((l) => l.split(" ")[0]!),
+    );
 
   it("fetches a complete pack for a want", async () => {
     const name = seededRepo();
@@ -250,7 +302,9 @@ describe("fetchPack", () => {
     const shallow = await parsePack(await fetchPack(remote, { wants: [c2], depth: 1 }));
     expect(shallow.filter((o) => o.type === "commit").map((o) => o.sha)).toEqual([c2]);
 
-    const blobless = await parsePack(await fetchPack(remote, { wants: [c2], depth: 1, filter: "blob:none" }));
+    const blobless = await parsePack(
+      await fetchPack(remote, { wants: [c2], depth: 1, filter: "blob:none" }),
+    );
     expect(blobless.some((o) => o.type === "blob")).toBe(false);
     expect(blobless.some((o) => o.type === "tree")).toBe(true);
   });
@@ -264,7 +318,9 @@ describe("fetchPack", () => {
 
   it("surfaces server-side ERR lines", async () => {
     const name = seededRepo();
-    await expect(fetchPack(server.remote(name), { wants: ["1234567890123456789012345678901234567890"] })).rejects.toBeInstanceOf(RemoteError);
+    await expect(
+      fetchPack(server.remote(name), { wants: ["1234567890123456789012345678901234567890"] }),
+    ).rejects.toBeInstanceOf(RemoteError);
   });
 });
 
@@ -276,7 +332,11 @@ describe("transferObjects", () => {
     forkWork = join(tmp.path, "fork-work");
     git(tmp.path, ["clone", "-q", work, forkWork]);
     git(forkWork, ["checkout", "-q", "-b", "change", c2]);
-    c3 = commitFiles(forkWork, { "src/big.txt": `${lorem(1, 300)}more\nand a fork change\n`, "fork.txt": lorem(5, 40) }, "c3");
+    c3 = commitFiles(
+      forkWork,
+      { "src/big.txt": `${lorem(1, 300)}more\nand a fork change\n`, "fork.txt": lorem(5, 40) },
+      "c3",
+    );
   });
 
   function fork(): string {
@@ -289,10 +349,14 @@ describe("transferObjects", () => {
     const from = fork();
     const to = seededRepo(["feature:refs/heads/main"]); // target main = c2
     const rec = recordingFetch();
-    const result = await transferObjects(server.remote(from, undefined, rec.fetch), server.remote(to), {
-      sha: c3,
-      toRef: "refs/merge-queue/42",
-    });
+    const result = await transferObjects(
+      server.remote(from, undefined, rec.fetch),
+      server.remote(to),
+      {
+        sha: c3,
+        toRef: "refs/merge-queue/42",
+      },
+    );
     expect(result).toEqual({ ref: "refs/merge-queue/42", ok: true });
     const fetchBody = rec.calls.find((c) => c.url.endsWith("/git-upload-pack"))?.body ?? "";
     expect(fetchBody).toContain(`have ${c2}`);
@@ -303,8 +367,22 @@ describe("transferObjects", () => {
     expect(git(server.repoPath(to), ["rev-parse", "main"])).toBe(c3);
     // Already there: no second push.
     const again = recordingFetch();
-    await transferObjects(server.remote(from), server.remote(to, undefined, again.fetch), { sha: c3, toRef: "refs/merge-queue/42" });
+    await transferObjects(server.remote(from), server.remote(to, undefined, again.fetch), {
+      sha: c3,
+      toRef: "refs/merge-queue/42",
+    });
     expect(again.calls.some((c) => c.url.endsWith("/git-receive-pack"))).toBe(false);
+  });
+
+  it("honours an explicit oldSha (create-only CAS on the merge-queue ref)", async () => {
+    const from = fork();
+    const to = seededRepo(["feature:refs/heads/main"]);
+    const opts = { sha: c3, toRef: "refs/merge-queue/44", oldSha: ZERO_SHA };
+    await transferObjects(server.remote(from), server.remote(to), opts);
+    await expect(
+      transferObjects(server.remote(from), server.remote(to), { ...opts, sha: c2 }),
+    ).rejects.toBeInstanceOf(StaleRefError);
+    expect(git(server.repoPath(to), ["rev-parse", "refs/merge-queue/44"])).toBe(c3);
   });
 
   it("requests REF_DELTA packs when the target does not advertise ofs-delta", async () => {
@@ -313,8 +391,13 @@ describe("transferObjects", () => {
     const target = await listRefs(server.remote(to), { service: "git-receive-pack" });
     expect(target.capabilities.has("ofs-delta")).toBe(false);
     const rec = recordingFetch();
-    await transferObjects(server.remote(from, undefined, rec.fetch), server.remote(to), { sha: c3, toRef: "refs/merge-queue/43" });
-    expect(rec.calls.find((c) => c.url.endsWith("/git-upload-pack"))?.body).not.toContain("ofs-delta");
+    await transferObjects(server.remote(from, undefined, rec.fetch), server.remote(to), {
+      sha: c3,
+      toRef: "refs/merge-queue/43",
+    });
+    expect(rec.calls.find((c) => c.url.endsWith("/git-upload-pack"))?.body).not.toContain(
+      "ofs-delta",
+    );
     git(server.repoPath(to), ["fsck", "--full", "--strict"]);
     expect(git(server.repoPath(to), ["rev-parse", "refs/merge-queue/43"])).toBe(c3);
   });
