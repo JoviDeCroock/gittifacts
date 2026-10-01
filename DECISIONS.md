@@ -84,7 +84,7 @@ that turns them into a static DAG. Repo code never runs in the platform Worker.
 D1 `migrations_dir`, and `cf` Previews don't support DO-managed containers. We use `wrangler.jsonc` and
 use the `cf` CLI only for resource/API commands. Revisit once `cf` config covers triggers.
 
-## 2026-10-01 — `@cloudflare/vitest-plugin` instead of `@cloudflare/vitest-pool-workers`
+## 2026-10-01 — `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`)
 
 The pool package has been superseded by `@cloudflare/vitest-plugin` (same `cloudflare:test` API,
 including `introspectWorkflowInstance`). Pinned at 1.3.4 with vitest 4.1.
