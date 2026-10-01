@@ -289,7 +289,8 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
   };
 
   // Fit the diff to what the remaining budget can pay for (one call, worst-case output).
-  const overhead = estimateTokens(TOUR_SYSTEM_PROMPT + buildTourUserPrompt(promptInput)) + 64;
+  // Everything but the diff, plus slack for the omitted-hunks line, escaping and rounding.
+  const overhead = estimateTokens(TOUR_SYSTEM_PROMPT + buildTourUserPrompt(promptInput)) + 128;
   const affordable = affordableInputTokens(
     tracker.remainingUsd,
     client.model,

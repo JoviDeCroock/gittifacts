@@ -59,6 +59,8 @@ export interface JudgeDeps {
 
 const SEVERITY: Record<JudgeOutcome, number> = { "no-concern": 0, unsure: 1, concern: 2 };
 const MIN_JUDGE_DIFF_TOKENS = 500;
+/** Slack between sizing the diff and the final estimate (notes appended later, rounding). */
+const ESTIMATE_PAD_TOKENS = 128;
 
 export function judgmentId(question: JudgeQuestion): string {
   return `llm-judgment:${question}`;
@@ -176,11 +178,16 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
     hasRisk: hasRisk(r),
   }));
 
+  const transformedNote =
+    transformed.length > 0
+      ? `\n\n(${transformed.length} file(s) reproduced byte-for-byte by a verified transform are not shown: ${transformed.slice(0, 20).join(", ")})`
+      : "";
+  // Everything but the diff, plus room for the omitted-hunks note and rounding.
   const overhead =
     estimateTokens(
       JUDGE_SYSTEM_PROMPT +
-        buildJudgeUserPrompt({ plan: input.plan, diffText: "", questions: asked }),
-    ) + 64;
+        buildJudgeUserPrompt({ plan: input.plan, diffText: transformedNote, questions: asked }),
+    ) + ESTIMATE_PAD_TOKENS;
   const affordable = affordableInputTokens(
     tracker.remainingUsd,
     client.model,
@@ -197,10 +204,7 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
     );
   }
   const rendered = renderDiff(reviewDiff, slots, diffBudget);
-  let diffText = rendered.text;
-  if (transformed.length > 0) {
-    diffText += `\n\n(${transformed.length} file(s) reproduced byte-for-byte by a verified transform are not shown: ${transformed.slice(0, 20).join(", ")})`;
-  }
+  let diffText = rendered.text + transformedNote;
   if (rendered.omitted.length > 0 || rendered.partial.length > 0) {
     diffText += `\n\n(${rendered.omitted.length + rendered.partial.length} hunk(s) were omitted or cut short to fit the budget; answer "unsure" where that matters.)`;
   }

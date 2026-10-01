@@ -395,6 +395,32 @@ describe("reviewer.tour: budget", () => {
     expect(client.requests).toHaveLength(1);
   });
 
+  it("sizes the diff so the first call is never refused by its own estimate", async () => {
+    // Sonnet 5.5: 6000 output tokens reserve $0.06; sweep limits around prompt + diff cost.
+    let declined = 0;
+    let trimmed = 0;
+    let full = 0;
+    for (let limit = 0.06; limit <= 0.076; limit += 0.0002) {
+      const client = new FakeLlmClient([{ json: goodModelTour() }], {
+        model: "anthropic/claude-sonnet-5-5",
+      });
+      const outcome = await createReviewer(client, opts).tour(
+        breakingApiInput({ budget: { changeId: CHANGE_ID, limitUsd: limit, spentUsd: 0 } }),
+      );
+      if (client.requests.length === 0) {
+        expect(outcome.status === "failed" && outcome.reason).toMatch(/cannot pay for a tour/);
+        declined++;
+        continue;
+      }
+      expect(outcome.status).toBe("ok");
+      if (outcome.diagnostics.omittedHunks.length > 0) trimmed++;
+      else full++;
+    }
+    expect(declined).toBeGreaterThan(0);
+    expect(trimmed).toBeGreaterThan(0);
+    expect(full).toBeGreaterThan(0);
+  });
+
   it("fits the diff to the remaining budget and says what was not read", async () => {
     const client = new FakeLlmClient([{ json: goodModelTour() }], {
       model: "anthropic/claude-sonnet-5-5",
