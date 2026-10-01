@@ -45,7 +45,7 @@ const entries = git(["ls-tree", "-r", "-z", "--full-tree", rev])
 const files = entries.map((e) => e.path).sort();
 const wanted = entries.filter((e) => contentNeeded(e.path));
 const batch = spawnSync("git", ["-C", ROOT, "cat-file", "--batch"], {
-  input: wanted.map((e) => e.oid).join("\n") + "\n",
+  input: `${wanted.map((e) => e.oid).join("\n")}\n`,
   maxBuffer: 1024 * 1024 * 1024,
 });
 const out = batch.stdout;

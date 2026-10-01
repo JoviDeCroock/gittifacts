@@ -14,7 +14,17 @@ export interface WorkerConfig {
   main: string | null;
   /** Static assets directory (repo path), when declared. */
   assets: string | null;
+  /** Build contexts of the Worker's container images (repo paths). */
+  containers: string[];
 }
+
+const ImageSource = z
+  .object({
+    dockerfile: z.string().optional(),
+    build_context: z.string().optional(),
+    image: z.string().optional(),
+  })
+  .passthrough();
 
 const WranglerJson = z
   .object({
@@ -22,8 +32,35 @@ const WranglerJson = z
     main: z.string().optional(),
     assets: z.object({ directory: z.string().optional() }).passthrough().optional(),
     site: z.object({ bucket: z.string().optional() }).passthrough().optional(),
+    containers: z
+      .array(
+        z
+          .object({
+            image: z.string().optional(),
+            image_build_context: z.string().optional(),
+            images: z.record(z.string(), ImageSource).optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
   })
   .passthrough();
+
+/** Local build context of a container image reference (null for registry images). */
+function contextOf(
+  dir: string,
+  source: {
+    dockerfile?: string | undefined;
+    build_context?: string | undefined;
+    image?: string | undefined;
+  },
+): string | null {
+  if (source.build_context !== undefined) return joinPath(dir, source.build_context);
+  const file = source.dockerfile ?? source.image;
+  if (file === undefined || !/^\.{0,2}\/|Dockerfile/.test(file) || file.includes(":")) return null;
+  const full = joinPath(dir, file);
+  return full === null ? null : /Dockerfile[^/]*$/.test(full) ? dirOf(full) : full;
+}
 
 const WRANGLER = /^wrangler\.(?:jsonc|json|toml)$/;
 
@@ -74,6 +111,7 @@ export function discoverWorkers(
     let name: string | undefined;
     let main: string | undefined;
     let assets: string | undefined;
+    const containers: string[] = [];
     if (f.endsWith(".toml")) {
       const kv = parseTomlStrings(text);
       name = kv.get("name");
@@ -85,6 +123,16 @@ export function discoverWorkers(
         name = parsed.data.name;
         main = parsed.data.main;
         assets = parsed.data.assets?.directory ?? parsed.data.site?.bucket;
+        for (const c of parsed.data.containers ?? []) {
+          const sources = [
+            { image: c.image, build_context: c.image_build_context },
+            ...Object.values(c.images ?? {}),
+          ];
+          for (const src of sources) {
+            const ctx = contextOf(dir, src);
+            if (ctx !== null && !containers.includes(ctx)) containers.push(ctx);
+          }
+        }
       }
     }
     if (name === undefined || name === "") {
@@ -97,6 +145,7 @@ export function discoverWorkers(
       config: f,
       main: main === undefined ? null : joinPath(dir, main),
       assets: assets === undefined ? null : joinPath(dir, assets),
+      containers,
     });
   }
   return { workers, problems };

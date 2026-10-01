@@ -440,6 +440,32 @@ describe("public API", () => {
 });
 
 describe("Workers", () => {
+  it("a container image's build context deploys with the Worker", () => {
+    const base: Files = {
+      ...REPO,
+      "packages/app/wrangler.jsonc": json({
+        name: "app-worker",
+        main: "src/main.ts",
+        containers: [
+          {
+            class_name: "Runner",
+            images: { base: { dockerfile: "../runner/Dockerfile", build_context: "../runner" } },
+          },
+          { class_name: "Remote", image: "registry.example.com/x:1" },
+        ],
+      }),
+      "packages/runner/Dockerfile": "FROM node:22\n",
+      "packages/runner/src/cli.ts":
+        'import { tool } from "../../tools/src/index.js";\nconsole.log(tool);\n',
+    };
+    expect(
+      affected(base, { "packages/tools/src/index.ts": "export const tool = 9;\n" }).deploysTo,
+    ).toEqual(["app-worker"]);
+    expect(affected(base, { "packages/runner/Dockerfile": "FROM node:24\n" }).deploysTo).toEqual([
+      "app-worker",
+    ]);
+  });
+
   it("a build-output assets directory deploys the sources of the package that builds it", () => {
     const base: Files = {
       ...REPO,

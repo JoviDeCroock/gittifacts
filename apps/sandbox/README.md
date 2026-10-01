@@ -153,6 +153,8 @@ AffectedSet = {
   - A Worker is included when the Change's modules reach a non-test file in its package.
   - It is also included when the Change touches its config or its assets. A build-output
     assets directory, such as `../web/dist`, counts as the package that builds it.
+  - A container image's build context (`containers[].image`, `images.*.build_context` or
+    `dockerfile`) counts too: the platform Worker ships this runner from `../sandbox`.
 - **`complete: false`** in any of these cases:
   - a touched file has no analyzer that understands its dependents (data read with `fs`, shell
     scripts, unknown types; docs, metadata, configs, snapshots and Worker assets are understood);

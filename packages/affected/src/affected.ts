@@ -496,7 +496,8 @@ function deploysTo(
   const configReach = configSeeds.size > 0 ? graph.reverseClosure(configSeeds) : new Set<string>();
   const manifests = new Set(allFiles.filter((f) => baseName(f) === "package.json").map(dirOf));
   for (const w of workers) {
-    const roots = [w.dir];
+    // A container image built from a directory of the repo ships that directory's code.
+    const roots = [w.dir, ...w.containers];
     // An assets directory that is a build output (nothing tracked under it) belongs to the
     // package that builds it: its sources deploy with this Worker.
     if (w.assets !== null && !allFiles.some((f) => isUnder(f, w.assets ?? ""))) {
