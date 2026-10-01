@@ -27,6 +27,9 @@ import type { EvidencePayload, LlmJudgment, SignedEvidence } from "@app/evidence
 export interface Store {
   getRepo(id: string): Promise<Repo | null>;
   getRepoByArtifactsName(artifactsName: string): Promise<Repo | null>;
+  insertRepo(repo: Repo): Promise<void>;
+  /** Shallow-merges `patch`, returns the new row. */
+  updateRepo(id: string, patch: Partial<Omit<Repo, "id" | "createdAt">>): Promise<Repo>;
   /** Cache the policy evaluated from the default branch at `sha`. */
   setRepoPolicy(repoId: string, policy: RepoPolicy, sha: string): Promise<void>;
 
@@ -39,6 +42,8 @@ export interface Store {
   updateChange(id: string, patch: Partial<Omit<Change, "id" | "repoId" | "createdAt">>): Promise<Change>;
   /** Changes in a repo with any of the given statuses (merge queue recovery, GC). */
   listChanges(repoId: string, statuses: Change["status"][]): Promise<Change[]>;
+  /** The change whose `rolloutState.versionId` is `versionId` (Workers Issues → rollout). */
+  getChangeByRolloutVersion(versionId: string): Promise<Change | null>;
 
   upsertRun(run: PipelineRun): Promise<void>;
   getRun(id: string): Promise<PipelineRun | null>;
@@ -70,6 +75,12 @@ export type FastForwardResult =
   | { ok: true }
   | { ok: false; reason: "stale" | "missing-object" | "rejected"; detail: string };
 
+/**
+ * Writes (`writeNote`, `transferObjects` target, `updateRef`, `commitTree`, write tokens) to a main
+ * repo are only allowed on the GitHost built for the `merge-queue` role (see `PortsRole`). Every
+ * other GitHost must refuse to write anywhere but a change fork (`task-*`). Main-repo write
+ * tokens are minted internally with TTL <= 300 s and never leave the host.
+ */
 export interface GitHost {
   /** Artifacts namespace this host operates on (e.g. "gittifacts-eu"). */
   readonly namespace: string;
@@ -122,6 +133,69 @@ export interface SandboxJobs {
     ontoSha: string;
     branch: string;
   }): Promise<{ status: "clean"; newSha: string } | { status: "conflict"; files: string[] }>;
+  /**
+   * `git revert --no-edit <sha>` on top of `ontoSha` in `fork` (used when main moved past the
+   * merge, so a pure tree revert is impossible). Pushes the result to `branch` in the fork with
+   * CAS against `ontoSha`.
+   */
+  revert(input: {
+    fork: string;
+    sha: string;
+    ontoSha: string;
+    branch: string;
+    message: string;
+  }): Promise<{ status: "clean"; newSha: string } | { status: "conflict"; files: string[] }>;
+}
+
+// ---------------------------------------------------------------- CI (@app/ci-engine)
+
+/** Where the run sink delivers `ci-finished` once a run is terminal. */
+export interface CiReplyTo {
+  workflow: "change";
+  instanceId: string;
+}
+
+export interface CiStartInput {
+  /** Chosen by the caller and deterministic, so `start` is idempotent per run id. */
+  runId: string;
+  changeId: string;
+  repoId: string;
+  /** Artifacts repo to check out (the change's fork). */
+  repo: string;
+  baseSha: string;
+  headSha: string;
+  /** Raw plan-mode output (the engine validates it as a PipelineSpec); null = engine defaults. */
+  pipeline: unknown;
+  /** full = user steps + evidence steps; cheap = typecheck + tests from the cached install snapshot. */
+  profile: "full" | "cheap";
+  replyTo: CiReplyTo | null;
+}
+
+export interface CiRunReport {
+  run: PipelineRun;
+  /** Raw evidence items from the evidence steps; the coordinator validates each one. */
+  items: unknown[];
+  outputs: {
+    /** Worker bundle produced by the pipeline's `build` step (R2 key), if any. */
+    bundleRef: string | null;
+  };
+  replyTo: CiReplyTo | null;
+}
+
+export interface CiEngine {
+  start(input: CiStartInput): Promise<{ runId: string }>;
+  /** Latest report for the run, or null when the engine does not know it. */
+  status(runId: string): Promise<CiRunReport | null>;
+  cancel(runId: string, reason: string): Promise<void>;
+  restartFrom(runId: string, step: string): Promise<void>;
+}
+
+/**
+ * Implemented by the coordinator (`createRunSink`); the CI engine calls it whenever a run changes
+ * state. Terminal reports with a `replyTo` are forwarded to that ChangeWorkflow as `ci-finished`.
+ */
+export interface RunSink {
+  report(report: CiRunReport): Promise<void>;
 }
 
 // ---------------------------------------------------------------- review (AI Gateway)
@@ -237,6 +311,12 @@ export interface Clock {
   now(): Date;
 }
 
+/**
+ * Which component a `Ports` bundle is built for. Only `merge-queue` gets a GitHost that may write
+ * to main repos (the MergeQueue DO is the only writer of the default branch).
+ */
+export type PortsRole = "default" | "merge-queue";
+
 /** The platform's own principal id, used for machine actions in the audit log. */
 export const SYSTEM_PRINCIPAL_ID = "system";
 
@@ -244,6 +324,7 @@ export interface Ports {
   store: Store;
   git: GitHost;
   sandbox: SandboxJobs;
+  ci: CiEngine;
   reviewer: Reviewer;
   signer: Signer;
   deployer: Deployer;
