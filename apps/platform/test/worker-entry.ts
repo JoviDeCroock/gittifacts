@@ -12,8 +12,10 @@ import { integrationOverrides } from "./integration/fakes.js";
 
 export * from "../src/index.js";
 export { default } from "../src/index.js";
+// The real PreviewHost with a fake container (an explicit export wins over the star export).
+export { TestPreviewHost as PreviewHost } from "./integration/preview-fakes.js";
 
 configureCoordinatorRuntime<Bindings>({
-  ports: (env, role) => buildPorts(env, role, { overrides: integrationOverrides(role) }),
+  ports: (env, role) => buildPorts(env, role, { overrides: integrationOverrides(role, env) }),
   coordinatorOptions: COORDINATOR_OPTIONS,
 });

@@ -23,6 +23,10 @@ import type {
   PortsRole,
 } from "@app/coordinator";
 import { FakeGitHost, FakeReviewer, FakeSandboxJobs, greenEvidence } from "@app/coordinator/fakes";
+import { PlatformPreviews } from "../../src/previews/port.js";
+import type { PortsEnv } from "../../src/runtime/ports.js";
+import { D1Store } from "../../src/store/d1-store.js";
+import { fakeBrowser } from "./preview-fakes.js";
 
 export const NAMESPACE = "gittifacts-eu";
 
@@ -200,13 +204,25 @@ function forkOnly(git: FakeGitHost): GitHost {
   });
 }
 
-/** The ports to swap into `buildPorts(env, role, { overrides })`. */
-export function integrationOverrides(role: PortsRole): Partial<Ports> {
+/**
+ * The ports to swap into `buildPorts(env, role, { overrides })`. With `env`, previews use the
+ * real `PlatformPreviews` (D1 rows, the PreviewHost DO with a fake container) and a fake
+ * Browser Run for screenshots.
+ */
+export function integrationOverrides(role: PortsRole, env?: PortsEnv): Partial<Ports> {
   const f = integrationFakes();
   return {
     git: role === "merge-queue" ? f.git : forkOnly(f.git),
     sandbox: f.sandbox,
     ci: f.ci,
     reviewer: f.reviewer,
+    ...(env === undefined
+      ? {}
+      : {
+          previews: new PlatformPreviews(
+            { ...env, BROWSER: fakeBrowser },
+            new D1Store(env.DB, env.BLOBS),
+          ),
+        }),
   };
 }

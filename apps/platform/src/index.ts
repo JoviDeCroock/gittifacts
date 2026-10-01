@@ -7,6 +7,8 @@ import { configureCoordinatorRuntime } from "@app/coordinator/workers";
 import { createApp } from "./app.js";
 import type { Bindings } from "./app-env.js";
 import { COORDINATOR_OPTIONS } from "./coordinator.js";
+import { handlePreviewRequest } from "./previews/gateway.js";
+import { isPreviewHost, previewZone } from "./previews/ids.js";
 import { buildPorts } from "./runtime/ports.js";
 
 // Durable Objects and Workflows are instantiated by the runtime with only `env`; this is how they
@@ -25,9 +27,14 @@ export {
   RolloutWorkflow,
 } from "@app/coordinator/workers";
 export { AuditLog } from "./audit/audit-log-do.js";
+export { PreviewHost } from "./previews/preview-host.js";
 
 const app = createApp();
 
 export default {
-  fetch: (request, env, ctx) => app.fetch(request, env, ctx),
+  // *.preview.resynapse.dev is the preview gateway; every other host is the platform.
+  fetch: (request, env, ctx) =>
+    isPreviewHost(new URL(request.url).hostname, previewZone(env))
+      ? handlePreviewRequest(request, env)
+      : app.fetch(request, env, ctx),
 } satisfies ExportedHandler<Bindings>;
