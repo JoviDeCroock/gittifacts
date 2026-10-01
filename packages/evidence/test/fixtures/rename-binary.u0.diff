@@ -1,0 +1,68 @@
+diff --git a/assets/icon.bin b/assets/icon.bin
+new file mode 100644
+index 0000000..366fd40
+Binary files /dev/null and b/assets/icon.bin differ
+diff --git a/assets/logo.png b/assets/logo.png
+index d919ccf..949bd3c 100644
+Binary files a/assets/logo.png and b/assets/logo.png differ
+diff --git a/docs/README.md b/docs/README.md
+index a223622..fb7bd87 100644
+--- a/docs/README.md
++++ b/docs/README.md
+@@ -1 +1 @@
+-old readme
++new readme
+@@ -3 +3 @@ line two
+-no newline at end
+\ No newline at end of file
++now with newline
+diff --git a/obsolete.txt b/obsolete.txt
+deleted file mode 100644
+index 10b961a..0000000
+--- a/obsolete.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-remove me
+diff --git a/run.sh b/run.sh
+old mode 100644
+new mode 100755
+diff --git "a/src/caf\303\251.ts" "b/src/caf\303\251.ts"
+new file mode 100644
+index 0000000..f8e3d87
+--- /dev/null
++++ "b/src/caf\303\251.ts"
+@@ -0,0 +1 @@
++export const y = 2;
+diff --git a/src/math.ts b/src/math.ts
+index 1d6ef0b..020b555 100644
+--- a/src/math.ts
++++ b/src/math.ts
+@@ -9,4 +8,0 @@ export function sub(a: number, b: number): number {
+-export function mul(a: number, b: number): number {
+-  return a * b;
+-}
+-
+@@ -13,0 +10 @@ export function div(a: number, b: number): number {
++  if (b === 0) throw new RangeError("division by zero");
+@@ -15,0 +13,4 @@ export function div(a: number, b: number): number {
++
++export function mod(a: number, b: number): number {
++  return a % b;
++}
+diff --git a/src/strings.ts b/src/text.ts
+similarity index 87%
+rename from src/strings.ts
+rename to src/text.ts
+index f1e3799..60fddbb 100644
+--- a/src/strings.ts
++++ b/src/text.ts
+@@ -10 +10 @@ export function trim(s: string): string {
+-  return s.trim();
++  return s.trim().replace(/\s+/g, " ");
+diff --git a/src/with space.ts b/src/with space.ts
+new file mode 100644
+index 0000000..ad1d380
+--- /dev/null
++++ b/src/with space.ts	
+@@ -0,0 +1 @@
++export const x = 1;

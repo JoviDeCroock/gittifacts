@@ -8,7 +8,9 @@
  */
 import { z } from "zod";
 
-export const Sha = z.string().regex(/^[0-9a-f]{40}([0-9a-f]{24})?$/, "expected a full git object id");
+export const Sha = z
+  .string()
+  .regex(/^[0-9a-f]{40}([0-9a-f]{24})?$/, "expected a full git object id");
 export type Sha = z.infer<typeof Sha>;
 
 /** ok = measured; skipped = deliberately not applicable; error = tried and failed. */
@@ -39,8 +41,14 @@ export const RedGreenProof = z.object({
   ...base,
   kind: z.literal("red-green"),
   tests: z.array(TestRef),
-  base: z.object({ sha: Sha, results: z.array(z.object({ id: z.string(), outcome: TestOutcome })) }),
-  head: z.object({ sha: Sha, results: z.array(z.object({ id: z.string(), outcome: TestOutcome })) }),
+  base: z.object({
+    sha: Sha,
+    results: z.array(z.object({ id: z.string(), outcome: TestOutcome })),
+  }),
+  head: z.object({
+    sha: Sha,
+    results: z.array(z.object({ id: z.string(), outcome: TestOutcome })),
+  }),
   /**
    * proven: >=1 new/changed test fails (or is missing) on base and every one passes on head.
    * not-proven: tests exist but the fail-then-pass pattern does not hold.
@@ -138,8 +146,12 @@ export type SemverBump = z.infer<typeof SemverBump>;
 export const DependencyDiff = z.object({
   ...base,
   kind: z.literal("dependencies"),
-  added: z.array(z.object({ name: z.string(), version: z.string(), dev: z.boolean(), manifest: z.string() })),
-  removed: z.array(z.object({ name: z.string(), version: z.string(), dev: z.boolean(), manifest: z.string() })),
+  added: z.array(
+    z.object({ name: z.string(), version: z.string(), dev: z.boolean(), manifest: z.string() }),
+  ),
+  removed: z.array(
+    z.object({ name: z.string(), version: z.string(), dev: z.boolean(), manifest: z.string() }),
+  ),
   changed: z.array(
     z.object({
       name: z.string(),
@@ -151,7 +163,9 @@ export const DependencyDiff = z.object({
     }),
   ),
   /** Lifecycle scripts (preinstall/install/postinstall/prepare) that appear in head but not base. */
-  newInstallScripts: z.array(z.object({ name: z.string(), script: z.string(), command: z.string() })),
+  newInstallScripts: z.array(
+    z.object({ name: z.string(), script: z.string(), command: z.string() }),
+  ),
   lockfileChanged: z.boolean(),
 });
 export type DependencyDiff = z.infer<typeof DependencyDiff>;
@@ -267,6 +281,18 @@ export const SignedEvidence = EvidencePayload.extend({
   attestation: Attestation,
 });
 export type SignedEvidence = z.infer<typeof SignedEvidence>;
+
+/**
+ * Detached signature over an arbitrary JSON document (plan approvals, audit-log
+ * entries). Signed bytes are canonical JSON of `{ document, purpose }`, so a
+ * document signature can never be replayed as an evidence attestation (whose
+ * signed object has the keys `{changeId, headSha, items}`) or across purposes.
+ */
+export const DocumentSignature = Attestation.extend({
+  /** Domain-separation label, e.g. "plan-approval", "audit-log". */
+  purpose: z.string().min(1).max(200),
+});
+export type DocumentSignature = z.infer<typeof DocumentSignature>;
 
 /** On-disk format of a note under refs/notes/evidence. */
 export const EVIDENCE_NOTES_REF = "refs/notes/evidence";

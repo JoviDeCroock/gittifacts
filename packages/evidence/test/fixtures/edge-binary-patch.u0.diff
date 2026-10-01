@@ -1,0 +1,23 @@
+diff --git a/blob.bin b/blob.bin
+index 677273046bce3115f56c248238f3b83f77cfc239..f94e94b0c923986186c01b9a7d5b9760c724f749 100644
+GIT binary patch
+literal 7
+OcmZQzWJ=1+GXeku=mBp4
+
+literal 6
+NcmZQzWJ=1+0{{Yf0X+Z!
+
+diff --git a/moved.txt b/dir/moved.txt
+similarity index 100%
+rename from moved.txt
+rename to dir/moved.txt
+diff --git a/new-empty.txt b/new-empty.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/tricky.sql b/tricky.sql
+index 253d7f9..88c5bcc 100644
+--- a/tricky.sql
++++ b/tricky.sql
+@@ -2,2 +1,0 @@ a
+--- b
+-++ c
