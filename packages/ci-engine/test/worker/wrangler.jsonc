@@ -1,0 +1,11 @@
+{
+  "$schema": "../../../../node_modules/wrangler/config-schema.json",
+  "name": "ci-engine-test",
+  "main": "./entry.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": { "bindings": [{ "name": "RUNNER", "class_name": "ProbeDO" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProbeDO"] }],
+  "workflows": [{ "name": "probe", "binding": "PROBE_WF", "class_name": "ProbeWorkflow" }],
+  "r2_buckets": [{ "binding": "CI_BUCKET", "bucket_name": "ci-test" }]
+}
