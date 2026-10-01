@@ -22,6 +22,8 @@ export default defineConfig(async () => ({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
+      // The production module with fakes for Artifacts, containers and the model (see the file).
+      main: "./test/worker-entry.ts",
       // Never reach the real account from tests (AI, Artifacts, Flagship, Browser stay unbound/local).
       remoteBindings: false,
       miniflare: {
