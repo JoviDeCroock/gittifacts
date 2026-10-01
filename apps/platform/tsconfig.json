@@ -1,7 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
+    // "node": nodejs_compat is on, and @app/ci-engine's sources (bundled into this Worker) call
+    // clearTimeout(undefined), which only Node's timer typings accept.
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types", "node"],
     "lib": ["ES2023"],
     "declaration": false
   },

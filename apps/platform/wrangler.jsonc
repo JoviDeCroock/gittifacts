@@ -16,10 +16,15 @@
   },
 
   "vars": {
+    // `workflows` (WorkflowsCiEngine, default) or `cloudflare-ci` (opt-in, separate env; DECISIONS.md).
     "CI_ENGINE": "workflows",
+    // Salt for CI cache keys (bump to invalidate every cached snapshot pointer).
+    "CI_CACHE_NAMESPACE": "v1",
     "ARTIFACTS_NAMESPACE": "gittifacts-eu",
     "AI_GATEWAY_ID": "gittifacts",
-    "FLAGSHIP_APP_ID": "a829ecb3-7b1d-4640-9117-77d6fff4ca5d"
+    "FLAGSHIP_APP_ID": "a829ecb3-7b1d-4640-9117-77d6fff4ca5d",
+    // Not a secret: Artifacts remotes and the REST APIs (Versions, Flagship, Observability) need it.
+    "CF_ACCOUNT_ID": "c8a74ade336909a754b36a7379edca30"
   },
 
   // `wrangler types` reads this list; values live in `.dev.vars` locally (see .dev.vars.example)
@@ -31,8 +36,7 @@
       "GITHUB_CLIENT_ID",
       "GITHUB_CLIENT_SECRET",
       "ISSUES_WEBHOOK_SECRET",
-      "CF_API_TOKEN",
-      "CF_ACCOUNT_ID"
+      "CF_API_TOKEN"
     ]
   },
 
@@ -47,7 +51,12 @@
   ],
 
   // Large diffs/evidence (> 512 KB), CI logs, screenshots, build cache pointers.
-  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "gittifacts-blobs", "jurisdiction": "eu" }],
+  // CI_BUCKET is the CI engine's view of the same bucket: its keys (ci-runs/, ci-logs/,
+  // ci-evidence/, ci-artifacts/, ci-cache/) are what `GET /api/v1/blobs/:ref` serves through BLOBS.
+  "r2_buckets": [
+    { "binding": "BLOBS", "bucket_name": "gittifacts-blobs", "jurisdiction": "eu" },
+    { "binding": "CI_BUCKET", "bucket_name": "gittifacts-blobs", "jurisdiction": "eu" }
+  ],
 
   // Artifacts has no local simulator; the binding always talks to the remote service.
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "gittifacts-eu", "remote": true }],
@@ -73,53 +82,63 @@
   "durable_objects": {
     "bindings": [
       // One AuditLog per org; the platform uses the name "global" for now.
-      { "name": "AUDIT_LOG", "class_name": "AuditLog" }
-      // TODO(coordinator): { "name": "CHANGE_COORDINATOR", "class_name": "ChangeCoordinator" },  // one per change
-      // TODO(coordinator): { "name": "MERGE_QUEUE", "class_name": "MergeQueue" },                // one per repo
-      // TODO(ci-engine):   { "name": "RUNNER", "class_name": "Runner" }                          // one per CI step, drives ctx.container
+      { "name": "AUDIT_LOG", "class_name": "AuditLog" },
+      // One per change (addressed by change id). Also the CI engine's run sink: CiRunWorkflow calls
+      // env.COORDINATOR.getByName(changeId).onRunFinished(summary).
+      { "name": "COORDINATOR", "class_name": "ChangeCoordinator" },
+      // One per repo: the only writer of a repo's default branch.
+      { "name": "MERGE_QUEUE", "class_name": "MergeQueue" },
+      // One per CI step / sandbox job; drives ctx.container (the sandbox image).
+      { "name": "RUNNER", "class_name": "Runner" }
     ]
   },
 
-  // Declarative DO exports (SQLite storage). Mutually exclusive with `migrations`.
+  // Declarative exports (SQLite DOs). Mutually exclusive with `migrations`. CiEgressGateway is the
+  // WorkerEntrypoint the Runner reaches through ctx.exports for `network: "registries-only"`.
   "exports": {
-    "AuditLog": { "type": "durable-object", "storage": "sqlite" }
-    // TODO(coordinator): "ChangeCoordinator": { "type": "durable-object", "storage": "sqlite" },
-    // TODO(coordinator): "MergeQueue": { "type": "durable-object", "storage": "sqlite" },
-    // TODO(ci-engine):   "Runner": { "type": "durable-object", "storage": "sqlite", "container": "runner" },
-    //
-    // Workflows can also be declared here (`{ "type": "workflow", "name": "..." }`) and reached via
-    // ctx.exports, but vitest introspection needs a binding, so prefer the `workflows` array below.
+    "AuditLog": { "type": "durable-object", "storage": "sqlite" },
+    "ChangeCoordinator": { "type": "durable-object", "storage": "sqlite" },
+    "MergeQueue": { "type": "durable-object", "storage": "sqlite" },
+    "Runner": { "type": "durable-object", "storage": "sqlite", "container": "runner" },
+    "CiEgressGateway": { "type": "worker" }
+  },
+
+  // compute.md §3.1. The durable_object policy rejects image / instance_type / max_instances: the
+  // Runner picks `images.base` and the instance type at runtime in start(). Build the runner bundle
+  // first (`pnpm --filter @app/sandbox build`; the deploy script does it).
+  "containers": [
+    {
+      "name": "runner",
+      "class_name": "Runner",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": { "dockerfile": "../sandbox/Dockerfile", "build_context": "../sandbox" }
+      },
+      "observability": { "logs": { "enabled": true } }
+    }
+  ],
+
+  // compute.md §2. Workflows stay in this array (not `exports`): vitest introspection needs a binding.
+  "workflows": [
+    // One per (change, head): diff → policy → CI → evidence → classify → tour → route → merge.
+    { "name": "change-workflow", "binding": "CHANGE_WORKFLOW", "class_name": "ChangeWorkflow" },
+    // One per merged change with a deploy target: gradual rollout, watch, auto-revert.
+    { "name": "rollout-workflow", "binding": "ROLLOUT_WORKFLOW", "class_name": "RolloutWorkflow" },
+    // One per Artifacts push in the namespace (triggers.events below).
+    { "name": "push-router", "binding": "PUSH_ROUTER", "class_name": "PushRouter" },
+    // One per CI run (instance id = runId = PipelineRun.id).
+    { "name": "ci-run-workflow", "binding": "CI_RUN_WORKFLOW", "class_name": "CiRunWorkflow" }
+  ],
+
+  // Every push in the namespace starts one PushRouter instance (artifacts.md §1, §6). The target
+  // Workflow must be defined by this Worker.
+  "triggers": {
+    "events": [
+      {
+        "type": "cf.artifacts.repo.pushed",
+        "filter": { "namespace": "gittifacts-eu" },
+        "targets": [{ "type": "workflow", "workflow_name": "push-router" }]
+      }
+    ]
   }
-
-  // TODO(ci-engine): containers (compute.md §3.1). The durable_object policy rejects image /
-  // instance_type / max_instances; the image + instance are picked at runtime in start().
-  // "containers": [
-  //   {
-  //     "name": "runner",
-  //     "class_name": "Runner",
-  //     "scheduling_policy": "durable_object",
-  //     "images": { "base": { "dockerfile": "../sandbox/Dockerfile", "build_context": "../sandbox" } },
-  //     "observability": { "logs": { "enabled": true } }
-  //   }
-  // ],
-
-  // TODO(coordinator): workflows (compute.md §2). A `triggers.events` target must be a Workflow
-  // defined by this Worker.
-  // "workflows": [
-  //   { "name": "change-workflow", "binding": "CHANGE_WORKFLOW", "class_name": "ChangeWorkflow" },
-  //   { "name": "ci-run-workflow", "binding": "CI_RUN_WORKFLOW", "class_name": "CiRunWorkflow" },
-  //   { "name": "rollout-workflow", "binding": "ROLLOUT_WORKFLOW", "class_name": "RolloutWorkflow" },
-  //   { "name": "push-router", "binding": "PUSH_ROUTER", "class_name": "PushRouter" }
-  // ],
-
-  // TODO(coordinator): every push in the namespace starts one PushRouter instance (artifacts.md §1, §6).
-  // "triggers": {
-  //   "events": [
-  //     {
-  //       "type": "cf.artifacts.repo.pushed",
-  //       "filter": { "namespace": "gittifacts-eu" },
-  //       "targets": [{ "type": "workflow", "workflow_name": "push-router" }]
-  //     }
-  //   ]
-  // }
 }
