@@ -32,11 +32,27 @@ export interface Invocation {
 }
 
 export const GLOBAL_FLAGS = [
-  { flag: "--host", placeholder: "<url>", description: "Platform origin (else GITTIFACTS_HOST, .gittifacts.json, the last login)." },
+  {
+    flag: "--host",
+    placeholder: "<url>",
+    description: "Platform origin (else GITTIFACTS_HOST, .gittifacts.json, the last login).",
+  },
   { flag: "--human", placeholder: "", description: "Tables and sections instead of JSON." },
-  { flag: "--json", placeholder: "<object|->", description: "Raw tool arguments as a JSON object (`-` reads stdin)." },
-  { flag: "--idempotency-key", placeholder: "<key>", description: "Key for mutating commands (default: generated, printed in the output)." },
-  { flag: "--help", placeholder: "", description: "Usage for a command (JSON, or text with --human)." },
+  {
+    flag: "--json",
+    placeholder: "<object|->",
+    description: "Raw tool arguments as a JSON object (`-` reads stdin).",
+  },
+  {
+    flag: "--idempotency-key",
+    placeholder: "<key>",
+    description: "Key for mutating commands (default: generated, printed in the output).",
+  },
+  {
+    flag: "--help",
+    placeholder: "",
+    description: "Usage for a command (JSON, or text with --human).",
+  },
   { flag: "--version", placeholder: "", description: "Print the CLI version." },
 ] as const;
 
@@ -209,7 +225,10 @@ export function parseCommandTokens(
       }
     }
     if (!flag) {
-      const near = suggest(name, spec.flags.map((f) => f.flag));
+      const near = suggest(
+        name,
+        spec.flags.map((f) => f.flag),
+      );
       throw usageError(
         `unknown flag for ${spec.command}: ${name}${near.length ? ` (did you mean ${near.join(", ")}?)` : ""}`,
         helpFix(spec),
@@ -217,7 +236,11 @@ export function parseCommandTokens(
       );
     }
     if (flag.kind === "boolean" && !flag.list) {
-      values[flag.property] = negated ? false : eq > 0 ? coerce(spec, flag, token.slice(eq + 1)) : true;
+      values[flag.property] = negated
+        ? false
+        : eq > 0
+          ? coerce(spec, flag, token.slice(eq + 1))
+          : true;
       i += 1;
       continue;
     }
@@ -275,7 +298,8 @@ export function buildToolArgs(
   if (needsStdin && stdinText === null) {
     throw usageError("expected JSON arguments on stdin", helpFix(spec));
   }
-  if (parsed.stdin && stdinText !== null) Object.assign(args, parseObject(stdinText, "stdin", spec));
+  if (parsed.stdin && stdinText !== null)
+    Object.assign(args, parseObject(stdinText, "stdin", spec));
   if (globals.json !== undefined) {
     const text = globals.json === "-" ? (stdinText ?? "") : globals.json;
     Object.assign(args, parseObject(text, "--json", spec));

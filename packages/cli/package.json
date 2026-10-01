@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "description": "CLI for gittifacts, the agent-native git platform. JSON by default; --human for tables.",
   "type": "module",
-  "bin": { "gittifacts": "./dist/cli.mjs" },
-  "files": ["dist"],
+  "bin": {
+    "gittifacts": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json",

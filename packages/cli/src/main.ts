@@ -4,20 +4,19 @@
  * server's `tools/list`. Every failure ends as one `{ error }` document and an exit code.
  */
 import { parseCommandTokens, splitArgv } from "./args.js";
-import { Ctx } from "./context.js";
-import { CliError, EXIT, RETRYABLE_CODES } from "./errors.js";
-import { toCliError } from "./failures.js";
-import type { CliIo } from "./io.js";
-import { Output } from "./output.js";
 import { login, logout } from "./commands/auth.js";
 import { type Builtin, bool, builtinSpec, int } from "./commands/builtin.js";
 import { commandHelp, listTools, searchTools, topHelp } from "./commands/help.js";
 import { init } from "./commands/init.js";
 import { resolveRemoteCommand, runToolCommand } from "./commands/tool.js";
 import { wait } from "./commands/wait.js";
+import { Ctx } from "./context.js";
+import { CliError, EXIT, RETRYABLE_CODES, usageError } from "./errors.js";
+import { toCliError } from "./failures.js";
+import type { CliIo } from "./io.js";
+import { Output } from "./output.js";
 import { bundledCommands, findCommand } from "./tools/commands.js";
 import { suggest } from "./tools/search.js";
-import { usageError } from "./errors.js";
 import { CLI_NAME, CLI_VERSION } from "./version.js";
 
 const tools: Builtin = {
@@ -26,7 +25,9 @@ const tools: Builtin = {
     title: "List commands",
     description:
       "List the commands generated from MCP tools (bundled with this CLI, or --remote: what the live server offers now).",
-    properties: { remote: { type: "boolean", description: "Ask the server's tools/list instead." } },
+    properties: {
+      remote: { type: "boolean", description: "Ask the server's tools/list instead." },
+    },
   }),
   run: (ctx, parsed) => listTools(ctx, bool(parsed, "remote"), BUILTINS),
 };
@@ -46,14 +47,23 @@ const search: Builtin = {
   }),
   examples: ['gittifacts search-tools "wait for ci"', "gittifacts search-tools review"],
   async run(ctx, parsed) {
-    const query = [...parsed.positionals, ...(typeof parsed.values.query === "string" ? [parsed.values.query] : [])].join(" ");
+    const query = [
+      ...parsed.positionals,
+      ...(typeof parsed.values.query === "string" ? [parsed.values.query] : []),
+    ].join(" ");
     if (query.trim() === "") {
       throw usageError("search-tools needs a query", {
-        explanation: "Describe what you want to do, e.g. `gittifacts search-tools wait for evidence`.",
+        explanation:
+          "Describe what you want to do, e.g. `gittifacts search-tools wait for evidence`.",
         command: "gittifacts tools",
       });
     }
-    return searchTools(ctx, query, { remote: bool(parsed, "remote"), limit: int(parsed, "limit") ?? 5 }, BUILTINS);
+    return searchTools(
+      ctx,
+      query,
+      { remote: bool(parsed, "remote"), limit: int(parsed, "limit") ?? 5 },
+      BUILTINS,
+    );
   },
 };
 
@@ -79,7 +89,10 @@ const help: Builtin = {
 export const BUILTINS: readonly Builtin[] = [init, login, logout, wait, tools, search, help];
 
 function unknownCommand(name: string): CliError {
-  const names = [...BUILTINS.map((b) => b.spec.command), ...bundledCommands().map((c) => c.command)];
+  const names = [
+    ...BUILTINS.map((b) => b.spec.command),
+    ...bundledCommands().map((c) => c.command),
+  ];
   const near = suggest(name, names);
   return usageError(
     `unknown command: ${name}${near.length > 0 ? ` (did you mean ${near.join(", ")}?)` : ""}`,
@@ -92,7 +105,11 @@ function unknownCommand(name: string): CliError {
   );
 }
 
-async function dispatch(ctx: Ctx, command: string | null, tokens: readonly string[]): Promise<number> {
+async function dispatch(
+  ctx: Ctx,
+  command: string | null,
+  tokens: readonly string[],
+): Promise<number> {
   const g = ctx.globals;
   if (g.version && command === null) {
     ctx.out.result({ name: CLI_NAME, version: CLI_VERSION });

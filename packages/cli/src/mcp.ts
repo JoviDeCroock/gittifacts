@@ -48,7 +48,12 @@ interface PendingTools {
       type: "object";
       properties: {
         projectId: { type: "string" };
-        remote: {};
+        remote: {
+          anyOf: [
+            { type: "string" },
+            { type: "object"; properties: { url: { type: "string" } }; required: ["url"] },
+          ];
+        };
         token: { type: "string" };
         mcpUrl: { type: "string" };
         previewUrl: { type: ["string", "null"] };

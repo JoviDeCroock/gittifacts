@@ -10,7 +10,13 @@ import {
 } from "../src/auth/device-flow.js";
 import { CliError, EXIT } from "../src/errors.js";
 import { harness, run } from "./support/io.js";
-import { type FakeOAuth, fakeOAuthServer, granted, pending, slowDown } from "./support/oauth-server.js";
+import {
+  type FakeOAuth,
+  fakeOAuthServer,
+  granted,
+  pending,
+  slowDown,
+} from "./support/oauth-server.js";
 
 let server: FakeOAuth | undefined;
 afterEach(async () => {
@@ -30,7 +36,10 @@ function clockAndSleep() {
   };
 }
 
-async function poll(answers: FakeOAuth["tokenAnswers"], over: { interval?: number; expires?: number } = {}) {
+async function poll(
+  answers: FakeOAuth["tokenAnswers"],
+  over: { interval?: number; expires?: number } = {},
+) {
   server = await fakeOAuthServer({ tokenAnswers: answers });
   const c = clockAndSleep();
   const p = pollForToken({
@@ -69,7 +78,11 @@ describe("device flow polling (RFC 8628 §3.5)", () => {
     expect(c.t.sleeps).toEqual([5000, 5000, 10000, 10000]);
     const polls = s.requests.filter((r) => r.path.endsWith("/token"));
     expect(polls).toHaveLength(4);
-    expect(polls[0]?.form).toEqual({ grant_type: DEVICE_GRANT, device_code: "dev_123", client_id: "cli" });
+    expect(polls[0]?.form).toEqual({
+      grant_type: DEVICE_GRANT,
+      device_code: "dev_123",
+      client_id: "cli",
+    });
   });
 
   it("stops on expired_token", async () => {
@@ -101,12 +114,16 @@ describe("device flow polling (RFC 8628 §3.5)", () => {
   });
 
   it("fails on an unknown error code", async () => {
-    const { p } = await poll([{ status: 400, body: { error: "invalid_grant", error_description: "Invalid device code" } }]);
+    const { p } = await poll([
+      { status: 400, body: { error: "invalid_grant", error_description: "Invalid device code" } },
+    ]);
     expect(await codeOf(p)).toBe("device-flow-failed");
   });
 
   it("reads better-auth style `code` bodies too", () => {
-    expect(oauthErrorOf({ code: "AUTHORIZATION_PENDING", message: "Authorization pending" })).toEqual({
+    expect(
+      oauthErrorOf({ code: "AUTHORIZATION_PENDING", message: "Authorization pending" }),
+    ).toEqual({
       error: "authorization_pending",
       description: "Authorization pending",
     });
@@ -139,11 +156,17 @@ describe("endpoint discovery", () => {
       tokenUrl: `${server.host}/oauth/token`,
       source: "metadata",
     });
-    server.metadata = { device_authorization_endpoint: "/oauth/device", token_endpoint: "/oauth/token" };
+    server.metadata = {
+      device_authorization_endpoint: "/oauth/device",
+      token_endpoint: "/oauth/token",
+    };
     const e2 = await discoverEndpoints((i, init) => fetch(i, init), server.host);
     expect(e2.tokenUrl).toBe(`${server.host}/oauth/token`);
     // metadata without device support says nothing about the device flow
-    server.metadata = { token_endpoint: "/oauth/token", grant_types_supported: ["authorization_code"] };
+    server.metadata = {
+      token_endpoint: "/oauth/token",
+      grant_types_supported: ["authorization_code"],
+    };
     const e3 = await discoverEndpoints((i, init) => fetch(i, init), server.host);
     expect(e3).toMatchObject({ tokenUrl: `${server.host}/api/oauth/token`, source: "default" });
   });
@@ -187,7 +210,12 @@ describe("gittifacts login / logout", () => {
     expect(r.stderr).toContain(`${server.host}/device?user_code=ABCD-EFGH`);
     expect(r.stderr).toContain("ABCD-EFGH");
     const out = r.json() as Record<string, unknown>;
-    expect(out).toMatchObject({ loggedIn: true, host: server.host, tokenType: "Bearer", scope: "repo:read change:create" });
+    expect(out).toMatchObject({
+      loggedIn: true,
+      host: server.host,
+      tokenType: "Bearer",
+      scope: "repo:read change:create",
+    });
     expect(JSON.stringify(out)).not.toContain("sess_abc");
 
     const path = join(h.dir, "config", "credentials.json");
@@ -196,10 +224,16 @@ describe("gittifacts login / logout", () => {
     const creds = JSON.parse(readFileSync(path, "utf8"));
     expect(creds.defaultHost).toBe(server.host);
     expect(creds.hosts[server.host].login).toMatchObject({ token: "sess_abc", via: "device-flow" });
-    expect(server.requests.find((q) => q.path.endsWith("/device/code"))?.form).toEqual({ client_id: DEFAULT_CLIENT_ID });
+    expect(server.requests.find((q) => q.path.endsWith("/device/code"))?.form).toEqual({
+      client_id: DEFAULT_CLIENT_ID,
+    });
 
     const out2 = await run(h, ["logout"]);
-    expect(out2.json()).toMatchObject({ loggedOut: true, host: server.host, removed: { login: true } });
+    expect(out2.json()).toMatchObject({
+      loggedOut: true,
+      host: server.host,
+      removed: { login: true },
+    });
     const after = JSON.parse(readFileSync(path, "utf8"));
     expect(after.hosts[server.host]).toBeUndefined();
     expect(after.defaultHost).toBeUndefined();
@@ -209,24 +243,51 @@ describe("gittifacts login / logout", () => {
   it("--no-wait hands an agent the code as JSON; --device-code finishes it", async () => {
     server = await fakeOAuthServer({ tokenAnswers: [granted] });
     const h = harness();
-    const started = await run(h, ["login", "--host", server.host, "--no-wait", "--scope", "repo:read"]);
+    const started = await run(h, [
+      "login",
+      "--host",
+      server.host,
+      "--no-wait",
+      "--scope",
+      "repo:read",
+    ]);
     expect(started.code).toBe(0);
-    const doc = started.json() as { deviceCode: string; userCode: string; nextSteps: { command?: string }[] };
-    expect(doc).toMatchObject({ deviceCode: "dev_123", userCode: "ABCD-EFGH", verificationUri: `${server.host}/device` });
+    const doc = started.json() as {
+      deviceCode: string;
+      userCode: string;
+      nextSteps: { command?: string }[];
+    };
+    expect(doc).toMatchObject({
+      deviceCode: "dev_123",
+      userCode: "ABCD-EFGH",
+      verificationUri: `${server.host}/device`,
+    });
     expect(doc.nextSteps[1]?.command).toBe(
       `gittifacts login --host ${server.host} --device-code dev_123 --interval 5 --expires-in 1800`,
     );
-    expect(server.requests.find((q) => q.path.endsWith("/device/code"))?.form.scope).toBe("repo:read");
+    expect(server.requests.find((q) => q.path.endsWith("/device/code"))?.form.scope).toBe(
+      "repo:read",
+    );
     expect(existsSync(join(h.dir, "config", "credentials.json"))).toBe(false);
 
-    const done = await run(h, ["login", "--host", server.host, "--device-code", "dev_123", "--interval", "2"]);
+    const done = await run(h, [
+      "login",
+      "--host",
+      server.host,
+      "--device-code",
+      "dev_123",
+      "--interval",
+      "2",
+    ]);
     expect(done.code).toBe(0);
     expect(h.sleeps).toEqual([2000]);
     h.cleanup();
   });
 
   it("reports access_denied with a fix and stores nothing", async () => {
-    server = await fakeOAuthServer({ tokenAnswers: [{ status: 400, body: { error: "access_denied" } }] });
+    server = await fakeOAuthServer({
+      tokenAnswers: [{ status: 400, body: { error: "access_denied" } }],
+    });
     const h = harness();
     const r = await run(h, ["login", "--host", server.host]);
     expect(r.code).toBe(EXIT.error);
@@ -242,7 +303,12 @@ describe("gittifacts login / logout", () => {
     server.deviceCodeStatus = 404;
     const h = harness();
     const r = await run(h, ["login", "--host", server.host]);
-    expect(r.json()).toMatchObject({ error: { code: "device-flow-unavailable", fix: { explanation: expect.stringContaining("GITTIFACTS_TOKEN") } } });
+    expect(r.json()).toMatchObject({
+      error: {
+        code: "device-flow-unavailable",
+        fix: { explanation: expect.stringContaining("GITTIFACTS_TOKEN") },
+      },
+    });
     h.cleanup();
   });
 
@@ -258,7 +324,12 @@ describe("gittifacts login / logout", () => {
     interruptNow = () => h.interrupt();
     const r = await run(h, ["login", "--host", server.host]);
     expect(r.code).toBe(EXIT.interrupted);
-    expect(r.json()).toMatchObject({ error: { code: "interrupted", fix: { command: expect.stringContaining("--device-code dev_123") } } });
+    expect(r.json()).toMatchObject({
+      error: {
+        code: "interrupted",
+        fix: { command: expect.stringContaining("--device-code dev_123") },
+      },
+    });
     h.cleanup();
   });
 });

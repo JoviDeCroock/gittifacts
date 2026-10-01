@@ -62,7 +62,12 @@ export function asEnvelope(v: unknown): ErrorBody | null {
   if (typeof e.fix.call === "string") fix.call = e.fix.call;
   if (typeof e.fix.command === "string") fix.command = e.fix.command;
   if (typeof e.fix.docsUrl === "string") fix.docsUrl = e.fix.docsUrl;
-  return { code: e.code, message: e.message, fix, ...("details" in e ? { details: e.details } : {}) };
+  return {
+    code: e.code,
+    message: e.message,
+    fix,
+    ...("details" in e ? { details: e.details } : {}),
+  };
 }
 
 export function parseEnvelope(text: string): ErrorBody | null {

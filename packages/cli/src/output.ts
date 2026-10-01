@@ -28,7 +28,9 @@ export class Output {
 
   result(doc: unknown, opts: { title?: string | undefined } = {}): void {
     if (this.human) {
-      this.io.stdout.write(renderHuman(doc, { style: this.style, width: this.width, title: opts.title }));
+      this.io.stdout.write(
+        renderHuman(doc, { style: this.style, width: this.width, title: opts.title }),
+      );
     } else {
       this.io.stdout.write(`${JSON.stringify(doc, null, 2)}\n`);
     }

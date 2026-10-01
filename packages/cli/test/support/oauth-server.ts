@@ -29,7 +29,9 @@ async function body(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-export async function fakeOAuthServer(init: Partial<Pick<FakeOAuth, "tokenAnswers" | "start" | "metadata">> = {}): Promise<FakeOAuth> {
+export async function fakeOAuthServer(
+  init: Partial<Pick<FakeOAuth, "tokenAnswers" | "start" | "metadata">> = {},
+): Promise<FakeOAuth> {
   const state: Omit<FakeOAuth, "host" | "close"> = {
     tokenAnswers: init.tokenAnswers ?? [],
     requests: [],
@@ -46,8 +48,13 @@ export async function fakeOAuthServer(init: Partial<Pick<FakeOAuth, "tokenAnswer
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(b));
     };
-    if (req.method === "GET" && url.pathname === "/start" && state.start !== undefined) return json(200, state.start);
-    if (req.method === "GET" && url.pathname === "/.well-known/oauth-authorization-server" && state.metadata !== undefined) {
+    if (req.method === "GET" && url.pathname === "/start" && state.start !== undefined)
+      return json(200, state.start);
+    if (
+      req.method === "GET" &&
+      url.pathname === "/.well-known/oauth-authorization-server" &&
+      state.metadata !== undefined
+    ) {
       return json(200, state.metadata);
     }
     if (req.method === "POST" && /\/device\/code$/.test(url.pathname)) {
@@ -85,8 +92,16 @@ export const pending: Scripted = {
   status: 400,
   body: { error: "authorization_pending", error_description: "Authorization pending" },
 };
-export const slowDown: Scripted = { status: 400, body: { error: "slow_down", error_description: "Polling too frequently" } };
+export const slowDown: Scripted = {
+  status: 400,
+  body: { error: "slow_down", error_description: "Polling too frequently" },
+};
 export const granted: Scripted = {
   status: 200,
-  body: { access_token: "sess_abc", token_type: "Bearer", expires_in: 3600, scope: "repo:read change:create" },
+  body: {
+    access_token: "sess_abc",
+    token_type: "Bearer",
+    expires_in: 3600,
+    scope: "repo:read change:create",
+  },
 };

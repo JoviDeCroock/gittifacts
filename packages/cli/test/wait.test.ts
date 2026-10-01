@@ -29,7 +29,12 @@ function waitResult(status: WaitOut["change"]["status"], reason: WaitOut["reason
       revertOf: null,
       updatedAt: "2026-10-01T00:00:00Z",
     },
-    nextSteps: [{ title: "Watch for production issues", call: 'list_issues_for_change({ changeId: "chg_1" })' }],
+    nextSteps: [
+      {
+        title: "Watch for production issues",
+        call: 'list_issues_for_change({ changeId: "chg_1" })',
+      },
+    ],
   };
 }
 
@@ -37,7 +42,9 @@ function waitResult(status: WaitOut["change"]["status"], reason: WaitOut["reason
 function waitHarness(script: (WaitOut | Error)[], opts: { block?: boolean } = {}) {
   const calls: WaitArgs[] = [];
   let i = 0;
-  const h = harness({ env: { GITTIFACTS_HOST: "https://gittifacts.example", GITTIFACTS_TOKEN: "t" } });
+  const h = harness({
+    env: { GITTIFACTS_HOST: "https://gittifacts.example", GITTIFACTS_TOKEN: "t" },
+  });
   h.io.connect = mockConnector({
     tools: {
       wait_for_change: async (args, options) => {
@@ -73,7 +80,11 @@ describe("gittifacts wait", () => {
       { changeId: "chg_1", until: "merged", timeoutSec: 90 },
       { changeId: "chg_1", until: "merged", timeoutSec: 90 },
     ]);
-    const doc = r.json() as { reached: boolean; waited: { attempts: number }; nextSteps: { command?: string }[] };
+    const doc = r.json() as {
+      reached: boolean;
+      waited: { attempts: number };
+      nextSteps: { command?: string }[];
+    };
     expect(doc.reached).toBe(true);
     expect(doc.waited.attempts).toBe(3);
     expect(doc.nextSteps[0]?.command).toBe("gittifacts list-issues-for-change --change-id chg_1");
@@ -85,7 +96,11 @@ describe("gittifacts wait", () => {
     const r = await run(h, ["wait", "chg_1", "--until", "evidence_ready", "--timeout", "100"]);
     expect(r.code).toBe(EXIT.notReached);
     expect(calls.map((c) => c.timeoutSec)).toEqual([90, 10]);
-    expect(r.json()).toMatchObject({ reached: false, reason: "timeout", waited: { attempts: 2, seconds: 100, timeoutSec: 100 } });
+    expect(r.json()).toMatchObject({
+      reached: false,
+      reason: "timeout",
+      waited: { attempts: 2, seconds: 100, timeoutSec: 100 },
+    });
     h.cleanup();
   });
 
@@ -100,7 +115,10 @@ describe("gittifacts wait", () => {
   });
 
   it("retries a dropped connection, then carries on", async () => {
-    const { h, calls } = waitHarness([new TypeError("fetch failed"), waitResult("merged", "reached")]);
+    const { h, calls } = waitHarness([
+      new TypeError("fetch failed"),
+      waitResult("merged", "reached"),
+    ]);
     const r = await run(h, ["wait", "chg_1", "--until", "merged"]);
     expect(r.code).toBe(EXIT.ok);
     expect(calls).toHaveLength(2);
@@ -129,7 +147,9 @@ describe("gittifacts wait", () => {
     const { h, calls } = waitHarness([]);
     const r = await run(h, ["wait", "chg_1", "--until", "deployed"]);
     expect(r.code).toBe(EXIT.usage);
-    expect(r.json()).toMatchObject({ error: { code: "usage", message: expect.stringContaining("evidence_ready") } });
+    expect(r.json()).toMatchObject({
+      error: { code: "usage", message: expect.stringContaining("evidence_ready") },
+    });
     expect(calls).toHaveLength(0);
     const missing = await run(h, ["wait", "--until", "merged"]);
     expect(missing.code).toBe(EXIT.usage);
@@ -146,7 +166,11 @@ describe("gittifacts wait", () => {
             {
               type: "text",
               text: JSON.stringify({
-                error: { code: "not-found", message: "change nope not found", fix: { explanation: "List what exists.", call: "list_repos({})" } },
+                error: {
+                  code: "not-found",
+                  message: "change nope not found",
+                  fix: { explanation: "List what exists.", call: "list_repos({})" },
+                },
               }),
             },
           ],
@@ -159,7 +183,11 @@ describe("gittifacts wait", () => {
       error: {
         code: "not-found",
         message: "change nope not found",
-        fix: { explanation: "List what exists.", call: "list_repos({})", command: "gittifacts list-repos" },
+        fix: {
+          explanation: "List what exists.",
+          call: "list_repos({})",
+          command: "gittifacts list-repos",
+        },
       },
     });
     h.cleanup();

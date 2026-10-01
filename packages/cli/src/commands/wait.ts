@@ -5,7 +5,6 @@
  */
 import type { WaitUntil } from "@app/domain";
 import { withCommands } from "../calls.js";
-import type { Ctx } from "../context.js";
 import { cliError, EXIT } from "../errors.js";
 import { isAbort, toCliError } from "../failures.js";
 import { bundledCommands, findCommand, flagFor } from "../tools/commands.js";
@@ -35,7 +34,10 @@ const spec = builtinSpec({
   properties: {
     changeId: { type: "string", description: "The change to wait for." },
     until: { enum: milestones(), description: "The milestone." },
-    timeout: { type: "integer", description: `Overall seconds to wait (default ${DEFAULT_TIMEOUT_SEC}).` },
+    timeout: {
+      type: "integer",
+      description: `Overall seconds to wait (default ${DEFAULT_TIMEOUT_SEC}).`,
+    },
   },
   required: ["changeId", "until"],
   positional: "changeId",
@@ -54,10 +56,15 @@ export const wait: Builtin = {
     const until = requireValue(spec, str(parsed, "until"), "--until") as WaitUntil;
     const timeoutSec = int(parsed, "timeout") ?? DEFAULT_TIMEOUT_SEC;
     if (timeoutSec < 1) {
-      throw cliError("usage", "--timeout must be at least 1 second", {
-        explanation: "Pass the overall number of seconds to wait.",
-        command: "gittifacts wait --help",
-      }, { exitCode: EXIT.usage });
+      throw cliError(
+        "usage",
+        "--timeout must be at least 1 second",
+        {
+          explanation: "Pass the overall number of seconds to wait.",
+          command: "gittifacts wait --help",
+        },
+        { exitCode: EXIT.usage },
+      );
     }
     const target = ctx.target();
     const started = ctx.io.now();
@@ -65,10 +72,15 @@ export const wait: Builtin = {
     const ac = new AbortController();
     const off = ctx.io.onInterrupt(() => ac.abort(new Error("aborted")));
     const interrupted = () =>
-      cliError("interrupted", `stopped waiting for ${changeId}`, {
-        explanation: "Nothing changed on the platform; wait again whenever you like.",
-        command: `gittifacts wait ${changeId} --until ${until} --timeout ${timeoutSec}`,
-      }, { exitCode: EXIT.interrupted });
+      cliError(
+        "interrupted",
+        `stopped waiting for ${changeId}`,
+        {
+          explanation: "Nothing changed on the platform; wait again whenever you like.",
+          command: `gittifacts wait ${changeId} --until ${until} --timeout ${timeoutSec}`,
+        },
+        { exitCode: EXIT.interrupted },
+      );
 
     let attempts = 0;
     let transient = 0;
@@ -91,7 +103,11 @@ export const wait: Builtin = {
           } catch (e) {
             if (ac.signal.aborted) throw interrupted();
             const mapped = toCliError(e, ctx.failureContext(target, "wait"));
-            if (TRANSIENT.has(mapped.body.code) && transient < MAX_TRANSIENT_RETRIES && ctx.io.now() < deadline) {
+            if (
+              TRANSIENT.has(mapped.body.code) &&
+              transient < MAX_TRANSIENT_RETRIES &&
+              ctx.io.now() < deadline
+            ) {
               transient += 1;
               ctx.out.progress(`connection trouble (${mapped.body.code}); retrying`);
               await ctx.io.sleep(1000 * 2 ** transient, ac.signal);

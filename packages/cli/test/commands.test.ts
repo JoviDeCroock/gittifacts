@@ -1,6 +1,5 @@
 import type { PlatformIntrospection } from "@app/mcp";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { TOOL_DEFINITIONS } from "../src/tools/definitions.js";
 import {
   bundledCommands,
   commandName,
@@ -9,6 +8,7 @@ import {
   kebab,
   usageOf,
 } from "../src/tools/commands.js";
+import { TOOL_DEFINITIONS } from "../src/tools/definitions.js";
 import { toWireTool } from "../src/tools/schema.js";
 
 const byName = (name: string) => {
@@ -33,7 +33,11 @@ describe("command table generated from the MCP tool definitions", () => {
       "wait_for_change",
       "whoami",
     ]);
-    expect(bundledCommands().map((c) => c.command).sort()).toEqual(tools.map(commandName).sort());
+    expect(
+      bundledCommands()
+        .map((c) => c.command)
+        .sort(),
+    ).toEqual(tools.map(commandName).sort());
     for (const c of bundledCommands()) {
       expect(c.tool).toBe(c.command.replaceAll("-", "_"));
       expect(c.description.length, c.command).toBeGreaterThan(20);
@@ -65,7 +69,12 @@ describe("command table generated from the MCP tool definitions", () => {
   it("derives flags from top-level input properties", () => {
     const status = byName("get-change-status");
     expect(status.flags).toEqual([
-      expect.objectContaining({ flag: "--change-id", property: "changeId", kind: "string", required: true }),
+      expect.objectContaining({
+        flag: "--change-id",
+        property: "changeId",
+        kind: "string",
+        required: true,
+      }),
     ]);
     expect(status.positional).toBe("changeId");
     expect(status.mutating).toBe(false);
@@ -75,7 +84,11 @@ describe("command table generated from the MCP tool definitions", () => {
     expect(plan.idempotencyArg).toBe(true);
     expect(plan.flags.map((f) => f.flag)).not.toContain("--idempotency-key");
     const flag = (p: string) => plan.flags.find((f) => f.property === p);
-    expect(flag("acceptanceCriteria")).toMatchObject({ kind: "string", list: true, required: true });
+    expect(flag("acceptanceCriteria")).toMatchObject({
+      kind: "string",
+      list: true,
+      required: true,
+    });
     expect(flag("riskDeclarations")).toMatchObject({ kind: "json", list: false, required: false });
     expect(flag("intent")?.description).toMatch(/problem/);
     expect(plan.positional).toBeNull();

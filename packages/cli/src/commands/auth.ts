@@ -15,7 +15,12 @@ import { isAbort } from "../failures.js";
 import { type Builtin, bool, builtinSpec, int, str } from "./builtin.js";
 
 function hostFor(ctx: Ctx): string {
-  const resolved = resolveHost(ctx.globals.host, ctx.io.env, ctx.project()?.config ?? null, ctx.creds());
+  const resolved = resolveHost(
+    ctx.globals.host,
+    ctx.io.env,
+    ctx.project()?.config ?? null,
+    ctx.creds(),
+  );
   if (!resolved) throw noHostError();
   return resolved.host;
 }
@@ -26,13 +31,31 @@ const loginSpec = builtinSpec({
   description:
     "Log in with the OAuth device flow (RFC 8628): open the printed URL, confirm the code, and the token is stored in ~/.config/gittifacts/credentials.json (0600) for this host. Optional: unclaimed projects work without it.",
   properties: {
-    scope: { type: "string", description: "Space-separated scopes to request (default: the platform's)." },
-    noWait: { type: "boolean", description: "Print the code and URL as JSON and exit; finish later with --device-code." },
+    scope: {
+      type: "string",
+      description: "Space-separated scopes to request (default: the platform's).",
+    },
+    noWait: {
+      type: "boolean",
+      description: "Print the code and URL as JSON and exit; finish later with --device-code.",
+    },
     deviceCode: { type: "string", description: "Finish a login started with --no-wait." },
-    interval: { type: "integer", description: "Polling interval in seconds with --device-code (default 5)." },
-    expiresIn: { type: "integer", description: "Seconds left on the --device-code (default 1800)." },
-    clientId: { type: "string", description: "OAuth client id (default gittifacts-cli, or what /start names)." },
-    deviceCodeUrl: { type: "string", description: "Device authorization endpoint (default: discovered)." },
+    interval: {
+      type: "integer",
+      description: "Polling interval in seconds with --device-code (default 5).",
+    },
+    expiresIn: {
+      type: "integer",
+      description: "Seconds left on the --device-code (default 1800).",
+    },
+    clientId: {
+      type: "string",
+      description: "OAuth client id (default gittifacts-cli, or what /start names).",
+    },
+    deviceCodeUrl: {
+      type: "string",
+      description: "Device authorization endpoint (default: discovered).",
+    },
     tokenUrl: { type: "string", description: "Token endpoint (default: discovered)." },
   },
 });
@@ -115,16 +138,26 @@ export const login: Builtin = {
         sleep: (ms, signal) => ctx.io.sleep(ms, signal),
         signal: ac.signal,
         onEvent: (e) => {
-          if (e.type === "slow_down") ctx.out.progress(`server asked to slow down: polling every ${e.intervalSec}s`);
-          if (e.type === "retry") ctx.out.progress(`token endpoint unavailable (${e.reason}); retrying in ${e.intervalSec}s`);
+          if (e.type === "slow_down")
+            ctx.out.progress(`server asked to slow down: polling every ${e.intervalSec}s`);
+          if (e.type === "retry")
+            ctx.out.progress(
+              `token endpoint unavailable (${e.reason}); retrying in ${e.intervalSec}s`,
+            );
         },
       });
     } catch (e) {
       if (ac.signal.aborted || isAbort(e)) {
-        throw cliError("interrupted", "login cancelled", {
-          explanation: "Nothing was stored. Finish the same login later (if the code hasn't expired) or start over.",
-          command: `gittifacts login --host ${host} --device-code ${deviceCode}`,
-        }, { exitCode: EXIT.interrupted });
+        throw cliError(
+          "interrupted",
+          "login cancelled",
+          {
+            explanation:
+              "Nothing was stored. Finish the same login later (if the code hasn't expired) or start over.",
+            command: `gittifacts login --host ${host} --device-code ${deviceCode}`,
+          },
+          { exitCode: EXIT.interrupted },
+        );
       }
       throw e;
     } finally {
@@ -132,9 +165,11 @@ export const login: Builtin = {
     }
 
     const now = ctx.io.now();
-    const expiresAt = token.expiresIn !== null ? new Date(now + token.expiresIn * 1000).toISOString() : null;
+    const expiresAt =
+      token.expiresIn !== null ? new Date(now + token.expiresIn * 1000).toISOString() : null;
     updateCredentials(ctx.credentialsPath, (c) => {
-      const h = (c.hosts[host] ??= {});
+      const h = c.hosts[host] ?? {};
+      c.hosts[host] = h;
       h.login = {
         token: token.accessToken,
         tokenType: token.tokenType,
@@ -154,8 +189,12 @@ export const login: Builtin = {
         scope: token.scope,
         expiresAt,
         credentialsPath: ctx.credentialsPath,
-        ...(env.GITTIFACTS_TOKEN ? { note: "GITTIFACTS_TOKEN is set and still takes precedence over this login." } : {}),
-        nextSteps: [{ title: "Check who you are and what you may do", command: "gittifacts whoami" }],
+        ...(env.GITTIFACTS_TOKEN
+          ? { note: "GITTIFACTS_TOKEN is set and still takes precedence over this login." }
+          : {}),
+        nextSteps: [
+          { title: "Check who you are and what you may do", command: "gittifacts whoami" },
+        ],
       },
       { title: "Logged in" },
     );
@@ -169,7 +208,9 @@ export const logout: Builtin = {
     title: "Log out",
     description:
       "Forget this host's login token. --all also forgets the tokens of unclaimed projects created from this machine.",
-    properties: { all: { type: "boolean", description: "Also remove project tokens for this host." } },
+    properties: {
+      all: { type: "boolean", description: "Also remove project tokens for this host." },
+    },
   }),
   async run(ctx, parsed) {
     const host = normalizeHost(hostFor(ctx));
@@ -196,7 +237,9 @@ export const logout: Builtin = {
         host,
         removed: { login: removedLogin, projectTokens: removedProjects },
         credentialsPath: ctx.credentialsPath,
-        ...(ctx.io.env.GITTIFACTS_TOKEN ? { note: "GITTIFACTS_TOKEN is still set in your environment." } : {}),
+        ...(ctx.io.env.GITTIFACTS_TOKEN
+          ? { note: "GITTIFACTS_TOKEN is still set in your environment." }
+          : {}),
       },
       { title: "Logged out" },
     );

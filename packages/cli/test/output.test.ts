@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { callToCommand, commandForCall, parseCall, shellQuote, withCommands } from "../src/calls.js";
+import {
+  callToCommand,
+  commandForCall,
+  parseCall,
+  shellQuote,
+  withCommands,
+} from "../src/calls.js";
 import { makeStyle, renderError, renderHuman, useColor } from "../src/human.js";
 import { harness, run } from "./support/io.js";
 
@@ -33,7 +39,11 @@ describe("JSON output (default)", () => {
     const usage = await run(h, ["get-change-stats"]);
     expect(usage.code).toBe(2);
     expect(usage.json()).toMatchObject({
-      error: { code: "usage", message: expect.stringContaining("did you mean get-change-status"), fix: { command: "gittifacts get-change-status --help" } },
+      error: {
+        code: "usage",
+        message: expect.stringContaining("did you mean get-change-status"),
+        fix: { command: "gittifacts get-change-status --help" },
+      },
     });
     h.cleanup();
   });
@@ -45,10 +55,19 @@ describe("JSON output (default)", () => {
       exitCodes: Record<string, string>;
     };
     expect(doc.commands.filter((c) => c.source === "builtin").map((c) => c.command)).toEqual([
-      "init", "login", "logout", "wait", "tools", "search-tools", "help",
+      "init",
+      "login",
+      "logout",
+      "wait",
+      "tools",
+      "search-tools",
+      "help",
     ]);
     expect(Object.keys(doc.exitCodes)).toEqual(["0", "1", "2", "3", "130"]);
-    const one = (await run(h, ["create-plan", "--help"])).json() as { usage: string; mutating: boolean };
+    const one = (await run(h, ["create-plan", "--help"])).json() as {
+      usage: string;
+      mutating: boolean;
+    };
     expect(one.usage).toMatch(/^gittifacts create-plan --repo-id <string>/);
     expect(one.mutating).toBe(true);
     h.cleanup();
@@ -56,7 +75,10 @@ describe("JSON output (default)", () => {
 
   it("prints the version", async () => {
     const h = harness();
-    expect((await run(h, ["--version"])).json()).toEqual({ name: "gittifacts", version: expect.any(String) });
+    expect((await run(h, ["--version"])).json()).toEqual({
+      name: "gittifacts",
+      version: expect.any(String),
+    });
     h.cleanup();
   });
 });
@@ -71,7 +93,11 @@ describe("--human output", () => {
     },
     runs: [],
     nextSteps: [
-      { title: "Ask a human to review it", call: 'request_review({ changeId: "chg_1" })', command: "gittifacts request-review --change-id chg_1" },
+      {
+        title: "Ask a human to review it",
+        call: 'request_review({ changeId: "chg_1" })',
+        command: "gittifacts request-review --change-id chg_1",
+      },
     ],
   };
 
@@ -100,14 +126,18 @@ describe("--human output", () => {
         "",
       ].join("\n"),
     );
-    expect(text).not.toMatch(/\u001b\[/);
+    expect(text.includes("\u001b[")).toBe(false);
   });
 
   it("highlights the fix of an error, with color only when enabled", () => {
     const body = {
       code: "not-found",
       message: "change nope not found",
-      fix: { explanation: "List what exists.", call: "list_repos({})", command: "gittifacts list-repos" },
+      fix: {
+        explanation: "List what exists.",
+        call: "list_repos({})",
+        command: "gittifacts list-repos",
+      },
     };
     expect(renderError(body, plain, { idempotencyKey: "k1" })).toBe(
       [
@@ -122,7 +152,7 @@ describe("--human output", () => {
       ].join("\n"),
     );
     const colored = renderError(body, { style: makeStyle(true), width: 100 });
-    expect(colored).toMatch(/\u001b\[33m/);
+    expect(colored.includes("\u001b[33m")).toBe(true);
   });
 
   it("uses color only on a TTY and never with NO_COLOR", () => {
@@ -140,7 +170,7 @@ describe("--human output", () => {
     expect(r.stdout).toBe("");
     expect(r.stderr).toMatch(/^Error \[no-host\]/);
     expect(r.stderr).toMatch(/Fix: Tell the CLI which platform to use/);
-    expect(r.stderr).not.toMatch(/\u001b\[/);
+    expect(r.stderr.includes("\u001b[")).toBe(false);
     h.cleanup();
   });
 
@@ -156,7 +186,11 @@ describe("--human output", () => {
 
 describe("MCP calls as CLI commands", () => {
   it("parses the conventions' call notation", () => {
-    expect(parseCall('start_change({ repoId: "r_1", planId: "p_1", title: "Fix \\"x\\"", category: "fix" })')).toEqual({
+    expect(
+      parseCall(
+        'start_change({ repoId: "r_1", planId: "p_1", title: "Fix \\"x\\"", category: "fix" })',
+      ),
+    ).toEqual({
       tool: "start_change",
       args: { repoId: "r_1", planId: "p_1", title: 'Fix "x"', category: "fix" },
     });
@@ -166,16 +200,22 @@ describe("MCP calls as CLI commands", () => {
   });
 
   it("maps calls to commands, with friendlier local commands where they exist", () => {
-    expect(commandForCall('get_change_status({ changeId: "chg_1" })')).toBe("gittifacts get-change-status --change-id chg_1");
-    expect(commandForCall('wait_for_change({ changeId: "chg_1", until: "merged", timeoutSec: 600 })')).toBe(
-      "gittifacts wait chg_1 --timeout 600 --until merged",
+    expect(commandForCall('get_change_status({ changeId: "chg_1" })')).toBe(
+      "gittifacts get-change-status --change-id chg_1",
     );
+    expect(
+      commandForCall('wait_for_change({ changeId: "chg_1", until: "merged", timeoutSec: 600 })'),
+    ).toBe("gittifacts wait chg_1 --timeout 600 --until merged");
     expect(commandForCall('create_project({ template: "workers-api", name: "my-api" })')).toBe(
       "gittifacts init --template workers-api --name my-api",
     );
     expect(
-      commandForCall('create_plan({ repoId: "<projectId>", title: "<what>", acceptanceCriteria: ["a b", "c"], scopePaths: ["src/**"] })'),
-    ).toBe("gittifacts create-plan --repo-id '<projectId>' --title '<what>' --acceptance-criteria 'a b' --acceptance-criteria c --scope-paths 'src/**'");
+      commandForCall(
+        'create_plan({ repoId: "<projectId>", title: "<what>", acceptanceCriteria: ["a b", "c"], scopePaths: ["src/**"] })',
+      ),
+    ).toBe(
+      "gittifacts create-plan --repo-id '<projectId>' --title '<what>' --acceptance-criteria 'a b' --acceptance-criteria c --scope-paths 'src/**'",
+    );
     expect(callToCommand({ tool: "open_workspace", args: { changeId: "c", warm: true } })).toBe(
       "gittifacts open-workspace --change-id c --warm true",
     );
@@ -183,11 +223,18 @@ describe("MCP calls as CLI commands", () => {
 
   it("adds `command` next to every next step and fix that has a `call`", () => {
     const out = withCommands({
-      nextSteps: [{ title: "Look", call: 'get_tour({ changeId: "c" })' }, { title: "Just read", why: "no call" }],
+      nextSteps: [
+        { title: "Look", call: 'get_tour({ changeId: "c" })' },
+        { title: "Just read", why: "no call" },
+      ],
       error: { code: "x", message: "y", fix: { explanation: "z", call: "whoami({})" } },
       unrelated: { call: "whoami({})" },
     });
-    expect(out.nextSteps[0]).toEqual({ title: "Look", call: 'get_tour({ changeId: "c" })', command: "gittifacts get-tour --change-id c" });
+    expect(out.nextSteps[0]).toEqual({
+      title: "Look",
+      call: 'get_tour({ changeId: "c" })',
+      command: "gittifacts get-tour --change-id c",
+    });
     expect(out.nextSteps[1]).toEqual({ title: "Just read", why: "no call" });
     expect((out.error.fix as { command?: string }).command).toBe("gittifacts whoami");
     expect(out.unrelated).toEqual({ call: "whoami({})" });

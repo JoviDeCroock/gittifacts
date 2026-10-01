@@ -46,7 +46,10 @@ describe("credentials file", () => {
       throw new Error("expected an error");
     } catch (e) {
       expect(e).toBeInstanceOf(CliError);
-      expect((e as CliError).body).toMatchObject({ code: "config", fix: { command: expect.stringContaining("gittifacts login") } });
+      expect((e as CliError).body).toMatchObject({
+        code: "config",
+        fix: { command: expect.stringContaining("gittifacts login") },
+      });
     }
   });
 
@@ -64,26 +67,52 @@ describe("token and host resolution", () => {
     defaultHost: H,
     hosts: {
       [H]: {
-        login: { token: "login-tok", tokenType: "Bearer", scope: null, expiresAt: loginExpires, obtainedAt: "", via: "device-flow" },
-        projects: { prj_1: { token: "project-tok", expiresAt: null, claimUrl: null, createdAt: "" } },
+        login: {
+          token: "login-tok",
+          tokenType: "Bearer",
+          scope: null,
+          expiresAt: loginExpires,
+          obtainedAt: "",
+          via: "device-flow",
+        },
+        projects: {
+          prj_1: { token: "project-tok", expiresAt: null, claimUrl: null, createdAt: "" },
+        },
       },
     },
   });
   const project = { host: H, projectId: "prj_1", remote: "" };
 
   it("GITTIFACTS_TOKEN beats the login, which beats the project token", () => {
-    expect(resolveToken(H, { GITTIFACTS_TOKEN: "env-tok" }, creds(null), project, now)).toMatchObject({ token: "env-tok", source: "env" });
-    expect(resolveToken(H, {}, creds(null), project, now)).toMatchObject({ token: "login-tok", source: "login" });
-    expect(resolveToken(H, {}, creds("2026-01-01T00:00:00Z"), project, now)).toMatchObject({ token: "project-tok", source: "project" });
+    expect(
+      resolveToken(H, { GITTIFACTS_TOKEN: "env-tok" }, creds(null), project, now),
+    ).toMatchObject({ token: "env-tok", source: "env" });
+    expect(resolveToken(H, {}, creds(null), project, now)).toMatchObject({
+      token: "login-tok",
+      source: "login",
+    });
+    expect(resolveToken(H, {}, creds("2026-01-01T00:00:00Z"), project, now)).toMatchObject({
+      token: "project-tok",
+      source: "project",
+    });
     expect(resolveToken(H, {}, creds("2026-01-01T00:00:00Z"), null, now)).toBeNull();
     expect(resolveToken("https://other.example", {}, creds(null), project, now)).toBeNull();
   });
 
   it("--host beats GITTIFACTS_HOST, which beats .gittifacts.json, which beats the last login", () => {
     const c = creds(null);
-    expect(resolveHost("flag.example", { GITTIFACTS_HOST: "env.example" }, project, c)).toEqual({ host: "https://flag.example", source: "flag" });
-    expect(resolveHost(undefined, { GITTIFACTS_HOST: "env.example" }, project, c)).toEqual({ host: "https://env.example", source: "env" });
-    expect(resolveHost(undefined, {}, { ...project, host: "https://p.example/" }, c)).toEqual({ host: "https://p.example", source: "project" });
+    expect(resolveHost("flag.example", { GITTIFACTS_HOST: "env.example" }, project, c)).toEqual({
+      host: "https://flag.example",
+      source: "flag",
+    });
+    expect(resolveHost(undefined, { GITTIFACTS_HOST: "env.example" }, project, c)).toEqual({
+      host: "https://env.example",
+      source: "env",
+    });
+    expect(resolveHost(undefined, {}, { ...project, host: "https://p.example/" }, c)).toEqual({
+      host: "https://p.example",
+      source: "project",
+    });
     expect(resolveHost(undefined, {}, null, c)).toEqual({ host: H, source: "login" });
     expect(resolveHost(undefined, {}, null, { version: 1, hosts: {} })).toBeNull();
   });
@@ -97,12 +126,20 @@ describe("token and host resolution", () => {
 
   it("finds .gittifacts.json in a parent directory", () => {
     const root = tempDir();
-    writeFileSync(join(root, PROJECT_FILE), JSON.stringify({ host: H, projectId: "prj_9", remote: "https://git.example/r.git" }));
+    writeFileSync(
+      join(root, PROJECT_FILE),
+      JSON.stringify({ host: H, projectId: "prj_9", remote: "https://git.example/r.git" }),
+    );
     const deep = join(root, "a", "b");
     mkdirSync(deep, { recursive: true });
     expect(findProject(deep)).toEqual({
       path: join(root, PROJECT_FILE),
-      config: { host: H, projectId: "prj_9", remote: "https://git.example/r.git", mcpUrl: undefined },
+      config: {
+        host: H,
+        projectId: "prj_9",
+        remote: "https://git.example/r.git",
+        mcpUrl: undefined,
+      },
     });
     writeFileSync(join(root, "a", PROJECT_FILE), "[]");
     expect(() => findProject(deep)).toThrow(CliError);

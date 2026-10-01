@@ -8,7 +8,6 @@ import { existsSync, readdirSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { withCommands } from "../calls.js";
 import { PROJECT_FILE, updateCredentials, writeProject } from "../config.js";
-import type { Ctx } from "../context.js";
 import { cliError, EXIT, usageError } from "../errors.js";
 import { unknownTool } from "../failures.js";
 import { clone, type GitAuth, splitRemote } from "../git.js";
@@ -32,10 +31,21 @@ const spec = builtinSpec({
     from: { type: "string", description: "Import a GitHub repository (https URL)." },
     name: { type: "string", description: "Project name." },
     description: { type: "string", description: "One-line description." },
-    clone: { type: "boolean", description: "git clone the new repo (the token travels in git's environment, never in .git/config)." },
-    dir: { type: "string", description: "Where to write .gittifacts.json (default: cwd), or clone to with --clone (default: ./<name>)." },
+    clone: {
+      type: "boolean",
+      description:
+        "git clone the new repo (the token travels in git's environment, never in .git/config).",
+    },
+    dir: {
+      type: "string",
+      description:
+        "Where to write .gittifacts.json (default: cwd), or clone to with --clone (default: ./<name>).",
+    },
     force: { type: "boolean", description: "Overwrite an existing .gittifacts.json." },
-    showToken: { type: "boolean", description: "Include the project token in the output (it is stored either way)." },
+    showToken: {
+      type: "boolean",
+      description: "Include the project token in the output (it is stored either way).",
+    },
   },
 });
 
@@ -52,9 +62,15 @@ interface ProjectResult {
 /** Validates the parts of the create_project result the CLI relies on (external input). */
 export function parseProjectResult(doc: Record<string, unknown>): ProjectResult {
   if (typeof doc.projectId !== "string" || doc.projectId === "") {
-    throw cliError("invalid-response", "create_project returned no projectId", {
-      explanation: "The platform answered with an unexpected shape. Retry with the same --idempotency-key; if it persists, report it.",
-    }, { details: doc });
+    throw cliError(
+      "invalid-response",
+      "create_project returned no projectId",
+      {
+        explanation:
+          "The platform answered with an unexpected shape. Retry with the same --idempotency-key; if it persists, report it.",
+      },
+      { details: doc },
+    );
   }
   const s = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
   let remoteUrl: string | null = null;
@@ -64,7 +80,10 @@ export function parseProjectResult(doc: Record<string, unknown>): ProjectResult 
     remoteUrl = doc.remote.url;
     const user = s(doc.remote.username);
     const tok = s(doc.remote.token);
-    if (tok) remoteAuth = user ? { scheme: "Basic", username: user, password: tok } : { scheme: "Bearer", token: tok };
+    if (tok)
+      remoteAuth = user
+        ? { scheme: "Basic", username: user, password: tok }
+        : { scheme: "Bearer", token: tok };
   }
   if (remoteUrl) {
     const split = splitRemote(remoteUrl);
@@ -94,7 +113,12 @@ function redact(doc: Record<string, unknown>, showToken: boolean): Record<string
 }
 
 function slug(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "project";
+  return (
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "project"
+  );
 }
 
 export const init: Builtin = {
@@ -110,10 +134,15 @@ export const init: Builtin = {
     const name = str(parsed, "name");
     const description = str(parsed, "description");
     const wantClone = bool(parsed, "clone");
-    const fix = { explanation: `Usage: gittifacts init [--template ${TEMPLATES.join("|")}] [--from <githubUrl>] [--name <name>]`, command: "gittifacts init --help" };
-    if (parsed.positionals.length > 0) throw usageError(`unexpected arguments: ${parsed.positionals.join(" ")}`, fix);
+    const fix = {
+      explanation: `Usage: gittifacts init [--template ${TEMPLATES.join("|")}] [--from <githubUrl>] [--name <name>]`,
+      command: "gittifacts init --help",
+    };
+    if (parsed.positionals.length > 0)
+      throw usageError(`unexpected arguments: ${parsed.positionals.join(" ")}`, fix);
     if (template && from) throw usageError("pass --template or --from, not both", fix);
-    if (from && !/^https?:\/\//i.test(from)) throw usageError(`--from must be an https URL, got ${JSON.stringify(from)}`, fix);
+    if (from && !/^https?:\/\//i.test(from))
+      throw usageError(`--from must be an https URL, got ${JSON.stringify(from)}`, fix);
 
     const dirFlag = str(parsed, "dir");
     const base = ctx.io.cwd;
@@ -123,7 +152,8 @@ export const init: Builtin = {
       const configPath = join(resolveDir(dirFlag ?? "."), PROJECT_FILE);
       if (existsSync(configPath) && !bool(parsed, "force")) {
         throw cliError("already-initialized", `${configPath} already exists`, {
-          explanation: "This directory already belongs to a project. Use it as-is, or pass --force to create a new project and overwrite the file.",
+          explanation:
+            "This directory already belongs to a project. Use it as-is, or pass --force to create a new project and overwrite the file.",
           command: "gittifacts whoami",
         });
       }
@@ -168,10 +198,16 @@ export const init: Builtin = {
     if (project.token) {
       const token = project.token;
       updateCredentials(ctx.credentialsPath, (c) => {
-        const h = (c.hosts[target.host] ??= {});
+        const h = c.hosts[target.host] ?? {};
+        c.hosts[target.host] = h;
         h.projects = {
           ...h.projects,
-          [project.projectId]: { token, expiresAt: project.tokenExpiresAt, claimUrl: project.claimUrl, createdAt: now },
+          [project.projectId]: {
+            token,
+            expiresAt: project.tokenExpiresAt,
+            claimUrl: project.claimUrl,
+            createdAt: now,
+          },
         };
       });
       ctx.invalidate();
@@ -181,21 +217,35 @@ export const init: Builtin = {
     let clonedTo: string | undefined;
     if (wantClone) {
       if (!project.remoteUrl) {
-        throw cliError("clone-failed", "create_project returned no git remote to clone", {
-          explanation: `The project ${project.projectId} was created; clone it later once the platform reports a remote.`,
-          command: "gittifacts whoami",
-        }, { details: redact(doc, false) });
+        throw cliError(
+          "clone-failed",
+          "create_project returned no git remote to clone",
+          {
+            explanation: `The project ${project.projectId} was created; clone it later once the platform reports a remote.`,
+            command: "gittifacts whoami",
+          },
+          { details: redact(doc, false) },
+        );
       }
       const dir = resolveDir(dirFlag ?? slug(name ?? project.projectId));
       const auth: GitAuth | null =
         project.remoteAuth ??
-        (project.token ? { scheme: "Bearer", token: project.token } : target.token ? { scheme: "Bearer", token: target.token.token } : null);
+        (project.token
+          ? { scheme: "Bearer", token: project.token }
+          : target.token
+            ? { scheme: "Bearer", token: target.token.token }
+            : null);
       const res = await clone(ctx.io.git, { url: project.remoteUrl, dir, cwd: base, auth });
       if (res.code !== 0) {
-        throw cliError("clone-failed", `git clone failed (exit ${res.code}): ${res.stderr.trim().split("\n").at(-1) ?? ""}`, {
-          explanation: `The project ${project.projectId} was created and its token stored; only the clone failed. Clone it yourself (the token goes in a header, not the URL).`,
-          command: `git -c http.extraHeader="Authorization: Bearer <token>" clone ${project.remoteUrl} ${dir}`,
-        }, { details: redact(doc, false) });
+        throw cliError(
+          "clone-failed",
+          `git clone failed (exit ${res.code}): ${res.stderr.trim().split("\n").at(-1) ?? ""}`,
+          {
+            explanation: `The project ${project.projectId} was created and its token stored; only the clone failed. Clone it yourself (the token goes in a header, not the URL).`,
+            command: `git -c http.extraHeader="Authorization: Bearer <token>" clone ${project.remoteUrl} ${dir}`,
+          },
+          { details: redact(doc, false) },
+        );
       }
       clonedTo = dir;
       configDir = dir;

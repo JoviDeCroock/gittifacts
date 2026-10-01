@@ -36,7 +36,8 @@ export function useColor(
   env: Readonly<Record<string, string | undefined>>,
 ): boolean {
   if (env.NO_COLOR !== undefined && env.NO_COLOR !== "") return false;
-  if (env.FORCE_COLOR !== undefined && env.FORCE_COLOR !== "" && env.FORCE_COLOR !== "0") return true;
+  if (env.FORCE_COLOR !== undefined && env.FORCE_COLOR !== "" && env.FORCE_COLOR !== "0")
+    return true;
   return stream.isTTY === true && env.TERM !== "dumb";
 }
 
@@ -108,10 +109,7 @@ export function table(
   ];
 }
 
-function keyValues(
-  entries: [string, unknown][],
-  opts: { style: Style; indent: number },
-): string[] {
+function keyValues(entries: [string, unknown][], opts: { style: Style; indent: number }): string[] {
   if (entries.length === 0) return [];
   const pad = Math.max(...entries.map(([k]) => humanize(k).length));
   const indent = " ".repeat(opts.indent);
@@ -157,7 +155,8 @@ function renderObject(
         out.push(...table(value, { style, width: opts.width, indent: indent + 2 }));
       } else out.push(...value.map((v) => `${pad}  - ${show(v)}`));
     } else if (isRecord(value)) {
-      if (depth >= 3) out.push(`${pad}  ${truncate(JSON.stringify(value), opts.width - indent - 2)}`);
+      if (depth >= 3)
+        out.push(`${pad}  ${truncate(JSON.stringify(value), opts.width - indent - 2)}`);
       else out.push(...renderObject(value, opts, indent + 2, depth + 1));
     }
   }
@@ -171,7 +170,11 @@ function renderObject(
   return out;
 }
 
-export function renderError(body: ErrorBody, opts: RenderOptions, extra: Record<string, unknown> = {}): string {
+export function renderError(
+  body: ErrorBody,
+  opts: RenderOptions,
+  extra: Record<string, unknown> = {},
+): string {
   const { style } = opts;
   const out = [`${style.red(style.bold("Error"))} ${style.red(`[${body.code}]`)} ${body.message}`];
   const fix = body.fix;
@@ -198,7 +201,11 @@ export function renderHuman(doc: unknown, opts: RenderOptions): string {
   if (opts.title) out.push(opts.style.bold(opts.title), "");
   if (isRecord(doc)) out.push(...renderObject(doc, opts, 0, 0));
   else if (Array.isArray(doc)) {
-    out.push(...(doc.every(isRecord) ? table(doc, { style: opts.style, width: opts.width }) : doc.map(show)));
+    out.push(
+      ...(doc.every(isRecord)
+        ? table(doc, { style: opts.style, width: opts.width })
+        : doc.map(show)),
+    );
   } else out.push(show(doc));
   return `${out.join("\n").trimEnd()}\n`;
 }

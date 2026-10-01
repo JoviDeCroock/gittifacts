@@ -30,10 +30,16 @@ export function toolFailure(spec: Pick<CommandSpec, "command">, r: AnyToolResult
   if (envelope) return new CliError(withCommands(envelope, bundledCommands()));
   const help = `gittifacts ${spec.command} --help`;
   if (/^Invalid input for tool/i.test(text)) {
-    return cliError("invalid-request", text.split("\n")[0] ?? text, {
-      explanation: "The arguments don't match the tool's input schema (see details). Fix them and run again.",
-      command: help,
-    }, { details: text.split("\n").slice(1).filter(Boolean) });
+    return cliError(
+      "invalid-request",
+      text.split("\n")[0] ?? text,
+      {
+        explanation:
+          "The arguments don't match the tool's input schema (see details). Fix them and run again.",
+        command: help,
+      },
+      { details: text.split("\n").slice(1).filter(Boolean) },
+    );
   }
   return cliError("tool-error", text || "the tool reported an error without a message", {
     explanation: "Read the message; `--help` shows what the command expects.",
@@ -128,4 +134,3 @@ export async function runToolCommand(
   ctx.out.result(out, { title: spec.title ?? spec.command });
   return EXIT.ok;
 }
-

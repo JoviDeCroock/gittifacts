@@ -26,7 +26,9 @@ type Env = Readonly<Record<string, string | undefined>>;
 export function normalizeHost(input: string): string {
   const raw = input.trim();
   const local = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/.test(raw);
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `${local ? "http" : "https"}://${raw}`;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw)
+    ? raw
+    : `${local ? "http" : "https"}://${raw}`;
   let url: URL;
   try {
     url = new URL(withScheme);
@@ -112,10 +114,15 @@ export function findProject(cwd: string): { path: string; config: ProjectConfig 
       try {
         parsed = JSON.parse(readFileSync(path, "utf8"));
       } catch (e) {
-        throw cliError("config", `${path} is not valid JSON`, {
-          explanation: `Fix or delete ${path}; \`gittifacts init --force\` rewrites it.`,
-          command: `cat ${path}`,
-        }, { details: e instanceof Error ? e.message : String(e) });
+        throw cliError(
+          "config",
+          `${path} is not valid JSON`,
+          {
+            explanation: `Fix or delete ${path}; \`gittifacts init --force\` rewrites it.`,
+            command: `cat ${path}`,
+          },
+          { details: e instanceof Error ? e.message : String(e) },
+        );
       }
       const config = parseProject(parsed);
       if (!config) {
@@ -217,10 +224,15 @@ export function readCredentials(path: string): Credentials {
   try {
     raw = JSON.parse(readFileSync(path, "utf8"));
   } catch (e) {
-    throw cliError("config", `${path} is not valid JSON`, {
-      explanation: `Delete ${path} and log in again.`,
-      command: `rm ${path} && gittifacts login`,
-    }, { details: e instanceof Error ? e.message : String(e) });
+    throw cliError(
+      "config",
+      `${path} is not valid JSON`,
+      {
+        explanation: `Delete ${path} and log in again.`,
+        command: `rm ${path} && gittifacts login`,
+      },
+      { details: e instanceof Error ? e.message : String(e) },
+    );
   }
   const hosts: Record<string, HostCredentials> = {};
   if (isRecord(raw) && isRecord(raw.hosts)) {
@@ -279,7 +291,8 @@ export function resolveToken(
   }
   if (project && normalizeHost(project.host) === host) {
     const p = h?.projects?.[project.projectId];
-    if (p && live(p.expiresAt, now)) return { token: p.token, source: "project", expiresAt: p.expiresAt };
+    if (p && live(p.expiresAt, now))
+      return { token: p.token, source: "project", expiresAt: p.expiresAt };
   }
   return null;
 }

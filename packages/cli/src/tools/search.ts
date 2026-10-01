@@ -79,7 +79,13 @@ export function searchCommands(
     else if (name.includes(joined)) score += 40;
     // Every query word matching beats a high score on one word.
     score += matched === tokens.length ? 15 : 0;
-    hits.push({ command: c.command, tool: c.tool, title: c.title, description: c.description, score });
+    hits.push({
+      command: c.command,
+      tool: c.tool,
+      title: c.title,
+      description: c.description,
+      score,
+    });
   }
   return hits
     .sort((a, b) => b.score - a.score || a.command.localeCompare(b.command))

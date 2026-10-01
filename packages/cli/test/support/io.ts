@@ -43,7 +43,11 @@ export function tempDir(prefix = "gittifacts-cli-test-"): string {
 }
 
 export function harness(
-  over: Partial<CliIo> & { stdin?: string; env?: Record<string, string | undefined>; tty?: boolean } = {},
+  over: Partial<CliIo> & {
+    stdin?: string;
+    env?: Record<string, string | undefined>;
+    tty?: boolean;
+  } = {},
 ): Harness {
   const dir = tempDir();
   const stdout = capture(over.tty ?? false);

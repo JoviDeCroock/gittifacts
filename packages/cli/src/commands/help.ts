@@ -83,7 +83,11 @@ export function commandHelp(ctx: Ctx, spec: CommandSpec, examples?: string[]): n
     description: f.description ?? "",
   }));
   if (rows.length > 0) lines.push(...table(rows, { style: s, width: 100 }), "");
-  if (spec.mutating) lines.push("Sends an idempotency key (printed in the output; reuse it with --idempotency-key to retry).", "");
+  if (spec.mutating)
+    lines.push(
+      "Sends an idempotency key (printed in the output; reuse it with --idempotency-key to retry).",
+      "",
+    );
   if (spec.source !== "builtin") {
     lines.push("Raw arguments: --json '<object>' or `-` to read them from stdin.", "");
   }
@@ -94,8 +98,18 @@ export function commandHelp(ctx: Ctx, spec: CommandSpec, examples?: string[]): n
 
 export function topHelp(ctx: Ctx, builtins: readonly Builtin[]): number {
   const commands = [
-    ...builtins.map((b) => ({ command: b.spec.command, summary: summaryOf(b.spec), source: "builtin", tool: b.spec.tool })),
-    ...bundledCommands().map((c) => ({ command: c.command, summary: summaryOf(c), source: "mcp", tool: c.tool })),
+    ...builtins.map((b) => ({
+      command: b.spec.command,
+      summary: summaryOf(b.spec),
+      source: "builtin",
+      tool: b.spec.tool,
+    })),
+    ...bundledCommands().map((c) => ({
+      command: c.command,
+      summary: summaryOf(c),
+      source: "mcp",
+      tool: c.tool,
+    })),
   ];
   const doc = {
     name: CLI_NAME,
@@ -121,18 +135,24 @@ export function topHelp(ctx: Ctx, builtins: readonly Builtin[]): number {
     "",
     s.bold("Commands (local)"),
     ...table(
-      commands.filter((c) => c.source === "builtin").map((c) => ({ command: c.command, summary: c.summary })),
+      commands
+        .filter((c) => c.source === "builtin")
+        .map((c) => ({ command: c.command, summary: c.summary })),
       { style: s, width: 100, indent: 2 },
     ),
     "",
     s.bold("Commands (one per MCP tool)"),
     ...table(
-      commands.filter((c) => c.source === "mcp").map((c) => ({ command: c.command, summary: c.summary })),
+      commands
+        .filter((c) => c.source === "mcp")
+        .map((c) => ({ command: c.command, summary: c.summary })),
       { style: s, width: 100, indent: 2 },
     ),
     "",
     s.bold("Global flags"),
-    ...GLOBAL_FLAGS.map((f) => `  ${`${f.flag} ${f.placeholder}`.trim().padEnd(28)} ${f.description}`),
+    ...GLOBAL_FLAGS.map(
+      (f) => `  ${`${f.flag} ${f.placeholder}`.trim().padEnd(28)} ${f.description}`,
+    ),
     "",
     s.bold("Ship something"),
     ...QUICKSTART.map((q, i) => `  ${i + 1}. ${q}`),
@@ -157,7 +177,11 @@ export async function commandTable(ctx: Ctx, remote: boolean): Promise<CommandSp
     .map((t) => deriveCommand(t, "server"));
 }
 
-export async function listTools(ctx: Ctx, remote: boolean, builtins: readonly Builtin[]): Promise<number> {
+export async function listTools(
+  ctx: Ctx,
+  remote: boolean,
+  builtins: readonly Builtin[],
+): Promise<number> {
   const commands = await commandTable(ctx, remote);
   const bundledNames = new Set(bundledCommands().map((c) => c.command));
   const doc = {

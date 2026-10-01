@@ -2,7 +2,13 @@
  * Maps anything a call can throw (SDK transport errors, HTTP statuses, network failures, aborted
  * requests) to the platform's error envelope, each with a `fix`.
  */
-import { ProtocolError, SdkError, SdkErrorCode, SdkHttpError, UnauthorizedError } from "@modelcontextprotocol/client";
+import {
+  ProtocolError,
+  SdkError,
+  SdkErrorCode,
+  SdkHttpError,
+  UnauthorizedError,
+} from "@modelcontextprotocol/client";
 import { CliError, cliError, EXIT, parseEnvelope } from "./errors.js";
 import { isRecord } from "./tools/schema.js";
 
@@ -50,20 +56,27 @@ function httpFailure(ctx: FailureContext, status: number, text: string | null): 
   let oauthDetail: string | undefined;
   try {
     const body: unknown = text ? JSON.parse(text) : null;
-    if (isRecord(body) && typeof body.error_description === "string") oauthDetail = body.error_description;
+    if (isRecord(body) && typeof body.error_description === "string")
+      oauthDetail = body.error_description;
   } catch {
     // not JSON
   }
   if (status === 401) return unauthorized(ctx, oauthDetail);
   if (status === 403) {
-    return cliError("forbidden", `the platform refused this call (HTTP 403)${oauthDetail ? `: ${oauthDetail}` : ""}`, {
-      explanation: "Your token lacks the scope or the repo access this needs. whoami shows your scopes; ask the human who owns this agent to grant more.",
-      command: "gittifacts whoami",
-    });
+    return cliError(
+      "forbidden",
+      `the platform refused this call (HTTP 403)${oauthDetail ? `: ${oauthDetail}` : ""}`,
+      {
+        explanation:
+          "Your token lacks the scope or the repo access this needs. whoami shows your scopes; ask the human who owns this agent to grant more.",
+        command: "gittifacts whoami",
+      },
+    );
   }
   if (status === 404 || status === 405) {
     return cliError("not-found", `no MCP endpoint at ${ctx.mcpUrl} (HTTP ${status})`, {
-      explanation: "Check --host: it should be the platform origin, whose /start page names the MCP URL.",
+      explanation:
+        "Check --host: it should be the platform origin, whose /start page names the MCP URL.",
       command: `curl -sS ${ctx.host}/start`,
     });
   }
@@ -113,20 +126,30 @@ export function toCliError(e: unknown, ctx: FailureContext): CliError {
   if (e instanceof ProtocolError) {
     const m = /unknown tool:?\s*([\w-]+)|tool ([\w-]+) not found/i.exec(e.message);
     if (m) return unknownTool(ctx, m[1] ?? m[2] ?? "?");
-    return cliError("protocol", e.message, {
-      explanation: "The MCP server rejected the request. Retry; if it persists, check the CLI version against the platform.",
-      command: "gittifacts --version",
-    }, { details: { code: e.code } });
+    return cliError(
+      "protocol",
+      e.message,
+      {
+        explanation:
+          "The MCP server rejected the request. Retry; if it persists, check the CLI version against the platform.",
+        command: "gittifacts --version",
+      },
+      { details: { code: e.code } },
+    );
   }
   if (e instanceof TypeError && /fetch failed|network/i.test(e.message)) return network(ctx, e);
   if (isAbort(e)) {
-    return cliError("interrupted", "interrupted", { explanation: "Run the command again." }, {
-      exitCode: EXIT.interrupted,
-    });
+    return cliError(
+      "interrupted",
+      "interrupted",
+      { explanation: "Run the command again." },
+      {
+        exitCode: EXIT.interrupted,
+      },
+    );
   }
-  return cliError(
-    "cli-internal",
-    e instanceof Error ? e.message : String(e),
-    { explanation: "Unexpected CLI failure. Retry; if it persists, report it with the CLI version.", command: "gittifacts --version" },
-  );
+  return cliError("cli-internal", e instanceof Error ? e.message : String(e), {
+    explanation: "Unexpected CLI failure. Retry; if it persists, report it with the CLI version.",
+    command: "gittifacts --version",
+  });
 }

@@ -24,9 +24,17 @@ interface Result {
   stderr: string;
 }
 
-function exec(cmd: string, args: string[], opts: { cwd: string; env: NodeJS.ProcessEnv; stdin?: string }): Promise<Result> {
+function exec(
+  cmd: string,
+  args: string[],
+  opts: { cwd: string; env: NodeJS.ProcessEnv; stdin?: string },
+): Promise<Result> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(cmd, args, {
+      cwd: opts.cwd,
+      env: opts.env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d: Buffer) => {
@@ -41,7 +49,11 @@ function exec(cmd: string, args: string[], opts: { cwd: string; env: NodeJS.Proc
   });
 }
 
-function cli(args: string[], env: Record<string, string | undefined> = {}, stdin?: string): Promise<Result> {
+function cli(
+  args: string[],
+  env: Record<string, string | undefined> = {},
+  stdin?: string,
+): Promise<Result> {
   const cwd = join(work, "project");
   mkdirSync(cwd, { recursive: true });
   return exec(process.execPath, [bundle, ...args], {
@@ -61,7 +73,10 @@ function cli(args: string[], env: Record<string, string | undefined> = {}, stdin
 const json = (r: Result): Record<string, unknown> => JSON.parse(r.stdout);
 
 beforeAll(async () => {
-  const built = await exec(process.execPath, ["build.mjs", "--outfile", bundle], { cwd: root, env: process.env });
+  const built = await exec(process.execPath, ["build.mjs", "--outfile", bundle], {
+    cwd: root,
+    env: process.env,
+  });
   if (built.code !== 0) throw new Error(`build failed:\n${built.stderr}${built.stdout}`);
   server = await serveMcp(backend);
   host = hostOf(server.url);
@@ -104,9 +119,13 @@ describe("bundled CLI against the real MCP server", () => {
     const r = await cli(["get-change-status", "--change-id", "chg_1", "--human"]);
     expect(r.code).toBe(0);
     expect(r.stdout).toMatch(/^Get change status\n/);
-    expect(r.stdout).toMatch(/Lane reasons\n\s+CODE\s+LANE\s+MESSAGE\n\s+size\.lane1\s+1\s+medium diff/);
-    expect(r.stdout).toMatch(/Next steps\n {2}1\. Read the tour a human will review\n {5}\$ gittifacts get-tour --change-id chg_1/);
-    expect(r.stdout).not.toMatch(/\u001b\[/);
+    expect(r.stdout).toMatch(
+      /Lane reasons\n\s+CODE\s+LANE\s+MESSAGE\n\s+size\.lane1\s+1\s+medium diff/,
+    );
+    expect(r.stdout).toMatch(
+      /Next steps\n {2}1\. Read the tour a human will review\n {5}\$ gittifacts get-tour --change-id chg_1/,
+    );
+    expect(r.stdout.includes("\u001b[")).toBe(false);
   });
 
   it("passes the platform's error envelope through with exit 1", async () => {
@@ -116,16 +135,33 @@ describe("bundled CLI against the real MCP server", () => {
       error: {
         code: "not-found",
         message: "change nope not found",
-        fix: { explanation: "List what exists.", call: "list_repos({})", command: "gittifacts list-repos" },
+        fix: {
+          explanation: "List what exists.",
+          call: "list_repos({})",
+          command: "gittifacts list-repos",
+        },
       },
     });
   });
 
   it("sends an idempotency key on mutating calls and prints it", async () => {
-    const args = ["create-plan", "--repo-id", "repo_1", "--title", "Rate limit logins", "--intent", "Stop credential stuffing on /login.", "--acceptance-criteria", "6th attempt gets 429"];
+    const args = [
+      "create-plan",
+      "--repo-id",
+      "repo_1",
+      "--title",
+      "Rate limit logins",
+      "--intent",
+      "Stop credential stuffing on /login.",
+      "--acceptance-criteria",
+      "6th attempt gets 429",
+    ];
     const given = await cli([...args, "--idempotency-key", "k-e2e"]);
     expect(given.code).toBe(0);
-    expect(json(given)).toMatchObject({ plan: { id: "plan_1", status: "draft" }, idempotencyKey: "k-e2e" });
+    expect(json(given)).toMatchObject({
+      plan: { id: "plan_1", status: "draft" },
+      idempotencyKey: "k-e2e",
+    });
     expect(backend.calls).toContain("createPlan:k-e2e");
 
     const generated = json(await cli(args)) as { idempotencyKey: string };
@@ -141,21 +177,36 @@ describe("bundled CLI against the real MCP server", () => {
 
   it("whoami reports the principal and where the token came from", async () => {
     const r = await cli(["whoami"]);
-    expect(json(r)).toMatchObject({ principalId: "ag_1", kind: "agent", auth: { host, hostSource: "env", tokenSource: "env" } });
+    expect(json(r)).toMatchObject({
+      principalId: "ag_1",
+      kind: "agent",
+      auth: { host, hostSource: "env", tokenSource: "env" },
+    });
   });
 
   it("without a token, the error says how to log in", async () => {
     const r = await cli(["whoami"], { GITTIFACTS_TOKEN: undefined });
     expect(r.code).toBe(1);
     expect(json(r)).toMatchObject({
-      error: { code: "unauthorized", fix: { explanation: expect.stringContaining("Bearer"), command: `gittifacts login --host ${host}` } },
+      error: {
+        code: "unauthorized",
+        fix: {
+          explanation: expect.stringContaining("Bearer"),
+          command: `gittifacts login --host ${host}`,
+        },
+      },
     });
   });
 
   it("waits for a milestone with the wait command", async () => {
     const r = await cli(["wait", "chg_1", "--until", "merged", "--timeout", "30"]);
     expect(r.code).toBe(0);
-    expect(json(r)).toMatchObject({ reached: true, reason: "reached", change: { status: "merged" }, waited: { attempts: 1 } });
+    expect(json(r)).toMatchObject({
+      reached: true,
+      reason: "reached",
+      change: { status: "merged" },
+      waited: { attempts: 1 },
+    });
   });
 
   it("init explains that this server has no create_project yet", async () => {
@@ -170,14 +221,21 @@ describe("bundled CLI against the real MCP server", () => {
   it("asks the server about commands it doesn't know, then gives up with suggestions", async () => {
     const r = await cli(["open-workspace", "chg_1"]);
     expect(r.code).toBe(2);
-    expect(json(r)).toMatchObject({ error: { code: "usage", message: "unknown command: open-workspace" } });
+    expect(json(r)).toMatchObject({
+      error: { code: "usage", message: "unknown command: open-workspace" },
+    });
   });
 
   it("a network failure on a mutating call says how to retry with the same key", async () => {
-    const r = await cli(["request-review", "chg_1", "--idempotency-key", "k-net"], { GITTIFACTS_HOST: "http://127.0.0.1:1" });
+    const r = await cli(["request-review", "chg_1", "--idempotency-key", "k-net"], {
+      GITTIFACTS_HOST: "http://127.0.0.1:1",
+    });
     expect(r.code).toBe(1);
     expect(json(r)).toMatchObject({
-      error: { code: "network", fix: { command: "gittifacts request-review chg_1 --idempotency-key k-net" } },
+      error: {
+        code: "network",
+        fix: { command: "gittifacts request-review chg_1 --idempotency-key k-net" },
+      },
       idempotencyKey: "k-net",
     });
   });

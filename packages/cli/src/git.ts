@@ -6,7 +6,9 @@
  */
 import type { GitResult, GitRunner } from "./io.js";
 
-export type GitAuth = { scheme: "Bearer"; token: string } | { scheme: "Basic"; username: string; password: string };
+export type GitAuth =
+  | { scheme: "Bearer"; token: string }
+  | { scheme: "Basic"; username: string; password: string };
 
 export function authHeader(auth: GitAuth): string {
   if (auth.scheme === "Bearer") return `Authorization: Bearer ${auth.token}`;
@@ -34,7 +36,11 @@ export function splitRemote(remote: string): { url: string; auth: GitAuth | null
   }
   if (!u.username && !u.password) return { url: remote, auth: null };
   const auth: GitAuth | null = u.password
-    ? { scheme: "Basic", username: decodeURIComponent(u.username), password: decodeURIComponent(u.password) }
+    ? {
+        scheme: "Basic",
+        username: decodeURIComponent(u.username),
+        password: decodeURIComponent(u.password),
+      }
     : { scheme: "Bearer", token: decodeURIComponent(u.username) };
   u.username = "";
   u.password = "";

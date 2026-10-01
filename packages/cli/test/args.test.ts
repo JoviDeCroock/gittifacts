@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildToolArgs,
-  type Globals,
-  parseCommandTokens,
-  splitArgv,
-} from "../src/args.js";
+import { buildToolArgs, type Globals, parseCommandTokens, splitArgv } from "../src/args.js";
 import { CliError, EXIT } from "../src/errors.js";
 import { deriveCommand, findCommand } from "../src/tools/commands.js";
 
@@ -37,7 +32,13 @@ function usageErrorOf(fn: () => unknown): CliError {
 
 describe("global flags", () => {
   it("are read before and after the command", () => {
-    const inv = splitArgv(["--host", "https://x.example", "--human", "whoami", "--idempotency-key=k1"]);
+    const inv = splitArgv([
+      "--host",
+      "https://x.example",
+      "--human",
+      "whoami",
+      "--idempotency-key=k1",
+    ]);
     expect(inv.command).toBe("whoami");
     expect(inv.globals).toMatchObject({ host: "https://x.example", human: true });
     const g: Globals = inv.globals;
@@ -59,7 +60,9 @@ describe("global flags", () => {
 
 describe("command flags", () => {
   it("parse --flag value, --flag=value, camelCase and a positional", () => {
-    expect(parse("get-change-status", ["--change-id", "chg_1"]).args).toEqual({ changeId: "chg_1" });
+    expect(parse("get-change-status", ["--change-id", "chg_1"]).args).toEqual({
+      changeId: "chg_1",
+    });
     expect(parse("get-change-status", ["--change-id=chg_2"]).args).toEqual({ changeId: "chg_2" });
     expect(parse("get-change-status", ["--changeId", "chg_3"]).args).toEqual({ changeId: "chg_3" });
     expect(parse("get-change-status", ["chg_4"]).args).toEqual({ changeId: "chg_4" });
@@ -71,18 +74,27 @@ describe("command flags", () => {
     ).toEqual({ changeId: "chg_1", until: "merged", timeoutSec: 30 });
     const bad = usageErrorOf(() => parse("wait-for-change", ["chg_1", "--until", "done"]));
     expect(bad.body.message).toMatch(/one of evidence_ready, lane_assigned/);
-    usageErrorOf(() => parse("wait-for-change", ["chg_1", "--until", "merged", "--timeout-sec", "soon"]));
+    usageErrorOf(() =>
+      parse("wait-for-change", ["chg_1", "--until", "merged", "--timeout-sec", "soon"]),
+    );
   });
 
   it("repeat list flags, accept JSON arrays, and take JSON for objects", () => {
     const { args } = parse("create-plan", [
-      "--repo-id", "repo_1",
-      "--title", "Rate limit",
-      "--intent", "Stop credential stuffing.",
-      "--acceptance-criteria", "6th try gets 429",
-      "--acceptance-criteria", "counter resets",
-      "--scope-paths", '["src/*.ts","test/*.ts"]',
-      "--risk-declarations", '[{"area":"auth","description":"login path"}]',
+      "--repo-id",
+      "repo_1",
+      "--title",
+      "Rate limit",
+      "--intent",
+      "Stop credential stuffing.",
+      "--acceptance-criteria",
+      "6th try gets 429",
+      "--acceptance-criteria",
+      "counter resets",
+      "--scope-paths",
+      '["src/*.ts","test/*.ts"]',
+      "--risk-declarations",
+      '[{"area":"auth","description":"login path"}]',
     ]);
     expect(args).toEqual({
       repoId: "repo_1",
@@ -103,10 +115,17 @@ describe("command flags", () => {
       timeoutSec: 5,
     });
     expect(
-      parse("wait-for-change", ["-", "--json", '{"changeId":"from-json","timeoutSec":9}'], stdin).args,
+      parse("wait-for-change", ["-", "--json", '{"changeId":"from-json","timeoutSec":9}'], stdin)
+        .args,
     ).toEqual({ changeId: "from-json", until: "merged", timeoutSec: 9 });
     expect(
-      parse("wait-for-change", ["chg_pos", "--json", '{"changeId":"from-json","until":"merged"}', "--until", "reverted"]).args,
+      parse("wait-for-change", [
+        "chg_pos",
+        "--json",
+        '{"changeId":"from-json","until":"merged"}',
+        "--until",
+        "reverted",
+      ]).args,
     ).toEqual({ changeId: "chg_pos", until: "reverted" });
     expect(parse("wait-for-change", ["--json", "-"], stdin).args.changeId).toBe("from-stdin");
   });
@@ -161,6 +180,8 @@ describe("command flags", () => {
     expect(values(["--warm=false"])).toEqual({ warm: false });
     expect(values(["--no-warm"])).toEqual({ warm: false });
     // a boolean never swallows the next token
-    expect(parseCommandTokens(s, ["--warm", "chg_1"], splitArgv([]).globals).positionals).toEqual(["chg_1"]);
+    expect(parseCommandTokens(s, ["--warm", "chg_1"], splitArgv([]).globals).positionals).toEqual([
+      "chg_1",
+    ]);
   });
 });

@@ -66,6 +66,7 @@ export function toWireTool(v: unknown): WireTool | null {
 /** The non-null JSON types a schema allows (`["string", "null"]` → `["string"]`). */
 export function schemaTypes(s: JsonSchema): string[] {
   const t = s.type;
-  const list = typeof t === "string" ? [t] : Array.isArray(t) ? t.filter((x) => typeof x === "string") : [];
+  const list =
+    typeof t === "string" ? [t] : Array.isArray(t) ? t.filter((x) => typeof x === "string") : [];
   return list.filter((x) => x !== "null");
 }

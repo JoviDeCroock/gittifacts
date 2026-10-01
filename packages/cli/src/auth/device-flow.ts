@@ -72,7 +72,10 @@ export async function discoverEndpoints(
 
   if (!device || !token) {
     const start = await getJson(fetch, `${host}/start`);
-    const flow = isRecord(start) && isRecord(start.auth) && isRecord(start.auth.deviceFlow) ? start.auth.deviceFlow : null;
+    const flow =
+      isRecord(start) && isRecord(start.auth) && isRecord(start.auth.deviceFlow)
+        ? start.auth.deviceFlow
+        : null;
     if (flow) {
       const d = strField(flow, "deviceAuthorizationEndpoint", "device_authorization_endpoint");
       const t = strField(flow, "tokenEndpoint", "token_endpoint");
@@ -134,18 +137,29 @@ async function readBody(res: Response): Promise<unknown> {
 /** The OAuth error code of a response body: `error` (RFC 6749 §5.2), else better-auth's `code`. */
 export function oauthErrorOf(body: unknown): { error: string; description?: string } | null {
   if (!isRecord(body)) return null;
-  const description = typeof body.error_description === "string" ? body.error_description : typeof body.message === "string" ? body.message : undefined;
-  if (typeof body.error === "string") return { error: body.error, ...(description ? { description } : {}) };
-  if (typeof body.code === "string") return { error: body.code.toLowerCase(), ...(description ? { description } : {}) };
+  const description =
+    typeof body.error_description === "string"
+      ? body.error_description
+      : typeof body.message === "string"
+        ? body.message
+        : undefined;
+  if (typeof body.error === "string")
+    return { error: body.error, ...(description ? { description } : {}) };
+  if (typeof body.code === "string")
+    return { error: body.code.toLowerCase(), ...(description ? { description } : {}) };
   return null;
 }
 
 function unavailable(host: string, url: string, status: number) {
-  return cliError("device-flow-unavailable", `${host} does not offer the OAuth device flow at ${url} (HTTP ${status})`, {
-    explanation:
-      "Use an agent token a human created for you (export GITTIFACTS_TOKEN=...), or create an unclaimed project without an account with `gittifacts init`. If the platform documents other endpoints, pass --device-code-url and --token-url.",
-    command: `curl -sS -H 'accept: application/json' ${host}/start`,
-  });
+  return cliError(
+    "device-flow-unavailable",
+    `${host} does not offer the OAuth device flow at ${url} (HTTP ${status})`,
+    {
+      explanation:
+        "Use an agent token a human created for you (export GITTIFACTS_TOKEN=...), or create an unclaimed project without an account with `gittifacts init`. If the platform documents other endpoints, pass --device-code-url and --token-url.",
+      command: `curl -sS -H 'accept: application/json' ${host}/start`,
+    },
+  );
 }
 
 export async function requestDeviceCode(
@@ -162,21 +176,33 @@ export async function requestDeviceCode(
       body: form({ client_id: endpoints.clientId, scope }),
     });
   } catch (e) {
-    throw cliError("network", `could not reach ${endpoints.deviceAuthorizationUrl}`, {
-      explanation: `Check the host (${host}) and your connection, then run login again.`,
-      command: `gittifacts login --host ${host}`,
-    }, { details: e instanceof Error ? e.message : String(e) });
+    throw cliError(
+      "network",
+      `could not reach ${endpoints.deviceAuthorizationUrl}`,
+      {
+        explanation: `Check the host (${host}) and your connection, then run login again.`,
+        command: `gittifacts login --host ${host}`,
+      },
+      { details: e instanceof Error ? e.message : String(e) },
+    );
   }
   const body = await readBody(res);
-  if (res.status === 404 || res.status === 405) throw unavailable(host, endpoints.deviceAuthorizationUrl, res.status);
+  if (res.status === 404 || res.status === 405)
+    throw unavailable(host, endpoints.deviceAuthorizationUrl, res.status);
   if (!res.ok) {
     const err = oauthErrorOf(body);
-    throw cliError("device-flow-failed", `device authorization failed: ${err?.error ?? `HTTP ${res.status}`}${err?.description ? ` (${err.description})` : ""}`, {
-      explanation: err?.error === "invalid_client"
-        ? "The platform doesn't know this client id. Pass the one it documents with --client-id."
-        : "The platform refused to start a device login. Retry; if it persists, use an agent token (GITTIFACTS_TOKEN).",
-      command: `gittifacts login --host ${host}`,
-    }, { details: body });
+    throw cliError(
+      "device-flow-failed",
+      `device authorization failed: ${err?.error ?? `HTTP ${res.status}`}${err?.description ? ` (${err.description})` : ""}`,
+      {
+        explanation:
+          err?.error === "invalid_client"
+            ? "The platform doesn't know this client id. Pass the one it documents with --client-id."
+            : "The platform refused to start a device login. Retry; if it persists, use an agent token (GITTIFACTS_TOKEN).",
+        command: `gittifacts login --host ${host}`,
+      },
+      { details: body },
+    );
   }
   if (
     !isRecord(body) ||
@@ -184,10 +210,16 @@ export async function requestDeviceCode(
     typeof body.user_code !== "string" ||
     typeof body.verification_uri !== "string"
   ) {
-    throw cliError("invalid-response", "the device authorization response is missing device_code, user_code or verification_uri", {
-      explanation: "The endpoint isn't an RFC 8628 device authorization endpoint. Pass the right one with --device-code-url.",
-      command: `curl -sS -H 'accept: application/json' ${host}/start`,
-    }, { details: body });
+    throw cliError(
+      "invalid-response",
+      "the device authorization response is missing device_code, user_code or verification_uri",
+      {
+        explanation:
+          "The endpoint isn't an RFC 8628 device authorization endpoint. Pass the right one with --device-code-url.",
+        command: `curl -sS -H 'accept: application/json' ${host}/start`,
+      },
+      { details: body },
+    );
   }
   const abs = (u: string) => new URL(u, host).toString();
   return {
@@ -195,9 +227,12 @@ export async function requestDeviceCode(
     userCode: body.user_code,
     verificationUri: abs(body.verification_uri),
     verificationUriComplete:
-      typeof body.verification_uri_complete === "string" ? abs(body.verification_uri_complete) : null,
+      typeof body.verification_uri_complete === "string"
+        ? abs(body.verification_uri_complete)
+        : null,
     expiresIn: typeof body.expires_in === "number" && body.expires_in > 0 ? body.expires_in : 1800,
-    interval: typeof body.interval === "number" && body.interval > 0 ? body.interval : DEFAULT_INTERVAL_SEC,
+    interval:
+      typeof body.interval === "number" && body.interval > 0 ? body.interval : DEFAULT_INTERVAL_SEC,
   };
 }
 
@@ -250,7 +285,8 @@ export async function pollForToken(o: PollOptions): Promise<TokenResponse> {
     o.onEvent?.({ type: "retry", intervalSec: wait(), reason });
   };
   // Connection trouble backs off exponentially on top of the interval; one good answer resets it.
-  const wait = () => (failures === 0 ? interval : Math.min(interval * 2 ** failures, MAX_BACKOFF_SEC));
+  const wait = () =>
+    failures === 0 ? interval : Math.min(interval * 2 ** failures, MAX_BACKOFF_SEC);
 
   for (;;) {
     await o.sleep(wait() * 1000, o.signal);
@@ -260,7 +296,10 @@ export async function pollForToken(o: PollOptions): Promise<TokenResponse> {
     try {
       res = await o.fetch(o.tokenUrl, {
         method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "application/json",
+        },
         body: form({ grant_type: DEVICE_GRANT, device_code: o.deviceCode, client_id: o.clientId }),
         ...(o.signal ? { signal: o.signal } : {}),
       });
@@ -298,7 +337,8 @@ export async function pollForToken(o: PollOptions): Promise<TokenResponse> {
           command: loginAgain,
         });
       default:
-        if (res.status === 404 || res.status === 405) throw unavailable(o.host, o.tokenUrl, res.status);
+        if (res.status === 404 || res.status === 405)
+          throw unavailable(o.host, o.tokenUrl, res.status);
         if (res.status >= 500 || res.status === 429) {
           transient(`HTTP ${res.status}`);
           continue;
@@ -306,7 +346,10 @@ export async function pollForToken(o: PollOptions): Promise<TokenResponse> {
         throw cliError(
           "device-flow-failed",
           `login failed: ${err?.error ?? `HTTP ${res.status}`}${err?.description ? ` (${err.description})` : ""}`,
-          { explanation: "The platform rejected the device code. Run login again.", command: loginAgain },
+          {
+            explanation: "The platform rejected the device code. Run login again.",
+            command: loginAgain,
+          },
           { details: body, exitCode: EXIT.error },
         );
     }

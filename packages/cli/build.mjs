@@ -75,7 +75,9 @@ const result = await build({
   legalComments: "none",
   banner: { js: banner },
   define: {
-    "process.env.GITTIFACTS_BUILD_DEFAULT_HOST": JSON.stringify(process.env.GITTIFACTS_DEFAULT_HOST ?? ""),
+    "process.env.GITTIFACTS_BUILD_DEFAULT_HOST": JSON.stringify(
+      process.env.GITTIFACTS_DEFAULT_HOST ?? "",
+    ),
   },
   plugins: [inlineDefinitions],
   metafile: true,

@@ -43,7 +43,10 @@ const createProjectSchema = {
   },
 };
 
-function initHarness(result: ProjectOut = created(), opts: { git?: GitRunner; declareKey?: boolean } = {}) {
+function initHarness(
+  result: ProjectOut = created(),
+  opts: { git?: GitRunner; declareKey?: boolean } = {},
+) {
   const calls: Record<string, unknown>[] = [];
   const h = harness({ env: { GITTIFACTS_HOST: HOST }, ...(opts.git ? { git: opts.git } : {}) });
   const connector = mockConnector(
@@ -61,7 +64,12 @@ function initHarness(result: ProjectOut = created(), opts: { git?: GitRunner; de
           scopes: ["repo:read"],
           canApprove: false,
           repos: [],
-          quotas: { enforced: true, ciMinutesPerDay: 30, ciMinutesUsedToday: 0, artifactsOpsPerDay: 100 },
+          quotas: {
+            enforced: true,
+            ciMinutesPerDay: 30,
+            ciMinutesUsedToday: 0,
+            artifactsOpsPerDay: 100,
+          },
         },
       },
     },
@@ -77,7 +85,10 @@ describe("gittifacts init", () => {
     const r = await run(h, ["init", "--template", "workers-api", "--name", "my-api"]);
     expect(r.code).toBe(EXIT.ok);
     expect(calls).toEqual([{ template: "workers-api", name: "my-api" }]);
-    expect(connector.connections[0]).toEqual({ token: null, headers: { "Idempotency-Key": "cli_id1" } });
+    expect(connector.connections[0]).toEqual({
+      token: null,
+      headers: { "Idempotency-Key": "cli_id1" },
+    });
 
     expect(JSON.parse(readFileSync(join(h.dir, ".gittifacts.json"), "utf8"))).toEqual({
       host: HOST,
@@ -88,7 +99,10 @@ describe("gittifacts init", () => {
     const credsPath = join(h.dir, "config", "credentials.json");
     expect(statSync(credsPath).mode & 0o777).toBe(0o600);
     const creds = JSON.parse(readFileSync(credsPath, "utf8"));
-    expect(creds.hosts[HOST].projects.prj_1).toMatchObject({ token: "tok_secret", claimUrl: `${HOST}/claim/abc` });
+    expect(creds.hosts[HOST].projects.prj_1).toMatchObject({
+      token: "tok_secret",
+      claimUrl: `${HOST}/claim/abc`,
+    });
 
     const doc = r.json() as Record<string, unknown> & { nextSteps: { command?: string }[] };
     expect(doc).toMatchObject({
@@ -101,7 +115,9 @@ describe("gittifacts init", () => {
     });
     expect(doc.token).toBeUndefined();
     expect(r.stdout).not.toContain("tok_secret");
-    expect(doc.nextSteps[0]?.command).toBe("gittifacts wait chg_1 --timeout 120 --until evidence_ready");
+    expect(doc.nextSteps[0]?.command).toBe(
+      "gittifacts wait chg_1 --timeout 120 --until evidence_ready",
+    );
     h.cleanup();
   });
 
@@ -111,13 +127,23 @@ describe("gittifacts init", () => {
     const r = await run(h, ["whoami"]);
     expect(r.code).toBe(EXIT.ok);
     expect(connector.connections[1]?.token).toBe("tok_secret");
-    expect(r.json()).toMatchObject({ principalId: "anon_prj_1", auth: { host: HOST, hostSource: "env", tokenSource: "project" } });
+    expect(r.json()).toMatchObject({
+      principalId: "anon_prj_1",
+      auth: { host: HOST, hostSource: "env", tokenSource: "project" },
+    });
     h.cleanup();
   });
 
   it("sends the idempotency key as an argument when the tool declares one, and --show-token prints it", async () => {
     const { h, calls } = initHarness(created(), { declareKey: true });
-    const r = await run(h, ["init", "--template", "ts-library", "--idempotency-key", "retry-1", "--show-token"]);
+    const r = await run(h, [
+      "init",
+      "--template",
+      "ts-library",
+      "--idempotency-key",
+      "retry-1",
+      "--show-token",
+    ]);
     expect(calls).toEqual([{ template: "ts-library", idempotencyKey: "retry-1" }]);
     expect(r.json()).toMatchObject({ token: "tok_secret", idempotencyKey: "retry-1" });
     h.cleanup();
@@ -132,7 +158,10 @@ describe("gittifacts init", () => {
       error: {
         code: "unknown-tool",
         message: `${HOST} has no MCP tool named create_project`,
-        fix: { explanation: expect.stringContaining("create_project"), command: "gittifacts tools --remote" },
+        fix: {
+          explanation: expect.stringContaining("create_project"),
+          command: "gittifacts tools --remote",
+        },
       },
       idempotencyKey: "cli_id1",
     });
@@ -142,10 +171,19 @@ describe("gittifacts init", () => {
 
   it("refuses to overwrite an existing project file and conflicting flags, before calling anything", async () => {
     const { h, calls } = initHarness();
-    writeFileSync(join(h.dir, ".gittifacts.json"), JSON.stringify({ host: HOST, projectId: "old" }));
+    writeFileSync(
+      join(h.dir, ".gittifacts.json"),
+      JSON.stringify({ host: HOST, projectId: "old" }),
+    );
     const r = await run(h, ["init"]);
     expect(r.json()).toMatchObject({ error: { code: "already-initialized" } });
-    const both = await run(h, ["init", "--template", "static-site", "--from", "https://github.com/a/b"]);
+    const both = await run(h, [
+      "init",
+      "--template",
+      "static-site",
+      "--from",
+      "https://github.com/a/b",
+    ]);
     expect(both.code).toBe(EXIT.usage);
     const badTemplate = await run(h, ["init", "--template", "rails"]);
     expect(badTemplate.code).toBe(EXIT.usage);
@@ -189,22 +227,28 @@ describe("gittifacts init", () => {
       url: "https://git.example/r.git",
       auth: { scheme: "Basic", username: "x", password: "s3cret" },
     });
-    expect(splitRemote("https://git.example/r.git")).toEqual({ url: "https://git.example/r.git", auth: null });
-    expect(gitAuthEnv({ scheme: "Basic", username: "x", password: "s3cret" }).GIT_CONFIG_VALUE_0).toBe(
-      `Authorization: Basic ${Buffer.from("x:s3cret").toString("base64")}`,
-    );
+    expect(splitRemote("https://git.example/r.git")).toEqual({
+      url: "https://git.example/r.git",
+      auth: null,
+    });
+    expect(
+      gitAuthEnv({ scheme: "Basic", username: "x", password: "s3cret" }).GIT_CONFIG_VALUE_0,
+    ).toBe(`Authorization: Basic ${Buffer.from("x:s3cret").toString("base64")}`);
   });
 
   it("a real git clone never writes the token to .git/config", async () => {
     const work = tempDir();
-    const git = (args: string[], cwd: string) => runGit(args, { cwd, env: { GIT_CONFIG_NOSYSTEM: "1" } });
+    const git = (args: string[], cwd: string) =>
+      runGit(args, { cwd, env: { GIT_CONFIG_NOSYSTEM: "1" } });
     const id = ["-c", "user.name=t", "-c", "user.email=t@example.com"];
     await git(["init", "--bare", "-b", "main", "origin.git"], work);
     await git(["init", "-b", "main", "seed"], work);
     writeFileSync(join(work, "seed", "README.md"), "hi\n");
     await git(["add", "."], join(work, "seed"));
     expect((await git([...id, "commit", "-m", "seed"], join(work, "seed"))).code).toBe(0);
-    expect((await git(["push", join(work, "origin.git"), "main"], join(work, "seed"))).code).toBe(0);
+    expect((await git(["push", join(work, "origin.git"), "main"], join(work, "seed"))).code).toBe(
+      0,
+    );
 
     const { h } = initHarness(created({ remote: join(work, "origin.git") }), { git: runGit });
     const r = await run(h, ["init", "--template", "static-site", "--clone", "--dir", "site"]);
@@ -213,7 +257,9 @@ describe("gittifacts init", () => {
     expect(config).not.toContain("tok_secret");
     expect(config).not.toMatch(/extraHeader/i);
     expect(readFileSync(join(h.dir, "site", "README.md"), "utf8")).toBe("hi\n");
-    expect(JSON.parse(readFileSync(join(h.dir, "site", ".gittifacts.json"), "utf8")).projectId).toBe("prj_1");
+    expect(
+      JSON.parse(readFileSync(join(h.dir, "site", ".gittifacts.json"), "utf8")).projectId,
+    ).toBe("prj_1");
     h.cleanup();
   });
 });
