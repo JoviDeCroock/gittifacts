@@ -14,7 +14,7 @@
  * test step's log tail. Exits 0 when CI passed and the evidence signature verified.
  *
  * The grant's token reaches git only through GIT_CONFIG_* environment variables (an
- * `http.extraHeader`), never argv or .git/config.
+ * `http.extraHeader: Authorization: Bearer …`), never argv or .git/config.
  */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -58,9 +58,8 @@ interface Grant {
   branch: string;
 }
 
-/** Runs git with the grant as an Authorization header from the environment. */
+/** Runs git with the grant as an Authorization header from the environment (never argv). */
 function git(cwd: string, grant: Grant, gitArgs: string[]): string {
-  const basic = Buffer.from(`${grant.username}:${grant.token}`).toString("base64");
   const res = spawnSync("git", gitArgs, {
     cwd,
     encoding: "utf8",
@@ -69,7 +68,8 @@ function git(cwd: string, grant: Grant, gitArgs: string[]): string {
       GIT_TERMINAL_PROMPT: "0",
       GIT_CONFIG_COUNT: "1",
       GIT_CONFIG_KEY_0: "http.extraHeader",
-      GIT_CONFIG_VALUE_0: `Authorization: Basic ${basic}`,
+      // Bearer takes the full token; Basic would need the part before "?expires=" (artifacts.md §4).
+      GIT_CONFIG_VALUE_0: `Authorization: Bearer ${grant.token}`,
     },
   });
   if (res.status !== 0) {
