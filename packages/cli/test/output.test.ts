@@ -189,7 +189,7 @@ describe("MCP calls as CLI commands", () => {
     });
     expect(out.nextSteps[0]).toEqual({ title: "Look", call: 'get_tour({ changeId: "c" })', command: "gittifacts get-tour --change-id c" });
     expect(out.nextSteps[1]).toEqual({ title: "Just read", why: "no call" });
-    expect(out.error.fix.command).toBe("gittifacts whoami");
+    expect((out.error.fix as { command?: string }).command).toBe("gittifacts whoami");
     expect(out.unrelated).toEqual({ call: "whoami({})" });
   });
 

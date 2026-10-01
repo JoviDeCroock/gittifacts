@@ -107,6 +107,10 @@ export class Ctx {
     } catch (e) {
       const err = toCliError(e, this.failureContext(target, command));
       Object.assign(err.meta, opts.meta ?? {});
+      // The platform's own unauthorized envelope names the header; the CLI can name the command.
+      if (err.body.code === "unauthorized" && err.body.fix.command === undefined) {
+        err.body.fix = { ...err.body.fix, command: `gittifacts login --host ${target.host}` };
+      }
       throw err;
     } finally {
       await conn?.close().catch(() => undefined);
