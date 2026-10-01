@@ -1,0 +1,57 @@
+{
+  "name": "touches-auth",
+  "description": "Changes token expiry in src/auth/token.ts so a token is rejected AT its `exp` second (`exp < now` -> `exp <= now`, per RFC 7519 4.1.4) and adds a boundary test that fails on base. Otherwise a perfect Lane 0 change (proven, tiny, in scope, no API change); it is Lane 2 only because it touches a sensitive path (`**/auth/**`).",
+  "claim": {
+    "category": "fix",
+    "title": "Reject session tokens at their exact expiry second"
+  },
+  "plan": {
+    "title": "Reject session tokens at their exact expiry second",
+    "intent": "verifyToken accepts a token during the very second named by its exp claim. RFC 7519 says a token must not be accepted on or after its expiry time. Tighten the comparison and add a boundary test.",
+    "acceptanceCriteria": [
+      "verifyToken returns null when now equals exp",
+      "verifyToken still accepts the token at exp - 1",
+      "Signature checks and the token format are unchanged"
+    ],
+    "outOfScope": [
+      "Clock-skew leeway",
+      "Changing the token format or signing algorithm"
+    ],
+    "riskDeclarations": [
+      {
+        "area": "auth",
+        "description": "Tokens expire one second earlier than before; clients that refresh exactly at exp will see one more rejection."
+      }
+    ],
+    "scopePaths": [
+      "src/auth/token.ts",
+      "test/auth.test.ts"
+    ],
+    "affectedRoutes": [],
+    "approved": true
+  },
+  "expected": {
+    "computedLane": 2,
+    "laneWithShadow": 2,
+    "reasonCodes": [
+      "sensitive.hit"
+    ],
+    "evidence": {
+      "changedFiles": [
+        "src/auth/token.ts",
+        "test/auth.test.ts"
+      ],
+      "redGreen": "proven",
+      "failingOnBase": [
+        "test/auth.test.ts > signToken / verifyToken > rejects a token at its exact expiry second"
+      ],
+      "publicApi": "none",
+      "dependenciesAdded": [],
+      "sensitiveHits": [
+        "src/auth/token.ts"
+      ],
+      "scopeDrift": [],
+      "policyChanged": false
+    }
+  }
+}

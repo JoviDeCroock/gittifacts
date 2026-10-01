@@ -1,0 +1,29 @@
+{
+  "name": "@fixture/lib",
+  "version": "1.4.0",
+  "description": "Integer-cents money helpers: arithmetic, fair allocation, formatting, and signed session tokens.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters --noImplicitReturns",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "nanoid": "^5.1.5"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vitest": "^4.1.11"
+  }
+}

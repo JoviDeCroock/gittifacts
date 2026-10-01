@@ -1,0 +1,52 @@
+{
+  "name": "new-dependency",
+  "description": "Adds nanoid (^5.1.5) to package.json `dependencies` and changes nothing else. Deliberately manifest-only: no source file imports nanoid, because fixtures are never `pnpm install`ed (tests reuse the monorepo's node_modules, where nanoid is not resolvable), and even a type-only import would fail `tsc` with TS2307. The dependency diff only needs the manifest. There is no lockfile in the fixtures, so lockfileChanged is false.",
+  "claim": {
+    "category": "dependency",
+    "title": "Add nanoid as a runtime dependency"
+  },
+  "plan": {
+    "title": "Add nanoid as a runtime dependency",
+    "intent": "Transfers need short, URL-safe idempotency keys. Add nanoid as a runtime dependency now; a follow-up change will use it to generate the keys.",
+    "acceptanceCriteria": [
+      "nanoid ^5 is listed under dependencies in package.json",
+      "No source or test files change"
+    ],
+    "outOfScope": [
+      "Generating idempotency keys (follow-up change)"
+    ],
+    "riskDeclarations": [
+      {
+        "area": "supply chain",
+        "description": "New third-party runtime dependency (nanoid, no install scripts, no transitive dependencies)."
+      }
+    ],
+    "scopePaths": [
+      "package.json",
+      "pnpm-lock.yaml"
+    ],
+    "affectedRoutes": [],
+    "approved": true
+  },
+  "expected": {
+    "computedLane": 2,
+    "laneWithShadow": 2,
+    "reasonCodes": [
+      "deps.added"
+    ],
+    "evidence": {
+      "changedFiles": [
+        "package.json"
+      ],
+      "redGreen": "no-tests",
+      "publicApi": "none",
+      "dependenciesAdded": [
+        "nanoid"
+      ],
+      "lockfileChanged": false,
+      "sensitiveHits": [],
+      "scopeDrift": [],
+      "policyChanged": false
+    }
+  }
+}

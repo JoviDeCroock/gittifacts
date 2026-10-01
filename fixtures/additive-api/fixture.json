@@ -1,0 +1,70 @@
+{
+  "name": "additive-api",
+  "description": "Adds a new exported function multiply(value, factor) (half-away-from-zero rounding) to src/money.ts, re-exports it from src/index.ts, documents it in the README and tests it. No existing export changes, so the public API diff is additive.",
+  "claim": {
+    "category": "feature",
+    "title": "Add multiply() for scaling money by a factor"
+  },
+  "plan": {
+    "title": "Add multiply() for scaling money by a factor",
+    "intent": "Callers keep re-implementing tax and discount maths with ad-hoc rounding. Add multiply(value, factor) that scales an amount and rounds to the nearest minor unit, halves away from zero, without touching existing functions.",
+    "acceptanceCriteria": [
+      "multiply(money(5, \"EUR\"), 0.5) is 3 cents and multiply(money(-5, \"EUR\"), 0.5) is -3 cents",
+      "multiply never returns negative zero",
+      "Non-finite factors throw a RangeError",
+      "multiply is exported from the package entry point and listed in the README"
+    ],
+    "outOfScope": [
+      "Changing add, subtract or any other existing export",
+      "Banker's rounding or configurable rounding modes"
+    ],
+    "riskDeclarations": [
+      {
+        "area": "public API",
+        "description": "Adds one new export (multiply); existing signatures are unchanged."
+      }
+    ],
+    "scopePaths": [
+      "src/money.ts",
+      "src/index.ts",
+      "test/money.test.ts",
+      "README.md"
+    ],
+    "affectedRoutes": [],
+    "approved": true
+  },
+  "expected": {
+    "computedLane": 1,
+    "laneWithShadow": 1,
+    "reasonCodes": [
+      "api.additive"
+    ],
+    "evidence": {
+      "changedFiles": [
+        "README.md",
+        "src/index.ts",
+        "src/money.ts",
+        "test/money.test.ts"
+      ],
+      "redGreen": "proven",
+      "failingOnBase": [
+        "test/money.test.ts > multiply > scales by a whole factor",
+        "test/money.test.ts > multiply > rounds a fractional result to the nearest minor unit",
+        "test/money.test.ts > multiply > rounds halves away from zero",
+        "test/money.test.ts > multiply > returns a positive zero rather than negative zero",
+        "test/money.test.ts > multiply > keeps the currency",
+        "test/money.test.ts > multiply > rejects non-finite factors"
+      ],
+      "publicApi": "additive",
+      "apiAdded": [
+        "multiply"
+      ],
+      "apiChanged": [],
+      "apiRemoved": [],
+      "dependenciesAdded": [],
+      "sensitiveHits": [],
+      "scopeDrift": [],
+      "policyChanged": false
+    }
+  }
+}

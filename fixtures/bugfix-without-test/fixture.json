@@ -1,0 +1,47 @@
+{
+  "name": "bugfix-without-test",
+  "description": "The same one-line allocate() fix as pure-bugfix-with-regression-test, but with no test change. Existing tests only cover evenly divisible totals, so nothing proves the fix (red/green verdict `no-tests`) even though every test passes on both sides.",
+  "claim": {
+    "category": "fix",
+    "title": "Fix allocate() losing a minor unit on uneven splits"
+  },
+  "plan": {
+    "title": "Fix allocate() losing a minor unit on uneven splits",
+    "intent": "allocate() promises shares that add up to exactly the total, but when the total does not divide evenly it drops one minor unit: splitting EUR 1.00 three ways returns 33 + 33 + 33 cents. Hand out every leftover minor unit, first share first, and pin the behaviour with a regression test.",
+    "acceptanceCriteria": [
+      "allocate(money(100, \"EUR\"), [1, 1, 1]) returns 34, 33 and 33 cents",
+      "For any total (including negative totals) and valid ratios, the shares sum to exactly the total",
+      "A regression test fails before the fix and passes after it",
+      "Results for evenly divisible totals are unchanged"
+    ],
+    "outOfScope": [
+      "Switching to a largest-remainder distribution strategy",
+      "Changes to any module other than allocate"
+    ],
+    "riskDeclarations": [],
+    "scopePaths": [
+      "src/allocate.ts",
+      "test/allocate.test.ts"
+    ],
+    "affectedRoutes": [],
+    "approved": true
+  },
+  "expected": {
+    "computedLane": 2,
+    "laneWithShadow": 2,
+    "reasonCodes": [
+      "redgreen.not-proven"
+    ],
+    "evidence": {
+      "changedFiles": [
+        "src/allocate.ts"
+      ],
+      "redGreen": "no-tests",
+      "publicApi": "none",
+      "dependenciesAdded": [],
+      "sensitiveHits": [],
+      "scopeDrift": [],
+      "policyChanged": false
+    }
+  }
+}

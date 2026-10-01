@@ -1,0 +1,51 @@
+{
+  "name": "codemod-rename",
+  "description": "Renames the internal helper requireCurrency -> toCurrencyCode (src/internal/currency.ts, not re-exported) across three source files. The head tree is exactly what `node .platform/transforms/rename-helper.mjs` produces on the base tree. The transform script is part of this fixture's BASE (it was reviewed and merged earlier through its own change), so the head diff contains only the transform's output and never touches .platform/. Public API unchanged, no tests changed.",
+  "claim": {
+    "category": "transform",
+    "title": "Apply rename-helper codemod (requireCurrency -> toCurrencyCode)"
+  },
+  "transform": {
+    "script": ".platform/transforms/rename-helper.mjs",
+    "command": "node .platform/transforms/rename-helper.mjs",
+    "source": "base"
+  },
+  "plan": {
+    "title": "Rename requireCurrency to toCurrencyCode",
+    "intent": "requireCurrency reads like a guard but actually narrows and returns a CurrencyCode. Rename it to toCurrencyCode everywhere by running the already-reviewed rename-helper codemod, with no hand edits.",
+    "acceptanceCriteria": [
+      "Head equals the output of node .platform/transforms/rename-helper.mjs run on base, byte for byte",
+      "No occurrences of requireCurrency remain",
+      "The public API (dist/index.d.ts) is unchanged"
+    ],
+    "outOfScope": [
+      "Any hand-written edits",
+      "Renaming exported functions"
+    ],
+    "riskDeclarations": [],
+    "scopePaths": [
+      "src/**"
+    ],
+    "affectedRoutes": [],
+    "approved": true
+  },
+  "expected": {
+    "computedLane": 0,
+    "laneWithShadow": 1,
+    "reasonCodes": [],
+    "evidence": {
+      "changedFiles": [
+        "src/format.ts",
+        "src/internal/currency.ts",
+        "src/money.ts"
+      ],
+      "transformVerified": true,
+      "redGreen": "no-tests",
+      "publicApi": "none",
+      "dependenciesAdded": [],
+      "sensitiveHits": [],
+      "scopeDrift": [],
+      "policyChanged": false
+    }
+  }
+}

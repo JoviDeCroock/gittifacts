@@ -1,0 +1,50 @@
+{
+  "name": "pure-bugfix-with-regression-test",
+  "description": "Fixes the seeded off-by-one in allocate() (`index < leftover - 1` -> `index < leftover`) and adds regression tests that fail on base and pass on head. One-line fix, two files, entirely inside the plan's scopePaths, no API or dependency change. The model Lane 0 change.",
+  "claim": {
+    "category": "fix",
+    "title": "Fix allocate() losing a minor unit on uneven splits"
+  },
+  "plan": {
+    "title": "Fix allocate() losing a minor unit on uneven splits",
+    "intent": "allocate() promises shares that add up to exactly the total, but when the total does not divide evenly it drops one minor unit: splitting EUR 1.00 three ways returns 33 + 33 + 33 cents. Hand out every leftover minor unit, first share first, and pin the behaviour with a regression test.",
+    "acceptanceCriteria": [
+      "allocate(money(100, \"EUR\"), [1, 1, 1]) returns 34, 33 and 33 cents",
+      "For any total (including negative totals) and valid ratios, the shares sum to exactly the total",
+      "A regression test fails before the fix and passes after it",
+      "Results for evenly divisible totals are unchanged"
+    ],
+    "outOfScope": [
+      "Switching to a largest-remainder distribution strategy",
+      "Changes to any module other than allocate"
+    ],
+    "riskDeclarations": [],
+    "scopePaths": [
+      "src/allocate.ts",
+      "test/allocate.test.ts"
+    ],
+    "affectedRoutes": [],
+    "approved": true
+  },
+  "expected": {
+    "computedLane": 0,
+    "laneWithShadow": 1,
+    "reasonCodes": [],
+    "evidence": {
+      "changedFiles": [
+        "src/allocate.ts",
+        "test/allocate.test.ts"
+      ],
+      "redGreen": "proven",
+      "failingOnBase": [
+        "test/allocate.test.ts > allocate > hands leftover minor units to the first shares",
+        "test/allocate.test.ts > allocate > never loses or creates a minor unit"
+      ],
+      "publicApi": "none",
+      "dependenciesAdded": [],
+      "sensitiveHits": [],
+      "scopeDrift": [],
+      "policyChanged": false
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "name": "policy-change",
+  "description": "Edits .platform/policy.ts to lower thresholds.changedLineCoverage from 0.8 to 0.5. No code changes. Policy is read from the base, so the lowered threshold does not apply to this change itself; any change to the policy file is Lane 2 and needs approval from someone other than the author. Also a sensitive-path hit (`.platform/**`).",
+  "claim": {
+    "category": "chore",
+    "title": "Lower the Lane 0 changed-line coverage threshold to 50%"
+  },
+  "plan": {
+    "title": "Lower the Lane 0 changed-line coverage threshold to 50%",
+    "intent": "Legacy formatting code has thin coverage, which keeps small, safe fixes out of Lane 0. Lower thresholds.changedLineCoverage from 0.8 to 0.5 while tests are backfilled.",
+    "acceptanceCriteria": [
+      "thresholds.changedLineCoverage is 0.5 in .platform/policy.ts",
+      "No other policy value changes"
+    ],
+    "outOfScope": [
+      "Enabling Lane 0",
+      "Changing the mutation score threshold"
+    ],
+    "riskDeclarations": [
+      {
+        "area": "review policy",
+        "description": "Weakens the Lane 0 coverage gate for every future change in this repository."
+      }
+    ],
+    "scopePaths": [
+      ".platform/policy.ts"
+    ],
+    "affectedRoutes": [],
+    "approved": true
+  },
+  "expected": {
+    "computedLane": 2,
+    "laneWithShadow": 2,
+    "reasonCodes": [
+      "policy.changed",
+      "sensitive.hit"
+    ],
+    "evidence": {
+      "changedFiles": [
+        ".platform/policy.ts"
+      ],
+      "redGreen": "no-tests",
+      "publicApi": "none",
+      "dependenciesAdded": [],
+      "sensitiveHits": [
+        ".platform/policy.ts"
+      ],
+      "scopeDrift": [],
+      "policyChanged": true
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "name": "breaking-api",
+  "description": "formatMoney(value) becomes formatMoney(value, options) with a REQUIRED FormatOptions parameter ({ style: \"code\" | \"symbol\" }) so callers can render currency symbols. Tests and the README are updated to the new signature. Every consumer calling formatMoney(value) breaks at compile time: the public API diff is breaking, and the breaking export is formatMoney.",
+  "claim": {
+    "category": "feature",
+    "title": "Let formatMoney() render currency symbols"
+  },
+  "plan": {
+    "title": "Let formatMoney() render currency symbols",
+    "intent": "Product wants amounts like €1234.56 in receipts. Give formatMoney an options parameter with a required style (\"code\" keeps today's parseable output, \"symbol\" puts the currency symbol in front) and update every caller in this repository.",
+    "acceptanceCriteria": [
+      "formatMoney(value, { style: \"code\" }) returns exactly what formatMoney(value) returned before",
+      "formatMoney(value, { style: \"symbol\" }) returns e.g. €1234.56, $0.05, ¥980 and -£12.30",
+      "parseMoney still parses the code style",
+      "README examples use the new signature"
+    ],
+    "outOfScope": [
+      "Locale-aware formatting via Intl",
+      "Parsing the symbol style"
+    ],
+    "riskDeclarations": [
+      {
+        "area": "public API",
+        "description": "Breaking: formatMoney gains a required options parameter. Downstream callers must be updated; needs a major version bump on release."
+      }
+    ],
+    "scopePaths": [
+      "src/format.ts",
+      "src/index.ts",
+      "test/format.test.ts",
+      "README.md"
+    ],
+    "affectedRoutes": [],
+    "approved": true
+  },
+  "expected": {
+    "computedLane": 2,
+    "laneWithShadow": 2,
+    "reasonCodes": [
+      "api.breaking"
+    ],
+    "evidence": {
+      "changedFiles": [
+        "README.md",
+        "src/format.ts",
+        "src/index.ts",
+        "test/format.test.ts"
+      ],
+      "redGreen": "proven",
+      "failingOnBase": [
+        "test/format.test.ts > formatMoney with style: symbol > puts the currency symbol in front of the amount",
+        "test/format.test.ts > formatMoney with style: symbol > puts the minus sign before the symbol"
+      ],
+      "publicApi": "breaking",
+      "apiAdded": [
+        "FormatOptions"
+      ],
+      "apiChanged": [
+        "formatMoney"
+      ],
+      "apiRemoved": [],
+      "dependenciesAdded": [],
+      "sensitiveHits": [],
+      "scopeDrift": [],
+      "policyChanged": false
+    }
+  }
+}

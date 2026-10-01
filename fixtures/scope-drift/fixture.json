@@ -1,0 +1,53 @@
+{
+  "name": "scope-drift",
+  "description": "The plan only covers parseMoney (src/format.ts + its test): accept comma-grouped thousands, proven by a new test. The diff ALSO edits src/money.ts, an unrelated module outside the plan's scopePaths, to normalise negative zero in money(). All tests pass on both sides; the drift is the only problem.",
+  "claim": {
+    "category": "feature",
+    "title": "parseMoney: accept comma-grouped thousands"
+  },
+  "plan": {
+    "title": "parseMoney: accept comma-grouped thousands",
+    "intent": "Amounts pasted from spreadsheets look like 1,234.56 EUR and parseMoney rejects them. Accept comma-grouped thousands in the whole part while still rejecting malformed grouping.",
+    "acceptanceCriteria": [
+      "parseMoney(\"1,234.56 EUR\") returns 123456 cents",
+      "Malformed grouping such as 1,23.00 EUR is still rejected",
+      "formatMoney output is unchanged"
+    ],
+    "outOfScope": [
+      "Other modules",
+      "Locale-specific separators (e.g. 1.234,56)"
+    ],
+    "riskDeclarations": [],
+    "scopePaths": [
+      "src/format.ts",
+      "test/format.test.ts"
+    ],
+    "affectedRoutes": [],
+    "approved": true
+  },
+  "expected": {
+    "computedLane": 2,
+    "laneWithShadow": 2,
+    "reasonCodes": [
+      "scope.drift"
+    ],
+    "evidence": {
+      "changedFiles": [
+        "src/format.ts",
+        "src/money.ts",
+        "test/format.test.ts"
+      ],
+      "redGreen": "proven",
+      "failingOnBase": [
+        "test/format.test.ts > parseMoney > accepts comma-grouped thousands"
+      ],
+      "publicApi": "none",
+      "dependenciesAdded": [],
+      "sensitiveHits": [],
+      "scopeDrift": [
+        "src/money.ts"
+      ],
+      "policyChanged": false
+    }
+  }
+}
