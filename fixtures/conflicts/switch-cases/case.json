@@ -1,0 +1,37 @@
+{
+  "name": "switch-cases",
+  "kind": "textual",
+  "description": "Both sides add a new shape: one more member of the union type and one more switch case, at the same places. Two conflict regions; keep both shapes.",
+  "change": {
+    "changeId": "chg_triangle",
+    "title": "Support triangles",
+    "dir": "change",
+    "plan": {
+      "title": "Support triangles",
+      "intent": "area() handles triangles given base and height.",
+      "acceptanceCriteria": [
+        "area of a triangle with base 4 and height 3 is 6"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_rectangle",
+      "title": "Support rectangles",
+      "dir": "upstream",
+      "plan": {
+        "title": "Support rectangles",
+        "intent": "area() handles rectangles given width and height.",
+        "acceptanceCriteria": [
+          "area of a 2 by 5 rectangle is 10"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "conflicted": [
+      "src/shapes.ts"
+    ],
+    "outsideHunks": false
+  }
+}

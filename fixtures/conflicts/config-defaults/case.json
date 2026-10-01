@@ -1,0 +1,39 @@
+{
+  "name": "config-defaults",
+  "kind": "textual",
+  "description": "Both sides add a config key at the end of the interface and of the defaults; upstream also raises the timeout default on the line next to it. The resolution keeps both keys and the new timeout.",
+  "change": {
+    "changeId": "chg_verbose_flag",
+    "title": "Verbose logging flag",
+    "dir": "change",
+    "plan": {
+      "title": "Verbose logging flag",
+      "intent": "Add a verbose flag to the client config, off by default.",
+      "acceptanceCriteria": [
+        "defaults.verbose is false",
+        "withDefaults({ verbose: true }).verbose is true"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_base_url",
+      "title": "Configurable base URL, longer timeout",
+      "dir": "upstream",
+      "plan": {
+        "title": "Configurable base URL, longer timeout",
+        "intent": "Make the API base URL configurable (default https://api.example.com) and raise the default timeout to 5 seconds after production timeouts.",
+        "acceptanceCriteria": [
+          "defaults.baseUrl is https://api.example.com",
+          "defaults.timeoutMs is 5000"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "conflicted": [
+      "src/config.ts"
+    ],
+    "outsideHunks": false
+  }
+}

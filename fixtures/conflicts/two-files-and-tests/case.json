@@ -1,0 +1,39 @@
+{
+  "name": "two-files-and-tests",
+  "kind": "textual",
+  "description": "Both sides append a function to src/math.ts and a test at the end of the same describe block: two conflicted files, source and test. Keep both functions and both tests.",
+  "change": {
+    "changeId": "chg_div",
+    "title": "Add division",
+    "dir": "change",
+    "plan": {
+      "title": "Add division",
+      "intent": "math gains div(a, b); dividing by zero throws a RangeError.",
+      "acceptanceCriteria": [
+        "div(6, 3) is 2",
+        "div(1, 0) throws RangeError"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_mul",
+      "title": "Add multiplication",
+      "dir": "upstream",
+      "plan": {
+        "title": "Add multiplication",
+        "intent": "math gains mul(a, b).",
+        "acceptanceCriteria": [
+          "mul(4, 3) is 12"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "conflicted": [
+      "src/math.ts",
+      "test/math.test.ts"
+    ],
+    "outsideHunks": false
+  }
+}

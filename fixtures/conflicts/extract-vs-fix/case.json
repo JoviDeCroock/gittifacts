@@ -1,0 +1,38 @@
+{
+  "name": "extract-vs-fix",
+  "kind": "textual",
+  "description": "Upstream extracts the checks of register() into an exported validate(); the change tightens the email check and normalizes the address inside register(). The fix has to land in validate() as well as in register().",
+  "change": {
+    "changeId": "chg_email_check",
+    "title": "Stricter, normalized emails",
+    "dir": "change",
+    "plan": {
+      "title": "Stricter, normalized emails",
+      "intent": "Reject addresses with spaces or several @, and register the trimmed, lower-cased address.",
+      "acceptanceCriteria": [
+        "register({ email: ' Ada@Example.org ', age: 30 }) returns 'registered ada@example.org'",
+        "'a b@c.d' is rejected"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_extract_validate",
+      "title": "Export the signup validation",
+      "dir": "upstream",
+      "plan": {
+        "title": "Export the signup validation",
+        "intent": "Forms validate input before submitting; expose the checks register() does as validate().",
+        "acceptanceCriteria": [
+          "validate() throws exactly what register() would"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "conflicted": [
+      "src/signup.ts"
+    ],
+    "outsideHunks": false
+  }
+}

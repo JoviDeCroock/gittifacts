@@ -1,0 +1,45 @@
+{
+  "name": "modify-delete-moved",
+  "kind": "textual",
+  "description": "Upstream deleted src/legacy.ts and moved parsePairs into a new, larger src/parse.ts (too different for rename detection); the change fixed a bug in legacy.ts. Correct resolution: delete legacy.ts and port the fix into parse.ts, an edit outside the conflict (Lane 1).",
+  "change": {
+    "changeId": "chg_pairs_fix",
+    "title": "parsePairs keeps '=' in values and trims",
+    "dir": "change",
+    "plan": {
+      "title": "parsePairs keeps '=' in values and trims",
+      "intent": "Values may contain '=' (base64 padding) and users add spaces around keys; split on the first '=' only and trim both sides.",
+      "acceptanceCriteria": [
+        "parsePairs('t=ab==') returns { t: 'ab==' }",
+        "parsePairs(' a = 1 ') returns { a: '1' }"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_parsers_module",
+      "title": "Collect the parsers in src/parse.ts",
+      "dir": "upstream",
+      "delete": [
+        "src/legacy.ts"
+      ],
+      "plan": {
+        "title": "Collect the parsers in src/parse.ts",
+        "intent": "Move parsePairs out of the legacy module into src/parse.ts next to the new list and flag parsers, and delete src/legacy.ts.",
+        "acceptanceCriteria": [
+          "src/legacy.ts no longer exists",
+          "parseList and parseFlags are exported"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "conflicted": [
+      "src/legacy.ts"
+    ],
+    "outsideHunks": true,
+    "delete": [
+      "src/legacy.ts"
+    ]
+  }
+}

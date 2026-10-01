@@ -1,0 +1,11 @@
+{
+  "name": "@corpus/tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "vitest run",
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  }
+}

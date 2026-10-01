@@ -1,0 +1,45 @@
+{
+  "name": "package-json-scripts",
+  "kind": "textual",
+  "description": "Both sides add an npm script after the last one in package.json, so both touch the comma on the same line. The resolution must be valid JSON with both scripts.",
+  "change": {
+    "changeId": "chg_format_script",
+    "title": "Add a format script",
+    "dir": "change",
+    "plan": {
+      "title": "Add a format script",
+      "intent": "Developers run `npm run format` to format the code base with biome.",
+      "acceptanceCriteria": [
+        "scripts.format is 'biome format --write .'"
+      ],
+      "scopePaths": [
+        "package.json",
+        "test/**"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_lint_script",
+      "title": "Add a lint script",
+      "dir": "upstream",
+      "plan": {
+        "title": "Add a lint script",
+        "intent": "CI runs `npm run lint` (biome check).",
+        "acceptanceCriteria": [
+          "scripts.lint is 'biome check .'"
+        ],
+        "scopePaths": [
+          "package.json",
+          "test/**"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "conflicted": [
+      "package.json"
+    ],
+    "outsideHunks": false
+  }
+}

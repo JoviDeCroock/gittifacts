@@ -1,0 +1,37 @@
+{
+  "name": "add-add",
+  "kind": "textual",
+  "description": "Both sides create src/constants.ts with a shared first constant and one constant of their own (add/add conflict, no common base). Keep all three constants.",
+  "change": {
+    "changeId": "chg_pager",
+    "title": "Paginate results",
+    "dir": "change",
+    "plan": {
+      "title": "Paginate results",
+      "intent": "Split result lists into pages of PAGE_SIZE (50) items; MAX_RETRIES stays 5.",
+      "acceptanceCriteria": [
+        "page(items, 0) returns the first 50 items"
+      ]
+    }
+  },
+  "upstream": [
+    {
+      "changeId": "chg_api_client",
+      "title": "Versioned API client",
+      "dir": "upstream",
+      "plan": {
+        "title": "Versioned API client",
+        "intent": "Build API URLs under /api/v2 and retry MAX_RETRIES (5) times.",
+        "acceptanceCriteria": [
+          "endpoint('users') is /api/v2/users"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "conflicted": [
+      "src/constants.ts"
+    ],
+    "outsideHunks": false
+  }
+}
