@@ -12,14 +12,9 @@
  * first use, so a missing binding fails the call that needs it (which the coordinator treats as
  * an errored signal → escalate), not every request.
  */
-import {
-  type CiEngine,
-  type Clock,
-  type Ports,
-  type PortsRole,
-  type Reviewer,
-  type Signer,
-} from "@app/coordinator";
+
+import { EngineKind, RunKeys, selectCiEngine } from "@app/ci-engine";
+import type { CiEngine, Clock, Ports, PortsRole, Reviewer, Signer } from "@app/coordinator";
 import {
   ArtifactsGitHost,
   ContainerSandboxJobs,
@@ -28,7 +23,6 @@ import {
   type RunnerLike,
   WorkersDeployer,
 } from "@app/coordinator/adapters";
-import { EngineKind, RunKeys, selectCiEngine } from "@app/ci-engine";
 import * as gitwire from "@app/gitwire";
 import { createReviewer, reviewerLlmFromEnv } from "@app/tour";
 import { DoAudit } from "../audit/audit.js";

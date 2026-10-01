@@ -15,7 +15,8 @@ import type { WorkerBundle, WorkerModule } from "@app/coordinator/adapters";
 import { z } from "zod";
 
 /** `RunKeys.artifact(runId, step, name)` from @app/ci-engine. */
-export const BUNDLE_REF = /^ci-artifacts\/[A-Za-z0-9][A-Za-z0-9_-]{0,99}\/[A-Za-z0-9._:-]{1,100}\/[A-Za-z0-9._-]{1,100}\.tgz$/;
+export const BUNDLE_REF =
+  /^ci-artifacts\/[A-Za-z0-9][A-Za-z0-9_-]{0,99}\/[A-Za-z0-9._:-]{1,100}\/[A-Za-z0-9._-]{1,100}\.tgz$/;
 
 /** Decompressed size cap (zip-bomb guard). Workers scripts are far smaller than this. */
 export const MAX_BUNDLE_BYTES = 64 * 1024 * 1024;
@@ -95,7 +96,8 @@ export function parseTar(archive: Uint8Array): TarEntry[] {
 /** Safe relative path (no absolute paths, no `..`), with a leading `./` removed. */
 function normalize(path: string): string | null {
   const p = path.replace(/^(\.\/)+/, "");
-  if (p === "" || p.startsWith("/") || p.split("/").some((s) => s === ".." || s === "")) return null;
+  if (p === "" || p.startsWith("/") || p.split("/").some((s) => s === ".." || s === ""))
+    return null;
   return p;
 }
 
@@ -109,7 +111,10 @@ function stripCommonRoot(entries: TarEntry[]): TarEntry[] {
 const Manifest = z
   .object({
     main: z.string().min(1).optional(),
-    compatibility_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    compatibility_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
     compatibility_flags: z.array(z.string()).optional(),
     bindings: z.array(z.record(z.string(), z.unknown())).optional(),
   })
@@ -159,7 +164,9 @@ export function bundleFromEntries(
     modules,
     metadata: {
       compatibility_date: manifest.compatibility_date ?? opts.compatibilityDate,
-      ...(manifest.compatibility_flags ? { compatibility_flags: manifest.compatibility_flags } : {}),
+      ...(manifest.compatibility_flags
+        ? { compatibility_flags: manifest.compatibility_flags }
+        : {}),
       ...(manifest.bindings ? { bindings: manifest.bindings } : {}),
     },
   };
