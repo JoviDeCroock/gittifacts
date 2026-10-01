@@ -229,3 +229,43 @@ describe("resolvePipelineExport", () => {
     expect(() => resolvePipelineExport({ default: 1 })).toThrow(/export default/);
   });
 });
+
+describe("chaining before a runner settles (@cloudflare/ci style)", () => {
+  it("records fixtures/_base/.platform/ci.ts exactly", async () => {
+    const mod: unknown = await import("../../../../fixtures/_base/.platform/ci.js");
+    const spec = await recordPipeline(resolvePipelineExport(mod));
+    expect(shape(spec)).toEqual({
+      install: { parent: null, after: [] },
+      lint: { parent: "install", after: [] },
+      typecheck: { parent: "install", after: [] },
+      test: { parent: "install", after: [] },
+      build: { parent: "install", after: ["lint", "typecheck", "test"] },
+    });
+    expect(spec.steps.find((s) => s.name === "install")?.cache).toEqual({
+      inputs: ["pnpm-lock.yaml"],
+    });
+    expect(spec.steps.find((s) => s.name === "test")?.cache?.inputs).toContain("test/**");
+  });
+
+  it("gives the same parent whether the runner was awaited or not", async () => {
+    const chained = await recordPipeline(async (ci) => {
+      const deps = ci.runner({ name: "deps", command: "npm ci" });
+      const build = deps.runner({ name: "build", command: "npm run build" });
+      await build.runner({ name: "e2e", command: "npm run e2e" });
+    });
+    expect(shape(chained)).toEqual({
+      deps: { parent: null, after: [] },
+      build: { parent: "deps", after: [] },
+      e2e: { parent: "build", after: [] },
+    });
+  });
+
+  it("orders a chained runner after what was awaited before it", async () => {
+    const spec = await recordPipeline(async (ci) => {
+      const install = ci.runner({ name: "install", command: "x" });
+      await ci.runner({ name: "lint", command: "y" });
+      await install.runner({ name: "test", command: "z" });
+    });
+    expect(shape(spec).test).toEqual({ parent: "install", after: ["lint"] });
+  });
+});

@@ -4,7 +4,13 @@
  * the parsed root `package.json` (read via the Artifacts binding, never executed).
  */
 import { z } from "zod";
-import { PIPELINE_SPEC_VERSION, type PipelineSpec, type StepSpec } from "./spec.js";
+import {
+  type ArtifactSpec,
+  PIPELINE_SPEC_VERSION,
+  type PipelineSpec,
+  RelativePath,
+  type StepSpec,
+} from "./spec.js";
 
 export type PackageManager = "pnpm" | "npm" | "yarn" | "yarn-berry" | "bun";
 
@@ -32,6 +38,30 @@ export interface RepoFacts {
   packageJson: unknown;
   /** Names of entries under `.platform/` (empty when the directory is absent). */
   platformEntries?: readonly string[];
+  /** Parsed root `template.json` (projects created from a template), or null. */
+  templateJson?: unknown;
+}
+
+/** The part of `template.json` the defaults read. */
+export const TemplateJsonLike = z
+  .object({
+    buildOutput: z.union([RelativePath, z.array(RelativePath).min(1).max(32)]).optional(),
+  })
+  .passthrough();
+
+/** Name of the build artifact in default pipelines (rollouts deploy it, previews start from the snapshot). */
+export const DEFAULT_BUNDLE_ARTIFACT = "bundle";
+
+/**
+ * The default build artifact: `template.json` `buildOutput` when present (required to exist), else
+ * `dist` (optional, so a build that writes elsewhere is not failed by a guess).
+ */
+export function defaultBundleArtifact(templateJson: unknown): ArtifactSpec {
+  const parsed = TemplateJsonLike.safeParse(templateJson);
+  const declared = parsed.success ? parsed.data.buildOutput : undefined;
+  if (declared === undefined)
+    return { name: DEFAULT_BUNDLE_ARTIFACT, paths: ["dist"], optional: true };
+  return { name: DEFAULT_BUNDLE_ARTIFACT, paths: Array.isArray(declared) ? declared : [declared] };
 }
 
 const LOCKFILES: readonly [string, PackageManager][] = [
@@ -233,6 +263,7 @@ export function defaultPipeline(facts: RepoFacts): PipelineSpec {
     if (script === null) continue;
     steps.push({
       name,
+      ...(name === "build" ? { artifacts: [defaultBundleArtifact(facts.templateJson)] } : {}),
       command: runScriptCommand(pm, script),
       parent: DEFAULT_INSTALL_STEP,
       after: [],

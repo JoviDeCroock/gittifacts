@@ -288,10 +288,10 @@ export class FakeContainer implements ContainerLike {
     const env = options.env ?? {};
     if (argv[0] === "true") return 0;
     if (script.includes("update-ca-certificates")) {
-      await this.record("ca", {});
+      await this.record("ca", { user: options.user ?? null });
       return 0;
     }
-    if (script.includes("gittifacts-src")) {
+    if (script.includes("gittifacts-inputs")) {
       const list =
         options.stdin instanceof ReadableStream ? await new Response(options.stdin).text() : "";
       const inputs = list.split("\0").filter((p) => p !== "");
@@ -325,6 +325,7 @@ export class FakeContainer implements ContainerLike {
 
     const t0 = Date.now();
     await this.record("exec", {
+      user: options.user ?? null,
       command: script,
       cwd: options.cwd ?? null,
       envKeys: Object.keys(env).sort(),
@@ -335,12 +336,17 @@ export class FakeContainer implements ContainerLike {
     const evidence = /gittifacts-runner evidence ([a-z-]+)/.exec(script);
     if (plan) {
       const file = fileAt(state.head, ".platform/ci.ts");
+      await writeErr("planning .platform/ci.ts\n");
       if (file === null || file === "THROW") {
-        await writeErr("Error: the pipeline function threw: boom\n");
+        // Author errors are a document on stdout with exit 0 (apps/sandbox protocol).
+        await write(
+          `::plan::${JSON.stringify({ error: "the pipeline function threw: boom", file: ".platform/ci.ts" })}\n`,
+        );
+      } else if (file === "CRASH") {
+        await writeErr("Error: esbuild crashed\n");
         code = 1;
       } else {
-        await writeErr("planning .platform/ci.ts\n");
-        await write(file);
+        await write(`::plan::${JSON.stringify(JSON.parse(file))}\n`);
       }
     } else if (evidence !== null) {
       const kind = evidence[1]!;

@@ -56,6 +56,9 @@ import {
   inDirectory,
   isTimeoutExit,
   KILL_AFTER_SECONDS,
+  ROOT_USER,
+  RUNNER_HOME,
+  RUNNER_USER,
   shellQuote,
   timedCommandArgv,
   trustCaScript,
@@ -673,6 +676,7 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
       await log.line(`$ ${command}`);
       const proc = await c.exec(timedCommandArgv(command, job.timeoutSeconds), {
         cwd: WORKSPACE,
+        user: RUNNER_USER,
         env: { ...planEnv(job), ...session.execEnv },
         stdout: "pipe",
         stderr: "pipe",
@@ -824,7 +828,7 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
         log,
         signal,
         60,
-        { cwd: "/" },
+        { cwd: "/", user: ROOT_USER },
       );
       if (code !== 0) {
         throw new RunnerError(
@@ -848,13 +852,14 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     log: StepLog,
     signal: AbortSignal,
     timeoutSeconds: number,
-    opts: { cwd?: string; stdin?: ReadableStream<Uint8Array> } = {},
+    opts: { cwd?: string; stdin?: ReadableStream<Uint8Array>; user?: string } = {},
   ): Promise<number> {
     if (signal.aborted) throw new RunnerError("aborted", "aborted");
     let proc: Awaited<ReturnType<ContainerLike["exec"]>>;
     try {
       proc = await c.exec(argv, {
         cwd: opts.cwd ?? WORKSPACE,
+        user: opts.user ?? RUNNER_USER,
         env,
         stdout: "pipe",
         stderr: "combined",
@@ -916,7 +921,7 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
   }
 
   private async runQuiet(c: ContainerLike, argv: string[]): Promise<number> {
-    const proc = await c.exec(argv, { stdout: "ignore", stderr: "ignore" });
+    const proc = await c.exec(argv, { user: RUNNER_USER, stdout: "ignore", stderr: "ignore" });
     return proc.exitCode;
   }
 
@@ -934,7 +939,7 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
         "-c",
         `if [ -f ${EVIDENCE_OUT} ]; then head -c ${MAX_EVIDENCE_BYTES + 1} ${EVIDENCE_OUT}; else exit 3; fi`,
       ],
-      { stdout: "pipe", stderr: "ignore" },
+      { user: RUNNER_USER, stdout: "pipe", stderr: "ignore" },
     );
     const [file, code] = await Promise.all([
       readCapped(proc.stdout, MAX_EVIDENCE_BYTES + 1),
@@ -965,7 +970,7 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
 /** Env for user commands. The image env is not inherited except PATH. */
 export function stepEnv(job: RunnerJob, userEnv: Record<string, string>): Record<string, string> {
   return {
-    HOME: "/root",
+    HOME: RUNNER_HOME,
     CI: "true",
     LANG: "C.UTF-8",
     TERM: "dumb",
@@ -982,7 +987,7 @@ export function stepEnv(job: RunnerJob, userEnv: Record<string, string>): Record
 
 function planEnv(job: PlanJob): Record<string, string> {
   return {
-    HOME: "/root",
+    HOME: RUNNER_HOME,
     CI: "true",
     LANG: "C.UTF-8",
     TERM: "dumb",

@@ -178,6 +178,9 @@ describe("CiRunWorkflow", () => {
     expect(testLog).toMatch(/env .*GITTIFACTS_HEAD_SHA/);
     expect(testLog).not.toMatch(/env .*GIT_CONFIG/);
     expect(testLog).not.toContain("GITTIFACTS_EVIDENCE_OUT");
+    // Workspace commands run as the image's unprivileged user.
+    const testExec = (await events(req.runId, "test")).find((x) => x.kind === "exec");
+    expect(testExec?.user).toBe("10001:10001");
 
     // Evidence: file channel (dependencies, coverage) and ::evidence:: line channel (policy).
     const summary = await sinkSummary(req);
@@ -314,8 +317,7 @@ describe("CiRunWorkflow", () => {
     expect(await runToCompletion(req)).toMatchObject({ status: "failed" });
     const status = await engine.status(req.runId);
     expect(status.status).toBe("failed");
-    expect(status.error).toMatch(/failed in plan mode \(exit 1\)/);
-    expect(status.error).toMatch(/the pipeline function threw: boom/);
+    expect(status.error).toBe(".platform/ci.ts: the pipeline function threw: boom");
     expect(status.steps).toEqual([]);
   });
 

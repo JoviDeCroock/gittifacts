@@ -30,6 +30,11 @@ export function isTimeoutExit(exitCode: number): boolean {
 }
 
 export const WORKSPACE = "/workspace";
+/** The image's unprivileged user (`runner`, apps/sandbox). Every workspace exec runs as it. */
+export const RUNNER_USER = "10001:10001";
+export const RUNNER_HOME = "/home/runner";
+/** Only the CA-trust step needs root. */
+export const ROOT_USER = "0:0";
 export const EVIDENCE_OUT = "/tmp/gittifacts/evidence.json";
 
 /** `/workspace/<cwd>` for a validated relative cwd. */
@@ -81,7 +86,7 @@ export function checkoutEnv(opts: {
 }): Record<string, string> {
   // PATH is inherited from the image; exec does not inherit any other image env.
   return {
-    HOME: "/root",
+    HOME: RUNNER_HOME,
     GIT_TERMINAL_PROMPT: "0",
     GITTIFACTS_REMOTE: opts.remote,
     GITTIFACTS_HEAD_SHA: opts.headSha,
@@ -112,11 +117,13 @@ export function trustCaScript(caPath: string): string {
  */
 export const HERMETIC_SCRIPT = [
   "set -eu",
-  "rm -rf /tmp/gittifacts-src",
-  `mv ${WORKSPACE} /tmp/gittifacts-src`,
-  `mkdir -p ${WORKSPACE}`,
-  `tar -C /tmp/gittifacts-src --null -T - -cf - | tar -C ${WORKSPACE} -xf -`,
-  "rm -rf /tmp/gittifacts-src",
+  "rm -rf /tmp/gittifacts-inputs",
+  "mkdir -p /tmp/gittifacts-inputs",
+  `tar -C ${WORKSPACE} --null -T - -cf - | tar -C /tmp/gittifacts-inputs -xf -`,
+  // Empty the workspace in place: the unprivileged user can't replace /workspace itself.
+  `find ${WORKSPACE} -mindepth 1 -maxdepth 1 -exec rm -rf {} +`,
+  `tar -C /tmp/gittifacts-inputs -cf - . | tar -C ${WORKSPACE} -xf -`,
+  "rm -rf /tmp/gittifacts-inputs",
   `echo "workspace reduced to $(find ${WORKSPACE} -type f | wc -l) cache input files"`,
 ].join("\n");
 

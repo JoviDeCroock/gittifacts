@@ -43,6 +43,8 @@ export interface RunnerOptions {
   cache?: { inputs: string[] };
   /** `global` (share with identical inputs in any repo) or `repo`. See `StepSpec.cacheScope`. */
   cacheScope?: "global" | "repo";
+  /** Build outputs to upload after success, e.g. `[{ name: "bundle", paths: ["dist"] }]`. */
+  artifacts?: { name: string; paths: string[]; optional?: boolean }[];
   /** Container size. Default `standard-2`. */
   instance?: InstanceType;
   /** Command timeout in minutes, 1-30. Default 25. */
@@ -67,12 +69,21 @@ export interface RunnerResult {
   readonly logs: { readonly stdout: string; readonly stderr: string };
   readonly snapshot: { readonly id: string; readonly dir: string };
   /** Starts a runner from this runner's snapshot. */
-  runner(options: RunnerOptions): Promise<RunnerResult>;
+  runner(options: RunnerOptions): RunnerPromise;
 }
+
+/**
+ * What `runner()` returns: a promise of the result that can also be chained before it settles
+ * (`const install = ci.runner(…); install.runner(…)`), as `@cloudflare/ci` pipelines are written.
+ * Chaining on the promise has the same meaning as chaining on the awaited result.
+ */
+export type RunnerPromise = Promise<RunnerResult> & {
+  runner(options: RunnerOptions): RunnerPromise;
+};
 
 export interface PipelineCi {
   /** Starts a runner from a fresh checkout. */
-  runner(options: RunnerOptions): Promise<RunnerResult>;
+  runner(options: RunnerOptions): RunnerPromise;
 }
 
 export interface PipelineContext {
@@ -110,6 +121,7 @@ const RunnerOptionsInput = z
       .strict()
       .optional(),
     cacheScope: z.string().optional(),
+    artifacts: z.array(z.unknown()).optional(),
     instance: z.string().optional(),
     timeoutMinutes: z.number().optional(),
     config: z
@@ -201,6 +213,7 @@ export function parseRunnerOptions(raw: unknown, warnings: string[]): StepFields
     ...(o.env === undefined || Object.keys(o.env).length === 0 ? {} : { env: o.env }),
     ...(o.cache === undefined ? {} : { cache: o.cache }),
     ...(o.cacheScope === undefined ? {} : { cacheScope: o.cacheScope }),
+    ...(o.artifacts === undefined ? {} : { artifacts: o.artifacts }),
     ...(o.instance === undefined ? {} : { instance: o.instance }),
     ...(timeoutMinutes === undefined ? {} : { timeoutMinutes }),
   });
@@ -233,7 +246,7 @@ class Recording {
     this.closed = true;
   }
 
-  private call(parent: string | null, raw: unknown): Promise<RunnerResult> {
+  private call(parent: string | null, raw: unknown): RunnerPromise {
     const where = describe(raw);
     if (this.closed) {
       throw new PlanError(
@@ -260,7 +273,7 @@ class Recording {
    * A thenable whose resolution is delivered in a microtask. Delivery is the moment the awaiting
    * code can observe completion, which is what orders later `runner()` calls after this one.
    */
-  private promiseFor(name: string, result: RunnerResult): Promise<RunnerResult> {
+  private promiseFor(name: string, result: RunnerResult): RunnerPromise {
     const deliver = (): void => {
       this.pendingDeliveries -= 1;
       if (!this.delivered.includes(name)) this.delivered.push(name);
@@ -294,9 +307,11 @@ class Recording {
           onFinally?.();
           return value;
         }),
+      // Chaining before the result settles: same parent as chaining on the result.
+      runner: (options: RunnerOptions) => this.call(name, options),
       [Symbol.toStringTag]: "PlanRunnerPromise",
     };
-    return thenable as unknown as Promise<RunnerResult>;
+    return thenable as unknown as RunnerPromise;
   }
 }
 

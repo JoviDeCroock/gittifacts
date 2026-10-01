@@ -53,7 +53,6 @@ import {
   formatIssues,
   type InstanceType,
   type PipelineSpec,
-  parsePipelineSpec,
   type StepSpec,
   seedPipeline,
   stepDependencies,
@@ -81,6 +80,7 @@ import {
   type RunnerRpc,
   runnerName,
 } from "../runner/job.js";
+import { parsePlanOutput } from "../runner/markers.js";
 import { type ObjectStore, readJson, writeJson } from "../storage.js";
 import { CI_PIPELINE_FILE, ENGINE_STEPS } from "./constants.js";
 
@@ -739,23 +739,14 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
     if (o.exitCode !== 0) {
       return {
         ok: false,
-        error: `${CI_PIPELINE_FILE} failed in plan mode (exit ${o.exitCode})\n${stderr}`,
+        error: `gittifacts-runner plan failed (exit ${o.exitCode}) on ${CI_PIPELINE_FILE}\n${stderr}`,
       };
     }
-    let json: unknown;
-    try {
-      json = JSON.parse(o.stdout);
-    } catch {
-      return { ok: false, error: `${CI_PIPELINE_FILE}: plan output is not JSON\n${stderr}` };
+    const parsed = parsePlanOutput(o.stdout, CI_PIPELINE_FILE);
+    if (!parsed.ok) {
+      return { ok: false, error: parsed.author ? parsed.error : `${parsed.error}\n${stderr}` };
     }
-    const spec = parsePipelineSpec(json);
-    if (!spec.ok) {
-      return {
-        ok: false,
-        error: `${CI_PIPELINE_FILE} describes an invalid pipeline\n${spec.error}`,
-      };
-    }
-    return { ok: true, pipeline: { ...spec.value, source: "file" } };
+    return { ok: true, pipeline: { ...parsed.spec, source: "file" } };
   }
 
   /** The runner image reference, so a new image never reuses snapshots of the old one. */

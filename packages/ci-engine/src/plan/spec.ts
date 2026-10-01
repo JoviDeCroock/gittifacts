@@ -65,6 +65,25 @@ export const RelativePath = z
     "must not contain '..' or empty segments",
   );
 
+export const MAX_ARTIFACTS_PER_STEP = 8;
+
+export const ArtifactName = z
+  .string()
+  .regex(
+    /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/,
+    "artifact names use letters, digits, '.', '_' or '-' (max 63)",
+  );
+
+export const ArtifactSpec = z
+  .object({
+    name: ArtifactName,
+    paths: z.array(RelativePath).min(1).max(32),
+    /** A missing path skips the artifact (with a note) instead of failing the step. */
+    optional: z.boolean().optional(),
+  })
+  .strict();
+export type ArtifactSpec = z.infer<typeof ArtifactSpec>;
+
 export const CacheGlob = z
   .string()
   .min(1)
@@ -125,6 +144,12 @@ export const StepSpec = z
      * Only root steps (no parent) can be `global`. Ignored without `cache`.
      */
     cacheScope: CacheScope.optional(),
+    /**
+     * Build outputs to keep: after the command succeeds each is uploaded as
+     * `tar -C /workspace -cz <paths>` (paths relative to the repository root). A missing path
+     * fails the step unless the artifact is `optional`. Steps with artifacts are snapshotted too.
+     */
+    artifacts: z.array(ArtifactSpec).max(MAX_ARTIFACTS_PER_STEP).optional(),
     instance: InstanceType.optional(),
     timeoutMinutes: z.number().int().min(1).max(MAX_STEP_TIMEOUT_MINUTES).optional(),
   })
@@ -178,7 +203,7 @@ export const PipelineSpec = z
   })
   .strict()
   .superRefine((spec, ctx) => {
-    for (const issue of graphIssues(spec.steps)) {
+    for (const issue of [...graphIssues(spec.steps), ...artifactIssues(spec.steps)]) {
       ctx.addIssue({ code: "custom", message: issue.message, path: issue.path });
     }
     const bytes = new TextEncoder().encode(JSON.stringify(spec)).byteLength;
@@ -293,6 +318,28 @@ export function graphIssues(
       }
     }
   }
+  return issues;
+}
+
+/** Artifact names are unique across the pipeline (the run summary is keyed by name). */
+export function artifactIssues(
+  steps: readonly Pick<StepSpec, "name" | "artifacts">[],
+): GraphIssue[] {
+  const issues: GraphIssue[] = [];
+  const owner = new Map<string, string>();
+  steps.forEach((step, i) => {
+    (step.artifacts ?? []).forEach((a, j) => {
+      const prev = owner.get(a.name);
+      if (prev !== undefined) {
+        issues.push({
+          message: `artifact "${a.name}" of step "${step.name}" is also declared by step "${prev}"`,
+          path: ["steps", i, "artifacts", j, "name"],
+        });
+      } else {
+        owner.set(a.name, step.name);
+      }
+    });
+  });
   return issues;
 }
 

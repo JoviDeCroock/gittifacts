@@ -187,7 +187,7 @@ describe("network: registries-only", () => {
       "http:*",
       "https:*",
     ]);
-    expect(ev.some((x) => x.kind === "ca")).toBe(true);
+    expect(ev.find((x) => x.kind === "ca")?.user).toBe("0:0");
     const fetchy = byName(s).fetchy;
     expect(fetchy).toMatchObject({
       status: "failed",
