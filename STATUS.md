@@ -2,35 +2,58 @@
 
 _Last updated: 2026-10-01_
 
-Specs: `docs/prompts/01-platform.md` (platform, M1–M5) and `docs/prompts/02-onboarding.md` (agent onboarding, O1–O6).
+Specs:
+- `docs/prompts/01-platform.md`: platform, M1–M5
+- `docs/prompts/02-onboarding.md`: agent onboarding, O1–O6
+- `docs/prompts/03-merge-queue.md`: agent-native merge queue, Q1–Q6
 
 ## Milestones
 | Milestone | State |
 |---|---|
-| M1 Vertical slice | building: platform Worker, coordinator, ci-engine and sandbox in progress |
-| M2 Evidence | evidence package done; sandbox runner producing real evidence for the fixtures in progress |
-| M3 Classifier + tour | classifier done (413 tests); tour reviewer and web UI in progress |
-| M4 Merge, rollout, revert | gitwire done and verified live; merge queue + rollout in progress (coordinator) |
-| M5 Mutation, transforms, screenshots, dogfood | mutation + transforms in progress in the sandbox runner |
-| O1 Front door + templates | conventions + 4 templates in progress |
-| O2 Ergonomics | error `fix` shape, idempotency, `wait_for_change`, `whoami` are being built into platform/coordinator |
-| O3–O6 | planned |
+| M1 Vertical slice | all packages built; platform integration (coordinator + CI + tour wiring) in progress; deploy pending a `wrangler login` refresh |
+| M2 Evidence | **acceptance passes locally**: sandbox e2e, real red/green on a seeded bug fix, attestation verified with the standalone CLI |
+| M3 Classifier + tour | **acceptance passes locally**: all 9 fixtures classify exactly, and the breaking-api tour puts `formatMoney` as its riskiest stop |
+| M4 Merge, rollout, revert | coordinator merge/rollout/revert built (152 tests); live e2e after deploy |
+| M5 Mutation, transforms, screenshots, dogfood | mutation + transforms done in the sandbox; screenshots and dogfood pending |
+| O1 Front door + templates | conventions + 4 templates done; `create_project` + preview gateway next |
+| O2 Ergonomics | errors with `fix`, idempotency, `wait_for_change`, `whoami` done; CLI in progress |
+| O3 Claimable projects + abuse limits | next after integration |
+| O4 Delegated auth (MCP OAuth, device flow) | in progress |
+| O5 Import detection + remote workspaces | planned |
+| O6 Onboarding eval | planned |
+| Q1–Q6 Merge queue | core + simulator, affected-set analyzer, conflict resolver in progress |
 
 ## What works (tested)
-- `@app/evidence`: canonical JSON, Ed25519 attestations, git-notes format, pure evidence producers, a standalone verify CLI (285 tests).
-- `@app/classifier`: pure `classify()`, 93 reason codes, shadow agreement, 9 fixture scenarios (413 tests).
-- `@app/gitwire`: git smart-HTTP client for Workers (receive-pack CAS, upload-pack v2, packs, notes, cross-repo transfer).
-  58 tests against `git http-backend`, plus a live smoke against Artifacts that passes.
-- `fixtures/`: 9 fixture repos with a materializer; `scripts/check-fixtures.ts` verifies them end to end.
+| Package | What it does | Tests |
+|---|---|---|
+| `@app/evidence` | canonical JSON, Ed25519 attestations, git-notes, pure producers, standalone verify CLI | 285 |
+| `@app/classifier` | pure lanes, 94 reason codes, shadow agreement | 413 |
+| `@app/gitwire` | git smart-HTTP client for Workers; live-verified on Artifacts (CAS, notes, cross-repo transfer) | 58 |
+| `@app/ci-engine` | Workflows + `ctx.container` engine, hermetic global cache, egress gateway, opt-in `@cloudflare/ci` adapter | 150 |
+| `@app/coordinator` | ChangeCoordinator DO, ChangeWorkflow, MergeQueue DO, RolloutWorkflow, PushRouter, Cloudflare adapters, fakes | 152 |
+| `@app/tour` | reviewer agent; AI binding + gateway clients; budget; risk-ordered, evidence-anchored tours | 105 |
+| `@app/conventions` | `AGENTS.md`, `/start`, `/llms.txt`, MCP discovery, fix hints, next steps, `.platform` generators | 226 |
+| `@app/mcp` | 11 tools on mcp-tada-server, typed client, contract snapshot | 8 |
+| `apps/platform` | Hono API + OpenAPI, better-auth, Drizzle/D1, AuditLog DO, idempotency, issues webhook | 57 |
+| `apps/sandbox` | `gittifacts-runner` (plan, policy, evidence ×9, diff, preview) and its container image | 57, incl. 9-fixture e2e |
+| `@app/web` | 9 screens, mock backend, 45 screenshots in `docs/screenshots/` | 35 |
+
+Also: `templates/` (4 templates, CI path 5–8 s each) and `fixtures/` (9 change fixtures, verified end to end).
 
 ## Live infrastructure (see docs/deploy.md)
-Artifacts namespace `gittifacts-eu` (EU), D1 `gittifacts` (EU), R2 `gittifacts-blobs` (EU), AI Gateway `gittifacts`,
-Flagship app `gittifacts-changes`. Preview domain: `*.preview.resynapse.dev` (gateway not deployed yet).
+- Artifacts namespace `gittifacts-eu` (EU)
+- D1 `gittifacts` (EU)
+- R2 `gittifacts-blobs` (EU)
+- AI Gateway `gittifacts`
+- Flagship app `gittifacts-changes`
+- DNS `*.preview.resynapse.dev`, the preview gateway target
 
 ## Mocked / not yet real
-- Nothing deployed yet.
+- Nothing is deployed yet. Containers have only run under local Docker; `ctx.container` hasn't run on Cloudflare yet.
 
 ## Next
-1. Integrate the in-flight packages into the platform Worker and deploy (needs `wrangler login` with fresh scopes).
-2. M1 e2e against the real platform: an agent clones a fork, pushes, and gets test results through MCP.
-3. O1: `create_project` from templates in under 60s, through the preview gateway.
+1. Finish platform integration → deploy → M1/M4 live e2e.
+2. O1 `create_project` + preview gateway; O3 claimable projects and abuse limits; O5; O6 eval loop.
+3. Merge queue Q1–Q6: DO shell + BatchRunWorkflow around the pure core, MCP tools, queue UI, deploy trains.
+4. **Final phase (requested):** large-scale dogfooding of everything, a large-scale UI/UX review, and recorded videos of
+   every journey for review.
