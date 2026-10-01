@@ -1,0 +1,111 @@
+.signin {
+  display: grid;
+  min-block-size: 100dvh;
+}
+@media (min-width: 1024px) {
+  .signin {
+    grid-template-columns: minmax(420px, 1fr) minmax(0, 1.15fr);
+  }
+}
+.signin__main {
+  display: grid;
+  align-content: center;
+  gap: var(--s-4);
+  inline-size: 100%;
+  max-inline-size: 420px;
+  margin-inline: auto;
+  padding: var(--s-7) var(--gutter) var(--s-6);
+}
+.signin__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-end: var(--s-5);
+}
+.signin__brand .brand-mark {
+  fill: var(--text);
+}
+.signin__title {
+  font-size: var(--text-display);
+}
+.signin__lede {
+  color: var(--text-2);
+  margin-block-end: var(--s-3);
+}
+.signin__notice {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--warn-tint);
+  color: var(--text);
+  font-size: var(--text-small);
+}
+.signin__notice .icon {
+  color: var(--warn);
+  margin-block-start: 2px;
+}
+.signin__github {
+  gap: 10px;
+}
+.signin__or {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  color: var(--text-3);
+  font-size: var(--text-small);
+}
+.signin__or::before,
+.signin__or::after {
+  content: "";
+  flex: 1;
+  block-size: 1px;
+  background: var(--rule);
+}
+.signin__form {
+  display: grid;
+  gap: var(--s-4);
+}
+.signin__switch {
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.linklike {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--action-ink);
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  min-block-size: 32px;
+}
+.signin__specimen {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .signin__specimen {
+    display: grid;
+    align-items: center;
+    padding: var(--s-7);
+    background: var(--panel);
+    border-inline-start: 1px solid var(--rule);
+  }
+}
+.signin__specimen-inner {
+  display: grid;
+  gap: var(--s-4);
+  max-inline-size: 560px;
+}
+.signin__specimen-title {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+.signin__specimen-note {
+  font-size: var(--text-small);
+  color: var(--text-3);
+}

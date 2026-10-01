@@ -1,0 +1,129 @@
+/* Observation chart: banded lane columns, hairline armature, markers. */
+.triage {
+  margin: 0;
+  --col: 46px;
+}
+@media (min-width: 640px) {
+  .triage {
+    --col: 56px;
+  }
+}
+.triage__grid {
+  display: grid;
+  border-block-start: 1px solid var(--rule);
+}
+.triage__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, var(--col));
+  align-items: stretch;
+  border-block-end: 1px solid var(--rule);
+}
+.triage__label {
+  display: grid;
+  align-content: center;
+  gap: 1px;
+  padding: 10px var(--s-3) 10px 0;
+  min-inline-size: 0;
+}
+.triage__row--head .triage__label {
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  color: var(--text-3);
+}
+.triage__family {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-small);
+  color: var(--text);
+}
+.triage__msg {
+  font-size: var(--text-small);
+  line-height: 1.4;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+a.triage__msg {
+  color: var(--text-2);
+  text-decoration-color: var(--rule-strong);
+}
+a.triage__msg:hover {
+  color: var(--text);
+  text-decoration-color: currentColor;
+}
+.triage__cell {
+  display: grid;
+  place-items: center;
+  border-inline-start: 1px solid var(--rule);
+}
+.triage__cell--l0 {
+  background: color-mix(in oklch, var(--lane0-tint) 70%, transparent);
+}
+.triage__cell--l1 {
+  background: color-mix(in oklch, var(--lane1-tint) 80%, transparent);
+}
+.triage__cell--l2 {
+  background: color-mix(in oklch, var(--lane2-tint) 70%, transparent);
+}
+.triage__row--head .triage__cell {
+  padding-block: 8px;
+}
+.triage__row--total {
+  border-block-end-width: 0;
+}
+.triage__row--total + .triage__row--total {
+  border-block-start: 1px dashed var(--rule-strong);
+}
+.triage__row--total .triage__label {
+  padding-block: 12px;
+}
+.triage__row--total:first-of-type,
+.triage__row:not(.triage__row--total) + .triage__row--total {
+  border-block-start: 2px solid var(--text);
+}
+
+/* markers */
+.tm {
+  display: block;
+  border-radius: 50%;
+}
+.tm--minor {
+  inline-size: 10px;
+  block-size: 10px;
+  background: var(--text-3);
+}
+.tm--decisive {
+  inline-size: 16px;
+  block-size: 16px;
+  box-shadow: 0 0 0 3px var(--surface);
+}
+.tm--l0 {
+  background: var(--lane0);
+}
+.tm--l1 {
+  background: var(--lane1);
+  outline: 1.5px solid var(--lane1-edge);
+  outline-offset: -1.5px;
+}
+.tm--l2 {
+  background: var(--lane2);
+}
+.tm--unknown {
+  inline-size: 16px;
+  block-size: 16px;
+  border: 2px dashed var(--warn);
+  background: var(--surface);
+}
+.triage__arrow {
+  position: relative;
+  display: block;
+  inline-size: 100%;
+  block-size: 2px;
+  background: linear-gradient(90deg, transparent 0 40%, var(--text-3) 40% 100%);
+}
+.triage__arrow::after {
+  content: "";
+  position: absolute;
+  inset-inline-end: -1px;
+  inset-block-start: -4px;
+  border-block: 5px solid transparent;
+  border-inline-start: 7px solid var(--text-3);
+}

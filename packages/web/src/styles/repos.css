@@ -1,0 +1,186 @@
+.repos-summary {
+  font-size: var(--text-body);
+  color: var(--text-2);
+}
+.repos-summary b {
+  color: var(--text);
+}
+
+.repo-cols {
+  display: none;
+}
+
+.repo-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "id chev"
+    "waiting waiting"
+    "lanes lanes"
+    "shadow shadow";
+  gap: var(--s-3);
+  padding: var(--s-4) 0 var(--s-5);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--dur-feedback) var(--ease-out);
+}
+.repo-row:hover {
+  text-decoration: none;
+}
+.repo-row:hover .repo-row__name {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+.repo-row__id {
+  grid-area: id;
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+.repo-row__name {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-title);
+  color: var(--text);
+}
+.repo-row__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--s-2);
+  font-size: var(--text-small);
+  color: var(--text-3);
+}
+.repo-row__juris {
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid var(--rule-strong);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  color: var(--text-2);
+}
+.repo-row__chev {
+  grid-area: chev;
+  align-self: center;
+  color: var(--text-4);
+}
+.repo-row__waiting {
+  grid-area: waiting;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-4);
+}
+.waiting {
+  color: var(--text-2);
+}
+.waiting b {
+  font-size: var(--text-title);
+  color: var(--action-ink);
+}
+.waiting--none {
+  color: var(--text-3);
+}
+.repo-row__flight {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+.flight {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-small);
+  color: var(--warn);
+  font-weight: var(--weight-medium);
+}
+.flight--danger {
+  color: var(--danger);
+}
+.repo-row__lanes {
+  grid-area: lanes;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+}
+.lane-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.lane-count b {
+  font-size: var(--text-body);
+  color: var(--text);
+}
+.lane-count.is-zero b {
+  color: var(--text-4);
+  font-weight: var(--weight-regular);
+}
+.repo-row__shadow {
+  grid-area: shadow;
+}
+
+/* shadow line (also used on the repo page) */
+.shadow-line {
+  display: grid;
+  gap: 6px;
+  max-inline-size: 460px;
+}
+.shadow-line__head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-small);
+  color: var(--text-2);
+  font-weight: var(--weight-medium);
+}
+.shadow-line--on .shadow-line__head {
+  color: var(--ok);
+}
+.shadow-line__bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+}
+.shadow-line__bar.has-tick {
+  padding-block-end: 16px;
+}
+.shadow-line__value {
+  font-weight: var(--weight-bold);
+  color: var(--text);
+  min-inline-size: 4.2ch;
+  text-align: end;
+}
+.shadow-line__detail {
+  font-size: var(--text-small);
+  color: var(--text-3);
+  text-wrap: pretty;
+}
+
+@media (min-width: 900px) {
+  .repo-cols {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.3fr) minmax(170px, 1fr) minmax(190px, 1fr) minmax(240px, 1.3fr) 24px;
+    gap: var(--s-5);
+    padding-block-end: var(--s-2);
+    font-size: var(--text-meta);
+    font-weight: var(--weight-medium);
+    color: var(--text-3);
+  }
+  .repo-row {
+    grid-template-columns: minmax(220px, 1.3fr) minmax(170px, 1fr) minmax(190px, 1fr) minmax(240px, 1.3fr) 24px;
+    grid-template-areas: "id waiting lanes shadow chev";
+    gap: var(--s-5);
+    align-items: start;
+    padding-block: var(--s-5);
+  }
+  .repo-row__waiting {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .repo-row__lanes {
+    gap: var(--s-4);
+    padding-block-start: 4px;
+  }
+}
