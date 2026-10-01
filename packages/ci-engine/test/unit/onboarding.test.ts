@@ -165,6 +165,7 @@ describe("limits", () => {
       maxMinutes: 10,
       maxLogBytes: 20 * 1024 * 1024,
       instance: "standard-4",
+      maxArtifactBytes: 100 * 1024 * 1024,
     });
     expect(req.network).toBe("open");
     const { limits: _l, ...withoutLimits } = base;
@@ -182,8 +183,15 @@ describe("limits", () => {
     expect(
       summarizeUsage(
         [
-          { v: 1, step: "a", instance: "standard-1", computeMs: 61_000, logBytes: 10 },
-          { v: 1, step: "b", instance: "standard-2", computeMs: 1, logBytes: 5 },
+          {
+            v: 1,
+            step: "a",
+            instance: "standard-1",
+            computeMs: 61_000,
+            logBytes: 10,
+            artifactBytes: 100,
+          },
+          { v: 1, step: "b", instance: "standard-2", computeMs: 1, logBytes: 5, artifactBytes: 0 },
         ],
         2,
       ),
@@ -194,6 +202,7 @@ describe("limits", () => {
       containers: 2,
       cacheHits: 2,
       logBytes: 15,
+      artifactBytes: 100,
     });
   });
 });

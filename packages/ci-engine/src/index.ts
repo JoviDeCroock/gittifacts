@@ -45,6 +45,13 @@ export {
   type RunnerRpc,
   runnerName,
 } from "./runner/job.js";
+export {
+  EVIDENCE_MARKER,
+  lastMarkedLine,
+  PLAN_MARKER,
+  PREVIEW_MARKER,
+  parsePlanOutput,
+} from "./runner/markers.js";
 export { createStreamRedactor, REDACTED, redactText } from "./runner/redact.js";
 export type { RunnerEnv } from "./runner/runner-do.js";
 export { Runner, snapshotName, stepEnv } from "./runner/runner-do.js";

@@ -52,6 +52,11 @@ export class CloudflareCiEngine extends WorkflowBackedEngine<CloudflareCiParams>
         'the "cloudflare-ci" engine needs an explicit pipeline and evidenceSteps (it has no plan mode)',
       );
     }
+    if (req.pipeline.steps.some((st) => (st.artifacts?.length ?? 0) > 0)) {
+      throw new InvalidRunRequestError(
+        'the "cloudflare-ci" engine cannot upload build artifacts; use the workflows engine',
+      );
+    }
     if (req.network !== "open") {
       // Fail closed: @cloudflare/sandbox containers have open egress and no interception hook here.
       throw new InvalidRunRequestError(

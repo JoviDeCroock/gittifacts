@@ -16,6 +16,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
+import type { ArtifactRef } from "../engine.js";
 import { formatIssues, type InstanceType } from "../plan/spec.js";
 import { type ObjectStore, writeJson } from "../storage.js";
 import {
@@ -46,7 +47,13 @@ import {
   type RunnerTimings,
   type StartFrom,
 } from "./job.js";
-import { EvidenceLineScanner, type LogBucket, R2LogSink, TailBuffer } from "./log-sink.js";
+import {
+  EvidenceLineScanner,
+  type LogBucket,
+  R2ChunkedUpload,
+  R2LogSink,
+  TailBuffer,
+} from "./log-sink.js";
 import { createStreamRedactor, redactText, type StreamRedactor, secretVariants } from "./redact.js";
 import {
   CHECKOUT_SCRIPT,
@@ -76,6 +83,7 @@ export const START_TIMEOUT_MS = 3 * 60_000;
 export const CHECKOUT_TIMEOUT_SECONDS = 300;
 export const MAX_EVIDENCE_BYTES = 4 * 1024 * 1024;
 export const MAX_PLAN_STDOUT_BYTES = 512 * 1024;
+export const ARTIFACT_TIMEOUT_SECONDS = 600;
 /** How long past the command timeout the Runner waits before destroying the container itself. */
 export const WATCHDOG_GRACE_SECONDS = 60;
 const MAX_INACTIVITY_MS = 6 * 60 * 60 * 1000;
@@ -562,8 +570,31 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
           : null;
       if (evidence !== null && "error" in evidence) await log.line(`evidence: ${evidence.error}`);
 
+      const artifacts: Record<string, ArtifactRef> = {};
+      const artifactErrors: Record<string, { error: string; optional: boolean }> = {};
+      if (exitCode === 0 && job.artifacts.length > 0) {
+        await session.phase("artifactsMs", async () => {
+          for (const a of job.artifacts) {
+            const res = await this.uploadArtifact(c, a, job.maxArtifactBytes, log, signal);
+            if ("ref" in res) {
+              artifacts[a.name] = res.ref;
+              await log.line(
+                `artifact ${a.name}: ${res.ref.bytes} bytes, sha256 ${res.ref.sha256}`,
+              );
+            } else {
+              const optional = a.optional === true;
+              artifactErrors[a.name] = { error: res.error, optional };
+              await log.line(
+                `artifact ${a.name}${optional ? " (optional, skipped)" : ""}: ${res.error}`,
+              );
+            }
+          }
+        });
+      }
+      const artifactsComplete = Object.values(artifactErrors).every((e) => e.optional);
+
       let snapshot: { id: string; size: number } | null = null;
-      if (exitCode === 0 && job.snapshot) {
+      if (exitCode === 0 && artifactsComplete && job.snapshot) {
         snapshot = await session.phase("snapshotMs", async () => {
           try {
             const s = await c.snapshotContainer({ name: snapshotName(job.runId, job.step) });
@@ -598,6 +629,8 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
         snapshot,
         evidence,
         hermetic: hermeticInputs !== undefined,
+        artifacts,
+        artifactErrors,
       };
     } catch (error) {
       if (signal.aborted) return fail("aborted", `stopped: ${String(signal.reason ?? "aborted")}`);
@@ -923,6 +956,82 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
   private async runQuiet(c: ContainerLike, argv: string[]): Promise<number> {
     const proc = await c.exec(argv, { user: RUNNER_USER, stdout: "ignore", stderr: "ignore" });
     return proc.exitCode;
+  }
+
+  /**
+   * `tar -C /workspace -cz <paths>` streamed straight to R2 (multipart past one part), hashed on
+   * the way. Over `maxBytes` the upload is abandoned.
+   */
+  private async uploadArtifact(
+    c: ContainerLike,
+    artifact: { name: string; paths: string[]; key: string },
+    maxBytes: number,
+    log: StepLog,
+    signal: AbortSignal,
+  ): Promise<{ ref: ArtifactRef } | { error: string }> {
+    if (signal.aborted) throw new RunnerError("aborted", "aborted");
+    const command = `exec tar -C ${WORKSPACE} -cz -- ${artifact.paths.map(shellQuote).join(" ")}`;
+    const proc = await c.exec(timedCommandArgv(command, ARTIFACT_TIMEOUT_SECONDS), {
+      cwd: WORKSPACE,
+      user: RUNNER_USER,
+      env: { HOME: RUNNER_HOME, LANG: "C.UTF-8" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const upload = new R2ChunkedUpload(this.logBucket(), artifact.key, {
+      contentType: "application/gzip",
+    });
+    const digest = new crypto.DigestStream("SHA-256");
+    const digestWriter = digest.getWriter();
+    let tooLarge = false;
+    const pump = async (): Promise<void> => {
+      if (proc.stdout === null) return;
+      const reader = proc.stdout.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (upload.size + value.byteLength > maxBytes) {
+          tooLarge = true;
+          await reader.cancel();
+          break;
+        }
+        await digestWriter.write(value);
+        await upload.append(value);
+      }
+    };
+    const watchdog = deadline(
+      (ARTIFACT_TIMEOUT_SECONDS + KILL_AFTER_SECONDS + WATCHDOG_GRACE_SECONDS) * 1000,
+      `packing artifact ${artifact.name} did not finish`,
+    );
+    let exitCode: number;
+    try {
+      [, , exitCode] = await Promise.race([
+        Promise.all([pump(), pumpText(proc.stderr, (t) => log.write(t)), proc.exitCode]),
+        watchdog.promise,
+      ]);
+    } catch (error) {
+      await upload.abort();
+      await digestWriter.abort().catch(() => {});
+      if (error instanceof DeadlineError) await destroyQuietly(c);
+      return { error: `packing failed: ${errorMessage(error)}` };
+    } finally {
+      watchdog.clear();
+    }
+    if (tooLarge || exitCode !== 0) {
+      await upload.abort();
+      await digestWriter.abort().catch(() => {});
+      return {
+        error: tooLarge
+          ? `larger than ${maxBytes} bytes compressed`
+          : `tar exited with ${exitCode} (does ${artifact.paths.join(", ")} exist?)`,
+      };
+    }
+    await digestWriter.close();
+    const sha256 = [...new Uint8Array(await digest.digest)]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const bytes = await upload.close();
+    return { ref: { key: artifact.key, bytes, sha256 } };
   }
 
   private async captureEvidence(

@@ -4,8 +4,14 @@
  */
 import { Sha } from "@app/evidence";
 import { z } from "zod";
-import { NetworkPolicy } from "../engine.js";
-import { InstanceType, MAX_STEP_TIMEOUT_MINUTES, RelativePath } from "../plan/spec.js";
+import { ArtifactRef, NetworkPolicy } from "../engine.js";
+import {
+  ArtifactSpec,
+  InstanceType,
+  MAX_ARTIFACTS_PER_STEP,
+  MAX_STEP_TIMEOUT_MINUTES,
+  RelativePath,
+} from "../plan/spec.js";
 
 export const MAX_TIMEOUT_SECONDS = (MAX_STEP_TIMEOUT_MINUTES + 5) * 60;
 
@@ -23,6 +29,7 @@ export const RunnerTimings = z
     replayMs: z.number().nonnegative().optional(),
     commandMs: z.number().nonnegative().optional(),
     evidenceMs: z.number().nonnegative().optional(),
+    artifactsMs: z.number().nonnegative().optional(),
     snapshotMs: z.number().nonnegative().optional(),
   })
   .strict();
@@ -102,6 +109,17 @@ export const RunnerJob = z
      * `/workspace` (their cache inputs), so the snapshot holds nothing else from the repository.
      */
     hermeticInputs: z.array(RelativePath).max(MAX_HERMETIC_INPUTS).optional(),
+    /** Build artifacts to upload after the command succeeds, each to its `key`. */
+    artifacts: z
+      .array(ArtifactSpec.extend({ key: z.string().min(1).max(512) }))
+      .max(MAX_ARTIFACTS_PER_STEP)
+      .default([]),
+    maxArtifactBytes: z
+      .number()
+      .int()
+      .min(1024 * 1024)
+      .max(2 * 1024 * 1024 * 1024)
+      .default(100 * 1024 * 1024),
   })
   .strict();
 export type RunnerJob = z.output<typeof RunnerJob>;
@@ -147,6 +165,9 @@ export const RunnerOutcome = z.discriminatedUnion("ok", [
       evidence: EvidenceCapture.nullable(),
       /** The command ran with only the hermetic inputs present. */
       hermetic: z.boolean(),
+      artifacts: z.record(z.string(), ArtifactRef),
+      /** Artifacts that could not be produced (`optional` ones don't fail the step). */
+      artifactErrors: z.record(z.string(), z.object({ error: z.string(), optional: z.boolean() })),
       ...Accounting,
     })
     .strict(),

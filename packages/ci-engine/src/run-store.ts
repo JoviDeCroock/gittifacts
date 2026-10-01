@@ -39,6 +39,8 @@ export const RunKeys = {
   usage: (runId: string, step: string, call: string) =>
     `ci-runs/${runId}/usage/${step}/${call}.json`,
   log: (runId: string, step: string) => `ci-logs/${runId}/${step}.log`,
+  artifact: (runId: string, step: string, name: string) =>
+    `ci-artifacts/${runId}/${step}/${name}.tgz`,
   evidence: (runId: string, step: string) => `ci-evidence/${runId}/${step}.json`,
 };
 
@@ -265,6 +267,7 @@ export const UsageRecord = z
     instance: z.string(),
     computeMs: z.number().nonnegative(),
     logBytes: z.number().int().nonnegative(),
+    artifactBytes: z.number().int().nonnegative().default(0),
   })
   .strict();
 export type UsageRecord = z.infer<typeof UsageRecord>;
@@ -273,7 +276,7 @@ export async function writeUsage(
   store: ObjectStore,
   runId: string,
   call: string,
-  record: Omit<UsageRecord, "v">,
+  record: Omit<z.input<typeof UsageRecord>, "v">,
 ): Promise<void> {
   await writeJson(store, RunKeys.usage(runId, record.step, call), { v: 1, ...record });
 }
@@ -289,9 +292,11 @@ export function summarizeUsage(records: readonly UsageRecord[], cacheHits: numbe
   const byInstance: Record<string, number> = {};
   let computeMs = 0;
   let logBytes = 0;
+  let artifactBytes = 0;
   for (const r of records) {
     computeMs += r.computeMs;
     logBytes += r.logBytes;
+    artifactBytes += r.artifactBytes;
     byInstance[r.instance] = (byInstance[r.instance] ?? 0) + r.computeMs;
   }
   return {
@@ -301,6 +306,7 @@ export function summarizeUsage(records: readonly UsageRecord[], cacheHits: numbe
     containers: records.length,
     cacheHits,
     logBytes,
+    artifactBytes,
   };
 }
 

@@ -4,6 +4,7 @@
  * find one again; anything older than 25 days is treated as a miss to stay clear of expiry.
  */
 import { z } from "zod";
+import { ArtifactRef } from "../engine.js";
 import { type ObjectStore, readJson, writeJson } from "../storage.js";
 
 export const CACHE_PREFIX = "ci-cache/";
@@ -20,6 +21,8 @@ export const CachePointer = z
     producedBySha: z.string().regex(/^[0-9a-f]{40}([0-9a-f]{24})?$/),
     runId: z.string().min(1).max(200),
     createdAt: z.string().datetime(),
+    /** Build artifacts the step produced with this snapshot; reused on a hit. */
+    artifacts: z.record(z.string(), ArtifactRef).optional(),
     /** Template id when the snapshot came from a `seedCache()` run. */
     seededBy: z.string().min(1).max(100).optional(),
   })

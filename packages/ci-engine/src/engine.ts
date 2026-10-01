@@ -55,6 +55,13 @@ export const RunLimits = z
       .max(100 * 1024 * 1024)
       .default(20 * 1024 * 1024),
     instance: InstanceType.default("standard-4"),
+    /** Cap on each uploaded build artifact (compressed). */
+    maxArtifactBytes: z
+      .number()
+      .int()
+      .min(1024 * 1024)
+      .max(2 * 1024 * 1024 * 1024)
+      .default(100 * 1024 * 1024),
   })
   .strict();
 export type RunLimits = z.infer<typeof RunLimits>;
@@ -156,6 +163,14 @@ export type StepState = z.infer<typeof StepState>;
 
 const IsoDate = z.string().datetime();
 
+/** An uploaded build artifact: `tar -cz` of the declared paths, in `CI_BUCKET`. */
+export const ArtifactRef = z.object({
+  key: z.string().min(1).max(512),
+  bytes: z.number().int().nonnegative(),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+});
+export type ArtifactRef = z.infer<typeof ArtifactRef>;
+
 /** Milliseconds per phase of one step. Phases a step didn't have are omitted. */
 export const StepTimings = z.object({
   /** Dependencies satisfied → step body started (Workflow scheduling). */
@@ -169,6 +184,8 @@ export const StepTimings = z.object({
   replayMs: z.number().nonnegative().optional(),
   commandMs: z.number().nonnegative().optional(),
   evidenceMs: z.number().nonnegative().optional(),
+  /** Packing and uploading build artifacts. */
+  artifactsMs: z.number().nonnegative().optional(),
   snapshotMs: z.number().nonnegative().optional(),
   /** Step body start → end, all of the above plus overhead. */
   totalMs: z.number().nonnegative(),
@@ -187,6 +204,8 @@ export const RunUsage = z.object({
   containers: z.number().int().nonnegative(),
   cacheHits: z.number().int().nonnegative(),
   logBytes: z.number().int().nonnegative(),
+  /** Build artifacts uploaded by this run (cache-hit reuse costs nothing). */
+  artifactBytes: z.number().int().nonnegative(),
 });
 export type RunUsage = z.infer<typeof RunUsage>;
 
@@ -225,12 +244,17 @@ export const StepStatus = z.object({
   instance: InstanceType.optional(),
   /** Scope of the cache entry the step hit or wrote. */
   cacheScope: z.enum(["global", "repo"]).optional(),
+  /** Build artifacts of the step, by name. */
+  artifacts: z.record(z.string(), ArtifactRef).optional(),
   /** Outbound requests the egress gateway refused (network: registries-only). */
   egressDenied: z
     .object({ count: z.number().int().nonnegative(), hosts: z.array(z.string()).max(20) })
     .optional(),
 });
 export type StepStatus = z.infer<typeof StepStatus>;
+
+export const RunArtifact = ArtifactRef.extend({ step: z.string() });
+export type RunArtifact = z.infer<typeof RunArtifact>;
 
 /** Mirrors `PipelineRun` in docs/api.md, with extra fields. */
 export const RunStatus = z.object({
@@ -250,6 +274,10 @@ export const RunStatus = z.object({
   /** Present once the run finished. */
   usage: RunUsage.optional(),
   timings: RunTimings.optional(),
+  /** Build artifacts of passed steps, by artifact name (names are unique per pipeline). */
+  artifacts: z.record(z.string(), RunArtifact).optional(),
+  /** Container snapshot of each passed step that has one (e.g. `build`, for previews). */
+  snapshots: z.record(z.string(), z.string()).optional(),
 });
 export type RunStatus = z.infer<typeof RunStatus>;
 
@@ -263,6 +291,8 @@ export const RunSummary = RunStatus.extend({
   evidence: z.array(EvidenceItem),
   usage: RunUsage,
   timings: RunTimings,
+  artifacts: z.record(z.string(), RunArtifact),
+  snapshots: z.record(z.string(), z.string()),
   /** Set for template seed runs. */
   seed: z.object({ templateId: z.string() }).optional(),
   /** Evidence steps that ran but produced no valid evidence, or did not run. Unknown → escalate. */

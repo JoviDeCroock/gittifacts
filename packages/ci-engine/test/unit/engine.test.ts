@@ -155,8 +155,11 @@ describe("WorkflowsCiEngine (fake bindings)", () => {
         containers: 0,
         cacheHits: 0,
         logBytes: 0,
+        artifactBytes: 0,
       },
       timings: { totalMs: 600_000 },
+      artifacts: {},
+      snapshots: {},
     };
     delete summary.error;
     await writeJson(bucket, RunKeys.summary("run-1"), summary);

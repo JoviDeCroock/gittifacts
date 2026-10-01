@@ -27,6 +27,7 @@ export const SHAS = {
   withCiFile: "4".repeat(40),
   badCiFile: "5".repeat(40),
   defaults: "6".repeat(40),
+  template: "7".repeat(40),
 };
 
 const nodeRepo: FakeTree = {
@@ -54,6 +55,11 @@ export const FAKE_COMMITS: Record<string, FakeTree> = {
     },
   },
   [SHAS.badCiFile]: { ...nodeRepo, ".platform": { "ci.ts": "THROW" } },
+  [SHAS.template]: {
+    "package.json": pkg({ build: "fake:touch=out" }),
+    "pnpm-lock.yaml": "lockfileVersion: 9",
+    "template.json": JSON.stringify({ id: "workers-api", buildOutput: "out" }),
+  },
   [SHAS.defaults]: {
     "package.json": pkg({ test: "fake:require=node_modules", typecheck: "fake:exit=0" }),
     "pnpm-lock.yaml": "lockfileVersion: 9",
@@ -119,7 +125,16 @@ type FsState = {
 };
 
 export type FakeEvent = {
-  kind: "start" | "exec" | "exit" | "snapshot" | "destroy" | "intercept" | "ca" | "hermetic";
+  kind:
+    | "start"
+    | "exec"
+    | "exit"
+    | "snapshot"
+    | "destroy"
+    | "intercept"
+    | "ca"
+    | "hermetic"
+    | "tar";
   t: number;
   [key: string]: unknown;
 };
@@ -323,6 +338,22 @@ export class FakeContainer implements ContainerLike {
       return 0;
     }
 
+    if (script.includes(`tar -C ${"/workspace"} -cz`)) {
+      // Paths follow `-cz --`, shell-quoted twice (once for tar, once for the timeout wrapper).
+      const paths = (script.split("-cz -- ")[1] ?? "")
+        .replace(/['\\]/g, "")
+        .split(" ")
+        .filter((p) => p !== "");
+      const missing = paths.find((p) => state.files[p] === undefined);
+      await this.record("tar", { paths, user: options.user ?? null });
+      if (missing !== undefined) {
+        await writeErr(`tar: ${missing}: Cannot stat: No such file or directory\n`);
+        return 2;
+      }
+      const size = Number(state.files.__bundlesize ?? "512");
+      await write(`TGZ ${paths.join(",")} ${state.head} `.padEnd(size, "z"));
+      return 0;
+    }
     const t0 = Date.now();
     await this.record("exec", {
       user: options.user ?? null,
@@ -358,7 +389,19 @@ export class FakeContainer implements ContainerLike {
         `evidence ${kind} base=${env.GITTIFACTS_BASE_SHA} head=${env.GITTIFACTS_HEAD_SHA}\n`,
       );
     }
-    for (const m of script.matchAll(/fake:([a-z]+)(?:=([^\s']+))?/g)) {
+    // `<pm> install|ci` creates node_modules; `<pm> run <script>` runs the script's directives.
+    if (/\b(?:pnpm|npm|yarn|bun) (?:install|ci)\b/.test(script)) state.files.node_modules = "1";
+    let directives = script;
+    const run = /\b(?:pnpm|npm|yarn|bun) run ([A-Za-z0-9:_-]+)/.exec(script);
+    if (run !== null) {
+      const manifest = fileAt(state.head, "package.json");
+      const scripts =
+        manifest === null
+          ? {}
+          : (JSON.parse(manifest) as { scripts?: Record<string, string> }).scripts;
+      directives = `${script} ${scripts?.[run[1]!] ?? ""}`;
+    }
+    for (const m of directives.matchAll(/fake:([a-z]+)(?:=([^\s']+))?/g)) {
       if (killed()) break;
       const [, directive, arg = ""] = m;
       if (directive === "sleep") await Promise.race([sleep(Number(arg)), killedSignal]);
@@ -370,6 +413,7 @@ export class FakeContainer implements ContainerLike {
         code = 1;
       } else if (directive === "printtoken") await write(`leaked ${FAKE_TOKEN}\n`);
       else if (directive === "spam") await write(`${"x".repeat(Number(arg))}\n`);
+      else if (directive === "bundlesize") state.files.__bundlesize = arg;
       else if (directive === "env") await write(`env ${Object.keys(env).sort().join(",")}\n`);
       else if (directive === "needsrepo" && state.hermetic === true) {
         await write("error: src/setup.js not found\n");

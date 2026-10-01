@@ -24,9 +24,15 @@ import { NonRetryableError } from "cloudflare:workflows";
 import { EvidenceItem } from "@app/evidence";
 import { z } from "zod";
 import { computeCacheKey, matchBlobs } from "../cache/key.js";
-import { deleteCachePointer, lookupCache, writeCachePointer } from "../cache/pointer.js";
+import {
+  type CachePointer,
+  deleteCachePointer,
+  readCachePointer,
+  writeCachePointer,
+} from "../cache/pointer.js";
 import { listDirectory, listRoot, type RepoReader, readRootFile, walkTree } from "../cache/tree.js";
 import {
+  type ArtifactRef,
   type CiRunParams,
   type RunLimits,
   RunRequest,
@@ -45,6 +51,7 @@ import {
 import { parentChain, snapshotSources, topologicalOrder } from "../plan/dag.js";
 import { defaultPipeline, detectRepoFeatures } from "../plan/defaults.js";
 import {
+  type ArtifactSpec,
   type CacheScope,
   clampInstance,
   DEFAULT_INSTANCE,
@@ -143,6 +150,8 @@ export type StepResult = {
   /** Container time of this attempt's Runner calls. */
   computeMs: number;
   egressDenied: { count: number; hosts: string[] } | null;
+  /** Build artifacts by name (uploaded now, or reused from the cache hit). */
+  artifacts: Record<string, ArtifactRef>;
 };
 
 export type ResolvedPipeline =
@@ -188,6 +197,7 @@ type ExecSpec = {
   timeoutMinutes: number;
   parent: string | null;
   deps: string[];
+  artifacts: ArtifactSpec[];
 };
 
 function userExec(s: StepSpec, limits: RunLimits): ExecSpec {
@@ -201,6 +211,7 @@ function userExec(s: StepSpec, limits: RunLimits): ExecSpec {
     timeoutMinutes: s.timeoutMinutes ?? DEFAULT_STEP_TIMEOUT_MINUTES,
     parent: s.parent,
     deps: stepDependencies(s),
+    artifacts: s.artifacts ?? [],
   };
 }
 
@@ -213,6 +224,7 @@ function evidenceExec(e: EvidenceStepSpec, limits: RunLimits): ExecSpec {
     timeoutMinutes: e.timeoutMinutes ?? DEFAULT_STEP_TIMEOUT_MINUTES,
     parent: e.parent,
     deps: e.parent === null ? [] : [e.parent],
+    artifacts: [],
   };
 }
 
@@ -251,6 +263,7 @@ function notRun(
     timings: null,
     computeMs: 0,
     egressDenied: null,
+    artifacts: {},
   };
 }
 
@@ -273,6 +286,7 @@ export function toStepStatus(r: StepResult, computeMs?: number): StepStatus {
     ...(r.timings === null ? {} : { timings: r.timings }),
     ...(compute > 0 || r.timings !== null ? { computeMs: compute } : {}),
     ...(r.cacheScope === null ? {} : { cacheScope: r.cacheScope }),
+    ...(Object.keys(r.artifacts).length === 0 ? {} : { artifacts: r.artifacts }),
     ...(r.egressDenied === null || r.egressDenied.count === 0
       ? {}
       : { egressDenied: r.egressDenied }),
@@ -363,6 +377,9 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
 
     const needsSnapshot = snapshotSources(pipeline.steps);
     for (const e of evidenceSteps) if (e.parent !== null) needsSnapshot.add(e.parent);
+    // Previews start from the build step's snapshot.
+    for (const st of pipeline.steps)
+      if ((st.artifacts?.length ?? 0) > 0) needsSnapshot.add(st.name);
 
     const results = new Map<string, Promise<StepResult>>();
     const byName = new Map(pipeline.steps.map((s) => [s.name, s] as const));
@@ -503,7 +520,7 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
 
     const keys = prepared.cacheKeys[spec.name] ?? null;
     if (keys !== null) {
-      const hit = await lookupCache(store, keys.read, Date.now());
+      const hit = await this.usableCacheHit(keys.read, spec.artifacts);
       if (hit !== null) {
         const seeded = hit.seededBy === undefined ? "" : ` (seeded for template ${hit.seededBy})`;
         await store.put(
@@ -521,6 +538,7 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
           cacheKey: hit.key,
           cacheScope: hit.scope === "global" ? "global" : "repo",
           timings: { queueMs, totalMs: Date.now() - bodyStart },
+          artifacts: pickArtifacts(hit.artifacts ?? {}, spec.artifacts),
         });
       }
     }
@@ -544,10 +562,15 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
           ? { kind: "snapshot", snapshotId: parent.snapshot.id, sha: parent.snapshot.sha }
           : { kind: "image" },
       replay: [],
-      snapshot: s.snapshot || (keys !== null && keys.write !== null),
+      snapshot: s.snapshot || spec.artifacts.length > 0 || (keys !== null && keys.write !== null),
       logKey,
       ...(spec.kind === "evidence" ? { evidenceKey: RunKeys.evidence(req.runId, spec.name) } : {}),
       maxLogBytes: limits.maxLogBytes,
+      maxArtifactBytes: limits.maxArtifactBytes,
+      artifacts: spec.artifacts.map((a) => ({
+        ...a,
+        key: RunKeys.artifact(req.runId, spec.name, a.name),
+      })),
       network: req.network,
       ...(keys?.hermeticInputs != null ? { hermeticInputs: keys.hermeticInputs } : {}),
     };
@@ -563,6 +586,9 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
         instance: spec.instance,
         computeMs: outcome.computeMs,
         logBytes: outcome.log?.bytes ?? 0,
+        artifactBytes: outcome.ok
+          ? Object.values(outcome.artifacts).reduce((sum, a) => sum + a.bytes, 0)
+          : 0,
       });
       return outcome;
     };
@@ -606,7 +632,12 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       throw new Error(message);
     }
 
-    const passed = outcome.exitCode === 0;
+    const artifactProblems = Object.entries(outcome.artifactErrors).map(
+      ([name, e]) =>
+        `${e.optional ? "optional artifact" : "artifact"} "${name}" ${e.optional ? "skipped" : "missing"}: ${e.error}`,
+    );
+    const requiredMissing = Object.values(outcome.artifactErrors).some((e) => !e.optional);
+    const passed = outcome.exitCode === 0 && !requiredMissing;
     let cacheKey: string | null = null;
     if (passed && write !== null && outcome.snapshot !== null) {
       await writeCachePointer(store, {
@@ -618,13 +649,16 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
         producedBySha: req.headSha,
         runId: req.runId,
         createdAt: new Date().toISOString(),
+        ...(Object.keys(outcome.artifacts).length === 0 ? {} : { artifacts: outcome.artifacts }),
         ...(req.seed === undefined || scope !== "global" ? {} : { seededBy: req.seed.templateId }),
       });
       cacheKey = write.key;
     }
-    const reasons = [outcome.timedOut ? `timed out after ${timeoutSeconds}s` : null, note].filter(
-      (r): r is string => r !== null,
-    );
+    const reasons = [
+      outcome.timedOut ? `timed out after ${timeoutSeconds}s` : null,
+      note,
+      ...artifactProblems,
+    ].filter((r): r is string => r !== null);
     return done({
       ...base,
       status: passed ? "passed" : "failed",
@@ -645,7 +679,27 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
         outcome.egress.denied === 0
           ? null
           : { count: outcome.egress.denied, hosts: outcome.egress.hosts },
+      artifacts: outcome.artifacts,
     });
+  }
+
+  /**
+   * The first fresh pointer among `keys` that carries every required artifact the step declares
+   * (an entry produced before the step declared an artifact can't stand in for it).
+   */
+  private async usableCacheHit(
+    keys: readonly string[],
+    artifacts: readonly ArtifactSpec[],
+  ): Promise<CachePointer | null> {
+    for (const key of keys) {
+      const hit = await readCachePointer(this.store(), key, Date.now());
+      if (hit === null) continue;
+      const missing = artifacts.some(
+        (a) => a.optional !== true && hit.artifacts?.[a.name] === undefined,
+      );
+      if (!missing) return hit;
+    }
+    return null;
   }
 
   /** `plan` step body: decide the pipeline and evidence steps for this run. */
@@ -661,9 +715,17 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       } catch {
         packageJson = null;
       }
+      const templateText = await readRootFile(repo, root, "template.json", 64 * 1024);
+      let templateJson: unknown = null;
+      try {
+        templateJson = templateText === null ? null : (JSON.parse(templateText) as unknown);
+      } catch {
+        templateJson = null;
+      }
       return {
         rootEntries: root.entries.map((e) => e.name),
         packageJson,
+        templateJson,
         platformEntries: await listDirectory(repo, root, ".platform"),
       };
     });
@@ -938,6 +1000,18 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
         message: e.message.slice(0, 4000),
       })),
       usage: summarizeUsage(usageRecords, all.filter((u) => u.cacheHit).length),
+      artifacts: Object.fromEntries(
+        r.userResults
+          .filter((u) => u.status === "passed")
+          .flatMap((u) =>
+            Object.entries(u.artifacts).map(([name, ref]) => [name, { ...ref, step: u.name }]),
+          ),
+      ),
+      snapshots: Object.fromEntries(
+        r.userResults
+          .filter((u) => u.status === "passed" && u.snapshot !== null)
+          .map((u) => [u.name, u.snapshot?.id ?? ""]),
+      ),
       timings: {
         totalMs: Math.max(0, finishedAt.getTime() - runStart),
         ...(r.resolved.durationMs > 0 ? { planMs: r.resolved.durationMs } : {}),
@@ -957,4 +1031,17 @@ function parseOutcome(raw: unknown): RunnerOutcome {
     throw new Error(`the runner returned an invalid outcome\n${formatIssues(parsed.error)}`);
   }
   return parsed.data;
+}
+
+/** The declared artifacts present in `refs`. */
+function pickArtifacts(
+  refs: Record<string, ArtifactRef>,
+  declared: readonly ArtifactSpec[],
+): Record<string, ArtifactRef> {
+  const out: Record<string, ArtifactRef> = {};
+  for (const a of declared) {
+    const ref = refs[a.name];
+    if (ref !== undefined) out[a.name] = ref;
+  }
+  return out;
 }

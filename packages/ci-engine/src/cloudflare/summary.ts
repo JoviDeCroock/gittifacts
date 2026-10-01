@@ -93,7 +93,10 @@ export function buildReplaySummary(
       containers: ran,
       cacheHits: 0,
       logBytes: 0,
+      artifactBytes: 0,
     },
+    artifacts: {},
+    snapshots: {},
     timings: {
       totalMs: Math.max(0, Date.parse(finishedAt) - runStart),
       ...(starts.length === 0 ? {} : { firstStepMs: Math.max(0, Math.min(...starts) - runStart) }),
