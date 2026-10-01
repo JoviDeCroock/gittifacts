@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -47,6 +47,19 @@ export function gitBytes(cwd: string, args: string[], opts: GitOptions = {}): Bu
 /** Runs git and returns trimmed stdout text. */
 export function git(cwd: string, args: string[], opts: GitOptions = {}): string {
   return gitBytes(cwd, args, opts).toString("utf8").trim();
+}
+
+/**
+ * Async variant for git commands that talk to the in-process HTTP server: a synchronous child
+ * would block the event loop the server needs to answer it.
+ */
+export function gitAsync(cwd: string, args: string[], opts: Pick<GitOptions, "env"> = {}): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile("git", args, { cwd, env: gitEnv(cwd, opts.env), maxBuffer: 256 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) reject(new Error(`git ${args.join(" ")} failed: ${stderr || err.message}`));
+      else resolve(stdout.trim());
+    });
+  });
 }
 
 export function tempDir(prefix = "gitwire-"): { path: string; cleanup: () => void } {
