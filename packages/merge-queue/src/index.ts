@@ -9,3 +9,4 @@ export * from "./protocol.js";
 export * from "./queries.js";
 export * from "./schema.js";
 export * from "./state.js";
+export * from "./trains.js";

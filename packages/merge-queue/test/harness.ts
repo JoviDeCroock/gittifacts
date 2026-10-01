@@ -42,6 +42,7 @@ export interface TestChange {
   author?: string;
   revertOf?: string | null;
   automaticRevert?: boolean;
+  flagKey?: string | null;
 }
 
 interface Pending {
@@ -90,6 +91,8 @@ export interface WorldOptions {
   seed?: number;
   /** Check checkStateInvariants after every step (O(n²); fine for small tests). */
   checkInvariants?: boolean;
+  /** Pass the affected set in the Enqueued event instead of answering ComputeAffectedSet. */
+  precompute?: boolean;
 }
 
 export class World {
@@ -135,6 +138,7 @@ export class World {
       resolverLowersLane: opts.resolverLowersLane ?? false,
       seed: opts.seed ?? 1,
       checkInvariants: opts.checkInvariants ?? true,
+      precompute: opts.precompute ?? false,
     };
   }
 
@@ -184,8 +188,9 @@ export class World {
       groupSize: c.groupSize ?? null,
       revertOf: c.revertOf ?? null,
       automaticRevert: c.automaticRevert ?? false,
-      affected: null,
+      affected: this.opts.precompute ? c.affected : null,
       size: { lines: 40, files: 2 },
+      flagKey: c.flagKey ?? null,
     });
   }
 
