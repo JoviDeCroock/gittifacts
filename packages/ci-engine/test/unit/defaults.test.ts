@@ -79,7 +79,11 @@ describe("defaultPipeline", () => {
       "**/package.json",
       "pnpm-lock.yaml",
       "pnpm-workspace.yaml",
+      "patches/**",
+      ".yarn/releases/**",
+      ".yarn/plugins/**",
     ]);
+    expect(spec.steps[0]?.cacheScope).toBe("global");
   });
 
   it("skips missing scripts and npm's placeholder test", () => {

@@ -52,6 +52,15 @@ export class CloudflareCiEngine extends WorkflowBackedEngine<CloudflareCiParams>
         'the "cloudflare-ci" engine needs an explicit pipeline and evidenceSteps (it has no plan mode)',
       );
     }
+    if (req.network !== "open") {
+      // Fail closed: @cloudflare/sandbox containers have open egress and no interception hook here.
+      throw new InvalidRunRequestError(
+        'the "cloudflare-ci" engine cannot restrict egress; use the workflows engine',
+      );
+    }
+    if (req.seed !== undefined) {
+      throw new InvalidRunRequestError('the "cloudflare-ci" engine cannot seed the global cache');
+    }
   }
 
   protected params(req: CiRunParams): CloudflareCiParams {

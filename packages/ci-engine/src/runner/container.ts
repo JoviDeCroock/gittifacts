@@ -20,6 +20,10 @@ export interface ContainerLike {
   }): Promise<{ id: string; size: number; name?: string }>;
   destroy(reason?: unknown): Promise<void>;
   setInactivityTimeout(durationMs: number): Promise<void>;
+  /** Routes all plain-HTTP egress to `binding`. */
+  interceptAllOutboundHttp(binding: Fetcher): Promise<void>;
+  /** Routes HTTPS egress for `addr` (`"*"`: every host) to `binding`, terminating TLS. */
+  interceptOutboundHttps(addr: string, binding: Fetcher): Promise<void>;
 }
 
 /**

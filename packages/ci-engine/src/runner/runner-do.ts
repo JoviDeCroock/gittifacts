@@ -3,18 +3,20 @@
  * through `this.ctx.container` (`scheduling_policy: "durable_object"`). It never uses
  * `@cloudflare/containers` or `@cloudflare/sandbox`.
  *
- * A job: start from `images.base` or the parent step's container snapshot → check out the head
- * commit with a short-lived read token passed only in that exec's env → run the command under
- * coreutils `timeout`, streaming redacted combined output to R2 → (evidence steps) collect the
- * evidence JSON → snapshot on success when asked → destroy the container.
+ * A job: start from `images.base` or the parent step's container snapshot (egress open, or locked
+ * down to registries through `CiEgressGateway`) → check out the head commit with a short-lived
+ * read token passed only in that exec's env → (global-scope cached steps) reduce the workspace to
+ * the cache inputs → run the command under coreutils `timeout`, streaming redacted combined output
+ * to R2 → (evidence steps) collect the evidence JSON → snapshot on success when asked → destroy.
  *
  * Platform secrets never enter the container: the only credential is the per-step read token,
- * and only the checkout exec sees it.
+ * and only the checkout exec sees it. Every outcome reports per-phase timings and the container
+ * time it used, for quotas and time-to-first-green.
  */
 
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
-import { formatIssues } from "../plan/spec.js";
+import { formatIssues, type InstanceType } from "../plan/spec.js";
 import { type ObjectStore, writeJson } from "../storage.js";
 import {
   type ContainerLike,
@@ -24,6 +26,14 @@ import {
   pumpText,
   readCapped,
 } from "./container.js";
+import {
+  CONTAINERS_CA_PATH,
+  EGRESS_GATEWAY_EXPORT,
+  EgressDenial,
+  type EgressProps,
+  hostOf,
+  REGISTRY_HOSTS,
+} from "./egress.js";
 import { parseEvidenceDocument } from "./evidence.js";
 import {
   type EvidenceCapture,
@@ -33,6 +43,8 @@ import {
   type RunnerErrorCode,
   RunnerJob,
   type RunnerOutcome,
+  type RunnerTimings,
+  type StartFrom,
 } from "./job.js";
 import { EvidenceLineScanner, type LogBucket, R2LogSink, TailBuffer } from "./log-sink.js";
 import { createStreamRedactor, redactText, type StreamRedactor, secretVariants } from "./redact.js";
@@ -40,12 +52,14 @@ import {
   CHECKOUT_SCRIPT,
   checkoutEnv,
   EVIDENCE_OUT,
+  HERMETIC_SCRIPT,
+  inDirectory,
   isTimeoutExit,
   KILL_AFTER_SECONDS,
   shellQuote,
   timedCommandArgv,
+  trustCaScript,
   WORKSPACE,
-  workspacePath,
 } from "./shell.js";
 
 export interface RunnerEnv {
@@ -62,6 +76,8 @@ export const MAX_PLAN_STDOUT_BYTES = 512 * 1024;
 /** How long past the command timeout the Runner waits before destroying the container itself. */
 export const WATCHDOG_GRACE_SECONDS = 60;
 const MAX_INACTIVITY_MS = 6 * 60 * 60 * 1000;
+/** Denied requests after this many are counted but no longer logged one by one. */
+const MAX_LOGGED_DENIALS = 50;
 
 const AbortRecord = z.object({ reason: z.string(), at: z.string() });
 
@@ -94,13 +110,18 @@ class StepLog {
     bucket: LogBucket,
     key: string,
     private readonly secrets: readonly string[],
+    maxBytes?: number,
   ) {
-    this.sink = new R2LogSink(bucket, key);
+    this.sink = new R2LogSink(bucket, key, maxBytes === undefined ? {} : { maxBytes });
     this.redactor = createStreamRedactor(secrets);
   }
 
   get tail(): string {
     return this.tailBuffer.toString();
+  }
+
+  get isClosed(): boolean {
+    return this.closed !== null;
   }
 
   redact(text: string): string {
@@ -142,8 +163,52 @@ class StepLog {
   }
 }
 
+/** Per-job accounting, also reachable from `noteEgressDenied` while the job runs. */
+class Session {
+  readonly timings: RunnerTimings = {};
+  log: StepLog | null = null;
+  container: ContainerLike | null = null;
+  containerStartedAt: number | null = null;
+  denied = 0;
+  readonly deniedHosts = new Set<string>();
+  /** Extra env every exec gets (e.g. NODE_EXTRA_CA_CERTS once egress is intercepted). */
+  readonly execEnv: Record<string, string> = {};
+
+  async phase<T>(name: keyof RunnerTimings, fn: () => Promise<T>): Promise<T> {
+    const t0 = Date.now();
+    try {
+      return await fn();
+    } finally {
+      this.timings[name] = (this.timings[name] ?? 0) + (Date.now() - t0);
+    }
+  }
+
+  computeMs(): number {
+    return this.containerStartedAt === null ? 0 : Date.now() - this.containerStartedAt;
+  }
+
+  egress(): { denied: number; hosts: string[] } {
+    return { denied: this.denied, hosts: [...this.deniedHosts] };
+  }
+}
+
+type Accounting = "computeMs" | "timings" | "egress";
+type OutcomeCore = RunnerOutcome extends infer O
+  ? O extends RunnerOutcome
+    ? Omit<O, Accounting>
+    : never
+  : never;
+type PlanCore = PlanOutcome extends infer O
+  ? O extends PlanOutcome
+    ? Omit<O, "computeMs">
+    : never
+  : never;
+
+type Lockdown = { network: "open" } | { network: "locked"; props: EgressProps };
+
 export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
   private active: { controller: AbortController; done: Promise<void> } | null = null;
+  private session: Session | null = null;
 
   // ------------------------------------------------------------------ seams (overridden in tests)
 
@@ -174,6 +239,19 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     return this.env.CI_BUCKET;
   }
 
+  /**
+   * The egress gateway for one container: `ctx.exports.CiEgressGateway({ props })`. Null when the
+   * Worker does not export it (then `registries-only` fails closed).
+   */
+  protected egressGateway(props: EgressProps): Fetcher | null {
+    const exportsObject: unknown = this.ctx.exports;
+    if (typeof exportsObject !== "object" || exportsObject === null) return null;
+    const factory: unknown = Reflect.get(exportsObject, EGRESS_GATEWAY_EXPORT);
+    if (typeof factory !== "function") return null;
+    const gateway: unknown = Reflect.apply(factory, exportsObject, [{ props }]);
+    return isFetcher(gateway) ? gateway : null;
+  }
+
   // ------------------------------------------------------------------ RPC
 
   /** Runs one step. Never throws: failures come back as `{ ok: false, code }`. */
@@ -185,17 +263,23 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     }
     const job = parsed.data;
     const aborted = await this.abortRecord();
-    if (aborted !== null)
+    if (aborted !== null) {
       return failure("aborted", `the run was cancelled: ${aborted.reason}`, started);
+    }
     return this.exclusive((signal) => this.execute(job, signal, started));
   }
 
   /** Evaluates a pipeline file in plan mode (`gittifacts-runner plan`). Never throws. */
   async plan(input: unknown): Promise<PlanOutcome> {
-    const started = Date.now();
     const parsed = PlanJob.safeParse(input);
     if (!parsed.success) {
-      return { ok: false, code: "invalid-job", message: formatIssues(parsed.error), stderr: "" };
+      return {
+        ok: false,
+        code: "invalid-job",
+        message: formatIssues(parsed.error),
+        stderr: "",
+        computeMs: 0,
+      };
     }
     const aborted = await this.abortRecord();
     if (aborted !== null) {
@@ -204,9 +288,10 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
         code: "aborted",
         message: `the run was cancelled: ${aborted.reason}`,
         stderr: "",
+        computeMs: 0,
       };
     }
-    return this.exclusive((signal) => this.executePlan(parsed.data, signal, started));
+    return this.exclusive((signal) => this.executePlan(parsed.data, signal));
   }
 
   /** Stops any running job, destroys the container and refuses later jobs for this run/step. */
@@ -223,6 +308,26 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
   /** Clears a previous `abort()` so the step can run again (used by `restartFrom`). */
   async clearAbort(): Promise<void> {
     await this.ctx.storage.delete("aborted");
+  }
+
+  /** The image a container would start from. Starts nothing. */
+  async describe(): Promise<{ image: string | null }> {
+    return { image: this.containerOrNull()?.images.base ?? null };
+  }
+
+  /** Called by `CiEgressGateway` for every refused request of the running job. */
+  async noteEgressDenied(input: unknown): Promise<void> {
+    const denial = EgressDenial.safeParse(input);
+    const session = this.session;
+    if (!denial.success || session === null) return;
+    session.denied += 1;
+    const host = hostOf(denial.data.url);
+    if (host !== null && session.deniedHosts.size < 20) session.deniedHosts.add(host);
+    if (session.denied <= MAX_LOGGED_DENIALS && session.log !== null && !session.log.isClosed) {
+      await session.log
+        .line(`egress blocked: ${denial.data.method} ${denial.data.url} (${denial.data.reason})`)
+        .catch(() => {});
+    }
   }
 
   // ------------------------------------------------------------------ internals
@@ -261,11 +366,42 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     }
   }
 
+  /** Runs `fn` with fresh accounting; always destroys the container afterwards. */
+  private async withSession<T>(
+    fn: (session: Session) => Promise<T>,
+  ): Promise<{ value: T; session: Session }> {
+    const session = new Session();
+    this.session = session;
+    try {
+      return { value: await fn(session), session };
+    } finally {
+      if (session.container !== null) await destroyQuietly(session.container);
+      if (this.session === session) this.session = null;
+    }
+  }
+
   private async execute(
     job: RunnerJob,
     signal: AbortSignal,
     started: number,
   ): Promise<RunnerOutcome> {
+    const { value, session } = await this.withSession((s) =>
+      this.executeJob(job, signal, started, s),
+    );
+    return {
+      ...value,
+      computeMs: session.computeMs(),
+      timings: session.timings,
+      egress: session.egress(),
+    };
+  }
+
+  private async executeJob(
+    job: RunnerJob,
+    signal: AbortSignal,
+    started: number,
+    session: Session,
+  ): Promise<OutcomeCore> {
     await this.ctx.storage.put("job", {
       runId: job.runId,
       step: job.step,
@@ -276,14 +412,15 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     try {
       token = await this.mintReadToken(job.artifactsRepo);
     } catch (error) {
-      return failure(
+      return coreFailure(
         "token",
         `could not mint a read token for ${job.artifactsRepo}: ${errorMessage(error)}`,
         started,
       );
     }
-    const log = new StepLog(this.logBucket(), job.logKey, secretVariants(token));
-    const fail = async (code: RunnerErrorCode, message: string): Promise<RunnerOutcome> => {
+    const log = new StepLog(this.logBucket(), job.logKey, secretVariants(token), job.maxLogBytes);
+    session.log = log;
+    const fail = async (code: RunnerErrorCode, message: string): Promise<OutcomeCore> => {
       const safe = log.redact(message);
       await log.line(`error (${code}): ${safe}`).catch(() => {});
       return {
@@ -296,68 +433,117 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
       };
     };
 
-    let c: ContainerLike;
     try {
-      c = this.container();
-    } catch (error) {
-      return fail(error instanceof RunnerError ? error.code : "internal", errorMessage(error));
-    }
-    try {
-      await log.line(`${job.kind} step "${job.step}" attempt ${job.attempt} on ${job.instance}`);
-      await this.startContainer(c, job, log, signal);
+      const c = this.container();
+      session.container = c;
+      await log.line(
+        `${job.kind} step "${job.step}" attempt ${job.attempt} on ${job.instance}, network ${job.network}`,
+      );
+      const lockdown: Lockdown =
+        job.network === "open"
+          ? { network: "open" }
+          : {
+              network: "locked",
+              props: {
+                runner: `${job.runId}:${job.step}`,
+                registries: [...REGISTRY_HOSTS],
+                gitHost: hostOf(job.remote),
+              },
+            };
+      await session.phase("containerStartMs", () =>
+        this.boot(
+          c,
+          {
+            from: job.from,
+            instance: job.instance,
+            timeoutSeconds: job.timeoutSeconds,
+            runId: job.runId,
+            step: job.step,
+            lockdown,
+          },
+          session,
+          log,
+          signal,
+        ),
+      );
 
       await log.line(
         `checkout ${job.headSha}${job.baseSha === undefined ? "" : ` (base ${job.baseSha})`}`,
       );
-      const checkout = await this.runProcess(
-        c,
-        timedCommandArgv(CHECKOUT_SCRIPT, CHECKOUT_TIMEOUT_SECONDS),
-        {
-          cwd: "/",
-          env: checkoutEnv({
-            remote: job.remote,
-            headSha: job.headSha,
-            baseSha: job.baseSha,
-            token,
-          }),
-        },
-        log,
-        signal,
-        CHECKOUT_TIMEOUT_SECONDS,
+      const checkout = await session.phase("checkoutMs", () =>
+        this.runProcess(
+          c,
+          timedCommandArgv(CHECKOUT_SCRIPT, CHECKOUT_TIMEOUT_SECONDS),
+          {
+            ...session.execEnv,
+            ...checkoutEnv({
+              remote: job.remote,
+              headSha: job.headSha,
+              baseSha: job.baseSha,
+              token,
+            }),
+          },
+          log,
+          signal,
+          CHECKOUT_TIMEOUT_SECONDS,
+          { cwd: "/" },
+        ),
       );
-      if (checkout !== 0)
+      if (checkout !== 0) {
         throw new RunnerError(
           "checkout",
           `checkout of ${job.headSha} failed with exit code ${checkout}`,
         );
+      }
+
+      const hermeticInputs = job.hermeticInputs;
+      if (hermeticInputs !== undefined) {
+        await log.line(
+          `global cache scope: running with only the ${hermeticInputs.length} cache input files in ${WORKSPACE}`,
+        );
+        const code = await session.phase("hermeticMs", () =>
+          this.runHermetic(c, hermeticInputs, session, log, signal),
+        );
+        if (code !== 0) {
+          throw new RunnerError(
+            "exec",
+            `reducing the workspace to the cache inputs failed (exit ${code})`,
+          );
+        }
+      }
 
       for (const r of job.replay) {
         await log.line(`replaying "${r.name}" (its snapshot is no longer available): ${r.command}`);
-        const code = await this.runProcess(
-          c,
-          timedCommandArgv(r.command, job.timeoutSeconds),
-          { cwd: workspacePath(r.cwd), env: stepEnv(job, r.env ?? {}) },
-          log,
-          signal,
-          job.timeoutSeconds,
+        const code = await session.phase("replayMs", () =>
+          this.runProcess(
+            c,
+            timedCommandArgv(inDirectory(r.command, r.cwd), job.timeoutSeconds),
+            { ...stepEnv(job, r.env ?? {}), ...session.execEnv },
+            log,
+            signal,
+            job.timeoutSeconds,
+          ),
         );
-        if (code !== 0)
+        if (code !== 0) {
           throw new RunnerError("replay", `replaying "${r.name}" failed with exit code ${code}`);
+        }
       }
 
       if (job.kind === "evidence") {
-        await this.runQuiet(c, ["sh", "-c", `rm -rf /tmp/gittifacts && mkdir -p /tmp/gittifacts`]);
+        await this.runQuiet(c, ["sh", "-c", "rm -rf /tmp/gittifacts && mkdir -p /tmp/gittifacts"]);
       }
 
       await log.line(`$ ${job.command}`);
       const commandStarted = Date.now();
-      const exitCode = await this.runProcess(
-        c,
-        timedCommandArgv(job.command, job.timeoutSeconds),
-        { cwd: workspacePath(job.cwd), env: stepEnv(job, job.env) },
-        log,
-        signal,
-        job.timeoutSeconds,
+      const exitCode = await session.phase("commandMs", () =>
+        this.runProcess(
+          c,
+          timedCommandArgv(inDirectory(job.command, job.cwd), job.timeoutSeconds),
+          { ...stepEnv(job, job.env), ...session.execEnv },
+          log,
+          signal,
+          job.timeoutSeconds,
+        ),
       );
       const timedOut =
         isTimeoutExit(exitCode) && Date.now() - commandStarted >= job.timeoutSeconds * 1000 - 2000;
@@ -367,25 +553,36 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
           : `exit code ${exitCode}`,
       );
 
-      const evidence = job.kind === "evidence" ? await this.captureEvidence(c, job, log) : null;
+      const evidence =
+        job.kind === "evidence"
+          ? await session.phase("evidenceMs", () => this.captureEvidence(c, job, log))
+          : null;
       if (evidence !== null && "error" in evidence) await log.line(`evidence: ${evidence.error}`);
 
       let snapshot: { id: string; size: number } | null = null;
       if (exitCode === 0 && job.snapshot) {
-        try {
-          const s = await c.snapshotContainer({ name: snapshotName(job.runId, job.step) });
-          snapshot = { id: s.id, size: s.size };
-          await this.ctx.storage.put("snapshot", {
-            ...snapshot,
-            takenAt: new Date().toISOString(),
-          });
-          await log.line(`snapshot ${s.id} (${s.size} bytes)`);
-        } catch (error) {
-          throw new RunnerError(
-            "snapshot",
-            `could not snapshot the container: ${errorMessage(error)}`,
-          );
-        }
+        snapshot = await session.phase("snapshotMs", async () => {
+          try {
+            const s = await c.snapshotContainer({ name: snapshotName(job.runId, job.step) });
+            await this.ctx.storage.put("snapshot", {
+              id: s.id,
+              size: s.size,
+              takenAt: new Date().toISOString(),
+            });
+            await log.line(`snapshot ${s.id} (${s.size} bytes)`);
+            return { id: s.id, size: s.size };
+          } catch (error) {
+            throw new RunnerError(
+              "snapshot",
+              `could not snapshot the container: ${errorMessage(error)}`,
+            );
+          }
+        });
+      }
+      if (session.denied > 0) {
+        await log.line(
+          `egress: ${session.denied} request(s) blocked (${[...session.deniedHosts].join(", ")})`,
+        );
       }
       const info = await log.close();
       return {
@@ -397,21 +594,25 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
         tail: log.tail,
         snapshot,
         evidence,
+        hermetic: hermeticInputs !== undefined,
       };
     } catch (error) {
       if (signal.aborted) return fail("aborted", `stopped: ${String(signal.reason ?? "aborted")}`);
       if (error instanceof RunnerError) return fail(error.code, error.message);
       return fail("internal", errorMessage(error));
-    } finally {
-      await destroyQuietly(c);
     }
   }
 
-  private async executePlan(
+  private async executePlan(job: PlanJob, signal: AbortSignal): Promise<PlanOutcome> {
+    const { value, session } = await this.withSession((s) => this.executePlanJob(job, signal, s));
+    return { ...value, computeMs: session.computeMs() };
+  }
+
+  private async executePlanJob(
     job: PlanJob,
     signal: AbortSignal,
-    started: number,
-  ): Promise<PlanOutcome> {
+    session: Session,
+  ): Promise<PlanCore> {
     let token: string;
     try {
       token = await this.mintReadToken(job.artifactsRepo);
@@ -419,47 +620,60 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
       return { ok: false, code: "token", message: errorMessage(error), stderr: "" };
     }
     const log = new StepLog(this.logBucket(), job.logKey, secretVariants(token));
-    let c: ContainerLike | null = null;
+    session.log = log;
     try {
-      c = this.container();
-      const runJob: RunnerJob = {
-        runId: job.runId,
-        step: "plan",
-        kind: "user",
-        attempt: 1,
-        command: "true",
-        env: {},
-        instance: "lite",
-        timeoutSeconds: job.timeoutSeconds,
-        artifactsRepo: job.artifactsRepo,
-        remote: job.remote,
-        headSha: job.sha,
-        from: { kind: "image" },
-        replay: [],
-        snapshot: false,
-        logKey: job.logKey,
+      const c = this.container();
+      session.container = c;
+      // Plan mode never needs more than the git host, so lock egress down whenever the gateway
+      // exists. Only an explicitly open run may fall back to open egress without it.
+      const props: EgressProps = {
+        runner: `${job.runId}:plan`,
+        registries: [],
+        gitHost: hostOf(job.remote),
       };
-      await this.startContainer(c, runJob, log, signal);
+      const lockdown: Lockdown =
+        job.network === "open" && this.egressGateway(props) === null
+          ? { network: "open" }
+          : { network: "locked", props };
+      await log.line(
+        `plan ${job.file} at ${job.sha}, network ${lockdown.network === "open" ? "open" : "git host only"}`,
+      );
+      await this.boot(
+        c,
+        {
+          from: { kind: "image" },
+          instance: "standard-1",
+          timeoutSeconds: job.timeoutSeconds,
+          runId: job.runId,
+          step: "plan",
+          lockdown,
+        },
+        session,
+        log,
+        signal,
+      );
       const checkout = await this.runProcess(
         c,
         timedCommandArgv(CHECKOUT_SCRIPT, CHECKOUT_TIMEOUT_SECONDS),
-        { cwd: "/", env: checkoutEnv({ remote: job.remote, headSha: job.sha, token }) },
+        { ...session.execEnv, ...checkoutEnv({ remote: job.remote, headSha: job.sha, token }) },
         log,
         signal,
         CHECKOUT_TIMEOUT_SECONDS,
+        { cwd: "/" },
       );
-      if (checkout !== 0)
+      if (checkout !== 0) {
         throw new RunnerError(
           "checkout",
           `checkout of ${job.sha} failed with exit code ${checkout}`,
         );
+      }
       const command = `gittifacts-runner plan ${shellQuote(job.file)} --sha ${job.sha}${
         job.baseSha === undefined ? "" : ` --base ${job.baseSha}`
       }`;
       await log.line(`$ ${command}`);
       const proc = await c.exec(timedCommandArgv(command, job.timeoutSeconds), {
         cwd: WORKSPACE,
-        env: stepEnv(runJob, {}),
+        env: { ...planEnv(job), ...session.execEnv },
         stdout: "pipe",
         stderr: "pipe",
       });
@@ -505,15 +719,21 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
       await log.line(`error (${code}): ${message}`).catch(() => {});
       await log.closeQuietly();
       return { ok: false, code, message, stderr: log.tail };
-    } finally {
-      if (c !== null) await destroyQuietly(c);
-      void started;
     }
   }
 
-  private async startContainer(
+  /** Starts the container, applies egress lockdown, waits until it runs commands. */
+  private async boot(
     c: ContainerLike,
-    job: RunnerJob,
+    opts: {
+      from: StartFrom;
+      instance: InstanceType;
+      timeoutSeconds: number;
+      runId: string;
+      step: string;
+      lockdown: Lockdown;
+    },
+    session: Session,
     log: StepLog,
     signal: AbortSignal,
   ): Promise<void> {
@@ -522,25 +742,37 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
       await destroyQuietly(c);
     }
     if (signal.aborted) throw new RunnerError("aborted", "aborted before start");
-    const fromSnapshot = job.from.kind === "snapshot";
-    const startCode: RunnerErrorCode = fromSnapshot ? "snapshot-unavailable" : "container-start";
+    let gateway: Fetcher | null = null;
+    if (opts.lockdown.network === "locked") {
+      gateway = this.egressGateway(opts.lockdown.props);
+      if (gateway === null) {
+        throw new RunnerError(
+          "internal",
+          `restricted egress needs the platform Worker to export ${EGRESS_GATEWAY_EXPORT}; refusing to run with open egress`,
+        );
+      }
+    }
+    const startCode: RunnerErrorCode =
+      opts.from.kind === "snapshot" ? "snapshot-unavailable" : "container-start";
     const common = {
-      enableInternet: true,
-      instance: job.instance,
+      enableInternet: gateway === null,
+      instance: opts.instance,
       entrypoint: ["sleep", "infinity"],
-      labels: { "gittifacts-run": label(job.runId), "gittifacts-step": label(job.step) },
+      labels: { "gittifacts-run": label(opts.runId), "gittifacts-step": label(opts.step) },
     };
     try {
-      if (job.from.kind === "snapshot") {
+      session.containerStartedAt = Date.now();
+      if (opts.from.kind === "snapshot") {
         await log.line(
-          `starting ${job.instance} from snapshot ${job.from.snapshotId} (commit ${job.from.sha})`,
+          `starting ${opts.instance} from snapshot ${opts.from.snapshotId} (commit ${opts.from.sha})`,
         );
-        c.start({ ...common, containerSnapshot: { id: job.from.snapshotId } });
+        c.start({ ...common, containerSnapshot: { id: opts.from.snapshotId } });
       } else {
         const image = c.images.base;
-        if (image === undefined)
+        if (image === undefined) {
           throw new RunnerError("container-start", 'no "base" image in containers[].images');
-        await log.line(`starting ${job.instance} from image ${image}`);
+        }
+        await log.line(`starting ${opts.instance} from image ${image}`);
         c.start({ ...common, image });
       }
     } catch (error) {
@@ -565,8 +797,13 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     );
     try {
       await c.setInactivityTimeout(
-        Math.min(MAX_INACTIVITY_MS, (job.timeoutSeconds + 15 * 60) * 1000),
+        Math.min(MAX_INACTIVITY_MS, (opts.timeoutSeconds + 15 * 60) * 1000),
       );
+      if (gateway !== null) {
+        // Every HTTP and HTTPS request goes to the gateway; nothing else has a route.
+        await c.interceptAllOutboundHttp(gateway);
+        await c.interceptOutboundHttps("*", gateway);
+      }
       const proc = await Promise.race([
         c.exec(["true"], { stdout: "ignore", stderr: "ignore" }),
         exited,
@@ -579,25 +816,49 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     } finally {
       probe.clear();
     }
+    if (gateway !== null && opts.lockdown.network === "locked") {
+      const code = await this.runProcess(
+        c,
+        ["sh", "-c", trustCaScript(CONTAINERS_CA_PATH)],
+        {},
+        log,
+        signal,
+        60,
+        { cwd: "/" },
+      );
+      if (code !== 0) {
+        throw new RunnerError(
+          "container-start",
+          `could not trust the egress interception CA (exit ${code})`,
+        );
+      }
+      session.execEnv.NODE_EXTRA_CA_CERTS = CONTAINERS_CA_PATH;
+      const allowed = [...opts.lockdown.props.registries, opts.lockdown.props.gitHost].filter(
+        (h): h is string => h !== null,
+      );
+      await log.line(`egress restricted to ${allowed.join(", ")}`);
+    }
   }
 
   /** Runs argv with combined output streamed into the log. Returns the exit code. */
   private async runProcess(
     c: ContainerLike,
     argv: string[],
-    opts: { cwd: string; env: Record<string, string> },
+    env: Record<string, string>,
     log: StepLog,
     signal: AbortSignal,
     timeoutSeconds: number,
+    opts: { cwd?: string; stdin?: ReadableStream<Uint8Array> } = {},
   ): Promise<number> {
     if (signal.aborted) throw new RunnerError("aborted", "aborted");
     let proc: Awaited<ReturnType<ContainerLike["exec"]>>;
     try {
       proc = await c.exec(argv, {
-        cwd: opts.cwd,
-        env: opts.env,
+        cwd: opts.cwd ?? WORKSPACE,
+        env,
         stdout: "pipe",
         stderr: "combined",
+        ...(opts.stdin === undefined ? {} : { stdin: opts.stdin }),
       });
     } catch (error) {
       throw new RunnerError("exec", `could not start the process: ${errorMessage(error)}`);
@@ -629,6 +890,31 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     }
   }
 
+  private async runHermetic(
+    c: ContainerLike,
+    inputs: readonly string[],
+    session: Session,
+    log: StepLog,
+    signal: AbortSignal,
+  ): Promise<number> {
+    const list = new TextEncoder().encode(inputs.map((p) => `${p}\0`).join(""));
+    const stdin = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(list);
+        controller.close();
+      },
+    });
+    return this.runProcess(
+      c,
+      timedCommandArgv(HERMETIC_SCRIPT, 300),
+      { ...session.execEnv },
+      log,
+      signal,
+      300,
+      { cwd: "/", stdin },
+    );
+  }
+
   private async runQuiet(c: ContainerLike, argv: string[]): Promise<number> {
     const proc = await c.exec(argv, { stdout: "ignore", stderr: "ignore" });
     return proc.exitCode;
@@ -655,8 +941,9 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
       proc.exitCode,
     ]);
     if (code === 0) {
-      if (file.bytes > MAX_EVIDENCE_BYTES)
+      if (file.bytes > MAX_EVIDENCE_BYTES) {
         return { error: `the evidence file exceeds ${MAX_EVIDENCE_BYTES} bytes` };
+      }
       raw = file.text;
     } else {
       raw = log.scanner.finish();
@@ -693,8 +980,42 @@ export function stepEnv(job: RunnerJob, userEnv: Record<string, string>): Record
   };
 }
 
-function failure(code: RunnerErrorCode, message: string, started: number): RunnerOutcome {
+function planEnv(job: PlanJob): Record<string, string> {
+  return {
+    HOME: "/root",
+    CI: "true",
+    LANG: "C.UTF-8",
+    TERM: "dumb",
+    GITTIFACTS: "1",
+    GITTIFACTS_RUN_ID: job.runId,
+    GITTIFACTS_HEAD_SHA: job.sha,
+  };
+}
+
+function isFetcher(value: unknown): value is Fetcher {
+  return (
+    (typeof value === "object" || typeof value === "function") &&
+    value !== null &&
+    typeof Reflect.get(value, "fetch") === "function"
+  );
+}
+
+function coreFailure(code: RunnerErrorCode, message: string, started: number): OutcomeCore {
   return { ok: false, code, message, durationMs: Date.now() - started, log: null, tail: "" };
+}
+
+function failure(code: RunnerErrorCode, message: string, started: number): RunnerOutcome {
+  return {
+    ok: false,
+    code,
+    message,
+    durationMs: Date.now() - started,
+    log: null,
+    tail: "",
+    computeMs: 0,
+    timings: {},
+    egress: { denied: 0, hosts: [] },
+  };
 }
 
 async function destroyQuietly(c: ContainerLike): Promise<void> {

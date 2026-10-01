@@ -91,3 +91,41 @@ export function checkoutEnv(opts: {
     GIT_CONFIG_VALUE_0: `Authorization: Bearer ${opts.token}`,
   };
 }
+
+/**
+ * Makes the container trust the Containers interception CA (needed once HTTPS is intercepted).
+ * Exit 3 when the runtime did not provide the certificate.
+ */
+export function trustCaScript(caPath: string): string {
+  const f = shellQuote(caPath);
+  return [
+    `if [ ! -f ${f} ]; then echo "interception CA certificate ${caPath} is missing" >&2; exit 3; fi`,
+    "mkdir -p /usr/local/share/ca-certificates",
+    `cp ${f} /usr/local/share/ca-certificates/cloudflare-containers-ca.crt`,
+    `if command -v update-ca-certificates >/dev/null 2>&1; then update-ca-certificates >/dev/null 2>&1; else cat ${f} >> /etc/ssl/certs/ca-certificates.crt; fi`,
+  ].join("\n");
+}
+
+/**
+ * Reduces `/workspace` to the NUL-separated repository paths read from stdin (a global-scope
+ * step's cache inputs). Needs GNU tar (`--null -T -`).
+ */
+export const HERMETIC_SCRIPT = [
+  "set -eu",
+  "rm -rf /tmp/gittifacts-src",
+  `mv ${WORKSPACE} /tmp/gittifacts-src`,
+  `mkdir -p ${WORKSPACE}`,
+  `tar -C /tmp/gittifacts-src --null -T - -cf - | tar -C ${WORKSPACE} -xf -`,
+  "rm -rf /tmp/gittifacts-src",
+  `echo "workspace reduced to $(find ${WORKSPACE} -type f | wc -l) cache input files"`,
+].join("\n");
+
+/**
+ * Runs `command` in `cwd` (relative to the workspace). A missing directory is the step's failure
+ * (exit 2 with a message), not an infrastructure error.
+ */
+export function inDirectory(command: string, cwd: string | undefined): string {
+  if (cwd === undefined || cwd === "") return command;
+  const message = shellQuote(`gittifacts: working directory ${cwd} does not exist`);
+  return `cd -- ${shellQuote(cwd)} || { echo ${message} >&2; exit 2; }\n${command}`;
+}

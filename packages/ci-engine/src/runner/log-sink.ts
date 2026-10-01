@@ -46,7 +46,24 @@ export class R2LogSink {
     return this.truncated;
   }
 
-  async write(text: string): Promise<void> {
+  private queue: Promise<unknown> = Promise.resolve();
+
+  /** Serializes writes and close (concurrent writers: process output and platform notes). */
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.queue.then(fn);
+    this.queue = next.catch(() => undefined);
+    return next;
+  }
+
+  write(text: string): Promise<void> {
+    return this.serial(() => this.writeNow(text));
+  }
+
+  close(): Promise<LogSinkResult> {
+    return this.serial(() => this.closeNow());
+  }
+
+  private async writeNow(text: string): Promise<void> {
     if (this.closed) throw new Error("log sink is closed");
     if (this.truncated || text === "") return;
     let bytes = this.encoder.encode(text);
@@ -62,7 +79,7 @@ export class R2LogSink {
     while (this.buffered >= this.partBytes) await this.uploadPart(this.take(this.partBytes));
   }
 
-  async close(): Promise<LogSinkResult> {
+  private async closeNow(): Promise<LogSinkResult> {
     if (this.closed) throw new Error("log sink is closed");
     this.closed = true;
     const rest = this.take(this.buffered);

@@ -177,6 +177,16 @@ export function detectRepoFeatures(facts: RepoFacts): RepoFeatures {
   };
 }
 
+/** Root files that change what an install produces; part of the default install cache inputs. */
+export const INSTALL_CONFIG_FILES: readonly string[] = [
+  "pnpm-workspace.yaml",
+  ".npmrc",
+  ".pnpmfile.cjs",
+  ".yarnrc",
+  ".yarnrc.yml",
+  "bunfig.toml",
+];
+
 /** Name of the install step in default pipelines. Evidence steps start from its snapshot. */
 export const DEFAULT_INSTALL_STEP = "install";
 
@@ -199,15 +209,18 @@ export function defaultPipeline(facts: RepoFacts): PipelineSpec {
   const inputs = ["**/package.json"];
   if (features.lockfile !== null) inputs.push(features.lockfile);
   else warnings.push(`no lockfile for ${pm}; install is not reproducible and is not cached`);
-  for (const extra of ["pnpm-workspace.yaml", ".npmrc", ".yarnrc.yml", "bunfig.toml"]) {
+  for (const extra of INSTALL_CONFIG_FILES) {
     if (facts.rootEntries.includes(extra)) inputs.push(extra);
   }
+  // Files package managers read during install that live in directories (patches, Yarn
+  // releases/plugins). Globs that match nothing cost nothing.
+  inputs.push("patches/**", ".yarn/releases/**", ".yarn/plugins/**");
   const install: StepSpec = {
     name: DEFAULT_INSTALL_STEP,
     command: installCommand(pm, features.lockfile !== null),
     parent: null,
     after: [],
-    ...(features.lockfile === null ? {} : { cache: { inputs } }),
+    ...(features.lockfile === null ? {} : { cache: { inputs }, cacheScope: "global" as const }),
   };
   const steps: StepSpec[] = [install];
   const scriptSteps: [string, string | null][] = [

@@ -19,6 +19,7 @@ import {
   type RunState,
   type RunStatus,
   RunSummary,
+  type RunUsage,
   StepStatus,
   SUPERSEDED_PREFIX,
 } from "./engine.js";
@@ -33,6 +34,10 @@ export const RunKeys = {
   step: (runId: string, step: string) => `ci-runs/${runId}/steps/${step}.json`,
   cancel: (runId: string) => `ci-runs/${runId}/cancel.json`,
   summary: (runId: string) => `ci-runs/${runId}/summary.json`,
+  usagePrefix: (runId: string) => `ci-runs/${runId}/usage/`,
+  /** One record per Runner invocation (attempts and lineage replays included). */
+  usage: (runId: string, step: string, call: string) =>
+    `ci-runs/${runId}/usage/${step}/${call}.json`,
   log: (runId: string, step: string) => `ci-logs/${runId}/${step}.log`,
   evidence: (runId: string, step: string) => `ci-evidence/${runId}/${step}.json`,
 };
@@ -251,4 +256,57 @@ export function buildRunStatus(s: RunSnapshot): RunStatus {
 
 export function isSupersededReason(reason: string): boolean {
   return reason.trim().toLowerCase().startsWith(SUPERSEDED_PREFIX);
+}
+
+export const UsageRecord = z
+  .object({
+    v: z.literal(1),
+    step: z.string(),
+    instance: z.string(),
+    computeMs: z.number().nonnegative(),
+    logBytes: z.number().int().nonnegative(),
+  })
+  .strict();
+export type UsageRecord = z.infer<typeof UsageRecord>;
+
+export async function writeUsage(
+  store: ObjectStore,
+  runId: string,
+  call: string,
+  record: Omit<UsageRecord, "v">,
+): Promise<void> {
+  await writeJson(store, RunKeys.usage(runId, record.step, call), { v: 1, ...record });
+}
+
+export async function readUsage(store: ObjectStore, runId: string): Promise<UsageRecord[]> {
+  const keys = await listKeys(store, RunKeys.usagePrefix(runId));
+  const records = await Promise.all(keys.map((k) => readRecord(store, k, UsageRecord)));
+  return records.filter((r): r is UsageRecord => r !== null);
+}
+
+/** Folds usage records into the run's `RunUsage`. */
+export function summarizeUsage(records: readonly UsageRecord[], cacheHits: number): RunUsage {
+  const byInstance: Record<string, number> = {};
+  let computeMs = 0;
+  let logBytes = 0;
+  for (const r of records) {
+    computeMs += r.computeMs;
+    logBytes += r.logBytes;
+    byInstance[r.instance] = (byInstance[r.instance] ?? 0) + r.computeMs;
+  }
+  return {
+    computeMs,
+    ciMinutes: Math.ceil(computeMs / 600) / 100,
+    byInstance,
+    containers: records.length,
+    cacheHits,
+    logBytes,
+  };
+}
+
+/** Container time per step across all of its usage records. */
+export function computeByStep(records: readonly UsageRecord[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of records) out.set(r.step, (out.get(r.step) ?? 0) + r.computeMs);
+  return out;
 }

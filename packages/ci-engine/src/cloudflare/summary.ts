@@ -10,6 +10,9 @@ export function replayStepStatus(r: ReplayStepResult): StepStatus {
     kind: r.kind,
     status: r.status,
     durationMs: r.durationMs,
+    ...(r.durationMs === null
+      ? {}
+      : { computeMs: r.durationMs, timings: { totalMs: r.durationMs } }),
     // @cloudflare/ci keeps logs in its own step outputs, not in our bucket.
     logRef: null,
     cacheHit: false,
@@ -61,6 +64,14 @@ export function buildReplaySummary(
     else evidenceErrors.push({ step: r.name, message: parsed.error.slice(0, 4000) });
   }
   const userSteps = result.steps.filter((s) => s.kind === "user");
+  // @cloudflare/ci does not report container time; step wall time is the closest upper-bound
+  // proxy (it includes sandbox start, checkout and backup).
+  const computeMs = result.steps.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
+  const ran = result.steps.filter((s) => s.durationMs !== null).length;
+  const runStart = Date.parse(startedAt);
+  const starts = userSteps
+    .map((s) => (s.startedAt === null ? Number.NaN : Date.parse(s.startedAt)))
+    .filter((t) => !Number.isNaN(t));
   return {
     id: req.runId,
     changeId: req.changeId,
@@ -75,5 +86,17 @@ export function buildReplaySummary(
     warnings: req.pipeline?.warnings ?? [],
     evidence,
     evidenceErrors,
+    usage: {
+      computeMs,
+      ciMinutes: Math.ceil(computeMs / 600) / 100,
+      byInstance: { sandbox: computeMs },
+      containers: ran,
+      cacheHits: 0,
+      logBytes: 0,
+    },
+    timings: {
+      totalMs: Math.max(0, Date.parse(finishedAt) - runStart),
+      ...(starts.length === 0 ? {} : { firstStepMs: Math.max(0, Math.min(...starts) - runStart) }),
+    },
   };
 }

@@ -110,10 +110,16 @@ function fileAt(sha: string | null, path: string): string | null {
   return typeof node === "string" ? node : null;
 }
 
-type FsState = { head: string | null; base: string | null; files: Record<string, string> };
+type FsState = {
+  head: string | null;
+  base: string | null;
+  files: Record<string, string>;
+  /** The workspace holds only cache inputs (no .git, no other repository files). */
+  hermetic?: boolean;
+};
 
 export type FakeEvent = {
-  kind: "start" | "exec" | "exit" | "snapshot" | "destroy";
+  kind: "start" | "exec" | "exit" | "snapshot" | "destroy" | "intercept" | "ca" | "hermetic";
   t: number;
   [key: string]: unknown;
 };
@@ -147,6 +153,8 @@ export class FakeContainer implements ContainerLike {
     if (this.running) throw new Error("container already running");
     this.running = true;
     this.startError = null;
+    this.internet = options.enableInternet;
+    this.httpsGateway = null;
     const snapshotId = options.containerSnapshot?.id ?? null;
     this.starting = (async () => {
       await this.record("start", {
@@ -154,10 +162,11 @@ export class FakeContainer implements ContainerLike {
         image: options.image ?? null,
         instance: options.instance ?? null,
         enableInternet: options.enableInternet,
+        labels: options.labels ?? null,
         env: options.env ?? null,
       });
       if (snapshotId === null) {
-        this.state = { head: null, base: null, files: {} };
+        this.state = { head: null, base: null, files: {}, hermetic: false };
         return;
       }
       const obj = await this.bucket.get(`fake-snapshots/${snapshotId}.json`);
@@ -179,6 +188,19 @@ export class FakeContainer implements ContainerLike {
   }
 
   async setInactivityTimeout(): Promise<void> {}
+
+  private internet = true;
+  private httpsGateway: Fetcher | null = null;
+
+  async interceptAllOutboundHttp(binding: Fetcher): Promise<void> {
+    this.httpsGateway ??= binding;
+    await this.record("intercept", { target: "http:*" });
+  }
+
+  async interceptOutboundHttps(addr: string, binding: Fetcher): Promise<void> {
+    if (addr === "*") this.httpsGateway = binding;
+    await this.record("intercept", { target: `https:${addr}` });
+  }
 
   async snapshotContainer(options: {
     name?: string;
@@ -265,7 +287,21 @@ export class FakeContainer implements ContainerLike {
     const state = this.state!;
     const env = options.env ?? {};
     if (argv[0] === "true") return 0;
+    if (script.includes("update-ca-certificates")) {
+      await this.record("ca", {});
+      return 0;
+    }
+    if (script.includes("gittifacts-src")) {
+      const list =
+        options.stdin instanceof ReadableStream ? await new Response(options.stdin).text() : "";
+      const inputs = list.split("\0").filter((p) => p !== "");
+      state.hermetic = true;
+      await this.record("hermetic", { inputs });
+      await write(`workspace reduced to ${inputs.length} cache input files\n`);
+      return 0;
+    }
     if (script.includes("git fetch")) {
+      state.hermetic = false;
       await write(`fetching from ${env.GITTIFACTS_REMOTE} with ${env.GIT_CONFIG_VALUE_0}\n`);
       if (env.GITTIFACTS_HEAD_SHA === BAD_SHA) {
         await write("fatal: remote error: object not found\n");
@@ -327,7 +363,23 @@ export class FakeContainer implements ContainerLike {
         await write(`error: ${arg} is missing\n`);
         code = 1;
       } else if (directive === "printtoken") await write(`leaked ${FAKE_TOKEN}\n`);
+      else if (directive === "spam") await write(`${"x".repeat(Number(arg))}\n`);
       else if (directive === "env") await write(`env ${Object.keys(env).sort().join(",")}\n`);
+      else if (directive === "needsrepo" && state.hermetic === true) {
+        await write("error: src/setup.js not found\n");
+        code = 1;
+      } else if (directive === "curl") {
+        if (this.httpsGateway !== null) {
+          const res = await this.httpsGateway.fetch(arg);
+          await write(`curl ${res.status} ${(await res.text()).trim()}\n`);
+          if (res.status >= 400) code = 22;
+        } else if (this.internet) {
+          await write(`curl ${arg}: direct internet\n`);
+        } else {
+          await write(`curl: (6) Could not resolve host\n`);
+          code = 6;
+        }
+      }
     }
     if (killed()) code = 137;
     await this.record("exit", { command: script, code, t0, t1: Date.now() });

@@ -41,6 +41,8 @@ export interface RunnerOptions {
   cwd?: string;
   env?: Record<string, string>;
   cache?: { inputs: string[] };
+  /** `global` (share with identical inputs in any repo) or `repo`. See `StepSpec.cacheScope`. */
+  cacheScope?: "global" | "repo";
   /** Container size. Default `standard-2`. */
   instance?: InstanceType;
   /** Command timeout in minutes, 1-30. Default 25. */
@@ -107,6 +109,7 @@ const RunnerOptionsInput = z
       .object({ inputs: z.array(z.string()) })
       .strict()
       .optional(),
+    cacheScope: z.string().optional(),
     instance: z.string().optional(),
     timeoutMinutes: z.number().optional(),
     config: z
@@ -197,6 +200,7 @@ export function parseRunnerOptions(raw: unknown, warnings: string[]): StepFields
     ...(cwd === undefined ? {} : { cwd }),
     ...(o.env === undefined || Object.keys(o.env).length === 0 ? {} : { env: o.env }),
     ...(o.cache === undefined ? {} : { cache: o.cache }),
+    ...(o.cacheScope === undefined ? {} : { cacheScope: o.cacheScope }),
     ...(o.instance === undefined ? {} : { instance: o.instance }),
     ...(timeoutMinutes === undefined ? {} : { timeoutMinutes }),
   });

@@ -20,6 +20,8 @@ export const CachePointer = z
     producedBySha: z.string().regex(/^[0-9a-f]{40}([0-9a-f]{24})?$/),
     runId: z.string().min(1).max(200),
     createdAt: z.string().datetime(),
+    /** Template id when the snapshot came from a `seedCache()` run. */
+    seededBy: z.string().min(1).max(100).optional(),
   })
   .strict();
 export type CachePointer = z.infer<typeof CachePointer>;

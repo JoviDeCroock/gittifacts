@@ -22,8 +22,19 @@ export {
   RunOutput,
   RunRecord,
   StepRecord,
+  summarizeUsage,
+  UsageRecord,
 } from "./run-store.js";
 export type { ContainerLike, ExecProcessLike } from "./runner/container.js";
+export {
+  CONTAINERS_CA_PATH,
+  EGRESS_GATEWAY_EXPORT,
+  EgressDenial,
+  EgressProps,
+  egressDecision,
+  REGISTRY_HOSTS,
+} from "./runner/egress.js";
+export { CiEgressGateway, type EgressGatewayEnv } from "./runner/egress-gateway.js";
 export { EvidenceDocument, parseEvidenceDocument } from "./runner/evidence.js";
 export {
   PlanJob,
@@ -40,6 +51,7 @@ export { Runner, snapshotName, stepEnv } from "./runner/runner-do.js";
 export * from "./select.js";
 export type { ObjectStore } from "./storage.js";
 export type {
+  CacheKeys,
   CiWorkflowEnv,
   Prepared,
   ResolvedPipeline,

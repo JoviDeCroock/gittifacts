@@ -46,6 +46,8 @@ export class TestCiRunWorkflow extends CiRunWorkflow<TestEnv> {
   }
 }
 
+export { CiEgressGateway } from "../../src/runner/egress-gateway.js";
+
 export default {
   fetch(): Response {
     return new Response("ci-engine test worker");

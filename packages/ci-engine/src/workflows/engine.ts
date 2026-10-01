@@ -9,16 +9,18 @@
 import {
   type CiEngine,
   type CiRunParams,
+  deriveRunId,
   type EngineKind,
   InvalidRunRequestError,
   RunConflictError,
   RunNotFoundError,
   RunRequest,
   type RunStatus,
+  SeedCacheRequest,
 } from "../engine.js";
 import { evidenceStepIssues } from "../evidence-steps.js";
 import { dependents, topologicalOrder } from "../plan/dag.js";
-import { formatIssues } from "../plan/spec.js";
+import { formatIssues, seedPipeline } from "../plan/spec.js";
 import {
   buildRunStatus,
   type CancelRecord,
@@ -103,12 +105,15 @@ export abstract class WorkflowBackedEngine<P> implements CiEngine {
         engine: this.kind,
         createdAt: new Date().toISOString(),
       } satisfies RunRecord);
-      if (req.pipeline !== undefined && req.evidenceSteps !== undefined) {
+      if (
+        req.pipeline !== undefined &&
+        (req.evidenceSteps !== undefined || req.seed !== undefined)
+      ) {
         await writeJson(bucket, RunKeys.pipeline(req.runId), {
           v: 1,
           source: "request",
-          pipeline: req.pipeline,
-          evidenceSteps: req.evidenceSteps,
+          pipeline: req.seed === undefined ? req.pipeline : seedPipeline(req.pipeline),
+          evidenceSteps: req.seed === undefined ? (req.evidenceSteps ?? []) : [],
           resolvedAt: new Date().toISOString(),
         });
       }
@@ -254,5 +259,31 @@ export class WorkflowsCiEngine extends WorkflowBackedEngine<CiRunParams> {
 
   protected params(req: CiRunParams): CiRunParams {
     return req;
+  }
+
+  /**
+   * Runs the template's global-scope cached steps at `sha` (hermetically, as every global step
+   * does) and publishes their snapshots under the input-addressed global keys. Idempotent per
+   * (template, sha).
+   */
+  async seedCache(input: SeedCacheRequest): Promise<{ runId: string }> {
+    const parsed = SeedCacheRequest.safeParse(input);
+    if (!parsed.success) throw new InvalidRunRequestError(formatIssues(parsed.error));
+    const seed = parsed.data;
+    const changeId = `seed-${seed.templateId}`.slice(0, 64);
+    return this.start({
+      runId: await deriveRunId(changeId, seed.sha),
+      changeId,
+      repo: { remote: seed.remote, tokenProvider: "artifacts" },
+      artifactsRepo: seed.artifactsRepo,
+      headSha: seed.sha,
+      baseSha: seed.sha,
+      pipelineFrom: "head",
+      ...(seed.pipeline === undefined ? {} : { pipeline: seed.pipeline }),
+      limits: seed.limits ?? { maxMinutes: 30 },
+      network: seed.network,
+      cache: { global: "read-write" },
+      seed: { templateId: seed.templateId },
+    });
   }
 }

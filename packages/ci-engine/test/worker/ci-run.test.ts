@@ -216,7 +216,9 @@ describe("CiRunWorkflow", () => {
       kind: "start",
       snapshot: firstSnap,
     });
-    expect(await text(RunKeys.log(second.runId, "install"))).toMatch(/cache hit: reusing snapshot/);
+    expect(await text(RunKeys.log(second.runId, "install"))).toMatch(
+      /cache hit \(repo scope\): reusing snapshot/,
+    );
   });
 
   it("a failing step skips its dependents; evidence that doesn't need green still runs", async () => {
@@ -354,7 +356,7 @@ describe("CiRunWorkflow", () => {
     expect(await runToCompletion(req)).toMatchObject({ status: "failed" });
     expect(byName(await engine.status(req.runId)).a).toMatchObject({
       status: "skipped",
-      reason: "the run's 1-minute budget is exhausted",
+      reason: "the run's 1-minute limit is exhausted",
     });
     expect(await events(req.runId, "a")).toEqual([]);
   });

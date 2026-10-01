@@ -148,6 +148,15 @@ describe("WorkflowsCiEngine (fake bindings)", () => {
       steps: [],
       evidence: [],
       evidenceErrors: [],
+      usage: {
+        computeMs: 0,
+        ciMinutes: 0,
+        byInstance: {},
+        containers: 0,
+        cacheHits: 0,
+        logBytes: 0,
+      },
+      timings: { totalMs: 600_000 },
     };
     delete summary.error;
     await writeJson(bucket, RunKeys.summary("run-1"), summary);

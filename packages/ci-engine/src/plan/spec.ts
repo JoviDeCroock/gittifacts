@@ -34,6 +34,9 @@ export const RESERVED_ENV_PREFIXES: readonly string[] = [
   "ARTIFACTS_",
 ];
 
+export const CacheScope = z.enum(["global", "repo"]);
+export type CacheScope = z.infer<typeof CacheScope>;
+
 export const InstanceType = z.enum([
   "lite",
   "standard-1",
@@ -114,11 +117,56 @@ export const StepSpec = z
     parent: StepName.nullable(),
     /** Steps that must finish first (derived from await ordering in plan mode). Excludes `parent`. */
     after: z.array(StepName).max(MAX_STEPS),
+    /**
+     * Who may reuse this step's cached snapshot. `global`: any repository whose cache inputs are
+     * byte-identical (e.g. every project from one template); the step then runs with only its
+     * cache inputs in `/workspace`, so the snapshot holds nothing else from the repository.
+     * `repo`: this repository only. Default: `global` for install-like root steps, else `repo`.
+     * Only root steps (no parent) can be `global`. Ignored without `cache`.
+     */
+    cacheScope: CacheScope.optional(),
     instance: InstanceType.optional(),
     timeoutMinutes: z.number().int().min(1).max(MAX_STEP_TIMEOUT_MINUTES).optional(),
   })
   .strict();
 export type StepSpec = z.infer<typeof StepSpec>;
+
+const INSTALL_LIKE = /\b(?:install|ci)\b/;
+
+/** A root step with cache inputs whose command installs dependencies (`pnpm install`, `npm ci`, ...). */
+export function isInstallLike(step: Pick<StepSpec, "command" | "parent" | "cache">): boolean {
+  return step.parent === null && step.cache !== undefined && INSTALL_LIKE.test(step.command);
+}
+
+/** The scope a cached step's snapshot is shared in, or null when the step is not cached. */
+export function effectiveCacheScope(
+  step: Pick<StepSpec, "command" | "parent" | "cache" | "cacheScope">,
+): CacheScope | null {
+  if (step.cache === undefined) return null;
+  if (step.parent !== null) return "repo";
+  return step.cacheScope ?? (isInstallLike(step) ? "global" : "repo");
+}
+
+/** Steps a template seed run executes: the global-scope cached steps (always roots). */
+export function seedPipeline(pipeline: PipelineSpec): PipelineSpec {
+  const steps = pipeline.steps
+    .filter((s) => effectiveCacheScope(s) === "global")
+    .map((s) => ({ ...s, after: [] }));
+  return { ...pipeline, steps };
+}
+
+const INSTANCE_ORDER: readonly InstanceType[] = [
+  "lite",
+  "standard-1",
+  "standard-2",
+  "standard-3",
+  "standard-4",
+];
+
+/** `instance`, or `max` when `instance` is larger. */
+export function clampInstance(instance: InstanceType, max: InstanceType): InstanceType {
+  return INSTANCE_ORDER.indexOf(instance) > INSTANCE_ORDER.indexOf(max) ? max : instance;
+}
 
 export const PipelineSpec = z
   .object({

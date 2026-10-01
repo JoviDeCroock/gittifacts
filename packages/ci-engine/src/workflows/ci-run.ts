@@ -3,13 +3,13 @@
  *
  *   plan      resolve the pipeline when the request didn't carry one (`.platform/ci.ts` evaluated
  *             in a sandbox, or the default JS/TS pipeline) and the evidence steps
- *   prepare   walk the head tree, compute cache keys, fix the budget deadline
+ *   prepare   walk the head tree, compute cache keys (global and per-repo), fix the deadline
  *   <step>…   one `step.do` per pipeline step, named exactly like the step, each as soon as its
  *             dependencies passed (so levels run in parallel); a dependency that did not pass
  *             skips the step
  *   evidence:* platform evidence steps after the user steps; `requiresGreen` ones only when all
  *             user steps passed
- *   finalize  write the summary to R2 and report it to the `RunSink`
+ *   finalize  write the summary (with usage and timings) to R2 and report it to the `RunSink`
  *
  * Everything outside `step.do` is deterministic given earlier step results, so replays are safe.
  */
@@ -23,15 +23,18 @@ import {
 import { NonRetryableError } from "cloudflare:workflows";
 import { EvidenceItem } from "@app/evidence";
 import { z } from "zod";
-import { computeCacheKey } from "../cache/key.js";
+import { computeCacheKey, matchBlobs } from "../cache/key.js";
 import { deleteCachePointer, lookupCache, writeCachePointer } from "../cache/pointer.js";
 import { listDirectory, listRoot, type RepoReader, readRootFile, walkTree } from "../cache/tree.js";
 import {
   type CiRunParams,
+  type RunLimits,
   RunRequest,
   type RunSink,
   type RunSummary,
+  resolveLimits,
   type StepStatus,
+  type StepTimings,
 } from "../engine.js";
 import {
   defaultEvidenceSteps,
@@ -42,22 +45,37 @@ import {
 import { parentChain, snapshotSources, topologicalOrder } from "../plan/dag.js";
 import { defaultPipeline, detectRepoFeatures } from "../plan/defaults.js";
 import {
+  type CacheScope,
+  clampInstance,
   DEFAULT_INSTANCE,
   DEFAULT_STEP_TIMEOUT_MINUTES,
+  effectiveCacheScope,
   formatIssues,
   type InstanceType,
   type PipelineSpec,
   parsePipelineSpec,
   type StepSpec,
+  seedPipeline,
   stepDependencies,
 } from "../plan/spec.js";
-import { type PipelineSource, RunKeys, type RunOutput, writeStepRecord } from "../run-store.js";
+import {
+  computeByStep,
+  type PipelineSource,
+  RunKeys,
+  type RunOutput,
+  readUsage,
+  summarizeUsage,
+  writeStepRecord,
+  writeUsage,
+} from "../run-store.js";
 import { errorMessage } from "../runner/container.js";
 import {
   type EvidenceCapture,
+  MAX_HERMETIC_INPUTS,
   PLAN_RUNNER_STEP,
   PlanOutcome,
   type ReplayStep,
+  RunnerDescription,
   type RunnerJobInput,
   RunnerOutcome,
   type RunnerRpc,
@@ -81,7 +99,7 @@ export interface CiWorkflowEnv {
   RUNNER: RunnerNamespace;
   /** Receives `onRunFinished(summary)` keyed by changeId. Optional: the summary is in R2 anyway. */
   COORDINATOR?: RunSinkNamespace;
-  /** Cache-key salt; bump it when the runner image changes. Default "v1". */
+  /** Cache-key salt (the runner image reference is part of every key already). Default "v1". */
   CI_CACHE_NAMESPACE?: string;
 }
 
@@ -116,20 +134,47 @@ export type StepResult = {
   snapshot: { id: string; sha: string } | null;
   /** Cache pointer this result came from or wrote, for invalidation. */
   cacheKey: string | null;
+  cacheScope: CacheScope | null;
   tail: string;
   reason: string | null;
   evidence: EvidenceCapture | null;
+  instance: InstanceType;
+  timings: StepTimings | null;
+  /** Container time of this attempt's Runner calls. */
+  computeMs: number;
+  egressDenied: { count: number; hosts: string[] } | null;
 };
 
 export type ResolvedPipeline =
-  | { ok: true; source: PipelineSource; pipeline: PipelineSpec; evidenceSteps: EvidenceStepSpec[] }
-  | { ok: false; error: string };
+  | {
+      ok: true;
+      source: PipelineSource;
+      pipeline: PipelineSpec;
+      evidenceSteps: EvidenceStepSpec[];
+      durationMs: number;
+    }
+  | { ok: false; error: string; durationMs: number };
+
+export type CacheKeys = {
+  scope: CacheScope;
+  /** Keys to look up, in order. */
+  read: string[];
+  /** Key to publish a fresh snapshot under (null: read-only). */
+  write: string | null;
+  writeScope: string;
+  /** Global writes run hermetically on these paths. */
+  hermeticInputs: string[] | null;
+  /** Where to cache instead when the hermetic run fails (the step needs other files). */
+  fallback: { write: string; writeScope: string } | null;
+};
 
 export type Prepared = {
   /** Epoch ms after which no new step starts. */
   deadline: number;
-  cacheKeys: Record<string, { write: string; writeScope: string; read: string[] } | null>;
+  image: string | null;
+  cacheKeys: Record<string, CacheKeys | null>;
   warnings: string[];
+  durationMs: number;
 };
 
 /** A pipeline or evidence step, normalized for execution. */
@@ -145,26 +190,26 @@ type ExecSpec = {
   deps: string[];
 };
 
-function userExec(s: StepSpec): ExecSpec {
+function userExec(s: StepSpec, limits: RunLimits): ExecSpec {
   return {
     name: s.name,
     kind: "user",
     command: s.command,
     cwd: s.cwd,
     env: s.env,
-    instance: s.instance ?? DEFAULT_INSTANCE,
+    instance: clampInstance(s.instance ?? DEFAULT_INSTANCE, limits.instance),
     timeoutMinutes: s.timeoutMinutes ?? DEFAULT_STEP_TIMEOUT_MINUTES,
     parent: s.parent,
     deps: stepDependencies(s),
   };
 }
 
-function evidenceExec(e: EvidenceStepSpec): ExecSpec {
+function evidenceExec(e: EvidenceStepSpec, limits: RunLimits): ExecSpec {
   return {
     name: e.name,
     kind: "evidence",
     command: e.command,
-    instance: e.instance ?? DEFAULT_INSTANCE,
+    instance: clampInstance(e.instance ?? DEFAULT_INSTANCE, limits.instance),
     timeoutMinutes: e.timeoutMinutes ?? DEFAULT_STEP_TIMEOUT_MINUTES,
     parent: e.parent,
     deps: e.parent === null ? [] : [e.parent],
@@ -198,14 +243,20 @@ function notRun(
     logKey,
     snapshot: null,
     cacheKey: null,
+    cacheScope: null,
     tail: "",
     reason,
     evidence: null,
+    instance: spec.instance,
+    timings: null,
+    computeMs: 0,
+    egressDenied: null,
   };
 }
 
-export function toStepStatus(r: StepResult): StepStatus {
+export function toStepStatus(r: StepResult, computeMs?: number): StepStatus {
   const showTail = (r.status === "failed" || r.status === "errored") && r.tail !== "";
+  const compute = computeMs ?? r.computeMs;
   return {
     name: r.name,
     kind: r.kind,
@@ -216,8 +267,15 @@ export function toStepStatus(r: StepResult): StepStatus {
     exitCode: r.exitCode,
     startedAt: r.startedAt,
     finishedAt: r.finishedAt,
+    instance: r.instance,
     ...(r.reason === null ? {} : { reason: r.reason.slice(0, 4000) }),
     ...(showTail ? { tail: r.tail.slice(-16 * 1024) } : {}),
+    ...(r.timings === null ? {} : { timings: r.timings }),
+    ...(compute > 0 || r.timings !== null ? { computeMs: compute } : {}),
+    ...(r.cacheScope === null ? {} : { cacheScope: r.cacheScope }),
+    ...(r.egressDenied === null || r.egressDenied.count === 0
+      ? {}
+      : { egressDenied: r.egressDenied }),
   };
 }
 
@@ -255,28 +313,43 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
     step: WorkflowStep,
   ): Promise<RunOutput> {
     const parsed = RunRequest.safeParse(event.payload);
-    if (!parsed.success)
+    if (!parsed.success) {
       throw new NonRetryableError(`invalid CI run params\n${formatIssues(parsed.error)}`);
+    }
     const req = parsed.data;
+    const limits = resolveLimits(req);
     const startedAt = event.timestamp.toISOString();
 
     let resolved: ResolvedPipeline;
-    if (req.pipeline !== undefined && req.evidenceSteps !== undefined) {
+    if (req.pipeline !== undefined && (req.evidenceSteps !== undefined || req.seed !== undefined)) {
       resolved = {
         ok: true,
         source: "request",
         pipeline: req.pipeline,
-        evidenceSteps: req.evidenceSteps,
+        evidenceSteps: req.evidenceSteps ?? [],
+        durationMs: 0,
       };
     } else {
       try {
         resolved = await step.do(ENGINE_STEPS.plan, PLAN_CONFIG, () => this.resolvePipeline(req));
       } catch (error) {
-        resolved = { ok: false, error: `could not resolve the pipeline: ${errorMessage(error)}` };
+        resolved = {
+          ok: false,
+          error: `could not resolve the pipeline: ${errorMessage(error)}`,
+          durationMs: 0,
+        };
       }
     }
-    if (!resolved.ok) return this.finish(step, req, startedAt, [], [], resolved.error);
-    const { pipeline, evidenceSteps } = resolved;
+    if (!resolved.ok) return this.finish(step, req, startedAt, [], [], resolved.error, resolved);
+    let { pipeline, evidenceSteps } = resolved;
+    if (req.seed !== undefined) {
+      pipeline = seedPipeline(pipeline);
+      evidenceSteps = [];
+      if (pipeline.steps.length === 0) {
+        const error = "the template has no global-scope cached steps to seed";
+        return this.finish(step, req, startedAt, [], [], error, resolved);
+      }
+    }
 
     let prepared: Prepared;
     try {
@@ -284,15 +357,8 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
         this.prepare(req, pipeline, event.timestamp.getTime()),
       );
     } catch (error) {
-      return this.finish(
-        step,
-        req,
-        startedAt,
-        [],
-        [],
-        `prepare failed: ${errorMessage(error)}`,
-        resolved,
-      );
+      const message = `prepare failed: ${errorMessage(error)}`;
+      return this.finish(step, req, startedAt, [], [], message, resolved);
     }
 
     const needsSnapshot = snapshotSources(pipeline.steps);
@@ -301,8 +367,8 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
     const results = new Map<string, Promise<StepResult>>();
     const byName = new Map(pipeline.steps.map((s) => [s.name, s] as const));
     for (const name of topologicalOrder(pipeline.steps)) {
-      const spec = userExec(byName.get(name)!);
-      const chain = parentChain(pipeline.steps, name).map(userExec);
+      const spec = userExec(byName.get(name)!, limits);
+      const chain = parentChain(pipeline.steps, name).map((s) => userExec(s, limits));
       results.set(
         name,
         this.schedule(step, req, prepared, spec, chain, results, needsSnapshot.has(name), null),
@@ -313,16 +379,27 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
 
     const evidenceResults = await Promise.all(
       evidenceSteps.map((e) => {
-        const spec = evidenceExec(e);
+        const spec = evidenceExec(e, limits);
         const chain =
           e.parent === null
             ? []
-            : [...parentChain(pipeline.steps, e.parent), byName.get(e.parent)!].map(userExec);
+            : [...parentChain(pipeline.steps, e.parent), byName.get(e.parent)!].map((s) =>
+                userExec(s, limits),
+              );
         const gate = e.requiresGreen && !green ? "requires every pipeline step to pass" : null;
         return this.schedule(step, req, prepared, spec, chain, results, false, gate);
       }),
     );
 
+    const clamped = [...pipeline.steps, ...evidenceSteps]
+      .filter(
+        (s) =>
+          s.instance !== undefined && clampInstance(s.instance, limits.instance) !== s.instance,
+      )
+      .map(
+        (s) =>
+          `step "${s.name}" runs on ${limits.instance} (requested ${s.instance}; the run's limit)`,
+      );
     return this.finish(
       step,
       req,
@@ -331,7 +408,8 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       evidenceResults,
       undefined,
       resolved,
-      prepared.warnings,
+      [...prepared.warnings, ...clamped],
+      prepared.durationMs,
     );
   }
 
@@ -347,14 +425,25 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
   ): Promise<StepResult> {
     const deps = await Promise.all(spec.deps.map((d) => results.get(d)!));
     const blocked = deps.find((d) => d.status !== "passed");
-    if (blocked !== undefined)
+    if (blocked !== undefined) {
       return notRun(spec, "skipped", `"${blocked.name}" ${blocked.status}`, null);
+    }
     if (gate !== null) return notRun(spec, "skipped", gate, null);
     const parent = spec.parent === null ? null : (deps[spec.deps.indexOf(spec.parent)] ?? null);
     const chainResults = await Promise.all(chain.map((c) => results.get(c.name)!));
+    // Only meaningful on the first execution of the step body; replays use the cached result.
+    const readyAt = Date.now();
     try {
       return await step.do(spec.name, stepConfig(spec.timeoutMinutes), (ctx) =>
-        this.executeStep(req, prepared, spec, parent, chain, chainResults, snapshot, ctx.attempt),
+        this.executeStep(req, prepared, {
+          spec,
+          parent,
+          chain,
+          chainResults,
+          snapshot,
+          attempt: ctx.attempt,
+          readyAt,
+        }),
       );
     } catch (error) {
       const result = notRun(
@@ -372,17 +461,24 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
   protected async executeStep(
     req: CiRunParams,
     prepared: Prepared,
-    spec: ExecSpec,
-    parent: StepResult | null,
-    chain: ExecSpec[],
-    chainResults: StepResult[],
-    snapshot: boolean,
-    attempt: number,
+    s: {
+      spec: ExecSpec;
+      parent: StepResult | null;
+      chain: ExecSpec[];
+      chainResults: StepResult[];
+      snapshot: boolean;
+      attempt: number;
+      readyAt: number;
+    },
   ): Promise<StepResult> {
+    const { spec, parent, chain, chainResults, attempt } = s;
     const store = this.store();
-    const startedAt = new Date().toISOString();
+    const limits = resolveLimits(req);
+    const bodyStart = Date.now();
+    const startedAt = new Date(bodyStart).toISOString();
+    const queueMs = Math.max(0, bodyStart - s.readyAt);
     const logKey = RunKeys.log(req.runId, spec.name);
-    const base = { ...notRun(spec, "skipped", "", logKey), reason: null, startedAt };
+    const base: StepResult = { ...notRun(spec, "skipped", "", logKey), reason: null, startedAt };
     await writeStepRecord(store, req.runId, { ...toStepStatus(base), status: "running" });
     const done = async (r: StepResult): Promise<StepResult> => {
       await writeStepRecord(store, req.runId, toStepStatus(r));
@@ -396,7 +492,8 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
         logKey: null,
         status: "skipped",
         finishedAt: new Date().toISOString(),
-        reason: `the run's ${req.budget.maxMinutes}-minute budget is exhausted`,
+        reason: `the run's ${limits.maxMinutes}-minute limit is exhausted`,
+        timings: { queueMs, totalMs: Date.now() - bodyStart },
       });
     }
     const timeoutSeconds = Math.max(
@@ -408,9 +505,10 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
     if (keys !== null) {
       const hit = await lookupCache(store, keys.read, Date.now());
       if (hit !== null) {
+        const seeded = hit.seededBy === undefined ? "" : ` (seeded for template ${hit.seededBy})`;
         await store.put(
           logKey,
-          `[gittifacts] cache hit: reusing snapshot ${hit.snapshotId} from run ${hit.runId} (commit ${hit.producedBySha}, ${hit.createdAt})\n`,
+          `[gittifacts] cache hit (${hit.scope === "global" ? "global" : "repo"} scope): reusing snapshot ${hit.snapshotId} from run ${hit.runId}${seeded} (commit ${hit.producedBySha}, ${hit.createdAt})\n`,
         );
         return done({
           ...base,
@@ -421,6 +519,8 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
           finishedAt: new Date().toISOString(),
           snapshot: { id: hit.snapshotId, sha: hit.producedBySha },
           cacheKey: hit.key,
+          cacheScope: hit.scope === "global" ? "global" : "repo",
+          timings: { queueMs, totalMs: Date.now() - bodyStart },
         });
       }
     }
@@ -444,49 +544,87 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
           ? { kind: "snapshot", snapshotId: parent.snapshot.id, sha: parent.snapshot.sha }
           : { kind: "image" },
       replay: [],
-      snapshot: snapshot || keys !== null,
+      snapshot: s.snapshot || (keys !== null && keys.write !== null),
       logKey,
       ...(spec.kind === "evidence" ? { evidenceKey: RunKeys.evidence(req.runId, spec.name) } : {}),
+      maxLogBytes: limits.maxLogBytes,
+      network: req.network,
+      ...(keys?.hermeticInputs != null ? { hermeticInputs: keys.hermeticInputs } : {}),
     };
     const runner = this.runner(req.runId, spec.name);
-    let outcome = parseOutcome(await runner.run(job));
+    let calls = 0;
+    let computeMs = 0;
+    const call = async (j: RunnerJobInput): Promise<RunnerOutcome> => {
+      const outcome = parseOutcome(await runner.run(j));
+      calls += 1;
+      computeMs += outcome.computeMs;
+      await writeUsage(store, req.runId, `${attempt}-${calls}`, {
+        step: spec.name,
+        instance: spec.instance,
+        computeMs: outcome.computeMs,
+        logBytes: outcome.log?.bytes ?? 0,
+      });
+      return outcome;
+    };
+    let outcome = await call(job);
 
     if (!outcome.ok && outcome.code === "snapshot-unavailable" && chain.length > 0) {
       // The parent's snapshot is gone (expired or evicted). Forget cache pointers that led to
       // it and rebuild the lineage from the base image inside this step.
-      for (const r of chainResults)
+      for (const r of chainResults) {
         if (r.cacheHit && r.cacheKey !== null) await deleteCachePointer(store, r.cacheKey);
+      }
       const replay: ReplayStep[] = chain.map((c) => ({
         name: c.name,
         command: c.command,
         ...(c.cwd === undefined ? {} : { cwd: c.cwd }),
         ...(c.env === undefined ? {} : { env: c.env }),
       }));
-      outcome = parseOutcome(await runner.run({ ...job, from: { kind: "image" }, replay }));
+      outcome = await call({ ...job, from: { kind: "image" }, replay });
+    }
+
+    let write =
+      keys === null || keys.write === null ? null : { key: keys.write, scope: keys.writeScope };
+    let scope: CacheScope | null = keys?.scope ?? null;
+    let note: string | null = null;
+    if (outcome.ok && outcome.exitCode !== 0 && outcome.hermetic && keys?.fallback != null) {
+      // With only its cache inputs present the command failed, so it needs other repository
+      // files: run it again on the full checkout and cache it for this repository only.
+      note = `cached per repository: "${spec.name}" needs files outside its cache inputs (add them to cache.inputs to share it across repositories)`;
+      const { hermeticInputs: _hermetic, ...full } = job;
+      outcome = await call(full);
+      write = { key: keys.fallback.write, scope: keys.fallback.writeScope };
+      scope = "repo";
     }
 
     if (!outcome.ok) {
-      const message = `[${outcome.code}] ${outcome.message}${outcome.tail === "" ? "" : `\n…${outcome.tail.slice(-TAIL_IN_ERROR)}`}`;
-      if (outcome.code === "aborted" || outcome.code === "invalid-job")
+      const tail = outcome.tail === "" ? "" : `\n…${outcome.tail.slice(-TAIL_IN_ERROR)}`;
+      const message = `[${outcome.code}] ${outcome.message}${tail}`;
+      if (outcome.code === "aborted" || outcome.code === "invalid-job") {
         throw new NonRetryableError(message);
+      }
       throw new Error(message);
     }
 
     const passed = outcome.exitCode === 0;
     let cacheKey: string | null = null;
-    if (passed && keys !== null && outcome.snapshot !== null) {
+    if (passed && write !== null && outcome.snapshot !== null) {
       await writeCachePointer(store, {
         v: 1,
-        key: keys.write,
+        key: write.key,
         snapshotId: outcome.snapshot.id,
         step: spec.name,
-        scope: keys.writeScope,
+        scope: write.scope,
         producedBySha: req.headSha,
         runId: req.runId,
         createdAt: new Date().toISOString(),
+        ...(req.seed === undefined || scope !== "global" ? {} : { seededBy: req.seed.templateId }),
       });
-      cacheKey = keys.write;
+      cacheKey = write.key;
     }
+    const reasons = [outcome.timedOut ? `timed out after ${timeoutSeconds}s` : null, note].filter(
+      (r): r is string => r !== null,
+    );
     return done({
       ...base,
       status: passed ? "passed" : "failed",
@@ -497,14 +635,22 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       logKey: outcome.log.key,
       snapshot: outcome.snapshot === null ? null : { id: outcome.snapshot.id, sha: req.headSha },
       cacheKey,
+      cacheScope: cacheKey === null ? null : scope,
       tail: passed ? "" : outcome.tail,
-      reason: outcome.timedOut ? `timed out after ${timeoutSeconds}s` : null,
+      reason: reasons.length === 0 ? null : reasons.join("; "),
       evidence: outcome.evidence,
+      timings: { queueMs, ...outcome.timings, totalMs: Date.now() - bodyStart },
+      computeMs,
+      egressDenied:
+        outcome.egress.denied === 0
+          ? null
+          : { count: outcome.egress.denied, hosts: outcome.egress.hosts },
     });
   }
 
   /** `plan` step body: decide the pipeline and evidence steps for this run. */
   protected async resolvePipeline(req: CiRunParams): Promise<ResolvedPipeline> {
+    const t0 = Date.now();
     const sha = req.pipelineFrom === "head" ? req.headSha : req.baseSha;
     const facts = await this.withRepo(req.artifactsRepo, async (repo) => {
       const root = await listRoot(repo, sha);
@@ -530,7 +676,7 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       source = "request";
     } else if (features.hasPipelineFile) {
       const planned = await this.planFromFile(req, sha);
-      if (!planned.ok) return planned;
+      if (!planned.ok) return { ...planned, durationMs: Date.now() - t0 };
       pipeline = planned.pipeline;
       source = "file";
     } else {
@@ -538,17 +684,21 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       source = "default";
     }
     const evidenceSteps =
-      req.evidenceSteps ?? defaultEvidenceSteps(evidenceOptionsFor(pipeline, features));
+      req.seed !== undefined
+        ? []
+        : (req.evidenceSteps ?? defaultEvidenceSteps(evidenceOptionsFor(pipeline, features)));
     const issues = evidenceStepIssues(pipeline, evidenceSteps);
-    if (issues.length > 0) return { ok: false, error: issues.join("\n") };
+    if (issues.length > 0) {
+      return { ok: false, error: issues.join("\n"), durationMs: Date.now() - t0 };
+    }
     await writeJson(this.store(), RunKeys.pipeline(req.runId), {
       v: 1,
       source,
-      pipeline,
+      pipeline: req.seed === undefined ? pipeline : seedPipeline(pipeline),
       evidenceSteps,
       resolvedAt: new Date().toISOString(),
     });
-    return { ok: true, source, pipeline, evidenceSteps };
+    return { ok: true, source, pipeline, evidenceSteps, durationMs: Date.now() - t0 };
   }
 
   private async planFromFile(
@@ -563,13 +713,21 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       baseSha: req.baseSha,
       file: CI_PIPELINE_FILE,
       logKey: RunKeys.log(req.runId, PLAN_RUNNER_STEP),
+      network: req.network,
     });
     const outcome = PlanOutcome.safeParse(raw);
-    if (!outcome.success)
+    if (!outcome.success) {
       throw new Error(
         `the runner returned an invalid plan outcome\n${formatIssues(outcome.error)}`,
       );
+    }
     const o = outcome.data;
+    await writeUsage(this.store(), req.runId, `plan-${Date.now()}`, {
+      step: PLAN_RUNNER_STEP,
+      instance: "standard-1",
+      computeMs: o.computeMs,
+      logBytes: 0,
+    });
     if (!o.ok) {
       if (o.code === "aborted") throw new NonRetryableError(o.message);
       // Infrastructure problems are retried by step.do; nothing else is the author's fault.
@@ -589,61 +747,110 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       return { ok: false, error: `${CI_PIPELINE_FILE}: plan output is not JSON\n${stderr}` };
     }
     const spec = parsePipelineSpec(json);
-    if (!spec.ok)
+    if (!spec.ok) {
       return {
         ok: false,
         error: `${CI_PIPELINE_FILE} describes an invalid pipeline\n${spec.error}`,
       };
+    }
     return { ok: true, pipeline: { ...spec.value, source: "file" } };
   }
 
-  /** `prepare` step body: cache keys from the head tree, and the budget deadline. */
+  /** The runner image reference, so a new image never reuses snapshots of the old one. */
+  protected async runnerImage(req: CiRunParams): Promise<string | null> {
+    const raw = await this.runner(req.runId, ENGINE_STEPS.prepare).describe();
+    const parsed = RunnerDescription.safeParse(raw);
+    return parsed.success ? parsed.data.image : null;
+  }
+
+  /** `prepare` step body: cache keys from the head tree, and the deadline. */
   protected async prepare(
     req: CiRunParams,
     pipeline: PipelineSpec,
     startMs: number,
   ): Promise<Prepared> {
-    const deadline = startMs + req.budget.maxMinutes * 60_000;
-    const scopes = req.cache ?? {
-      write: `repo:${req.artifactsRepo}`,
-      read: [`repo:${req.artifactsRepo}`],
-    };
+    const t0 = Date.now();
+    const limits = resolveLimits(req);
+    const deadline = startMs + limits.maxMinutes * 60_000;
+    const repoWrite = req.cache?.write ?? `repo:${req.artifactsRepo}`;
+    const repoRead = req.cache?.read ?? [repoWrite];
+    const global = req.seed !== undefined ? "read-write" : (req.cache?.global ?? "read-write");
     const namespace = this.env.CI_CACHE_NAMESPACE ?? "v1";
-    const cached = pipeline.steps.filter((s) => s.cache !== undefined);
+    const cached = pipeline.steps.filter((st) => st.cache !== undefined);
     const cacheKeys: Prepared["cacheKeys"] = {};
     const warnings: string[] = [];
-    if (cached.length === 0) return { deadline, cacheKeys, warnings };
+    if (cached.length === 0) {
+      return { deadline, image: null, cacheKeys, warnings, durationMs: Date.now() - t0 };
+    }
+    let image: string | null = null;
+    try {
+      image = await this.runnerImage(req);
+    } catch (error) {
+      warnings.push(`could not read the runner image reference: ${errorMessage(error)}`);
+    }
     try {
       const blobs = await this.withRepo(req.artifactsRepo, (repo) => walkTree(repo, req.headSha));
-      for (const s of cached) {
-        const inputs = s.cache?.inputs ?? [];
-        const keyFor = (scope: string) =>
-          computeCacheKey({
-            scope,
-            namespace,
-            step: { name: s.name, command: s.command, cwd: s.cwd, env: s.env },
-            inputs,
-            blobs,
-          });
-        const write = await keyFor(scopes.write);
-        if (write === null) {
+      for (const st of cached) {
+        const inputs = st.cache?.inputs ?? [];
+        const matched = matchBlobs(blobs, inputs);
+        if (matched.length === 0) {
           warnings.push(
-            `step "${s.name}": no file matches cache inputs ${inputs.join(", ")}; not cached`,
+            `step "${st.name}": no file matches cache inputs ${inputs.join(", ")}; not cached`,
           );
-          cacheKeys[s.name] = null;
+          cacheKeys[st.name] = null;
           continue;
         }
-        const read: string[] = [];
-        for (const scope of scopes.read) {
-          const k = await keyFor(scope);
-          if (k !== null && !read.includes(k)) read.push(k);
+        const step = { name: st.name, command: st.command, cwd: st.cwd, env: st.env };
+        const keyFor = async (kind: "repo" | "global", scope: string): Promise<string> =>
+          (await computeCacheKey({ kind, scope, namespace, image, step, inputs, blobs })) ?? "";
+        const repoReadKeys: string[] = [];
+        for (const scope of repoRead) {
+          const k = await keyFor("repo", scope);
+          if (!repoReadKeys.includes(k)) repoReadKeys.push(k);
         }
-        cacheKeys[s.name] = { write, writeScope: scopes.write, read };
+        const repoWriteKey = await keyFor("repo", repoWrite);
+        let scope = effectiveCacheScope(st) ?? "repo";
+        if (scope === "global" && global === "read-write" && matched.length > MAX_HERMETIC_INPUTS) {
+          warnings.push(
+            `step "${st.name}": ${matched.length} cache input files exceed ${MAX_HERMETIC_INPUTS}; cached per repository`,
+          );
+          scope = "repo";
+        }
+        if (scope === "global" && global !== "off") {
+          const globalKey = await keyFor("global", "global");
+          cacheKeys[st.name] =
+            global === "read-write"
+              ? {
+                  scope: "global",
+                  read: [globalKey],
+                  write: globalKey,
+                  writeScope: "global",
+                  hermeticInputs: matched.map((b) => b.path),
+                  fallback: { write: repoWriteKey, writeScope: repoWrite },
+                }
+              : {
+                  scope: "global",
+                  read: [globalKey, ...repoReadKeys],
+                  write: repoWriteKey,
+                  writeScope: repoWrite,
+                  hermeticInputs: null,
+                  fallback: null,
+                };
+        } else {
+          cacheKeys[st.name] = {
+            scope: "repo",
+            read: repoReadKeys,
+            write: repoWriteKey,
+            writeScope: repoWrite,
+            hermeticInputs: null,
+            fallback: null,
+          };
+        }
       }
     } catch (error) {
       warnings.push(`caching is disabled for this run: ${errorMessage(error)}`);
     }
-    return { deadline, cacheKeys, warnings };
+    return { deadline, image, cacheKeys, warnings, durationMs: Date.now() - t0 };
   }
 
   private async finish(
@@ -652,27 +859,27 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
     startedAt: string,
     userResults: StepResult[],
     evidenceResults: StepResult[],
-    error?: string,
-    resolved?: ResolvedPipeline,
+    error: string | undefined,
+    resolved: ResolvedPipeline,
     extraWarnings: string[] = [],
+    prepareMs?: number,
   ): Promise<RunOutput> {
     return step.do(ENGINE_STEPS.finalize, FINALIZE_CONFIG, async () => {
-      const summary = await this.buildSummary(
-        req,
-        startedAt,
+      const summary = await this.buildSummary(req, startedAt, {
         userResults,
         evidenceResults,
         error,
         resolved,
         extraWarnings,
-      );
+        prepareMs,
+      });
       await writeJson(this.store(), RunKeys.summary(req.runId), summary);
       await this.runSink(req).onRunFinished(summary);
       return {
         status: summary.status,
         finishedAt: summary.finishedAt,
         ...(summary.error === undefined ? {} : { error: summary.error.slice(0, 8000) }),
-        steps: summary.steps.map((s) => ({ name: s.name, status: s.status })),
+        steps: summary.steps.map((st) => ({ name: st.name, status: st.status })),
         evidenceItems: summary.evidence.length,
       };
     });
@@ -681,35 +888,43 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
   protected async buildSummary(
     req: CiRunParams,
     startedAt: string,
-    userResults: StepResult[],
-    evidenceResults: StepResult[],
-    error: string | undefined,
-    resolved: ResolvedPipeline | undefined,
-    extraWarnings: string[],
+    r: {
+      userResults: StepResult[];
+      evidenceResults: StepResult[];
+      error: string | undefined;
+      resolved: ResolvedPipeline;
+      extraWarnings: string[];
+      prepareMs: number | undefined;
+    },
   ): Promise<RunSummary> {
     const evidence: EvidenceItem[] = [];
     const evidenceErrors: { step: string; message: string }[] = [];
-    for (const r of evidenceResults) {
-      const capture = r.evidence;
+    for (const e of r.evidenceResults) {
+      const capture = e.evidence;
       if (capture !== null && "key" in capture) {
         const items = z.array(EvidenceItem).safeParse(await readJson(this.store(), capture.key));
         if (items.success) evidence.push(...items.data);
         else
-          evidenceErrors.push({ step: r.name, message: "stored evidence is missing or invalid" });
+          evidenceErrors.push({ step: e.name, message: "stored evidence is missing or invalid" });
       } else if (capture !== null) {
-        evidenceErrors.push({ step: r.name, message: capture.error });
+        evidenceErrors.push({ step: e.name, message: capture.error });
       } else {
         evidenceErrors.push({
-          step: r.name,
-          message: `${r.status}${r.reason === null ? "" : `: ${r.reason}`}`,
+          step: e.name,
+          message: `${e.status}${e.reason === null ? "" : `: ${e.reason}`}`,
         });
       }
     }
-    const passed = error === undefined && userResults.every((r) => r.status === "passed");
-    const warnings = [
-      ...(resolved?.ok === true ? resolved.pipeline.warnings : []),
-      ...extraWarnings,
-    ];
+    const all = [...r.userResults, ...r.evidenceResults];
+    const usageRecords = await readUsage(this.store(), req.runId);
+    const perStep = computeByStep(usageRecords);
+    const finishedAt = new Date();
+    const runStart = Date.parse(startedAt);
+    const starts = r.userResults
+      .map((u) => (u.startedAt === null ? Number.NaN : Date.parse(u.startedAt)))
+      .filter((t) => !Number.isNaN(t));
+    const passed = r.error === undefined && r.userResults.every((u) => u.status === "passed");
+    const warnings = [...(r.resolved.ok ? r.resolved.pipeline.warnings : []), ...r.extraWarnings];
     return {
       id: req.runId,
       changeId: req.changeId,
@@ -718,23 +933,34 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       engine: "workflows",
       status: passed ? "passed" : "failed",
       startedAt,
-      finishedAt: new Date().toISOString(),
-      steps: [...userResults, ...evidenceResults].map(toStepStatus),
-      pipelineSource: resolved?.ok === true ? resolved.source : null,
+      finishedAt: finishedAt.toISOString(),
+      steps: all.map((u) => toStepStatus(u, perStep.get(u.name) ?? u.computeMs)),
+      pipelineSource: r.resolved.ok ? r.resolved.source : null,
       warnings,
-      ...(error === undefined ? {} : { error: error.slice(0, 16_000) }),
+      ...(r.error === undefined ? {} : { error: r.error.slice(0, 16_000) }),
       evidence,
       evidenceErrors: evidenceErrors.map((e) => ({
         step: e.step,
         message: e.message.slice(0, 4000),
       })),
+      usage: summarizeUsage(usageRecords, all.filter((u) => u.cacheHit).length),
+      timings: {
+        totalMs: Math.max(0, finishedAt.getTime() - runStart),
+        ...(r.resolved.durationMs > 0 ? { planMs: r.resolved.durationMs } : {}),
+        ...(r.prepareMs === undefined ? {} : { prepareMs: r.prepareMs }),
+        ...(starts.length === 0
+          ? {}
+          : { firstStepMs: Math.max(0, Math.min(...starts) - runStart) }),
+      },
+      ...(req.seed === undefined ? {} : { seed: { templateId: req.seed.templateId } }),
     };
   }
 }
 
 function parseOutcome(raw: unknown): RunnerOutcome {
   const parsed = RunnerOutcome.safeParse(raw);
-  if (!parsed.success)
+  if (!parsed.success) {
     throw new Error(`the runner returned an invalid outcome\n${formatIssues(parsed.error)}`);
+  }
   return parsed.data;
 }
