@@ -1,0 +1,6 @@
+{
+  "name": "clock-api",
+  "main": "dist/index.js",
+  "compatibility_date": "2026-09-30",
+  "build": { "command": "pnpm run build", "watch_dir": "src" }
+}

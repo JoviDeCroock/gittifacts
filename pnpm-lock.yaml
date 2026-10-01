@@ -108,6 +108,9 @@ importers:
       '@app/ci-engine':
         specifier: workspace:*
         version: link:../../packages/ci-engine
+      '@app/conventions':
+        specifier: workspace:*
+        version: link:../../packages/conventions
       '@app/domain':
         specifier: workspace:*
         version: link:../../packages/domain

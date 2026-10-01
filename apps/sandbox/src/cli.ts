@@ -17,6 +17,7 @@ import { EvidenceItem, type ReproducibleTransform } from "@app/evidence";
 import { AFFECTED_PREFIX, affectedCommand } from "./commands/affected.js";
 import { coverage } from "./commands/coverage.js";
 import { dependencies } from "./commands/dependencies.js";
+import { DETECT_PREFIX, detectCommand } from "./commands/detect.js";
 import { changeDiff } from "./commands/diff.js";
 import {
   coverageError,
@@ -48,7 +49,7 @@ export const EVIDENCE_PREFIX = "::evidence::";
 export const PLAN_PREFIX = "::plan::";
 export const PREVIEW_PREFIX = "::preview::";
 export const MERGE_PREFIX = "::merge::";
-export { AFFECTED_PREFIX };
+export { AFFECTED_PREFIX, DETECT_PREFIX };
 
 export const EVIDENCE_KINDS = [
   "red-green",
@@ -74,6 +75,7 @@ Usage:
   gittifacts-runner merge-attempt --base <sha> --onto <sha> --head <sha>
   gittifacts-runner apply-resolution --patch <file> [--onto <sha>]
   gittifacts-runner affected --base <sha> --head <sha> [--coverage-map <file>]
+  gittifacts-runner detect [--sha <sha>]   (import detection: ${DETECT_PREFIX}<DetectReport>)
 
 Merge queue:
   merge-attempt     replay base..head onto --onto (3-way, explicit merge base); prints
@@ -393,6 +395,12 @@ export async function main(argv: readonly string[]): Promise<number> {
 
   if (command === "merge-attempt" || command === "apply-resolution") {
     return mergeCommand(command, opts);
+  }
+
+  if (command === "detect") {
+    return detectCommand({ cwd: opts.cwd, sha: opts.head }, (doc) =>
+      emit(DETECT_PREFIX, doc, opts.out),
+    );
   }
 
   if (command === "affected") {

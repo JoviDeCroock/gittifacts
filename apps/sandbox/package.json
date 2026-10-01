@@ -12,6 +12,7 @@
   "dependencies": {
     "@app/affected": "workspace:*",
     "@app/ci-engine": "workspace:*",
+    "@app/conventions": "workspace:*",
     "@app/domain": "workspace:*",
     "@app/evidence": "workspace:*",
     "@stryker-mutator/core": "10.0.0",

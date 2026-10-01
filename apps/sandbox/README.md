@@ -28,6 +28,7 @@ Both contexts produce the same image. `Dockerfile.dockerignore` limits either co
 | `merge-attempt --base <sha> --onto <sha> --head <sha>` | `::merge::{status: clean\|conflict\|error, files[], newSha \| conflictSha, markers, upstreamCommits, messages}` (`src/commands/merge.ts`) |
 | `apply-resolution --patch <file> [--onto <sha>]` | `::merge::{status: resolved\|error, parentSha, newSha, files}` |
 | `affected --base <sha> --head <sha> [--coverage-map <file>] [--public-api-evidence <file>]` | `::affected::<AffectedSet>` (`@app/affected`; not an EvidenceItem, hence its own marker) |
+| `detect [--sha <sha>]` | `::detect::<DetectReport>` (`@app/conventions` `inspectRepo`; import detection, see below) |
 
 - **Evidence kinds:** `red-green`, `coverage`, `mutation`, `public-api`, `dependencies`,
   `transforms`, `sensitive-paths`, `test-run`, and `policy`. `evidence policy` returns the
@@ -169,6 +170,29 @@ AffectedSet = {
   `analyzers: [{ name: "gittifacts-runner", complete: false, note }]`.
 - **Cost.** On this monorepo (≈810 files, ≈630 scanned, ≈4 MB of source), the whole command
   takes about 1.2 s: reading the blobs ≈0.4 s, the analysis ≈0.4 s cold, and node startup.
+
+## Import detection (`detect`)
+
+`detect` describes an imported repository so the platform can propose its `.platform/ci.ts`,
+`.platform/policy.ts` and `AGENTS.md` as a Plan + Change that a human approves. The analysis is the
+pure `@app/conventions` `inspectRepo`; the command lists the tracked files (`git ls-files`, or a
+walk that skips `node_modules`/`dist` outside git) and reads them. Nothing is installed or run,
+so it works with `--network none`.
+
+- **Output.** `DetectReport` (schema in `@app/conventions`): `features` and `confidence` from
+  `detectProject`, `uncertain[]` (one sentence per guess, each becomes a Plan risk),
+  `packageManager`, `testRunner` (refined from vitest/jest configs when the test script doesn't
+  name it), the install/test/build/typecheck/lint commands, `tsconfig` (`strict`, `extends`,
+  project references), `workers` (the `name` of every wrangler config outside test fixtures),
+  `workspaces`, and `buildScriptsNeedingApproval`.
+- **pnpm 11 build scripts.** pnpm refuses to install (`ERR_PNPM_IGNORED_BUILDS`) while a
+  dependency's install script is not approved in `pnpm-workspace.yaml` `allowBuilds` (or
+  `onlyBuiltDependencies`). pnpm lockfiles don't record install scripts, so the candidates are the
+  lockfile's packages that are on a list of well-known install-script packages, minus approved
+  and denied ones; `uncertain` says the list may be incomplete. npm lockfiles record
+  `hasInstallScript`, which goes into `notes` (npm runs them). Detection never approves anything.
+- **Fail closed.** A crash still prints a document: `confidence: "low"` and the failure as the
+  first `uncertain` sentence.
 
 ## How each signal is measured
 

@@ -1,0 +1,3 @@
+# Standalone project (not part of any monorepo). pnpm 11 reads its settings from this file.
+allowBuilds:
+  esbuild: true

@@ -1,0 +1,17 @@
+{
+  "name": "clock-api",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.27.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=neutral --target=es2023 --outfile=dist/index.js --log-level=warning"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  }
+}
