@@ -14,7 +14,7 @@ import { clone, type GitAuth, splitRemote } from "../git.js";
 import { bundledCommands, IDEMPOTENCY_PROPERTY } from "../tools/commands.js";
 import { isRecord, toWireTool } from "../tools/schema.js";
 import { type Builtin, bool, builtinSpec, str } from "./builtin.js";
-import { resultDocument, toolFailure } from "./tool.js";
+import { DEFAULT_REQUEST_TIMEOUT_MS, resultDocument, toolFailure } from "./tool.js";
 
 /** The launch templates (onboarding §3); the platform validates the id too. */
 export const TEMPLATES = ["workers-api", "preact-app", "ts-library", "static-site"] as const;
@@ -187,7 +187,7 @@ export const init: Builtin = {
           ...(description !== undefined ? { description } : {}),
           ...(IDEMPOTENCY_PROPERTY in declared ? { idempotencyKey: key } : {}),
         };
-        const r = await mcp.tools.create_project(args);
+        const r = await mcp.tools.create_project(args, { timeout: DEFAULT_REQUEST_TIMEOUT_MS });
         if (r.isError) throw toolFailure(spec, r);
         return resultDocument(r);
       },

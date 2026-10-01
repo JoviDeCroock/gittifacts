@@ -100,6 +100,17 @@ export async function resolveRemoteCommand(ctx: Ctx, name: string): Promise<Comm
   }
 }
 
+/** Default client-side budget: above the platform's default long-poll (120s), unlike the SDK's 60s. */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
+
+/** Long-polling tools take `timeoutSec`; give the request that long plus a margin. */
+export function requestTimeoutMs(args: Record<string, unknown>): number {
+  const sec = args.timeoutSec;
+  return typeof sec === "number" && Number.isFinite(sec)
+    ? Math.max(DEFAULT_REQUEST_TIMEOUT_MS, (sec + 30) * 1000)
+    : DEFAULT_REQUEST_TIMEOUT_MS;
+}
+
 export async function runToolCommand(
   ctx: Ctx,
   spec: CommandSpec,
@@ -117,7 +128,10 @@ export async function runToolCommand(
     if (spec.idempotencyArg) args.idempotencyKey = key;
   }
   const target = ctx.target();
-  const doc = await callTool(ctx, target, spec, args, { idempotencyKey: key });
+  const doc = await callTool(ctx, target, spec, args, {
+    idempotencyKey: key,
+    request: { timeout: requestTimeoutMs(args), resetTimeoutOnProgress: true },
+  });
   let out: Record<string, unknown> = withCommands(doc, bundledCommands());
   if (spec.tool === "whoami") {
     out = {

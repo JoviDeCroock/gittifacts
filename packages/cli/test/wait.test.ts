@@ -192,4 +192,24 @@ describe("gittifacts wait", () => {
     });
     h.cleanup();
   });
+
+  it("the wait-for-change mirror gives the long-poll more than the SDK's 60s default", async () => {
+    const seen: (number | undefined)[] = [];
+    const h = harness({ env: { GITTIFACTS_HOST: "https://gittifacts.example" } });
+    h.io.connect = mockConnector({
+      tools: {
+        wait_for_change: (_args, options) => {
+          seen.push(options?.timeout);
+          return waitResult("merged", "reached");
+        },
+      },
+    });
+    expect(
+      (await run(h, ["wait-for-change", "chg_1", "--until", "merged", "--timeout-sec", "600"]))
+        .code,
+    ).toBe(0);
+    expect((await run(h, ["wait-for-change", "chg_1", "--until", "merged"])).code).toBe(0);
+    expect(seen).toEqual([630_000, 180_000]);
+    h.cleanup();
+  });
 });
