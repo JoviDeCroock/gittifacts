@@ -241,6 +241,23 @@ describe("apply-resolution", () => {
     expect(merged).toContain("<<<<<<<<<<<<< upstream");
   });
 
+  it("an empty patch keeps the merge-attempt tree and is still committed by the resolver", async () => {
+    const r = repo(
+      { "gone.ts": "export const x = 1;\n" },
+      { "gone.ts": null },
+      { "gone.ts": "export const x = 2;\n" },
+    );
+    const merged = await attempt(r);
+    const conflictSha = merged.conflictSha as string;
+    const doc = await apply(r, conflictSha, "");
+    expect(doc).toMatchObject({ status: "resolved", parentSha: conflictSha, files: [] });
+    const sha = doc.newSha as string;
+    expect(gitSync(r.dir, ["rev-parse", `${sha}^{tree}`])).toBe(
+      gitSync(r.dir, ["rev-parse", `${conflictSha}^{tree}`]),
+    );
+    expect(gitSync(r.dir, ["log", "-1", "--format=%an", sha])).toBe("gittifacts-resolver");
+  });
+
   it("reports a patch that does not apply", async () => {
     const { r, conflictSha } = await conflicted();
     const doc = await apply(

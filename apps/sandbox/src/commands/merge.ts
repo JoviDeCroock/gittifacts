@@ -466,9 +466,15 @@ export async function applyResolution(
   try {
     const patchFile = join(tmp, "resolution.patch");
     writeFileSync(patchFile, patch);
-    const applied = await git(worktree, ["apply", "--index", "--whitespace=nowarn", patchFile], {
-      allowFail: true,
-    });
+    // An empty patch is a valid resolution: the merge-attempt commit already holds the answer
+    // (e.g. a modify/delete conflict resolved by keeping the surviving side). It is still
+    // committed, so the resolver's decision is recorded and attributable.
+    const applied =
+      patch.trim() === ""
+        ? { code: 0, stderr: "" }
+        : await git(worktree, ["apply", "--index", "--whitespace=nowarn", patchFile], {
+            allowFail: true,
+          });
     if (applied.code !== 0) {
       return {
         status: "error",
