@@ -30,7 +30,7 @@ describe("landing page", () => {
 
   it("links the human action and every machine document", () => {
     const hrefs = new Set(all(/href="([^"]+)"/g));
-    for (const href of ["/signin", "/start", "/llms.txt", "/openapi.json", "/mcp/server-card"]) {
+    for (const href of ["/signin", "/start", "/llms.txt", "/openapi.json", "/mcp/server-card", "/docs"]) {
       expect(hrefs.has(href), href).toBe(true);
     }
     // In-page anchors point at sections that exist.

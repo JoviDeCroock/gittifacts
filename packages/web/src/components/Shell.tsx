@@ -17,11 +17,13 @@ import { Who } from "./ui.js";
 
 export { BrandMark };
 
-const NAV: { href: string; label: string; icon: IconId; match: (path: string) => boolean }[] = [
+/** `server`: a page the Worker serves (not an SPA route), so the router must not intercept it. */
+const NAV: { href: string; label: string; icon: IconId; match: (path: string) => boolean; server?: boolean }[] = [
   { href: "/", label: "Repositories", icon: "layers", match: (p) => p === "/" || p.startsWith("/repos") || p.startsWith("/changes") || p.startsWith("/plans") },
   { href: "/audit", label: "Audit log", icon: "scroll-text", match: (p) => p.startsWith("/audit") },
   { href: "/agents", label: "Agents", icon: "key", match: (p) => p.startsWith("/agents") },
   { href: "/settings/integrations", label: "Integrations", icon: "plug", match: (p) => p.startsWith("/settings/integrations") },
+  { href: "/docs", label: "Docs", icon: "file-text", match: () => false, server: true },
 ];
 
 const sidebarRepos = { value: null as RepoSummary[] | null };
@@ -92,7 +94,7 @@ function Sidebar() {
         <ul>
           {NAV.map((n) => (
             <li key={n.href}>
-              <a href={n.href} class="nav-link" aria-current={n.match(path) ? "page" : undefined}>
+              <a href={n.href} class="nav-link" aria-current={n.match(path) ? "page" : undefined} target={n.server ? "_top" : undefined}>
                 <Icon name={n.icon} />
                 {n.label}
               </a>
@@ -171,7 +173,7 @@ function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
           <ul class="drawer__nav">
             {NAV.map((n) => (
               <li key={n.href}>
-                <a href={n.href} class="nav-link" aria-current={n.match(path) ? "page" : undefined}>
+                <a href={n.href} class="nav-link" aria-current={n.match(path) ? "page" : undefined} target={n.server ? "_top" : undefined}>
                   <Icon name={n.icon} />
                   {n.label}
                 </a>

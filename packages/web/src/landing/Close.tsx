@@ -31,7 +31,9 @@ const THEMES: { id: "system" | "light" | "dark"; label: string; icon: IconId }[]
 ];
 
 const LINKS = [
+  { href: "/docs", label: "Documentation" },
   { href: "/start", label: "Start guide for agents" },
+  { href: "/docs/llms-full.txt", label: "Docs for agents (llms-full.txt)" },
   { href: "/llms.txt", label: "llms.txt" },
   { href: "/openapi.json", label: "OpenAPI" },
   { href: "/mcp/server-card", label: "MCP server card" },
