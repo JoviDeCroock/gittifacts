@@ -86,7 +86,8 @@ Merge queue:
                     public API, Workers) for the conflict graph: ${AFFECTED_PREFIX}<AffectedSet>
 
 Evidence kinds:
-  red-green        new/changed tests: fail on base (head's tests overlaid), pass on head
+  red-green        tests failing on base and passing on head: new/changed ones (head's tests
+                   overlaid on base) and pre-existing ones (base as committed, failures confirmed)
   coverage         changed-line coverage at head (vitest v8 / jest istanbul)
   mutation         Stryker mutation score on changed lines
   public-api       exported API of TypeScript packages, base vs head (.d.ts surface)

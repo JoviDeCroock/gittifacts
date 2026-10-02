@@ -158,7 +158,7 @@ export const REASON_CODES = {
     0,
     "pass",
     ["red-green"],
-    "Red-green proof: {tests} new/changed test(s) fail on base and pass on head.",
+    "Red-green proof: {tests} test(s) fail on base and pass on head.",
     'Claimed fix and every red-green item has verdict "proven".',
   ),
   "red-green.not-required": spec(
@@ -172,14 +172,14 @@ export const REASON_CODES = {
     2,
     "fail",
     ["red-green"],
-    "Claimed fix, but the new/changed tests do not fail on base and pass on head.",
+    "Claimed fix, but no listed test fails on base, or one still fails on head.",
     'Claimed fix and a red-green item has verdict "not-proven".',
   ),
   "red-green.no-tests": spec(
     2,
     "fail",
     ["red-green"],
-    "Claimed fix with no new or changed tests.",
+    "Claimed fix, but no test fails on base and passes on head (none is new, changed or fixed).",
     'Claimed fix and a red-green item has verdict "no-tests".',
   ),
   "signal.missing.red-green": spec(

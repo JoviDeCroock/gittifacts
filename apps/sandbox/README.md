@@ -196,18 +196,34 @@ so it works with `--network none`.
 
 ## How each signal is measured
 
-- **red-green.**
+- **red-green.** A test that fails on base and passes on head proves the change, whether the
+  change added it, changed it, or found it already there (an imported repo's failing test, fixed
+  by a source-only change).
   1. The new or changed test files are read from the diff. Within them, the changed test
      cases are found from the syntax tree plus the diff lines. The whole file is used when that
      can't be decided: a dynamic title, or top-level setup code.
-  2. Those files are run at head with the repo's own vitest or jest binary and a JSON reporter.
-  3. They are run again in a clean `git worktree` of base, with head's test and test-support
-     files overlaid.
-  4. Base dependencies are head's `node_modules`, symlinked, when the dependency graph is
-     identical (lockfiles, install config, and the dependency fields of every manifest).
-     Otherwise the base is installed. If that install fails, the item is an error, because a
-     red result on a broken base proves nothing.
-  5. A test that is absent on base, or whose file can't load there, is `missing`.
+  2. A clean `git worktree` of base gets dependencies: head's `node_modules`, symlinked, when the
+     dependency graph is identical (lockfiles, install config, and the dependency fields of every
+     manifest). Otherwise the base is installed, but only when there are new/changed tests; if
+     that install fails, the item is an error, because a red result on a broken base proves
+     nothing.
+  3. **Pre-existing failures.** The whole suite runs on base as committed (nothing overlaid), with
+     base's own runner. Failing files run a second time: only a test that fails both times
+     counts, so a flaky failure is never a red.
+  4. Head's test and test-support files are overlaid on base, and the new/changed test files run
+     there. A new/changed test that is absent on base, or whose file can't load there, is
+     `missing` (red).
+  5. At head: the new/changed test files plus the files of base's failures.
+  6. Listed: the new/changed tests; base failures that pass at head (fixed); base failures that
+     still fail at head (listed, so a fix that doesn't work is never proven). A base failure with
+     no result at head (deleted, renamed, skipped) is noted, not listed. A pre-existing test
+     whose file failed to load on base is `error` there.
+  7. Verdict (pure producer): `proven` iff ≥ 1 listed test is red on base and all are green on
+     head; `no-tests` when nothing is listed.
+  - Looking for pre-existing failures can only add or block a proof. When it can't run, the
+    note says why and the item rests on the new/changed tests. Without any (no supported
+    runner, the working tree not at head, a dependency graph that differs), it is `no-tests`,
+    never an error: exactly what it was before pre-existing tests counted.
 - **coverage.**
   - The whole suite runs once with `include` set to the changed source files, so an unloaded
     changed file counts as uncovered instead of being absent from the report.

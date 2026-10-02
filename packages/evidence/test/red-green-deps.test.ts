@@ -61,6 +61,21 @@ describe("redGreenVerdict", () => {
     ).toBe("proven");
   });
 
+  it("pre-existing tests follow the same rule as new ones (a fix of an already failing test)", () => {
+    // A source-only fix: the only listed test already existed and failed on base.
+    expect(redGreenVerdict([t("old")], [r("old", "fail")], [r("old", "pass")])).toBe("proven");
+    // Its file failed to load on base (base was broken), it loads and passes on head.
+    expect(redGreenVerdict([t("old")], [r("old", "error")], [r("old", "pass")])).toBe("proven");
+    // A pre-existing failure the change does not fix blocks even a new test's proof.
+    expect(
+      redGreenVerdict(
+        [t("new"), t("old")],
+        [r("old", "fail")],
+        [r("new", "pass"), r("old", "fail")],
+      ),
+    ).toBe("not-proven");
+  });
+
   it("details explain each test", () => {
     expect(redGreenDetails([t("a"), t("a"), t("b")], [r("a", "error")], [r("a", "pass")])).toEqual([
       { id: "a", base: "error", head: "pass", red: true, green: true },

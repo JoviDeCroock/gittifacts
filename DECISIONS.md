@@ -926,3 +926,41 @@ started, from whatever policy it had then (60 min with the default policy).
 agent proposes a `.platform/policy.ts` change (`stages [50, 100]`, `stageMinutes 2`, `watchMinutes 3`,
 `minRequests 20`, `maxErrorRateIncrease 0.05`). It is Lane 2, a human approves it, and the merge queue merges it
 before the deploy target is set. There is no create-time policy override and no agent bypass.
+
+## 2026-10-02 — Red/green proof counts pre-existing failing tests (O6 platform fix)
+
+**Triggered by:** O6 design review 2026-10-02 (no live run yet). Eval task 2 ("Import <repo> and fix the failing
+test", fixture `fixtures/imports/clock-api`) must end with red/green proof. `evidence red-green` only looked at
+new/changed test files, so the natural fix (one line in `src/clock.ts`, the failing test already there) was
+`no-tests` → `red-green.no-tests` (Lane 2), and the task could never pass. Fixed in the platform, not the prompt.
+
+**Semantics.** A test that fails on base and passes on head proves the change, whether the change added it, changed
+it, or found it already there. `tests[]` = the new/changed tests (unchanged) + pre-existing tests that fail on base
+**as committed** and pass on head (fixed) + pre-existing tests that fail on base and still fail on head (listed, so a
+fix that doesn't work is never proven). The verdict rule is unchanged (`proven` iff ≥ 1 listed test is red on base and
+all are green on head), so `@app/evidence` only changed docs and a test; the classifier only changed reason texts.
+
+**How (apps/sandbox).** Base first: the whole suite on a pristine base worktree (nothing overlaid; base's own runner;
+head's `node_modules` linked when the dependency graph is identical). Failing files run a **second** time and only
+failures in both runs count: a flaky failure would otherwise be a false proof of any claimed fix. Then head's test
+files are overlaid and the new/changed test files run (as before); head runs the new/changed files plus the files of
+base's failures. Not reused from `evidence test-run`: each evidence command is its own process with its own scratch
+directory, and running base first means a healthy main costs one base suite run and no extra head run.
+
+**Bounds.**
+- A pre-existing test whose file fails to load on base is `error` there (base was broken; a fix of that is a fix).
+  The pristine checkout matters: with head's support files overlaid, an unchanged test could fail to load on base
+  only because of the overlay, which would be a false red.
+- The scan never installs dependencies on its own. When base and head install different graphs and there are no
+  new/changed tests, it is skipped with a note (an install just to look, and a base with head's deps would not be
+  base as committed). Likewise without a supported runner or with the tree not at head: `no-tests` + a note, never
+  an error, i.e. exactly the old result. It can only add a proof or block one.
+- A base failure with no result at head (deleted, renamed, skipped) is noted, not listed. Regressions (pass → fail)
+  are `test-run`'s job, not red/green's.
+- Cost: every Change now runs base's suite once (twice for failing files). Fixture `bugfix-without-test` stays
+  `no-tests` → Lane 2 (its seeded bug isn't caught by any base test); the 9-fixture e2e is unchanged, and a new e2e
+  (`apps/sandbox/test/import-fixture.e2e.test.ts`) proves clock-api's source-only fix.
+
+**Follow-up (not in this change, other owners):** AGENTS.md (`packages/conventions/src/agents-md.ts`, templates) still
+says a fix "must add or change a test", and the `red-green-missing` fix hint says "adds or changes no test". Both are
+still a valid way to get proof, but they should also say that fixing an already failing test counts.

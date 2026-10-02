@@ -168,7 +168,7 @@ CI sandbox runs the tools and passes the output in.
 | Producer | Input | Output |
 |---|---|---|
 | `parseUnifiedDiff` | `git diff [-U0] -M` text | files (status, renames, binary, modes), hunks, `changedLines` (head line numbers) |
-| `redGreenVerdict` / `redGreenProof` | listed tests + base/head results | `red-green`. Proven iff ≥1 test is red on base and all are green on head. Flaky counts against. |
+| `redGreenVerdict` / `redGreenProof` | listed tests + base/head results | `red-green`. Proven iff ≥1 listed test is red on base and all are green on head. Flaky counts against. Listed: new/changed tests, and pre-existing tests that fail on base (they pass on head: a fix; they still fail: a fix that doesn't work). |
 | `semverBump` / `dependencyDiff` | npm specs / `package.json` texts by path | `dependencies`, including new or changed `preinstall`/`install`/`postinstall`/`prepare` scripts |
 | `parseLcov` / `parseIstanbul` / `changedLineCoverage` | lcov or `coverage-final.json` + changed lines | `coverage` over executable changed lines. Files missing from the report are listed in `unmeasuredFiles`. |
 | `parseStrykerReport` / `mutationScore` | Stryker `mutation.json` + changed lines | `mutation`. Only mutants on changed lines count. If there are none, the item is `skipped`, never a free 100%. |

@@ -50,9 +50,11 @@ export const RedGreenProof = z.object({
     results: z.array(z.object({ id: z.string(), outcome: TestOutcome })),
   }),
   /**
-   * proven: >=1 new/changed test fails (or is missing) on base and every one passes on head.
-   * not-proven: tests exist but the fail-then-pass pattern does not hold.
-   * no-tests: the change has no new or changed tests.
+   * `tests`: the change's new/changed tests, plus pre-existing tests that fail on base (as
+   * committed) and pass, or still fail, on head.
+   * proven: >=1 listed test fails (or is missing) on base and every one passes on head.
+   * not-proven: tests are listed but the fail-then-pass pattern does not hold.
+   * no-tests: nothing is listed (no new or changed test, and no test fails on base).
    */
   verdict: z.enum(["proven", "not-proven", "no-tests"]),
 });
