@@ -21,6 +21,7 @@ import type { Services } from "../app-env.js";
 import { disablePrincipal } from "../auth/principals.js";
 import { projectClaims, unclaimedCreations } from "../db/schema.js";
 import { ApiError, conflict } from "../errors.js";
+import { refuseAnonymousPushImport } from "../import/push-project.js";
 import type { AnonymousClient } from "../limits/client.js";
 import { unclaimedLimits } from "../limits/config.js";
 import { takeCreation } from "../limits/creation.js";
@@ -111,9 +112,10 @@ export async function createUnclaimedProject(
   raw: unknown,
   idempotencyKey?: string,
 ): Promise<ProjectCreated> {
+  const input = CreateProjectInput.parse(raw);
+  refuseAnonymousPushImport(input);
   const state = await unclaimedCreationState(svc.store, svc.env.FLAGS);
   if (!state.enabled) throw creationDisabled(svc.origin);
-  const input = CreateProjectInput.parse(raw);
   const limits = unclaimedLimits(svc.env);
   const now = svc.clock.now();
   const db = svc.store.db;

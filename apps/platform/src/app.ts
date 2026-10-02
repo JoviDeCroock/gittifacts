@@ -6,6 +6,7 @@ import { authFor, callerOf, requirePrincipal } from "./auth/middleware.js";
 import { registerClaimRoutes } from "./claim/routes.js";
 import { getCoordinator } from "./coordinator.js";
 import { fixFor, toErrorResponse } from "./errors.js";
+import { registerImportGrantRoutes } from "./import/push-grant-routes.js";
 import { registerImportRoutes } from "./import/routes.js";
 import { registerIntegrationRoutes } from "./integrations/routes.js";
 import { RateLimited } from "./limits/creation.js";
@@ -94,6 +95,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerRepoRoutes(app);
   registerMemberRoutes(app);
   registerImportRoutes(app);
+  registerImportGrantRoutes(app);
   registerQueueRoutes(app);
   registerPlanRoutes(app);
   registerChangeRoutes(app);

@@ -224,10 +224,15 @@ const CreateProjectArgs = z
     template: z.string().min(1).max(100).optional(),
     from: z.string().url().startsWith("https://").max(500).optional(),
     description: z.string().max(500).optional(),
+    importMode: z.enum(["push"]).optional(),
   })
   .refine((v) => v.template === undefined || v.from === undefined, {
     message: "pass template or from, not both",
     path: ["from"],
+  })
+  .refine((v) => v.importMode === undefined || (v.template ?? v.from) === undefined, {
+    message: "importMode push creates an empty project: no template or from",
+    path: ["importMode"],
   });
 
 export function buildTools(backend: McpBackend) {

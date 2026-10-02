@@ -11,6 +11,7 @@ import {
 } from "@app/coordinator";
 import { repoAccessPort } from "./access/port.js";
 import type { Bindings } from "./app-env.js";
+import { guardImportGrants } from "./import/push-grant-runtime.js";
 import { unclaimedLimits } from "./limits/config.js";
 import { initialCommitProvider } from "./projects/initial-commit.js";
 import { buildPorts } from "./runtime/ports.js";
@@ -45,10 +46,18 @@ export function facadeOptions(
   };
 }
 
-/** Request facades check repo membership on every actor-driven call (src/access/). */
-export const getCoordinator: CoordinatorFactory = (env, _ctx, origin) =>
-  createCoordinator(
-    buildPorts(env, "default", { overrides: { access: repoAccessPort(env) } }),
-    cloudflareBindings(env),
-    facadeOptions(origin, env),
+/**
+ * Request facades check repo membership on every actor-driven call (src/access/), and close a
+ * live import-by-push grant before any Change starts (src/import/push-grant.ts).
+ */
+export const getCoordinator: CoordinatorFactory = (env, ctx, origin) =>
+  guardImportGrants(
+    createCoordinator(
+      buildPorts(env, "default", { overrides: { access: repoAccessPort(env) } }),
+      cloudflareBindings(env),
+      facadeOptions(origin, env),
+    ),
+    env,
+    ctx,
+    origin,
   );

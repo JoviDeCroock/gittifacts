@@ -365,6 +365,7 @@ export type introspection = {
      * @param args.name Project (and repo) name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>.
      * @param args.template Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty project.
      * @param args.from Import a public https git repository (e.g. GitHub) instead of a template.
+     * @param args.importMode Private repos: "push" creates an empty project whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in).
      * @param args.description One line about the project.
      * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
      */
@@ -393,6 +394,12 @@ export type introspection = {
             "maxLength": 500,
             "pattern": "^https://",
             "description": "Import a public https git repository (e.g. GitHub) instead of a template."
+          },
+          "importMode": {
+            "enum": [
+              "push"
+            ],
+            "description": "Private repos: \"push\" creates an empty project whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in)."
           },
           "description": {
             "type": "string",

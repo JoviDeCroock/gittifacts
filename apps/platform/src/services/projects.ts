@@ -23,6 +23,7 @@ import { auditorReadOnly } from "../access/route.js";
 import type { Caller, Services } from "../app-env.js";
 import { restrictedRepoIds } from "../auth/repo-scope.js";
 import { ApiError } from "../errors.js";
+import { createPushImportProject } from "../import/push-project.js";
 import { previewUrlFor, previewZone } from "../previews/ids.js";
 import { recordProjectCreated } from "../projects/onboarding.js";
 
@@ -32,11 +33,17 @@ export const CreateProjectInput = z
     template: z.string().min(1).max(100).optional(),
     from: z.string().url().startsWith("https://").max(500).optional(),
     description: z.string().max(500).optional(),
+    /** Private repos: an empty project its human owner pushes into (src/import/push-project.ts). */
+    importMode: z.enum(["push"]).optional(),
   })
   .strict()
   .refine((v) => v.template === undefined || v.from === undefined, {
     message: "pass template or from, not both",
     path: ["from"],
+  })
+  .refine((v) => v.importMode === undefined || (v.template ?? v.from) === undefined, {
+    message: "importMode push creates an empty project: no template or from",
+    path: ["importMode"],
   });
 export type CreateProjectInput = z.infer<typeof CreateProjectInput>;
 
@@ -105,6 +112,9 @@ export async function createProject(
   if (isPlatformAuditor(caller.principal, svc.env)) throw auditorReadOnly();
   assertMayCreate(caller);
   const input = CreateProjectInput.parse(raw);
+  if (input.importMode === "push") {
+    return createPushImportProject(svc, caller, input, idempotencyKey);
+  }
   return createProjectAs(svc, caller.principal, input, idempotencyKey);
 }
 

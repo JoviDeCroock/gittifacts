@@ -59,6 +59,21 @@ export const ProjectCreatedSchema = z
       .nullable()
       .describe("The Change running the first CI and preview: wait_for_change on it"),
     nextSteps: z.array(NextStepSchema),
+    importGrant: z
+      .object({
+        url: z.string().describe("The project's main repo remote"),
+        branch: z.string(),
+        token: z
+          .string()
+          .describe("Artifacts write token for the main repo: one push, then revoked"),
+        expiresAt: z.string(),
+        command: z.string(),
+        closesWhen: z.string(),
+      })
+      .optional()
+      .describe(
+        "importMode push only: the one-time grant to push the history (closes at the first push, the first Change or after 30 minutes)",
+      ),
   })
   .meta({ id: "ProjectCreated" });
 
@@ -68,7 +83,7 @@ const create = createRoute({
   tags: ["projects"],
   summary:
     "Create a project in one call: repo + .platform/* + AGENTS.md + first CI + first preview",
-  description: `Template (${TEMPLATE_IDS.join(", ")}), import (\`from\`: a public https git URL) or empty. Returns at once; CI and the preview finish in the background (wait on \`bootstrapChangeId\`). Not stored by the idempotency middleware (the response holds a push grant): the key is forwarded, so a retry with the same Idempotency-Key returns the same project with a fresh grant.\n\n**No credentials needed**: without an Authorization header (and while the kill switch allows it) you get an *unclaimed* project, \`token\` (a Bearer token for that project only, valid until it expires) and \`claimUrl\` for a human. Unclaimed projects expire unless claimed and have hard limits (see /start). 429 \`rate-limited\` per IP, network or platform-wide; 503 \`creation-disabled\` when switched off. Without credentials an Idempotency-Key must be at least 16 characters.`,
+  description: `Template (${TEMPLATE_IDS.join(", ")}), import (\`from\`: a public https git URL), import by push (\`importMode: "push"\`: private repos; a signed-in human owner gets an empty project and a one-time \`importGrant\`, closed at the first push, the first Change or after 30 minutes) or empty. Returns at once; CI and the preview finish in the background (wait on \`bootstrapChangeId\`). Not stored by the idempotency middleware (the response holds a push grant): the key is forwarded, so a retry with the same Idempotency-Key returns the same project with a fresh grant.\n\n**No credentials needed**: without an Authorization header (and while the kill switch allows it) you get an *unclaimed* project, \`token\` (a Bearer token for that project only, valid until it expires) and \`claimUrl\` for a human. Unclaimed projects expire unless claimed and have hard limits (see /start). 429 \`rate-limited\` per IP, network or platform-wide; 503 \`creation-disabled\` when switched off. Without credentials an Idempotency-Key must be at least 16 characters.`,
   // Credentials are optional: none → an unclaimed project.
   security: [{}, ...SECURITY],
   request: {
@@ -79,6 +94,12 @@ const create = createRoute({
         template: TemplateId.optional(),
         from: z.string().url().startsWith("https://").max(500).optional(),
         description: z.string().max(500).optional(),
+        importMode: z
+          .enum(["push"])
+          .optional()
+          .describe(
+            "Private repos: an empty project and a one-time `importGrant` its human owner pushes the history with. Humans only (signed-in session).",
+          ),
       }),
     ),
   },

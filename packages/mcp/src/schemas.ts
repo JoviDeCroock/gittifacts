@@ -250,6 +250,11 @@ export const CreateProjectInput = {
       pattern: "^https://",
       description: "Import a public https git repository (e.g. GitHub) instead of a template.",
     },
+    importMode: {
+      enum: ["push"],
+      description:
+        'Private repos: "push" creates an empty project whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in).',
+    },
     description: { type: "string", maxLength: 500, description: "One line about the project." },
     idempotencyKey,
   },

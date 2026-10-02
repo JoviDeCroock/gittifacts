@@ -2,6 +2,7 @@ export type {
   ClassificationSummary,
   CreateProjectArgs,
   GitRemote,
+  ImportGrantData,
   LaneCountsData,
   McpBackend,
   McpCaller,

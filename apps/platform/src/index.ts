@@ -8,7 +8,8 @@ import { createApp } from "./app.js";
 import type { Bindings } from "./app-env.js";
 import { runExpiry } from "./claim/expire-runtime.js";
 import { COORDINATOR_OPTIONS } from "./coordinator.js";
-import { onPushEvent, runWebhookQueue, runWebhookSweep } from "./integrations/worker.js";
+import { platformPushObserver, runImportGrantSweep } from "./import/push-grant-runtime.js";
+import { runWebhookQueue, runWebhookSweep } from "./integrations/worker.js";
 import { withUnclaimedLimits } from "./limits/ci-quota.js";
 import { handlePreviewRequest } from "./previews/gateway.js";
 import { isPreviewHost, previewZone } from "./previews/ids.js";
@@ -24,8 +25,9 @@ configureCoordinatorRuntime<Bindings>({
   coordinatorOptions: COORDINATOR_OPTIONS,
   // The agent-native merge queue (MergeQueue DO): scratch-repo jobs, BatchRunWorkflow, resolver.
   mergeQueue: (env, ports) => buildQueueRuntime(env, ports),
-  // Every push (default branch, change forks) → `push` webhooks of installed integrations.
-  onPushEvent: (env, push) => onPushEvent(env, push),
+  // Every push (default branch, change forks) → `push` webhooks of installed integrations; the
+  // first push to a repo with an import-by-push grant closes it (src/import/push-grant.ts).
+  onPushEvent: (env, push) => platformPushObserver(env, push),
 });
 
 export { CiEgressGateway, CiRunWorkflow, Runner } from "@app/ci-engine";
@@ -55,10 +57,12 @@ export default {
       ? handlePreviewRequest(request, env)
       : app.fetch(request, env, ctx),
   // Cron (wrangler.jsonc triggers.crons): delete unclaimed projects whose TTL ran out; re-queue
-  // integration webhook deliveries a lost queue send left pending.
+  // integration webhook deliveries a lost queue send left pending; close import-by-push grants
+  // past their TTL (and finish unconfirmed revocations).
   scheduled: (_controller, env, ctx) => {
     ctx.waitUntil(runExpiry(env).then(() => undefined));
     ctx.waitUntil(runWebhookSweep(env).then(() => undefined));
+    ctx.waitUntil(runImportGrantSweep(env).then(() => undefined));
   },
   // WEBHOOK_QUEUE consumer: signed integration webhook deliveries (src/integrations/delivery.ts).
   queue: (batch, env) => runWebhookQueue(batch, env),

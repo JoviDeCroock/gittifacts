@@ -78,6 +78,20 @@ export interface CreateProjectArgs {
   template?: string | undefined;
   from?: string | undefined;
   description?: string | undefined;
+  /** "push": an empty project whose human owner pushes the history (humans only). */
+  importMode?: "push" | undefined;
+}
+
+/** Import by push: the one-time grant a human owner pushes a repo's history with. */
+export interface ImportGrantData {
+  /** The project's main repo remote. */
+  url: string;
+  branch: string;
+  /** Artifacts write token for the main repo; closes at the first push, first Change or TTL. */
+  token: string;
+  expiresAt: string;
+  command: string;
+  closesWhen: string;
 }
 
 export interface NextStepData {
@@ -99,6 +113,8 @@ export interface ProjectCreated {
   claimUrl: string | null;
   bootstrapChangeId: string | null;
   nextSteps: NextStepData[];
+  /** Only for `importMode: "push"` (a human caller). */
+  importGrant?: ImportGrantData | undefined;
 }
 
 export type RepoRoleData = "owner" | "maintainer" | "reviewer" | "reader";
