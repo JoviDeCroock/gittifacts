@@ -105,6 +105,16 @@ export async function takeCreation(
   if (refused === null) return;
   await refundAll(env, taken, atMs);
   const { k, r } = refused;
+  // Workers Logs, not the audit log: an attack must not be able to flood the audit chain.
+  console.warn(
+    JSON.stringify({
+      event: "unclaimed-creation-rate-limited",
+      scope: k.scope,
+      window: r.window,
+      asn: client.asn,
+      ipHash: client.ipHash.slice(0, 12),
+    }),
+  );
   throw new RateLimited(
     k.scope,
     r.retryAfterSec,
