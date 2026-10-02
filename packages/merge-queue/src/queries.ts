@@ -5,7 +5,15 @@
 import { conflicts } from "./conflict.js";
 import { flakeRate, predict } from "./predict.js";
 import { compareOrder, effectiveRank } from "./priority.js";
-import type { Batch, EjectReason, EntryState, FreezeReason, HoldReason, Lane, QueueEntry } from "./schema.js";
+import type {
+  Batch,
+  EjectReason,
+  EntryState,
+  FreezeReason,
+  HoldReason,
+  Lane,
+  QueueEntry,
+} from "./schema.js";
 import { TERMINAL_STATES } from "./schema.js";
 import { isFrozen, type QueueState } from "./state.js";
 
@@ -38,7 +46,9 @@ function waitingOrder(s: QueueState, now: number): QueueEntry[] {
 }
 
 function chainOf(s: QueueState, trackId: string): Batch[] {
-  return (s.tracks[trackId]?.chain ?? []).map((id) => s.batches[id]).filter((b): b is Batch => b !== undefined);
+  return (s.tracks[trackId]?.chain ?? [])
+    .map((id) => s.batches[id])
+    .filter((b): b is Batch => b !== undefined);
 }
 
 function entriesOf(b: Batch): string[] {
@@ -71,13 +81,21 @@ export function entryStatus(s: QueueState, changeId: string, now: number): Entry
     hold: e.hold,
     lane: e.lane,
     trackId: e.trackId,
-    predictedPassProbability: e.prediction?.p ?? (TERMINAL_STATES.has(e.state) ? null : predict(s, e).p),
+    predictedPassProbability:
+      e.prediction?.p ?? (TERMINAL_STATES.has(e.state) ? null : predict(s, e).p),
     frozen,
     ejectReason: e.ejectReason,
     mergedSha: e.mergedSha,
   };
   if (TERMINAL_STATES.has(e.state)) {
-    return { ...base, batch: null, position: null, etaSeconds: null, blocking: [], reason: e.state };
+    return {
+      ...base,
+      batch: null,
+      position: null,
+      etaSeconds: null,
+      blocking: [],
+      reason: e.state,
+    };
   }
   const b = e.batchId === null ? undefined : s.batches[e.batchId];
   if (b !== undefined) {
@@ -86,11 +104,15 @@ export function entryStatus(s: QueueState, changeId: string, now: number): Entry
     const ahead = chain.slice(0, Math.max(0, pos)).flatMap(entriesOf);
     let reason: string;
     if (frozen && e.priority !== "revert" && e.priority !== "incident")
-      reason = "queue is frozen: speculating, but only reverts and incident fixes land until it thaws";
-    else if (b.state === "bisecting") reason = `batch ${b.id} failed; bisecting to find the culprit`;
-    else if (b.state === "passed") reason = ahead.length > 0 ? `passed; landing after ${ahead.join(", ")}` : "passed; landing";
+      reason =
+        "queue is frozen: speculating, but only reverts and incident fixes land until it thaws";
+    else if (b.state === "bisecting")
+      reason = `batch ${b.id} failed; bisecting to find the culprit`;
+    else if (b.state === "passed")
+      reason = ahead.length > 0 ? `passed; landing after ${ahead.join(", ")}` : "passed; landing";
     else if (b.state === "landing") reason = "landing (revalidating on main / CAS)";
-    else reason = `testing in batch ${b.id} (track ${b.trackId})${ahead.length ? ` on top of ${ahead.length} change(s)` : ""}`;
+    else
+      reason = `testing in batch ${b.id} (track ${b.trackId})${ahead.length ? ` on top of ${ahead.length} change(s)` : ""}`;
     return {
       ...base,
       batch: { id: b.id, state: b.state, size: entriesOf(b).length, chainPosition: pos },
@@ -130,7 +152,8 @@ export function entryStatus(s: QueueState, changeId: string, now: number): Entry
     blocking = hits.map((h) => h.change);
     if (hits.length > 1)
       reason = `waiting on conflicting ${hits.map((h) => `Change ${h.change} in track ${h.track}`).join(" and ")}`;
-    else if (hits.length === 1) reason = `waiting for a speculation slot in track ${hits[0]?.track} (conflicts with ${hits[0]?.change})`;
+    else if (hits.length === 1)
+      reason = `waiting for a speculation slot in track ${hits[0]?.track} (conflicts with ${hits[0]?.change})`;
   }
   const tracks = Math.max(1, Object.keys(s.tracks).length);
   const rounds = 1 + Math.floor(Math.max(0, position) / (tracks * s.config.maxBatchSize));
@@ -149,7 +172,12 @@ export function enqueueReply(
   s: QueueState,
   changeId: string,
   now: number,
-): { position: number; track: string | null; etaSeconds: number; predictedPassProbability: number } | null {
+): {
+  position: number;
+  track: string | null;
+  etaSeconds: number;
+  predictedPassProbability: number;
+} | null {
   const st = entryStatus(s, changeId, now);
   if (st === null) return null;
   return {
@@ -202,7 +230,12 @@ export function overview(s: QueueState, now: number): QueueOverview {
     tracks: Object.values(s.tracks).map((t) => ({
       id: t.id,
       express: t.express,
-      batches: chainOf(s, t.id).map((b) => ({ id: b.id, state: b.state, entries: entriesOf(b), kind: b.kind })),
+      batches: chainOf(s, t.id).map((b) => ({
+        id: b.id,
+        state: b.state,
+        entries: entriesOf(b),
+        kind: b.kind,
+      })),
     })),
     landing: s.landing
       .map((id) => s.batches[id])

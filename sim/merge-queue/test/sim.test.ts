@@ -10,7 +10,13 @@ import { getScenario } from "../src/scenarios.js";
 import { type RunMetrics, simulate } from "../src/sim.js";
 import { generate } from "../src/workload.js";
 
-function short(name: string, seed: number, hours: number, mode = "full", invariantEvery = 0): RunMetrics {
+function short(
+  name: string,
+  seed: number,
+  hours: number,
+  mode = "full",
+  invariantEvery = 0,
+): RunMetrics {
   const w = generate({ ...getScenario(name), hours, drainHours: 4 }, seed);
   return simulate(w, { mode, config: modeConfig(mode), invariantEvery });
 }

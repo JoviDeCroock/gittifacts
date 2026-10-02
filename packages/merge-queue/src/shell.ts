@@ -74,7 +74,19 @@ export interface QueueShell {
  */
 export type ShellOriginatedEvent = Extract<
   CoreEventInput,
-  { type: "Enqueued" | "Dequeued" | "Reprioritized" | "PostMergeCheckFailed" | "Freeze" | "Thaw" | "Unquarantined" | "MainAdvanced" | "Tick" | "ConfigUpdated" }
+  {
+    type:
+      | "Enqueued"
+      | "Dequeued"
+      | "Reprioritized"
+      | "PostMergeCheckFailed"
+      | "Freeze"
+      | "Thaw"
+      | "Unquarantined"
+      | "MainAdvanced"
+      | "Tick"
+      | "ConfigUpdated";
+  }
 >;
 
 /** The BatchRunWorkflow: one instance per `StartBatchRun.runId`, built on the existing CiEngine. */
@@ -85,17 +97,28 @@ export interface BatchRunWorkflowContract {
    * listed test targets plus the pipeline's non-test steps (revalidation), and report the tested
    * tree. Report as soon as a required step fails (fail fast). Infra errors → outcome "errored".
    */
-  run(params: CommandOf<"StartBatchRun">): Promise<Extract<CoreEventInput, { type: "BatchResult" }>>;
+  run(
+    params: CommandOf<"StartBatchRun">,
+  ): Promise<Extract<CoreEventInput, { type: "BatchResult" }>>;
 }
 
 /** Deploy-train shell: Flagship, gradual deployments, Workers Issues. */
 export interface TrainShell {
   /** Upload a version containing the train's Changes, deploy; → `TrainDeployed{ versionId }` or `TrainDeployFailed`. */
-  startDeployTrain(cmd: Extract<TrainCommand, { type: "StartDeployTrain" }>, emit: (e: TrainEventInput) => Promise<void>): Promise<void>;
+  startDeployTrain(
+    cmd: Extract<TrainCommand, { type: "StartDeployTrain" }>,
+    emit: (e: TrainEventInput) => Promise<void>,
+  ): Promise<void>;
   /** `Flags.off(flagKey)`; watch telemetry → `RegressionCleared` (or nothing: the machine escalates on Tick). */
-  killFlag(cmd: Extract<TrainCommand, { type: "KillFlag" }>, emit: (e: TrainEventInput) => Promise<void>): Promise<void>;
+  killFlag(
+    cmd: Extract<TrainCommand, { type: "KillFlag" }>,
+    emit: (e: TrainEventInput) => Promise<void>,
+  ): Promise<void>;
   /** Roll the Worker back to before the train → `RollbackDone`. */
-  rollbackTrain(cmd: Extract<TrainCommand, { type: "RollbackTrain" }>, emit: (e: TrainEventInput) => Promise<void>): Promise<void>;
+  rollbackTrain(
+    cmd: Extract<TrainCommand, { type: "RollbackTrain" }>,
+    emit: (e: TrainEventInput) => Promise<void>,
+  ): Promise<void>;
   /** Open the pure-inverse revert Change and enqueue it (`priority: "revert"`, `automaticRevert: true`). */
   requestRevert(cmd: Extract<TrainCommand, { type: "RequestRevert" }>): Promise<void>;
   /** Workers Issues webhook → `IssueReported{ worker, versionId, issueId, frames }`; merges → `ChangeMerged`. */

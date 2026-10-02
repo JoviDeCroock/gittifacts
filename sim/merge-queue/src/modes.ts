@@ -8,16 +8,35 @@ export const MODES: Record<string, { label: string; config: () => QueueConfig }>
   full: { label: "agent-native queue (all mechanisms)", config: () => queueConfig() },
   serial: { label: "baseline: strictly serial (coordinator's queue)", config: serialConfig },
   "batch-all": { label: "baseline: batch everything, no conflict graph", config: batchAllConfig },
-  "no-speculation": { label: "no speculation (1 batch in flight per track)", config: () => queueConfig({ maxSpeculationDepth: 1 }) },
-  "no-bisection": { label: "no bisection (re-test each unit alone)", config: () => queueConfig({ features: { bisection: false } }) },
-  "no-flake-recheck": { label: "no flake re-check", config: () => queueConfig({ features: { flakeRecheck: false } }) },
-  "no-resolver": { label: "no conflict resolver (eject conflicts)", config: () => queueConfig({ features: { resolver: false } }) },
-  "no-revalidation": { label: "no impacted-target revalidation (stale tracks re-run in full)", config: () => queueConfig({ features: { revalidation: false } }) },
-  "no-fairness": { label: "no fair queuing / in-flight cap", config: () => queueConfig({ features: { fairness: false } }) },
+  "no-speculation": {
+    label: "no speculation (1 batch in flight per track)",
+    config: () => queueConfig({ maxSpeculationDepth: 1 }),
+  },
+  "no-bisection": {
+    label: "no bisection (re-test each unit alone)",
+    config: () => queueConfig({ features: { bisection: false } }),
+  },
+  "no-flake-recheck": {
+    label: "no flake re-check",
+    config: () => queueConfig({ features: { flakeRecheck: false } }),
+  },
+  "no-resolver": {
+    label: "no conflict resolver (eject conflicts)",
+    config: () => queueConfig({ features: { resolver: false } }),
+  },
+  "no-revalidation": {
+    label: "no impacted-target revalidation (stale tracks re-run in full)",
+    config: () => queueConfig({ features: { revalidation: false } }),
+  },
+  "no-fairness": {
+    label: "no fair queuing / in-flight cap",
+    config: () => queueConfig({ features: { fairness: false } }),
+  },
 };
 
 export function modeConfig(name: string): QueueConfig {
   const m = MODES[name];
-  if (m === undefined) throw new Error(`unknown mode ${name}; known: ${Object.keys(MODES).join(", ")}`);
+  if (m === undefined)
+    throw new Error(`unknown mode ${name}; known: ${Object.keys(MODES).join(", ")}`);
   return m.config();
 }

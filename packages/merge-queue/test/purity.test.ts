@@ -3,7 +3,16 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // The core must be pure and IO-free: time comes from events, randomness only in the simulator.
-const FORBIDDEN = [/Date\.now/, /new Date\(/, /Math\.random/, /\bfetch\(/, /setTimeout|setInterval/, /crypto\./, /cloudflare:/, /process\./];
+const FORBIDDEN = [
+  /Date\.now/,
+  /new Date\(/,
+  /Math\.random/,
+  /\bfetch\(/,
+  /setTimeout|setInterval/,
+  /crypto\./,
+  /cloudflare:/,
+  /process\./,
+];
 
 describe("purity", () => {
   it("src/ uses no clock, randomness or IO", () => {

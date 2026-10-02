@@ -7,14 +7,14 @@ import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueueConfig } from "@app/merge-queue";
+import { formatRun } from "./format.js";
 import { type GateJob, type GatesRun, gateJobs, runJob, summarizeGates } from "./gates.js";
-import type { RunMetrics } from "./sim.js";
 import { MODES, modeConfig } from "./modes.js";
 import { renderReport } from "./report.js";
-import { getScenario, type Scenario, SCENARIOS } from "./scenarios.js";
+import { getScenario, SCENARIOS, type Scenario } from "./scenarios.js";
+import type { RunMetrics } from "./sim.js";
 import { simulate } from "./sim.js";
 import { generate } from "./workload.js";
-import { formatRun } from "./format.js";
 
 function arg(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`);
@@ -54,13 +54,31 @@ function configOverrides(c: QueueConfig, args: string[]): QueueConfig {
 /** Run one job in a child process (same tsx loader), return its JSON result. */
 function runChild(j: GateJob): Promise<ReturnType<typeof runJob>> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [...process.execArgv, process.argv[1] ?? "", "one", "--scenario", j.scenario, "--seed", String(j.seed), "--mode", j.mode], { stdio: ["ignore", "pipe", "inherit"] });
+    const child = spawn(
+      process.execPath,
+      [
+        ...process.execArgv,
+        process.argv[1] ?? "",
+        "one",
+        "--scenario",
+        j.scenario,
+        "--seed",
+        String(j.seed),
+        "--mode",
+        j.mode,
+      ],
+      { stdio: ["ignore", "pipe", "inherit"] },
+    );
     let out = "";
     child.stdout.on("data", (d: Buffer) => {
       out += d.toString();
     });
     child.on("error", reject);
-    child.on("close", (code) => (code === 0 ? resolve(JSON.parse(out) as ReturnType<typeof runJob>) : reject(new Error(`job ${JSON.stringify(j)} exited ${code}`))));
+    child.on("close", (code) =>
+      code === 0
+        ? resolve(JSON.parse(out) as ReturnType<typeof runJob>)
+        : reject(new Error(`job ${JSON.stringify(j)} exited ${code}`)),
+    );
   });
 }
 
@@ -77,17 +95,21 @@ async function gates(args: string[]): Promise<number> {
       runs.push(r.metrics);
       workloads.push(r.workload);
       const m = r.metrics;
-      process.stdout.write(`[${runs.length}/${jobs.length}] ${j.scenario} #${j.seed} ${j.mode}: merged ${m.merged}/${m.arrivals} p95 ${m.timeInQueueMin.p95.toFixed(1)}m ci ${m.ciRatio.toFixed(2)}x red ${m.mainRedEvents} (${(m.wallMs / 1000).toFixed(0)}s)\n`);
+      process.stdout.write(
+        `[${runs.length}/${jobs.length}] ${j.scenario} #${j.seed} ${j.mode}: merged ${m.merged}/${m.arrivals} p95 ${m.timeInQueueMin.p95.toFixed(1)}m ci ${m.ciRatio.toFixed(2)}x red ${m.mainRedEvents} (${(m.wallMs / 1000).toFixed(0)}s)\n`,
+      );
     }
   };
   await Promise.all(Array.from({ length: parallel }, worker));
-  const order = (r: RunMetrics) => jobs.findIndex((j) => j.scenario === r.scenario && j.seed === r.seed && j.mode === r.mode);
+  const order = (r: RunMetrics) =>
+    jobs.findIndex((j) => j.scenario === r.scenario && j.seed === r.seed && j.mode === r.mode);
   runs.sort((a, b) => order(a) - order(b));
   const result = summarizeGates(seeds, runs, workloads);
   const out = arg(args, "out") ?? join(import.meta.dirname, "..", "report.md");
   writeFileSync(out, renderReport(result));
   process.stdout.write(`\nreport: ${out}\n`);
-  for (const g of result.gates) process.stdout.write(`${g.pass ? "PASS" : "FAIL"}  ${g.name}: ${g.detail}\n`);
+  for (const g of result.gates)
+    process.stdout.write(`${g.pass ? "PASS" : "FAIL"}  ${g.name}: ${g.detail}\n`);
   return result.gates.every((g) => g.pass) ? 0 : 1;
 }
 
@@ -95,7 +117,11 @@ async function main(): Promise<number> {
   const args = process.argv.slice(2).filter((a) => a !== "--");
   if (args[0] === "gates") return gates(args);
   if (args[0] === "one") {
-    const r = runJob({ scenario: arg(args, "scenario") ?? "gate-200", seed: Number(arg(args, "seed") ?? "1"), mode: arg(args, "mode") ?? "full" });
+    const r = runJob({
+      scenario: arg(args, "scenario") ?? "gate-200",
+      seed: Number(arg(args, "seed") ?? "1"),
+      mode: arg(args, "mode") ?? "full",
+    });
     process.stdout.write(JSON.stringify(r));
     return 0;
   }
@@ -104,8 +130,13 @@ async function main(): Promise<number> {
   const modes = (arg(args, "mode") ?? "full").split(",");
   const workload = generate(scenario, seed);
   for (const mode of modes) {
-    if (MODES[mode] === undefined) throw new Error(`unknown mode ${mode}; known: ${Object.keys(MODES).join(", ")}`);
-    const m = simulate(workload, { mode, config: configOverrides(modeConfig(mode), args), invariantEvery: Number(arg(args, "check") ?? "0") });
+    if (MODES[mode] === undefined)
+      throw new Error(`unknown mode ${mode}; known: ${Object.keys(MODES).join(", ")}`);
+    const m = simulate(workload, {
+      mode,
+      config: configOverrides(modeConfig(mode), args),
+      invariantEvery: Number(arg(args, "check") ?? "0"),
+    });
     if (args.includes("--json")) process.stdout.write(`${JSON.stringify(m, null, 2)}\n`);
     else process.stdout.write(`${formatRun(m, workload)}\n`);
   }
@@ -113,7 +144,9 @@ async function main(): Promise<number> {
 }
 
 if (args0IsList()) {
-  process.stdout.write(`scenarios: ${Object.keys(SCENARIOS).join(", ")}\nmodes: ${Object.keys(MODES).join(", ")}\n`);
+  process.stdout.write(
+    `scenarios: ${Object.keys(SCENARIOS).join(", ")}\nmodes: ${Object.keys(MODES).join(", ")}\n`,
+  );
 } else {
   main().then(
     (code) => {

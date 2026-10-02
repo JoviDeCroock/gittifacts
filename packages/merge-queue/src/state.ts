@@ -1,11 +1,5 @@
 import { type QueueConfig, queueConfig } from "./config.js";
-import type {
-  AffectedSet,
-  Batch,
-  FreezeReason,
-  QueueEntry,
-  Track,
-} from "./schema.js";
+import type { AffectedSet, Batch, FreezeReason, QueueEntry, Track } from "./schema.js";
 
 /** One landed main commit (only the queue lands, so every entry is a CAS the core issued). */
 export interface MainLogEntry {
@@ -83,7 +77,11 @@ export interface QueueState {
   terminal: string[];
 }
 
-export function initialState(mainSha: string, config: QueueConfig = queueConfig(), now = 0): QueueState {
+export function initialState(
+  mainSha: string,
+  config: QueueConfig = queueConfig(),
+  now = 0,
+): QueueState {
   return {
     v: 1,
     config,

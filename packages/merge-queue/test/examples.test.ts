@@ -16,7 +16,9 @@ import { affected, World } from "./harness.js";
 const cmds = <T extends Command["type"]>(w: World, type: T): CommandOf<T>[] =>
   w.commands.filter((c): c is CommandOf<T> => c.type === type);
 const emitted = (w: World, type: string) =>
-  w.commands.filter((c) => c.type === "Emit" && c.event.type === type).map((c) => (c.type === "Emit" ? c.event : null));
+  w.commands
+    .filter((c) => c.type === "Emit" && c.event.type === type)
+    .map((c) => (c.type === "Emit" ? c.event : null));
 const human = { principalId: "human-1", kind: "human" as const, signature: "sig" };
 
 describe("bisection (§4.3)", () => {
@@ -25,9 +27,15 @@ describe("bisection (§4.3)", () => {
     const w = new World({ config, precompute: true });
     // z occupies the track; a..d queue up behind it and form one batch.
     w.enqueue({ id: "z", affected: affected({ files: ["x.ts"], tests: ["tx"] }) });
-    for (const id of ["a", "b", "c", "d"]) w.enqueue({ id, affected: affected({ files: ["x.ts"], tests: ["tx"] }), bad: id === "c" });
+    for (const id of ["a", "b", "c", "d"])
+      w.enqueue({ id, affected: affected({ files: ["x.ts"], tests: ["tx"] }), bad: id === "c" });
     w.drain();
-    expect(cmds(w, "BuildBatchTree")[1]?.entries.map((e) => e.changeId)).toEqual(["a", "b", "c", "d"]);
+    expect(cmds(w, "BuildBatchTree")[1]?.entries.map((e) => e.changeId)).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+    ]);
     expect(w.violations).toEqual([]);
     // One failing batch → re-check (reproduced on the tree, green on main) → 3 probes in parallel.
     const probes = cmds(w, "StartBatchRun").filter((r) => r.kind === "probe");
@@ -36,14 +44,17 @@ describe("bisection (§4.3)", () => {
     expect(w.ejected.get("c")).toBe("tests-failed");
     expect(new Set(w.merged)).toEqual(new Set(["z", "a", "b", "d"]));
     const ejected = emitted(w, "ejected")[0];
-    expect(ejected?.type === "ejected" && ejected.reason.fix.call).toBe('open_workspace({ changeId: "c" })');
+    expect(ejected?.type === "ejected" && ejected.reason.fix.call).toBe(
+      'open_workspace({ changeId: "c" })',
+    );
     expect(ejected?.type === "ejected" && ejected.reason.failingTests).toEqual(["test:c"]);
   });
 
   it("re-roots descendants immediately when an ancestor batch fails", () => {
     const config = queueConfig({ maxBatchSize: 1, maxSpeculationDepth: 3 });
     const w = new World({ config, precompute: true });
-    for (const id of ["a", "b", "c"]) w.enqueue({ id, affected: affected({ files: ["x.ts"] }), bad: id === "a" });
+    for (const id of ["a", "b", "c"])
+      w.enqueue({ id, affected: affected({ files: ["x.ts"] }), bad: id === "a" });
     // Three batches speculated on top of each other.
     expect(cmds(w, "BuildBatchTree").length).toBe(1);
     w.drain();
@@ -116,7 +127,11 @@ describe("flaky tests (§4.7)", () => {
 
   it("a test failing on main's head too is quarantined (audited, Plan opened), never counted as passing, and raises the lane", () => {
     const w = new World({ flakeRate: 1, flakeRepeat: 1, precompute: true });
-    w.enqueue({ id: "a", affected: affected({ files: ["a.ts"], tests: ["flaky:0", "flaky:1", "flaky:2"] }), lane: 0 });
+    w.enqueue({
+      id: "a",
+      affected: affected({ files: ["a.ts"], tests: ["flaky:0", "flaky:1", "flaky:2"] }),
+      lane: 0,
+    });
     w.drain();
     expect(w.violations).toEqual([]);
     expect(w.merged).toEqual(["a"]);
@@ -180,16 +195,34 @@ describe("conflict resolution (§4.4)", () => {
       changeId: "b",
       attempt: 1,
       resolverId: "resolver-9",
-      outcome: { status: "resolved", newHeadSha: "f".repeat(40), lane: 0, outsideHunks: true, blamedUpstream: "a", resolutionRef: "res:1", affected: affected({ files: ["s.ts"] }) },
+      outcome: {
+        status: "resolved",
+        newHeadSha: "f".repeat(40),
+        lane: 0,
+        outsideHunks: true,
+        blamedUpstream: "a",
+        resolutionRef: "res:1",
+        affected: affected({ files: ["s.ts"] }),
+      },
     });
     expect(w.state.entries.b?.lane).toBe(1);
     expect(w.state.entries.b?.approvalRequired).toBe(true);
     const req = cmds(w, "RequestApproval").at(-1);
     expect(req?.excludePrincipals).toEqual(expect.arrayContaining(["agent-a", "resolver-9"]));
     // The resolver can't approve its own resolution.
-    w.send({ type: "Approved", changeId: "b", lane: 1, approver: { principalId: "resolver-9", kind: "human" } });
+    w.send({
+      type: "Approved",
+      changeId: "b",
+      lane: 1,
+      approver: { principalId: "resolver-9", kind: "human" },
+    });
     expect(w.state.entries.b?.approvalRequired).toBe(true);
-    w.send({ type: "Approved", changeId: "b", lane: 1, approver: { principalId: "human-2", kind: "human" } });
+    w.send({
+      type: "Approved",
+      changeId: "b",
+      lane: 1,
+      approver: { principalId: "human-2", kind: "human" },
+    });
     expect(w.state.entries.b?.approvalRequired).toBe(false);
   });
 });
@@ -206,7 +239,13 @@ describe("freezes (§4.9)", () => {
     for (let i = 0; i < 20 && w.outstanding > 0; i++) w.complete(0);
     expect(w.state.entries.n1?.state).toBe("passed");
     expect(w.merged).toEqual(["bad"]);
-    w.enqueue({ id: "r1", affected: affected({ files: ["x.ts"] }), priority: "revert", revertOf: "bad", automaticRevert: true });
+    w.enqueue({
+      id: "r1",
+      affected: affected({ files: ["x.ts"] }),
+      priority: "revert",
+      revertOf: "bad",
+      automaticRevert: true,
+    });
     w.drain();
     expect(w.violations).toEqual([]);
     expect(w.merged).toEqual(["bad", "r1", "n1"]);
@@ -216,7 +255,11 @@ describe("freezes (§4.9)", () => {
 
   it("manual freeze and thaw are human-signed audit events; agents can't", () => {
     const w = new World();
-    w.send({ type: "Freeze", signer: { principalId: "agent-x", kind: "agent", signature: "s" }, reason: "nope" });
+    w.send({
+      type: "Freeze",
+      signer: { principalId: "agent-x", kind: "agent", signature: "s" },
+      reason: "nope",
+    });
     expect(w.state.freeze.reasons).toEqual([]);
     w.send({ type: "Freeze", signer: human, reason: "incident review" });
     expect(w.state.freeze.reasons[0]?.signer?.principalId).toBe("human-1");
@@ -224,7 +267,9 @@ describe("freezes (§4.9)", () => {
     expect(audit?.signature).toBe("sig");
     w.send({ type: "Thaw", signer: human, reason: "done" });
     expect(w.state.freeze.reasons).toEqual([]);
-    expect(cmds(w, "Audit").find((a) => a.action === "merge-queue.thawed")?.principalId).toBe("human-1");
+    expect(cmds(w, "Audit").find((a) => a.action === "merge-queue.thawed")?.principalId).toBe(
+      "human-1",
+    );
   });
 });
 
@@ -235,9 +280,20 @@ describe("the CAS guard asserts instead of trusting", () => {
     while (!w.pending.some((p) => p.cmd.type === "StartBatchRun")) w.complete(0);
     const s = structuredClone(w.state);
     const b = Object.values(s.batches)[0];
-    if (b === undefined || b.treeSha === null || b.tipSha === null || b.baseSha === null) throw new Error("no batch");
+    if (b === undefined || b.treeSha === null || b.tipSha === null || b.baseSha === null)
+      throw new Error("no batch");
     b.state = "passed";
-    b.verdict = { treeSha: "0".repeat(40), commitSha: b.tipSha, baseSha: b.baseSha, scope: "all", runIds: ["x"], passed: true, failing: [], quarantined: [], flakyRetried: [] };
+    b.verdict = {
+      treeSha: "0".repeat(40),
+      commitSha: b.tipSha,
+      baseSha: b.baseSha,
+      scope: "all",
+      runIds: ["x"],
+      passed: true,
+      failing: [],
+      quarantined: [],
+      flakyRetried: [],
+    };
     expect(() => step(s, { type: "Tick" }, { now: 1 })).toThrow(InvariantViolation);
   });
 
@@ -248,7 +304,15 @@ describe("the CAS guard asserts instead of trusting", () => {
     const run = cmds(w, "StartBatchRun")[0];
     if (run === undefined) throw new Error("no run");
     w.pending = [];
-    w.send({ type: "BatchResult", batchId: run.batchId, runId: run.runId, treeSha: "0".repeat(40), outcome: "passed", failingTests: [], scope: "all" });
+    w.send({
+      type: "BatchResult",
+      batchId: run.batchId,
+      runId: run.runId,
+      treeSha: "0".repeat(40),
+      outcome: "passed",
+      failingTests: [],
+      scope: "all",
+    });
     expect(cmds(w, "Cas")).toEqual([]);
     expect(cmds(w, "StartBatchRun").length).toBe(2); // re-run on the right tree
   });
@@ -259,9 +323,20 @@ describe("the CAS guard asserts instead of trusting", () => {
     while (!w.pending.some((p) => p.cmd.type === "StartBatchRun")) w.complete(0);
     const s = structuredClone(w.state);
     const b = Object.values(s.batches)[0];
-    if (b === undefined || b.treeSha === null || b.tipSha === null || b.baseSha === null) throw new Error("no batch");
+    if (b === undefined || b.treeSha === null || b.tipSha === null || b.baseSha === null)
+      throw new Error("no batch");
     b.state = "passed";
-    b.verdict = { treeSha: b.treeSha, commitSha: b.tipSha, baseSha: b.baseSha, scope: ["ta"], runIds: ["x"], passed: true, failing: [], quarantined: [], flakyRetried: [] };
+    b.verdict = {
+      treeSha: b.treeSha,
+      commitSha: b.tipSha,
+      baseSha: b.baseSha,
+      scope: ["ta"],
+      runIds: ["x"],
+      passed: true,
+      failing: [],
+      quarantined: [],
+      flakyRetried: [],
+    };
     expect(() => step(s, { type: "Tick" }, { now: 1 })).toThrow(/cas.scope/);
   });
 });
@@ -270,7 +345,12 @@ describe("stacks, plan groups and fairness (§4.5)", () => {
   it("lands an atomic stack in one CAS, dependency first", () => {
     const w = new World({ precompute: true });
     w.enqueue({ id: "base", affected: affected({ files: ["a.ts"] }), landMode: "atomic" });
-    w.enqueue({ id: "top", affected: affected({ files: ["b.ts"] }), dependsOn: ["base"], landMode: "atomic" });
+    w.enqueue({
+      id: "top",
+      affected: affected({ files: ["b.ts"] }),
+      dependsOn: ["base"],
+      landMode: "atomic",
+    });
     w.drain();
     expect(w.violations).toEqual([]);
     expect(cmds(w, "Cas").map((c) => c.entries.map((e) => e.changeId))).toEqual([["base", "top"]]);
@@ -278,18 +358,37 @@ describe("stacks, plan groups and fairness (§4.5)", () => {
 
   it("holds a land-together plan group until every member is enqueued", () => {
     const w = new World({ precompute: true });
-    w.enqueue({ id: "g1", affected: affected({ files: ["a.ts"] }), plangroup: "P", landTogether: true, groupSize: 2 });
+    w.enqueue({
+      id: "g1",
+      affected: affected({ files: ["a.ts"] }),
+      plangroup: "P",
+      landTogether: true,
+      groupSize: 2,
+    });
     w.drain(200);
     expect(w.state.entries.g1?.hold).toBe("group");
-    w.enqueue({ id: "g2", affected: affected({ files: ["b.ts"] }), plangroup: "P", landTogether: true, groupSize: 2 });
+    w.enqueue({
+      id: "g2",
+      affected: affected({ files: ["b.ts"] }),
+      plangroup: "P",
+      landTogether: true,
+      groupSize: 2,
+    });
     w.drain();
-    expect(cmds(w, "Cas").map((c) => c.entries.map((e) => e.changeId).sort())).toEqual([["g1", "g2"]]);
+    expect(cmds(w, "Cas").map((c) => c.entries.map((e) => e.changeId).sort())).toEqual([
+      ["g1", "g2"],
+    ]);
   });
 
   it("a runaway session can't starve others (fair queuing + in-flight cap)", () => {
-    const config = queueConfig({ maxInFlightPerSession: 2, maxSpeculationDepth: 2, maxBatchSize: 2 });
+    const config = queueConfig({
+      maxInFlightPerSession: 2,
+      maxSpeculationDepth: 2,
+      maxBatchSize: 2,
+    });
     const w = new World({ config, precompute: true, checkInvariants: false });
-    for (let i = 0; i < 30; i++) w.enqueue({ id: `run${i}`, affected: affected({ files: ["x.ts"] }), session: "runaway" });
+    for (let i = 0; i < 30; i++)
+      w.enqueue({ id: `run${i}`, affected: affected({ files: ["x.ts"] }), session: "runaway" });
     w.enqueue({ id: "polite", affected: affected({ files: ["x.ts"] }), session: "polite" });
     w.drain();
     expect(w.merged.indexOf("polite")).toBeLessThan(6);

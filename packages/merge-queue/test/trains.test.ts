@@ -21,7 +21,14 @@ class Trains {
     return r.commands;
   }
   merged(id: string, worker: string, files: string[], flag = true) {
-    return this.send({ type: "ChangeMerged", changeId: id, sha: `sha-${id}`, deploysTo: [worker], flagKey: flag ? `change-${id}` : null, files });
+    return this.send({
+      type: "ChangeMerged",
+      changeId: id,
+      sha: `sha-${id}`,
+      deploysTo: [worker],
+      flagKey: flag ? `change-${id}` : null,
+      files,
+    });
   }
   of<T extends TrainCommand["type"]>(type: T) {
     return this.out.filter((c): c is Extract<TrainCommand, { type: T }> => c.type === type);
@@ -42,7 +49,10 @@ describe("deploy trains (§4.8)", () => {
     expect(t.of("StartDeployTrain").length).toBe(1);
     t.now += 30 * 60_000;
     t.send({ type: "Tick" });
-    expect(t.of("StartDeployTrain").map((x) => x.changes.map((c) => c.changeId))).toEqual([["a"], ["b", "c"]]);
+    expect(t.of("StartDeployTrain").map((x) => x.changes.map((c) => c.changeId))).toEqual([
+      ["a"],
+      ["b", "c"],
+    ]);
   });
 
   it("deploys a change that can't be switched off alone, and different Workers in parallel", () => {
@@ -50,7 +60,9 @@ describe("deploy trains (§4.8)", () => {
     t.merged("w1", "web", ["web/x.ts"]);
     t.merged("u", "api", ["src/u.ts"], false);
     t.merged("v", "api", ["src/v.ts"]);
-    expect(t.of("StartDeployTrain").map((x) => [x.worker, x.changes.map((c) => c.changeId)])).toEqual([
+    expect(
+      t.of("StartDeployTrain").map((x) => [x.worker, x.changes.map((c) => c.changeId)]),
+    ).toEqual([
       ["web", ["w1"]],
       ["api", ["u"]],
     ]);
@@ -66,7 +78,14 @@ describe("deploy trains (§4.8)", () => {
         api: {
           active: null,
           history: [],
-          pending: ["a", "b", "c"].map((id) => ({ changeId: id, sha: `s${id}`, flagKey: `change-${id}`, files: [`src/${id}/index.ts`], modules: [], mergedAt: 0 })),
+          pending: ["a", "b", "c"].map((id) => ({
+            changeId: id,
+            sha: `s${id}`,
+            flagKey: `change-${id}`,
+            files: [`src/${id}/index.ts`],
+            modules: [],
+            mergedAt: 0,
+          })),
         },
       },
     };
@@ -75,7 +94,17 @@ describe("deploy trains (§4.8)", () => {
     expect(train?.changes.map((c) => c.changeId)).toEqual(["a", "b", "c"]);
     t.send({ type: "TrainDeployed", trainId: train?.trainId ?? "", versionId: "v7" });
     t.now += 60_000;
-    t.send({ type: "IssueReported", worker: "api", versionId: "v7", issueId: "iss-1", frames: [{ file: "node_modules/runtime.js" }, { file: "src/b/index.ts" }, { file: "src/b/util.ts" }] });
+    t.send({
+      type: "IssueReported",
+      worker: "api",
+      versionId: "v7",
+      issueId: "iss-1",
+      frames: [
+        { file: "node_modules/runtime.js" },
+        { file: "src/b/index.ts" },
+        { file: "src/b/util.ts" },
+      ],
+    });
     expect(t.of("KillFlag").map((k) => k.changeId)).toEqual(["b"]);
     expect(t.of("Emit").some((e) => e.event.type === "flag_killed")).toBe(true);
     t.send({ type: "RegressionCleared", trainId: train?.trainId ?? "", issueId: "iss-1" });
@@ -96,7 +125,13 @@ describe("deploy trains (§4.8)", () => {
     t.send({ type: "Tick" });
     const bc = t.of("StartDeployTrain")[1];
     t.send({ type: "TrainDeployed", trainId: bc?.trainId ?? "", versionId: "v2" });
-    t.send({ type: "IssueReported", worker: "api", versionId: "v2", issueId: "iss-2", frames: [{ file: "src/c.ts" }] });
+    t.send({
+      type: "IssueReported",
+      worker: "api",
+      versionId: "v2",
+      issueId: "iss-2",
+      frames: [{ file: "src/c.ts" }],
+    });
     expect(t.of("KillFlag").map((k) => k.changeId)).toEqual(["c"]);
     t.now += 10 * 60_000;
     t.send({ type: "Tick" });
@@ -105,7 +140,13 @@ describe("deploy trains (§4.8)", () => {
   });
 
   it("scores frames transparently", () => {
-    expect(attributionScore({ files: ["src/a/x.ts"] }, [{ file: "src/a/x.ts" }, { file: "src/a/y.ts" }, { file: "z.ts" }])).toBe(4);
+    expect(
+      attributionScore({ files: ["src/a/x.ts"] }, [
+        { file: "src/a/x.ts" },
+        { file: "src/a/y.ts" },
+        { file: "z.ts" },
+      ]),
+    ).toBe(4);
   });
 });
 
@@ -114,27 +155,54 @@ describe("Q5 acceptance shape: one of three Changes in a train throws in product
     const q = new World({ precompute: true });
     const t = new Trains();
     const ids = ["a", "b", "c"];
-    for (const id of ids) q.enqueue({ id, affected: affected({ files: [`src/${id}.ts`], deploysTo: ["api"] }), flagKey: `change-${id}` });
+    for (const id of ids)
+      q.enqueue({
+        id,
+        affected: affected({ files: [`src/${id}.ts`], deploysTo: ["api"] }),
+        flagKey: `change-${id}`,
+      });
     // Hold deploys until all three merged so they ride one train.
     q.drain();
     expect(new Set(q.merged)).toEqual(new Set(ids));
     t.state = { ...t.state, workers: { api: { pending: [], active: "busy", history: [] } } };
     for (const c of q.commands) {
       if (c.type !== "Emit" || c.event.type !== "merged") continue;
-      t.send({ type: "ChangeMerged", changeId: c.event.changeId, sha: c.event.mergedSha, deploysTo: c.event.deploysTo, flagKey: c.event.flagKey, files: c.event.files });
+      t.send({
+        type: "ChangeMerged",
+        changeId: c.event.changeId,
+        sha: c.event.mergedSha,
+        deploysTo: c.event.deploysTo,
+        flagKey: c.event.flagKey,
+        files: c.event.files,
+      });
     }
-    t.state = { ...t.state, workers: { api: { ...(t.state.workers.api ?? { pending: [], history: [] }), active: null } } };
+    t.state = {
+      ...t.state,
+      workers: { api: { ...(t.state.workers.api ?? { pending: [], history: [] }), active: null } },
+    };
     t.send({ type: "Tick" });
     const train = t.of("StartDeployTrain")[0];
     expect(train?.changes.length).toBe(3);
     t.send({ type: "TrainDeployed", trainId: train?.trainId ?? "", versionId: "v1" });
-    t.send({ type: "IssueReported", worker: "api", versionId: "v1", issueId: "boom", frames: [{ file: "src/b.ts" }] });
+    t.send({
+      type: "IssueReported",
+      worker: "api",
+      versionId: "v1",
+      issueId: "boom",
+      frames: [{ file: "src/b.ts" }],
+    });
     t.send({ type: "RegressionCleared", trainId: train?.trainId ?? "", issueId: "boom" });
     expect(t.of("KillFlag").map((k) => k.changeId)).toEqual(["b"]);
     const revert = t.of("RequestRevert")[0];
     expect(revert?.changeId).toBe("b");
     // The automatic revert enters the queue: frozen until it lands, then thawed.
-    q.enqueue({ id: "revert-b", affected: affected({ files: ["src/b.ts"], deploysTo: ["api"] }), priority: "revert", revertOf: "b", automaticRevert: true });
+    q.enqueue({
+      id: "revert-b",
+      affected: affected({ files: ["src/b.ts"], deploysTo: ["api"] }),
+      priority: "revert",
+      revertOf: "b",
+      automaticRevert: true,
+    });
     expect(q.state.freeze.reasons.map((r) => r.kind)).toEqual(["revert-in-progress"]);
     q.enqueue({ id: "d", affected: affected({ files: ["src/d.ts"] }) });
     q.drain();

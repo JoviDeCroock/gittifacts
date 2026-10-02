@@ -5,7 +5,7 @@
  * non-empty test set. An unknown set (null: not computed) conflicts with everything. Never default
  * to parallel.
  */
-import { ALL_TESTS, type AffectedSet, CONFIG_SENTINEL } from "./schema.js";
+import { type AffectedSet, ALL_TESTS, CONFIG_SENTINEL } from "./schema.js";
 
 /** True when the set must be treated as conflicting with every other set. */
 export function conflictsWithEverything(a: AffectedSet | null): boolean {
@@ -35,7 +35,8 @@ export function conflictKeys(a: AffectedSet): string[] {
 }
 
 export function conflicts(a: AffectedSet | null, b: AffectedSet | null): boolean {
-  if (a === null || b === null || conflictsWithEverything(a) || conflictsWithEverything(b)) return true;
+  if (a === null || b === null || conflictsWithEverything(a) || conflictsWithEverything(b))
+    return true;
   if ((allTests(a) && hasTests(b)) || (allTests(b) && hasTests(a))) return true;
   const keys = new Set(conflictKeys(a));
   for (const k of conflictKeys(b)) if (keys.has(k)) return true;

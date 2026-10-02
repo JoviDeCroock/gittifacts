@@ -39,7 +39,11 @@ export function checkStateInvariants(s: QueueState): void {
       const b = s.batches[bid];
       invariant(b !== undefined, "track.dangling", `track ${t.id} references missing batch ${bid}`);
       invariant(b.kind === "chain", "track.kind", `track ${t.id} holds non-chain batch ${bid}`);
-      invariant(b.trackId === t.id, "track.owner", `batch ${bid} is in track ${t.id} but says ${b.trackId}`);
+      invariant(
+        b.trackId === t.id,
+        "track.owner",
+        `batch ${bid} is in track ${t.id} but says ${b.trackId}`,
+      );
       invariant(
         !["landed", "cancelled", "failed", "bisecting"].includes(b.state),
         "track.terminal",
@@ -66,7 +70,11 @@ export function checkStateInvariants(s: QueueState): void {
       for (const id of u.changeIds) {
         const e = s.entries[id];
         if (e === undefined || TERMINAL_STATES.has(e.state)) continue;
-        invariant(!seen.has(id), "entry.duplicated", `${id} is in ${seen.get(id)} and bisecting ${b.id}`);
+        invariant(
+          !seen.has(id),
+          "entry.duplicated",
+          `${id} is in ${seen.get(id)} and bisecting ${b.id}`,
+        );
         seen.set(id, b.id);
       }
   }
@@ -75,8 +83,16 @@ export function checkStateInvariants(s: QueueState): void {
       invariant(seen.has(e.changeId), "entry.lost", `${e.changeId} is ${e.state} but in no batch`);
     }
     if (e.state === "waiting" || e.state === "resolving") {
-      invariant(!seen.has(e.changeId), "entry.duplicated", `${e.changeId} is ${e.state} but in a batch`);
-      invariant(e.batchId === null, "entry.batch", `${e.changeId} is ${e.state} with batch ${e.batchId}`);
+      invariant(
+        !seen.has(e.changeId),
+        "entry.duplicated",
+        `${e.changeId} is ${e.state} but in a batch`,
+      );
+      invariant(
+        e.batchId === null,
+        "entry.batch",
+        `${e.changeId} is ${e.state} with batch ${e.batchId}`,
+      );
     }
     invariant(e.lane >= 0 && e.lane <= 2, "lane.range", `${e.changeId} lane ${e.lane}`);
   }
@@ -93,16 +109,26 @@ export function checkStateInvariants(s: QueueState): void {
             const ay = s.entries[y]?.affected ?? null;
             invariant(
               !conflicts(ax, ay),
-              conflictsWithEverything(ax) || conflictsWithEverything(ay) ? "parallel.unknown" : "parallel.conflict",
+              conflictsWithEverything(ax) || conflictsWithEverything(ay)
+                ? "parallel.unknown"
+                : "parallel.conflict",
               `${x} (track ${tracks[i]?.id}) conflicts with ${y} (track ${tracks[j]?.id})`,
             );
           }
       }
   } else {
-    invariant(tracks.length <= 1, "parallel.no-graph", "without a conflict graph there is one track");
+    invariant(
+      tracks.length <= 1,
+      "parallel.no-graph",
+      "without a conflict graph there is one track",
+    );
   }
   if (s.cas !== null) {
-    invariant(s.batches[s.cas.batchId] !== undefined, "cas.batch", "CAS in flight for a missing batch");
+    invariant(
+      s.batches[s.cas.batchId] !== undefined,
+      "cas.batch",
+      "CAS in flight for a missing batch",
+    );
   }
 }
 

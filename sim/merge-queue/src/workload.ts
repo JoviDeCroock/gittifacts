@@ -144,7 +144,11 @@ function calibrate(target: number, seed: number): number {
     else hi = mid;
   }
   // pick the closer of lo-1 / lo
-  if (lo > 1 && Math.abs(densityFor(lo - 1, seed) - target) < Math.abs(densityFor(lo, seed) - target)) return lo - 1;
+  if (
+    lo > 1 &&
+    Math.abs(densityFor(lo - 1, seed) - target) < Math.abs(densityFor(lo, seed) - target)
+  )
+    return lo - 1;
   return lo;
 }
 
@@ -152,7 +156,10 @@ export function generate(scenario: Scenario, seed: number): Workload {
   const rng = new Rng(`workload|${scenario.name}|${seed}`);
   const K = calibrate(scenario.conflictDensity, seed);
   const workers = Array.from({ length: Math.max(1, scenario.workers) }, (_, i) => `worker-${i}`);
-  const sessions = Array.from({ length: scenario.sessions }, (_, i) => ({ id: `s${i}`, quality: 0.5 + rng.next() }));
+  const sessions = Array.from({ length: scenario.sessions }, (_, i) => ({
+    id: `s${i}`,
+    quality: 0.5 + rng.next(),
+  }));
   const hourMs = 3_600_000;
   const end = scenario.hours * hourMs;
   const perEvent = 1 + scenario.stacks.rate * 2 + scenario.planGroups.rate * 1.5;
@@ -160,13 +167,25 @@ export function generate(scenario: Scenario, seed: number): Workload {
   const changes: SimChange[] = [];
   let n = 0;
   let families = 0;
-  const make = (arrival: number, session: { id: string; quality: number }, runaway: boolean, cluster: number, family: string): SimChange => {
+  const make = (
+    arrival: number,
+    session: { id: string; quality: number },
+    runaway: boolean,
+    cluster: number,
+    family: string,
+  ): SimChange => {
     const s = shape(rng, K, cluster);
     const affected = affectedOf(s, workers);
     const r = rng.next();
-    const lane: Lane = r < scenario.laneMix[0] ? 0 : r < scenario.laneMix[0] + scenario.laneMix[1] ? 1 : 2;
+    const lane: Lane =
+      r < scenario.laneMix[0] ? 0 : r < scenario.laneMix[0] + scenario.laneMix[1] ? 1 : 2;
     const p = rng.next();
-    const priority: PriorityClass = p < scenario.priorityMix.incident ? "incident" : p < scenario.priorityMix.incident + scenario.priorityMix.security ? "security" : "normal";
+    const priority: PriorityClass =
+      p < scenario.priorityMix.incident
+        ? "incident"
+        : p < scenario.priorityMix.incident + scenario.priorityMix.security
+          ? "security"
+          : "normal";
     const id = `x${(n++).toString(36)}`;
     return {
       id,
@@ -243,16 +262,21 @@ export function generate(scenario: Scenario, seed: number): Workload {
   if (scenario.runaway !== null) {
     const at = scenario.runaway.atHour * hourMs;
     const runaway = { id: "runaway", quality: 1 };
-    for (let i = 0; i < scenario.runaway.count; i++) changes.push(make(at + rng.next() * 60_000, runaway, true, rng.int(K), `f${families++}`));
+    for (let i = 0; i < scenario.runaway.count; i++)
+      changes.push(make(at + rng.next() * 60_000, runaway, true, rng.int(K), `f${families++}`));
   }
   changes.sort((a, b) => a.arrival - b.arrival || (a.id < b.id ? -1 : 1));
   // Truly broken changes: risk-weighted, normalized to the scenario's rate.
   const quality = new Map(sessions.map((s) => [s.id, s.quality]));
-  const risk = (c: SimChange) => (quality.get(c.session) ?? 1) * (c.lines > 400 ? 2 : 1) * (c.lane === 2 ? 1.5 : 1);
+  const risk = (c: SimChange) =>
+    (quality.get(c.session) ?? 1) * (c.lines > 400 ? 2 : 1) * (c.lane === 2 ? 1.5 : 1);
   const meanRisk = changes.reduce((acc, c) => acc + risk(c), 0) / Math.max(1, changes.length);
   for (const c of changes) {
     c.bad = draw(seed, "bad", c.id) < (scenario.trueFailureRate * risk(c)) / meanRisk;
-    c.prodBad = !c.bad && c.affected.deploysTo.length > 0 && draw(seed, "prod", c.id) < scenario.prodRegressionRate;
+    c.prodBad =
+      !c.bad &&
+      c.affected.deploysTo.length > 0 &&
+      draw(seed, "prod", c.id) < scenario.prodRegressionRate;
     c.flagKey = draw(seed, "flag", c.id) < scenario.flagCoverage ? `change-${c.id}` : null;
   }
   // Pairwise interactions among overlapping changes (bucketed by module).
@@ -284,14 +308,20 @@ export function generate(scenario: Scenario, seed: number): Workload {
         }
       }
   const tests: string[] = [];
-  for (let k = 0; k < K; k++) for (let j = 0; j < MODULES_PER_CLUSTER; j++) tests.push(testName(k, j));
+  for (let k = 0; k < K; k++)
+    for (let j = 0; j < MODULES_PER_CLUSTER; j++) tests.push(testName(k, j));
   const flaky = new Map<string, number>();
   const pool = tests.filter((t) => draw(seed, "flaky-pool", t) < 0.2);
   const perTest = pool.length === 0 ? 0 : 1 - (1 - scenario.flakyRate) ** (1 / pool.length);
   for (const t of pool) flaky.set(t, perTest);
-  const hot = [...tests].sort((a, b) => draw(seed, "hot", a) - draw(seed, "hot", b)).slice(0, scenario.hotFlaky.tests);
+  const hot = [...tests]
+    .sort((a, b) => draw(seed, "hot", a) - draw(seed, "hot", b))
+    .slice(0, scenario.hotFlaky.tests);
   for (const t of hot) flaky.set(t, scenario.hotFlaky.failProb);
-  const postMergeFailuresAt = Array.from({ length: scenario.postMergeFailures }, (_, i) => ((i + 1) / (scenario.postMergeFailures + 1)) * end);
+  const postMergeFailuresAt = Array.from(
+    { length: scenario.postMergeFailures },
+    (_, i) => ((i + 1) / (scenario.postMergeFailures + 1)) * end,
+  );
   return {
     scenario,
     seed,

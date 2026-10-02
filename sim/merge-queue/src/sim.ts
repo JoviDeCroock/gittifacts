@@ -8,9 +8,9 @@ import {
   CoreEvent,
   type CoreEventInput,
   checkStateInvariants,
+  InvariantViolation,
   initialState,
   initialTrainState,
-  InvariantViolation,
   type QueueConfig,
   type QueueState,
   step,
@@ -68,7 +68,14 @@ export interface RunMetrics {
   throughputPerHour: number;
   timeInQueueMin: { p50: number; p95: number; p99: number };
   /** Enqueue → first batch, and first batch → merged (merged entries). */
-  phasesMin: { toBatchP50: number; toBatchP95: number; batchToMergeP50: number; batchToMergeP95: number; passedToMergeP50: number; passedToMergeP95: number };
+  phasesMin: {
+    toBatchP50: number;
+    toBatchP95: number;
+    batchToMergeP50: number;
+    batchToMergeP95: number;
+    passedToMergeP50: number;
+    passedToMergeP95: number;
+  };
   /** p95 of entries from non-runaway sessions (fairness). */
   timeInQueueOthersP95Min: number;
   ciMinutes: number;
@@ -79,7 +86,12 @@ export interface RunMetrics {
   ejectRate: number;
   falseEjectRate: number;
   ejectCodes: Record<string, number>;
-  resolver: { textual: { incidents: number; resolved: number }; semantic: { incidents: number; resolved: number }; laneDowngradesIgnored: number; laneDecreases: number };
+  resolver: {
+    textual: { incidents: number; resolved: number };
+    semantic: { incidents: number; resolved: number };
+    laneDowngradesIgnored: number;
+    laneDecreases: number;
+  };
   mainRedEvents: number;
   maskedByQuarantine: number;
   attributionFailures: number;
@@ -151,7 +163,10 @@ class Sim {
   private revertOf = new Map<string, string>();
   private reverted = new Set<string>();
   // CI accounting
-  private runs = new Map<string, { start: number; dur: number; kind: string; done: boolean; entries: string[] }>();
+  private runs = new Map<
+    string,
+    { start: number; dur: number; kind: string; done: boolean; entries: string[] }
+  >();
   private ciMinutes = 0;
   private ciByKind: Record<string, number> = {};
   // trains
@@ -206,7 +221,10 @@ class Sim {
     this.commits.set(this.mainSha, { parent: null, entry: null, t0: 0, t1: 0 });
     this.contentCache.set(this.mainSha, new Map());
     this.core = initialState(this.mainSha, opts.config, 0);
-    this.trains = initialTrainState({ watchMs: this.sc.trains.watchMinutes * MINUTE, maxTrainSize: this.sc.trains.maxTrainSize });
+    this.trains = initialTrainState({
+      watchMs: this.sc.trains.watchMinutes * MINUTE,
+      maxTrainSize: this.sc.trains.maxTrainSize,
+    });
     this.arrivalEnd = this.sc.hours * 3_600_000;
     this.endTime = this.arrivalEnd + this.sc.drainHours * 3_600_000;
   }
@@ -235,18 +253,29 @@ class Sim {
         }
         this.now = next.at;
         if (process.env.MQ_DEBUG_PROGRESS === "1") {
-          const k = next.v.k === "core" || next.v.k === "train" || next.v.k === "run-done" || next.v.k === "issue" ? `${next.v.k}:${next.v.e.type}` : next.v.k;
+          const k =
+            next.v.k === "core" ||
+            next.v.k === "train" ||
+            next.v.k === "run-done" ||
+            next.v.k === "issue"
+              ? `${next.v.k}:${next.v.e.type}`
+              : next.v.k;
           this.kinds.set(k, (this.kinds.get(k) ?? 0) + 1);
           if (this.steps % 2000 === 1999) {
-            process.stderr.write(`kinds ${JSON.stringify([...this.kinds].sort((a, b) => b[1] - a[1]).slice(0, 6))}\n`);
+            process.stderr.write(
+              `kinds ${JSON.stringify([...this.kinds].sort((a, b) => b[1] - a[1]).slice(0, 6))}\n`,
+            );
             this.kinds.clear();
           }
         }
         if (process.env.MQ_DEBUG_PROGRESS === "1" && this.steps % 2000 === 0 && this.steps > 0)
-          process.stderr.write(`t=${(this.now / MINUTE).toFixed(1)}m steps=${this.steps} live=${this.liveEntries()} batches=${Object.keys(this.core.batches).length} heap=${(process.memoryUsage().heapUsed / 1e6).toFixed(0)}MB frozen=${this.core.freeze.reasons.map((r) => r.kind).join(",")} pending=${this.pendingNonTick}\n`);
+          process.stderr.write(
+            `t=${(this.now / MINUTE).toFixed(1)}m steps=${this.steps} live=${this.liveEntries()} batches=${Object.keys(this.core.batches).length} heap=${(process.memoryUsage().heapUsed / 1e6).toFixed(0)}MB frozen=${this.core.freeze.reasons.map((r) => r.kind).join(",")} pending=${this.pendingNonTick}\n`,
+          );
         this.handle(next.v);
         if (next.v.k === "tick") {
-          const idle = this.now > this.arrivalEnd && this.pendingNonTick === 0 && this.liveEntries() === 0;
+          const idle =
+            this.now > this.arrivalEnd && this.pendingNonTick === 0 && this.liveEntries() === 0;
           if (!idle) this.push(this.now + MINUTE, { k: "tick" });
         }
       }
@@ -262,28 +291,60 @@ class Sim {
   /** Debug: passed batches that have waited > 20 min to land, and why. */
   private dumpStuck(): void {
     const s = this.core;
-    process.stderr.write(`freeze=${JSON.stringify(s.freeze.reasons.map((r) => [r.kind, r.changeId]))}\n`);
+    process.stderr.write(
+      `freeze=${JSON.stringify(s.freeze.reasons.map((r) => [r.kind, r.changeId]))}\n`,
+    );
     for (const e of Object.values(s.entries)) {
       if (e.priority !== "revert" || e.state === "merged") continue;
       const b = s.batches[e.batchId ?? ""];
-      process.stderr.write(`revert ${e.changeId} ${e.state} hold=${e.hold} batch=${b?.id}:${b?.state} parent=${b?.parentId} carried=${b?.carried.length} lineage=${b?.lineage.filter((x) => s.entries[x]?.state !== "merged").map((x) => `${x}:${s.entries[x]?.priority}:${s.entries[x]?.state}`).join(",")} base==main=${b?.baseSha === s.main.sha} verdict=${b?.verdict?.passed} landing=${s.landing.length} cas=${s.cas?.batchId}\n`);
+      process.stderr.write(
+        `revert ${e.changeId} ${e.state} hold=${e.hold} batch=${b?.id}:${b?.state} parent=${b?.parentId} carried=${b?.carried.length} lineage=${b?.lineage
+          .filter((x) => s.entries[x]?.state !== "merged")
+          .map((x) => `${x}:${s.entries[x]?.priority}:${s.entries[x]?.state}`)
+          .join(
+            ",",
+          )} base==main=${b?.baseSha === s.main.sha} verdict=${b?.verdict?.passed} landing=${s.landing.length} cas=${s.cas?.batchId}\n`,
+      );
     }
-    process.stderr.write(`landing=${JSON.stringify(s.landing.map((id) => [id, s.batches[id]?.state, s.batches[id]?.members]))} cas=${s.cas?.batchId ?? null}\n`);
+    process.stderr.write(
+      `landing=${JSON.stringify(s.landing.map((id) => [id, s.batches[id]?.state, s.batches[id]?.members]))} cas=${s.cas?.batchId ?? null}\n`,
+    );
     for (const b of Object.values(s.batches)) {
-      if (b.kind !== "chain" || b.state !== "passed" || b.readyAt === null || this.now - b.readyAt < 20 * MINUTE) continue;
+      if (
+        b.kind !== "chain" ||
+        b.state !== "passed" ||
+        b.readyAt === null ||
+        this.now - b.readyAt < 20 * MINUTE
+      )
+        continue;
       const own = new Set(b.units.flatMap((u) => u.changeIds));
-      const blockers = b.lineage.filter((id) => !own.has(id) && s.entries[id] !== undefined && s.entries[id]?.state !== "merged").map((id) => `${id}:${s.entries[id]?.state}:${s.entries[id]?.batchId}:${s.batches[s.entries[id]?.batchId ?? ""]?.state}`);
-      for (const bid of new Set(b.lineage.map((id) => s.entries[id]?.batchId ?? "").filter((x) => x !== "" && x !== b.id))) {
+      const blockers = b.lineage
+        .filter(
+          (id) => !own.has(id) && s.entries[id] !== undefined && s.entries[id]?.state !== "merged",
+        )
+        .map(
+          (id) =>
+            `${id}:${s.entries[id]?.state}:${s.entries[id]?.batchId}:${s.batches[s.entries[id]?.batchId ?? ""]?.state}`,
+        );
+      for (const bid of new Set(
+        b.lineage.map((id) => s.entries[id]?.batchId ?? "").filter((x) => x !== "" && x !== b.id),
+      )) {
         const x = s.batches[bid];
-        if (x !== undefined && x.state !== "passed") process.stderr.write(`  blocker ${bid}: ${x.state} fallbackOf=${x.fallbackOf} carried=${x.carried.length} runSeq=${x.runSeq} created=${((this.now - x.createdAt) / MINUTE).toFixed(0)}m ago parent=${x.parentId} merges=${x.mergeParents.length} units=${x.units.length}\n`);
+        if (x !== undefined && x.state !== "passed")
+          process.stderr.write(
+            `  blocker ${bid}: ${x.state} fallbackOf=${x.fallbackOf} carried=${x.carried.length} runSeq=${x.runSeq} created=${((this.now - x.createdAt) / MINUTE).toFixed(0)}m ago parent=${x.parentId} merges=${x.mergeParents.length} units=${x.units.length}\n`,
+          );
       }
-      process.stderr.write(`stuck ${b.id} waited ${((this.now - b.readyAt) / MINUTE).toFixed(0)}m base=${b.baseSha === this.mainSha} carried=${b.carried.length} noReval=${b.noRevalidate} blockers=${blockers.slice(0, 6).join(" ")}\n`);
+      process.stderr.write(
+        `stuck ${b.id} waited ${((this.now - b.readyAt) / MINUTE).toFixed(0)}m base=${b.baseSha === this.mainSha} carried=${b.carried.length} noReval=${b.noRevalidate} blockers=${blockers.slice(0, 6).join(" ")}\n`,
+      );
     }
   }
 
   private liveEntries(): number {
     let n = 0;
-    for (const e of Object.values(this.core.entries)) if (e.state !== "merged" && e.state !== "ejected" && e.state !== "dequeued") n++;
+    for (const e of Object.values(this.core.entries))
+      if (e.state !== "merged" && e.state !== "ejected" && e.state !== "dequeued") n++;
     return n;
   }
 
@@ -313,7 +374,13 @@ class Sim {
         return;
       case "issue": {
         const issue = this.issues.get(ev.issueId);
-        if (issue === undefined || this.rolledBack.has(issue.trainId) || this.flagOff.has(issue.culprit) || this.reverted.has(issue.culprit)) return;
+        if (
+          issue === undefined ||
+          this.rolledBack.has(issue.trainId) ||
+          this.flagOff.has(issue.culprit) ||
+          this.reverted.has(issue.culprit)
+        )
+          return;
         this.m.regressions++;
         const cmds = this.sendTrain(ev.e);
         const attributed =
@@ -329,9 +396,15 @@ class Sim {
         this.m.maxQueue = Math.max(this.m.maxQueue, this.liveEntries());
         return;
       case "pmf": {
-        const last = [...this.records.values()].filter((r) => r.mergedAt !== null && !r.revert && !this.reverted.has(r.id)).sort((a, b) => (b.mergedAt ?? 0) - (a.mergedAt ?? 0))[0];
+        const last = [...this.records.values()]
+          .filter((r) => r.mergedAt !== null && !r.revert && !this.reverted.has(r.id))
+          .sort((a, b) => (b.mergedAt ?? 0) - (a.mergedAt ?? 0))[0];
         if (last === undefined) return;
-        this.sendCore({ type: "PostMergeCheckFailed", sha: this.mainSha, checks: ["deploy-smoke"] });
+        this.sendCore({
+          type: "PostMergeCheckFailed",
+          sha: this.mainSha,
+          checks: ["deploy-smoke"],
+        });
         this.requestRevert(last.id);
         return;
       }
@@ -393,7 +466,11 @@ class Sim {
       changeId: c.id,
       headSha: head,
       authorId: c.author,
-      enqueuedBy: { principalId: c.author, kind: c.revertOf !== null ? "system" : "agent", sessionId: c.revertOf !== null ? null : c.session },
+      enqueuedBy: {
+        principalId: c.author,
+        kind: c.revertOf !== null ? "system" : "agent",
+        sessionId: c.revertOf !== null ? null : c.session,
+      },
       priority: c.priority,
       lane: c.lane,
       dependsOn: deps,
@@ -450,7 +527,11 @@ class Sim {
   private treeOf(sha: string): string {
     const c = this.commits.get(sha);
     if (c === undefined) throw new Error(`unknown commit ${sha}`);
-    return (c.t0 >>> 0).toString(16).padStart(8, "0") + (c.t1 >>> 0).toString(16).padStart(8, "0") + "0".repeat(24);
+    return (
+      (c.t0 >>> 0).toString(16).padStart(8, "0") +
+      (c.t1 >>> 0).toString(16).padStart(8, "0") +
+      "0".repeat(24)
+    );
   }
 
   private contentOf(sha: string): Map<string, number> {
@@ -522,7 +603,13 @@ class Sim {
       if (c === undefined) continue;
       if (this.isBad(id, v)) out.add(c.badTest);
       for (const p of c.semantic) {
-        if (!ids.has(p) || gone.has(p) || !this.interacts(id, p) || this.resolved(id, v, p, ids.get(p))) continue;
+        if (
+          !ids.has(p) ||
+          gone.has(p) ||
+          !this.interacts(id, p) ||
+          this.resolved(id, v, p, ids.get(p))
+        )
+          continue;
         const pc = this.changes.get(p);
         const shared = c.affected.testTargets.find((t) => pc?.affected.testTargets.includes(t));
         out.add(shared ?? c.badTest);
@@ -544,7 +631,12 @@ class Sim {
   }
 
   private fullDuration(key: string): number {
-    return lognormal(this.sc.ci.medianMinutes * MINUTE, this.sc.ci.sigma, draw(this.seed, "dur1", key), draw(this.seed, "dur2", key));
+    return lognormal(
+      this.sc.ci.medianMinutes * MINUTE,
+      this.sc.ci.sigma,
+      draw(this.seed, "dur1", key),
+      draw(this.seed, "dur2", key),
+    );
   }
 
   // ------------------------------------------------------------------ command execution
@@ -556,24 +648,41 @@ class Sim {
         const ch = this.changes.get(h?.id ?? c.changeId);
         if (ch === undefined) return;
         const affected = ch.analyzerFails ? { ...ch.affected, complete: false } : ch.affected;
-        const delay = this.sc.analyzerMinutes * MINUTE * (0.5 + draw(this.seed, "an", c.changeId, c.headSha));
-        this.push(this.now + delay, { k: "core", e: { type: "AffectedSetComputed", changeId: c.changeId, headSha: c.headSha, affected } });
+        const delay =
+          this.sc.analyzerMinutes * MINUTE * (0.5 + draw(this.seed, "an", c.changeId, c.headSha));
+        this.push(this.now + delay, {
+          k: "core",
+          e: { type: "AffectedSetComputed", changeId: c.changeId, headSha: c.headSha, affected },
+        });
         return;
       }
       case "BuildBatchTree":
-        return this.build(c);
+        this.build(c);
+        return;
       case "StartBatchRun": {
         const full = this.fullDuration(c.runId);
         const ovf = this.sc.ci.overheadFraction;
-        const dur = c.targets === "all" ? full : ovf * full + (1 - ovf) * full * (c.targets.length / Math.max(1, this.w.tests.length));
+        const dur =
+          c.targets === "all"
+            ? full
+            : ovf * full + (1 - ovf) * full * (c.targets.length / Math.max(1, this.w.tests.length));
         const scope = c.targets === "all" ? this.w.tests : c.targets;
         const scopeSet = new Set(scope);
-        const real = this.failures(c.commitSha).filter((t) => c.targets === "all" || scopeSet.has(t));
+        const real = this.failures(c.commitSha).filter(
+          (t) => c.targets === "all" || scopeSet.has(t),
+        );
         const failing = [...new Set([...real, ...this.flakes(c.runId, scope)])];
         // Fail fast: a failing run reports when its first failing test finishes, not at suite end.
         const ov = this.sc.ci.overheadFraction * full;
-        const took = failing.length > 0 ? ov + (dur - ov) * draw(this.seed, "failat", c.runId) : dur;
-        this.runs.set(c.runId, { start: this.now, dur: took, kind: c.kind, done: false, entries: c.entries });
+        const took =
+          failing.length > 0 ? ov + (dur - ov) * draw(this.seed, "failat", c.runId) : dur;
+        this.runs.set(c.runId, {
+          start: this.now,
+          dur: took,
+          kind: c.kind,
+          done: false,
+          entries: c.entries,
+        });
         if (c.kind === "probe") this.m.probes++;
         if (c.kind === "landing") {
           this.m.landings++;
@@ -581,13 +690,23 @@ class Sim {
             const r = this.records.get(id);
             if (r === undefined) continue;
             r.landingRuns++;
-            if (r.firstLandingAt === null || (r.passedAt !== null && r.firstLandingAt < r.passedAt)) r.firstLandingAt = this.now;
+            if (r.firstLandingAt === null || (r.passedAt !== null && r.firstLandingAt < r.passedAt))
+              r.firstLandingAt = this.now;
           }
         }
         this.push(this.now + took, {
           k: "run-done",
           runId: c.runId,
-          e: { type: "BatchResult", batchId: c.batchId, runId: c.runId, treeSha: c.treeSha, outcome: failing.length > 0 ? "failed" : "passed", failingTests: failing, scope: c.targets, durationMs: took },
+          e: {
+            type: "BatchResult",
+            batchId: c.batchId,
+            runId: c.runId,
+            treeSha: c.treeSha,
+            outcome: failing.length > 0 ? "failed" : "passed",
+            failingTests: failing,
+            scope: c.targets,
+            durationMs: took,
+          },
         });
         return;
       }
@@ -600,20 +719,47 @@ class Sim {
       }
       case "RunFlakeRecheck": {
         const ov = this.sc.ci.overheadFraction;
-        const dur = this.sc.ci.medianMinutes * MINUTE * (ov + (1 - ov) * (c.tests.length / Math.max(1, this.w.tests.length)));
-        const onBatch = new Set([...this.failures(c.commitSha), ...this.flakes(`${c.runId}|b`, c.tests)]);
-        const onMain = new Set([...this.failures(c.mainSha), ...this.flakes(`${c.runId}|m`, c.tests)]);
-        const results = c.tests.map((t) => ({ test: t, onBatch: onBatch.has(t) ? ("failed" as const) : ("passed" as const), onMain: onMain.has(t) ? ("failed" as const) : ("passed" as const) }));
+        const dur =
+          this.sc.ci.medianMinutes *
+          MINUTE *
+          (ov + (1 - ov) * (c.tests.length / Math.max(1, this.w.tests.length)));
+        const onBatch = new Set([
+          ...this.failures(c.commitSha),
+          ...this.flakes(`${c.runId}|b`, c.tests),
+        ]);
+        const onMain = new Set([
+          ...this.failures(c.mainSha),
+          ...this.flakes(`${c.runId}|m`, c.tests),
+        ]);
+        const results = c.tests.map((t) => ({
+          test: t,
+          onBatch: onBatch.has(t) ? ("failed" as const) : ("passed" as const),
+          onMain: onMain.has(t) ? ("failed" as const) : ("passed" as const),
+        }));
         // Batch-tree and main-head re-runs execute in parallel: two containers.
-        this.runs.set(c.runId, { start: this.now, dur: 2 * dur, kind: "recheck", done: false, entries: [] });
-        this.push(this.now + dur, { k: "run-done", runId: c.runId, e: { type: "FlakeRecheckResult", batchId: c.batchId, runId: c.runId, results } });
+        this.runs.set(c.runId, {
+          start: this.now,
+          dur: 2 * dur,
+          kind: "recheck",
+          done: false,
+          entries: [],
+        });
+        this.push(this.now + dur, {
+          k: "run-done",
+          runId: c.runId,
+          e: { type: "FlakeRecheckResult", batchId: c.batchId, runId: c.runId, results },
+        });
         return;
       }
       case "RequestResolution":
-        return this.resolve(c);
+        this.resolve(c);
+        return;
       case "Cas": {
         if (c.expectedOld !== this.mainSha) {
-          this.push(this.now + 2000, { k: "core", e: { type: "CasResult", casId: c.casId, result: "stale", actualSha: this.mainSha } });
+          this.push(this.now + 2000, {
+            k: "core",
+            e: { type: "CasResult", casId: c.casId, result: "stale", actualSha: this.mainSha },
+          });
           return;
         }
         this.mainSha = c.newSha;
@@ -627,7 +773,11 @@ class Sim {
           const owners = visible.map((t) => {
             const who = [...ids.keys()].filter((id) => {
               const ch = this.changes.get(id);
-              return ch !== undefined && (ch.badTest === t || ch.affected.testTargets.includes(t)) && (this.isBad(id, ids.get(id) ?? 1) || ch.semantic.size > 0);
+              return (
+                ch !== undefined &&
+                (ch.badTest === t || ch.affected.testTargets.includes(t)) &&
+                (this.isBad(id, ids.get(id) ?? 1) || ch.semantic.size > 0)
+              );
             });
             return `${t}<-[${who.join(",")}]`;
           });
@@ -635,7 +785,10 @@ class Sim {
             `main red at ${this.now}: ${owners.join(" ")} via ${c.entries.map((e) => e.changeId).join(",")} scope=${JSON.stringify(c.evidence.verdict.scope).slice(0, 80)} carried=${c.evidence.carried.map((x) => `${x.batchId}:${x.disjointFrom.length}`).join(",")}`,
           );
         } else if (red.length > 0) this.m.masked++;
-        this.push(this.now + 2000, { k: "core", e: { type: "CasResult", casId: c.casId, result: "ok" } });
+        this.push(this.now + 2000, {
+          k: "core",
+          e: { type: "CasResult", casId: c.casId, result: "ok" },
+        });
         return;
       }
       case "DeleteQueueRef":
@@ -644,27 +797,65 @@ class Sim {
       case "RequestApproval": {
         const ra = this.records.get(c.changeId);
         if (ra !== undefined) ra.approvals++;
-        const delay = lognormal(this.sc.humanReviewMinutes * MINUTE, 0.5, draw(this.seed, "rv1", c.changeId, this.now), draw(this.seed, "rv2", c.changeId, this.now));
-        this.push(this.now + delay, { k: "core", e: { type: "Approved", changeId: c.changeId, lane: c.lane, approver: { principalId: "human-reviewer", kind: "human" } } });
+        const delay = lognormal(
+          this.sc.humanReviewMinutes * MINUTE,
+          0.5,
+          draw(this.seed, "rv1", c.changeId, this.now),
+          draw(this.seed, "rv2", c.changeId, this.now),
+        );
+        this.push(this.now + delay, {
+          k: "core",
+          e: {
+            type: "Approved",
+            changeId: c.changeId,
+            lane: c.lane,
+            approver: { principalId: "human-reviewer", kind: "human" },
+          },
+        });
         return;
       }
       case "OpenPlan":
         // The fix-the-flaky-test Plan lands two hours later.
-        this.push(this.now + 120 * MINUTE, { k: "core", e: { type: "Unquarantined", test: c.test, by: "fix-plan" } });
+        this.push(this.now + 120 * MINUTE, {
+          k: "core",
+          e: { type: "Unquarantined", test: c.test, by: "fix-plan" },
+        });
         this.fixedTests.add(c.test);
         return;
       case "Emit":
-        return this.onEmit(c.event);
+        this.onEmit(c.event);
+        return;
       case "Audit":
         if (c.action === "merge-queue.test-quarantined") this.m.quarantines++;
-        if (c.action === "merge-queue.batches-cancelled" && process.env.MQ_DEBUG_PROGRESS === "1" && this.now > 44 * MINUTE && this.dbgN++ < 10) {
-          const ex = Object.values(this.core.entries).filter((e) => (e.priority === "revert" || e.priority === "incident") && e.state !== "merged" && e.state !== "ejected").map((e) => `${e.changeId}:${e.priority}:${e.state}:${e.hold}:${e.batchId}:deps=${e.dependsOn.join("+")}:wf=${e.waitFor.join("+")}:grp=${e.plangroup}`);
-          process.stderr.write(`cancel ${String(c.payload.why)} batches=${JSON.stringify(c.payload.batches)} express=${ex.join(" ")} cas=${this.core.cas?.batchId}\n`);
+        if (
+          c.action === "merge-queue.batches-cancelled" &&
+          process.env.MQ_DEBUG_PROGRESS === "1" &&
+          this.now > 44 * MINUTE &&
+          this.dbgN++ < 10
+        ) {
+          const ex = Object.values(this.core.entries)
+            .filter(
+              (e) =>
+                (e.priority === "revert" || e.priority === "incident") &&
+                e.state !== "merged" &&
+                e.state !== "ejected",
+            )
+            .map(
+              (e) =>
+                `${e.changeId}:${e.priority}:${e.state}:${e.hold}:${e.batchId}:deps=${e.dependsOn.join("+")}:wf=${e.waitFor.join("+")}:grp=${e.plangroup}`,
+            );
+          process.stderr.write(
+            `cancel ${String(c.payload.why)} batches=${JSON.stringify(c.payload.batches)} express=${ex.join(" ")} cas=${this.core.cas?.batchId}\n`,
+          );
         }
         if (c.action === "merge-queue.batches-cancelled" && process.env.MQ_DEBUG_TAIL === "1") {
           const why = String(c.payload.why).replace(/[a-z]\w*\d\w*/g, "#");
           const t = this.cancelTally.get(why) ?? [0, 0, 0];
-          this.cancelTally.set(why, [t[0] + 1, t[1] + Number(c.payload.entries), t[2] + Number(c.payload.running)]);
+          this.cancelTally.set(why, [
+            t[0] + 1,
+            t[1] + Number(c.payload.entries),
+            t[2] + Number(c.payload.running),
+          ]);
         }
         if (c.action === "merge-queue.full-run-fallback") {
           this.m.fallbacks++;
@@ -674,19 +865,31 @@ class Sim {
             const ch = this.changes.get(who);
             const e = this.core.entries[who];
             const lb = this.core.batches[e?.batchId ?? ""];
-            const seqOf = this.core.mainLog.find((m) => m.changes.some((x) => x.changeId === who))?.seq;
-            process.stderr.write(`  payload ${JSON.stringify({ ...c.payload, blockerSeq: seqOf, blockerAffected: this.changes.get(who)?.affected.modules, ownAffected: (c.payload.entries as string[]).map((id) => this.core.entries[id]?.affected?.modules) })}\n`);
-            process.stderr.write(`fallback ${c.subject} ${why} [${ch ? `analyzerFails=${ch.analyzerFails}` : "?"}] blocker=${e?.state}/${e?.batchId}/${lb?.state} landing=${JSON.stringify(this.core.landing.map((id) => [id, this.core.batches[id]?.state, this.core.batches[id]?.members.map((m) => `${m}:${this.core.batches[m]?.state}`)]))}\n`);
+            const seqOf = this.core.mainLog.find((m) =>
+              m.changes.some((x) => x.changeId === who),
+            )?.seq;
+            process.stderr.write(
+              `  payload ${JSON.stringify({ ...c.payload, blockerSeq: seqOf, blockerAffected: this.changes.get(who)?.affected.modules, ownAffected: (c.payload.entries as string[]).map((id) => this.core.entries[id]?.affected?.modules) })}\n`,
+            );
+            process.stderr.write(
+              `fallback ${c.subject} ${why} [${ch ? `analyzerFails=${ch.analyzerFails}` : "?"}] blocker=${e?.state}/${e?.batchId}/${lb?.state} landing=${JSON.stringify(this.core.landing.map((id) => [id, this.core.batches[id]?.state, this.core.batches[id]?.members.map((m) => `${m}:${this.core.batches[m]?.state}`)]))}\n`,
+            );
           }
         }
         return;
       case "Telemetry":
         if (c.kind === "lane-downgrade-ignored") this.m.laneDowngradesIgnored++;
-        if (c.kind === "prediction") this.m.predictions.set(String(c.data.changeId), Number(c.data.p));
+        if (c.kind === "prediction")
+          this.m.predictions.set(String(c.data.changeId), Number(c.data.p));
         if (c.kind === "outcome") {
           const p = this.m.predictions.get(String(c.data.changeId));
           const outcome = String(c.data.outcome);
-          const y = outcome === "merged" ? 1 : outcome === "ejected:tests-failed" || outcome === "ejected:semantic-conflict" ? 0 : null;
+          const y =
+            outcome === "merged"
+              ? 1
+              : outcome === "ejected:tests-failed" || outcome === "ejected:semantic-conflict"
+                ? 0
+                : null;
           if (p !== undefined && y !== null) this.m.brier.push((p - y) ** 2);
         }
         return;
@@ -705,21 +908,49 @@ class Sim {
       const h = this.heads.get(e.headSha);
       const ch = this.changes.get(e.changeId);
       if (h === undefined || ch === undefined) throw new Error(`unknown head for ${e.changeId}`);
-      const blocker = [...ch.textual].find((p) => ids.has(p) && !gone.has(p) && this.interacts(e.changeId, p) && !this.resolved(e.changeId, h.v, p, ids.get(p)));
-      if (blocker !== undefined && process.env.MQ_DEBUG_PROGRESS === "1" && this.now > 44 * MINUTE && this.dbgN++ < 12) {
+      const blocker = [...ch.textual].find(
+        (p) =>
+          ids.has(p) &&
+          !gone.has(p) &&
+          this.interacts(e.changeId, p) &&
+          !this.resolved(e.changeId, h.v, p, ids.get(p)),
+      );
+      if (
+        blocker !== undefined &&
+        process.env.MQ_DEBUG_PROGRESS === "1" &&
+        this.now > 44 * MINUTE &&
+        this.dbgN++ < 12
+      ) {
         const b = this.core.batches[c.batchId];
-        process.stderr.write(`conflict build ${c.batchId} entry=${e.changeId} blocker=${blocker} own=${b?.units.flatMap((u) => u.changeIds).join(",")} carried=${b?.carried.length} parent=${b?.parentId} express=${this.core.entries[e.changeId]?.priority} t=${(this.now / MINUTE).toFixed(2)}\n`);
+        process.stderr.write(
+          `conflict build ${c.batchId} entry=${e.changeId} blocker=${blocker} own=${b?.units.flatMap((u) => u.changeIds).join(",")} carried=${b?.carried.length} parent=${b?.parentId} express=${this.core.entries[e.changeId]?.priority} t=${(this.now / MINUTE).toFixed(2)}\n`,
+        );
       }
       if (blocker !== undefined) {
-        const files = ch.affected.files.filter((f) => this.changes.get(blocker)?.affected.files.includes(f));
-        this.push(this.now + delay, { k: "core", e: { type: "RebaseResult", batchId: c.batchId, result: { status: "conflict", changeId: e.changeId, files, upstream: [blocker] } } });
+        const files = ch.affected.files.filter((f) =>
+          this.changes.get(blocker)?.affected.files.includes(f),
+        );
+        this.push(this.now + delay, {
+          k: "core",
+          e: {
+            type: "RebaseResult",
+            batchId: c.batchId,
+            result: { status: "conflict", changeId: e.changeId, files, upstream: [blocker] },
+          },
+        });
         return;
       }
       const entry = `${e.changeId}@${h.v}`;
       const pc = this.commits.get(parent);
       if (pc === undefined) throw new Error(`unknown base ${parent}`);
       const sha = fakeSha(`commit|${parent}|${entry}`);
-      if (!this.commits.has(sha)) this.commits.set(sha, { parent, entry, t0: pc.t0 ^ h32(`t0|${entry}`), t1: pc.t1 ^ h32(`t1|${entry}`) });
+      if (!this.commits.has(sha))
+        this.commits.set(sha, {
+          parent,
+          entry,
+          t0: pc.t0 ^ h32(`t0|${entry}`),
+          t1: pc.t1 ^ h32(`t1|${entry}`),
+        });
       ids.set(e.changeId, h.v);
       commits.push({ changeId: e.changeId, commitSha: sha, treeSha: this.treeOf(sha) });
       parent = sha;
@@ -727,7 +958,14 @@ class Sim {
     const last = commits[commits.length - 1];
     if (last === undefined) return;
     this.refs.add(c.refName);
-    this.push(this.now + delay, { k: "core", e: { type: "RebaseResult", batchId: c.batchId, result: { status: "clean", tipSha: last.commitSha, treeSha: last.treeSha, commits } } });
+    this.push(this.now + delay, {
+      k: "core",
+      e: {
+        type: "RebaseResult",
+        batchId: c.batchId,
+        result: { status: "clean", tipSha: last.commitSha, treeSha: last.treeSha, commits },
+      },
+    });
   }
 
   private resolve(c: Extract<Command, { type: "RequestResolution" }>): void {
@@ -736,13 +974,23 @@ class Sim {
     if (ch === undefined) return;
     const v = this.versions.get(c.changeId) ?? 1;
     const key = `${c.changeId}|${c.attempt}|${v}`;
-    const delay = (r.minutes[0] + (r.minutes[1] - r.minutes[0]) * draw(this.seed, "rdelay", key)) * MINUTE;
+    const delay =
+      (r.minutes[0] + (r.minutes[1] - r.minutes[0]) * draw(this.seed, "rdelay", key)) * MINUTE;
     if (c.attempt === 1) {
       this.m.openIncident.set(c.changeId, c.kind);
       this.m[c.kind].incidents++;
     }
     const send = (outcome: Extract<CoreEventInput, { type: "ResolutionResult" }>["outcome"]) =>
-      this.push(this.now + delay, { k: "core", e: { type: "ResolutionResult", changeId: c.changeId, attempt: c.attempt, resolverId: "resolver-agent", outcome } });
+      this.push(this.now + delay, {
+        k: "core",
+        e: {
+          type: "ResolutionResult",
+          changeId: c.changeId,
+          attempt: c.attempt,
+          resolverId: "resolver-agent",
+          outcome,
+        },
+      });
     if (draw(this.seed, "budget", key) < r.budgetExhaustRate) {
       send({ status: "budget-exhausted", message: "AI Gateway budget exhausted" });
       return;
@@ -759,12 +1007,22 @@ class Sim {
       blamed = partners[0] ?? c.upstream[0] ?? null;
     } else {
       if (this.isBad(c.changeId, v)) {
-        send(draw(this.seed, "nac", key) < 0.9 ? { status: "not-a-conflict", message: "the Change fails on its own" } : { status: "failed", message: "no fix found" });
+        send(
+          draw(this.seed, "nac", key) < 0.9
+            ? { status: "not-a-conflict", message: "the Change fails on its own" }
+            : { status: "failed", message: "no fix found" },
+        );
         return;
       }
       partners = [...ch.semantic].filter((p) => upstream.has(p));
       if (partners.length === 0 || draw(this.seed, "rsem", key) >= r.semanticSuccess) {
-        send({ status: "failed", message: partners.length === 0 ? "could not reproduce the failure or find an upstream cause" : "could not fix the interaction" });
+        send({
+          status: "failed",
+          message:
+            partners.length === 0
+              ? "could not reproduce the failure or find an upstream cause"
+              : "could not fix the interaction",
+        });
         return;
       }
       blamed = partners[0] ?? null;
@@ -792,9 +1050,14 @@ class Sim {
   private onEmit(ev: Extract<Command, { type: "Emit" }>["event"]): void {
     switch (ev.type) {
       case "entered_batch": {
-        if (process.env.MQ_TRACE !== undefined && process.env.MQ_TRACE.split(",").includes(ev.changeId)) {
+        if (
+          process.env.MQ_TRACE !== undefined &&
+          process.env.MQ_TRACE.split(",").includes(ev.changeId)
+        ) {
           const b = this.core.batches[ev.batchId];
-          process.stderr.write(`trace ${ev.changeId} t=${(this.now / MINUTE).toFixed(1)} -> ${ev.batchId} parent=${b?.parentId} merges=${b?.mergeParents.join("+")} lineage=${b?.lineage.join(",")} main=${this.core.main.seq}\n`);
+          process.stderr.write(
+            `trace ${ev.changeId} t=${(this.now / MINUTE).toFixed(1)} -> ${ev.batchId} parent=${b?.parentId} merges=${b?.mergeParents.join("+")} lineage=${b?.lineage.join(",")} main=${this.core.main.seq}\n`,
+          );
         }
         const r = this.records.get(ev.changeId);
         if (r !== undefined && r.firstBatchAt === null) r.firstBatchAt = ev.at;
@@ -806,7 +1069,15 @@ class Sim {
         const r = this.records.get(ev.changeId);
         if (r !== undefined) r.mergedAt = ev.at;
         const ch = this.changes.get(ev.changeId);
-        this.sendTrain({ type: "ChangeMerged", changeId: ev.changeId, sha: ev.mergedSha, deploysTo: ev.deploysTo, flagKey: ev.flagKey, files: ev.files, modules: ev.modules });
+        this.sendTrain({
+          type: "ChangeMerged",
+          changeId: ev.changeId,
+          sha: ev.mergedSha,
+          deploysTo: ev.deploysTo,
+          flagKey: ev.flagKey,
+          files: ev.files,
+          modules: ev.modules,
+        });
         if (ch?.revertOf !== null && ch !== undefined) this.reverted.add(ch.revertOf ?? "");
         return;
       }
@@ -818,12 +1089,25 @@ class Sim {
           r.ejectCode = ev.reason.code;
           // False eject: a test-failure ejection of a Change that is not broken and has no
           // unresolved semantic partner in main (only flakes or misattribution can do that).
-          if (ch !== undefined && (ev.reason.code === "tests-failed" || ev.reason.code === "semantic-conflict")) {
+          if (
+            ch !== undefined &&
+            (ev.reason.code === "tests-failed" || ev.reason.code === "semantic-conflict")
+          ) {
             const v = this.versions.get(ev.changeId) ?? 1;
-            const partner = [...ch.semantic].some((p) => this.mainIds.has(p) && this.interacts(ev.changeId, p) && !this.resolved(ev.changeId, v, p, this.mainIds.get(p)));
+            const partner = [...ch.semantic].some(
+              (p) =>
+                this.mainIds.has(p) &&
+                this.interacts(ev.changeId, p) &&
+                !this.resolved(ev.changeId, v, p, this.mainIds.get(p)),
+            );
             const inQueue = [...ch.semantic].some((p) => {
               const e = this.core.entries[p];
-              return e !== undefined && e.state !== "merged" && e.state !== "ejected" && e.state !== "dequeued";
+              return (
+                e !== undefined &&
+                e.state !== "merged" &&
+                e.state !== "ejected" &&
+                e.state !== "dequeued"
+              );
             });
             r.falseEject = !this.isBad(ev.changeId, v) && !partner && !inQueue;
           }
@@ -869,14 +1153,24 @@ class Sim {
       case "StartDeployTrain": {
         const versionId = `v-${c.trainId}`;
         const deployAt = this.now + 2 * MINUTE;
-        this.push(deployAt, { k: "train", e: { type: "TrainDeployed", trainId: c.trainId, versionId } });
+        this.push(deployAt, {
+          k: "train",
+          e: { type: "TrainDeployed", trainId: c.trainId, versionId },
+        });
         for (const x of c.changes) {
           const ch = this.changes.get(x.changeId);
           if (ch === undefined || !ch.prodBad || this.reverted.has(ch.id)) continue;
           const issueId = `iss-${ch.id}-${c.trainId}`;
           this.issues.set(issueId, { culprit: ch.id, trainId: c.trainId });
-          const frames = [...ch.affected.files.slice(0, 2).map((file) => ({ file })), ...NOISE_FRAMES.map((file) => ({ file }))];
-          this.push(deployAt + (5 + 10 * draw(this.seed, "issue", issueId)) * MINUTE, { k: "issue", issueId, e: { type: "IssueReported", worker: c.worker, versionId, issueId, frames } });
+          const frames = [
+            ...ch.affected.files.slice(0, 2).map((file) => ({ file })),
+            ...NOISE_FRAMES.map((file) => ({ file })),
+          ];
+          this.push(deployAt + (5 + 10 * draw(this.seed, "issue", issueId)) * MINUTE, {
+            k: "issue",
+            issueId,
+            e: { type: "IssueReported", worker: c.worker, versionId, issueId, frames },
+          });
         }
         return;
       }
@@ -885,13 +1179,19 @@ class Sim {
         this.flagOff.add(c.changeId);
         const issue = this.issues.get(c.issueId);
         if (issue !== undefined && issue.culprit === c.changeId)
-          this.push(this.now + 3 * MINUTE, { k: "train", e: { type: "RegressionCleared", trainId: c.trainId, issueId: c.issueId } });
+          this.push(this.now + 3 * MINUTE, {
+            k: "train",
+            e: { type: "RegressionCleared", trainId: c.trainId, issueId: c.issueId },
+          });
         return;
       }
       case "RollbackTrain":
         this.m.rollbacks++;
         this.rolledBack.add(c.trainId);
-        this.push(this.now + MINUTE, { k: "train", e: { type: "RollbackDone", trainId: c.trainId } });
+        this.push(this.now + MINUTE, {
+          k: "train",
+          e: { type: "RollbackDone", trainId: c.trainId },
+        });
         return;
       case "RequestRevert":
         this.requestRevert(c.changeId);
@@ -906,22 +1206,39 @@ class Sim {
   private metrics(wallMs: number): RunMetrics {
     const recs = [...this.records.values()];
     if (process.env.MQ_DEBUG_TAIL === "1") {
-      const m = recs.filter((r) => r.mergedAt !== null).sort((a, b) => (b.mergedAt ?? 0) - b.enqueuedAt - ((a.mergedAt ?? 0) - a.enqueuedAt));
+      const m = recs
+        .filter((r) => r.mergedAt !== null)
+        .sort((a, b) => (b.mergedAt ?? 0) - b.enqueuedAt - ((a.mergedAt ?? 0) - a.enqueuedAt));
       const tail = m.slice(0, Math.ceil(m.length * 0.05));
-      const avg = (f: (r: ChangeRecord) => number) => (tail.reduce((x, r) => x + f(r), 0) / Math.max(1, tail.length)).toFixed(2);
-      for (const [k, v] of [...this.cancelTally].sort((a, b) => b[1][1] - a[1][1])) process.stderr.write(`cancel ${v[0]}x entries=${v[1]} running=${v[2]} ${k}\n`);
-      const slow = m.filter((r) => r.passedAt !== null && (r.mergedAt ?? 0) - r.passedAt > 8 * MINUTE);
-      const avgS = (f: (r: ChangeRecord) => number) => (slow.reduce((x, r) => x + f(r), 0) / Math.max(1, slow.length)).toFixed(2);
-      process.stderr.write(`slow-landing n=${slow.length} wait-to-first-landing-run=${avgS((r) => ((r.firstLandingAt ?? r.mergedAt ?? 0) - (r.passedAt ?? 0)) / MINUTE)}m landingRuns=${avgS((r) => r.landingRuns)} direct=${slow.filter((r) => r.firstLandingAt === null).length}\n`);
-      process.stderr.write(`tail n=${tail.length} batches=${avg((r) => r.batches)} resolved=${avg((r) => r.resolved)} approvals=${avg((r) => r.approvals)} revert=${avg((r) => (r.revert ? 1 : 0))} | all batches=${(m.reduce((x, r) => x + r.batches, 0) / m.length).toFixed(2)}\n`);
+      const avg = (f: (r: ChangeRecord) => number) =>
+        (tail.reduce((x, r) => x + f(r), 0) / Math.max(1, tail.length)).toFixed(2);
+      for (const [k, v] of [...this.cancelTally].sort((a, b) => b[1][1] - a[1][1]))
+        process.stderr.write(`cancel ${v[0]}x entries=${v[1]} running=${v[2]} ${k}\n`);
+      const slow = m.filter(
+        (r) => r.passedAt !== null && (r.mergedAt ?? 0) - r.passedAt > 8 * MINUTE,
+      );
+      const avgS = (f: (r: ChangeRecord) => number) =>
+        (slow.reduce((x, r) => x + f(r), 0) / Math.max(1, slow.length)).toFixed(2);
+      process.stderr.write(
+        `slow-landing n=${slow.length} wait-to-first-landing-run=${avgS((r) => ((r.firstLandingAt ?? r.mergedAt ?? 0) - (r.passedAt ?? 0)) / MINUTE)}m landingRuns=${avgS((r) => r.landingRuns)} direct=${slow.filter((r) => r.firstLandingAt === null).length}\n`,
+      );
+      process.stderr.write(
+        `tail n=${tail.length} batches=${avg((r) => r.batches)} resolved=${avg((r) => r.resolved)} approvals=${avg((r) => r.approvals)} revert=${avg((r) => (r.revert ? 1 : 0))} | all batches=${(m.reduce((x, r) => x + r.batches, 0) / m.length).toFixed(2)}\n`,
+      );
     }
     const merged = recs.filter((r) => r.mergedAt !== null);
     const ejected = recs.filter((r) => r.ejectedAt !== null && r.mergedAt === null);
     const unfinished = recs.filter((r) => r.mergedAt === null && r.ejectedAt === null);
     const end = this.now;
     // Time in queue: merged entries, plus censored waits of unfinished ones (conservative).
-    const waits = [...merged.map((r) => (r.mergedAt ?? 0) - r.enqueuedAt), ...unfinished.map((r) => end - r.enqueuedAt)].map((x) => x / MINUTE);
-    const others = [...merged.filter((r) => !r.runaway).map((r) => (r.mergedAt ?? 0) - r.enqueuedAt), ...unfinished.filter((r) => !r.runaway).map((r) => end - r.enqueuedAt)].map((x) => x / MINUTE);
+    const waits = [
+      ...merged.map((r) => (r.mergedAt ?? 0) - r.enqueuedAt),
+      ...unfinished.map((r) => end - r.enqueuedAt),
+    ].map((x) => x / MINUTE);
+    const others = [
+      ...merged.filter((r) => !r.runaway).map((r) => (r.mergedAt ?? 0) - r.enqueuedAt),
+      ...unfinished.filter((r) => !r.runaway).map((r) => end - r.enqueuedAt),
+    ].map((x) => x / MINUTE);
     const q = (xs: number[], p: number) => {
       if (xs.length === 0) return 0;
       const s = [...xs].sort((a, b) => a - b);
@@ -945,12 +1262,30 @@ class Sim {
       throughputPerHour: merged.length / Math.max(this.sc.hours, end / 3_600_000),
       timeInQueueMin: { p50: q(waits, 0.5), p95: q(waits, 0.95), p99: q(waits, 0.99) },
       phasesMin: {
-        toBatchP50: q(merged.map((r) => ((r.firstBatchAt ?? r.enqueuedAt) - r.enqueuedAt) / MINUTE), 0.5),
-        toBatchP95: q(merged.map((r) => ((r.firstBatchAt ?? r.enqueuedAt) - r.enqueuedAt) / MINUTE), 0.95),
-        batchToMergeP50: q(merged.map((r) => ((r.mergedAt ?? 0) - (r.firstBatchAt ?? r.enqueuedAt)) / MINUTE), 0.5),
-        batchToMergeP95: q(merged.map((r) => ((r.mergedAt ?? 0) - (r.firstBatchAt ?? r.enqueuedAt)) / MINUTE), 0.95),
-        passedToMergeP50: q(merged.map((r) => ((r.mergedAt ?? 0) - (r.passedAt ?? r.mergedAt ?? 0)) / MINUTE), 0.5),
-        passedToMergeP95: q(merged.map((r) => ((r.mergedAt ?? 0) - (r.passedAt ?? r.mergedAt ?? 0)) / MINUTE), 0.95),
+        toBatchP50: q(
+          merged.map((r) => ((r.firstBatchAt ?? r.enqueuedAt) - r.enqueuedAt) / MINUTE),
+          0.5,
+        ),
+        toBatchP95: q(
+          merged.map((r) => ((r.firstBatchAt ?? r.enqueuedAt) - r.enqueuedAt) / MINUTE),
+          0.95,
+        ),
+        batchToMergeP50: q(
+          merged.map((r) => ((r.mergedAt ?? 0) - (r.firstBatchAt ?? r.enqueuedAt)) / MINUTE),
+          0.5,
+        ),
+        batchToMergeP95: q(
+          merged.map((r) => ((r.mergedAt ?? 0) - (r.firstBatchAt ?? r.enqueuedAt)) / MINUTE),
+          0.95,
+        ),
+        passedToMergeP50: q(
+          merged.map((r) => ((r.mergedAt ?? 0) - (r.passedAt ?? r.mergedAt ?? 0)) / MINUTE),
+          0.5,
+        ),
+        passedToMergeP95: q(
+          merged.map((r) => ((r.mergedAt ?? 0) - (r.passedAt ?? r.mergedAt ?? 0)) / MINUTE),
+          0.95,
+        ),
       },
       timeInQueueOthersP95Min: q(others, 0.95),
       ciMinutes: this.ciMinutes,
@@ -961,7 +1296,12 @@ class Sim {
       ejectRate: ejected.length / Math.max(1, decided),
       falseEjectRate: ejected.filter((r) => r.falseEject).length / Math.max(1, decided),
       ejectCodes: codes,
-      resolver: { textual: { ...this.m.textual }, semantic: { ...this.m.semantic }, laneDowngradesIgnored: this.m.laneDowngradesIgnored, laneDecreases: this.m.laneDecreases },
+      resolver: {
+        textual: { ...this.m.textual },
+        semantic: { ...this.m.semantic },
+        laneDowngradesIgnored: this.m.laneDowngradesIgnored,
+        laneDecreases: this.m.laneDecreases,
+      },
       mainRedEvents: this.m.mainRed,
       maskedByQuarantine: this.m.masked,
       attributionFailures: this.m.attributionFailures + this.trains.attributionFailures,
@@ -978,7 +1318,10 @@ class Sim {
       probes: this.m.probes,
       landings: this.m.landings,
       maxQueueLength: this.m.maxQueue,
-      predictionBrier: this.m.brier.length === 0 ? null : this.m.brier.reduce((a, b) => a + b, 0) / this.m.brier.length,
+      predictionBrier:
+        this.m.brier.length === 0
+          ? null
+          : this.m.brier.reduce((a, b) => a + b, 0) / this.m.brier.length,
       predictions: this.m.brier.length,
       refsLeaked: runsLeaked,
       invariantViolations: this.m.violations,

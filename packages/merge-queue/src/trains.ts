@@ -15,9 +15,17 @@ import { ChangeId, QueueEvent } from "./schema.js";
 
 export const TrainConfig = z.object({
   /** Watch window after a train reaches production. */
-  watchMs: z.number().int().min(1).default(30 * 60_000),
+  watchMs: z
+    .number()
+    .int()
+    .min(1)
+    .default(30 * 60_000),
   /** After killing a flag, how long the regression has to clear before the train rolls back. */
-  killWatchMs: z.number().int().min(1).default(10 * 60_000),
+  killWatchMs: z
+    .number()
+    .int()
+    .min(1)
+    .default(10 * 60_000),
   maxTrainSize: z.number().int().min(1).max(64).default(8),
   historyLimit: z.number().int().min(1).default(50),
 });
@@ -48,7 +56,15 @@ export const Train = z.object({
   id: z.string(),
   worker: z.string(),
   changes: z.array(PendingDeploy),
-  state: z.enum(["deploying", "watching", "killing", "rolling-back", "released", "rolled-back", "failed"]),
+  state: z.enum([
+    "deploying",
+    "watching",
+    "killing",
+    "rolling-back",
+    "released",
+    "rolled-back",
+    "failed",
+  ]),
   versionId: z.string().nullable(),
   deployedAt: z.number().int().nullable(),
   watchUntil: z.number().int().nullable(),
@@ -70,7 +86,13 @@ export interface TrainState {
 }
 
 export function initialTrainState(config: z.input<typeof TrainConfig> = {}): TrainState {
-  return { config: TrainConfig.parse(config), seq: 0, workers: {}, trains: {}, attributionFailures: 0 };
+  return {
+    config: TrainConfig.parse(config),
+    seq: 0,
+    workers: {},
+    trains: {},
+    attributionFailures: 0,
+  };
 }
 
 export const TrainEvent = z.discriminatedUnion("type", [
@@ -105,7 +127,9 @@ export const TrainCommand = z.discriminatedUnion("type", [
     type: z.literal("StartDeployTrain"),
     trainId: z.string(),
     worker: z.string(),
-    changes: z.array(z.object({ changeId: ChangeId, sha: z.string(), flagKey: z.string().nullable() })),
+    changes: z.array(
+      z.object({ changeId: ChangeId, sha: z.string(), flagKey: z.string().nullable() }),
+    ),
   }),
   z.object({
     type: z.literal("KillFlag"),
@@ -115,9 +139,19 @@ export const TrainCommand = z.discriminatedUnion("type", [
     flagKey: z.string(),
     issueId: z.string(),
   }),
-  z.object({ type: z.literal("RollbackTrain"), trainId: z.string(), worker: z.string(), versionId: z.string().nullable() }),
+  z.object({
+    type: z.literal("RollbackTrain"),
+    trainId: z.string(),
+    worker: z.string(),
+    versionId: z.string().nullable(),
+  }),
   /** Open an automatic revert Change (the merge queue freezes until it lands). */
-  z.object({ type: z.literal("RequestRevert"), changeId: ChangeId, issueId: z.string(), reason: z.string() }),
+  z.object({
+    type: z.literal("RequestRevert"),
+    changeId: ChangeId,
+    issueId: z.string(),
+    reason: z.string(),
+  }),
   z.object({ type: z.literal("Emit"), event: QueueEvent }),
   z.object({
     type: z.literal("Audit"),
@@ -141,7 +175,10 @@ function dir(path: string): string {
  * Attribution score of one Change for a set of stack frames: 3 per frame in a file the Change
  * touched, 1 per frame in a directory it touched. Transparent and logged with the decision.
  */
-export function attributionScore(c: Pick<PendingDeploy, "files">, frames: { file: string }[]): number {
+export function attributionScore(
+  c: Pick<PendingDeploy, "files">,
+  frames: { file: string }[],
+): number {
   const files = new Set(c.files);
   const dirs = new Set(c.files.map(dir));
   let s = 0;
@@ -160,7 +197,10 @@ export function trainStep(
   const s: TrainState = {
     ...state,
     workers: Object.fromEntries(
-      Object.entries(state.workers).map(([k, w]) => [k, { pending: [...w.pending], active: w.active, history: [...w.history] }]),
+      Object.entries(state.workers).map(([k, w]) => [
+        k,
+        { pending: [...w.pending], active: w.active, history: [...w.history] },
+      ]),
     ),
     trains: Object.fromEntries(Object.entries(state.trains).map(([k, t]) => [k, { ...t }])),
   };
@@ -206,9 +246,20 @@ export function trainStep(
       t.watchUntil = now + s.config.watchMs;
       out.push({
         type: "Emit",
-        event: { type: "deployed", at: now, trainId: t.id, worker: t.worker, versionId: event.versionId, changeIds: t.changes.map((c) => c.changeId) },
+        event: {
+          type: "deployed",
+          at: now,
+          trainId: t.id,
+          worker: t.worker,
+          versionId: event.versionId,
+          changeIds: t.changes.map((c) => c.changeId),
+        },
       });
-      audit("deploy.train-deployed", `train:${t.id}`, { worker: t.worker, versionId: event.versionId, changes: t.changes.map((c) => c.changeId) });
+      audit("deploy.train-deployed", `train:${t.id}`, {
+        worker: t.worker,
+        versionId: event.versionId,
+        changes: t.changes.map((c) => c.changeId),
+      });
       break;
     }
     case "TrainDeployFailed": {
@@ -250,39 +301,131 @@ export function trainStep(
         // Deployed alone (or not switchable): the version identifies the Change exactly.
         t.attributions = [
           ...t.attributions,
-          { issueId: event.issueId, changeId: suspect.changeId, scores, method: candidates.length === 1 ? "single-change-train" : "rollback", confirmed: candidates.length === 1 ? true : null, at: now },
+          {
+            issueId: event.issueId,
+            changeId: suspect.changeId,
+            scores,
+            method: candidates.length === 1 ? "single-change-train" : "rollback",
+            confirmed: candidates.length === 1 ? true : null,
+            at: now,
+          },
         ];
         if (suspect.flagKey !== null && candidates.length === 1) {
           t.state = "killing";
-          t.regression = { issueId: event.issueId, suspect: suspect.changeId, deadline: now + s.config.killWatchMs };
-          out.push({ type: "KillFlag", trainId: t.id, worker: t.worker, changeId: suspect.changeId, flagKey: suspect.flagKey, issueId: event.issueId });
-          out.push({ type: "Emit", event: { type: "flag_killed", at: now, trainId: t.id, worker: t.worker, changeId: suspect.changeId, flagKey: suspect.flagKey, issueId: event.issueId } });
+          t.regression = {
+            issueId: event.issueId,
+            suspect: suspect.changeId,
+            deadline: now + s.config.killWatchMs,
+          };
+          out.push({
+            type: "KillFlag",
+            trainId: t.id,
+            worker: t.worker,
+            changeId: suspect.changeId,
+            flagKey: suspect.flagKey,
+            issueId: event.issueId,
+          });
+          out.push({
+            type: "Emit",
+            event: {
+              type: "flag_killed",
+              at: now,
+              trainId: t.id,
+              worker: t.worker,
+              changeId: suspect.changeId,
+              flagKey: suspect.flagKey,
+              issueId: event.issueId,
+            },
+          });
         } else {
           t.state = "rolling-back";
-          out.push({ type: "RollbackTrain", trainId: t.id, worker: t.worker, versionId: t.versionId });
-          out.push({ type: "RequestRevert", changeId: suspect.changeId, issueId: event.issueId, reason: `regression ${event.issueId} in ${t.worker} version ${event.versionId}` });
+          out.push({
+            type: "RollbackTrain",
+            trainId: t.id,
+            worker: t.worker,
+            versionId: t.versionId,
+          });
+          out.push({
+            type: "RequestRevert",
+            changeId: suspect.changeId,
+            issueId: event.issueId,
+            reason: `regression ${event.issueId} in ${t.worker} version ${event.versionId}`,
+          });
         }
-        audit("deploy.regression-attributed", `change:${suspect.changeId}`, { trainId: t.id, issueId: event.issueId, scores, method: t.attributions[t.attributions.length - 1]?.method });
+        audit("deploy.regression-attributed", `change:${suspect.changeId}`, {
+          trainId: t.id,
+          issueId: event.issueId,
+          scores,
+          method: t.attributions[t.attributions.length - 1]?.method,
+        });
         break;
       }
       t.state = "killing";
-      t.regression = { issueId: event.issueId, suspect: suspect.changeId, deadline: now + s.config.killWatchMs };
-      t.attributions = [...t.attributions, { issueId: event.issueId, changeId: suspect.changeId, scores, method: "flag-kill", confirmed: null, at: now }];
-      out.push({ type: "KillFlag", trainId: t.id, worker: t.worker, changeId: suspect.changeId, flagKey: suspect.flagKey, issueId: event.issueId });
-      out.push({ type: "Emit", event: { type: "flag_killed", at: now, trainId: t.id, worker: t.worker, changeId: suspect.changeId, flagKey: suspect.flagKey, issueId: event.issueId } });
-      audit("deploy.flag-killed", `change:${suspect.changeId}`, { trainId: t.id, issueId: event.issueId, scores });
+      t.regression = {
+        issueId: event.issueId,
+        suspect: suspect.changeId,
+        deadline: now + s.config.killWatchMs,
+      };
+      t.attributions = [
+        ...t.attributions,
+        {
+          issueId: event.issueId,
+          changeId: suspect.changeId,
+          scores,
+          method: "flag-kill",
+          confirmed: null,
+          at: now,
+        },
+      ];
+      out.push({
+        type: "KillFlag",
+        trainId: t.id,
+        worker: t.worker,
+        changeId: suspect.changeId,
+        flagKey: suspect.flagKey,
+        issueId: event.issueId,
+      });
+      out.push({
+        type: "Emit",
+        event: {
+          type: "flag_killed",
+          at: now,
+          trainId: t.id,
+          worker: t.worker,
+          changeId: suspect.changeId,
+          flagKey: suspect.flagKey,
+          issueId: event.issueId,
+        },
+      });
+      audit("deploy.flag-killed", `change:${suspect.changeId}`, {
+        trainId: t.id,
+        issueId: event.issueId,
+        scores,
+      });
       break;
     }
     case "RegressionCleared": {
       const t = s.trains[event.trainId];
-      if (t === undefined || t.state !== "killing" || t.regression?.issueId !== event.issueId) break;
+      if (t === undefined || t.state !== "killing" || t.regression?.issueId !== event.issueId)
+        break;
       const suspect = t.regression.suspect;
       t.killed = [...t.killed, suspect];
-      t.attributions = t.attributions.map((a) => (a.issueId === event.issueId ? { ...a, confirmed: true } : a));
+      t.attributions = t.attributions.map((a) =>
+        a.issueId === event.issueId ? { ...a, confirmed: true } : a,
+      );
       t.regression = null;
       t.state = "watching";
-      out.push({ type: "RequestRevert", changeId: suspect, issueId: event.issueId, reason: `flag killed after regression ${event.issueId}; reverting` });
-      audit("deploy.regression-attributed", `change:${suspect}`, { trainId: t.id, issueId: event.issueId, confirmed: true });
+      out.push({
+        type: "RequestRevert",
+        changeId: suspect,
+        issueId: event.issueId,
+        reason: `flag killed after regression ${event.issueId}; reverting`,
+      });
+      audit("deploy.regression-attributed", `change:${suspect}`, {
+        trainId: t.id,
+        issueId: event.issueId,
+        confirmed: true,
+      });
       break;
     }
     case "ErrorBudgetCleared": {
@@ -308,11 +451,21 @@ export function trainStep(
           // The killed flag didn't clear it: roll the whole train back.
           s.attributionFailures++;
           const issueId = t.regression.issueId;
-          t.attributions = t.attributions.map((a) => (a.issueId === issueId ? { ...a, confirmed: false } : a));
+          t.attributions = t.attributions.map((a) =>
+            a.issueId === issueId ? { ...a, confirmed: false } : a,
+          );
           t.regression = null;
           t.state = "rolling-back";
-          out.push({ type: "RollbackTrain", trainId: t.id, worker: t.worker, versionId: t.versionId });
-          audit("deploy.regression-unattributed", `train:${t.id}`, { issueId, why: "killing the most likely flag did not clear it; rolling back the train" });
+          out.push({
+            type: "RollbackTrain",
+            trainId: t.id,
+            worker: t.worker,
+            versionId: t.versionId,
+          });
+          audit("deploy.regression-unattributed", `train:${t.id}`, {
+            issueId,
+            why: "killing the most likely flag did not clear it; rolling back the train",
+          });
         }
       }
       break;
@@ -336,9 +489,25 @@ export function trainStep(
     }
     w.pending = w.pending.slice(changes.length);
     const id = `t${(++s.seq).toString(36)}`;
-    s.trains[id] = { id, worker: name, changes, state: "deploying", versionId: null, deployedAt: null, watchUntil: null, killed: [], regression: null, attributions: [] };
+    s.trains[id] = {
+      id,
+      worker: name,
+      changes,
+      state: "deploying",
+      versionId: null,
+      deployedAt: null,
+      watchUntil: null,
+      killed: [],
+      regression: null,
+      attributions: [],
+    };
     w.active = id;
-    out.push({ type: "StartDeployTrain", trainId: id, worker: name, changes: changes.map((c) => ({ changeId: c.changeId, sha: c.sha, flagKey: c.flagKey })) });
+    out.push({
+      type: "StartDeployTrain",
+      trainId: id,
+      worker: name,
+      changes: changes.map((c) => ({ changeId: c.changeId, sha: c.sha, flagKey: c.flagKey })),
+    });
   }
   // Forget old trains.
   const keep = new Set<string>();

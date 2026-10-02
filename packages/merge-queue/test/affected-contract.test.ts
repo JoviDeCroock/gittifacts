@@ -7,15 +7,16 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import {
+  conflictBetween,
+  conflictComponents,
   ALL_TESTS as THEIR_ALL_TESTS,
   CONFIG_SENTINEL as THEIR_CONFIG,
   AffectedSet as TheirAffectedSet,
-  conflictBetween,
-  conflictComponents,
 } from "../../affected/src/index.js";
-import { ALL_TESTS, AffectedSet, CONFIG_SENTINEL, components, conflicts } from "../src/index.js";
+import { AffectedSet, ALL_TESTS, CONFIG_SENTINEL, components, conflicts } from "../src/index.js";
 
-type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+type Equals<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 const sameType: Equals<z.infer<typeof AffectedSet>, z.infer<typeof TheirAffectedSet>> = true;
 
 const setArb = fc.record({
@@ -57,7 +58,23 @@ describe("AffectedSet contract matches @app/affected", () => {
       fc.property(fc.array(setArb, { maxLength: 9 }), (sets) => {
         const ids = sets.map((_, i) => `c${i}`);
         const mine = components(ids, (id) => sets[Number(id.slice(1))] ?? null);
-        const theirs = conflictComponents(new Map(ids.map((id, i) => [id, sets[i] ?? TheirAffectedSet.parse({ files: [], modules: [], testTargets: [], publicApi: false, deploysTo: [], complete: true, analyzers: [] })])));
+        const theirs = conflictComponents(
+          new Map(
+            ids.map((id, i) => [
+              id,
+              sets[i] ??
+                TheirAffectedSet.parse({
+                  files: [],
+                  modules: [],
+                  testTargets: [],
+                  publicApi: false,
+                  deploysTo: [],
+                  complete: true,
+                  analyzers: [],
+                }),
+            ]),
+          ),
+        );
         const norm = (groups: string[][]) => groups.map((g) => [...g].sort().join(",")).sort();
         expect(norm(mine)).toEqual(norm(theirs));
       }),

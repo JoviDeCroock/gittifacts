@@ -37,7 +37,11 @@ export const QueueConfig = z.object({
    * A batch built on an in-flight predecessor can't land before it anyway, so it stays open for
    * joiners this long after its parent started (free batching: fewer CI runs, no added latency).
    */
-  batchHoldMs: z.number().int().min(0).default(2 * 60_000),
+  batchHoldMs: z
+    .number()
+    .int()
+    .min(0)
+    .default(2 * 60_000),
   /**
    * In-flight chain batches across the repo. Backpressure: while it is reached, arrivals wait and
    * are batched together when a slot frees (bigger batches, fewer CI minutes).
@@ -57,19 +61,35 @@ export const QueueConfig = z.object({
   /** Parallel prefix probes per bisection round. */
   bisectProbes: z.number().int().min(1).max(16).default(3),
   /** Every `agingStepMs` of waiting raises an entry one priority class (never above `security`). */
-  agingStepMs: z.number().int().min(1).default(15 * 60_000),
+  agingStepMs: z
+    .number()
+    .int()
+    .min(1)
+    .default(15 * 60_000),
   /** Entries one agent session may have in batches at once. */
   maxInFlightPerSession: z.number().int().min(1).default(12),
   /** Fair-share weights per principal (default 1). */
   principalWeights: z.record(z.string(), z.number().positive()).default({}),
   resolutionMaxAttempts: z.number().int().min(1).max(10).default(2),
   /** An affected set not computed after this long is treated as unknown (conflicts with all). */
-  affectedSetTimeoutMs: z.number().int().min(1).default(15 * 60_000),
+  affectedSetTimeoutMs: z
+    .number()
+    .int()
+    .min(1)
+    .default(15 * 60_000),
   /** A CI run with no result after this long is cancelled and retried. */
-  runTimeoutMs: z.number().int().min(1).default(90 * 60_000),
+  runTimeoutMs: z
+    .number()
+    .int()
+    .min(1)
+    .default(90 * 60_000),
   maxInfraRetries: z.number().int().min(0).default(3),
   /** Prior for the CI duration estimate (ETAs) before any run has finished. */
-  initialCiDurationMs: z.number().int().min(1).default(10 * 60_000),
+  initialCiDurationMs: z
+    .number()
+    .int()
+    .min(1)
+    .default(10 * 60_000),
   /** Landed main commits remembered for staleness checks. */
   mainLogLimit: z.number().int().min(16).default(2000),
   /** Terminal entries kept for status queries. */

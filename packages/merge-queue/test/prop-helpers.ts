@@ -3,7 +3,7 @@
  * counterexamples while debugging).
  */
 import fc from "fast-check";
-import { ALL_TESTS, type AffectedSet, CONFIG_SENTINEL, type queueConfig } from "../src/index.js";
+import { type AffectedSet, ALL_TESTS, CONFIG_SENTINEL, type queueConfig } from "../src/index.js";
 import { affected, type TestChange, World } from "./harness.js";
 
 export const FILES = ["f0", "f1", "f2", "f3", "f4", "f5"];
@@ -22,8 +22,18 @@ export const affectedArb: fc.Arbitrary<AffectedSet | null | "incomplete"> = fc.o
   { weight: 1, arbitrary: fc.constant(null) },
   { weight: 1, arbitrary: fc.constant("incomplete" as const) },
   // Config change (conflicts with everything) and "all tests" (meets any non-empty test set).
-  { weight: 1, arbitrary: fc.subarray(FILES, { minLength: 1, maxLength: 1 }).map((files) => affected({ files, modules: [CONFIG_SENTINEL], tests: [ALL_TESTS] })) },
-  { weight: 1, arbitrary: fc.subarray(FILES, { minLength: 1, maxLength: 1 }).map((files) => affected({ files, tests: [ALL_TESTS] })) },
+  {
+    weight: 1,
+    arbitrary: fc
+      .subarray(FILES, { minLength: 1, maxLength: 1 })
+      .map((files) => affected({ files, modules: [CONFIG_SENTINEL], tests: [ALL_TESTS] })),
+  },
+  {
+    weight: 1,
+    arbitrary: fc
+      .subarray(FILES, { minLength: 1, maxLength: 1 })
+      .map((files) => affected({ files, tests: [ALL_TESTS] })),
+  },
 );
 
 export const specArb = fc.record({
@@ -54,7 +64,10 @@ export type Op =
 export const opArb: fc.Arbitrary<Op> = fc.oneof(
   { weight: 6, arbitrary: fc.constant<Op>({ k: "enqueue" }) },
   { weight: 14, arbitrary: fc.nat(1000).map<Op>((i) => ({ k: "complete", i })) },
-  { weight: 2, arbitrary: fc.integer({ min: 1000, max: 20 * 60_000 }).map<Op>((ms) => ({ k: "tick", ms })) },
+  {
+    weight: 2,
+    arbitrary: fc.integer({ min: 1000, max: 20 * 60_000 }).map<Op>((ms) => ({ k: "tick", ms })),
+  },
   { weight: 1, arbitrary: fc.nat(100).map<Op>((i) => ({ k: "dequeue", i })) },
   { weight: 1, arbitrary: fc.constant<Op>({ k: "freeze" }) },
   { weight: 1, arbitrary: fc.constant<Op>({ k: "thaw" }) },
@@ -67,7 +80,10 @@ export function toChanges(specs: Spec[]): TestChange[] {
   return specs.map((s, i): TestChange => {
     const id = `c${i}`;
     const partner = i > 0 ? `c${s.partner % i}` : null;
-    const a = s.affected === "incomplete" ? { ...affected({ files: ["fz"] }), complete: false } : s.affected;
+    const a =
+      s.affected === "incomplete"
+        ? { ...affected({ files: ["fz"] }), complete: false }
+        : s.affected;
     const inGroup = s.group && groupSize > 1;
     return {
       id,
@@ -75,7 +91,8 @@ export function toChanges(specs: Spec[]): TestChange[] {
       bad: s.bad,
       textualWith: s.textual && partner !== null ? [partner] : [],
       semanticWith: s.semantic && partner !== null ? [partner] : [],
-      dependsOn: s.dep && partner !== null && !inGroup && !specs[s.partner % i]?.group ? [partner] : [],
+      dependsOn:
+        s.dep && partner !== null && !inGroup && !specs[s.partner % i]?.group ? [partner] : [],
       landMode: s.atomic ? "atomic" : "incremental",
       plangroup: inGroup ? "G" : null,
       landTogether: inGroup,
@@ -87,9 +104,19 @@ export function toChanges(specs: Spec[]): TestChange[] {
   });
 }
 
-export function run(specs: Spec[], ops: Op[], picks: number[], opts: { flakeRate: number; config?: ReturnType<typeof queueConfig> }) {
+export function run(
+  specs: Spec[],
+  ops: Op[],
+  picks: number[],
+  opts: { flakeRate: number; config?: ReturnType<typeof queueConfig> },
+) {
   const changes = toChanges(specs);
-  const w = new World({ flakeRate: opts.flakeRate, flakeRepeat: 0.3, resolverSuccess: 0.7, ...(opts.config ? { config: opts.config } : {}) });
+  const w = new World({
+    flakeRate: opts.flakeRate,
+    flakeRepeat: 0.3,
+    resolverSuccess: 0.7,
+    ...(opts.config ? { config: opts.config } : {}),
+  });
   let next = 0;
   let reverts = 0;
   const human = { principalId: "human-1", kind: "human" as const, signature: "sig" };
@@ -127,7 +154,14 @@ export function run(specs: Spec[], ops: Op[], picks: number[], opts: { flakeRate
         const target = w.merged[w.merged.length - 1];
         if (target === undefined) break;
         const orig = w.changes.get(target);
-        w.enqueue({ id: `r${reverts++}`, affected: orig?.affected ?? null, priority: "revert", revertOf: target, automaticRevert: true, lane: 0 });
+        w.enqueue({
+          id: `r${reverts++}`,
+          affected: orig?.affected ?? null,
+          priority: "revert",
+          revertOf: target,
+          automaticRevert: true,
+          lane: 0,
+        });
         break;
       }
     }
@@ -141,4 +175,3 @@ export function run(specs: Spec[], ops: Op[], picks: number[], opts: { flakeRate
   }
   return { w, changes };
 }
-

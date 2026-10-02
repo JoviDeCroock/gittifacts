@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { World, affected } from "./harness.js";
+import { affected, World } from "./harness.js";
 
 describe("smoke", () => {
   it("lands independent and conflicting changes", () => {
@@ -14,7 +14,8 @@ describe("smoke", () => {
   });
   it("ejects a bad change and lands the rest", () => {
     const w = new World();
-    for (const id of ["a", "b", "c", "d"]) w.enqueue({ id, affected: affected({ files: ["x.ts"], tests: ["tx"] }), bad: id === "c" });
+    for (const id of ["a", "b", "c", "d"])
+      w.enqueue({ id, affected: affected({ files: ["x.ts"], tests: ["tx"] }), bad: id === "c" });
     w.drain();
     expect(w.violations).toEqual([]);
     expect(new Set(w.merged)).toEqual(new Set(["a", "b", "d"]));

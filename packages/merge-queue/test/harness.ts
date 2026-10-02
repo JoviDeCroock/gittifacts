@@ -67,7 +67,12 @@ export const sha = (s: string): string => {
   return out;
 };
 
-export function affected(keys: { files?: string[]; modules?: string[]; tests?: string[]; deploysTo?: string[] }): AffectedSet {
+export function affected(keys: {
+  files?: string[];
+  modules?: string[];
+  tests?: string[];
+  deploysTo?: string[];
+}): AffectedSet {
   return {
     files: keys.files ?? [],
     modules: keys.modules ?? [],
@@ -174,7 +179,10 @@ export class World {
     this.version.set(c.id, v);
     const head = sha(`head:${c.id}@${v}`);
     this.heads.set(head, { id: c.id, v });
-    this.authoredOn.set(c.id, new Set(this.contentOf(this.mainSha).map((x) => x.split("@")[0] ?? x)));
+    this.authoredOn.set(
+      c.id,
+      new Set(this.contentOf(this.mainSha).map((x) => x.split("@")[0] ?? x)),
+    );
     this.enqueued.add(c.id);
     this.laneHistory.delete(c.id);
     this.send({
@@ -182,7 +190,11 @@ export class World {
       changeId: c.id,
       headSha: head,
       authorId: c.author ?? `agent-${c.session ?? "a"}`,
-      enqueuedBy: { principalId: c.author ?? `agent-${c.session ?? "a"}`, kind: "agent", sessionId: c.session ?? "a" },
+      enqueuedBy: {
+        principalId: c.author ?? `agent-${c.session ?? "a"}`,
+        kind: "agent",
+        sessionId: c.session ?? "a",
+      },
       priority: c.priority ?? "normal",
       lane: c.lane ?? 0,
       dependsOn: c.dependsOn ?? [],
@@ -236,7 +248,8 @@ export class World {
         if (c.event.type === "ejected") this.ejected.set(c.event.changeId, c.event.reason.code);
         return;
       case "Audit":
-        if (c.action === "merge-queue.dequeued") this.dequeued.add(c.subject.slice("change:".length));
+        if (c.action === "merge-queue.dequeued")
+          this.dequeued.add(c.subject.slice("change:".length));
         return;
       default:
         return;
@@ -257,11 +270,15 @@ export class World {
     const clean = (this.runs.get(c.treeSha) ?? []).some(
       (r) =>
         (r.scope === "all" || c.evidence.verdict.scope !== "all") &&
-        r.failed.every((t) => rechecked.has(t) || (c.evidence.quarantined.includes(t) && this.quarantined.has(t))),
+        r.failed.every(
+          (t) =>
+            rechecked.has(t) || (c.evidence.quarantined.includes(t) && this.quarantined.has(t)),
+        ),
     );
     if (!clean) this.violations.push(`CAS ${c.casId} to a tree with no clean run on it`);
     if (c.evidence.verdict.scope !== "all") {
-      for (const m of c.evidence.carried) if (m.verdict.scope !== "all") this.violations.push(`carried non-full run in ${c.casId}`);
+      for (const m of c.evidence.carried)
+        if (m.verdict.scope !== "all") this.violations.push(`carried non-full run in ${c.casId}`);
     }
     // Ground truth: the landed content must be green.
     const truth = this.realFailures(commit.content);
@@ -291,7 +308,12 @@ export class World {
     return [...out].filter((o) => conflicts(mine, this.changes.get(o)?.affected ?? null));
   }
 
-  private resolved(x: string, vx: string | number | undefined, y: string, vy: string | number | undefined): boolean {
+  private resolved(
+    x: string,
+    vx: string | number | undefined,
+    y: string,
+    vy: string | number | undefined,
+  ): boolean {
     return this.resolvedPairs.has(`${x}@${vx}+${y}`) || this.resolvedPairs.has(`${y}@${vy}+${x}`);
   }
 
@@ -304,7 +326,8 @@ export class World {
       if (ch === undefined) continue;
       if (ch.bad) out.push(`test:${id}`);
       for (const o of this.related(id, "semanticWith"))
-        if (version.has(o) && !this.resolved(id, v, o, version.get(o))) out.push(`pair:${[id, o].sort().join("+")}`);
+        if (version.has(o) && !this.resolved(id, v, o, version.get(o)))
+          out.push(`pair:${[id, o].sort().join("+")}`);
     }
     return [...new Set(out)];
   }
@@ -339,7 +362,12 @@ export class World {
         const ch = this.changes.get(h?.id ?? c.changeId);
         if (ch === undefined) return;
         if (ch.affected === null) return; // analyzer never answers → core times out
-        this.send({ type: "AffectedSetComputed", changeId: c.changeId, headSha: c.headSha, affected: ch.affected });
+        this.send({
+          type: "AffectedSetComputed",
+          changeId: c.changeId,
+          headSha: c.headSha,
+          affected: ch.affected,
+        });
         return;
       }
       case "BuildBatchTree": {
@@ -351,10 +379,22 @@ export class World {
           const version = new Map(content.map((x) => [x.split("@")[0] ?? x, x.split("@")[1]]));
           const authored = this.authoredOn.get(e.changeId) ?? new Set<string>();
           const blocker = this.related(e.changeId, "textualWith").find(
-            (o) => version.has(o) && !authored.has(o) && !this.resolved(e.changeId, h?.v, o, version.get(o)),
+            (o) =>
+              version.has(o) &&
+              !authored.has(o) &&
+              !this.resolved(e.changeId, h?.v, o, version.get(o)),
           );
           if (blocker !== undefined) {
-            this.send({ type: "RebaseResult", batchId: c.batchId, result: { status: "conflict", changeId: e.changeId, files: ["shared.ts"], upstream: [blocker] } });
+            this.send({
+              type: "RebaseResult",
+              batchId: c.batchId,
+              result: {
+                status: "conflict",
+                changeId: e.changeId,
+                files: ["shared.ts"],
+                upstream: [blocker],
+              },
+            });
             return;
           }
           content = [...content, `${e.changeId}@${h?.v ?? 0}`];
@@ -368,7 +408,11 @@ export class World {
         const last = commits[commits.length - 1];
         if (last === undefined) return;
         this.refs.add(c.refName);
-        this.send({ type: "RebaseResult", batchId: c.batchId, result: { status: "clean", tipSha: last.commitSha, treeSha: last.treeSha, commits } });
+        this.send({
+          type: "RebaseResult",
+          batchId: c.batchId,
+          result: { status: "clean", tipSha: last.commitSha, treeSha: last.treeSha, commits },
+        });
         return;
       }
       case "StartBatchRun": {
@@ -377,7 +421,8 @@ export class World {
         if (this.rand("flake", c.runId) < this.opts.flakeRate) {
           const names = this.opts.flakyTests;
           const t = names[Math.floor(this.rand("which", c.runId) * names.length)];
-          if (t !== undefined && this.testsCovered(c.targets, t) && !failing.includes(t)) failing.push(t);
+          if (t !== undefined && this.testsCovered(c.targets, t) && !failing.includes(t))
+            failing.push(t);
         }
         const runs = this.runs.get(c.treeSha) ?? [];
         runs.push({ runId: c.runId, scope: c.targets, failed: failing });
@@ -399,8 +444,16 @@ export class World {
         const mainReal = new Set(this.realFailures(this.contentOf(c.mainSha)));
         const results = c.tests.map((t) => {
           const flaky = this.isFlaky(t);
-          const onBatch = real.has(t) || (flaky && this.rand("rb", c.runId, t) < this.opts.flakeRepeat) || t === WHOLE_RUN ? "failed" : "passed";
-          const onMain = mainReal.has(t) || (flaky && this.rand("rm", c.runId, t) < this.opts.flakeRepeat) ? "failed" : "passed";
+          const onBatch =
+            real.has(t) ||
+            (flaky && this.rand("rb", c.runId, t) < this.opts.flakeRepeat) ||
+            t === WHOLE_RUN
+              ? "failed"
+              : "passed";
+          const onMain =
+            mainReal.has(t) || (flaky && this.rand("rm", c.runId, t) < this.opts.flakeRepeat)
+              ? "failed"
+              : "passed";
           if (onBatch === "passed") {
             const s = this.recheckPassed.get(c.treeSha) ?? new Set<string>();
             s.add(t);
@@ -416,20 +469,38 @@ export class World {
         const ch = this.changes.get(c.changeId);
         if (ch === undefined) return;
         const ok = this.rand("resolve", c.changeId, c.attempt) < this.opts.resolverSuccess;
-        const blamed = c.kind === "semantic" ? this.related(c.changeId, "semanticWith").find((o) => c.upstream.includes(o)) ?? null : c.upstream[0] ?? null;
+        const blamed =
+          c.kind === "semantic"
+            ? (this.related(c.changeId, "semanticWith").find((o) => c.upstream.includes(o)) ?? null)
+            : (c.upstream[0] ?? null);
         if (c.kind === "semantic" && ch.bad) {
-          this.send({ type: "ResolutionResult", changeId: c.changeId, attempt: c.attempt, resolverId: "resolver-1", outcome: { status: "not-a-conflict", message: "the change itself fails" } });
+          this.send({
+            type: "ResolutionResult",
+            changeId: c.changeId,
+            attempt: c.attempt,
+            resolverId: "resolver-1",
+            outcome: { status: "not-a-conflict", message: "the change itself fails" },
+          });
           return;
         }
         if (!ok || (c.kind === "semantic" && blamed === null)) {
-          this.send({ type: "ResolutionResult", changeId: c.changeId, attempt: c.attempt, resolverId: "resolver-1", outcome: { status: "failed", message: "could not resolve" } });
+          this.send({
+            type: "ResolutionResult",
+            changeId: c.changeId,
+            attempt: c.attempt,
+            resolverId: "resolver-1",
+            outcome: { status: "failed", message: "could not resolve" },
+          });
           return;
         }
         const v = (this.version.get(c.changeId) ?? 1) + 1;
         this.version.set(c.changeId, v);
         const head = sha(`head:${c.changeId}@${v}`);
         this.heads.set(head, { id: c.changeId, v });
-        for (const o of [...this.related(c.changeId, "textualWith"), ...this.related(c.changeId, "semanticWith")])
+        for (const o of [
+          ...this.related(c.changeId, "textualWith"),
+          ...this.related(c.changeId, "semanticWith"),
+        ])
           this.resolvedPairs.add(`${c.changeId}@${v}+${o}`);
         const lane = this.opts.resolverLowersLane ? 0 : (ch.lane ?? 0);
         this.send({
@@ -437,19 +508,38 @@ export class World {
           changeId: c.changeId,
           attempt: c.attempt,
           resolverId: "resolver-1",
-          outcome: { status: "resolved", newHeadSha: head, lane, laneReasons: [], outsideHunks: false, blamedUpstream: blamed, resolutionRef: `res:${c.changeId}:${v}`, affected: ch.affected },
+          outcome: {
+            status: "resolved",
+            newHeadSha: head,
+            lane,
+            laneReasons: [],
+            outsideHunks: false,
+            blamedUpstream: blamed,
+            resolutionRef: `res:${c.changeId}:${v}`,
+            affected: ch.affected,
+          },
         });
         return;
       }
       case "RequestApproval": {
         const e = this.state.entries[c.changeId];
         if (e === undefined) return;
-        this.send({ type: "Approved", changeId: c.changeId, lane: e.lane, approver: { principalId: "human-reviewer", kind: "human" } });
+        this.send({
+          type: "Approved",
+          changeId: c.changeId,
+          lane: e.lane,
+          approver: { principalId: "human-reviewer", kind: "human" },
+        });
         return;
       }
       case "Cas": {
         if (c.expectedOld !== this.mainSha) {
-          this.send({ type: "CasResult", casId: c.casId, result: "stale", actualSha: this.mainSha });
+          this.send({
+            type: "CasResult",
+            casId: c.casId,
+            result: "stale",
+            actualSha: this.mainSha,
+          });
           return;
         }
         this.mainSha = c.newSha;

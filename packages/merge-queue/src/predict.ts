@@ -30,7 +30,8 @@ export function predict(s: QueueState, e: QueueEntry): Prediction {
   const rate =
     a === undefined
       ? AUTHOR_PRIOR
-      : (a.passed + AUTHOR_PRIOR * AUTHOR_PRIOR_WEIGHT) / (a.passed + a.failed + AUTHOR_PRIOR_WEIGHT);
+      : (a.passed + AUTHOR_PRIOR * AUTHOR_PRIOR_WEIGHT) /
+        (a.passed + a.failed + AUTHOR_PRIOR_WEIGHT);
   factors.author = Math.min(1.02, rate / AUTHOR_PRIOR);
   factors.redGreen = e.evidence.redGreen === false ? 0.97 : e.evidence.redGreen === null ? 0.99 : 1;
   const cov = e.evidence.coverage;

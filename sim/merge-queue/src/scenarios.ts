@@ -125,7 +125,9 @@ export const SCENARIOS: Record<string, Scenario> = {
     "Hot codebase: 30% conflict density, more textual and semantic conflicts.",
     { conflictDensity: 0.3, textualConflictRate: 0.4, semanticConflictRate: 0.01 },
   ),
-  "failure-heavy": scenario("failure-heavy", "Sloppy agents: 6% truly broken Changes.", { trueFailureRate: 0.06 }),
+  "failure-heavy": scenario("failure-heavy", "Sloppy agents: 6% truly broken Changes.", {
+    trueFailureRate: 0.06,
+  }),
   "flaky-storm": scenario(
     "flaky-storm",
     "15% flaky runs plus 3 very flaky tests (30% per run) that must get quarantined.",
@@ -149,12 +151,19 @@ export const SCENARIOS: Record<string, Scenario> = {
   "textual-corpus": scenario(
     "textual-corpus",
     "Resolver gate stand-in: high textual conflict rate in a hot codebase (the real fixture corpus comes from the resolver agent).",
-    { conflictDensity: 0.25, textualConflictRate: 0.8, semanticConflictRate: 0, arrivalsPerHour: 150, hours: 2 },
+    {
+      conflictDensity: 0.25,
+      textualConflictRate: 0.8,
+      semanticConflictRate: 0,
+      arrivalsPerHour: 150,
+      hours: 2,
+    },
   ),
 };
 
 export function getScenario(name: string): Scenario {
   const s = SCENARIOS[name];
-  if (s === undefined) throw new Error(`unknown scenario ${name}; known: ${Object.keys(SCENARIOS).join(", ")}`);
+  if (s === undefined)
+    throw new Error(`unknown scenario ${name}; known: ${Object.keys(SCENARIOS).join(", ")}`);
   return s;
 }

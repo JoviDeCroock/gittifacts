@@ -14,7 +14,14 @@ import { ConflictIndex, conflicts, needsAllTests, unionAffected } from "./confli
 import { type EjectInput, ejectReason } from "./eject.js";
 import { InvariantViolation, invariant } from "./invariants.js";
 import { predict } from "./predict.js";
-import { advanceVirtualTime, assignTag, compareOrder, effectiveRank, flowKey, isExpress } from "./priority.js";
+import {
+  advanceVirtualTime,
+  assignTag,
+  compareOrder,
+  effectiveRank,
+  flowKey,
+  isExpress,
+} from "./priority.js";
 import type { CasEvidence, Command, CoreEvent, CoreEventOf, LaneRaise } from "./protocol.js";
 import {
   type AffectedSet,
@@ -66,7 +73,8 @@ function isTerminal(e: QueueEntry): boolean {
 }
 
 function batchDone(b: Batch): boolean {
-  if (b.kind === "probe") return b.state === "passed" || b.state === "failed" || b.state === "cancelled";
+  if (b.kind === "probe")
+    return b.state === "passed" || b.state === "failed" || b.state === "cancelled";
   return b.state === "landed" || b.state === "cancelled" || b.state === "failed";
 }
 
@@ -78,7 +86,13 @@ function ownEntries(b: Batch): string[] {
 
 /** Not yet tested: counts toward speculation depth and the in-flight cap. */
 function inFlight(b: Batch): boolean {
-  return b.state === "pending" || b.state === "building" || b.state === "ready" || b.state === "running" || b.state === "rechecking";
+  return (
+    b.state === "pending" ||
+    b.state === "building" ||
+    b.state === "ready" ||
+    b.state === "running" ||
+    b.state === "rechecking"
+  );
 }
 
 interface PlannedUnit {
@@ -137,7 +151,10 @@ class Machine {
     this.out.push({ type: "Audit", action, subject, principalId, signature, payload });
   }
 
-  private telemetry(kind: "prediction" | "outcome" | "lane-downgrade-ignored" | "rejected-event", data: Record<string, unknown>): void {
+  private telemetry(
+    kind: "prediction" | "outcome" | "lane-downgrade-ignored" | "rejected-event",
+    data: Record<string, unknown>,
+  ): void {
     this.out.push({ type: "Telemetry", kind, data });
   }
 
@@ -159,39 +176,56 @@ class Machine {
   handle(ev: CoreEvent): void {
     switch (ev.type) {
       case "Enqueued":
-        return this.onEnqueued(ev);
+        this.onEnqueued(ev);
+        return;
       case "Dequeued":
-        return this.onDequeued(ev);
+        this.onDequeued(ev);
+        return;
       case "Reprioritized":
-        return this.onReprioritized(ev);
+        this.onReprioritized(ev);
+        return;
       case "AffectedSetComputed":
-        return this.onAffected(ev);
+        this.onAffected(ev);
+        return;
       case "RebaseResult":
-        return this.onRebase(ev);
+        this.onRebase(ev);
+        return;
       case "BatchResult":
-        return this.onBatchResult(ev);
+        this.onBatchResult(ev);
+        return;
       case "FlakeRecheckResult":
-        return this.onRecheck(ev);
+        this.onRecheck(ev);
+        return;
       case "ResolutionResult":
-        return this.onResolution(ev);
+        this.onResolution(ev);
+        return;
       case "CasResult":
-        return this.onCasResult(ev);
+        this.onCasResult(ev);
+        return;
       case "MainAdvanced":
-        return this.onExternalMain(ev.sha);
+        this.onExternalMain(ev.sha);
+        return;
       case "PostMergeCheckFailed":
-        return this.onPostMergeFailed(ev);
+        this.onPostMergeFailed(ev);
+        return;
       case "RevertLanded":
-        return this.onRevertLanded([ev.changeId]);
+        this.onRevertLanded([ev.changeId]);
+        return;
       case "Freeze":
-        return this.onFreeze(ev);
+        this.onFreeze(ev);
+        return;
       case "Thaw":
-        return this.onThaw(ev);
+        this.onThaw(ev);
+        return;
       case "Approved":
-        return this.onApproved(ev);
+        this.onApproved(ev);
+        return;
       case "Unquarantined":
-        return this.onUnquarantined(ev);
+        this.onUnquarantined(ev);
+        return;
       case "Tick":
-        return this.onTick();
+        this.onTick();
+        return;
       case "ConfigUpdated":
         this.s.config = ev.config;
         return;
@@ -203,7 +237,9 @@ class Machine {
     if (existing !== undefined && !isTerminal(existing)) {
       if (existing.headSha === ev.headSha) return; // idempotent re-enqueue
       if (this.inCas(existing.changeId)) {
-        this.reject("Enqueued", "a previous head is landing right now; retry after it settles", { changeId: ev.changeId });
+        this.reject("Enqueued", "a previous head is landing right now; retry after it settles", {
+          changeId: ev.changeId,
+        });
         return;
       }
       // New head: the old one leaves the queue (dependents keep waiting for the new one).
@@ -211,14 +247,20 @@ class Machine {
       this.terminate(
         existing,
         "ejected",
-        { changeId: existing.changeId, code: "superseded", message: `head ${existing.headSha.slice(0, 12)} replaced by ${ev.headSha.slice(0, 12)}` },
+        {
+          changeId: existing.changeId,
+          code: "superseded",
+          message: `head ${existing.headSha.slice(0, 12)} replaced by ${ev.headSha.slice(0, 12)}`,
+        },
         SYSTEM_PRINCIPAL,
         false,
       );
     }
     const seq = ++this.s.seq;
     // Already-merged dependencies are satisfied (the shell should leave them out; be robust).
-    const deps = [...new Set(ev.dependsOn)].filter((d) => d !== ev.changeId && this.entry(d)?.state !== "merged");
+    const deps = [...new Set(ev.dependsOn)].filter(
+      (d) => d !== ev.changeId && this.entry(d)?.state !== "merged",
+    );
     const approvedLane: Lane = ev.approvedLane ?? ev.lane;
     const e: QueueEntry = {
       changeId: ev.changeId,
@@ -264,7 +306,8 @@ class Machine {
     };
     e.wfqTag = assignTag(this.s, e);
     this.s.entries[e.changeId] = e;
-    if (e.affected === null) this.out.push({ type: "ComputeAffectedSet", changeId: e.changeId, headSha: e.headSha });
+    if (e.affected === null)
+      this.out.push({ type: "ComputeAffectedSet", changeId: e.changeId, headSha: e.headSha });
     else this.applyQuarantineTo(e);
     if (e.approvalRequired) this.requestApproval(e);
     this.audit("merge-queue.enqueued", `change:${e.changeId}`, {
@@ -312,16 +355,26 @@ class Machine {
     if (e === undefined || isTerminal(e)) return;
     const human = ev.by.kind === "human";
     if (ev.priority === "incident" && !human && ev.incidentPlanId === null) {
-      this.reject("Reprioritized", "the incident class needs a human or an incident Plan", { changeId: e.changeId, by: ev.by.principalId });
+      this.reject("Reprioritized", "the incident class needs a human or an incident Plan", {
+        changeId: e.changeId,
+        by: ev.by.principalId,
+      });
       return;
     }
     if (ev.priority === "revert" && e.revertOf === null && !human) {
-      this.reject("Reprioritized", "only reverts (or a human) may use the revert class", { changeId: e.changeId });
+      this.reject("Reprioritized", "only reverts (or a human) may use the revert class", {
+        changeId: e.changeId,
+      });
       return;
     }
     const from = e.priority;
     e.priority = ev.priority;
-    this.audit("merge-queue.reprioritized", `change:${e.changeId}`, { from, to: ev.priority, by: ev.by.principalId, incidentPlanId: ev.incidentPlanId });
+    this.audit("merge-queue.reprioritized", `change:${e.changeId}`, {
+      from,
+      to: ev.priority,
+      by: ev.by.principalId,
+      incidentPlanId: ev.incidentPlanId,
+    });
   }
 
   private onAffected(ev: CoreEventOf<"AffectedSetComputed">): void {
@@ -340,7 +393,8 @@ class Machine {
     const b = this.batch(ev.batchId);
     if (b === undefined || b.state !== "building") {
       // A build for a batch we no longer want: make sure its ref doesn't leak.
-      if (ev.result.status === "clean") this.out.push({ type: "DeleteQueueRef", refName: `refs/queue/${ev.batchId}` });
+      if (ev.result.status === "clean")
+        this.out.push({ type: "DeleteQueueRef", refName: `refs/queue/${ev.batchId}` });
       return;
     }
     if (ev.result.status === "conflict") {
@@ -376,19 +430,29 @@ class Machine {
     }
     if (ev.treeSha !== b.treeSha) {
       // Never count a result for a different tree: main only advances to exactly-tested trees.
-      this.audit("merge-queue.result-tree-mismatch", `batch:${b.id}`, { runId: ev.runId, expected: b.treeSha, got: ev.treeSha });
+      this.audit("merge-queue.result-tree-mismatch", `batch:${b.id}`, {
+        runId: ev.runId,
+        expected: b.treeSha,
+        got: ev.treeSha,
+      });
       this.infraRetry(b, "result for a different tree", "ready");
       return;
     }
     if (!this.scopeCovers(ev.scope, b.targets)) {
-      this.audit("merge-queue.result-scope-short", `batch:${b.id}`, { runId: ev.runId, wanted: b.targets, got: ev.scope });
+      this.audit("merge-queue.result-scope-short", `batch:${b.id}`, {
+        runId: ev.runId,
+        wanted: b.targets,
+        got: ev.scope,
+      });
       this.infraRetry(b, "run did not cover the required targets", "ready");
       return;
     }
     if (b.targets === "all") {
       this.s.stats.fullRuns++;
       if (ev.durationMs !== undefined && b.kind !== "landing")
-        this.s.stats.ciDurationMs = Math.round(0.8 * this.s.stats.ciDurationMs + 0.2 * ev.durationMs);
+        this.s.stats.ciDurationMs = Math.round(
+          0.8 * this.s.stats.ciDurationMs + 0.2 * ev.durationMs,
+        );
     }
     let failing = [...new Set(ev.failingTests)];
     if (ev.outcome === "failed" && failing.length === 0) failing = [WHOLE_RUN];
@@ -401,7 +465,11 @@ class Machine {
       return;
     }
     if (this.cfg.features.flakeRecheck) {
-      invariant(b.tipSha !== null && b.treeSha !== null, "recheck.tree", "re-check of an unbuilt batch");
+      invariant(
+        b.tipSha !== null && b.treeSha !== null,
+        "recheck.tree",
+        "re-check of an unbuilt batch",
+      );
       b.state = "rechecking";
       b.recheck = { tests: candidates, mainSha: this.s.main.sha };
       b.verdict = verdict;
@@ -424,7 +492,8 @@ class Machine {
 
   private onRecheck(ev: CoreEventOf<"FlakeRecheckResult">): void {
     const b = this.batch(ev.batchId);
-    if (b === undefined || b.state !== "rechecking" || b.runId !== ev.runId || b.recheck === null) return;
+    if (b === undefined || b.state !== "rechecking" || b.runId !== ev.runId || b.recheck === null)
+      return;
     const base = b.verdict ?? this.newVerdict(b, ev.runId, []);
     const byTest = new Map(ev.results.map((r) => [r.test, r]));
     const real: string[] = [];
@@ -469,7 +538,11 @@ class Machine {
   }
 
   private newVerdict(b: Batch, runId: string, quarantinedFailing: string[]): TreeVerdict {
-    invariant(b.treeSha !== null && b.tipSha !== null && b.baseSha !== null, "verdict.tree", `verdict for unbuilt batch ${b.id}`);
+    invariant(
+      b.treeSha !== null && b.tipSha !== null && b.baseSha !== null,
+      "verdict.tree",
+      `verdict for unbuilt batch ${b.id}`,
+    );
     return {
       treeSha: b.treeSha,
       commitSha: b.tipSha,
@@ -478,7 +551,9 @@ class Machine {
       runIds: [runId],
       passed: true,
       failing: [],
-      quarantined: [...new Set([...quarantinedFailing, ...this.relevantQuarantine(this.landingEntriesOf(b))])],
+      quarantined: [
+        ...new Set([...quarantinedFailing, ...this.relevantQuarantine(this.landingEntriesOf(b))]),
+      ],
       flakyRetried: [],
     };
   }
@@ -509,12 +584,15 @@ class Machine {
     }
     switch (b.kind) {
       case "chain":
-        return this.onChainFailure(b);
+        this.onChainFailure(b);
+        return;
       case "probe":
         b.state = "failed";
-        return this.onProbeSettled(b, false);
+        this.onProbeSettled(b, false);
+        return;
       case "landing":
-        return this.onLandingFailure(b);
+        this.onLandingFailure(b);
+        return;
     }
   }
 
@@ -555,7 +633,11 @@ class Machine {
           e.infraErrors++;
           if (e.infraErrors > this.cfg.maxInfraRetries) {
             this.removeFromFlight(e);
-            this.terminate(e, "ejected", { changeId: id, code: "infra-error", message: `CI could not produce a result (${why})` });
+            this.terminate(e, "ejected", {
+              changeId: id,
+              code: "infra-error",
+              message: `CI could not produce a result (${why})`,
+            });
           }
         }
         return;
@@ -616,7 +698,8 @@ class Machine {
   /** Cancel b (unless `keepSelf`) and every batch built on it; their entries wait again. */
   private cancelTree(b: Batch, why: string, keepSelf = false): void {
     const victims = [...this.descendantsOf(b), ...(keepSelf ? [] : [b])];
-    for (const v of victims) invariant(!this.batchInCas(v), "cancel.in-cas", `cannot cancel ${v.id}: CAS in flight`);
+    for (const v of victims)
+      invariant(!this.batchInCas(v), "cancel.in-cas", `cannot cancel ${v.id}: CAS in flight`);
     if (victims.length > 0)
       this.audit("merge-queue.batches-cancelled", `batch:${b.id}`, {
         why,
@@ -625,7 +708,9 @@ class Machine {
         running: victims.filter((v) => v.state === "running" || v.state === "rechecking").length,
       });
     for (const v of victims) {
-      const li = this.s.landing.findIndex((lid) => this.batch(lid)?.members.includes(v.id) === true);
+      const li = this.s.landing.findIndex(
+        (lid) => this.batch(lid)?.members.includes(v.id) === true,
+      );
       if (li >= 0) this.invalidateLanding(li, why);
       this.removeFromTrack(v);
       this.cancelBatch(v, why);
@@ -747,7 +832,11 @@ class Machine {
     let n = b.carried.length;
     for (const u of units) n += u.changeIds.length;
     const c = b.commits[n - 1];
-    invariant(c !== undefined && b.baseSha !== null, "probe.commit", `no commit for prefix ${n} of ${b.id}`);
+    invariant(
+      c !== undefined && b.baseSha !== null,
+      "probe.commit",
+      `no commit for prefix ${n} of ${b.id}`,
+    );
     const id = this.id("p");
     this.s.batches[id] = {
       id,
@@ -800,7 +889,8 @@ class Machine {
         let lo = b.carried.length > 0 ? -1 : 0;
         for (const id of bis.probeIds) {
           const q = this.batch(id);
-          if (q?.state === "passed" && q.probe !== null && q.probe.prefixUnits < bis.hi) lo = Math.max(lo, q.probe.prefixUnits);
+          if (q?.state === "passed" && q.probe !== null && q.probe.prefixUnits < bis.hi)
+            lo = Math.max(lo, q.probe.prefixUnits);
         }
         bis.lo = lo;
       }
@@ -817,7 +907,8 @@ class Machine {
   }
 
   private settleChildBisections(parentId: string): void {
-    for (const b of Object.values(this.s.batches)) if (b.state === "bisecting" && b.parentId === parentId) this.resolveBisection(b);
+    for (const b of Object.values(this.s.batches))
+      if (b.state === "bisecting" && b.parentId === parentId) this.resolveBisection(b);
   }
 
   /** A bisection whose base contains a failed/cancelled batch's entries is moot. */
@@ -826,7 +917,8 @@ class Machine {
     for (const b of Object.values(this.s.batches)) {
       if (b.state !== "bisecting" || b.id === gone.id) continue;
       const bOwn = new Set(ownEntries(b));
-      if (b.parentId === gone.id || own.some((id) => !bOwn.has(id) && b.lineage.includes(id))) this.abortBisection(b, why);
+      if (b.parentId === gone.id || own.some((id) => !bOwn.has(id) && b.lineage.includes(id)))
+        this.abortBisection(b, why);
     }
   }
 
@@ -839,7 +931,8 @@ class Machine {
     if (pending.length === 0) return;
     for (const id of ownEntries(b)) {
       const e = this.entry(id);
-      if (e !== undefined && e.state === "waiting") e.waitFor = [...new Set([...e.waitFor, ...pending])];
+      if (e !== undefined && e.state === "waiting")
+        e.waitFor = [...new Set([...e.waitFor, ...pending])];
     }
   }
 
@@ -880,7 +973,9 @@ class Machine {
     this.finishBatch(b, "failed");
     const single = culprits.length === 1 ? culprits[0] : undefined;
     if (single !== undefined && this.canResolve(single, "semantic")) {
-      const upstream = [...new Set([...prefix, ...ancestors, ...this.overlappingLanded(single)])].slice(0, 20);
+      const upstream = [
+        ...new Set([...prefix, ...ancestors, ...this.overlappingLanded(single)]),
+      ].slice(0, 20);
       this.startResolution(single, "semantic", {
         upstream,
         files: [],
@@ -940,16 +1035,28 @@ class Machine {
       return;
     }
     const ui = b.units.findIndex((u) => u.changeIds.includes(changeId));
-    const preceding = [...b.carried, ...b.units.slice(0, Math.max(0, ui)).flatMap((u) => u.changeIds)];
+    const preceding = [
+      ...b.carried,
+      ...b.units.slice(0, Math.max(0, ui)).flatMap((u) => u.changeIds),
+    ];
     const at = b.lineage.indexOf(changeId);
     const lineageBefore = b.lineage.slice(0, at >= 0 ? at : b.lineage.length);
     if (this.isActiveChain(b)) this.cancelTree(b, `rebase conflict on ${changeId}`);
     const e = this.entry(changeId);
     if (e === undefined || isTerminal(e)) return;
     if (e.batchId !== null) this.removeFromFlight(e);
-    const suspects = upstream.length > 0 ? upstream : [...new Set([...lineageBefore, ...this.overlappingLanded(e)])].slice(0, 20);
+    const suspects =
+      upstream.length > 0
+        ? upstream
+        : [...new Set([...lineageBefore, ...this.overlappingLanded(e)])].slice(0, 20);
     if (this.canResolve(e, "textual")) {
-      this.startResolution(e, "textual", { upstream: suspects, files, failingTests: [], ontoSha: b.baseSha ?? this.s.main.sha, preceding });
+      this.startResolution(e, "textual", {
+        upstream: suspects,
+        files,
+        failingTests: [],
+        ontoSha: b.baseSha ?? this.s.main.sha,
+        preceding,
+      });
       return;
     }
     this.terminate(e, "ejected", {
@@ -972,14 +1079,28 @@ class Machine {
   private startResolution(
     e: QueueEntry,
     kind: ResolutionState["kind"],
-    info: { upstream: string[]; files: string[]; failingTests: string[]; ontoSha: string; preceding: string[] },
+    info: {
+      upstream: string[];
+      files: string[];
+      failingTests: string[];
+      ontoSha: string;
+      preceding: string[];
+    },
   ): void {
     const prev = e.resolution;
     const attempts = prev !== null && !prev.resolved && prev.kind === kind ? prev.attempts + 1 : 1;
     e.state = "resolving";
     e.batchId = null;
     e.trackId = null;
-    e.resolution = { kind, attempts, upstream: info.upstream, files: info.files, failingTests: info.failingTests, blamed: null, resolved: false };
+    e.resolution = {
+      kind,
+      attempts,
+      upstream: info.upstream,
+      files: info.files,
+      failingTests: info.failingTests,
+      blamed: null,
+      resolved: false,
+    };
     this.out.push({
       type: "RequestResolution",
       changeId: e.changeId,
@@ -993,40 +1114,74 @@ class Machine {
       failingTests: info.failingTests,
       excludePrincipals: [e.authorId],
     });
-    this.emit({ type: "resolving_conflict", at: this.now, changeId: e.changeId, kind, upstream: info.upstream, attempt: attempts });
+    this.emit({
+      type: "resolving_conflict",
+      at: this.now,
+      changeId: e.changeId,
+      kind,
+      upstream: info.upstream,
+      attempt: attempts,
+    });
   }
 
   private onResolution(ev: CoreEventOf<"ResolutionResult">): void {
     const e = this.entry(ev.changeId);
     const r = e?.resolution ?? null;
     if (e === undefined || e.state !== "resolving" || r === null || ev.attempt !== r.attempts) {
-      this.reject("ResolutionResult", "no matching resolution in progress", { changeId: ev.changeId, attempt: ev.attempt });
+      this.reject("ResolutionResult", "no matching resolution in progress", {
+        changeId: ev.changeId,
+        attempt: ev.attempt,
+      });
       return;
     }
     let outcome = ev.outcome;
     if (ev.resolverId === e.authorId) {
       // The resolver must not be the Change's authoring agent (no self-approval of resolutions).
-      this.audit("merge-queue.self-resolution-rejected", `change:${e.changeId}`, { resolverId: ev.resolverId });
+      this.audit("merge-queue.self-resolution-rejected", `change:${e.changeId}`, {
+        resolverId: ev.resolverId,
+      });
       outcome = { status: "failed", message: "resolver is the Change's author" };
-    } else if (outcome.status === "resolved" && r.kind === "semantic" && outcome.blamedUpstream === null) {
-      outcome = { status: "failed", message: "semantic resolution did not name the upstream Change" };
+    } else if (
+      outcome.status === "resolved" &&
+      r.kind === "semantic" &&
+      outcome.blamedUpstream === null
+    ) {
+      outcome = {
+        status: "failed",
+        message: "semantic resolution did not name the upstream Change",
+      };
     }
     switch (outcome.status) {
       case "resolved": {
         if (outcome.lane < e.lane)
-          this.telemetry("lane-downgrade-ignored", { changeId: e.changeId, lane: e.lane, reported: outcome.lane, resolverId: ev.resolverId });
+          this.telemetry("lane-downgrade-ignored", {
+            changeId: e.changeId,
+            lane: e.lane,
+            reported: outcome.lane,
+            resolverId: ev.resolverId,
+          });
         const reasons: LaneReason[] = [...outcome.laneReasons];
         if (outcome.outsideHunks)
-          reasons.push({ code: "merge-queue.resolution-outside-hunks", lane: 1, message: "The conflict resolution touches lines outside the conflict hunks." });
+          reasons.push({
+            code: "merge-queue.resolution-outside-hunks",
+            lane: 1,
+            message: "The conflict resolution touches lines outside the conflict hunks.",
+          });
         // The lane may only stay or rise: the core keeps the max.
-        this.raiseLane(e, Math.max(outcome.lane, outcome.outsideHunks ? 1 : 0) as Lane, reasons, false);
+        this.raiseLane(
+          e,
+          Math.max(outcome.lane, outcome.outsideHunks ? 1 : 0) as Lane,
+          reasons,
+          false,
+        );
         e.headSha = outcome.newHeadSha;
         e.resolverIds = [...e.resolverIds, ev.resolverId];
         e.resolution = { ...r, resolved: true, blamed: outcome.blamedUpstream };
         e.affected = outcome.affected;
         e.affectedRequestedAt = outcome.affected === null ? this.now : null;
         e.state = "waiting";
-        if (outcome.affected === null) this.out.push({ type: "ComputeAffectedSet", changeId: e.changeId, headSha: e.headSha });
+        if (outcome.affected === null)
+          this.out.push({ type: "ComputeAffectedSet", changeId: e.changeId, headSha: e.headSha });
         else this.applyQuarantineTo(e);
         if (outcome.outsideHunks || e.lane > e.approvedLane) {
           e.approvalRequired = true;
@@ -1065,11 +1220,26 @@ class Machine {
         return;
       }
       case "budget-exhausted":
-        this.terminate(e, "ejected", { changeId: e.changeId, code: "resolution-budget-exhausted", message: outcome.message, upstream: r.upstream, files: r.files });
+        this.terminate(e, "ejected", {
+          changeId: e.changeId,
+          code: "resolution-budget-exhausted",
+          message: outcome.message,
+          upstream: r.upstream,
+          files: r.files,
+        });
         return;
       case "failed": {
-        if (r.attempts < this.cfg.resolutionMaxAttempts && e.resolverIds.length < MAX_RESOLUTIONS_PER_ENTRY) {
-          this.startResolution(e, r.kind, { upstream: r.upstream, files: r.files, failingTests: r.failingTests, ontoSha: this.s.main.sha, preceding: [] });
+        if (
+          r.attempts < this.cfg.resolutionMaxAttempts &&
+          e.resolverIds.length < MAX_RESOLUTIONS_PER_ENTRY
+        ) {
+          this.startResolution(e, r.kind, {
+            upstream: r.upstream,
+            files: r.files,
+            failingTests: r.failingTests,
+            ontoSha: this.s.main.sha,
+            preceding: [],
+          });
           return;
         }
         if (r.kind === "semantic") this.authorOutcome(e, false);
@@ -1117,20 +1287,33 @@ class Machine {
     const pid = ev.approver.principalId;
     if (pid === e.authorId || e.resolverIds.includes(pid)) {
       this.audit("merge-queue.self-approval-rejected", `change:${e.changeId}`, { approver: pid });
-      this.reject("Approved", "no self-approval (author or resolver)", { changeId: e.changeId, approver: pid });
+      this.reject("Approved", "no self-approval (author or resolver)", {
+        changeId: e.changeId,
+        approver: pid,
+      });
       return;
     }
     if (ev.approver.kind !== "human" && ev.lane >= 1) {
-      this.reject("Approved", "Lane 1+ needs a human approval", { changeId: e.changeId, approver: pid });
+      this.reject("Approved", "Lane 1+ needs a human approval", {
+        changeId: e.changeId,
+        approver: pid,
+      });
       return;
     }
     if (ev.lane < e.lane) {
-      this.reject("Approved", `approval covers lane ${ev.lane}, the Change is lane ${e.lane}`, { changeId: e.changeId });
+      this.reject("Approved", `approval covers lane ${ev.lane}, the Change is lane ${e.lane}`, {
+        changeId: e.changeId,
+      });
       return;
     }
     e.approvedLane = Math.max(e.approvedLane, ev.lane) as Lane;
     e.approvalRequired = false;
-    this.audit("merge-queue.approved", `change:${e.changeId}`, { approver: pid, lane: ev.lane }, pid);
+    this.audit(
+      "merge-queue.approved",
+      `change:${e.changeId}`,
+      { approver: pid, lane: ev.lane },
+      pid,
+    );
   }
 
   // ---------------------------------------------------------------- flakes (§4.7)
@@ -1147,7 +1330,13 @@ class Machine {
       mainSha,
       runIds: b.verdict?.runIds ?? [],
     });
-    this.out.push({ type: "OpenPlan", kind: "fix-flaky-test", test, title: `Fix flaky test ${test}`.slice(0, 200), evidenceRefs: refs });
+    this.out.push({
+      type: "OpenPlan",
+      kind: "fix-flaky-test",
+      test,
+      title: `Fix flaky test ${test}`.slice(0, 200),
+      evidenceRefs: refs,
+    });
     for (const e of Object.values(this.s.entries)) if (!isTerminal(e)) this.applyQuarantineTo(e);
   }
 
@@ -1162,7 +1351,8 @@ class Machine {
         message: `Quarantined test(s) in this Change's affected set do not count as passing: ${hit.slice(0, 5).join(", ")}.`,
       },
     ]);
-    if (raised && e.approvalRequired && e.batchId !== null && !this.inCas(e.changeId)) this.removeFromFlight(e);
+    if (raised && e.approvalRequired && e.batchId !== null && !this.inCas(e.changeId))
+      this.removeFromFlight(e);
   }
 
   private relevantQuarantine(changeIds: string[]): string[] {
@@ -1197,8 +1387,14 @@ class Machine {
     invariant(b !== undefined, "cas.batch", `CAS ${cas.casId} for unknown batch ${cas.batchId}`);
     if (ev.result !== "ok") {
       b.state = "passed";
-      this.audit(`merge-queue.cas-${ev.result}`, `batch:${b.id}`, { casId: cas.casId, expectedOld: cas.expectedOld, actual: ev.actualSha, detail: ev.detail });
-      if (ev.result === "stale" && ev.actualSha !== null && ev.actualSha !== this.s.main.sha) this.onExternalMain(ev.actualSha);
+      this.audit(`merge-queue.cas-${ev.result}`, `batch:${b.id}`, {
+        casId: cas.casId,
+        expectedOld: cas.expectedOld,
+        actual: ev.actualSha,
+        detail: ev.detail,
+      });
+      if (ev.result === "stale" && ev.actualSha !== null && ev.actualSha !== this.s.main.sha)
+        this.onExternalMain(ev.actualSha);
       else if (ev.result === "rejected") this.s.casRetryAt = this.now + 30_000;
       for (const id of cas.entries) {
         const e = this.entry(id);
@@ -1215,10 +1411,20 @@ class Machine {
       return { changeId: id, affected: e?.affected ?? null, revertOf: e?.revertOf ?? null };
     });
     this.s.main = { sha: cas.newSha, seq: this.s.main.seq + 1 };
-    this.s.mainLog.push({ seq: this.s.main.seq, sha: cas.newSha, parentSha: cas.expectedOld, changes, at: this.now, kind: "cas" });
-    if (this.s.mainLog.length > this.cfg.mainLogLimit) this.s.mainLog = this.s.mainLog.slice(this.s.mainLog.length - this.cfg.mainLogLimit);
+    this.s.mainLog.push({
+      seq: this.s.main.seq,
+      sha: cas.newSha,
+      parentSha: cas.expectedOld,
+      changes,
+      at: this.now,
+      kind: "cas",
+    });
+    if (this.s.mainLog.length > this.cfg.mainLogLimit)
+      this.s.mainLog = this.s.mainLog.slice(this.s.mainLog.length - this.cfg.mainLogLimit);
     const landed =
-      b.kind === "landing" ? [b, ...b.members.map((m) => this.batch(m)).filter((x): x is Batch => x !== undefined)] : [b];
+      b.kind === "landing"
+        ? [b, ...b.members.map((m) => this.batch(m)).filter((x): x is Batch => x !== undefined)]
+        : [b];
     for (const lb of landed) {
       this.finishBatch(lb, "landed");
       this.removeFromTrack(lb);
@@ -1247,7 +1453,8 @@ class Machine {
     if (this.s.stats.recentMerged.length > 500) this.s.stats.recentMerged.shift();
     this.authorOutcome(e, true);
     for (const o of Object.values(this.s.entries))
-      if (!isTerminal(o) && o.dependsOn.includes(e.changeId)) o.dependsOn = o.dependsOn.filter((d) => d !== e.changeId);
+      if (!isTerminal(o) && o.dependsOn.includes(e.changeId))
+        o.dependsOn = o.dependsOn.filter((d) => d !== e.changeId);
     this.emit({
       type: "merged",
       at: this.now,
@@ -1270,7 +1477,12 @@ class Machine {
       laneReasons: e.laneReasons.map((r) => r.code),
       timeInQueueMs: waitMs,
     });
-    this.telemetry("outcome", { changeId: e.changeId, outcome: "merged", predicted: e.prediction?.p ?? null, factors: e.prediction?.factors ?? {} });
+    this.telemetry("outcome", {
+      changeId: e.changeId,
+      outcome: "merged",
+      predicted: e.prediction?.p ?? null,
+      factors: e.prediction?.factors ?? {},
+    });
   }
 
   private authorOutcome(e: QueueEntry, passed: boolean): void {
@@ -1282,7 +1494,10 @@ class Machine {
 
   private onExternalMain(sha: string): void {
     if (sha === this.s.main.sha) return;
-    this.audit("merge-queue.main-moved-externally", "repo:main", { from: this.s.main.sha, to: sha });
+    this.audit("merge-queue.main-moved-externally", "repo:main", {
+      from: this.s.main.sha,
+      to: sha,
+    });
     this.s.main = { sha, seq: this.s.main.seq + 1 };
     this.s.mainLog.push({
       seq: this.s.main.seq,
@@ -1297,7 +1512,8 @@ class Machine {
   }
 
   private landedSeqOf(changeId: string): number | null {
-    for (const m of this.s.mainLog) if (m.changes.some((c) => c.changeId === changeId)) return m.seq;
+    for (const m of this.s.mainLog)
+      if (m.changes.some((c) => c.changeId === changeId)) return m.seq;
     return null;
   }
 
@@ -1329,18 +1545,26 @@ class Machine {
    * disjoint from each of b's own entries. Returns the changes the result is carried across, or null.
    */
   /** The change that prevents carrying b's result over (for audits), or null. */
-  private carryBlocker(b: Batch, ahead: { changeId: string; affected: AffectedSet | null }[]): string | null {
+  private carryBlocker(
+    b: Batch,
+    ahead: { changeId: string; affected: AffectedSet | null }[],
+  ): string | null {
     const first = this.s.mainLog[0];
     if (first === undefined || b.rootSeq < first.seq) return "(history forgotten)";
     const lineage = new Set(b.lineage);
     const own = ownEntries(b).map((id) => this.entry(id)?.affected ?? null);
-    const check = (c: { changeId: string; affected: AffectedSet | null }) => !lineage.has(c.changeId) && own.some((o) => conflicts(c.affected, o));
-    for (const m of this.s.mainLog) if (m.seq > b.rootSeq) for (const c of m.changes) if (check(c)) return c.changeId;
+    const check = (c: { changeId: string; affected: AffectedSet | null }) =>
+      !lineage.has(c.changeId) && own.some((o) => conflicts(c.affected, o));
+    for (const m of this.s.mainLog)
+      if (m.seq > b.rootSeq) for (const c of m.changes) if (check(c)) return c.changeId;
     for (const c of ahead) if (check(c)) return c.changeId;
     return null;
   }
 
-  private carryOver(b: Batch, ahead: { changeId: string; affected: AffectedSet | null }[]): string[] | null {
+  private carryOver(
+    b: Batch,
+    ahead: { changeId: string; affected: AffectedSet | null }[],
+  ): string[] | null {
     const first = this.s.mainLog[0];
     if (first === undefined || b.rootSeq < first.seq) return null; // history forgotten → unknown
     const lineage = new Set(b.lineage);
@@ -1376,7 +1600,12 @@ class Machine {
   private readyChainBatches(): Batch[] {
     return this.activeChain()
       .filter((b) => b.state === "passed")
-      .sort((a, b) => (a.readyAt ?? 0) - (b.readyAt ?? 0) || a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
+      .sort(
+        (a, b) =>
+          (a.readyAt ?? 0) - (b.readyAt ?? 0) ||
+          a.createdAt - b.createdAt ||
+          (a.id < b.id ? -1 : 1),
+      );
   }
 
   private advanceLanding(): boolean {
@@ -1412,7 +1641,8 @@ class Machine {
       for (const m of l?.members ?? []) {
         inLanding.add(m);
         const mb = this.batch(m);
-        for (const id of mb === undefined ? [] : ownEntries(mb)) ahead.push({ changeId: id, affected: this.entry(id)?.affected ?? null });
+        for (const id of mb === undefined ? [] : ownEntries(mb))
+          ahead.push({ changeId: id, affected: this.entry(id)?.affected ?? null });
       }
     }
     const members: Batch[] = [];
@@ -1464,7 +1694,9 @@ class Machine {
     const parentId = this.s.landing[this.s.landing.length - 1] ?? null;
     const own = members.flatMap((m) => ownEntries(m));
     const affected = unionAffected(own.map((x) => this.entry(x)?.affected ?? null));
-    const targets: TestScope = needsAllTests(affected) ? "all" : [...new Set(affected.testTargets)].sort();
+    const targets: TestScope = needsAllTests(affected)
+      ? "all"
+      : [...new Set(affected.testTargets)].sort();
     this.s.batches[id] = {
       id,
       kind: "landing",
@@ -1594,16 +1826,36 @@ class Machine {
     const v = b.verdict;
     invariant(s.cas === null, "cas.concurrent", "a CAS is already in flight");
     invariant(b.tipSha !== null && b.treeSha !== null, "cas.unbuilt", `batch ${b.id} has no tree`);
-    invariant(v !== null && v.passed, "cas.untested", `batch ${b.id} has no passing verdict`, { batch: b.id });
-    invariant(v.failing.length === 0, "cas.failing", `batch ${b.id} has failing checks`, { failing: v.failing });
-    invariant(v.treeSha === b.treeSha && v.commitSha === b.tipSha, "cas.tree-mismatch", `verdict of ${b.id} is for tree ${v.treeSha}, not ${b.treeSha}`);
-    invariant(b.baseSha === s.main.sha && v.baseSha === s.main.sha, "cas.stale-base", `batch ${b.id} is not built on main`);
+    invariant(v !== null && v.passed, "cas.untested", `batch ${b.id} has no passing verdict`, {
+      batch: b.id,
+    });
+    invariant(v.failing.length === 0, "cas.failing", `batch ${b.id} has failing checks`, {
+      failing: v.failing,
+    });
+    invariant(
+      v.treeSha === b.treeSha && v.commitSha === b.tipSha,
+      "cas.tree-mismatch",
+      `verdict of ${b.id} is for tree ${v.treeSha}, not ${b.treeSha}`,
+    );
+    invariant(
+      b.baseSha === s.main.sha && v.baseSha === s.main.sha,
+      "cas.stale-base",
+      `batch ${b.id} is not built on main`,
+    );
     const entries = this.landingEntriesOf(b);
-    invariant(new Set(entries).size === entries.length, "cas.duplicate", `batch ${b.id} lists an entry twice`);
+    invariant(
+      new Set(entries).size === entries.length,
+      "cas.duplicate",
+      `batch ${b.id} lists an entry twice`,
+    );
     const carried: CasEvidence["carried"] = [];
     if (b.kind === "chain") {
       invariant(v.scope === "all", "cas.scope", `direct land of ${b.id} needs a full run`);
-      invariant(b.carried.every((id) => this.entry(id)?.state === "merged"), "cas.carried", `${b.id} carries unlanded entries`);
+      invariant(
+        b.carried.every((id) => this.entry(id)?.state === "merged"),
+        "cas.carried",
+        `${b.id} carries unlanded entries`,
+      );
       invariant(this.lineageLanded(b), "cas.ancestors", `ancestors of ${b.id} have not landed`);
     } else {
       invariant(b.kind === "landing", "cas.kind", `cannot land a ${b.kind} batch`);
@@ -1616,13 +1868,25 @@ class Machine {
         invariant(m !== undefined, "cas.member", `landing ${b.id} lost member ${mid}`);
         const mv = m.verdict;
         invariant(
-          mv !== null && mv.passed && mv.scope === "all" && mv.treeSha === m.treeSha && mv.failing.length === 0,
+          mv !== null &&
+            mv.passed &&
+            mv.scope === "all" &&
+            mv.treeSha === m.treeSha &&
+            mv.failing.length === 0,
           "cas.member-untested",
           `member ${mid} of ${b.id} has no full passing run`,
         );
-        invariant(this.lineageLanded(m, aheadIds), "cas.ancestors", `ancestors of ${mid} have not landed`);
+        invariant(
+          this.lineageLanded(m, aheadIds),
+          "cas.ancestors",
+          `ancestors of ${mid} have not landed`,
+        );
         const across = this.carryOver(m, ahead);
-        invariant(across !== null, "cas.not-disjoint", `member ${mid} is not disjoint from what landed since`);
+        invariant(
+          across !== null,
+          "cas.not-disjoint",
+          `member ${mid} is not disjoint from what landed since`,
+        );
         carried.push({ batchId: mid, verdict: mv, disjointFrom: across });
         for (const id of ownEntries(m)) {
           const a = this.entry(id)?.affected ?? null;
@@ -1647,28 +1911,62 @@ class Machine {
       const e = this.entry(id);
       invariant(e !== undefined && !isTerminal(e), "cas.entry", `entry ${id} is gone or terminal`);
       invariant(e.state === "passed", "cas.entry-state", `entry ${id} is ${e.state}`);
-      invariant(e.lane <= e.approvedLane && !e.approvalRequired, "cas.approval", `entry ${id} needs approval`);
-      invariant(this.landAllowed([id]), "cas.frozen", `queue is frozen; ${id} is not a revert/incident fix`);
+      invariant(
+        e.lane <= e.approvedLane && !e.approvalRequired,
+        "cas.approval",
+        `entry ${id} needs approval`,
+      );
+      invariant(
+        this.landAllowed([id]),
+        "cas.frozen",
+        `queue is frozen; ${id} is not a revert/incident fix`,
+      );
       for (const d of e.dependsOn) {
         if (this.entry(d)?.state === "merged") continue;
         const dp = position.get(d);
-        invariant(dp !== undefined && dp < (position.get(id) ?? 0), "cas.stack-order", `${id} depends on ${d}, which neither landed nor precedes it`);
+        invariant(
+          dp !== undefined && dp < (position.get(id) ?? 0),
+          "cas.stack-order",
+          `${id} depends on ${d}, which neither landed nor precedes it`,
+        );
       }
       if (e.landTogether && e.plangroup !== null) {
-        const group = Object.values(s.entries).filter((o) => o.plangroup === e.plangroup && o.landTogether && !isTerminal(o));
-        invariant(group.every((o) => position.has(o.changeId)), "cas.plangroup", `plan group ${e.plangroup} would land partially`);
-        invariant(e.groupSize === null || group.length >= e.groupSize, "cas.plangroup-size", `plan group ${e.plangroup} has ${group.length}/${e.groupSize} members`);
+        const group = Object.values(s.entries).filter(
+          (o) => o.plangroup === e.plangroup && o.landTogether && !isTerminal(o),
+        );
+        invariant(
+          group.every((o) => position.has(o.changeId)),
+          "cas.plangroup",
+          `plan group ${e.plangroup} would land partially`,
+        );
+        invariant(
+          e.groupSize === null || group.length >= e.groupSize,
+          "cas.plangroup-size",
+          `plan group ${e.plangroup} has ${group.length}/${e.groupSize} members`,
+        );
       }
       const hit = this.relevantQuarantine([id]);
       if (hit.length > 0) {
-        invariant(e.lane >= 1, "cas.quarantine-lane", `${id} has quarantined tests in its affected set but is Lane 0`);
+        invariant(
+          e.lane >= 1,
+          "cas.quarantine-lane",
+          `${id} has quarantined tests in its affected set but is Lane 0`,
+        );
         laneRaises.push({ changeId: id, lane: e.lane, reasons: e.laneReasons });
       } else if (e.laneReasons.length > 0) {
         laneRaises.push({ changeId: id, lane: e.lane, reasons: e.laneReasons });
       }
     }
     const casId = this.id("c");
-    s.cas = { casId, batchId: b.id, expectedOld: s.main.sha, newSha: b.tipSha, treeSha: b.treeSha, entries, issuedAt: this.now };
+    s.cas = {
+      casId,
+      batchId: b.id,
+      expectedOld: s.main.sha,
+      newSha: b.tipSha,
+      treeSha: b.treeSha,
+      entries,
+      issuedAt: this.now,
+    };
     b.state = "landing";
     this.out.push({
       type: "Cas",
@@ -1700,7 +1998,8 @@ class Machine {
   }
 
   private markBad(seq: number): void {
-    this.s.freeze.badSeq = this.s.freeze.badSeq === null ? seq : Math.min(this.s.freeze.badSeq, seq);
+    this.s.freeze.badSeq =
+      this.s.freeze.badSeq === null ? seq : Math.min(this.s.freeze.badSeq, seq);
   }
 
   private onPostMergeFailed(ev: CoreEventOf<"PostMergeCheckFailed">): void {
@@ -1721,7 +2020,11 @@ class Machine {
     const before = this.s.freeze.reasons;
     if (before.length === 0 && this.s.freeze.badSeq === null) return;
     const after = before.filter(
-      (r) => !(r.kind === "post-merge-check" || (r.kind === "revert-in-progress" && r.changeId !== null && ids.has(r.changeId))),
+      (r) =>
+        !(
+          r.kind === "post-merge-check" ||
+          (r.kind === "revert-in-progress" && r.changeId !== null && ids.has(r.changeId))
+        ),
     );
     const stillReverting = after.some((r) => r.kind === "revert-in-progress");
     let invalidated = 0;
@@ -1731,8 +2034,17 @@ class Machine {
     }
     this.s.freeze.reasons = after;
     if (before.length > 0 && after.length === 0) {
-      this.audit("merge-queue.thawed", "repo:merge-queue", { by: "revert", reverts: revertIds, invalidated });
-      this.emit({ type: "thawed", at: this.now, by: `revert:${revertIds.join(",")}`, invalidatedBatches: invalidated });
+      this.audit("merge-queue.thawed", "repo:merge-queue", {
+        by: "revert",
+        reverts: revertIds,
+        invalidated,
+      });
+      this.emit({
+        type: "thawed",
+        at: this.now,
+        by: `revert:${revertIds.join(",")}`,
+        invalidatedBatches: invalidated,
+      });
     }
   }
 
@@ -1778,7 +2090,13 @@ class Machine {
     }
     if (!isFrozen(this.s)) return;
     this.s.freeze = { reasons: [], badSeq: null };
-    this.audit("merge-queue.thawed", "repo:merge-queue", { by: ev.signer.principalId, reason: ev.reason, manual: true }, ev.signer.principalId, ev.signer.signature);
+    this.audit(
+      "merge-queue.thawed",
+      "repo:merge-queue",
+      { by: ev.signer.principalId, reason: ev.reason, manual: true },
+      ev.signer.principalId,
+      ev.signer.signature,
+    );
     this.emit({ type: "thawed", at: this.now, by: ev.signer.principalId, invalidatedBatches: 0 });
   }
 
@@ -1845,14 +2163,25 @@ class Machine {
       if (e.state !== "waiting" || e.affected !== null || e.affectedRequestedAt === null) continue;
       if (this.now - e.affectedRequestedAt >= this.cfg.affectedSetTimeoutMs) {
         e.affected = unknownAffectedSet();
-        this.audit("merge-queue.affected-set-timeout", `change:${e.changeId}`, { waitedMs: this.now - e.affectedRequestedAt });
+        this.audit("merge-queue.affected-set-timeout", `change:${e.changeId}`, {
+          waitedMs: this.now - e.affectedRequestedAt,
+        });
         this.applyQuarantineTo(e);
       }
     }
     for (const b of Object.values(s.batches)) {
-      if ((b.state === "running" || b.state === "rechecking" || b.state === "building") && b.startedAt !== null) {
+      if (
+        (b.state === "running" || b.state === "rechecking" || b.state === "building") &&
+        b.startedAt !== null
+      ) {
         if (this.now - b.startedAt < this.cfg.runTimeoutMs) continue;
-        if (b.runId !== null && b.state !== "building") this.out.push({ type: "CancelBatchRun", batchId: b.id, runId: b.runId, reason: "timed out" });
+        if (b.runId !== null && b.state !== "building")
+          this.out.push({
+            type: "CancelBatchRun",
+            batchId: b.id,
+            runId: b.runId,
+            reason: "timed out",
+          });
         if (b.state === "rechecking") b.recheck = null;
         this.infraRetry(b, "timed out", b.state === "building" ? "pending" : "ready");
       }
@@ -1877,7 +2206,8 @@ class Machine {
   /** Terminal transition of a batch (releases its `refs/queue/*` ref exactly once). */
   private finishBatch(b: Batch, state: "landed" | "cancelled" | "failed"): void {
     if (batchDone(b) && b.kind !== "probe") return;
-    if (b.kind !== "probe" && b.state !== "pending") this.out.push({ type: "DeleteQueueRef", refName: b.refName });
+    if (b.kind !== "probe" && b.state !== "pending")
+      this.out.push({ type: "DeleteQueueRef", refName: b.refName });
     b.state = state;
   }
 
@@ -1914,7 +2244,13 @@ class Machine {
   }
 
   /** Terminal transition + cascades (stack dependents, land-together group members). */
-  private terminate(e: QueueEntry, state: "ejected" | "dequeued", reason: EjectInput | null, by = SYSTEM_PRINCIPAL, cascade = true): void {
+  private terminate(
+    e: QueueEntry,
+    state: "ejected" | "dequeued",
+    reason: EjectInput | null,
+    by = SYSTEM_PRINCIPAL,
+    cascade = true,
+  ): void {
     if (isTerminal(e)) return;
     invariant(e.batchId === null, "terminate.in-batch", `${e.changeId} must leave its batch first`);
     e.state = state;
@@ -1927,8 +2263,18 @@ class Machine {
       e.ejectReason = r;
       this.s.stats.ejected++;
       this.emit({ type: "ejected", at: this.now, changeId: e.changeId, reason: r });
-      this.audit("merge-queue.ejected", `change:${e.changeId}`, { code: r.code, message: r.message, upstream: r.upstream, failingTests: r.failingTests });
-      this.telemetry("outcome", { changeId: e.changeId, outcome: `ejected:${r.code}`, predicted: e.prediction?.p ?? null, factors: e.prediction?.factors ?? {} });
+      this.audit("merge-queue.ejected", `change:${e.changeId}`, {
+        code: r.code,
+        message: r.message,
+        upstream: r.upstream,
+        failingTests: r.failingTests,
+      });
+      this.telemetry("outcome", {
+        changeId: e.changeId,
+        outcome: `ejected:${r.code}`,
+        predicted: e.prediction?.p ?? null,
+        factors: e.prediction?.factors ?? {},
+      });
     } else {
       this.audit("merge-queue.dequeued", `change:${e.changeId}`, { by }, by);
     }
@@ -1936,7 +2282,8 @@ class Machine {
     for (const o of Object.values(this.s.entries)) {
       if (isTerminal(o) || o.changeId === e.changeId) continue;
       const dependent = o.dependsOn.includes(e.changeId);
-      const sibling = e.landTogether && o.landTogether && o.plangroup !== null && o.plangroup === e.plangroup;
+      const sibling =
+        e.landTogether && o.landTogether && o.plangroup !== null && o.plangroup === e.plangroup;
       if (!dependent && !sibling) continue;
       if (this.inCas(o.changeId)) continue;
       this.removeFromFlight(o);
@@ -1973,15 +2320,26 @@ class Machine {
     for (const b of pending) {
       let base: string | null;
       if (b.kind === "chain" && b.parentId !== null && !this.holdExpired(b)) continue;
-      if (b.kind === "chain") base = b.parentId === null ? b.rootBase : (this.batch(b.parentId)?.tipSha ?? null);
-      else if (b.kind === "landing") base = b.parentId === null ? this.s.main.sha : (this.batch(b.parentId)?.tipSha ?? null);
+      if (b.kind === "chain")
+        base = b.parentId === null ? b.rootBase : (this.batch(b.parentId)?.tipSha ?? null);
+      else if (b.kind === "landing")
+        base = b.parentId === null ? this.s.main.sha : (this.batch(b.parentId)?.tipSha ?? null);
       else continue;
       if (base === null) continue;
       b.baseSha = base;
       b.state = "building";
       b.startedAt = this.now;
-      const entries = [...b.carried, ...ownEntries(b)].map((id) => ({ changeId: id, headSha: this.entry(id)?.headSha ?? "" }));
-      this.out.push({ type: "BuildBatchTree", batchId: b.id, refName: b.refName, baseSha: base, entries });
+      const entries = [...b.carried, ...ownEntries(b)].map((id) => ({
+        changeId: id,
+        headSha: this.entry(id)?.headSha ?? "",
+      }));
+      this.out.push({
+        type: "BuildBatchTree",
+        batchId: b.id,
+        refName: b.refName,
+        baseSha: base,
+        entries,
+      });
       changed = true;
     }
     return changed;
@@ -2006,11 +2364,21 @@ class Machine {
     if (ready.length === 0) return false;
     const kindOrder = { landing: 0, probe: 1, chain: 2 } as const;
     const depth = (b: Batch): number => b.lineage.length - ownEntries(b).length;
-    ready.sort((a, b) => kindOrder[a.kind] - kindOrder[b.kind] || depth(a) - depth(b) || a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
+    ready.sort(
+      (a, b) =>
+        kindOrder[a.kind] - kindOrder[b.kind] ||
+        depth(a) - depth(b) ||
+        a.createdAt - b.createdAt ||
+        (a.id < b.id ? -1 : 1),
+    );
     let changed = false;
     for (const b of ready) {
       if (running >= this.cfg.maxConcurrentRuns) break;
-      invariant(b.tipSha !== null && b.treeSha !== null && b.baseSha !== null, "run.unbuilt", `run of unbuilt ${b.id}`);
+      invariant(
+        b.tipSha !== null && b.treeSha !== null && b.baseSha !== null,
+        "run.unbuilt",
+        `run of unbuilt ${b.id}`,
+      );
       b.runSeq++;
       b.runId = `${b.id}-r${b.runSeq}`;
       b.state = "running";
@@ -2064,12 +2432,19 @@ class Machine {
         return de !== undefined && (de.state === "ejected" || de.state === "dequeued");
       });
       if (dead !== undefined) {
-        this.terminate(e, "ejected", { changeId: e.changeId, code: "dependency-ejected", message: `depends on ${dead}, which left the queue`, upstream: [dead] });
+        this.terminate(e, "ejected", {
+          changeId: e.changeId,
+          code: "dependency-ejected",
+          message: `depends on ${dead}, which left the queue`,
+          upstream: [dead],
+        });
         changed = true;
         continue;
       }
       if (e.landTogether && e.plangroup !== null) {
-        const gone = (groups.get(e.plangroup) ?? []).find((o) => o.state === "ejected" || o.state === "dequeued");
+        const gone = (groups.get(e.plangroup) ?? []).find(
+          (o) => o.state === "ejected" || o.state === "dequeued",
+        );
         if (gone !== undefined) {
           this.terminate(e, "ejected", {
             changeId: e.changeId,
@@ -2105,7 +2480,8 @@ class Machine {
       for (const e of [...ready.values()]) {
         for (const d of e.dependsOn) {
           const de = this.entry(d);
-          if (de !== undefined && (ready.has(d) || this.inChain(de) || de.state === "merged")) continue;
+          if (de !== undefined && (ready.has(d) || this.inChain(de) || de.state === "merged"))
+            continue;
           e.hold = "dependency";
           ready.delete(e.changeId);
           progress = true;
@@ -2115,7 +2491,9 @@ class Machine {
       for (const e of [...ready.values()]) {
         if (!e.landTogether || e.plangroup === null) continue;
         const group = (groups.get(e.plangroup) ?? []).filter((o) => !isTerminal(o));
-        const complete = (e.groupSize === null || group.length >= e.groupSize) && group.every((o) => ready.has(o.changeId));
+        const complete =
+          (e.groupSize === null || group.length >= e.groupSize) &&
+          group.every((o) => ready.has(o.changeId));
         if (complete) continue;
         for (const o of group)
           if (ready.delete(o.changeId)) {
@@ -2142,7 +2520,8 @@ class Machine {
     for (const e of ready.values()) parent.set(e.changeId, e.changeId);
     const groupFirst = new Map<string, string>();
     for (const e of ready.values()) {
-      if (e.landMode === "atomic") for (const d of e.dependsOn) if (ready.has(d)) glue(e.changeId, d);
+      if (e.landMode === "atomic")
+        for (const d of e.dependsOn) if (ready.has(d)) glue(e.changeId, d);
       if (e.landTogether && e.plangroup !== null) {
         const f = groupFirst.get(e.plangroup);
         if (f === undefined) groupFirst.set(e.plangroup, e.changeId);
@@ -2186,7 +2565,9 @@ class Machine {
         flows,
       });
     }
-    units.sort((a, b) => (frozen ? Number(b.express) - Number(a.express) : 0) || compareOrder(a, b));
+    units.sort(
+      (a, b) => (frozen ? Number(b.express) - Number(a.express) : 0) || compareOrder(a, b),
+    );
 
     // ---- frozen: express units go on main; conflicting normal batches are re-rooted behind them.
     if (frozen) {
@@ -2208,10 +2589,12 @@ class Machine {
     const inFlightPerFlow = new Map<string, number>();
     if (cfg.features.fairness)
       for (const e of Object.values(s.entries))
-        if (e.state === "speculating" || e.state === "passed") inFlightPerFlow.set(flowKey(e), (inFlightPerFlow.get(flowKey(e)) ?? 0) + 1);
+        if (e.state === "speculating" || e.state === "passed")
+          inFlightPerFlow.set(flowKey(e), (inFlightPerFlow.get(flowKey(e)) ?? 0) + 1);
     const index = new ConflictIndex();
     const active = this.activeChain();
-    for (const b of active) for (const id of ownEntries(b)) index.add(b.id, this.entry(id)?.affected ?? null);
+    for (const b of active)
+      for (const id of ownEntries(b)) index.add(b.id, this.entry(id)?.affected ?? null);
     let inflightCount = active.filter(inFlight).length;
     const blocked = new ConflictIndex();
     const depthMemo = new Map<string, number>();
@@ -2234,10 +2617,18 @@ class Machine {
         }
       }
       const expressFirst = frozen && u.express;
-      if (!expressFirst && (cfg.features.conflictGraph ? blocked.query(u.affected).size > 0 : blocked.size > 0)) return "blocked";
-      const hits = cfg.features.conflictGraph ? index.query(u.affected) : index.query(unknownAffectedSet());
+      if (
+        !expressFirst &&
+        (cfg.features.conflictGraph ? blocked.query(u.affected).size > 0 : blocked.size > 0)
+      )
+        return "blocked";
+      const hits = cfg.features.conflictGraph
+        ? index.query(u.affected)
+        : index.query(unknownAffectedSet());
       for (const d of depBatches) hits.add(d);
-      const conflicting = [...hits].map((id) => this.batch(id)).filter((b): b is Batch => b !== undefined && this.isActiveChain(b));
+      const conflicting = [...hits]
+        .map((id) => this.batch(id))
+        .filter((b): b is Batch => b !== undefined && this.isActiveChain(b));
       if (expressFirst && conflicting.some((b) => !this.isExpressBatch(b))) return "blocked"; // a normal batch with a CAS in flight
       // Frontier: the conflicting batches no other conflicting batch is built on.
       const frontier = conflicting.filter((c) => {
@@ -2251,8 +2642,13 @@ class Machine {
         // A batch something is already built on (its tip, or a merge copying its lineage) can't
         // grow: the descendant's lineage would not list the newcomer.
         const oOwn = ownEntries(o);
-        if (active.some((c) => c.id !== o.id && this.isActiveChain(c) && this.builtOn(c, oOwn))) continue;
-        if (u.isolate || o.units.some((x) => x.changeIds.some((id) => this.entry(id)?.isolate === true))) continue;
+        if (active.some((c) => c.id !== o.id && this.isActiveChain(c) && this.builtOn(c, oOwn)))
+          continue;
+        if (
+          u.isolate ||
+          o.units.some((x) => x.changeIds.some((id) => this.entry(id)?.isolate === true))
+        )
+          continue;
         if (frozen && this.isExpressBatch(o) !== u.express) continue;
         const covers =
           frontier.length > 0
@@ -2295,7 +2691,8 @@ class Machine {
         if (r === "placed") changed = true;
         // While frozen an express unit that couldn't be placed still goes first: nothing that
         // conflicts with it may be placed in front of it (else the re-rooting above never ends).
-        else if (r === "blocked" || (r === "deferred" && frozen && u.express)) blocked.add(`u:${u.changeIds[0]}`, u.affected);
+        else if (r === "blocked" || (r === "deferred" && frozen && u.express))
+          blocked.add(`u:${u.changeIds[0]}`, u.affected);
         else if (r === "dep") retry.push(u);
       }
       if (retry.length === queue.length) break;
@@ -2349,7 +2746,8 @@ class Machine {
     const lineage = new Set(f.lineage);
     for (const m of this.s.mainLog) {
       if (m.seq <= f.rootSeq) continue;
-      for (const c of m.changes) if (!lineage.has(c.changeId) && conflicts(c.affected, a)) return false;
+      for (const c of m.changes)
+        if (!lineage.has(c.changeId) && conflicts(c.affected, a)) return false;
     }
     return true;
   }
@@ -2371,7 +2769,9 @@ class Machine {
     } else if (frontier.length > 0) {
       // Merge batch: rebuild every unmerged entry of the predecessors on current main.
       const seen = new Set<string>();
-      for (const f of [...frontier].sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1)))
+      for (const f of [...frontier].sort(
+        (a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1),
+      ))
         for (const x of f.lineage) {
           if (seen.has(x)) continue;
           seen.add(x);
@@ -2446,7 +2846,14 @@ class Machine {
       const e = this.entry(cid);
       if (e === undefined || b.trackId === null || !fresh.has(cid)) return;
       if (e.prediction !== null)
-        this.telemetry("prediction", { changeId: cid, batchId: b.id, position, p: e.prediction.p, factors: e.prediction.factors, model: e.prediction.model });
+        this.telemetry("prediction", {
+          changeId: cid,
+          batchId: b.id,
+          position,
+          p: e.prediction.p,
+          factors: e.prediction.factors,
+          model: e.prediction.model,
+        });
       this.emit({
         type: "entered_batch",
         at: this.now,
@@ -2496,7 +2903,8 @@ class Machine {
       for (const p of b.bisect?.probeIds ?? []) referenced.add(p);
     }
     if (s.cas !== null) referenced.add(s.cas.batchId);
-    for (const [id, b] of Object.entries(s.batches)) if (batchDone(b) && !referenced.has(id)) delete s.batches[id];
+    for (const [id, b] of Object.entries(s.batches))
+      if (batchDone(b) && !referenced.has(id)) delete s.batches[id];
   }
 }
 

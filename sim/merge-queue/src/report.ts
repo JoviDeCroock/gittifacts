@@ -12,7 +12,11 @@ const f2 = (x: number) => x.toFixed(2);
 const pct = (x: number) => `${(100 * x).toFixed(2)}%`;
 
 function table(head: string[], rows: string[][]): string {
-  return [`| ${head.join(" | ")} |`, `|${head.map(() => "---").join("|")}|`, ...rows.map((r) => `| ${r.join(" | ")} |`)].join("\n");
+  return [
+    `| ${head.join(" | ")} |`,
+    `|${head.map(() => "---").join("|")}|`,
+    ...rows.map((r) => `| ${r.join(" | ")} |`),
+  ].join("\n");
 }
 
 function runsOf(r: GatesRun, scenario: string, mode: string): RunMetrics[] {
@@ -61,14 +65,30 @@ function scenarioSection(r: GatesRun): string {
     "Time in queue is enqueue → merged, in minutes; Changes still unmerged when the run ends count with their wait so far (conservative). CI ratio = CI minutes per merged Change ÷ one isolated full run (the scenario's median CI duration). False eject = ejected for a test failure although the Change is not broken and has no unresolved semantic partner in main or the queue (a flake or a misattribution).",
     "",
     table(
-      ["scenario", "arrivals", "merged/h", "time in queue p50 / p95 / p99", "CI ratio", "eject", "false eject", "resolved / conflicts", "main red", "attribution fail / regressions", "batch size", "freezes", "quarantines"],
+      [
+        "scenario",
+        "arrivals",
+        "merged/h",
+        "time in queue p50 / p95 / p99",
+        "CI ratio",
+        "eject",
+        "false eject",
+        "resolved / conflicts",
+        "main red",
+        "attribution fail / regressions",
+        "batch size",
+        "freezes",
+        "quarantines",
+      ],
       rows,
     ),
   ].join("\n");
 }
 
 function baselineSection(r: GatesRun): string {
-  const modes = ["full", "serial", "batch-all", "no-speculation", "no-revalidation"].filter((m) => runsOf(r, "gate-200", m).length > 0);
+  const modes = ["full", "serial", "batch-all", "no-speculation", "no-revalidation"].filter(
+    (m) => runsOf(r, "gate-200", m).length > 0,
+  );
   const rows = modes.map((mode) => {
     const rs = runsOf(r, "gate-200", mode);
     return [
@@ -87,7 +107,19 @@ function baselineSection(r: GatesRun): string {
     "",
     "Same workload (same seeds) for every configuration. *Strictly serial* is the coordinator's original queue expressed as a configuration of the core (FIFO, one Change at a time, rebase + full re-test + CAS, conflicts and red runs eject). *Batch everything* keeps every mechanism except the conflict graph: one speculative chain.",
     "",
-    table(["configuration", "merged/h", "backlog at end of arrivals", "time in queue p50 / p95", "CI ratio", "eject", "false eject", "main red"], rows),
+    table(
+      [
+        "configuration",
+        "merged/h",
+        "backlog at end of arrivals",
+        "time in queue p50 / p95",
+        "CI ratio",
+        "eject",
+        "false eject",
+        "main red",
+      ],
+      rows,
+    ),
   ].join("\n");
 }
 
@@ -107,7 +139,10 @@ function mechanismSection(r: GatesRun): string {
     "",
     "Each row switches one mechanism off (`no-*` modes in `src/modes.ts`) on the scenario where it should matter most, and compares the metric it exists for (mean over seeds).",
     "",
-    table(["mechanism", "scenario", "metric", "with", "without", "earns its keep", "why it exists"], rows),
+    table(
+      ["mechanism", "scenario", "metric", "with", "without", "earns its keep", "why it exists"],
+      rows,
+    ),
     "",
     losers.length === 0
       ? "Every mechanism beats its simpler alternative on the metric it exists for."
@@ -150,7 +185,8 @@ function knobsSection(): string {
     `${s.hours}h`,
     pct(s.conflictDensity),
     pct(s.trueFailureRate),
-    pct(s.flakyRate) + (s.hotFlaky.tests > 0 ? ` + ${s.hotFlaky.tests}×${pct(s.hotFlaky.failProb)}` : ""),
+    pct(s.flakyRate) +
+      (s.hotFlaky.tests > 0 ? ` + ${s.hotFlaky.tests}×${pct(s.hotFlaky.failProb)}` : ""),
     `${s.semanticConflictRate} / ${s.textualConflictRate}`,
     `${s.ci.medianMinutes}m σ${s.ci.sigma}`,
     `${pct(s.stacks.rate)} / ${pct(s.planGroups.rate)}`,
@@ -164,7 +200,24 @@ function knobsSection(): string {
     "",
     "Conflict density is calibrated: the repo model (K clusters × 4 modules × 12 files, module 0 is each cluster's core and puts the whole cluster in the reverse-dependency closure) picks K so two random Changes' affected sets overlap with that probability. Semantic/textual rates are per *concurrent* overlapping (file-sharing) pair; the analyzer is sound (interactions only happen between overlapping sets, which is what impacted-target revalidation relies on).",
     "",
-    table(["scenario", "arrivals/h", "window", "conflict density", "broken", "flaky runs", "semantic / textual pair rate", "CI", "stacks / plan groups", "unknown affected", "prod regressions", "post-merge failures", "description"], rows),
+    table(
+      [
+        "scenario",
+        "arrivals/h",
+        "window",
+        "conflict density",
+        "broken",
+        "flaky runs",
+        "semantic / textual pair rate",
+        "CI",
+        "stacks / plan groups",
+        "unknown affected",
+        "prod regressions",
+        "post-merge failures",
+        "description",
+      ],
+      rows,
+    ),
   ].join("\n");
 }
 
