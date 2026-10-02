@@ -987,3 +987,127 @@ HTMLRewriter. The page extends DESIGN.md's world rather than forking it: same to
 `chg_fx2r7` mock fixture and the screenshots are captured from mock mode, so they must be recaptured
 if that fixture changes. The platform test for `/` needs a fresh `packages/web` build (it reads
 `dist/landing.html` through the ASSETS binding).
+
+## 2026-10-02 — External integrations: deploy platforms connect to gittifacts (docs/prompts/04-integrations.md)
+
+**Integration principals.** `Principal.kind` gained `"integration"` (additive, `@app/domain`). Each installation has
+its own integration principal, owned by the installing human, with explicit `repoIds` re-resolved on every request.
+It is never unrestricted: no list means no repos. We didn't reuse `"agent"`, because an agent kind would have put
+installations in the human's Agents list and in the ownerless-agent (unclaimed) and MCP code paths. Every approval
+and review check is `kind === "human"`, so an integration fails all of them. The repo-access chokepoint gives an
+integration `reader` on its installation's repos while the installer is still a member.
+
+**Scopes.** `Scope` gained four integration-only scopes (`IntegrationScope` = those four + `repo:read`):
+- `contents:read`
+- `webhooks`
+- `deployments:write`
+- `checks:write`
+
+Scope lists elsewhere stay as they were:
+- humans' default scopes exclude these four;
+- the agent consent screen's "never" list excludes them too (it shows only the approval class);
+- `parseRequestedScopes` still rejects them for agents.
+
+The scope string an integration may request is a subset of what it registered. Approval and write scopes are
+rejected by name. `checks:write` is grantable, but there is no checks endpoint yet (follow-up: a raise-only
+`external-check` evidence kind plus classifier support).
+
+**OAuth.** Integrations use the O4 authorization server (`/api/oauth/authorize|token|revoke`), dispatched by
+`client_id`:
+- **Clients.** Registered client ids are `gtic_…` (no CIMD). Clients are confidential (`client_secret_basic` or
+  `_post`, exactly one method) or public.
+- **PKCE.** S256 is required for every integration client, confidential ones too.
+- **Audience.** `<origin>/api` only; `/mcp` is refused, and `gti_` tokens don't verify at MCP.
+- **Separate requests table.** Install requests live in their own `integration_authorizations` table, so agent
+  consent and integration installs can never cross.
+- **Access tokens.** `gti_…` rows in `agent_tokens` (1 h, audience api, `session_id` = the installation's
+  `agent_sessions` row).
+- **Refresh tokens.** `gtir_…` in `oauth_refresh_tokens`, rotated on every use and good for 180 days after the
+  last rotation. Replaying a spent refresh token or code revokes every token of the installation; the
+  installation itself stays.
+- **Revocation.** RFC 7009 revoke for integrations revokes just that token.
+- **Metadata.** AS metadata now advertises `client_secret_basic`/`client_secret_post` and the integration scopes;
+  the O4 test was updated to match.
+- **Secrets.** Client secrets (`gtis_…`) are SHA-256 only. At most two can be active while rotating, and the last
+  one can't be revoked.
+
+**Installations.**
+- **Shape.** An installation is integration × account (human; `account_kind` leaves room for orgs) × repos, with
+  one active installation per (integration, account). Approving again updates its repos.
+- **Created at approval, before the code exchange.** That time is when `installation.created` is sent.
+- **Who may install.** Only an **owner or maintainer of a claimed repo**.
+- **"All repositories".** Every claimed repo the account owns or maintains, now and later, evaluated per request.
+- **Uninstall.** Access and refresh tokens are revoked, the principal is disabled (so the next request fails),
+  the session is revoked and pending deliveries are cancelled. `installation.deleted` is the last event sent.
+- **Audit.** Every install, update, uninstall, token issue/revocation and deployment report is audit-logged.
+
+**Git URL naming.**
+- `https://<host>/git/<owner>/<repo>.git`: `<repo>` is the repo name, which is unique in the Artifacts namespace.
+  `<owner>` is the owner's **handle**: assigned once on first use from a slug of the claimer's name (`-2`, `-3`… on
+  collision), stored in `account_handles` and stable after that.
+- A Change's fork: `/git/<owner>/<repo>/changes/<changeId>.git`.
+- Unclaimed projects have no git URL.
+
+**Git proxy.** Smart-HTTP `git-upload-pack` only (protocol v1 and v2 pass through):
+- **How it serves.** The Worker mints a 5-minute Artifacts **read** token per request (never returned) and
+  streams the exchange.
+- **Who may clone.**
+  - Integration tokens with `contents:read`.
+  - Agent tokens (`gtf_…`) with `repo:read` whose audience includes the API.
+  - Human browser sessions are not git credentials; humans clone with an agent token.
+  - The chokepoint decides the repo.
+- **Credentials.** Basic (`x-access-token:<token>`, or the token as the username) or Bearer.
+- **No push.** `git-receive-pack` is refused (403 `read-only`) for every caller.
+
+**Webhooks.** Event sources, without touching the coordinator's logic:
+- **Change events.** `buildPorts` wraps the Store:
+  - an insert sends `change.created`;
+  - a status, head, lane, evidence or tour update sends `change.updated`;
+  - `merged` and `reverted` get their own events.
+
+  Emission is best effort and never fails the write.
+- **Push.** The PushRouter got an optional `onPushEvent` runtime observer (a coordinator hook in its own commit).
+  It covers the default branch and change forks; deletes, tags, notes, queue refs and the rebase branch are not
+  `push`.
+
+Delivery:
+- **Rows.** One delivery row per covering installation that holds `webhooks` and is subscribed, sent through the
+  `WEBHOOK_QUEUE` (at least once).
+- **Signing.** `X-Gittifacts-Signature-256: sha256=HMAC(secret, raw body)`.
+- **Retries.** 10 s, 30 s, 2 min, 10 min, 30 min, 1 h, 2 h; the 8th failure marks the delivery `failed`.
+- **Duplicates.** A lease stops two consumers sending the same delivery.
+- **Sweep.** The cron re-queues deliveries more than 5 minutes overdue.
+- **Redeliver.** A redelivery is a new row that keeps `X-Gittifacts-Delivery`.
+- **Webhook secrets.** Needed in plaintext to sign, so they are sealed with AES-256-GCM under
+  HKDF(`BETTER_AUTH_SECRET`). **Rotating `BETTER_AUTH_SECRET` makes every stored webhook secret unreadable:
+  developers must generate new ones.**
+
+**Deployments → evidence.**
+- **Reports only.** Platforms report what they deployed; nothing deploys on their say-so.
+- **Previews.** A successful **preview** becomes `preview:<integrationId>` (`kind: "preview"`, status ok, `url`,
+  new optional `source: { kind: "integration", id, name, deploymentId, logUrl }` in `@app/evidence`, still
+  standalone). The platform re-signs the bundle with the same id, base and creation time.
+- **Never reclassified.** Nothing is reclassified, so a preview never lowers (or raises) a lane.
+- **Before CI seals.** If the head's bundle isn't sealed yet, the deployment waits as `pending`. When the
+  coordinator seals that head (or re-seals it), the Store wrapper adds every successful integration preview.
+- **Production.** Recorded as audit `deployment.production` on `change:<id>`, which is the rollout timeline. A
+  failure carries its log link. Without a `changeId`, the Change is matched by `mergedSha`.
+- **Refusals.** Unclaimed repos are refused.
+
+**Rate limits.** `INTEGRATION_LIMITER` (Workers Rate Limiting, 600/min per integration across its installations;
+API and git proxy) answers 429 `rate-limited`. It is per location, the binding's semantics, which is good enough
+for a request-rate guard.
+
+**Unclaimed projects and writes (the stop condition).** No path lets an integration push, approve or deploy, from
+an unclaimed project or any other:
+- integration scopes contain no write, review or approval scope;
+- `git-receive-pack` is always refused;
+- deployments are records, not deploys;
+- unclaimed repos are never installable, have no git URL and refuse deployment reports;
+- the chokepoint gives integrations `reader` at most.
+
+**Known gaps.**
+- No `checks:write` endpoint yet.
+- Repo-selection changes don't send an `installation_repositories`-style event.
+- The handle is derived from the claimer, not from the current owner: ownership transfer keeps the URL.
+- Delivery rows and expired `gti_` token rows need a periodic purge.
