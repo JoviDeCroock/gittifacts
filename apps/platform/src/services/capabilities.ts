@@ -1,11 +1,14 @@
 /**
  * `whoami` (MCP) / `GET /api/v1/capabilities`: what the caller is, what it may do, and where.
- * Quotas are placeholders until onboarding O3 enforces them.
+ * Quotas: an unclaimed project's agent gets its project's hard limits and today's use (O3).
  */
 import type { Principal, Repo, Scope } from "@app/domain";
 import type { Caller, Services } from "../app-env.js";
 import type { SessionUser } from "../auth/principals.js";
 import { filterRepos } from "../auth/repo-scope.js";
+import { unclaimedLimits } from "../limits/config.js";
+import { usageOf } from "../limits/quotas.js";
+import { isUnclaimedAgent } from "../limits/request-limit.js";
 
 export const REPO_ACTIONS = [
   "read",
@@ -29,11 +32,12 @@ export interface RepoCapability {
 }
 
 export interface Quotas {
-  /** Not enforced yet (onboarding O3); null = unlimited / unknown. */
+  /** True for an unclaimed project's agent (hard limits, O3); null = not metered. */
   enforced: boolean;
   ciMinutesPerDay: number | null;
   ciMinutesUsedToday: number | null;
   artifactsOpsPerDay: number | null;
+  /** The storage quota (bytes); usage is in the ledger. */
   storageBytes: number | null;
 }
 
@@ -84,12 +88,32 @@ export async function capabilities(svc: Services, caller: Caller): Promise<Capab
       actions: repoActions(caller.principal, repo),
       aiBudgetUsdPerChange: repo.policy.ai.budgetUsdPerChange,
     })),
-    quotas: {
+    quotas: await quotasFor(svc, caller.principal, repos),
+  };
+}
+
+/**
+ * An unclaimed project's agent sees its project's hard limits and today's use (O3); everyone
+ * else is not metered here (null = no platform quota).
+ */
+async function quotasFor(svc: Services, principal: Principal, repos: Repo[]): Promise<Quotas> {
+  const project = repos.find((r) => r.claim.status !== "claimed");
+  if (!isUnclaimedAgent(principal) || project === undefined) {
+    return {
       enforced: false,
       ciMinutesPerDay: null,
       ciMinutesUsedToday: null,
       artifactsOpsPerDay: null,
       storageBytes: null,
-    },
+    };
+  }
+  const l = unclaimedLimits(svc.env);
+  const used = await usageOf(svc.env, svc.store, project.id, svc.clock.now().getTime());
+  return {
+    enforced: true,
+    ciMinutesPerDay: l.ci.minutesPerDay,
+    ciMinutesUsedToday: Math.ceil(used.project.ciMinutesUsedToday),
+    artifactsOpsPerDay: l.artifactsOpsPerDay,
+    storageBytes: l.storageBytes,
   };
 }

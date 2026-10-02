@@ -34,6 +34,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import type { Caller, Services } from "../app-env.js";
 import { ApiError, conflict, forbidden } from "../errors.js";
+import { admitUnclaimedWork } from "../limits/gates.js";
 import { requireChange, requireRepo } from "../services/changes.js";
 import type { LedgerUsage, ProjectLedger } from "./ledger-do.js";
 import {
@@ -248,6 +249,10 @@ export async function openWorkspace(
   }
   const limits = limitsFor(repo, bindings(svc));
   const workspaceId = workspaceIdFor(change.id);
+  // O3: an unclaimed project's quotas (CI minutes, storage) and the checkout's Artifacts ops.
+  if (caller.principal.id !== SYSTEM_PRINCIPAL_ID) {
+    await admitUnclaimedWork(svc, repo, { ops: 1, what: "open_workspace" });
+  }
   const ledger = bindings(svc).PROJECT_LEDGER.getByName(repo.id);
   const usage = await ledger.usage({ cpuSecondsPerDay: limits.cpuSecondsPerDay, atMs: now });
   // The platform's own workspaces (import proposals) are short and don't count against the
@@ -439,6 +444,10 @@ export async function wsCommitPush(
   input: { workspaceId: string; message: string },
 ): Promise<WsCommitPushResult> {
   const w = await resolve(svc, caller, input.workspaceId);
+  // O3: each push mints a write token for the fork (one Artifacts operation).
+  if (caller.principal.id !== SYSTEM_PRINCIPAL_ID) {
+    await admitUnclaimedWork(svc, w.repo, { ops: 1, what: "ws_commit_push" });
+  }
   const r = unwrap(await w.stub.commitPush(caller.principal.id, { message: input.message }));
   await svc.audit.append({
     principalId: caller.principal.id,

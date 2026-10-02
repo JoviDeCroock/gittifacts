@@ -17,6 +17,7 @@ import type { z } from "zod";
 import type { ReviewBody } from "../api/schemas.js";
 import type { Caller, Services } from "../app-env.js";
 import { conflict, forbidden, notFound } from "../errors.js";
+import { admitUnclaimedWork } from "../limits/gates.js";
 import type { ChangeSummary, PrincipalRef } from "../store/d1-store.js";
 import type { PlanView } from "../store/rows.js";
 import { type AuditEventView, withSummaries } from "./audit.js";
@@ -219,7 +220,9 @@ export async function startChange(
   idempotencyKey?: string,
 ): Promise<{ change: Change; remote: GitRemoteGrant }> {
   const v = StartChangeInput.parse(input);
-  await requireRepo(svc, v.repoId);
+  const repo = await requireRepo(svc, v.repoId);
+  // O3: an unclaimed project pays a fork and a push token from its quotas.
+  await admitUnclaimedWork(svc, repo, { ops: 2, what: "start_change" });
   if (v.planId !== undefined && !(await svc.store.getPlan(v.planId))) {
     throw notFound(`plan ${v.planId}`, {
       explanation:
@@ -243,7 +246,11 @@ export async function refreshPushGrant(
   caller: Caller,
   changeId: string,
 ): Promise<GitRemoteGrant> {
-  await requireChange(svc, changeId);
+  const change = await requireChange(svc, changeId);
+  await admitUnclaimedWork(svc, await requireRepo(svc, change.repoId), {
+    ops: 1,
+    what: "refresh_push_token",
+  });
   return svc.coordinator.refreshPushGrant(caller.principal, changeId);
 }
 
