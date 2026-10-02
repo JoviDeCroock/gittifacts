@@ -1,0 +1,175 @@
+/* ------------------------------------------------------------------ article */
+.main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  padding: var(--s-5) var(--gutter) var(--s-8);
+}
+.article {
+  min-width: 0;
+  max-width: 48rem;
+}
+.crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-2);
+  margin: 0 0 var(--s-3);
+  padding: 0;
+  list-style: none;
+  color: var(--text-3);
+  font-size: var(--text-small);
+}
+.crumbs li + li::before {
+  content: "/";
+  margin-right: var(--s-2);
+  color: var(--text-4);
+}
+.crumbs a {
+  color: var(--text-2);
+  text-decoration: none;
+}
+.crumbs a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+.article__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin: calc(-1 * var(--s-2)) 0 var(--s-5);
+  font-size: var(--text-small);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--panel-strong);
+  color: var(--text-2);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+.meta__md {
+  color: var(--text-2);
+}
+.soon {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border: var(--hairline) solid var(--lane1-edge);
+  border-radius: 6px;
+  background: var(--lane1-tint);
+  color: var(--lane1-ink);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+  vertical-align: 0.1em;
+}
+
+/* ------------------------------------------------------------------ prose */
+.prose {
+  font-size: var(--text-body);
+}
+.prose > :first-child {
+  margin-top: 0;
+}
+.prose h1 {
+  margin: 0 0 var(--s-4);
+  font-size: var(--text-heading);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.012em;
+}
+.prose h2 {
+  margin: var(--s-7) 0 var(--s-3);
+  padding-top: var(--s-5);
+  border-top: var(--hairline) solid var(--rule);
+  font-size: 1.3125rem;
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+.prose h3 {
+  margin: var(--s-6) 0 var(--s-2);
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+  line-height: 1.3;
+}
+.prose h4 {
+  margin: var(--s-5) 0 var(--s-2);
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+}
+.prose h2,
+.prose h3,
+.prose h4 {
+  position: relative;
+}
+.anchor {
+  position: absolute;
+  left: -1.1em;
+  padding-right: 0.3em;
+  color: var(--text-4);
+  font-weight: var(--weight-regular);
+  text-decoration: none;
+  opacity: 0;
+}
+.prose h2:hover .anchor,
+.prose h3:hover .anchor,
+.anchor:focus {
+  opacity: 1;
+}
+.prose p,
+.prose li {
+  max-width: var(--measure);
+}
+.prose p {
+  margin: 0 0 var(--s-4);
+}
+.prose ul,
+.prose ol {
+  margin: 0 0 var(--s-4);
+  padding-left: 1.4em;
+}
+.prose li {
+  margin: var(--s-1) 0;
+}
+.prose li > p {
+  margin-bottom: var(--s-2);
+}
+.prose ol > li::marker {
+  color: var(--text-3);
+  font-weight: var(--weight-bold);
+}
+.prose strong {
+  font-weight: var(--weight-bold);
+}
+.prose hr {
+  margin: var(--s-6) 0;
+  border: 0;
+  border-top: var(--hairline) solid var(--rule);
+}
+.prose :not(pre) > code {
+  padding: 0.08em 0.32em;
+  border-radius: var(--r-tag);
+  background: var(--panel-strong);
+  font-family: var(--font-code);
+  font-size: 0.875em;
+  overflow-wrap: anywhere;
+}
+.prose a code {
+  color: inherit;
+}
+.note {
+  margin: 0 0 var(--s-5);
+  padding: var(--s-3) var(--s-4);
+  border-top: 3px solid var(--text);
+  border-radius: 0 0 var(--r-control) var(--r-control);
+  background: var(--panel);
+}
+.note > :last-child {
+  margin-bottom: 0;
+}
