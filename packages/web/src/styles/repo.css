@@ -7,7 +7,6 @@
   display: grid;
   gap: var(--s-6);
   align-content: start;
-  order: -1;
 }
 @media (min-width: 1100px) {
   .repo-layout {
@@ -74,11 +73,6 @@
 }
 .plan-mini .tone {
   font-size: var(--text-meta);
-}
-@media (max-width: 1099px) {
-  .repo-layout__side .side-block {
-    display: none;
-  }
 }
 
 /* Plans awaiting approval */
@@ -156,6 +150,17 @@
 .changes__bar .segmented__opt {
   flex: 1 0 auto;
   justify-content: center;
+}
+/* Phones: all four filters fit on one 358px row instead of scrolling "All" out of view. */
+@media (max-width: 639px) {
+  .changes__bar .segmented__opt {
+    gap: 4px;
+    padding-inline: var(--s-2);
+  }
+  .changes__bar .segmented__count {
+    min-inline-size: 18px;
+    padding-inline: 5px;
+  }
 }
 
 .lane-group + .lane-group {
