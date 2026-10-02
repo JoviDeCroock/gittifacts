@@ -22,8 +22,9 @@
     "PREVIEW_HOST_SUFFIX": "-pv.resynapse.dev",
     // Every model call goes through this AI Gateway (metadata: run, task, model).
     "AI_GATEWAY_ID": "gittifacts",
-    // Task 2's public GitHub fixture (fixtures/imports/clock-api). Empty → task 2 is skipped.
-    "EVAL_IMPORT_REPO_URL": "",
+    // Task 2's public GitHub fixture: fixtures/imports/clock-api materialized (main = 69c3b2037a8d,
+    // one failing test). Empty → task 2 is reported as skipped.
+    "EVAL_IMPORT_REPO_URL": "https://github.com/JoviDeCroock/gittifacts-fixture-clock-api",
     // Nightly matrix: every task × model, this many runs per cell (§7 needs ≥ 5).
     "EVAL_RUNS_PER_CELL": "5",
     // Runs in flight at once (each creates an unclaimed project: mind the creation limits).
