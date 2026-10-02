@@ -103,8 +103,10 @@
 .table-wrap td code {
   white-space: nowrap;
 }
+/* Long codes in the first column may wrap at their hyphens, never letter by letter. */
 .table-wrap td:first-child code {
   white-space: normal;
+  overflow-wrap: normal;
 }
 
 /* ------------------------------------------------------------------ pager, toc */
