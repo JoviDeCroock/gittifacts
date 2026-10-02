@@ -10,7 +10,7 @@ import type { Services } from "../app-env.js";
 import { claimUrlForRepo } from "../claim/store.js";
 import { ApiError } from "../errors.js";
 import { unclaimedLimits } from "./config.js";
-import { assertCanStartWork, chargeArtifactsOps } from "./quotas.js";
+import { assertCanStartWork, assertOpenChangesBelow, chargeArtifactsOps } from "./quotas.js";
 
 export async function admitUnclaimedWork(
   svc: Services,
@@ -36,6 +36,9 @@ export async function admitUnclaimedWork(
   const claimUrl = await claimUrlForRepo(svc.env, svc.store, svc.origin, repo.id);
   try {
     await assertCanStartWork(svc.env, svc.store, repo, limits, now, claimUrl);
+    if (input.what === "start_change") {
+      await assertOpenChangesBelow(svc.store, repo, limits, claimUrl);
+    }
     await chargeArtifactsOps(svc.env, svc.store, repo, input.ops, limits, now, claimUrl);
   } catch (e) {
     if (e instanceof ApiError && e.code === "quota-exceeded") {

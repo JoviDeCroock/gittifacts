@@ -22,8 +22,16 @@ import {
 import type { Repo } from "@app/domain";
 import { ApiError } from "../errors.js";
 import { D1Store } from "../store/d1-store.js";
+import type { ProjectLedger } from "../workspace/ledger-do.js";
 import { type LimitsEnv, type UnclaimedLimits, unclaimedLimits } from "./config.js";
-import { chargeArtifactsOps, ledgersFor, type QuotaEnv, quotaExceeded, usageOf } from "./quotas.js";
+import {
+  chargeArtifactsOps,
+  GLOBAL_LEDGER,
+  ledgersFor,
+  type QuotaEnv,
+  quotaExceeded,
+  usageOf,
+} from "./quotas.js";
 
 export const LIMIT_STEP = "unclaimed-limits";
 
@@ -90,21 +98,49 @@ async function refusal(
     return over(
       quotaExceeded(repo, "ci-minutes", "project", p.usedMinutes, l.ci.minutesPerDay, null, null),
     );
-  if (ip === null) return { minutes: p.minutes };
-  const i = await ip.reserveCi({
+  let minutes = p.minutes;
+  const release = async (ledgers: Array<DurableObjectStub<ProjectLedger>>) => {
+    for (const x of ledgers) await x.settleCi({ runId: req.runId, actualMinutes: 0 });
+  };
+  if (ip !== null) {
+    const i = await ip.reserveCi({
+      runId: req.runId,
+      maxMinutes: minutes,
+      perDay: l.perIp.ciMinutesPerDay,
+      minMinutes: 1,
+      atMs,
+    });
+    if (!i.ok) {
+      await release([project]);
+      return over(
+        quotaExceeded(repo, "ci-minutes", "ip", i.usedMinutes, l.perIp.ciMinutesPerDay, null, null),
+      );
+    }
+    minutes = Math.min(minutes, i.minutes);
+  }
+  // Platform-wide: every unclaimed project's CI together (a cost bound).
+  const g = await env.PROJECT_LEDGER.getByName(GLOBAL_LEDGER).reserveCi({
     runId: req.runId,
-    maxMinutes: p.minutes,
-    perDay: l.perIp.ciMinutesPerDay,
+    maxMinutes: minutes,
+    perDay: l.globalCiMinutesPerDay,
     minMinutes: 1,
     atMs,
   });
-  if (!i.ok) {
-    await project.settleCi({ runId: req.runId, actualMinutes: 0 });
+  if (!g.ok) {
+    await release(ip === null ? [project] : [project, ip]);
     return over(
-      quotaExceeded(repo, "ci-minutes", "ip", i.usedMinutes, l.perIp.ciMinutesPerDay, null, null),
+      quotaExceeded(
+        repo,
+        "ci-minutes",
+        "global",
+        g.usedMinutes,
+        l.globalCiMinutesPerDay,
+        null,
+        null,
+      ),
     );
   }
-  return { minutes: Math.min(p.minutes, i.minutes) };
+  return { minutes: Math.min(minutes, g.minutes) };
 }
 
 /** The request an unclaimed project's run actually gets. */

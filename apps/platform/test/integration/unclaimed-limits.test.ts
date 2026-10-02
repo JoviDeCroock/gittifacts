@@ -10,15 +10,17 @@ import { env } from "cloudflare:workers";
 import { bootstrapChangeIdFor, changeWorkflowId, ciRunIdFor } from "@app/coordinator";
 import type { ProjectCreated } from "@app/mcp";
 import { createPlatformClient } from "@app/mcp/client";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
+import { previews } from "../../src/db/schema.js";
 import { UnclaimedLimitError } from "../../src/limits/refusals.js";
 import { UNCLAIMED_BANNER } from "../../src/previews/pages.js";
+import { PlatformPreviews } from "../../src/previews/port.js";
 import { store } from "../fixtures.js";
 import { ORIGIN } from "../http.js";
 import { type IntegrationFakes, NAMESPACE, resetIntegrationFakes } from "./fakes.js";
 import { platformApp } from "./harness.js";
-import { previewFakes, resetPreviewFakes } from "./preview-fakes.js";
+import { fakeBrowser, previewFakes, resetPreviewFakes } from "./preview-fakes.js";
 import {
   createUnclaimed,
   fetchWith,
@@ -365,5 +367,56 @@ describe("no API can give an unclaimed project secrets, custom domains or a depl
     } finally {
       await mcp.client.close();
     }
+  });
+});
+
+describe("bounds on what an unclaimed project can hold", () => {
+  it("at most 5 open Changes (each holds a fork; Artifacts can't report git storage)", async () => {
+    const app = platformApp();
+    const p = await createUnclaimed(app);
+    // The first Change came with the project: four more fit.
+    for (let i = 0; i < 4; i++) expect((await startChange(app, p)).status).toBe(201);
+    const sixth = await startChange(app, p);
+    expect(sixth.status).toBe(429);
+    const body = (await sixth.json()) as Envelope;
+    expect(body.error.details).toMatchObject({ quota: "open-changes", limit: 5 });
+    expect(body.error.fix.explanation).toMatch(/abandon/i);
+  });
+
+  it("a platform-wide cap on all unclaimed projects' CI minutes", async () => {
+    const app = platformApp();
+    const p = await createUnclaimed(app);
+    const global = ledger("global");
+    await global.add({ metric: "ci-minutes", amount: 1500, period: "day", atMs: at() });
+    try {
+      const res = await startChange(app, p);
+      expect(res.status).toBe(429);
+      expect(((await res.json()) as Envelope).error.details).toMatchObject({
+        quota: "ci-minutes",
+        scope: "global",
+      });
+    } finally {
+      await global.add({ metric: "ci-minutes", amount: -1500, period: "day", atMs: at() });
+    }
+  });
+
+  it("only the 3 newest previews of an unclaimed project stay live", async () => {
+    const previewsPort = new PlatformPreviews({ ...env, BROWSER: fakeBrowser }, store());
+    const repoId = `r-${crypto.randomUUID().slice(0, 8)}`;
+    for (let i = 0; i < 4; i++) {
+      const out = await previewsPort.start({
+        changeId: `c${i}-${repoId}`,
+        repoId,
+        artifactsRepo: `task-c${i}`,
+        headSha: `${i}`.repeat(40),
+        snapshots: { build: `snap-${i}` },
+        claimed: false,
+        template: "workers-api",
+      });
+      expect(out.status).toBe("ready");
+    }
+    const rows = await store().db.select().from(previews).where(eq(previews.repoId, repoId)).all();
+    expect(rows.map((r) => r.changeId).sort()).toEqual([1, 2, 3].map((i) => `c${i}-${repoId}`));
+    expect(previewFakes().starts.every((s) => s.enableInternet === false)).toBe(true);
   });
 });

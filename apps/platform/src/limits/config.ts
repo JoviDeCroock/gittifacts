@@ -37,6 +37,13 @@ export const UnclaimedLimits = z.object({
   storageBytes: z.number().int().min(0),
   /** Platform-mediated Artifacts operations (forks, push/clone tokens, imports) per UTC day. */
   artifactsOpsPerDay: z.number().int().min(1),
+  /**
+   * Open Changes (each one a fork) an unclaimed project may have at once: bounds the git storage
+   * it can hold, which Artifacts can't report (1 GB per repo is Artifacts' own cap).
+   */
+  maxOpenChanges: z.number().int().min(1),
+  /** Platform-wide cap on all unclaimed projects' CI minutes per UTC day (cost bound). */
+  globalCiMinutesPerDay: z.number().int().min(1),
   /** Aggregate over every unclaimed project created from one IP (or IPv6 /64). */
   perIp: z.object({
     ciMinutesPerDay: z.number().int().min(1),
@@ -68,6 +75,8 @@ export const DEFAULT_UNCLAIMED_LIMITS: UnclaimedLimits = {
   },
   storageBytes: 200 * MiB,
   artifactsOpsPerDay: 300,
+  maxOpenChanges: 5,
+  globalCiMinutesPerDay: 1500,
   perIp: { ciMinutesPerDay: 120, storageBytes: 500 * MiB, artifactsOpsPerDay: 600 },
   creation: {
     ipHour: { capacity: 3, periodSec: 3600 },

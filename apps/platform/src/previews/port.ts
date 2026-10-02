@@ -8,7 +8,7 @@
 import { isTemplateId, TEMPLATES } from "@app/conventions";
 import type { PreviewOutcome, PreviewRequest, Previews } from "@app/coordinator";
 import type { Screenshots } from "@app/evidence";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { previews } from "../db/schema.js";
 import type { D1Store } from "../store/d1-store.js";
 import { previewIdFor, previewUrlFor, previewZone } from "./ids.js";
@@ -17,6 +17,8 @@ import type { PreviewConfig, PreviewState } from "./preview-host.js";
 /** How long the workflow's preview step waits for a boot before reporting it. */
 export const START_WAIT_MS = 120_000;
 const MAX_ROUTES = 4;
+/** Unclaimed projects: how many previews stay live (the newest; older ones are destroyed). */
+export const UNCLAIMED_LIVE_PREVIEWS = 3;
 const VIEWPORTS = {
   desktop: { width: 1280, height: 800 },
   mobile: { width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
@@ -29,6 +31,7 @@ export interface PreviewsEnv {
   PREVIEW_HOST: {
     getByName(name: string): {
       ensure(config: PreviewConfig, opts: { waitMs: number }): Promise<PreviewState>;
+      destroy?(): Promise<void>;
     };
   };
   BROWSER?: Pick<BrowserRun, "quickAction">;
@@ -112,6 +115,8 @@ export class PlatformPreviews implements Previews {
         target: previews.id,
         set: { snapshotId, snapshotStep: step, status: "starting", detail: null, updatedAt: at },
       });
+    // O3: an unclaimed project keeps only its newest previews live (bounds container time).
+    if (!req.claimed) await this.retireOldPreviews(req.repoId, UNCLAIMED_LIVE_PREVIEWS);
     let state: PreviewState;
     try {
       state = await this.env.PREVIEW_HOST.getByName(id).ensure(config, { waitMs: START_WAIT_MS });
@@ -142,6 +147,24 @@ export class PlatformPreviews implements Previews {
         .where(eqId(id));
     }
     return { status: "error", url, reason };
+  }
+
+  /** Destroy and forget every preview of `repoId` but the `keep` newest. */
+  private async retireOldPreviews(repoId: string, keep: number): Promise<void> {
+    const old = await this.store.db
+      .select({ id: previews.id })
+      .from(previews)
+      .where(eq(previews.repoId, repoId))
+      .orderBy(desc(previews.createdAt))
+      .limit(100)
+      .offset(keep)
+      .all();
+    for (const { id } of old) {
+      await this.env.PREVIEW_HOST.getByName(id)
+        .destroy?.()
+        .catch((e: unknown) => console.warn("could not destroy preview", id, e));
+      await this.store.db.delete(previews).where(eqId(id));
+    }
   }
 
   async screenshots(input: {

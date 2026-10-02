@@ -14,8 +14,8 @@
  */
 import { fixFor } from "@app/conventions";
 import type { Repo } from "@app/domain";
-import { eq } from "drizzle-orm";
-import { projectClaims } from "../db/schema.js";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { changes, projectClaims } from "../db/schema.js";
 import { ApiError } from "../errors.js";
 import type { D1Store } from "../store/d1-store.js";
 import type { ProjectLedger } from "../workspace/ledger-do.js";
@@ -25,7 +25,10 @@ export interface QuotaEnv {
   PROJECT_LEDGER: DurableObjectNamespace<ProjectLedger>;
 }
 
-export type QuotaName = "ci-minutes" | "storage-bytes" | "artifacts-ops";
+export type QuotaName = "ci-minutes" | "storage-bytes" | "artifacts-ops" | "open-changes";
+
+/** The ProjectLedger that sums every unclaimed project's CI minutes (platform-wide cap). */
+export const GLOBAL_LEDGER = "global";
 
 export const isUnclaimed = (repo: Pick<Repo, "claim">) => repo.claim.status !== "claimed";
 
@@ -52,7 +55,7 @@ export async function ledgersFor(
 export function quotaExceeded(
   repo: Pick<Repo, "id">,
   quota: QuotaName,
-  scope: "project" | "ip",
+  scope: "project" | "ip" | "global",
   used: number,
   limit: number,
   claimUrl: string | null,
@@ -62,9 +65,14 @@ export function quotaExceeded(
     "ci-minutes": "CI minutes today",
     "storage-bytes": "storage",
     "artifacts-ops": "Artifacts operations today",
+    "open-changes": "open Changes",
   }[quota];
   const who =
-    scope === "ip" ? "unclaimed projects created from your address" : `project ${repo.id}`;
+    scope === "ip"
+      ? "unclaimed projects created from your address"
+      : scope === "global"
+        ? "unclaimed projects on this platform"
+        : `project ${repo.id}`;
   const base = fixFor("quota-exceeded", {
     quota: { name: quota, limit, used, ...(resetsAt === null ? {} : { resetsAt }) },
     ...(claimUrl === null ? {} : { claimUrl }),
@@ -229,4 +237,66 @@ export async function assertCanStartWork(
       claimUrl,
       reset,
     );
+  const global = await env.PROJECT_LEDGER.getByName(GLOBAL_LEDGER).counters({
+    metrics: [{ metric: "ci-minutes", period: "day" }],
+    atMs,
+  });
+  const globalUsed = global["ci-minutes"] ?? 0;
+  if (globalUsed > limits.globalCiMinutesPerDay - 1)
+    throw quotaExceeded(
+      repo,
+      "ci-minutes",
+      "global",
+      globalUsed,
+      limits.globalCiMinutesPerDay,
+      claimUrl,
+      reset,
+    );
+}
+
+/** Non-final Changes (each holds a fork), the bootstrap excluded. */
+const OPEN_STATUSES = [
+  "awaiting-push",
+  "running",
+  "failing",
+  "awaiting-review",
+  "approved",
+  "queued",
+] as const;
+
+/** Refuse a new Change when an unclaimed project already has `maxOpenChanges` open. */
+export async function assertOpenChangesBelow(
+  store: D1Store,
+  repo: Pick<Repo, "id" | "claim">,
+  limits: UnclaimedLimits,
+  claimUrl: string | null,
+): Promise<void> {
+  if (!isUnclaimed(repo)) return;
+  const row = await store.db
+    .select({ n: sql<number>`count(*)` })
+    .from(changes)
+    .where(
+      and(
+        eq(changes.repoId, repo.id),
+        inArray(changes.status, [...OPEN_STATUSES]),
+        sql`${changes.id} NOT LIKE 'bs-%'`,
+      ),
+    )
+    .get();
+  const open = row?.n ?? 0;
+  if (open >= limits.maxOpenChanges) {
+    const e = quotaExceeded(
+      repo,
+      "open-changes",
+      "project",
+      open,
+      limits.maxOpenChanges,
+      claimUrl,
+      null,
+    );
+    throw new ApiError(e.status, e.code, e.message, e.details, {
+      ...e.fix,
+      explanation: `Finish or abandon an open Change first (each one holds a fork). ${e.fix.explanation}`,
+    });
+  }
 }

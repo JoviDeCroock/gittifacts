@@ -8,7 +8,7 @@
 import { ChangeCoordinator as CoordinatorChangeCoordinator } from "@app/coordinator/workers";
 import { z } from "zod";
 import { D1Store } from "../store/d1-store.js";
-import { ledgersFor, type QuotaEnv } from "./quotas.js";
+import { GLOBAL_LEDGER, ledgersFor, type QuotaEnv } from "./quotas.js";
 
 const Usage = z.object({
   id: z.string().min(1),
@@ -40,6 +40,7 @@ export async function settleRunUsage(env: SettleEnv, summary: unknown, atMs = Da
     const metered = await project.settleCi({ runId: id, actualMinutes });
     if (!metered) return;
     if (ip !== null) await ip.settleCi({ runId: id, actualMinutes });
+    await env.PROJECT_LEDGER.getByName(GLOBAL_LEDGER).settleCi({ runId: id, actualMinutes });
     const bytes = (usage?.logBytes ?? 0) + (usage?.artifactBytes ?? 0);
     if (bytes > 0) {
       await project.add({ metric: "storage-bytes", amount: bytes, period: "total", atMs });
