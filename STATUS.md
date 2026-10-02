@@ -17,8 +17,8 @@ Specs:
 | M4 Merge, rollout, revert | coordinator merge/rollout/revert built (152 tests); live e2e after deploy |
 | M5 Mutation, transforms, screenshots, dogfood | mutation + transforms done in the sandbox; screenshots and dogfood pending |
 | O1 Front door + templates | **acceptance passes locally** (workerd, fakes): front door discovery, `create_project` per template → initial commit → bootstrap CI → preview through the gateway with banner → `evidence_ready`; TTFG metrics + dashboard; live check after deploy (docs/deploy.md) |
-| O2 Ergonomics | errors with `fix`, idempotency, `wait_for_change`, `whoami` done; CLI in progress |
-| O3 Claimable projects + abuse limits | **built and tested locally** (workerd): credential-less `create_project` (MCP + HTTP) → unclaimed project + token + claimUrl; claim flow (`/claim/<token>`, Turnstile, single-use, idempotent); TTL expiry cron; quotas (CI minutes per project/IP/global, storage, Artifacts ops, open Changes, previews, workspaces); IP/ASN/global creation limits; per-token limits; kill switch (Flagship + D1 override, fail closed); every limit has a test. Needs before going live: Flagship flag `unclaimed-creation-enabled`, Turnstile widget keys, `PLATFORM_ADMINS` (docs/deploy.md) |
+| O2 Ergonomics | errors with `fix`, idempotency, `wait_for_change`, `whoami` done; CLI built, served by the platform as an npm tarball (`npx -y https://<host>/cli/gittifacts.tgz`; not on npm yet) |
+| O3 Claimable projects + abuse limits | **live** (creation flag on, verified with the CLI, 2026-10-02); **built and tested locally** (workerd): credential-less `create_project` (MCP + HTTP) → unclaimed project + token + claimUrl; claim flow (`/claim/<token>`, Turnstile, single-use, idempotent); TTL expiry cron; quotas (CI minutes per project/IP/global, storage, Artifacts ops, open Changes, previews, workspaces); IP/ASN/global creation limits; per-token limits; kill switch (Flagship + D1 override, fail closed); every limit has a test. Configuration: Flagship flag `unclaimed-creation-enabled`, Turnstile widget keys, `PLATFORM_ADMINS` (docs/deploy.md) |
 | O4 Delegated auth (MCP OAuth, device flow) | **built and tested locally**: MCP OAuth (code + PKCE S256, CIMD, RFC 8707 audience), device flow, per-session agent principals with repo scoping, consent/device/sessions screens; deploy pending |
 | O5 Import detection + remote workspaces | **built and tested locally**: `gittifacts-runner detect` + `inspectRepo`, `propose_platform_config` (Plan + Lane 2 Change via a system workspace), `open_workspace` + `ws_*` on a Workspace DO (blobless fork checkout, idle sleep, TTL, quotas, registries-only egress); remote-only acceptance test over MCP passes; live: `scripts/e2e/remote-workspace.ts` after deploy |
 | O6 Onboarding eval | planned |
@@ -35,8 +35,8 @@ Specs:
 | `@app/coordinator` | ChangeCoordinator DO, ChangeWorkflow, MergeQueue DO, RolloutWorkflow, PushRouter, Cloudflare adapters, fakes | 152 |
 | `@app/tour` | reviewer agent; AI binding + gateway clients; budget; risk-ordered, evidence-anchored tours; conflict-resolution stop | 116 |
 | `@app/resolver` | merge-queue conflict resolver (`system:resolver`): verified patches, mechanical scope, ejections with fixes; 14-case conflict corpus | 68 |
-| `@app/conventions` | `AGENTS.md`, `/start`, `/llms.txt`, MCP discovery, fix hints, next steps, `.platform` generators | 226 |
-| `@app/mcp` | 27 tools (incl. `create_project`, workspaces, merge queue, `search_tools`) on mcp-tada-server, typed client, contract snapshot | 20 |
+| `@app/conventions` | `AGENTS.md`, `/start`, `/llms.txt`, MCP discovery, fix hints, next steps, `.platform` generators; `TOOL_NAMES` = the live MCP tools | 265 |
+| `@app/mcp` | 28 tools (incl. `create_project`, workspaces, merge queue, `search_tools`) on mcp-tada-server, typed client, contract snapshot, examples validated against schemas | 50 |
 | `apps/platform` | the one Worker: Hono API + OpenAPI, better-auth, D1, AuditLog DO, MCP, SSE, Ports per role wiring the coordinator, CI engine (Runner container) and reviewer; front door, `create_project`, preview gateway + PreviewHost container, TTFG metrics; M1 and O1 integration tests | 116 |
 | `apps/sandbox` | `gittifacts-runner` (plan, policy, evidence ×9, diff, preview) and its container image | 57, incl. 9-fixture e2e |
 | `@app/web` | 9 screens, mock backend, 45 screenshots in `docs/screenshots/` | 35 |
@@ -55,6 +55,10 @@ Landing page: `/` serves a prerendered marketing page to visitors without a sess
 people, the machine guide to agents); `packages/web/landing.html` + `src/landing/`, HTML+CSS ~22 KB gzip,
 screenshots in `docs/screenshots/landing-*`, tests in `packages/web/test/landing.test.ts` and
 `apps/platform/test/front-door.test.ts`.
+
+CLI: `deploy:prepare` packs `packages/cli` (`pack:assets`) into the static assets; `/cli/gittifacts.tgz` (+ `gittifacts-<version>.tgz`,
+`latest.json`) is served as `application/gzip` by `routes/cli.ts`. `/start`, `/llms.txt`, AGENTS.md, the device-flow hint and the
+web app say `npx -y https://<host>/cli/gittifacts.tgz --host https://<host> …`.
 
 Docs: `/docs` serves task-first documentation built by `packages/docs` (get started, concepts, 18 guides plus the
 integrations guide, 21 generated reference pages, security model) as HTML in the product's design system, markdown
