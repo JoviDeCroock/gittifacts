@@ -147,7 +147,7 @@ export function IntegrationInstall() {
   }
 
   return (
-    <ConsentFrame>
+    <ConsentFrame wide>
       {st.status === "loading" ? <Loading label="Loading the installation request" lines={8} /> : null}
       {st.status === "error" ? <LoadError error={st.error} onRetry={res.reload} /> : null}
       {st.status === "ok" && st.data ? (
