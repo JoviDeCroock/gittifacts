@@ -23,7 +23,7 @@ install.runner({
 });
 ```
 
-Bundles may declare plain variables only; resource bindings are refused. Every deployed version gets two bindings from the platform: `FLAGS` (the flags) and `VERSION` (version metadata). **Coming soon:** deploying asset-based projects (`preact-app`, `static-site`).
+Bundles may declare plain variables only; resource bindings are refused. Every deployed version gets two bindings from the platform: `FLAGS` (your project's own flag app) and `VERSION` (version metadata). **Coming soon:** deploying asset-based projects (`preact-app`, `static-site`).
 
 ## 2. Set the deploy target
 
@@ -72,6 +72,8 @@ export default {
 ```
 
 Each stage sets the traffic split, waits `stageMinutes`, then compares the new version with the previous one: error rate (with at least `minRequests`) and new Workers Issues groups. After 100% the platform watches for `watchMinutes`.
+
+Two signals feed the check. Workers Issues pushes each new error group of your Worker to the platform as it is detected, so a regression can be caught between polls. Workers Logs are polled every 30 seconds as the fallback.
 
 ## 5. Watch it
 

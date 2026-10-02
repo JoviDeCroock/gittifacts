@@ -58,6 +58,11 @@ Every transition (plan approved, push received, lane assigned, review, merge, ro
 - Repos live in the Artifacts namespace `gittifacts-eu` (EU jurisdiction). Metadata (D1) and logs, artifacts and screenshots (R2) are in the EU too.
 - **Coming soon:** choosing another jurisdiction per organization.
 
+## Project Workers
+
+- Project Workers run in the platform's account as `gf-<projectId>-<script>`; a bundle may declare plain variables only, never a resource binding.
+- Each project's Workers bind `FLAGS` to the project's own Flagship app, so no project can read another project's flags. Deleting a project deletes its Worker and its app.
+
 ## Previews and webhooks
 
 - Previews run on a separate domain (`*-pv.resynapse.dev`) with a banner, `noindex`, no framing, no internet access and no secrets.

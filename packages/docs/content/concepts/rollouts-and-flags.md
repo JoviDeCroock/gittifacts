@@ -29,9 +29,11 @@ return oldBehaviour();
 
 The helper ships in the `workers-api` template (`src/flags.ts`). Without a `FLAGS` binding (tests, previews, `wrangler dev`) or when the flag can't be evaluated, the Change counts as on.
 
+Each project has its own Flagship app, created when its deploy target is set. Its Workers bind `FLAGS` to that app and to no other, so a project never sees another project's flags or the platform's.
+
 ## Watching
 
-The rollout policy sets the stages, minutes per stage, the watch window and the thresholds: an absolute error-rate increase (default 1%) with enough requests, or new Workers Issues groups for the Change's version (default 0 allowed). Several flag-guarded Changes may share one deploy train; on a regression the platform kills the most likely flag first, then rolls back the whole train if that doesn't clear it.
+The rollout policy sets the stages, minutes per stage, the watch window and the thresholds: an absolute error-rate increase (default 1%) with enough requests, or new Workers Issues groups for the Change's version (default 0 allowed). New issue groups arrive as Workers Issues webhooks; error rates come from polling Workers Logs every 30 seconds. Several flag-guarded Changes may share one deploy train; on a regression the platform kills the most likely flag first, then rolls back the whole train if that doesn't clear it.
 
 A revert is a Change too: the pure inverse of the merge. When the platform verifies it is exactly that, it may auto-merge (`autoMergeVerifiedReverts`, on by default). A revert that regresses is rolled back and left to a human.
 
