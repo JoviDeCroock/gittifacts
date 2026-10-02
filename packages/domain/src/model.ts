@@ -15,8 +15,35 @@ export const Scope = z.enum([
   "change:create",
   "change:review",
   "policy:admin",
+  // External integrations (deploy platforms, docs/prompts/04-integrations.md). Only integration
+  // principals hold these; humans and agents never do.
+  "contents:read",
+  "webhooks",
+  "deployments:write",
+  "checks:write",
 ]);
 export type Scope = z.infer<typeof Scope>;
+
+/**
+ * What an integration (an OAuth app a deploy platform registers) may ever hold: read code, receive
+ * events, report deployments and raise-only checks. Never a write, review or approval scope.
+ */
+export const IntegrationScope = z.enum([
+  "repo:read",
+  "contents:read",
+  "webhooks",
+  "deployments:write",
+  "checks:write",
+]);
+export type IntegrationScope = z.infer<typeof IntegrationScope>;
+
+/** Scopes that exist only for integrations (not held by humans or delegated to agents). */
+export const INTEGRATION_ONLY_SCOPES: readonly Scope[] = [
+  "contents:read",
+  "webhooks",
+  "deployments:write",
+  "checks:write",
+];
 
 export const PrincipalKey = z.object({
   id: z.string(),
@@ -30,16 +57,23 @@ export type PrincipalKey = z.infer<typeof PrincipalKey>;
 
 export const Principal = z.object({
   id: Id,
-  kind: z.enum(["human", "agent", "system"]),
+  /**
+   * `integration`: one per installation of an external integration (a deploy platform's OAuth
+   * app), owned by the human who installed it. Like an agent it can never approve or review;
+   * unlike an agent it can never create plans or changes either, and it is always limited to its
+   * installation's repos.
+   */
+  kind: z.enum(["human", "agent", "system", "integration"]),
   name: z.string().min(1).max(120),
-  /** For agents: the human who registered and is accountable for it. */
+  /** For agents and integrations: the human who registered/installed it and is accountable for it. */
   ownerId: Id.nullable(),
   keys: z.array(PrincipalKey),
   scopes: z.array(Scope),
   /**
-   * Agents only: the repos this principal may act on. `null` (or absent) means every repo its
-   * owner can access; a delegated session only gets `null` when the human picks "all repos"
-   * explicitly. Humans and the system principal leave it absent.
+   * Agents and integrations: the repos this principal may act on. For agents `null` (or absent)
+   * means every repo its owner can access; a delegated session only gets `null` when the human
+   * picks "all repos" explicitly. Integrations are never unrestricted: `null` means none.
+   * Humans and the system principal leave it absent.
    */
   repoIds: z.array(Id).nullable().optional(),
 });
