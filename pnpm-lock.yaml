@@ -33,6 +33,15 @@ importers:
         specifier: 4.145.0
         version: 4.145.0(@cloudflare/workers-types@5.20261001.1)(@types/node@22.20.4)
 
+  apps/evals:
+    dependencies:
+      '@modelcontextprotocol/client':
+        specifier: 2.2.0
+        version: 2.2.0
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
   apps/platform:
     dependencies:
       '@app/ci-engine':

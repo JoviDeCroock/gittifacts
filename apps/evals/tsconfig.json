@@ -1,0 +1,11 @@
+{
+  // The evals Worker: Workers types only (src/ runs on workerd). Unit tests are pure and also
+  // type-check here; scripts/ and vitest.config.ts use tsconfig.node.json.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
+    "lib": ["ES2023"],
+    "declaration": false
+  },
+  "include": ["src", "test"]
+}

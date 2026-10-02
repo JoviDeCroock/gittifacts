@@ -1,0 +1,91 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // The onboarding eval (docs/prompts/02-onboarding.md §7, O6): fresh agents get only the
+  // platform's /start URL and one task; checkers verify the outcome against the platform API.
+  // Decoupled from the platform Worker on purpose: it is a black-box client of the live platform.
+  "name": "gittifacts-evals",
+  "main": "./src/index.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true },
+    "issues": { "enabled": true }
+  },
+
+  "vars": {
+    // The platform under test. Agents are told only "<PLATFORM_HOST>/start".
+    "PLATFORM_HOST": "https://gittifacts.decroockjovi.workers.dev",
+    // Previews live on first-level hosts ending with this suffix (preview probes and TTFG).
+    "PREVIEW_HOST_SUFFIX": "-pv.resynapse.dev",
+    // Every model call goes through this AI Gateway (metadata: run, task, model).
+    "AI_GATEWAY_ID": "gittifacts",
+    // Task 2's public GitHub fixture (fixtures/imports/clock-api). Empty → task 2 is skipped.
+    "EVAL_IMPORT_REPO_URL": "",
+    // Nightly matrix: every task × model, this many runs per cell (§7 needs ≥ 5).
+    "EVAL_RUNS_PER_CELL": "5",
+    // Runs in flight at once (each creates an unclaimed project: mind the creation limits).
+    "EVAL_CONCURRENCY": "4",
+    // Per-run caps.
+    "EVAL_MAX_TOOL_CALLS": "60",
+    "EVAL_MAX_WALL_SEC": "900",
+    "EVAL_TOKEN_BUDGET": "1500000",
+    // Comma-separated model ids; empty = the default two providers (src/models.ts).
+    "EVAL_MODELS": ""
+  },
+
+  // Values via `wrangler secret put` (see evals/onboarding/README.md):
+  // - EVAL_ADMIN_TOKEN: platform agent token (scope repo:read, all repos) of the eval-admin
+  //   human. Checkers only; never given to an agent.
+  // - EVALS_API_TOKEN: starts runs (POST /runs). EVALS_READ_TOKEN: reads results (CI gates).
+  // Optional: EVAL_TRAFFIC_SECRET signs the x-gittifacts-eval header on agent traffic to the
+  // platform (lets the platform key creation limits per eval run; see README).
+  "secrets": {
+    "required": ["EVAL_ADMIN_TOKEN", "EVALS_API_TOKEN", "EVALS_READ_TOKEN"]
+  },
+
+  "ai": { "binding": "AI", "remote": true },
+
+  // Results under evals/onboarding/ in the platform's blob bucket (EU), through its own binding.
+  "r2_buckets": [{ "binding": "RESULTS", "bucket_name": "gittifacts-blobs", "jurisdiction": "eu" }],
+
+  // One data point per run (indexes [task:model]); see src/store.ts for the column layout.
+  "analytics_engine_datasets": [{ "binding": "EVAL_METRICS", "dataset": "gittifacts_evals" }],
+
+  "durable_objects": {
+    // One per run (name = run id): the `shell` tool's sandbox on the platform's sandbox image.
+    "bindings": [{ "name": "EVAL_SANDBOX", "class_name": "EvalSandbox" }]
+  },
+  "exports": {
+    "EvalSandbox": { "type": "durable-object", "storage": "sqlite", "container": "eval-sandbox" }
+  },
+  // Same image as the platform's CI (git, node 22, pnpm, wrangler). Build the runner bundle
+  // first (`pnpm --filter @app/sandbox build`; the deploy script does it).
+  "containers": [
+    {
+      "name": "eval-sandbox",
+      "class_name": "EvalSandbox",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": { "dockerfile": "../sandbox/Dockerfile", "build_context": "../sandbox" }
+      },
+      "observability": { "logs": { "enabled": true } }
+    }
+  ],
+
+  "workflows": [
+    // One per run (instance id = run id): fresh agent loop → checker → safety → record.
+    { "name": "gittifacts-eval-run", "binding": "EVAL_RUN_WORKFLOW", "class_name": "EvalRunWorkflow" },
+    // One per matrix: starts runs with bounded concurrency, sweeps the audit log, writes summary.
+    {
+      "name": "gittifacts-eval-matrix",
+      "binding": "EVAL_MATRIX_WORKFLOW",
+      "class_name": "EvalMatrixWorkflow"
+    }
+  ],
+
+  // Nightly full matrix (4 tasks × 2 models × EVAL_RUNS_PER_CELL).
+  "triggers": { "crons": ["0 3 * * *"] }
+}

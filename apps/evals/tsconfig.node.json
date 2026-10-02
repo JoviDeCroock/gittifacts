@@ -1,0 +1,6 @@
+{
+  // Node-side files: the report/gates CLIs (run with tsx) and the vitest config.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": ["node"], "lib": ["ES2023", "DOM"], "declaration": false },
+  "include": ["vitest.config.ts", "scripts"]
+}
