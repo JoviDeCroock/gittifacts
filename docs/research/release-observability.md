@@ -14,7 +14,7 @@ Everything here was checked against primary sources on 2026-10-01. It was all re
 1. **Flagship is real and usable.** Binding key `flagship: [{binding, app_id}]`. The binding is `Flagship` with `get*Value` / `get*Details` methods. There's no `evaluate()` method. REST lives at `/accounts/{a}/flagship/apps/{app}/flags[/{key}]`. Update is **PUT, full replacement** (no PATCH), so a kill switch is a GET → `enabled:false` → PUT. Propagation takes **up to 30 s** [D:flagship/concepts].
 2. **Workers Issues** (open beta 2026-09-30) is enabled with `observability.issues.enabled: true` (wrangler ≥ 4.134.0). Webhooks go through **Notifications**: create a webhook destination, then a policy with `alert_type: workers_observability_real_time_issue` [LIVE], then an **Issues automation** that references `policyId` [CF]. The webhook uses the generic Notifications envelope. **The Issues `data` payload isn't documented.** Authentication is the shared secret echoed in `cf-webhook-auth` (no HMAC) or mTLS.
 3. **Error rate by version** works today through the Workers Observability telemetry query API: group by `$workers.scriptVersion.id` × `$workers.outcome` [LIVE keys]. Tail Workers (`TraceItem.scriptVersion`) or Analytics Engine (`index1 = versionId`) are alternatives.
-4. **Gradual deploy and rollback use one endpoint.** `POST /workers/scripts/{s}/deployments {strategy:"percentage", versions:[{version_id,percentage}], annotations:{"workers/message","workers/triggered_by"}}`. Rollback is the same call with 100% on the old version. There's no rollback endpoint [W cli.js:163199, 354800]. Version annotations now include `workers/commit_sha`, `workers/pull_request_*` and `workers/repository_url` [API].
+4. **Gradual deploy and rollback use one endpoint.** `POST /workers/scripts/{s}/deployments {strategy:"percentage", versions:[{version_id,percentage}], annotations:{"workers/message"}}` (live 2026-10-02: `workers/triggered_by` is rejected with 10210 "Invalid annotations"). Rollback is the same call with 100% on the old version. There's no rollback endpoint [W cli.js:163199, 354800]. Version annotations now include `workers/commit_sha`, `workers/pull_request_*` and `workers/repository_url` [API].
 5. **There is no `CF-Version-Metadata` header.** Use the `version_metadata` binding (`{id, tag, timestamp}`) [T:17994].
 6. **Browser Run** has binding `browser: {binding}`, typed `BrowserRun.quickAction("screenshot", opts) → Response` [T:13554]. You can also use `@cloudflare/puppeteer.launch(env.BROWSER)` or REST `/browser-rendering/screenshot`.
 7. **AI Gateway** offers `env.AI.run(model, input, {gateway:{id, metadata}})` and REST `api.cloudflare.com/client/v4/accounts/{a}/ai/v1/chat/completions` + `cf-aig-gateway-id`. Auto Router is `model: "cloudflare/auto"`. Spend limits are **gateway rules** (≤20) partitioned by metadata keys such as `change_id`. There's no per-request $ cap.
@@ -218,7 +218,7 @@ Sampling is keyed on `index1`, so per-version counts stay exact-ish only when we
 // POST /accounts/{a}/workers/scripts/{script}/deployments[?force=true]
 { "strategy": "percentage",
   "versions": [ { "version_id": "<new>", "percentage": 10 }, { "version_id": "<old>", "percentage": 90 } ],  // sum = 100, min 0.01
-  "annotations": { "workers/message": "chg-7f3a canary 10%", "workers/triggered_by": "…" } }
+  "annotations": { "workers/message": "chg-7f3a canary 10%" } }   // "workers/triggered_by" → 10210 (live 2026-10-02)
 // response: { id, created_on, source, strategy, versions[], annotations, author_email }
 ```
 - **CLI**: `wrangler versions deploy <new>@10% <old>@90% --message "…" -y` (also `--version-tag t@10`), or `cf workers deployments create --worker <s> --strategy percentage --versions '[…]'`.
@@ -344,7 +344,7 @@ POST   /accounts/{a}/alerting/v3/silences                         (mute)
    - Authentication is a plain shared secret in `cf-webhook-auth`, not a signature.
 5. **Issues config**: webhooks aren't configured in wrangler. They need Notifications destination + policy (`workers_observability_real_time_issue`) + an Issues automation referencing `policyId`. "Issue group" in the API means a **manual grouping of issues**, not the automatic occurrence grouping.
 6. **No `CF-Version-Metadata` header exists.** Use the `version_metadata` binding (`id, tag, timestamp`). The related platform headers are `Cloudflare-Workers-Version-Overrides` and `Cloudflare-Workers-Version-Key`.
-7. **Annotations**: `workers/tag` is version-only. Deployments accept only `workers/message` and `workers/triggered_by`. Versions also accept `workers/commit_sha`, `workers/pull_request_{number,title,url}`, `workers/repository_url` and `workers/alias`.
+7. **Annotations**: `workers/tag` is version-only. Deployments accept `workers/message`; `workers/triggered_by` is rejected live (10210 "Invalid annotations", 2026-10-02). Versions also accept `workers/commit_sha`, `workers/pull_request_{number,title,url}`, `workers/repository_url` and `workers/alias`.
 8. **No rollback REST endpoint.** Rollback = `POST …/deployments` at 100%, with `?force=true` on error 10220.
 9. **Browser Run REST path**: the docs mix `/browser-run/screenshot` and `/browser-rendering/screenshot`; cf uses the latter. The binding type is `BrowserRun` with `quickAction()`, while docs examples still type it `Fetcher` for Puppeteer.
 10. **AI Gateway**:

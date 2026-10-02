@@ -244,7 +244,7 @@ describe("WorkersDeployer", () => {
         { version_id: "v2", percentage: 25 },
         { version_id: "v1", percentage: 75 },
       ],
-      annotations: { "workers/message": "25%", "workers/triggered_by": "gittifacts" },
+      annotations: { "workers/message": "25%" },
     });
     await expect(d.setSplit("api", [{ versionId: "v2", percentage: 50 }], "bad")).rejects.toThrow(
       /total 100/,

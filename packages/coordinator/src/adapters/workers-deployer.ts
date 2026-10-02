@@ -291,10 +291,9 @@ export class WorkersDeployer implements Deployer {
           versions: split
             .filter((s) => s.percentage > 0)
             .map((s) => ({ version_id: s.versionId, percentage: s.percentage })),
-          annotations: {
-            "workers/message": message.slice(0, 1000),
-            "workers/triggered_by": "gittifacts",
-          },
+          // Only `workers/message`: the API rejects `workers/triggered_by` on deployments
+          // (10210 "Invalid annotations", live 2026-10-02), although wrangler's types list it.
+          annotations: { "workers/message": message.slice(0, 1000) },
         },
       },
       z.unknown(),
