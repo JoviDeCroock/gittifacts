@@ -36,6 +36,10 @@
     // and TURNSTILE_SECRET_KEY (secret) for the claim page (unset: Cloudflare's test keys), and
     // PLATFORM_ADMINS (comma-separated principal ids, hu_…) for the kill-switch override endpoint.
     "UNCLAIMED_TTL_DAYS": "7",
+    // Public Turnstile site key of the `gittifacts-claim` widget (the secret is a Worker secret).
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAFLsOe8gJedT53qK",
+    // Humans allowed to flip the unclaimed-creation kill-switch override (comma-separated hu_… ids).
+    "PLATFORM_ADMINS": "hu_3XXFXEuxAyAwrnKdYWRWYkV1KhFKfy9A",
     // Merge queue deploy trains (docs/prompts/03-merge-queue.md §4.8): merged Changes deploy in
     // per-Worker trains with flag-first attribution. "off" = one RolloutWorkflow per Change.
     "MERGE_QUEUE_TRAINS": "on"
