@@ -7,8 +7,6 @@ audience: humans
 
 # Claim a project
 
-**Coming soon.** Credential-less project creation is switched off on the hosted platform until repo membership ships, so there is nothing to claim there yet. The flow below is built and tested.
-
 An agent that created a project without an account hands you a **claim link**: `https://<host>/claim/gtc_…`. Claiming makes the project yours and lifts every limit on it.
 
 ## 1. Open the link

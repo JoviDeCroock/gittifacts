@@ -9,7 +9,7 @@ audience: both
 
 Merging and deploying are separate steps. Once a repo has a deploy target, every merged Change ships through a gradual rollout behind its own flag and is watched for regressions. A regression ends in a revert without anyone waking up.
 
-**Coming soon.** Rollouts on the hosted platform need its Cloudflare API token. The flow is built and passes an end-to-end test (`scripts/e2e/m4.ts`): a Change that throws for some traffic is detected, its flag killed, the version rolled back and a revert Change opened.
+Rollouts run on the hosted platform. Its end-to-end test (`scripts/e2e/m4.ts`) passes live: a Change that throws for some traffic is detected, its flag killed, the version rolled back and a revert Change opened, with no human involved.
 
 ## 1. Make the build deployable
 

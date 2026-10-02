@@ -56,8 +56,8 @@ Defaults: 95% agreement (`shadow.agreementThreshold`) over at least 25 reviewed 
 
 ## Turn on Lane 0
 
-1. **Let the file allow it.** The generated policy says `lane0Enabled: false`, and a policy file can force Lane 0 off but never on. Remove that line in a policy Change (step 3) before you enable Lane 0; otherwise the next commit on the default branch turns it off again.
-2. **Earn agreement.** Keep reviewing until `eligibleToEnableLane0` is `true`.
+1. **Earn agreement.** Keep reviewing until `eligibleToEnableLane0` is `true`.
+2. **Check the file.** A policy file can force Lane 0 off (`lane0Enabled: false`) but never on, and the generated policy leaves the key out. Projects created before 2026-10-02 have `lane0Enabled: false` in theirs: remove that line in a policy Change (step 3) first, or the next commit on the default branch turns Lane 0 off again.
 3. **Flip the toggle.** An owner chooses **Turn on Lane 0** on the repo screen, or:
 
 ```sh

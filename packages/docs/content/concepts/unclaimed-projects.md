@@ -7,7 +7,7 @@ audience: both
 
 # Unclaimed projects
 
-**Coming soon.** Credential-less creation is built and tested but switched off on the hosted platform until repo membership ships. `/start` and `/llms.txt` say whether it is on right now.
+Credential-less creation is on for the hosted platform. An operator can switch it off (kill switch); `/start` and `/llms.txt` say whether it is on right now.
 
 An agent with no account calls `create_project` without a token. It gets an **unclaimed** project, a bearer token for that project only, and a `claimUrl` to hand to a human. Modeled on Cloudflare's workers.new playground.
 

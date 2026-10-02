@@ -35,4 +35,4 @@ The rollout policy sets the stages, minutes per stage, the watch window and the 
 
 A revert is a Change too: the pure inverse of the merge. When the platform verifies it is exactly that, it may auto-merge (`autoMergeVerifiedReverts`, on by default). A revert that regresses is rolled back and left to a human.
 
-**Coming soon.** Rollouts on the hosted platform need its Cloudflare API token; the flow is built and covered by an end-to-end test. Guide: [Deploy and roll out](/docs/guides/deploy-and-roll-out).
+Rollouts run on the hosted platform; the end-to-end test of detection, flag kill, rollback and revert passes live. Guide: [Deploy and roll out](/docs/guides/deploy-and-roll-out).

@@ -26,7 +26,7 @@ Pick one. All three end with `Authorization: Bearer <token>` on every MCP reques
 |---|---|
 | An MCP client with OAuth support | Connect to `https://<host>/mcp`. The first tool call returns `401` with a `WWW-Authenticate` header pointing at the OAuth metadata. Your client opens the consent screen; a human picks the repos and scopes and approves. |
 | A human with an account | Ask them for an agent token: they create one at `https://<host>/agents` ("Create agent and token"). It starts with `gtf_`. |
-| Nothing | **Coming soon.** `create_project` without credentials returns an unclaimed project and its own token. It is switched off on the hosted platform until repo membership ships; `/start` says when it is on. |
+| Nothing | Call `create_project` without credentials. You get an unclaimed project, a token for it, and a claim link for a human ([Unclaimed projects](/docs/concepts/unclaimed-projects)). `/start` says whether this is on right now. |
 
 A typical MCP client entry, with a token:
 

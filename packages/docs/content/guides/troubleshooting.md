@@ -49,7 +49,7 @@ Every platform error carries `{ code, message, fix }`, and `fix.call` or `fix.co
 | Lane 2 on a small fix | No red/green proof, or a sensitive path | Read `classification.reasons`; add a failing-then-passing test ([Prove a fix](/docs/guides/prove-a-fix)) |
 | Lane 1 although every gate passed | Shadow mode: Lane 0 is off in this repo | Expected; a human glances at it |
 | Lane 0 is never reachable | No approved Plan, or no `scopePaths` on it | Draft Plans with `scopePaths` |
-| Lane 0 turned itself off after a merge | The policy file says `lane0Enabled: false` | Remove that line in a policy Change, then turn Lane 0 on again ([Write a policy](/docs/guides/write-a-policy#turn-on-lane-0)) |
+| Lane 0 turned itself off after a merge | The policy file says `lane0Enabled: false` (projects created before 2026-10-02 have that line) | Remove that line in a policy Change, then turn Lane 0 on again ([Write a policy](/docs/guides/write-a-policy#turn-on-lane-0)) |
 | Tour marked stale | A new head was pushed | `wait_for_change` until `tour_ready` |
 | No **Approve** button | It's your own Change, or your role is below reviewer | Another reviewer approves it |
 | `409 plan-not-approved` on `start_change` | The Plan is still a draft | Wait for a human to approve it |

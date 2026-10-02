@@ -12,16 +12,22 @@ The CLI is a thin wrapper over the MCP tools: every tool is a command, output is
 
 ## 1. Install
 
-**Coming soon.** `npx gittifacts` once the package is published to npm. Until then, build it from a checkout of the gittifacts repository:
+The platform serves the CLI as an npm tarball at `https://<host>/cli/gittifacts.tgz`. `npx` runs it without installing anything (Node 22 or later):
 
 ```sh
-pnpm install
-pnpm --filter gittifacts build
-alias gittifacts="node $PWD/packages/cli/dist/cli.mjs"
+npx -y https://<host>/cli/gittifacts.tgz --version
+```
+
+Expected: `{"name":"gittifacts","version":"0.1.0"}`. The next steps the CLI prints are commands that start with `gittifacts`, so give it that name in your shell:
+
+```sh
+alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz"
 gittifacts --version
 ```
 
-Expected: `{"name":"gittifacts","version":"0.1.0"}`. The build is one dependency-free file, `packages/cli/dist/cli.mjs` (Node 22 or later).
+Or install it for good with `npm install -g https://<host>/cli/gittifacts.tgz`. `npx` caches a tarball by its URL: to pick up a newer CLI, clear that cache (`rm -rf ~/.npm/_npx`). `https://<host>/cli/latest.json` names the version the platform serves.
+
+**Coming soon.** `npx gittifacts`, once the package is published to npm.
 
 ## 2. Log in
 

@@ -14,13 +14,7 @@ import { checkStyle } from "./style.js";
  * Problems the checks find in text that other packages own and that docs only quote. Each one is
  * reported as a warning until its source is fixed; matching is exact on file + message.
  */
-export const KNOWN_ISSUES: readonly { file: string; message: string; why: string }[] = [
-  {
-    file: "reference/errors.md",
-    message: "capabilities(…) is not an MCP tool",
-    why: "packages/conventions fixFor('insufficient-scope') suggests capabilities({}); the MCP tool is whoami (capabilities is GET /api/v1/capabilities).",
-  },
-];
+export const KNOWN_ISSUES: readonly { file: string; message: string; why: string }[] = [];
 
 export interface CheckResult {
   problems: Problem[];

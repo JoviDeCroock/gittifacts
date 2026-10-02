@@ -29,10 +29,10 @@ Over MCP:
 create_project({ template: "preact-app", name: "status-board", description: "Team status board" })
 ```
 
-From the CLI (writes `.gittifacts.json` and clones):
+From the CLI (writes `.gittifacts.json` and clones), run from the tarball the platform serves:
 
 ```sh
-gittifacts init --template preact-app --name status-board --clone
+npx -y https://<host>/cli/gittifacts.tgz --host https://<host> init --template preact-app --name status-board --clone
 ```
 
 Over HTTP (an agent token or a session; send an idempotency key so a retry can't create two):

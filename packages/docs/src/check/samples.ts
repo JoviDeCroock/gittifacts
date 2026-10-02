@@ -134,7 +134,23 @@ export function cliProblem(argv: readonly string[], strict = true): string | nul
   }
 }
 
-/** `gittifacts …` / `npx gittifacts …` segments of a shell snippet. */
+/** The CLI tarball the platform serves (`npx -y https://<host>/cli/gittifacts.tgz …`). */
+const CLI_TARBALL = /^https?:\/\/[^\s/]+\/cli\/gittifacts(-[\w.-]+)?\.tgz$/;
+
+/**
+ * Where the CLI's own argv starts in a command's words: after `gittifacts`, `npx gittifacts`, or
+ * `npx -y <tarball URL>`; -1 when the command is not the CLI.
+ */
+export function cliArgvStart(words: readonly string[]): number {
+  if (words[0] === "gittifacts") return 1;
+  if (words[0] !== "npx") return -1;
+  let i = 1;
+  while (words[i] === "-y" || words[i] === "--yes") i++;
+  const pkg = words[i] ?? "";
+  return pkg === "gittifacts" || CLI_TARBALL.test(pkg) ? i + 1 : -1;
+}
+
+/** `gittifacts …`, `npx gittifacts …` and `npx -y <tarball> …` segments of a shell snippet. */
 export function checkCommands(page: Page, text: string, line: number, strict = true): Problem[] {
   const problems: Problem[] = [];
   const logical = text.replace(/\\\n\s*/g, " ").split("\n");
@@ -142,8 +158,7 @@ export function checkCommands(page: Page, text: string, line: number, strict = t
     const cmd = raw.replace(/^\s*\$\s+/, "").replace(/(^|\s)#.*$/, "");
     for (const segment of cmd.split(/&&|\|\||;|\|/)) {
       const words = shellWords(segment.trim());
-      const start =
-        words[0] === "npx" && words[1] === "gittifacts" ? 2 : words[0] === "gittifacts" ? 1 : -1;
+      const start = cliArgvStart(words);
       if (start < 0) continue;
       const problem = cliProblem(words.slice(start), strict);
       if (problem !== null) problems.push({ file: page.file, line, rule: "cli", message: problem });
@@ -237,7 +252,7 @@ export function checkSamples(page: Page, x: Extracted): Problem[] {
   for (const c of x.inline) {
     problems.push(...checkToolCalls(page, c.text, c.line));
     // Inline mentions name commands; usage notation (`[--flag <x>]`) is not an invocation.
-    if (/^(npx )?gittifacts /.test(c.text) && !c.text.includes("[")) {
+    if (/^(npx (-y )?)?(gittifacts|\S+\/cli\/gittifacts\S*\.tgz) /.test(c.text) && !c.text.includes("[")) {
       problems.push(...checkCommands(page, c.text, c.line, false));
     }
   }

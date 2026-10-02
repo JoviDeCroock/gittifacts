@@ -74,6 +74,17 @@ describe("CLI samples", () => {
     expect(messages(ok)).toEqual([]);
   });
 
+  it("check commands run from the platform's tarball too", () => {
+    const tarball = "npx -y https://<host>/cli/gittifacts.tgz --host https://<host>";
+    expect(messages(`\`\`\`sh\n${tarball} login --no-wait\n\`\`\`\n`)).toEqual([]);
+    expect(messages(`\`\`\`sh\n${tarball} deploy ch_1\n\`\`\`\n`)).toEqual([
+      "[cli] unknown command: gittifacts deploy",
+    ]);
+    expect(messages(`Run \`${tarball} lgoin\`.\n`)).toEqual([
+      "[cli] unknown command: gittifacts lgoin",
+    ]);
+  });
+
   it("catch unknown commands, unknown flags, bad values and missing arguments", () => {
     expect(messages("```sh\ngittifacts deploy ch_1\n```\n")).toEqual([
       "[cli] unknown command: gittifacts deploy",
