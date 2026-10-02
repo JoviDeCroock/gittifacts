@@ -21,6 +21,8 @@ export interface AgentsMdOptions {
   template?: string | undefined;
   /** Command table for imported repos (from `commandsFor(detectProject(...).features)`). */
   commands?: Commands | undefined;
+  /** Unclaimed projects: days after creation until the platform deletes it unless claimed. */
+  unclaimedTtlDays?: number | undefined;
 }
 
 const DEFAULT_COMMANDS: Commands = {
@@ -53,8 +55,10 @@ export function agentsMd(opts: AgentsMdOptions): string {
   const status = opts.claimed
     ? ["**claimed** (a human owns it). Lane 0 stays off until the owner enables it."]
     : [
-        "**unclaimed**: previews only, no secrets, no Lane 0, deleted when it expires.",
-        "  Give the `claimUrl` from `create_project` to a human to keep it.",
+        `**unclaimed**: deleted ${opts.unclaimedTtlDays === undefined ? "when it expires" : `${opts.unclaimedTtlDays} days after creation`} unless a human claims it.`,
+        "  Give the `claimUrl` from `create_project` to a human (they log in to claim it).",
+        "  Until then: previews only, no secrets, custom domains or production deploys, no Lane 0 or",
+        "  auto-merge, registries-only egress, tight CI/storage/request quotas (`whoami` shows them).",
       ];
 
   const code = (c: string | null) => (c === null ? null : `\`${c}\``);

@@ -94,6 +94,27 @@ describe("fixFor", () => {
     );
   });
 
+  it("names the claim link, the kill switch and the human check (O3)", () => {
+    const quota = fixFor("quota-exceeded", {
+      quota: { name: "ci-minutes-per-day", limit: 60, used: 60 },
+      claimUrl: "https://h/claim/gtc_x",
+    });
+    expect(quota.explanation).toContain(
+      "A human can claim the project at https://h/claim/gtc_x to lift unclaimed limits.",
+    );
+    expect(fixFor("quota-exceeded").explanation).toMatch(/claiming the project/);
+    const off = fixFor("creation-disabled", { host: HOST });
+    expect(off.explanation).toMatch(/kill switch/);
+    expect(off.explanation).toMatch(/MCP OAuth/);
+    expect(off.docsUrl).toBe(`${HOST}/start`);
+    expect(resolveErrorCode("kill-switch")).toBe("creation-disabled");
+    expect(ERROR_STATUS["creation-disabled"]).toBe(503);
+    const human = fixFor("turnstile-failed", { claimUrl: "https://h/claim/gtc_x" });
+    expect(ERROR_STATUS["turnstile-failed"]).toBe(403);
+    expect(human.explanation).toMatch(/Turnstile/);
+    expect(human.command).toBe("open https://h/claim/gtc_x");
+  });
+
   it("adds docsUrl only when the host is known", () => {
     expect(fixFor("not-found").docsUrl).toBeUndefined();
     expect(fixFor("not-found", { host: `${HOST}/` }).docsUrl).toBe(`${HOST}/start`);

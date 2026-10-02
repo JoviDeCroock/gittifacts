@@ -4,7 +4,7 @@
  * agent may skip when its context is short.
  */
 import { TEMPLATE_IDS } from "./catalog.js";
-import { MCP_PROTOCOL_VERSION, PLATFORM_SUMMARY } from "./start.js";
+import { MCP_PROTOCOL_VERSION, PLATFORM_SUMMARY, type UnclaimedQuotaHints } from "./start.js";
 import { join, normalizeOrigin, pathOf } from "./urls.js";
 
 export interface LlmsTxtOptions {
@@ -13,6 +13,28 @@ export interface LlmsTxtOptions {
   openapiUrl: string;
   /** MCP OAuth is offered (protected resource metadata is served). Default false. */
   oauth?: boolean;
+  /**
+   * Whether create_project works without credentials right now (the kill switch), and the
+   * configured quotas. Omitted: enabled, generic wording.
+   */
+  unclaimed?: { enabled: boolean; quotas?: UnclaimedQuotaHints | undefined };
+}
+
+/** The "No account" paragraph: how unclaimed projects work, or that they're switched off. */
+export function noAccountText(unclaimed: LlmsTxtOptions["unclaimed"]): string {
+  if (unclaimed?.enabled === false) {
+    return "Creating projects without an account is switched off right now: authenticate with MCP OAuth (discovered from the MCP server's 401) or an agent token from a human.";
+  }
+  const q = unclaimed?.quotas;
+  const expiry =
+    q === undefined
+      ? "It expires unless a human claims it."
+      : `It expires after ${q.ttlDays} days unless a human claims it.`;
+  const limits =
+    q === undefined
+      ? "Until then: previews only, no secrets, custom domains or production deploys, no Lane 0, registries-only egress, tight quotas."
+      : `Until then: previews only, no secrets, custom domains or production deploys, no Lane 0, registries-only egress, ${q.ciMinutesPerDay} CI minutes/day, ${q.storageMb} MB storage.`;
+  return `No account is needed: call create_project without credentials to get an unclaimed project, a Bearer token for it and a claimUrl for a human. ${expiry} ${limits}`;
 }
 
 export function llmsTxt(opts: LlmsTxtOptions): string {
@@ -26,7 +48,7 @@ export function llmsTxt(opts: LlmsTxtOptions): string {
     `> ${PLATFORM_SUMMARY}`,
     "",
     `Start with ${join(host, "/start")}: it lists the three calls that create a project, run CI and return a live preview URL.`,
-    "No account is needed: create_project without credentials returns an unclaimed project, a token and a claim link for a human.",
+    noAccountText(opts.unclaimed),
     "",
     "## Start",
     link(

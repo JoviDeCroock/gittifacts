@@ -13,6 +13,7 @@ export const ERROR_CODES = [
   "scope-not-allowed",
   "forbidden",
   "self-approval",
+  "turnstile-failed",
   // lifecycle rules
   "push-to-main",
   "red-green-missing",
@@ -58,6 +59,7 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   "scope-not-allowed": 403,
   forbidden: 403,
   "self-approval": 403,
+  "turnstile-failed": 403,
   "push-to-main": 403,
   "red-green-missing": 422,
   "plan-not-approved": 409,
@@ -187,6 +189,13 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
           "No principal approves its own Plan or Change, and agents approve nothing. Ask a different human to review it.",
         call: call("request_review", { changeId: P.change(c) }),
       };
+    case "turnstile-failed":
+      return {
+        explanation:
+          "The human-verification check (Turnstile) failed or expired. Reload the claim page, complete the check again and retry the claim.",
+        // Every fix carries a call or a command; for a human in a browser that's reopening the page.
+        command: `open ${c.claimUrl ?? "<claimUrl>"}`,
+      };
     case "push-to-main":
       return {
         explanation:
@@ -235,7 +244,10 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
       return {
         explanation:
           `You hit ${what}${q?.resetsAt === undefined ? "" : `; it resets at ${q.resetsAt}`}. ` +
-          "capabilities shows every quota and what is left. Unclaimed projects have tight quotas: a human claiming the project raises them.",
+          "capabilities shows every quota and what is left. " +
+          (c.claimUrl === undefined
+            ? "Unclaimed projects have tight quotas: a human claiming the project (its claimUrl from create_project) raises them."
+            : `A human can claim the project at ${c.claimUrl} to lift unclaimed limits.`),
         call: call("capabilities", {}),
       };
     }
@@ -249,7 +261,7 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
     case "creation-disabled":
       return {
         explanation:
-          "Creating unclaimed projects is switched off right now. Authenticate (MCP OAuth, or an agent token from a human) and create the project as a claimed one.",
+          "Creating unclaimed projects (no credentials) is switched off right now (kill switch). Authenticate with MCP OAuth (discovered from the MCP server's 401 resource_metadata) or an agent token from a human, then call create_project again: the project is created claimed.",
         command: `curl -s ${host}/start`,
       };
     case "rate-limited": {

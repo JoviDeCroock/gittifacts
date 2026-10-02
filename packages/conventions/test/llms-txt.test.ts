@@ -46,4 +46,33 @@ describe("llmsTxt", () => {
     expect(plain).not.toContain("oauth-protected-resource");
     expect(plain).not.toContain("OAuth");
   });
+
+  it("says how unclaimed projects work, or that they're switched off (O3)", () => {
+    const base = { host: HOST, mcpUrl: MCP_URL, openapiUrl: `${HOST}/openapi.json` };
+    expect(llmsTxt(base)).toContain(
+      "No account is needed: call create_project without credentials",
+    );
+    const on = llmsTxt({
+      ...base,
+      unclaimed: {
+        enabled: true,
+        quotas: {
+          ttlDays: 7,
+          ciMinutesPerDay: 60,
+          ciMinutesPerRun: 10,
+          storageMb: 250,
+          artifactsOpsPerDay: 200,
+          workspaceCpuMinutesPerDay: 30,
+          requestsPerMinute: 120,
+          createsPerIpPerHour: 3,
+        },
+      },
+    });
+    expect(on).toContain("It expires after 7 days unless a human claims it.");
+    expect(on).toContain("60 CI minutes/day, 250 MB storage");
+    expect(on).toContain("no Lane 0, registries-only egress");
+    const off = llmsTxt({ ...base, unclaimed: { enabled: false } });
+    expect(off).toContain("switched off right now");
+    expect(off).not.toContain("No account is needed");
+  });
 });

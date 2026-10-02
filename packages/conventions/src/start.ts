@@ -18,11 +18,70 @@ export const PLATFORM_SUMMARY =
   "every Change is routed to a risk lane: 0 auto-merge, 1 async glance, 2 full review. " +
   "Agents work through MCP (or the HTTP API) and git, and can never approve their own work.";
 
+/** The numbers behind the unclaimed-project limits (the platform's configured values). */
+export interface UnclaimedQuotaHints {
+  ttlDays: number;
+  ciMinutesPerDay: number;
+  ciMinutesPerRun: number;
+  storageMb: number;
+  artifactsOpsPerDay: number;
+  workspaceCpuMinutesPerDay: number;
+  requestsPerMinute: number;
+  createsPerIpPerHour: number;
+}
+
+/**
+ * What an unclaimed project can't do, in plain words: concrete numbers when `q` is given, generic
+ * wording otherwise. Shared by /start, llms.txt, the claim page and AGENTS.md.
+ */
+export function unclaimedLimitLines(q?: UnclaimedQuotaHints): string[] {
+  const n = (v: number, unit: string) => `${v} ${unit}`;
+  return [
+    'previews only, on a separate clearly marked domain with an "Unclaimed project — not verified" banner',
+    "no secrets, no custom domains, no production deploys",
+    "Lane 0 / auto-merge is off (even for verified reverts): a human reviews every Change",
+    q === undefined
+      ? "tight CI-minute quota per day and per run"
+      : `CI: ${n(q.ciMinutesPerDay, "minutes")} per day, at most ${n(q.ciMinutesPerRun, "minutes")} per run`,
+    q === undefined ? "tight storage quota" : `storage: ${n(q.storageMb, "MB")}`,
+    q === undefined
+      ? "tight Artifacts-operation quota (forks, push tokens, imports)"
+      : `Artifacts operations (forks, push tokens, imports): ${q.artifactsOpsPerDay} per day`,
+    q === undefined
+      ? "small daily remote-workspace quota"
+      : `remote workspaces: ${n(q.workspaceCpuMinutesPerDay, "vCPU-minutes")} per day`,
+    "sandbox, CI and workspace egress limited to package registries; previews have no internet",
+    q === undefined
+      ? "requests per token are rate limited"
+      : `${q.requestsPerMinute} requests per minute per project token`,
+    q === undefined
+      ? "creation is rate limited per IP, per network and globally"
+      : `creation is rate limited per IP (${q.createsPerIpPerHour} per hour), per network and globally`,
+    q === undefined
+      ? "it expires unless a human claims it"
+      : `it expires ${q.ttlDays} days after creation unless a human claims it (everything is deleted)`,
+  ];
+}
+
+/** What claiming an unclaimed project does, in plain words (the claim page and /start). */
+export function claimingLines(): string[] {
+  return [
+    "You (a logged-in human) become the project's owner.",
+    "The agent that created it keeps working on it under your ownership, with the same scopes; it can never approve Plans or Changes.",
+    "Quotas rise to the claimed tier, and sandbox egress follows the repo's policy.",
+    "The project no longer expires.",
+    "Lane 0 (auto-merge) stays off until an owner turns it on once shadow-mode agreement allows it.",
+    "The claim is recorded in the audit log.",
+  ];
+}
+
 export interface AuthHints {
   /** `create_project` without credentials returns an unclaimed project and a token (off when the kill switch is on). */
   unclaimedProjects: boolean;
   /** Unclaimed projects are deleted after this many days unless a human claims them. */
   unclaimedTtlDays: number;
+  /** The configured unclaimed quotas, so the limits list carries numbers. */
+  unclaimedQuotas?: UnclaimedQuotaHints | undefined;
   /** MCP OAuth (RFC 9728 discovery from the 401) is available for logged-in users. */
   oauth: boolean;
   /** CLI device flow, e.g. `npx gittifacts login`. Omit when not available. */
@@ -92,6 +151,16 @@ export const StartDoc = z
 export type StartDoc = z.infer<typeof StartDoc>;
 
 const CH = "<changeId>";
+
+/** /start "No account" when unclaimed creation is on. */
+export const ANONYMOUS_HOW =
+  "Call create_project with NO Authorization header (MCP initialize, tools/list, create_project and whoami work without credentials; so does POST /api/v1/projects). " +
+  "You get an unclaimed project, token (a Bearer token limited to that one project, valid until the project expires) and claimUrl: give claimUrl to a human, who logs in to claim it. " +
+  "Send Authorization: Bearer <token> on every later call.";
+
+/** /start "No account" when the kill switch is off. */
+export const ANONYMOUS_OFF =
+  "Disabled right now (kill switch). Authenticate with MCP OAuth or an agent token from a human.";
 
 export const RULES = [
   "Never push to main: only the merge queue writes the default branch. Push to your Change's fork remote.",
@@ -174,13 +243,11 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
     },
   ];
 
-  const limits = [
-    "previews only, on a separate clearly marked domain",
-    "no secrets, no custom domains, no production deploys",
-    "Lane 0 (auto-merge) is off",
-    "tight CI-minute, storage and request quotas (see capabilities)",
-    "sandbox egress limited to package registries",
-  ];
+  const limits = unclaimedLimitLines(
+    a.unclaimedQuotas === undefined
+      ? undefined
+      : { ...a.unclaimedQuotas, ttlDays: a.unclaimedTtlDays },
+  );
 
   const json: StartDoc = {
     kind: "gittifacts.start",
@@ -197,9 +264,7 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
       header: "Authorization: Bearer <token>",
       anonymous: {
         available: a.unclaimedProjects,
-        how: a.unclaimedProjects
-          ? "Call create_project with no credentials. You get an unclaimed project, a short-lived token for it, and a claimUrl to give to a human."
-          : "Disabled right now. Authenticate with OAuth or an agent token.",
+        how: a.unclaimedProjects ? ANONYMOUS_HOW : ANONYMOUS_OFF,
         ttlDays: a.unclaimedTtlDays,
         limits,
       },
@@ -257,7 +322,8 @@ export function renderStartMarkdown(doc: StartDoc): string {
     `- **No account:** ${a.anonymous.how}`,
     ...(a.anonymous.available
       ? [
-          `  Unclaimed projects expire after ${a.anonymous.ttlDays} days unless claimed. Limits: ${a.anonymous.limits.join("; ")}.`,
+          `  Unclaimed projects expire after ${a.anonymous.ttlDays} days unless a human claims them. Until then:`,
+          ...a.anonymous.limits.map((l) => `  - ${l}`),
         ]
       : []),
     `- **Logged-in human:** ${a.oauth.available ? `MCP OAuth. Connect to ${doc.mcp.url}; the 401 points to ${a.oauth.resourceMetadata}.` : "MCP OAuth is not available yet; use an agent token."}`,

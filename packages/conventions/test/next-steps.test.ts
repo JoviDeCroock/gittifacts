@@ -129,6 +129,32 @@ describe("nextStepsFor", () => {
     ).toBe(false);
   });
 
+  it("says when an unclaimed project expires and that its token is the Bearer token", () => {
+    const steps = nextStepsFor("project_created", {
+      projectId: "rep_1",
+      claimUrl: "https://h/claim/x",
+      claimed: false,
+      expiresAt: "2026-10-09T00:00:00.000Z",
+    });
+    const claim = steps.at(-1)?.why ?? "";
+    expect(claim).toContain("deleted at 2026-10-09T00:00:00.000Z");
+    expect(claim).toContain("Bearer token for this project only");
+  });
+
+  it("tells every wait step to call again while reason is timeout", () => {
+    let waits = 0;
+    for (const [event, ctx] of cases) {
+      for (const step of nextStepsFor(event, ctx as never)) {
+        if (step.call?.startsWith("wait_for_change(")) {
+          waits++;
+          expect(step.call).toContain("timeoutSec: 50");
+          expect(step.why).toContain('call it again while reason is "timeout"');
+        }
+      }
+    }
+    expect(waits).toBeGreaterThan(5);
+  });
+
   it("hands a new project's first Change fork to the agent", () => {
     const steps = nextStepsFor("project_created", {
       projectId: "rep_1",

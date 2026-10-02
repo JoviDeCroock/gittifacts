@@ -19,6 +19,8 @@ export interface NextStepContexts {
     previewUrl?: string | null | undefined;
     claimUrl?: string | null | undefined;
     claimed: boolean;
+    /** Unclaimed projects: when the platform deletes it unless a human claims it (ISO). */
+    expiresAt?: string | null | undefined;
   };
   change_started: { changeId: string; remote: { url: string; branch: string } };
   push_received: { changeId: string; headSha?: string | undefined };
@@ -245,7 +247,10 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
         steps.push({
           title: "Give the claim link to a human to keep this project",
           why: clip(
-            `${c.claimUrl ? `Claim link: ${c.claimUrl}. ` : "The claimUrl is in the create_project response. "}Unclaimed projects expire, get previews only, no secrets and no Lane 0. capabilities shows the expiry and quotas.`,
+            `${c.claimUrl ? `Claim link: ${c.claimUrl}. ` : "The claimUrl is in the create_project response. "}` +
+              `${c.expiresAt ? `Unless a human claims it, this project is deleted at ${c.expiresAt}. ` : "Unclaimed projects expire unless a human claims them. "}` +
+              "Until then: previews only, no secrets, no production deploys, no Lane 0, tight quotas. " +
+              "The response's token is your Bearer token for this project only: send it as Authorization on every call. whoami shows the expiry and quotas.",
             600,
           ),
           call: call("capabilities", {}),

@@ -111,3 +111,18 @@ describe("agentsMd commands", () => {
     expect(yarn).toContain("`yarn jest test/<name>.test.ts`");
   });
 });
+
+describe("agentsMd unclaimed (O3)", () => {
+  it("says when an unclaimed project is deleted and what it can't do, within the line limit", () => {
+    const md = agentsMd({ ...base, claimed: false, template: "workers-api", unclaimedTtlDays: 7 });
+    expect(md).toContain("**unclaimed**: deleted 7 days after creation unless a human claims it.");
+    expect(md).toContain("no Lane 0 or");
+    expect(md).toContain("registries-only egress");
+    expect(md.split("\n").length).toBeLessThan(AGENTS_MD_MAX_LINES);
+    for (const line of md.split("\n"))
+      if (!line.startsWith("   `") && !line.startsWith("|"))
+        expect(line.length).toBeLessThanOrEqual(110);
+    expect(agentsMd({ ...base, claimed: false })).toContain("deleted when it expires unless");
+    expect(agentsMd({ ...base, claimed: true, unclaimedTtlDays: 7 })).not.toContain("deleted");
+  });
+});

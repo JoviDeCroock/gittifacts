@@ -1,7 +1,15 @@
 import { NextStep } from "@app/domain";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { PLATFORM_SUMMARY, StartDoc, startGuide, TEMPLATE_IDS } from "../src/index.js";
+import {
+  claimingLines,
+  PLATFORM_SUMMARY,
+  StartDoc,
+  startGuide,
+  TEMPLATE_IDS,
+  type UnclaimedQuotaHints,
+  unclaimedLimitLines,
+} from "../src/index.js";
 import { callsIn, expectValidCall, HOST, MCP_URL } from "./helpers.js";
 
 const opts = {
@@ -122,5 +130,72 @@ describe("startGuide markdown", () => {
     expect(markdown).toContain("Accept: application/json");
     for (const url of [json.links.llmsTxt, json.links.openapi, json.mcp.serverCard])
       expect(markdown).toContain(url);
+  });
+});
+
+const QUOTAS: UnclaimedQuotaHints = {
+  ttlDays: 7,
+  ciMinutesPerDay: 60,
+  ciMinutesPerRun: 10,
+  storageMb: 250,
+  artifactsOpsPerDay: 200,
+  workspaceCpuMinutesPerDay: 30,
+  requestsPerMinute: 120,
+  createsPerIpPerHour: 3,
+};
+
+describe("unclaimed projects (O3)", () => {
+  it("lists every limit, with the configured numbers when known", () => {
+    const generic = unclaimedLimitLines();
+    const concrete = unclaimedLimitLines(QUOTAS);
+    expect(concrete).toHaveLength(generic.length);
+    const all = concrete.join("\n");
+    for (const needle of [
+      "Unclaimed project — not verified",
+      "no secrets, no custom domains, no production deploys",
+      "even for verified reverts",
+      "60 minutes per day, at most 10 minutes per run",
+      "250 MB",
+      "200 per day",
+      "30 vCPU-minutes per day",
+      "package registries; previews have no internet",
+      "120 requests per minute",
+      "per IP (3 per hour)",
+      "expires 7 days after creation",
+    ]) {
+      expect(all).toContain(needle);
+    }
+    expect(generic.join("\n")).not.toMatch(/\d+ (minutes|MB|per|requests|days)/);
+  });
+
+  it("explains what claiming does without promising approvals", () => {
+    const lines = claimingLines().join("\n");
+    expect(lines).toMatch(/become the project's owner/);
+    expect(lines).toMatch(/can never approve/);
+    expect(lines).toMatch(/no longer expires/);
+    expect(lines).toMatch(/audit log/);
+  });
+
+  it("says how to work without an account when enabled, with numbers", () => {
+    const { json, markdown } = startGuide({
+      ...opts,
+      authHints: { ...opts.authHints, unclaimedQuotas: QUOTAS },
+    });
+    expect(json.auth.anonymous.how).toMatch(/NO Authorization header/);
+    expect(json.auth.anonymous.how).toMatch(/initialize, tools\/list, create_project and whoami/);
+    expect(json.auth.anonymous.how).toMatch(/claimUrl/);
+    expect(json.auth.anonymous.limits).toEqual(unclaimedLimitLines(QUOTAS));
+    expect(markdown).toContain("Unclaimed projects expire after 7 days unless a human claims them");
+    expect(markdown).toContain("  - CI: 60 minutes per day, at most 10 minutes per run");
+    expect(markdown.split("\n").length).toBeLessThan(90);
+  });
+
+  it("says it's switched off when the kill switch is on", () => {
+    const { json, markdown } = startGuide({
+      ...opts,
+      authHints: { ...opts.authHints, unclaimedProjects: false, unclaimedQuotas: QUOTAS },
+    });
+    expect(json.auth.anonymous.how).toMatch(/Disabled right now \(kill switch\)/);
+    expect(markdown).not.toContain("Unclaimed projects expire after");
   });
 });

@@ -7,8 +7,10 @@ machines prove conformance (evidence), and every Change is routed to the cheapes
 - Project: `{{repoId}}` (template `ts-library`)
 - MCP: {{mcpUrl}}
 - Guide: {{host}}/start · API: {{host}}/openapi.json
-- Status: **unclaimed**: previews only, no secrets, no Lane 0, deleted when it expires.
-  Give the `claimUrl` from `create_project` to a human to keep it.
+- Status: **unclaimed**: deleted when it expires unless a human claims it.
+  Give the `claimUrl` from `create_project` to a human (they log in to claim it).
+  Until then: previews only, no secrets, custom domains or production deploys, no Lane 0 or
+  auto-merge, registries-only egress, tight CI/storage/request quotas (`whoami` shows them).
 
 Every response has `nextSteps` and every error has `fix` (`call` / `command`). Do what they say.
 
