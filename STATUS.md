@@ -41,6 +41,11 @@ Specs:
 
 Also: `templates/` (4 templates, CI path 5–8 s each) and `fixtures/` (9 change fixtures, verified end to end).
 
+Landing page: `/` serves a prerendered marketing page to visitors without a session (the app to signed-in
+people, the machine guide to agents); `packages/web/landing.html` + `src/landing/`, HTML+CSS ~22 KB gzip,
+screenshots in `docs/screenshots/landing-*`, tests in `packages/web/test/landing.test.ts` and
+`apps/platform/test/front-door.test.ts`.
+
 ## Live infrastructure (see docs/deploy.md)
 - Artifacts namespace `gittifacts-eu` (EU)
 - D1 `gittifacts` (EU)
