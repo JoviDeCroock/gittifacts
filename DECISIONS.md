@@ -309,18 +309,18 @@ gateway route.
 - **Lazy ports.** The CI engine (`selectCiEngine` by `CI_ENGINE`), the reviewer (`createReviewer(reviewerLlmFromEnv)`)
   and the signer (`PLATFORM_SIGNING_KEY`) are built on first use. A missing binding or secret fails the call
   that needs it, and the coordinator treats that as an errored signal (escalate), not every request.
-- **Reviewer model.** The `Reviewer` port takes no policy, so the platform uses `"auto"` (the policy default).
-  A repo's `ai.reviewerModel` is not honoured yet.
+- **Reviewer model.** The coordinator passes the base policy's `ai.reviewerModel` to the `Reviewer` port (`model`);
+  the platform keeps one model client per model (`lazyReviewer`). *(Updated 2026-10-02, O1.)*
 - **One bucket.** `CI_BUCKET` is a second binding to `gittifacts-blobs` (eu), so the engine's `ci-logs/<runId>/…`
   refs are served by `GET /api/v1/blobs/:ref` through `BLOBS`. `PipelineRun.id` is the CI run id the coordinator
   gives the engine (`run-<changeId>-<head12>`), which is what makes those refs attributable to a change.
-- **Bundle seam.** The engine reports the build artifact as `RunSummary.artifacts.bundle.key`; the coordinator's
-  run sink reads `outputs.bundleRef`. The platform's `ChangeCoordinator` subclass maps one onto the other until
-  the coordinator reads the engine's field itself. `loadBundle` only accepts `ci-artifacts/<runId>/<step>/<name>.tgz`.
+- **Bundle seam.** The engine reports the build artifact as `RunSummary.artifacts.bundle.key`, and the coordinator's
+  run sink reads it directly (the platform subclass shim is gone, 2026-10-02); it also forwards `snapshots` (previews
+  start from `snapshots.build`). `loadBundle` only accepts `ci-artifacts/<runId>/<step>/<name>.tgz`.
 - **SSE.** `GET /api/v1/changes/:id/events` streams the change (`event: change`, `id` = change version, resumable with
   `Last-Event-ID`), built on `watchChange` so the DO holds each long-poll; it ends after 15 minutes or at a final status.
-- **Node types in the platform tsconfig.** `@app/ci-engine`'s sources call `clearTimeout(undefined)`, which only Node's
-  timer typings accept; the Worker runs with `nodejs_compat`.
+- **Workers types only.** `@app/ci-engine` guards its `clearTimeout` calls, so the platform tsconfig dropped Node's
+  types (2026-10-02); config files type-check with `tsconfig.node.json`.
 - **Integration test fakes** (apps/platform/test/integration). Real: Hono app, MCP server, auth, D1, AuditLog,
   signing key, coordinator facade, ChangeCoordinator/MergeQueue DOs, PushRouter/ChangeWorkflow. Fake:
   Artifacts (`FakeGitHost`; no local simulator), containers (`FakeSandboxJobs` and a CI fake that reports a
@@ -501,3 +501,54 @@ gateway route.
   - Refresh reuse is strict (no overlap window).
 - **Known follow-ups.** Expired `agent_tokens` rows (one per refresh) need a periodic purge. The sessions list
   aggregates in SQL, so the extra rows only cost storage.
+
+## 2026-10-02 — Onboarding O1: front door, create_project, bootstrap Change, preview gateway
+
+- **Front door** (`apps/platform/src/routes/front-door.ts`): `/start` (markdown; JSON on `Accept: application/json`),
+  `/llms.txt`, `/openapi.json` (alias), `/mcp/server-card` and `/.well-known/ai-catalog.json` from `@app/conventions`.
+  The OAuth routes keep RFC 9728/8414 metadata. `/` carries RFC 8288 `Link` headers (service-doc, describedby,
+  service-desc, mcp-server-card, ai-catalog) and the same `<link>` tags; `Accept: application/json|text/markdown` on `/`
+  gets the guide itself.
+- **`run_worker_first: true`.** The preview gateway shares the Worker, and asset patterns are path-only, so a preview's
+  `/about/` would otherwise be answered with the platform's SPA. Platform hosts fall back to `ASSETS` in `notFound`.
+- **Templates in the Worker.** `scripts/bundle-templates.ts` writes `src/generated/templates.ts` (183 KB, committed,
+  formatted by biome); `deploy:prepare` and `test` regenerate it.
+- **Initial commit = the one main-repo write outside the merge queue.** `GitHost.writeInitialCommit` pushes a root
+  commit with old SHA = zero, so it can create a branch but never move one; every role may call it. `createRepo` takes
+  the files from an `InitialCommitProvider` (template rendered with placeholders + conventions `.platform/*` and
+  AGENTS.md, or README + AGENTS.md + `.platform/*` for an empty project), called before anything is created so an
+  unknown template has no side effects. The generated policy's value (`defaultPolicyValue`) is cached for the initial
+  sha, so the bootstrap needs no policy sandbox job. `createRepo` is idempotent per (actor, key) and adopts its own
+  empty Artifacts repo after a partial failure. `seed-` is a reserved repo prefix.
+- **Bootstrap Change** (`bs-<repoId>`, author `system`, category chore, base = head = initial commit, `forkName` = the
+  main repo: no fork, CI gets a read token). Started through the ChangeCoordinator DO (`startBootstrap`) so
+  `registerRun` accepts its run. The ChangeWorkflow runs it with `evidenceSteps: []`, seals evidence (with the
+  preview), skips judge/note/classify/tour/route and sets `released` with `mergedSha` = head. `lane_assigned` and
+  `tour_ready` are unreachable for it; `kill` refuses it. Empty projects get no bootstrap.
+- **`create_project` returns** `remote` = a push grant for a fresh `task-` fork (the caller's "First change",
+  category feature, planless), so an agent can push at once; `token` stays null for authenticated callers (O3's
+  unclaimed bearer token; the CLI stores `token` as a bearer, so it must not be a git token); `previewUrl` =
+  `https://p-<bootstrapId>.preview.resynapse.dev`, known up front ("Building…" until green); `claimUrl` null.
+  Callers need repo:read + change:create; repo-restricted agent sessions cannot create projects. Idempotency rides on
+  the coordinator's derived ids (the response holds a push grant, so it is never stored).
+- **Preview gateway in the platform Worker** (supersedes "a separate `preview-gateway` Worker"): route
+  `*.preview.resynapse.dev/*`, `p-<changeId>` = latest head, `p-<changeId>-<sha8>` = pinned. HTMLRewriter injects a
+  banner (custom element, inline `!important` position/z-index, closed declarative shadow root) at the start of
+  `<body>`; `/cdn-cgi/*` is blocked; `Set-Cookie` with a `Domain` attribute is dropped; `X-Robots-Tag: noindex`,
+  `frame-ancestors 'none'`, `X-Frame-Options: DENY`. D1 `previews` maps ids to snapshots.
+- **PreviewHost DO** with its own container application (`preview`) on the same sandbox Dockerfile: wrangler allows a
+  container to back only one DO class. It restores the CI `build` snapshot (else `install` + a checkout through
+  `CiEgressGateway`, git host only), runs `gittifacts-runner preview --port 8787`, proxies with `getTcpPort().fetch`,
+  sleeps after 10 min idle and wakes on the next request ("Starting preview…" page for HTML, 503 + Retry-After
+  otherwise). Internet is off for every preview for now. **Risk:** restoring a Runner snapshot in another container
+  application needs both to resolve to the same image digest; if a restore fails the preview evidence is `error`.
+- **Previews are Worker-side evidence.** The ChangeWorkflow starts the preview before sealing (so `evidence_ready`
+  means CI green *and* preview serving), then screenshots `policy.previewRoutes` ∪ plan `affectedRoutes` ∪ template
+  routes with Browser Run (desktop + mobile, after-only for now) into R2 `screenshots/<changeId>/…` and re-seals.
+  Browser Run missing or rate-limited → `skipped`; a preview that fails to start → `error` (raises to Lane 1).
+- **Time-to-first-green**: D1 `project_onboarding` (request start, response, evidence, preview ready, outcome) plus
+  Analytics Engine points (`indexes [projectId]`, `blobs [projectId, template, outcome, "ttfg"]`,
+  `doubles [msToGreen, msToPreview, msToRespond]`). `GET /internal/ttfg` (human, repo:admin) reads the AE SQL API
+  when `CF_API_TOKEN` can (Account Analytics Read), D1 otherwise; the web page is `/internal/onboarding`.
+- **Template cache seeding**: `POST /api/v1/admin/seed-cache` writes each template once into `seed-<id>-<digest8>`
+  and calls `ciEngine.seedCache`, so the first project per template hits a published install snapshot.
