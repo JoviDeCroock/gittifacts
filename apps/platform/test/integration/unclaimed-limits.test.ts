@@ -355,7 +355,9 @@ describe("no API can give an unclaimed project secrets, custom domains or a depl
       // An integration's own client and webhook secrets (developer portal, humans only): OAuth app
       // credentials, never a project's secrets. Integrations can't be installed on unclaimed projects.
       if (path.startsWith("/api/v1/integrations/") || path === "/api/v1/integrations") {
-        expect(JSON.stringify(ops), path).not.toMatch(/"(env(ironment)?Vars?|custom_?domains?|domains?|hostnames?)":/i);
+        expect(JSON.stringify(ops), path).not.toMatch(
+          /"(env(ironment)?Vars?|custom_?domains?|domains?|hostnames?)":/i,
+        );
         continue;
       }
       expect(path).not.toMatch(/secret|domain/i);
