@@ -108,25 +108,27 @@ describe("merge queue Q1 (shell + core over fakes)", () => {
     const running = [...ci.runs.values()].filter((r) => r.status.status === "running");
     expect(running).toHaveLength(3); // three speculative batches in flight at once
     const byHead = new Map(running.map((r) => [r.request.headSha, r.request]));
-    const roots = running.filter((r) => r.request.baseSha === env.mainHistory[0]);
-    expect(roots).toHaveLength(1);
-    // Each batch is tested on its predecessor's tree: c1 ← c2 ← c3.
-    let cur = roots[0]?.request;
-    const order: string[] = [];
-    while (cur !== undefined) {
-      const files = git.filesAt(cur.headSha);
-      order.push(["c1", "c2", "c3"].filter((id) => files[`src/${id}.ts`] !== undefined).join("+"));
-      const next = running.find((r) => r.request.baseSha === cur?.headSha)?.request;
-      cur = next;
-    }
-    expect(order).toEqual(["c1", "c1+c2", "c1+c2+c3"]);
+    // Each batch is tested on the tree it would land: c1, c1+c2, c1+c2+c3. With direct carrying
+    // (the core's default) every batch is built on main and carries the entries it conflicts with,
+    // so assert the tested trees' contents rather than how their bases chain.
+    const trees = running
+      .map((r) => {
+        const files = git.filesAt(r.request.headSha);
+        return ["c1", "c2", "c3"].filter((id) => files[`src/${id}.ts`] !== undefined).join("+");
+      })
+      .sort();
+    expect(trees).toEqual(["c1", "c1+c2", "c1+c2+c3"]);
     expect(byHead.size).toBe(3);
     ci.autoFinish = true;
     for (const r of running) await ci.finish(r.request.runId);
     await env.drive();
     for (const id of ["c1", "c2", "c3"])
       expect((await env.ports.store.getChange(id))?.status).toBe("merged");
-    expect(env.mainHistory).toHaveLength(4); // three CAS, one per batch, in order
+    // The landing pipeline may land several passed batches in one CAS; what matters is that main
+    // advanced only to tested trees (assertMainNeverRed) and ends with all three Changes.
+    expect(env.mainHistory.length).toBeGreaterThan(1);
+    const finalFiles = git.filesAt(git.head("app"));
+    for (const id of ["c1", "c2", "c3"]) expect(finalFiles[`src/${id}.ts`]).toBeDefined();
     expect(svc.loop.state.main.sha).toBe(git.head("app"));
     expect(queueRefs(env)).toEqual([]);
     assertMainNeverRed(env);
