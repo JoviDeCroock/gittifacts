@@ -54,7 +54,7 @@ Expected (abbreviated):
 
 ```jsonc
 {
-  "principalId": "ag_7f3k2",
+  "principalId": "ag_4f1c9e2a7b6d40e8a3c5f9d2b1e7a6c0",
   "kind": "agent",
   "scopes": ["repo:read", "change:create"],
   "canApprove": false,        // agents never approve
@@ -75,20 +75,20 @@ One call creates the repo from the template, commits `.platform/ci.ts`, `.platfo
 
 ```jsonc
 {
-  "projectId": "rp_9xk2m",
+  "projectId": "3fk2q8wz7m1x0c5v9nbd",
   "remote": {                     // push grant for your first Change's fork
-    "url": "https://<artifacts-host>/git/<namespace>/task-ch_4kq9.git",
+    "url": "https://<artifacts-host>/git/<namespace>/task-5k4q9xw2m7d0z8r3t1cv.git",
     "username": "x",
     "token": "art_v2_…?expires=1790000000",
     "expiresAt": "2026-10-02T09:12:00.000Z",
     "branch": "main",
-    "changeId": "ch_4kq9"
+    "changeId": "5k4q9xw2m7d0z8r3t1cv"
   },
   "token": null,                  // only set for unclaimed projects
   "mcpUrl": "https://<host>/mcp",
-  "previewUrl": "https://p-bs-rp_9xk2m-pv.resynapse.dev",
+  "previewUrl": "https://p-bs-3fk2q8wz7m1x0c5v9nbd-pv.resynapse.dev",
   "claimUrl": null,
-  "bootstrapChangeId": "bs-rp_9xk2m",
+  "bootstrapChangeId": "bs-3fk2q8wz7m1x0c5v9nbd",
   "nextSteps": [{ "title": "Wait for the first green", "call": "wait_for_change(…)" }]
 }
 ```
@@ -98,7 +98,7 @@ Templates: `workers-api`, `preact-app`, `ts-library` (no preview), `static-site`
 ## 5. Wait for the first green
 
 ```text
-wait_for_change({ changeId: "bs-rp_9xk2m", until: "evidence_ready", timeoutSec: 50 })
+wait_for_change({ changeId: "bs-3fk2q8wz7m1x0c5v9nbd", until: "evidence_ready", timeoutSec: 50 })
 ```
 
 The call long-polls for up to 50 s, under the usual 60 s MCP request timeout. Expected: `{ "reached": true, "reason": "reached", … }`. On `"reason": "timeout"` call it again; `"unreachable"` means CI failed (go to step 6 and read the failing step).
@@ -106,7 +106,7 @@ The call long-polls for up to 50 s, under the usual 60 s MCP request timeout. Ex
 ## 6. Read the result
 
 ```text
-get_change_status({ changeId: "bs-rp_9xk2m" })
+get_change_status({ changeId: "bs-3fk2q8wz7m1x0c5v9nbd" })
 ```
 
 Expected: `runs[0].status` is `"passed"` with steps `install`, `lint`, `typecheck`, `test`, `build` and the evidence steps, and `previewUrl` serves the template. Open the preview; for `workers-api`, `GET /` returns `{ "now": "…" }`.

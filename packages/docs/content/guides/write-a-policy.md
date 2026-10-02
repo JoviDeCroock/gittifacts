@@ -43,7 +43,7 @@ Fields you leave out take their defaults.
 ## 3. Ship it as a Change
 
 ```text
-start_change({ repoId: "rp_9xk2m", title: "Policy: screenshot /settings", category: "chore" })
+start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Policy: screenshot /settings", category: "chore" })
 ```
 
 Push the edit. Expected: Lane 2 with reason `policy.changed` and `requiresHumanApproval: true`. Once a human approves and it merges, Changes based on the new default branch follow it.
@@ -61,7 +61,7 @@ Defaults: 95% agreement (`shadow.agreementThreshold`) over at least 25 reviewed 
 3. **Flip the toggle.** An owner chooses **Turn on Lane 0** on the repo screen, or:
 
 ```sh
-curl -s -X PATCH https://<host>/api/v1/repos/rp_9xk2m/lane0 \
+curl -s -X PATCH https://<host>/api/v1/repos/3fk2q8wz7m1x0c5v9nbd/lane0 \
   -H "Cookie: $GITTIFACTS_SESSION" -H "Content-Type: application/json" \
   -d '{"enabled":true}'
 ```

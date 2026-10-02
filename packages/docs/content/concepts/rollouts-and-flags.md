@@ -23,7 +23,7 @@ Each Change gets a Flagship flag `change-<changeId>`. Guard a risky code path wi
 ```ts
 import { isChangeEnabled } from "./flags";
 
-if (await isChangeEnabled(env, "ch_5mz1")) return newBehaviour();
+if (await isChangeEnabled(env, "7h2kd9x0qw3m5z8r1vtc")) return newBehaviour();
 return oldBehaviour();
 ```
 

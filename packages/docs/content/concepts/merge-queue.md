@@ -36,9 +36,9 @@ textual conflict ─► resolver agent (not the author) ─► re-evidence, re-c
 A Change joins the queue on its own once it is approved (or is Lane 0 with Lane 0 on). `enqueue` only adds options: priority, stacks (`dependsOn`), plan groups that land together.
 
 ```text
-queue_status({ changeId: "ch_5mz1" })
+queue_status({ changeId: "7h2kd9x0qw3m5z8r1vtc" })
 ```
 
-Expected: `state`, `position`, `etaSeconds` and `reason` in words, such as "waiting on conflicting Change ch_8f2a in track 2". An ejection carries `{ code, message, fix }` with the next call to make.
+Expected: `state`, `position`, `etaSeconds` and `reason` in words, such as "waiting on conflicting Change 6f8a2kq9w3x7m0d1z5rb in track 2". An ejection carries `{ code, message, fix }` with the next call to make.
 
 Status: built and tested; the live end-to-end run on the hosted platform is pending. Guide: [Merge queue](/docs/guides/merge-queue).

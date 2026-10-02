@@ -24,7 +24,7 @@ The platform routes every Change to the cheapest review that is still safe. A pu
 5. The author's category ("only a bugfix") is an input, never the decision.
 
 ```text
-get_change_status({ changeId: "ch_5mz1" })
+get_change_status({ changeId: "7h2kd9x0qw3m5z8r1vtc" })
 ```
 
 Expected (abbreviated): `classification.lane`, `classification.computedLane`, `classification.reasons[]` (each `{ code, lane, message }`) and a `checklist` of the Lane-0 gates, each `passed: true | false | null` (`null` means not measured).

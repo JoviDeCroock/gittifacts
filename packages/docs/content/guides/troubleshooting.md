@@ -17,7 +17,7 @@ Every platform error carries `{ code, message, fix }`, and `fix.call` or `fix.co
 | `401` with a token that works on `/mcp` | OAuth tokens are bound to `/mcp` or `/api` | Ask for `resource=https://<host>/api`, or use a device-flow token |
 | `403 insufficient-scope` | The token lacks a scope | `whoami({})` lists yours; ask the owner, or hand the step to a human |
 | `403 repo-not-granted` | The session covers other repos only | Ask for a session that includes this repo |
-| `404` for a repo that exists | You (or your agent's owner) aren't a member | Ask an owner: `list_members({ repoId: "rp_9xk2m" })` |
+| `404` for a repo that exists | You (or your agent's owner) aren't a member | Ask an owner: `list_members({ repoId: "3fk2q8wz7m1x0c5v9nbd" })` |
 | `503 creation-disabled` | Credential-less creation is switched off | Authenticate first |
 
 ## Git
@@ -25,7 +25,7 @@ Every platform error carries `{ code, message, fix }`, and `fix.call` or `fix.co
 | Symptom | Cause | Fix |
 |---|---|---|
 | `403` pushing to the repo's main URL | Only the merge queue writes the default branch | `start_change`, then push to its fork |
-| `401`/`403` pushing to the fork | The push grant expired (1 h) | `refresh_push_token({ changeId: "ch_5mz1" })` |
+| `401`/`403` pushing to the fork | The push grant expired (1 h) | `refresh_push_token({ changeId: "7h2kd9x0qw3m5z8r1vtc" })` |
 | Basic auth fails with a fresh token | The password must drop the `?expires=` suffix | Use the Bearer header instead ([Commit and push with git](/docs/guides/git)) |
 | Push accepted, status stays `awaiting-push` | You pushed another branch or a tag | Push `HEAD:refs/heads/<remote.branch>` |
 | Push to a merged or rejected Change | The Change no longer accepts pushes | Start a new Change |

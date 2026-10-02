@@ -39,7 +39,7 @@ Screenshots (desktop and mobile) are taken of the union of:
 Declare routes in the Plan when the Change touches specific pages:
 
 ```text
-create_plan({ repoId: "rp_9xk2m", title: "Redesign settings", intent: "Settings is hard to scan on phones; group it into sections.", acceptanceCriteria: ["Settings shows three sections on a 390px screen"], scopePaths: ["src/**"], affectedRoutes: ["/settings"] })
+create_plan({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Redesign settings", intent: "Settings is hard to scan on phones; group it into sections.", acceptanceCriteria: ["Settings shows three sections on a 390px screen"], scopePaths: ["src/**"], affectedRoutes: ["/settings"] })
 ```
 
 The screenshots are `screenshots:<route>` evidence items; the tour links them. **Coming soon:** before/after pairs (today the platform captures the head only).

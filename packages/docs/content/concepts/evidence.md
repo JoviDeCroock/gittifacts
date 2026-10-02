@@ -51,7 +51,7 @@ Exit code 0 means verified, 1 not verified, 2 a usage error. More in the [Securi
 ## Read it
 
 ```text
-get_evidence({ changeId: "ch_5mz1" })
+get_evidence({ changeId: "7h2kd9x0qw3m5z8r1vtc" })
 ```
 
 Expected: `items[]` with `kind`, `status` and a summary per item, plus `verification: { ok: true, keyId }`.

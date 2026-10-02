@@ -35,7 +35,7 @@ Expected: the test fails. If it passes, it doesn't reproduce the bug, and the pl
 ## 2. Fix the code, then open the Change as a fix
 
 ```text
-start_change({ repoId: "rp_9xk2m", planId: "pl_7c1e", title: "Pad hours in formatTime", category: "fix" })
+start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", planId: "2c7e1kq9w4x8m0d3z5np", title: "Pad hours in formatTime", category: "fix" })
 ```
 
 Commit the test and the fix together (or the fix alone when a test already fails on base) and push to the fork ([Commit and push with git](/docs/guides/git)).
@@ -43,11 +43,11 @@ Commit the test and the fix together (or the fix alone when a test already fails
 ## 3. Read the proof
 
 ```text
-wait_for_change({ changeId: "ch_3pq8", until: "evidence_ready", timeoutSec: 50 })
+wait_for_change({ changeId: "9q3pk8w2x7m0d5z1r4tb", until: "evidence_ready", timeoutSec: 50 })
 ```
 
 ```text
-get_evidence({ changeId: "ch_3pq8" })
+get_evidence({ changeId: "9q3pk8w2x7m0d5z1r4tb" })
 ```
 
 Expected: an item with `kind: "red-green"` and `verdict: "proven"`. Its `base.results` show your test `fail` (or `missing`) and `head.results` show it `pass`.

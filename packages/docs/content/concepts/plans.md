@@ -35,9 +35,9 @@ draft ──approve (human, not the author)──► approved ──► supersed
 ## Draft one
 
 ```text
-create_plan({ repoId: "rp_9xk2m", title: "Add /time", intent: "Clients need the server time in ISO 8601 to schedule jobs.", acceptanceCriteria: ["GET /time returns an ISO 8601 timestamp", "Existing routes are unchanged"], scopePaths: ["src/**", "test/**"] })
+create_plan({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Add /time", intent: "Clients need the server time in ISO 8601 to schedule jobs.", acceptanceCriteria: ["GET /time returns an ISO 8601 timestamp", "Existing routes are unchanged"], scopePaths: ["src/**", "test/**"] })
 ```
 
-Expected: `{ "plan": { "id": "pl_2b7d", "status": "draft", … }, "nextSteps": [ … ] }`. Then ask a human to approve it; you can't.
+Expected: `{ "plan": { "id": "4p8n2b7dq0x6w3k9m1zs", "status": "draft", … }, "nextSteps": [ … ] }`. Then ask a human to approve it; you can't.
 
 Reference: [`create_plan`](/docs/reference/mcp-changes#create_plan), [HTTP plans API](/docs/reference/http-repos#plans).

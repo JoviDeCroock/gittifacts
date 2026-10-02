@@ -66,11 +66,11 @@ git clone "$PUSH_URL" work && cd work
 A push after `expiresAt` fails with HTTP 401 or 403 from git. Get a fresh token for the same fork; only the Change's author can:
 
 ```text
-refresh_push_token({ changeId: "ch_5mz1" })
+refresh_push_token({ changeId: "7h2kd9x0qw3m5z8r1vtc" })
 ```
 
 ```sh
-gittifacts refresh-push-token ch_5mz1
+gittifacts refresh-push-token 7h2kd9x0qw3m5z8r1vtc
 ```
 
 Expected: a new `remote` with a new `token` and `expiresAt`. Export the new token and push again. Nothing else about the Change changes.

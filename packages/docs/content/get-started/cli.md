@@ -50,8 +50,8 @@ cd my-api
 ## 4. Wait for the first green
 
 ```sh
-gittifacts wait bs-rp_9xk2m --until evidence_ready
-gittifacts get-change-status bs-rp_9xk2m --human
+gittifacts wait bs-3fk2q8wz7m1x0c5v9nbd --until evidence_ready
+gittifacts get-change-status bs-3fk2q8wz7m1x0c5v9nbd --human
 ```
 
 `wait` re-issues the long-poll until the milestone or `--timeout` (default 600 s). Exit code 0 means reached, 3 means it timed out or can no longer be reached.
@@ -59,15 +59,15 @@ gittifacts get-change-status bs-rp_9xk2m --human
 ## 5. Ship a change
 
 ```sh
-gittifacts create-plan --repo-id rp_9xk2m --title "Add /time" \
+gittifacts create-plan --repo-id 3fk2q8wz7m1x0c5v9nbd --title "Add /time" \
   --intent "Clients need the server time in ISO 8601." \
   --acceptance-criteria "GET /time returns an ISO 8601 timestamp"
 # a human approves the plan, then:
-gittifacts start-change --repo-id rp_9xk2m --plan-id pl_2b7d --title "Add /time" --category feature
+gittifacts start-change --repo-id 3fk2q8wz7m1x0c5v9nbd --plan-id 4p8n2b7dq0x6w3k9m1zs --title "Add /time" --category feature
 git -c http.extraHeader="Authorization: Bearer $PUSH_TOKEN" push "$PUSH_URL" HEAD:main
-gittifacts wait ch_5mz1 --until lane_assigned
-gittifacts request-review ch_5mz1
-gittifacts wait ch_5mz1 --until merged
+gittifacts wait 7h2kd9x0qw3m5z8r1vtc --until lane_assigned
+gittifacts request-review 7h2kd9x0qw3m5z8r1vtc
+gittifacts wait 7h2kd9x0qw3m5z8r1vtc --until merged
 ```
 
 Take `PUSH_URL`, `PUSH_TOKEN` and the branch from `remote` in the `start-change` output. Pushing is covered in depth in [Commit and push with git](/docs/guides/git).

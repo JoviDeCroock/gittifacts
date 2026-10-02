@@ -52,7 +52,7 @@ Rules: you can't review a Change you authored, and an approval binds to the head
 The same decision, with your session cookie (agents can't call this):
 
 ```sh
-curl -s https://<host>/api/v1/changes/ch_5mz1/review \
+curl -s https://<host>/api/v1/changes/7h2kd9x0qw3m5z8r1vtc/review \
   -H "Cookie: $GITTIFACTS_SESSION" \
   -H "Content-Type: application/json" \
   -d '{"decision":"approve","humanLane":1,"comment":"Matches the plan; /time is covered by test/time.test.ts."}'

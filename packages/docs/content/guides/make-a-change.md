@@ -7,12 +7,12 @@ audience: agents
 
 # Make a Change
 
-This is the loop for every piece of work. Each step names the call and what it returns. The example adds `GET /time` to a `workers-api` project `rp_9xk2m`.
+This is the loop for every piece of work. Each step names the call and what it returns. The example adds `GET /time` to a `workers-api` project `3fk2q8wz7m1x0c5v9nbd`.
 
 ## 1. Draft a Plan
 
 ```text
-create_plan({ repoId: "rp_9xk2m", title: "Add /time", intent: "Clients need the server time in ISO 8601 to schedule jobs.", acceptanceCriteria: ["GET /time returns { time } in ISO 8601", "Existing routes are unchanged"], scopePaths: ["src/**", "test/**"] })
+create_plan({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Add /time", intent: "Clients need the server time in ISO 8601 to schedule jobs.", acceptanceCriteria: ["GET /time returns { time } in ISO 8601", "Existing routes are unchanged"], scopePaths: ["src/**", "test/**"] })
 ```
 
 Expected: `plan.status` is `"draft"`. Send the human the Plan link (`https://<host>/plans/<planId>`) and wait for **Sign and approve**. Listing `scopePaths` matters: without them the Change can't reach Lane 0.
@@ -20,10 +20,10 @@ Expected: `plan.status` is `"draft"`. Send the human the Plan link (`https://<ho
 ## 2. Start the Change
 
 ```text
-start_change({ repoId: "rp_9xk2m", planId: "pl_2b7d", title: "Add /time", category: "feature", idempotencyKey: "add-time-1" })
+start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", planId: "4p8n2b7dq0x6w3k9m1zs", title: "Add /time", category: "feature", idempotencyKey: "add-time-1" })
 ```
 
-Expected: `change.id` (`ch_5mz1`), `change.status` `"awaiting-push"`, and `remote` with `url`, `token`, `branch` and `expiresAt`. A Plan that isn't approved yet returns `409 plan-not-approved`.
+Expected: `change.id` (`7h2kd9x0qw3m5z8r1vtc`), `change.status` `"awaiting-push"`, and `remote` with `url`, `token`, `branch` and `expiresAt`. A Plan that isn't approved yet returns `409 plan-not-approved`.
 
 ## 3. Commit and push to the fork
 
@@ -41,7 +41,7 @@ git push "$PUSH_URL" HEAD:refs/heads/main
 ## 4. Wait for evidence
 
 ```text
-wait_for_change({ changeId: "ch_5mz1", until: "evidence_ready", timeoutSec: 50 })
+wait_for_change({ changeId: "7h2kd9x0qw3m5z8r1vtc", until: "evidence_ready", timeoutSec: 50 })
 ```
 
 Expected after about 50 s of CI: `reached: true` (call again while `reason` is `"timeout"`). On `"unreachable"`, CI failed: go to step 5.
@@ -49,7 +49,7 @@ Expected after about 50 s of CI: `reached: true` (call again while `reason` is `
 ## 5. Read the status
 
 ```text
-get_change_status({ changeId: "ch_5mz1" })
+get_change_status({ changeId: "7h2kd9x0qw3m5z8r1vtc" })
 ```
 
 | You see | Do |
@@ -61,11 +61,11 @@ get_change_status({ changeId: "ch_5mz1" })
 ## 6. Ask a human to review
 
 ```text
-wait_for_change({ changeId: "ch_5mz1", until: "tour_ready", timeoutSec: 50 })
+wait_for_change({ changeId: "7h2kd9x0qw3m5z8r1vtc", until: "tour_ready", timeoutSec: 50 })
 ```
 
 ```text
-request_review({ changeId: "ch_5mz1", message: "Adds GET /time per plan pl_2b7d; red/green not needed (feature)." })
+request_review({ changeId: "7h2kd9x0qw3m5z8r1vtc", message: "Adds GET /time per plan 4p8n2b7dq0x6w3k9m1zs; red/green not needed (feature)." })
 ```
 
 The reviewer agent has written a tour; `request_review` notifies the humans who can review. It never approves. A **Request changes** answer comes back on the Change: push a new head and the tour is rewritten.
@@ -73,7 +73,7 @@ The reviewer agent has written a tour; `request_review` notifies the humans who 
 ## 7. Wait for the merge
 
 ```text
-wait_for_change({ changeId: "ch_5mz1", until: "merged", timeoutSec: 50 })
+wait_for_change({ changeId: "7h2kd9x0qw3m5z8r1vtc", until: "merged", timeoutSec: 50 })
 ```
 
 Expected: `change.status` `"merged"` and `change.mergedSha`. With a deploy target set, it then rolls out; watch it with `list_issues_for_change`. If the merge queue ejects it, `queue_status` returns the reason and the fix ([Merge queue](/docs/guides/merge-queue)).

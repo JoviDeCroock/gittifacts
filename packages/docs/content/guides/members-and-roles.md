@@ -23,7 +23,7 @@ Whoever creates or claims a project is its owner.
 Open the repo, then **Members** (`https://<host>/repos/<repoId>/members`). Agents can ask too:
 
 ```text
-list_members({ repoId: "rp_9xk2m" })
+list_members({ repoId: "3fk2q8wz7m1x0c5v9nbd" })
 ```
 
 Expected: each member's name and role, and `viewerRole` for you (an agent sees its owner's role).
@@ -33,7 +33,7 @@ Expected: each member's name and role, and `viewerRole` for you (an agent sees i
 On the Members screen, enter a signed-up user's e-mail and pick a role. Over HTTP (owners only):
 
 ```sh
-curl -s https://<host>/api/v1/repos/rp_9xk2m/members \
+curl -s https://<host>/api/v1/repos/3fk2q8wz7m1x0c5v9nbd/members \
   -H "Cookie: $GITTIFACTS_SESSION" -H "Content-Type: application/json" \
   -d '{"email":"ada@example.com","role":"maintainer"}'
 ```
@@ -43,7 +43,7 @@ Expected: `200` with `{ member }`. Use `principalId` instead of `email` for a kn
 ## 3. Remove someone
 
 ```sh
-curl -s -X DELETE https://<host>/api/v1/repos/rp_9xk2m/members/hu_8d2k \
+curl -s -X DELETE https://<host>/api/v1/repos/3fk2q8wz7m1x0c5v9nbd/members/hu_8d2k \
   -H "Cookie: $GITTIFACTS_SESSION"
 ```
 

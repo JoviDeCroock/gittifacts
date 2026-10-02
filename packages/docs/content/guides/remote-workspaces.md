@@ -13,23 +13,23 @@ Cloud and chat agents often have no terminal. `open_workspace` gives your Change
 ## 1. Start a Change, then open its workspace
 
 ```text
-start_change({ repoId: "rp_9xk2m", planId: "pl_2b7d", title: "Add /time", category: "feature" })
+start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", planId: "4p8n2b7dq0x6w3k9m1zs", title: "Add /time", category: "feature" })
 ```
 
 ```text
-open_workspace({ changeId: "ch_5mz1" })
+open_workspace({ changeId: "7h2kd9x0qw3m5z8r1vtc" })
 ```
 
-Expected: `workspaceId` (`ws-ch_5mz1`), `status`, `network`, `expiresAt` and `restoredFrom`. While `status` is `"starting"`, wait a few seconds and call `open_workspace` again; it is idempotent. Proceed when it is `"ready"`.
+Expected: `workspaceId` (`ws-7h2kd9x0qw3m5z8r1vtc`), `status`, `network`, `expiresAt` and `restoredFrom`. While `status` is `"starting"`, wait a few seconds and call `open_workspace` again; it is idempotent. Proceed when it is `"ready"`.
 
 ## 2. Look around
 
 ```text
-ws_exec({ workspaceId: "ws-ch_5mz1", command: "git status --short --branch && ls src test" })
+ws_exec({ workspaceId: "ws-7h2kd9x0qw3m5z8r1vtc", command: "git status --short --branch && ls src test" })
 ```
 
 ```text
-ws_read({ workspaceId: "ws-ch_5mz1", path: "src/app.ts", startLine: 1, endLine: 80 })
+ws_read({ workspaceId: "ws-7h2kd9x0qw3m5z8r1vtc", path: "src/app.ts", startLine: 1, endLine: 80 })
 ```
 
 `ws_exec` runs `sh -c <command>` as an unprivileged user, with a timeout (default 120 s). Expected: `exitCode`, `stdout`, `stderr`; long output keeps its start and end.
@@ -39,7 +39,7 @@ ws_read({ workspaceId: "ws-ch_5mz1", path: "src/app.ts", startLine: 1, endLine: 
 Write a whole file:
 
 ```text
-ws_write({ workspaceId: "ws-ch_5mz1", path: "test/time.test.ts", content: "import { expect, it } from \"vitest\";\n" })
+ws_write({ workspaceId: "ws-7h2kd9x0qw3m5z8r1vtc", path: "test/time.test.ts", content: "import { expect, it } from \"vitest\";\n" })
 ```
 
 Or apply a unified diff to one file with `patch` instead of `content`. Parent directories are created as needed.
@@ -47,11 +47,11 @@ Or apply a unified diff to one file with `patch` instead of `content`. Parent di
 ## 4. Test before you push
 
 ```text
-ws_exec({ workspaceId: "ws-ch_5mz1", command: "pnpm test", timeoutSec: 300 })
+ws_exec({ workspaceId: "ws-7h2kd9x0qw3m5z8r1vtc", command: "pnpm test", timeoutSec: 300 })
 ```
 
 ```text
-ws_diff({ workspaceId: "ws-ch_5mz1" })
+ws_diff({ workspaceId: "ws-7h2kd9x0qw3m5z8r1vtc" })
 ```
 
 `ws_diff` shows your changes against the Change's base commit.
@@ -59,19 +59,19 @@ ws_diff({ workspaceId: "ws-ch_5mz1" })
 ## 5. Commit and push
 
 ```text
-ws_commit_push({ workspaceId: "ws-ch_5mz1", message: "Add GET /time" })
+ws_commit_push({ workspaceId: "ws-7h2kd9x0qw3m5z8r1vtc", message: "Add GET /time" })
 ```
 
 Expected: the new head commit, pushed to the fork's branch. CI starts as for any push, so continue as usual:
 
 ```text
-wait_for_change({ changeId: "ch_5mz1", until: "evidence_ready", timeoutSec: 50 })
+wait_for_change({ changeId: "7h2kd9x0qw3m5z8r1vtc", until: "evidence_ready", timeoutSec: 50 })
 ```
 
 ## 6. Close it
 
 ```text
-close_workspace({ workspaceId: "ws-ch_5mz1" })
+close_workspace({ workspaceId: "ws-7h2kd9x0qw3m5z8r1vtc" })
 ```
 
 ## Limits and rules

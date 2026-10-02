@@ -49,7 +49,7 @@ walk("src");
 Ship it in its own Change. It touches `.platform/**`, so it is Lane 2 and a human approves it:
 
 ```text
-start_change({ repoId: "rp_9xk2m", title: "Transform: rename formatMoney", category: "chore" })
+start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Transform: rename formatMoney", category: "chore" })
 ```
 
 ## 2. Use it in a later Change
@@ -62,7 +62,7 @@ git add -A && git commit -m "Rename formatMoney to formatCurrency (transform)"
 ```
 
 ```text
-start_change({ repoId: "rp_9xk2m", title: "Rename formatMoney to formatCurrency", category: "transform" })
+start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Rename formatMoney to formatCurrency", category: "transform" })
 ```
 
 Push to the fork. Expected in `get_evidence`: an item with `kind: "transform"` and `status: "ok"`, and in the diff each reproduced file has `transformVerified: true`. The tour collapses those hunks into one stop.

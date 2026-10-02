@@ -30,12 +30,12 @@ Bundles may declare plain variables only; resource bindings are refused. Every d
 A human owner of a claimed project names the Worker. There is no MCP tool: agents can't hold `repo:admin`.
 
 ```sh
-curl -s -X PATCH https://<host>/api/v1/repos/rp_9xk2m/deploy-target \
+curl -s -X PATCH https://<host>/api/v1/repos/3fk2q8wz7m1x0c5v9nbd/deploy-target \
   -H "Cookie: $GITTIFACTS_SESSION" -H "Content-Type: application/json" \
   -d '{"script":"api"}'
 ```
 
-Expected: `200`. Rollouts go to the Worker `gf-rp_9xk2m-api` in the platform's account; the first one creates it with a `workers.dev` URL. `{"script":null}` clears the target. Unclaimed projects get `403 unclaimed-limit`.
+Expected: `200`. Rollouts go to the Worker `gf-3fk2q8wz7m1x0c5v9nbd-api` in the platform's account; the first one creates it with a `workers.dev` URL. `{"script":null}` clears the target. Unclaimed projects get `403 unclaimed-limit`.
 
 ## 3. Guard risky code with the Change's flag
 
@@ -45,7 +45,7 @@ Every merged Change gets a flag `change-<changeId>`, on while it rolls out. Code
 import { isChangeEnabled } from "./flags";
 
 export async function handleTime(env: Env): Promise<Response> {
-  if (await isChangeEnabled(env, "ch_5mz1")) {
+  if (await isChangeEnabled(env, "7h2kd9x0qw3m5z8r1vtc")) {
     return Response.json({ time: new Date().toISOString() });
   }
   return new Response("Not found", { status: 404 });
@@ -76,7 +76,7 @@ Each stage sets the traffic split, waits `stageMinutes`, then compares the new v
 ## 5. Watch it
 
 ```text
-list_issues_for_change({ changeId: "ch_5mz1" })
+list_issues_for_change({ changeId: "7h2kd9x0qw3m5z8r1vtc" })
 ```
 
 Humans watch `https://<host>/changes/<changeId>/rollout`: the stages, the health checks and every step as a signed audit event. Over HTTP: `GET /api/v1/changes/<changeId>/rollout` returns `{ rollout, timeline, policy }`.
@@ -90,7 +90,7 @@ The platform turns the flag off, rolls back to the previous version and opens a 
 A maintainer or owner pulls the kill switch on the rollout screen (**Kill switch**), or:
 
 ```sh
-curl -s https://<host>/api/v1/changes/ch_5mz1/kill \
+curl -s https://<host>/api/v1/changes/7h2kd9x0qw3m5z8r1vtc/kill \
   -H "Cookie: $GITTIFACTS_SESSION" -H "Content-Type: application/json" \
   -d '{"reason":"p95 latency doubled on /time"}'
 ```

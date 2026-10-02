@@ -92,7 +92,7 @@ pnpm exec vitest run $(printf '%s\n' "$GITTIFACTS_TEST_TARGETS" | tr '\n' ' ')
 `.platform/**` is a sensitive path: the Change is Lane 2 and needs a human's approval. The pipeline is read from the Change's **base** commit, so your edit applies to Changes that start after it merges, not to the Change that makes it.
 
 ```text
-start_change({ repoId: "rp_9xk2m", title: "CI: add e2e step", category: "chore" })
+start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "CI: add e2e step", category: "chore" })
 ```
 
 ## When the pipeline itself fails

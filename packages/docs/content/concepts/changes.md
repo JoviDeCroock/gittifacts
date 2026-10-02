@@ -40,7 +40,7 @@ Reviews bind to a specific head. A push after an approval needs a fresh approval
 ## Start one
 
 ```text
-start_change({ repoId: "rp_9xk2m", planId: "pl_2b7d", title: "Add /time", category: "feature" })
+start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", planId: "4p8n2b7dq0x6w3k9m1zs", title: "Add /time", category: "feature" })
 ```
 
 Expected: `change.status` is `awaiting-push` and `remote` holds `url`, `token`, `branch` and `expiresAt`. Next: [Make a Change](/docs/guides/make-a-change).

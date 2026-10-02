@@ -59,7 +59,7 @@ curl -s https://<host>/api/v1/projects \
 ## 4. Wait for green
 
 ```text
-wait_for_change({ changeId: "bs-rp_9xk2m", until: "evidence_ready", timeoutSec: 50 })
+wait_for_change({ changeId: "bs-3fk2q8wz7m1x0c5v9nbd", until: "evidence_ready", timeoutSec: 50 })
 ```
 
 Call it again while `reason` is `"timeout"`. Expected within about a minute: `reached: true`. If CI fails, `get_change_status` names the failing step.

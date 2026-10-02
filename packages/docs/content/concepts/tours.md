@@ -37,11 +37,11 @@ Model calls go through AI Gateway with a per-Change budget (`policy.ai.budgetUsd
 ## Read one
 
 ```text
-wait_for_change({ changeId: "ch_5mz1", until: "tour_ready", timeoutSec: 50 })
+wait_for_change({ changeId: "7h2kd9x0qw3m5z8r1vtc", until: "tour_ready", timeoutSec: 50 })
 ```
 
 ```text
-get_tour({ changeId: "ch_5mz1" })
+get_tour({ changeId: "7h2kd9x0qw3m5z8r1vtc" })
 ```
 
 Humans read it in the web app at `/changes/<changeId>`. How to act on it: [Read and act on a tour](/docs/guides/review-a-tour).
