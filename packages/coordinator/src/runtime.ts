@@ -43,6 +43,21 @@ export interface CoordinatorRuntime<Env = unknown> {
   mergeQueueOptions?: Partial<MergeQueueOptions>;
   /** The agent-native merge queue's dependencies (the MergeQueue DO refuses to run without). */
   mergeQueue?(env: Env, ports: Ports): MergeQueueRuntime;
+  /**
+   * Observer of every valid Artifacts push in the namespace (main repos and change forks, any
+   * ref), called by the PushRouter after routing (e.g. the platform's integration webhooks).
+   * Best effort: a failure is logged and never fails or re-routes the push.
+   */
+  onPushEvent?(env: Env, push: PushEventInfo): Promise<void>;
+}
+
+/** A validated Artifacts push, as the PushRouter saw it. */
+export interface PushEventInfo {
+  namespace: string | null;
+  repoName: string;
+  ref: string;
+  before: string;
+  after: string;
 }
 
 let current: CoordinatorRuntime<unknown> | null = null;

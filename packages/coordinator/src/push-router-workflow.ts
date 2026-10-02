@@ -1,7 +1,8 @@
 /**
  * `PushRouter`: started by `triggers.events` for every `cf.artifacts.repo.pushed` in the namespace.
  * Validates the event and hands it to `coordinator.onPush`, which routes change-fork pushes to
- * the change's ChangeCoordinator DO (deletes, non-branch refs and main repos are ignored).
+ * the change's ChangeCoordinator DO (deletes, non-branch refs and main repos are ignored), then to
+ * the runtime's optional `onPushEvent` observer (every push, main repos included).
  *
  *   "triggers": { "events": [{ "type": "cf.artifacts.repo.pushed",
  *     "filter": { "namespace": "gittifacts-eu" },
@@ -37,6 +38,24 @@ export class PushRouter extends WorkflowEntrypoint<unknown, unknown> {
       });
       return true;
     });
+    const observe = runtime.onPushEvent;
+    if (observe) {
+      // Observers (integration webhooks) run in their own step and never fail the routing.
+      try {
+        await step.do("observe", RETRY.quick, async () => {
+          await observe(this.env, {
+            namespace: parsed.namespace,
+            repoName: parsed.repoName,
+            ref: parsed.ref,
+            before: parsed.before,
+            after: parsed.after,
+          });
+          return true;
+        });
+      } catch (e) {
+        console.error("push observer failed", parsed.repoName, parsed.ref, e);
+      }
+    }
     return { routed: true, reason: null };
   }
 }
