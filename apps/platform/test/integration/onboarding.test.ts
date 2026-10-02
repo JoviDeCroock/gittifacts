@@ -124,7 +124,13 @@ describe("create_project → first green (workerd, fake Artifacts/containers)", 
         expect(head).not.toBeNull();
         const files = fakes.git.filesAt(head as string);
         const spec = TEMPLATES[template];
-        expect(files[".platform/ci.ts"]).toBe(defaultCiTs(spec.features).text);
+        expect(files[".platform/ci.ts"]).toBe(
+          defaultCiTs(
+            spec.features,
+            undefined,
+            spec.deployable ? { bundle: spec.manifest.buildOutput } : {},
+          ).text,
+        );
         expect(files[".platform/policy.ts"]).toBe(
           defaultPolicyTs({ previewRoutes: spec.previewRoutes }).text,
         );
