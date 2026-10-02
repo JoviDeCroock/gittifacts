@@ -4,7 +4,7 @@
  */
 import type { HunkRef } from "@app/domain";
 import type { ChangeDiff } from "../api/types.js";
-import { type Excerpt, excerptForRef, rangeLabel, splitPath, tokenize, usesHashComments } from "../lib/diff.js";
+import { type Excerpt, excerptForRef, rangeLabel, splitPath, tokenize, usesHashComments, wholeFileRefs } from "../lib/diff.js";
 import { Icon } from "./Icon.js";
 
 function Code({ text, hash }: { text: string; hash: boolean }) {
@@ -99,5 +99,34 @@ export function DiffExcerpt({ diff, refs }: { diff: ChangeDiff; refs: HunkRef[] 
         return <ExcerptView key={`${ref.file}:${ref.startLine}`} ex={ex} />;
       })}
     </div>
+  );
+}
+
+/** Past this many files the page stops rendering code; the rest are listed by path. */
+const WHOLE_DIFF_MAX = 20;
+
+/** Every changed file, for a change that has no tour to cite hunks. */
+export function WholeDiff({ diff }: { diff: ChangeDiff }) {
+  const shown = { ...diff, files: diff.files.slice(0, WHOLE_DIFF_MAX) };
+  const rest = diff.files.slice(WHOLE_DIFF_MAX);
+  const noText = shown.files.filter((f) => f.hunks.length === 0);
+  return (
+    <>
+      <DiffExcerpt diff={shown} refs={wholeFileRefs(shown)} />
+      {noText.length > 0 || rest.length > 0 ? (
+        <ul class="whole-diff__rest">
+          {noText.map((f) => (
+            <li key={f.path}>
+              <code>{f.path}</code> {f.binary ? "binary file" : f.truncated ? "too large to show" : "no text changes"}, {f.status}
+            </li>
+          ))}
+          {rest.map((f) => (
+            <li key={f.path}>
+              <code>{f.path}</code> {f.status}, +{f.additions} −{f.deletions}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </>
   );
 }

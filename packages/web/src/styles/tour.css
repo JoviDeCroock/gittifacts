@@ -206,6 +206,14 @@
   color: var(--text-2);
   text-wrap: pretty;
 }
+/* A model's concern can run to a paragraph; the chart below carries it in full. */
+.lane-block__line--clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+}
 .lane-block__why > summary {
   font-size: var(--text-small);
   color: var(--text);
@@ -922,4 +930,43 @@ a.ctx-link:hover .ctx-link__value {
 .lane-pick__skip {
   color: var(--text-2);
   font-weight: var(--weight-medium);
+}
+
+/* No tour: why, the run behind a disclosure, then every changed file. */
+.not-ready__run > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-block-size: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+.not-ready__run > summary::-webkit-details-marker {
+  display: none;
+}
+.not-ready__run > summary .disclosure__chev {
+  margin-inline-start: auto;
+  transition: transform 180ms var(--ease-out, cubic-bezier(0.25, 1, 0.5, 1));
+}
+.not-ready__run[open] > summary .disclosure__chev {
+  transform: rotate(180deg);
+}
+.whole-diff {
+  display: grid;
+  gap: var(--s-3);
+  margin-block-start: var(--s-6);
+}
+.whole-diff__title {
+  font-size: var(--text-title);
+}
+.whole-diff__count {
+  color: var(--text-3);
+  font-weight: var(--weight-regular, 400);
+}
+.whole-diff__rest {
+  display: grid;
+  gap: var(--s-1);
+  padding-inline-start: var(--s-4);
+  font-size: var(--text-small);
+  color: var(--text-2);
 }

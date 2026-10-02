@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChangeDiff } from "../src/api/types.js";
-import { compressLines, excerptForRef, fileStats, hunkFromText, splitPath, tokenize } from "../src/lib/diff.js";
+import { compressLines, excerptForRef, fileStats, hunkFromText, splitPath, tokenize, wholeFileRefs } from "../src/lib/diff.js";
 
 const hunk = hunkFromText(
   10,
@@ -110,5 +110,26 @@ describe("path and line helpers", () => {
   it("compresses line numbers into ranges", () => {
     expect(compressLines([9, 3, 4, 5, 12, 11])).toEqual(["3–5", "9", "11–12"]);
     expect(compressLines([])).toEqual([]);
+  });
+});
+
+describe("wholeFileRefs", () => {
+  it("cites every changed line of each file, deleted files on the base side, and skips files without hunks", () => {
+    const gone = hunkFromText(1, 0, "-a\n-b");
+    const whole: ChangeDiff = {
+      ...diff,
+      files: [
+        diff.files[0]!,
+        { ...diff.files[0]!, path: "old.ts", status: "deleted", hunks: [gone], ...fileStats([gone]) },
+        { ...diff.files[0]!, path: "logo.png", status: "added", binary: true, hunks: [] },
+      ],
+    };
+    const refs = wholeFileRefs(whole);
+    expect(refs).toEqual([
+      { file: "src/x.ts", startLine: 10, endLine: 17, side: "head" },
+      { file: "old.ts", startLine: 1, endLine: 2, side: "base" },
+    ]);
+    const ex = excerptForRef(whole, refs[0]!);
+    expect(ex?.rows.filter((r) => r.type === "line" && r.line.kind !== "ctx")).toHaveLength(5);
   });
 });

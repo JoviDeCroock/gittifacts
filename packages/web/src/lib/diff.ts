@@ -196,3 +196,26 @@ export function compressLines(lines: number[]): string[] {
   if (start !== null && prev !== null) out.push(start === prev ? `${start}` : `${start}–${prev}`);
   return out;
 }
+
+/**
+ * One ref per file that spans every changed line, for reading a change without a tour (the
+ * reviewer agent failed, or the change merged in Lane 0). Deleted files are cited on the base
+ * side. Files without text hunks (binary, truncated) get no ref; callers list them separately.
+ */
+export function wholeFileRefs(diff: ChangeDiff): HunkRef[] {
+  const refs: HunkRef[] = [];
+  for (const f of diff.files) {
+    const side = f.status === "deleted" ? "base" : "head";
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = Number.NEGATIVE_INFINITY;
+    for (const h of f.hunks)
+      for (const l of h.lines) {
+        const n = lineNo(l, side);
+        if (n === null) continue;
+        lo = Math.min(lo, n);
+        hi = Math.max(hi, n);
+      }
+    if (lo <= hi) refs.push({ file: f.path, startLine: lo, endLine: hi, side });
+  }
+  return refs;
+}

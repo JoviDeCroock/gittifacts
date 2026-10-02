@@ -10,7 +10,7 @@ import { useEffect, useRef } from "preact/hooks";
 import { ApiError, api } from "../api/client.js";
 import type { ChangeDiff, EvidenceResponse, PipelineRun, PrincipalRef, RepoDetail } from "../api/types.js";
 import { DecisionPanel } from "../components/DecisionPanel.js";
-import { DiffExcerpt } from "../components/DiffExcerpt.js";
+import { DiffExcerpt, WholeDiff } from "../components/DiffExcerpt.js";
 import { EvidenceChip, MissingChip, RedGreenList, ShotPair } from "../components/EvidenceBits.js";
 import { Icon } from "../components/Icon.js";
 import { Prose } from "../components/Prose.js";
@@ -107,12 +107,19 @@ function StationStrip({ tour, current, onJump, resumeAt, onResume }: { tour: Tou
 function LaneBlock({ change, open, rail = false }: { change: Change; open: boolean; rail?: boolean }) {
   const chart = triageChart(change.laneReasons, change.computedLane, change.lane);
   if (change.lane === null) {
+    const pending = change.status === "awaiting-push" || change.status === "running" || change.status === "awaiting-review";
     return (
       <section class="lane-block lane-block--none">
         <LaneTag lane={null} size="lg" />
         <div>
-          <h2 class="lane-block__title">Not routed yet</h2>
-          <p class="lane-block__line">The lane is computed once checks pass and evidence is signed.</p>
+          <h2 class="lane-block__title">{pending ? "Not routed yet" : "Not routed"}</h2>
+          <p class="lane-block__line">
+            {pending
+              ? "The lane is computed once checks pass and evidence is signed."
+              : change.id.startsWith("bs-")
+                ? "The platform's bootstrap change merges without review, so it has no lane."
+                : "This change closed before a lane was computed."}
+          </p>
         </div>
       </section>
     );
@@ -129,7 +136,9 @@ function LaneBlock({ change, open, rail = false }: { change: Change; open: boole
           <h2 class="lane-block__title" id={rail ? "lane-title-rail" : "lane-title"}>
             {routed.name} · {routed.short}
           </h2>
-          <p class="lane-block__line">{why}</p>
+          <p class="lane-block__line lane-block__line--clamp" title={why.length > 160 ? why : undefined}>
+            {why}
+          </p>
         </div>
       </div>
       <details class="disclosure lane-block__why" open={open}>
@@ -377,25 +386,53 @@ function TourEnd({ tour, desktop }: { tour: Tour; desktop: boolean }) {
 
 // ---------------------------------------------------------------- not ready
 
-function PipelineSteps({ run }: { run: PipelineRun }) {
+function PipelineHead({ run }: { run: PipelineRun }) {
   const idx = run.steps.findIndex((s) => s.status === "running" || s.status === "failed");
+  switch (run.status) {
+    case "passed":
+      return (
+        <>
+          <Icon name="check-circle" class="tone--ok" /> All {run.steps.length} checks passed
+        </>
+      );
+    case "failed":
+    case "errored":
+      return (
+        <>
+          <Icon name="x-circle" class="tone--danger" /> Checks failed at <b>{run.steps[idx]?.name ?? "a step"}</b>
+        </>
+      );
+    case "cancelled":
+    case "superseded":
+      return (
+        <>
+          <Icon name="circle-dashed" /> This run was {run.status}; a newer push replaces it
+        </>
+      );
+    default:
+      return idx >= 0 ? (
+        <>
+          <Icon name="loader" class="spin" /> Running step {idx + 1} of {run.steps.length}: <b>{run.steps[idx]?.name}</b>
+        </>
+      ) : (
+        <>
+          <Icon name="loader" class="spin" /> Waiting for a runner
+        </>
+      );
+  }
+}
+
+function PipelineSteps({ run }: { run: PipelineRun }) {
   return (
     <div class="pipeline">
-      <p class="pipeline__head">
-        {run.status === "failed" ? (
-          <>
-            <Icon name="x-circle" class="tone--danger" /> Checks failed at <b>{run.steps[idx]?.name ?? "a step"}</b>
-          </>
-        ) : (
-          <>
-            <Icon name="loader" class="spin" /> Running step {idx + 1} of {run.steps.length}: <b>{run.steps[idx]?.name}</b>
-          </>
-        )}
-      </p>
       <ol class="pipeline__steps">
         {run.steps.map((s) => (
           <li key={s.name} class={`pstep pstep--${s.status}`}>
-            <Icon name={s.status === "passed" ? "check" : s.status === "failed" ? "x" : s.status === "running" ? "loader" : "circle-dashed"} size={15} class={s.status === "running" ? "spin" : ""} />
+            <Icon
+              name={s.status === "passed" || s.status === "cached" ? "check" : s.status === "failed" ? "x" : s.status === "running" ? "loader" : "circle-dashed"}
+              size={15}
+              class={s.status === "running" ? "spin" : ""}
+            />
             <span class="pstep__name">{s.name}</span>
             <span class="pstep__dur tnum">{s.durationMs !== null && s.status === "passed" ? durationLabel(s.durationMs) : s.status}</span>
           </li>
@@ -405,14 +442,64 @@ function PipelineSteps({ run }: { run: PipelineRun }) {
   );
 }
 
+/** Why a change has no tour, in the change's own state, and what the reader can do instead. */
+function noTourCopy(data: TourData): { title: string; body: string; showDiff: boolean } {
+  const { change } = data;
+  const run = data.runs[0];
+  const tourFailed = change.laneReasons.some((r) => r.code === "tour.failed");
+  if (change.status === "awaiting-push")
+    return { title: "Waiting for the first push", body: "The author has not pushed a head yet. Checks, evidence and the tour follow the push.", showDiff: false };
+  if (change.status === "running" || (run && (run.status === "running" || run.status === "queued")))
+    return { title: "The tour is not written yet", body: "The reviewer agent writes the tour once the checks pass and the evidence is signed. Nothing can be approved until then.", showDiff: false };
+  if (change.status === "failing")
+    return { title: "Checks failed", body: "There is nothing to review until the author pushes a fix. The failing step is below.", showDiff: false };
+  if (change.status === "awaiting-review")
+    return tourFailed
+      ? { title: "No tour: the reviewer agent could not write one", body: "Review the change itself. Every changed file is below, the evidence is one step away, and the lane panel lists what was and was not measured.", showDiff: true }
+      : { title: "The reviewer agent is writing the tour", body: "You can already read the diff below and the signed evidence. The tour usually follows within a minute.", showDiff: true };
+  if (change.id.startsWith("bs-"))
+    return { title: "No tour for the bootstrap change", body: "The platform's first commit sets up CI and the first preview. It merges without review, so no tour is written.", showDiff: false };
+  if (change.lane === 0)
+    return { title: "No tour: this change merged in Lane 0", body: "In Lane 0 the evidence alone decides and nobody reviews, so no tour is written. The diff and the signed evidence are the record.", showDiff: true };
+  return {
+    title: tourFailed ? "No tour: the reviewer agent could not write one" : "No tour for this change",
+    body: "It was decided without a tour. The diff and the signed evidence are the record.",
+    showDiff: true,
+  };
+}
+
 function NotReady({ data }: { data: TourData }) {
   const run = data.runs[0];
+  const copy = noTourCopy(data);
+  const diff = copy.showDiff && data.diff && data.diff.files.length > 0 ? data.diff : null;
   return (
-    <section class="not-ready">
-      <h2 class="not-ready__title">The tour is not written yet</h2>
-      <p>The reviewer agent writes the tour after the checks pass and the evidence is signed. Nothing here can be approved until then.</p>
-      {run ? <PipelineSteps run={run} /> : <p class="not-ready__fine">No pipeline has run for this change. The author has not pushed a head yet.</p>}
-    </section>
+    <>
+      <section class="not-ready" aria-labelledby="not-ready-title">
+        <h2 id="not-ready-title" class="not-ready__title">
+          {copy.title}
+        </h2>
+        <p>{copy.body}</p>
+        {run ? (
+          <details class="not-ready__run" open={run.status !== "passed"}>
+            <summary class="pipeline__head">
+              <PipelineHead run={run} />
+              <Icon name="chevron-down" size={14} class="disclosure__chev" />
+            </summary>
+            <PipelineSteps run={run} />
+          </details>
+        ) : data.change.status === "awaiting-push" ? null : (
+          <p class="not-ready__fine">No pipeline has run for this change.</p>
+        )}
+      </section>
+      {diff ? (
+        <section class="whole-diff" aria-labelledby="whole-diff-title">
+          <h2 id="whole-diff-title" class="whole-diff__title">
+            Changed files <span class="whole-diff__count tnum">{diff.files.length}</span>
+          </h2>
+          <WholeDiff diff={diff} />
+        </section>
+      ) : null}
+    </>
   );
 }
 
