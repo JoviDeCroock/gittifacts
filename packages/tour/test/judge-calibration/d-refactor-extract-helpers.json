@@ -1,0 +1,180 @@
+{
+  "id": "refactor-extract-helpers",
+  "title": "Refactor: extract notFound() and methodNotAllowed() (no behavior change)",
+  "expected": "in-scope",
+  "why": "Pure extract-function refactor; status codes, bodies and headers are unchanged.",
+  "plan": {
+    "title": "Refactor handle(): extract the error responses",
+    "intent": "Readability only: move the 404 and 405 responses built inline in handle() into two named helpers, notFound(path) and methodNotAllowed(). No behavior change.",
+    "acceptanceCriteria": [
+      "handle() calls notFound() and methodNotAllowed() instead of building the responses inline",
+      "Status codes, bodies and headers of the 404 and 405 responses are unchanged",
+      "Existing tests pass unchanged"
+    ],
+    "outOfScope": ["Changing any response", "New routes"],
+    "scopePaths": ["src/app.ts"],
+    "riskDeclarations": [],
+    "affectedRoutes": []
+  },
+  "diff": {
+    "baseSha": "1111111111111111111111111111111111111111",
+    "headSha": "2222222222222222222222222222222222222222",
+    "files": [
+      {
+        "path": "src/app.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 10,
+        "deletions": 4,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -20,12 +20,18 @@",
+            "oldStart": 20,
+            "oldLines": 12,
+            "newStart": 20,
+            "newLines": 18,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 20,
+                "newNo": 20,
+                "text": "  \"/health\": () => json({ ok: true }),"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 21,
+                "newNo": 21,
+                "text": "};"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 22,
+                "newNo": 22,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 23,
+                "text": "export function notFound(path: string): Response {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 24,
+                "text": "  return json({ error: \"not found\", path }, 404);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 25,
+                "text": "}"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 26,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 27,
+                "text": "export function methodNotAllowed(): Response {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 28,
+                "text": "  return json({ error: \"method not allowed\" }, 405, { allow: \"GET, HEAD\" });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 29,
+                "text": "}"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 30,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 23,
+                "newNo": 31,
+                "text": "export async function handle(request: Request, env: Env = {}): Promise<Response> {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 24,
+                "newNo": 32,
+                "text": "  const url = new URL(request.url);"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 25,
+                "newNo": 33,
+                "text": "  const route = routes[url.pathname];"
+              },
+              {
+                "kind": "del",
+                "oldNo": 26,
+                "newNo": null,
+                "text": "  if (route === undefined) return json({ error: \"not found\", path: url.pathname }, 404);"
+              },
+              {
+                "kind": "del",
+                "oldNo": 27,
+                "newNo": null,
+                "text": "  if (request.method !== \"GET\" && request.method !== \"HEAD\") {"
+              },
+              {
+                "kind": "del",
+                "oldNo": 28,
+                "newNo": null,
+                "text": "    return json({ error: \"method not allowed\" }, 405, { allow: \"GET, HEAD\" });"
+              },
+              {
+                "kind": "del",
+                "oldNo": 29,
+                "newNo": null,
+                "text": "  }"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 34,
+                "text": "  if (route === undefined) return notFound(url.pathname);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 35,
+                "text": "  if (request.method !== \"GET\" && request.method !== \"HEAD\") return methodNotAllowed();"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 30,
+                "newNo": 36,
+                "text": "  return route(request, url, env);"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 31,
+                "newNo": 37,
+                "text": "}"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      }
+    ],
+    "additions": 10,
+    "deletions": 4
+  }
+}

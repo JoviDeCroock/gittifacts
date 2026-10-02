@@ -103,7 +103,7 @@ Symbols:
 | Symbol | Meaning | Value |
 |---|---|---|
 | `in`, `out` | Price per input / output token | Default pool: $2 / $10 per MTok |
-| `M` | Output tokens per call | tour 6,000; judge 1,500 |
+| `M` | Output tokens per call | tour 6,000; judge 6,000 (reasoning models spend ~4k judging a small diff) |
 | `O` | Prompt without the diff, plus 128 slack | ≈ 2–4k tokens. System prompt ≈ 1.1k; the breaking-api fixture totals ≈ 2.0k |
 | `R` | Extra regeneration input | ≤ 4.8k (previous reply clipped to 12k chars ≈ 4k, plus the retry message) |
 
@@ -111,14 +111,14 @@ Worst case at the default $0.50, default pool, with `O` = 4k:
 
 | Call | Input tokens | Cost |
 |---|---|---|
-| Judge (16k diff cap) | ≤ 17k | 17k·$2/M + 1.5k·$10/M = **$0.049** |
+| Judge (16k diff cap) | ≤ 17k | 17k·$2/M + 6k·$10/M = **$0.094** |
 | Tour, 8k diff | 12k | 12k·$2/M + 6k·$10/M = **$0.084** |
 | Regeneration, 8k diff | 16.8k | **$0.094** |
 | Tour, 24k diff (cap) | 28k | **$0.116** |
 | Regeneration, 24k diff | 32.8k | **$0.126** |
 
-- **Small diff:** judge + tour + regeneration = **$0.227**.
-- **Largest diff:** judge + tour + regeneration = **$0.291**.
+- **Small diff:** judge + tour + regeneration = **$0.272**.
+- **Largest diff:** judge + tour + regeneration = **$0.336**.
 
 Both are under $0.50, so with the default pool every tour gets its regeneration with the whole
 diff. For an 8k diff, the reserve in rule 5 only starts trimming when less than about $0.18
@@ -127,8 +127,58 @@ remains: `(2·(4k + 8k) + 4.8k)·$2/M + 2·6k·$10/M = $0.178`.
 The same flow with the router's full pool shows why the default pool exists. The ceiling is
 Claude Fable 5 at $10 / $50:
 - the output reserve alone is 6k × $50/M = **$0.30 per tour call**;
-- the judge costs up to $0.245;
+- the judge costs up to $0.47;
 - so a regeneration can never fit within $0.50, and the first call's diff gets squeezed.
+
+## Judge
+
+One call answers three questions: `scope-drift`, `plan-conformance` and `hidden-behavior-change`.
+Each answer becomes an `llm-judgment` evidence item. The classifier maps "no-concern" to nothing,
+"unsure" to Lane 1 and "concern" to Lane 2, so a judgment can only raise a lane.
+
+**What "concern" means.** The diff does something the plan does not ask for, hides a behavior
+change the plan and its acceptance criteria do not state, or contradicts the plan. Doing what the
+plan asks is never a concern. That includes the routine scaffolding: tests for the new behavior,
+types, imports, wiring, and docs.
+
+**Every concern cites.** The model names a hunk it was shown (`file` and `hunk` N from the
+`@@ hunk N` header). It also gives the plan sentence that hunk contradicts or goes beyond, quoted
+from the plan (`planBasis` "contradicts" or "goes-beyond"), or states that the plan does not
+mention the behavior ("not-in-plan").
+
+`judge-citations.ts` checks each citation against the reviewed diff and the plan. Quotes match
+word for word, ignoring case and punctuation; quotes of four or more words may also match with
+75% word overlap within one plan line. A citation is invalid when:
+- the file is not in the diff;
+- the hunk does not exist;
+- the hunk was omitted from the prompt;
+- it says "contradicts" or "goes-beyond" without a quote;
+- the quote is not in the plan.
+
+A concern with no valid citation is **downgraded to "unsure"** (Lane 1). It never goes lower, and
+never to "no-concern". The rationale then starts with `Concern downgraded to unsure: …`, and the
+item's `note` records why. A concern that keeps a valid citation gets its citations appended to
+the rationale; any invalid ones are listed in the note. "no-concern" and "unsure" are never
+touched.
+
+**Without a plan,** only `hidden-behavior-change` is asked, and the two plan questions are
+reported as `skipped`. A concern still needs a valid hunk citation; it needs no quote, because
+there is no plan to quote.
+
+**Prompt version.** `JUDGE_PROMPT_VERSION` is sent as the `prompt` gateway metadata of judge
+calls. `PROMPT_VERSION` is the tour's.
+
+**Calibration.** `test/judge-calibration/*.json` holds realistic workers-api Changes. Each one has
+its plan and a label: `in-scope` (the judge must not answer "concern") or `out-of-scope` /
+`hidden-behavior` (the judge must answer "concern"). `test/judge-calibration.test.ts` runs them
+with a scripted model to pin down the citation rule.
+
+`scripts/calibrate-judge.ts` runs them against a real Workers AI model and prints a table:
+
+```sh
+# REST transport, with Wrangler's OAuth login (the cf CLI transport times out after ~30 s)
+CF_ACCOUNT_ID=… pnpm --filter @app/tour exec tsx scripts/calibrate-judge.ts [case-id …]
+```
 
 ## Tours
 

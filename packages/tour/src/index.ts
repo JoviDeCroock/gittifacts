@@ -32,8 +32,21 @@ export {
   type JudgeInput,
   type JudgeResult,
   judgmentId,
+  type ParsedJudgment,
   parseJudgments,
 } from "./judge.js";
+export {
+  applyCitationRule,
+  type CheckedCitation,
+  type CitationCheck,
+  type CitationContext,
+  type CitationProblem,
+  checkCitation,
+  formatCitation,
+  planLines,
+  quoteInPlan,
+  type RuledAnswer,
+} from "./judge-citations.js";
 export {
   AiGatewayClient,
   type AiGatewayClientOptions,
@@ -80,6 +93,7 @@ export {
 export {
   buildJudgeUserPrompt,
   buildTourUserPrompt,
+  JUDGE_PROMPT_VERSION,
   JUDGE_SYSTEM_PROMPT,
   type JudgePromptInput,
   PROMPT_VERSION,
@@ -100,9 +114,13 @@ export {
   JUDGE_QUESTIONS,
   type JudgeQuestion,
   MODEL_STOP_KINDS,
+  ModelCitation,
   ModelJudgeOutput,
+  ModelJudgment,
   ModelTour,
   ModelTourStop,
+  PLAN_BASES,
+  PlanBasis,
   TOUR_JSON_SCHEMA,
   toModelJsonSchema,
 } from "./schema.js";

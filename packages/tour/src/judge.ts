@@ -4,6 +4,10 @@
  *
  * Anything that goes wrong becomes "unsure" (or status "error" when the call itself failed), never
  * "no-concern". One call answers every question; there is no regeneration.
+ *
+ * A "concern" must cite a hunk the model was shown and the plan sentence it contradicts or goes
+ * beyond (or say the plan does not mention it); without a valid citation it is downgraded to
+ * "unsure" (judge-citations.ts). That is the only way an answer is ever lowered.
  */
 import type { ChangeDiff, Plan } from "@app/domain";
 import { LlmJudgment } from "@app/evidence";
@@ -16,15 +20,16 @@ import {
   type ReviewerBudget,
 } from "./budget.js";
 import { renderDiff } from "./diff.js";
+import { applyCitationRule } from "./judge-citations.js";
 import { type LlmClient, LlmError, type LlmResponse, parseJsonLoose } from "./llm.js";
-import { buildJudgeUserPrompt, JUDGE_SYSTEM_PROMPT, PROMPT_VERSION } from "./prompt.js";
+import { buildJudgeUserPrompt, JUDGE_PROMPT_VERSION, JUDGE_SYSTEM_PROMPT } from "./prompt.js";
 import { hasRisk, rankHunks } from "./rank.js";
 import {
   JUDGE_JSON_SCHEMA,
   JUDGE_QUESTIONS,
   type JudgeOutcome,
   type JudgeQuestion,
-  ModelJudgment,
+  LenientModelJudgment,
 } from "./schema.js";
 
 export interface JudgeInput {
@@ -91,15 +96,23 @@ function item(
   });
 }
 
+/** One parsed answer. `citations` are raw: the citation rule checks them against diff and plan. */
+export interface ParsedJudgment {
+  outcome: JudgeOutcome;
+  rationale: string;
+  citations: unknown[];
+}
+
 /**
  * Read the model's answer leniently: valid entries are kept even when others are malformed, the
- * most severe answer wins for a repeated question, and unanswered questions become "unsure".
+ * most severe answer wins for a repeated question (repeated concerns pool their citations), and
+ * unanswered questions become "unsure".
  */
 export function parseJudgments(
   response: Pick<LlmResponse, "text" | "json">,
   questions: readonly JudgeQuestion[],
-): Map<JudgeQuestion, { outcome: JudgeOutcome; rationale: string }> {
-  const out = new Map<JudgeQuestion, { outcome: JudgeOutcome; rationale: string }>();
+): Map<JudgeQuestion, ParsedJudgment> {
+  const out = new Map<JudgeQuestion, ParsedJudgment>();
   const json = response.json ?? parseJsonLoose(response.text);
   const raw =
     json !== null &&
@@ -111,11 +124,18 @@ export function parseJudgments(
         ? (json as unknown[])
         : [];
   for (const entry of raw) {
-    const r = ModelJudgment.safeParse(entry);
+    const r = LenientModelJudgment.safeParse(entry);
     if (!r.success || !questions.includes(r.data.question)) continue;
+    const citations = r.data.citations ?? [];
     const prev = out.get(r.data.question);
     if (prev === undefined || SEVERITY[r.data.outcome] > SEVERITY[prev.outcome]) {
-      out.set(r.data.question, { outcome: r.data.outcome, rationale: r.data.rationale });
+      out.set(r.data.question, {
+        outcome: r.data.outcome,
+        rationale: r.data.rationale,
+        citations: [...citations],
+      });
+    } else if (prev.outcome === "concern" && r.data.outcome === "concern") {
+      prev.citations.push(...citations);
     }
   }
   for (const q of questions) {
@@ -126,6 +146,7 @@ export function parseJudgments(
           json === undefined
             ? `The model's reply was not parseable JSON, so ${q} is unknown.`
             : `The model gave no valid answer for ${q}.`,
+        citations: [],
       });
     }
   }
@@ -223,7 +244,7 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
       change_id: input.budget.changeId,
       purpose: "judge",
       head: input.diff.headSha.slice(0, 12),
-      prompt: PROMPT_VERSION,
+      prompt: JUDGE_PROMPT_VERSION,
     },
   };
   const estimate = estimateCallCostUsd(
@@ -260,17 +281,28 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
 
   const answers = parseJudgments(res, asked);
   const truncated = res.stopReason === "length" || res.stopReason === "max_tokens";
+  // Hunks the model could read (in full or cut short); omitted and lockfile hunks are not citable.
+  const omitted = new Set(rendered.omitted.map((o) => `${o.path}\u0000${o.hunkIndex}`));
+  const citationContext = {
+    diff: reviewDiff,
+    plan: input.plan,
+    shown: (path: string, index: number) => !omitted.has(`${path}\u0000${index}`),
+  };
   const items = [
     ...fixed.map((f) => ({ ...f, model: res.model })),
     ...asked.map((q) => {
-      const a = answers.get(q)!;
+      const a = applyCitationRule(answers.get(q)!, citationContext);
+      const notes = [
+        ...(truncated ? ["The model's reply hit the output limit."] : []),
+        ...(a.note === undefined ? [] : [a.note]),
+      ];
       return item(
         q,
         a.outcome,
         a.rationale,
         res.model,
         "ok",
-        truncated ? "The model's reply hit the output limit." : undefined,
+        notes.length > 0 ? notes.join(" ") : undefined,
       );
     }),
   ];

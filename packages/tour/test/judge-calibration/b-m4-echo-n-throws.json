@@ -1,0 +1,300 @@
+{
+  "id": "m4-echo-n-throws",
+  "title": "M4: ?n= echo that also throws for 2 in 5 requests behind the change flag",
+  "expected": "hidden-behavior",
+  "why": "The plan asks to echo n; the diff also throws for n % 5 < 2 while the flag is on (hidden failure mode).",
+  "plan": {
+    "title": "Echo the ?n= query parameter on GET /",
+    "intent": "Load-test traffic sends GET /?n=<counter>. Echo n back in the response body so requests can be correlated in logs.",
+    "acceptanceCriteria": [
+      "GET /?n=7 returns { now, n: 7 }",
+      "GET / without n returns { now } exactly as before",
+      "A test covers the echo"
+    ],
+    "outOfScope": ["Any other change to the / route"],
+    "scopePaths": ["src/app.ts", "test/app.test.ts"],
+    "riskDeclarations": [],
+    "affectedRoutes": []
+  },
+  "concernAt": [
+    {
+      "file": "src/app.ts",
+      "hunk": 2
+    }
+  ],
+  "diff": {
+    "baseSha": "1111111111111111111111111111111111111111",
+    "headSha": "2222222222222222222222222222222222222222",
+    "files": [
+      {
+        "path": "src/app.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 10,
+        "deletions": 1,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -3,6 +3,7 @@",
+            "oldStart": 3,
+            "oldLines": 6,
+            "newStart": 3,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 3,
+                "newNo": 3,
+                "text": " * `routes`."
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 4,
+                "newNo": 4,
+                "text": " */"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 5,
+                "newNo": 5,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 6,
+                "text": "import { isChangeEnabled } from \"./flags.js\";"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 6,
+                "newNo": 7,
+                "text": "import type { Env } from \"./index.js\";"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 7,
+                "newNo": 8,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 8,
+                "newNo": 9,
+                "text": "type Handler = (request: Request, url: URL, env: Env) => Response | Promise<Response>;"
+              }
+            ]
+          },
+          {
+            "header": "@@ -16,7 +17,15 @@",
+            "oldStart": 16,
+            "oldLines": 7,
+            "newStart": 17,
+            "newLines": 15,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 16,
+                "newNo": 17,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 17,
+                "newNo": 18,
+                "text": "/** GET routes by exact path. */"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 18,
+                "newNo": 19,
+                "text": "export const routes: Record<string, Handler> = {"
+              },
+              {
+                "kind": "del",
+                "oldNo": 19,
+                "newNo": null,
+                "text": "  \"/\": () => json({ now: new Date().toISOString() }),"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 20,
+                "text": "  \"/\": async (_request, url, env) => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 21,
+                "text": "    const raw = url.searchParams.get(\"n\");"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 22,
+                "text": "    if (raw === null) return json({ now: new Date().toISOString() });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 23,
+                "text": "    const n = Number(raw);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 24,
+                "text": "    if (await isChangeEnabled(env, \"chg_m4\")) {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 25,
+                "text": "      if (Number.isFinite(n) && n % 5 < 2) throw new Error(`m4 regression for n=${n}`);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 26,
+                "text": "    }"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 27,
+                "text": "    return json({ now: new Date().toISOString(), n });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 28,
+                "text": "  },"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 20,
+                "newNo": 29,
+                "text": "  \"/health\": () => json({ ok: true }),"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 21,
+                "newNo": 30,
+                "text": "};"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 22,
+                "newNo": 31,
+                "text": ""
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      },
+      {
+        "path": "test/app.test.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 7,
+        "deletions": 0,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -17,6 +17,13 @@",
+            "oldStart": 17,
+            "oldLines": 6,
+            "newStart": 17,
+            "newLines": 13,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 17,
+                "newNo": 17,
+                "text": "  });"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 18,
+                "newNo": 18,
+                "text": "});"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 19,
+                "newNo": 19,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 20,
+                "text": "describe(\"GET /?n=\", () => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 21,
+                "text": "  it(\"echoes n\", async () => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 22,
+                "text": "    const res = await get(\"/?n=7\");"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 23,
+                "text": "    expect(((await res.json()) as { n: number }).n).toBe(7);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 24,
+                "text": "  });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 25,
+                "text": "});"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 26,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 20,
+                "newNo": 27,
+                "text": "describe(\"GET /health\", () => {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 21,
+                "newNo": 28,
+                "text": "  it(\"returns ok\", async () => {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 22,
+                "newNo": 29,
+                "text": "    const res = await get(\"/health\");"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      }
+    ],
+    "additions": 17,
+    "deletions": 1
+  }
+}

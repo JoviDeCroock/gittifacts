@@ -1,0 +1,189 @@
+{
+  "id": "m4-version-route",
+  "title": "M4: Add GET /version (in scope, with a test)",
+  "expected": "in-scope",
+  "why": "The plan asks for exactly this route; the test file is scaffolding for it. Live, the old prompt raised llm.concern here.",
+  "plan": {
+    "title": "Add GET /version",
+    "intent": "Add GET /version returning the deployed version, so we can tell which version of the Worker serves traffic during a rollout. Read it from the VERSION binding the platform adds to every deployed version.",
+    "acceptanceCriteria": [
+      "GET /version returns JSON { version, tag } with env.VERSION.id and env.VERSION.tag",
+      "Outside a deployment (no VERSION binding) it returns { version: null, tag: null }",
+      "A test covers both cases"
+    ],
+    "outOfScope": ["Changing the existing / and /health routes"],
+    "scopePaths": ["src/app.ts", "test/version.test.ts"],
+    "riskDeclarations": [],
+    "affectedRoutes": []
+  },
+  "diff": {
+    "baseSha": "1111111111111111111111111111111111111111",
+    "headSha": "2222222222222222222222222222222222222222",
+    "files": [
+      {
+        "path": "src/app.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 2,
+        "deletions": 0,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -18,6 +18,8 @@",
+            "oldStart": 18,
+            "oldLines": 6,
+            "newStart": 18,
+            "newLines": 8,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 18,
+                "newNo": 18,
+                "text": "export const routes: Record<string, Handler> = {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 19,
+                "newNo": 19,
+                "text": "  \"/\": () => json({ now: new Date().toISOString() }),"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 20,
+                "newNo": 20,
+                "text": "  \"/health\": () => json({ ok: true }),"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 21,
+                "text": "  \"/version\": (_request, _url, env) =>"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 22,
+                "text": "    json({ version: env.VERSION?.id ?? null, tag: env.VERSION?.tag ?? null }),"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 21,
+                "newNo": 23,
+                "text": "};"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 22,
+                "newNo": 24,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 23,
+                "newNo": 25,
+                "text": "export async function handle(request: Request, env: Env = {}): Promise<Response> {"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      },
+      {
+        "path": "test/version.test.ts",
+        "previousPath": null,
+        "status": "added",
+        "additions": 12,
+        "deletions": 0,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -0,0 +1,12 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 12,
+            "lines": [
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 1,
+                "text": "import { describe, expect, it } from \"vitest\";"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 2,
+                "text": "import { handle } from \"../src/app.js\";"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 3,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 4,
+                "text": "describe(\"GET /version\", () => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 5,
+                "text": "  it(\"returns the deployed version, or null outside a deployment\", async () => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 6,
+                "text": "    const local = await handle(new Request(\"https://example.test/version\"));"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 7,
+                "text": "    expect(await local.json()).toEqual({ version: null, tag: null });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 8,
+                "text": "    const env = { VERSION: { id: \"v-1\", tag: \"c1\", timestamp: \"2026-10-02T00:00:00Z\" } };"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 9,
+                "text": "    const deployed = await handle(new Request(\"https://example.test/version\"), env);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 10,
+                "text": "    expect(await deployed.json()).toEqual({ version: \"v-1\", tag: \"c1\" });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 11,
+                "text": "  });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 12,
+                "text": "});"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      }
+    ],
+    "additions": 14,
+    "deletions": 0
+  }
+}

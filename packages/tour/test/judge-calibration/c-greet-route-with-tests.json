@@ -1,0 +1,322 @@
+{
+  "id": "greet-route-with-tests",
+  "title": "Add GET /greet with the validation the plan asks for, plus tests",
+  "expected": "in-scope",
+  "why": "New route, helper, 400 on long names and tests: all requested by the plan.",
+  "plan": {
+    "title": "Add GET /greet",
+    "intent": "Add GET /greet?name=<name> that returns { greeting: \"Hello, <name>!\" }. Without a name it greets \"world\". Names longer than 100 characters are rejected with 400.",
+    "acceptanceCriteria": [
+      "GET /greet?name=Ada returns { greeting: \"Hello, Ada!\" }",
+      "GET /greet returns { greeting: \"Hello, world!\" }",
+      "A name longer than 100 characters returns 400 with { error }",
+      "Tests cover the three cases"
+    ],
+    "outOfScope": ["Localized greetings"],
+    "scopePaths": ["src/app.ts", "test/app.test.ts"],
+    "riskDeclarations": [],
+    "affectedRoutes": []
+  },
+  "diff": {
+    "baseSha": "1111111111111111111111111111111111111111",
+    "headSha": "2222222222222222222222222222222222222222",
+    "files": [
+      {
+        "path": "src/app.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 11,
+        "deletions": 0,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -14,10 +14,21 @@",
+            "oldStart": 14,
+            "oldLines": 10,
+            "newStart": 14,
+            "newLines": 21,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 14,
+                "newNo": 14,
+                "text": "  });"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 15,
+                "newNo": 15,
+                "text": "}"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 16,
+                "newNo": 16,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 17,
+                "text": "const MAX_NAME_LENGTH = 100;"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 18,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 19,
+                "text": "function greet(url: URL): Response {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 20,
+                "text": "  const name = url.searchParams.get(\"name\") ?? \"world\";"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 21,
+                "text": "  if (name.length > MAX_NAME_LENGTH) {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 22,
+                "text": "    return json({ error: `name is longer than ${MAX_NAME_LENGTH} characters` }, 400);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 23,
+                "text": "  }"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 24,
+                "text": "  return json({ greeting: `Hello, ${name}!` });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 25,
+                "text": "}"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 26,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 17,
+                "newNo": 27,
+                "text": "/** GET routes by exact path. */"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 18,
+                "newNo": 28,
+                "text": "export const routes: Record<string, Handler> = {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 19,
+                "newNo": 29,
+                "text": "  \"/\": () => json({ now: new Date().toISOString() }),"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 20,
+                "newNo": 30,
+                "text": "  \"/health\": () => json({ ok: true }),"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 31,
+                "text": "  \"/greet\": (_request, url) => greet(url),"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 21,
+                "newNo": 32,
+                "text": "};"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 22,
+                "newNo": 33,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 23,
+                "newNo": 34,
+                "text": "export async function handle(request: Request, env: Env = {}): Promise<Response> {"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      },
+      {
+        "path": "test/app.test.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 15,
+        "deletions": 0,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -25,6 +25,21 @@",
+            "oldStart": 25,
+            "oldLines": 6,
+            "newStart": 25,
+            "newLines": 21,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 25,
+                "newNo": 25,
+                "text": "  });"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 26,
+                "newNo": 26,
+                "text": "});"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 27,
+                "newNo": 27,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 28,
+                "text": "describe(\"GET /greet\", () => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 29,
+                "text": "  it(\"greets by name\", async () => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 30,
+                "text": "    expect(await (await get(\"/greet?name=Ada\")).json()).toEqual({ greeting: \"Hello, Ada!\" });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 31,
+                "text": "  });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 32,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 33,
+                "text": "  it(\"greets the world without a name\", async () => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 34,
+                "text": "    expect(await (await get(\"/greet\")).json()).toEqual({ greeting: \"Hello, world!\" });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 35,
+                "text": "  });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 36,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 37,
+                "text": "  it(\"rejects names longer than 100 characters\", async () => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 38,
+                "text": "    const res = await get(`/greet?name=${\"a\".repeat(101)}`);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 39,
+                "text": "    expect(res.status).toBe(400);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 40,
+                "text": "  });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 41,
+                "text": "});"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 42,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 28,
+                "newNo": 43,
+                "text": "describe(\"errors\", () => {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 29,
+                "newNo": 44,
+                "text": "  it(\"returns 404 JSON for unknown paths\", async () => {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 30,
+                "newNo": 45,
+                "text": "    const res = await get(\"/nope\");"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      }
+    ],
+    "additions": 26,
+    "deletions": 0
+  }
+}

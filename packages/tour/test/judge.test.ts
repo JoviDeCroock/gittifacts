@@ -2,7 +2,7 @@ import { LlmJudgment } from "@app/evidence";
 import { describe, expect, it } from "vitest";
 import { judgmentId, parseJudgments } from "../src/judge.js";
 import { FakeLlmClient, LlmError } from "../src/llm.js";
-import { PROMPT_VERSION } from "../src/prompt.js";
+import { JUDGE_PROMPT_VERSION } from "../src/prompt.js";
 import { createReviewer } from "../src/tour.js";
 import { breakingApiDiff, CHANGE_ID, diffOf, file, hunk, plan } from "./support/scenario.js";
 
@@ -31,16 +31,27 @@ describe("reviewer.judge", () => {
                 question: "scope-drift",
                 outcome: "no-concern",
                 rationale: "All four files are in scopePaths.",
+                citations: [],
               },
               {
                 question: "plan-conformance",
                 outcome: "no-concern",
                 rationale: "Both styles and README are done.",
+                citations: [],
               },
               {
                 question: "hidden-behavior-change",
                 outcome: "concern",
                 rationale: "src/format.ts:13 makes options required.",
+                citations: [
+                  {
+                    file: "src/format.ts",
+                    hunk: 1,
+                    behavior: "Drops the zero-digit early return.",
+                    planBasis: "not-in-plan",
+                    planQuote: null,
+                  },
+                ],
               },
             ],
           },
@@ -69,7 +80,7 @@ describe("reviewer.judge", () => {
     expect(req.metadata).toMatchObject({
       change_id: CHANGE_ID,
       purpose: "judge",
-      prompt: PROMPT_VERSION,
+      prompt: JUDGE_PROMPT_VERSION,
     });
     expect(req.messages[0]!.content).toContain("Questions (answer each exactly once)");
   });
@@ -95,6 +106,15 @@ describe("reviewer.judge", () => {
                 question: "scope-drift",
                 outcome: "concern",
                 rationale: "README rewrite goes beyond the examples.",
+                citations: [
+                  {
+                    file: "README.md",
+                    hunk: 1,
+                    behavior: "Rewrites the whole README.",
+                    planBasis: "goes-beyond",
+                    planQuote: "README examples use the new signature",
+                  },
+                ],
               },
               { question: "plan-conformance", outcome: "maybe", rationale: "?" },
               { question: "made-up", outcome: "concern", rationale: "x" },
@@ -106,7 +126,9 @@ describe("reviewer.judge", () => {
     const q = byQuestion(result.items);
     expect(q["scope-drift"]).toMatchObject({
       outcome: "concern",
-      rationale: "README rewrite goes beyond the examples.",
+      rationale: expect.stringMatching(
+        /^README rewrite goes beyond the examples\. Cited: README\.md hunk 1/,
+      ),
     });
     expect(q["plan-conformance"]).toMatchObject({ outcome: "unsure" });
     expect(q["hidden-behavior-change"]).toMatchObject({ outcome: "unsure" });
@@ -193,5 +215,56 @@ describe("parseJudgments", () => {
       ["scope-drift"],
     );
     expect(out.get("scope-drift")?.outcome).toBe("concern");
+  });
+});
+
+describe("parseJudgments with citations", () => {
+  it("reads unreadable citations as none, keeping the outcome", () => {
+    const out = parseJudgments(
+      {
+        json: {
+          judgments: [
+            { question: "scope-drift", outcome: "no-concern", rationale: "x", citations: null },
+            {
+              question: "plan-conformance",
+              outcome: "concern",
+              rationale: "y",
+              citations: "hunk 2",
+            },
+          ],
+        },
+        text: "",
+      },
+      ["scope-drift", "plan-conformance"],
+    );
+    expect(out.get("scope-drift")).toEqual({
+      outcome: "no-concern",
+      rationale: "x",
+      citations: [],
+    });
+    expect(out.get("plan-conformance")).toEqual({
+      outcome: "concern",
+      rationale: "y",
+      citations: [],
+    });
+  });
+
+  it("pools the citations of a repeated concern", () => {
+    const c = (hunk: number) => ({ file: "a.ts", hunk, planBasis: "not-in-plan", planQuote: null });
+    const out = parseJudgments(
+      {
+        json: [
+          { question: "scope-drift", outcome: "concern", rationale: "first", citations: [c(1)] },
+          { question: "scope-drift", outcome: "concern", rationale: "second", citations: [c(2)] },
+        ],
+        text: "",
+      },
+      ["scope-drift"],
+    );
+    expect(out.get("scope-drift")).toEqual({
+      outcome: "concern",
+      rationale: "first",
+      citations: [c(1), c(2)],
+    });
   });
 });

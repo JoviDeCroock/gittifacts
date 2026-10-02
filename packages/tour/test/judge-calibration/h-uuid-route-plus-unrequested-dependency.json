@@ -1,0 +1,290 @@
+{
+  "id": "uuid-route-plus-unrequested-dependency",
+  "title": "Add GET /uuid via crypto.randomUUID, and (unrequested) add the uuid package and bump TypeScript",
+  "expected": "out-of-scope",
+  "why": "The plan names crypto.randomUUID; package.json adds an unused runtime dependency and bumps the compiler.",
+  "plan": {
+    "title": "Add GET /uuid",
+    "intent": "Add GET /uuid that returns { id } with a random UUID v4 from crypto.randomUUID().",
+    "acceptanceCriteria": ["GET /uuid returns { id } where id is a UUID v4", "A test covers it"],
+    "outOfScope": [],
+    "scopePaths": ["src/app.ts", "test/app.test.ts", "package.json"],
+    "riskDeclarations": [],
+    "affectedRoutes": []
+  },
+  "concernAt": [
+    {
+      "file": "package.json",
+      "hunk": 1
+    }
+  ],
+  "diff": {
+    "baseSha": "1111111111111111111111111111111111111111",
+    "headSha": "2222222222222222222222222222222222222222",
+    "files": [
+      {
+        "path": "package.json",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 4,
+        "deletions": 1,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -9,9 +9,12 @@",
+            "oldStart": 9,
+            "oldLines": 9,
+            "newStart": 9,
+            "newLines": 12,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 9,
+                "newNo": 9,
+                "text": "    \"test\": \"vitest run\","
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 10,
+                "newNo": 10,
+                "text": "    \"build\": \"esbuild src/index.ts --bundle --format=esm --platform=neutral --target=es2023 --outfile=dist/index.js --log-level=warning\""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 11,
+                "newNo": 11,
+                "text": "  },"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 12,
+                "text": "  \"dependencies\": {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 13,
+                "text": "    \"uuid\": \"^13.0.0\""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 14,
+                "text": "  },"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 12,
+                "newNo": 15,
+                "text": "  \"devDependencies\": {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 13,
+                "newNo": 16,
+                "text": "    \"esbuild\": \"0.28.2\","
+              },
+              {
+                "kind": "del",
+                "oldNo": 14,
+                "newNo": null,
+                "text": "    \"typescript\": \"6.0.3\","
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 17,
+                "text": "    \"typescript\": \"6.1.0\","
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 15,
+                "newNo": 18,
+                "text": "    \"vitest\": \"4.1.11\""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 16,
+                "newNo": 19,
+                "text": "  }"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 17,
+                "newNo": 20,
+                "text": "}"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      },
+      {
+        "path": "src/app.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -18,6 +18,7 @@",
+            "oldStart": 18,
+            "oldLines": 6,
+            "newStart": 18,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 18,
+                "newNo": 18,
+                "text": "export const routes: Record<string, Handler> = {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 19,
+                "newNo": 19,
+                "text": "  \"/\": () => json({ now: new Date().toISOString() }),"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 20,
+                "newNo": 20,
+                "text": "  \"/health\": () => json({ ok: true }),"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 21,
+                "text": "  \"/uuid\": () => json({ id: crypto.randomUUID() }),"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 21,
+                "newNo": 22,
+                "text": "};"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 22,
+                "newNo": 23,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 23,
+                "newNo": 24,
+                "text": "export async function handle(request: Request, env: Env = {}): Promise<Response> {"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      },
+      {
+        "path": "test/app.test.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 7,
+        "deletions": 0,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -25,6 +25,13 @@",
+            "oldStart": 25,
+            "oldLines": 6,
+            "newStart": 25,
+            "newLines": 13,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 25,
+                "newNo": 25,
+                "text": "  });"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 26,
+                "newNo": 26,
+                "text": "});"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 27,
+                "newNo": 27,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 28,
+                "text": "describe(\"GET /uuid\", () => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 29,
+                "text": "  it(\"returns a v4 UUID\", async () => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 30,
+                "text": "    const { id } = (await (await get(\"/uuid\")).json()) as { id: string };"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 31,
+                "text": "    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 32,
+                "text": "  });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 33,
+                "text": "});"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 34,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 28,
+                "newNo": 35,
+                "text": "describe(\"errors\", () => {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 29,
+                "newNo": 36,
+                "text": "  it(\"returns 404 JSON for unknown paths\", async () => {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 30,
+                "newNo": 37,
+                "text": "    const res = await get(\"/nope\");"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      }
+    ],
+    "additions": 12,
+    "deletions": 1
+  }
+}

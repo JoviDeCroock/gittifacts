@@ -138,6 +138,15 @@ describe("judge × classifier", () => {
               question: "hidden-behavior-change",
               outcome: "concern",
               rationale: "src/format.ts:1 changes error handling.",
+              citations: [
+                {
+                  file: "src/format.ts",
+                  hunk: 1,
+                  behavior: "Swaps requireCurrency for toCurrencyCode, which does not throw.",
+                  planBasis: "not-in-plan",
+                  planQuote: null,
+                },
+              ],
             },
           ],
         },
@@ -151,6 +160,36 @@ describe("judge × classifier", () => {
     });
     expect(result.computedLane).toBe(2);
     expect(result.reasons.map((r) => r.code)).toContain("llm.concern");
+  });
+
+  it("an uncited concern is downgraded to unsure: Lane 1, never Lane 0", async () => {
+    const input = planless();
+    const client = new FakeLlmClient([
+      {
+        json: {
+          judgments: [
+            {
+              question: "hidden-behavior-change",
+              outcome: "concern",
+              rationale: "Something feels off.",
+              citations: [],
+            },
+          ],
+        },
+      },
+    ]);
+    const judged = await createReviewer(client).judge({ plan: null, diff, budget });
+    const result = run({
+      ...input,
+      evidence: { items: [...(input.evidence?.items ?? []), ...judged.items] },
+    });
+    expect(result.computedLane).toBe(1);
+    const codes = result.reasons.map((r) => r.code);
+    expect(codes).toContain("llm.unsure");
+    expect(codes).not.toContain("llm.concern");
+    expect(result.reasons.find((r) => r.code === "llm.unsure")?.message).toMatch(
+      /Concern downgraded to unsure: no hunk citation/,
+    );
   });
 
   it("garbage from the judge raises a planned change to at least Lane 1 (unsure)", async () => {

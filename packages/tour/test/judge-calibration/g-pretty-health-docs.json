@@ -1,0 +1,358 @@
+{
+  "id": "pretty-health-docs",
+  "title": "Add ?pretty=1 to GET /health, documented in the README, with a test",
+  "expected": "in-scope",
+  "why": "Code, README line and test are exactly what the plan asks for; json() gains an optional parameter that defaults to the old output.",
+  "plan": {
+    "title": "Pretty-printed /health",
+    "intent": "Add a ?pretty=1 option to GET /health that returns the same JSON pretty-printed with two-space indentation, for humans reading it in a browser. Document the option in the README.",
+    "acceptanceCriteria": [
+      "GET /health?pretty=1 returns the same body, indented with two spaces",
+      "GET /health without the option is unchanged",
+      "The README lists the option",
+      "A test covers it"
+    ],
+    "outOfScope": ["Pretty-printing other routes"],
+    "scopePaths": ["src/app.ts", "test/app.test.ts", "README.md"],
+    "riskDeclarations": [],
+    "affectedRoutes": []
+  },
+  "diff": {
+    "baseSha": "1111111111111111111111111111111111111111",
+    "headSha": "2222222222222222222222222222222222222222",
+    "files": [
+      {
+        "path": "README.md",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -3,7 +3,7 @@",
+            "oldStart": 3,
+            "oldLines": 7,
+            "newStart": 3,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 3,
+                "newNo": 3,
+                "text": "A JSON API on Cloudflare Workers, from the gittifacts `workers-api` template."
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 4,
+                "newNo": 4,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 5,
+                "newNo": 5,
+                "text": "- `GET /` → `{ \"now\": \"<ISO time>\" }`"
+              },
+              {
+                "kind": "del",
+                "oldNo": 6,
+                "newNo": null,
+                "text": "- `GET /health` → `{ \"ok\": true }`"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 6,
+                "text": "- `GET /health` → `{ \"ok\": true }` (add `?pretty=1` for indented JSON)"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 7,
+                "newNo": 7,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 8,
+                "newNo": 8,
+                "text": "Routes live in the `routes` table in `src/app.ts`; `src/index.ts` is the Worker entry. Tests are in `test/`."
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 9,
+                "newNo": 9,
+                "text": ""
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      },
+      {
+        "path": "src/app.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 9,
+        "deletions": 3,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -7,8 +7,13 @@",
+            "oldStart": 7,
+            "oldLines": 8,
+            "newStart": 7,
+            "newLines": 13,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 7,
+                "newNo": 7,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 8,
+                "newNo": 8,
+                "text": "type Handler = (request: Request, url: URL, env: Env) => Response | Promise<Response>;"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 9,
+                "newNo": 9,
+                "text": ""
+              },
+              {
+                "kind": "del",
+                "oldNo": 10,
+                "newNo": null,
+                "text": "export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {"
+              },
+              {
+                "kind": "del",
+                "oldNo": 11,
+                "newNo": null,
+                "text": "  return new Response(JSON.stringify(body), {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 10,
+                "text": "export function json("
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 11,
+                "text": "  body: unknown,"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 12,
+                "text": "  status = 200,"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 13,
+                "text": "  headers: Record<string, string> = {},"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 14,
+                "text": "  space?: number,"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 15,
+                "text": "): Response {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 16,
+                "text": "  return new Response(JSON.stringify(body, null, space), {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 12,
+                "newNo": 17,
+                "text": "    status,"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 13,
+                "newNo": 18,
+                "text": "    headers: { \"content-type\": \"application/json; charset=utf-8\", ...headers },"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 14,
+                "newNo": 19,
+                "text": "  });"
+              }
+            ]
+          },
+          {
+            "header": "@@ -17,7 +22,8 @@",
+            "oldStart": 17,
+            "oldLines": 7,
+            "newStart": 22,
+            "newLines": 8,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 17,
+                "newNo": 22,
+                "text": "/** GET routes by exact path. */"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 18,
+                "newNo": 23,
+                "text": "export const routes: Record<string, Handler> = {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 19,
+                "newNo": 24,
+                "text": "  \"/\": () => json({ now: new Date().toISOString() }),"
+              },
+              {
+                "kind": "del",
+                "oldNo": 20,
+                "newNo": null,
+                "text": "  \"/health\": () => json({ ok: true }),"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 25,
+                "text": "  \"/health\": (_request, url) =>"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 26,
+                "text": "    json({ ok: true }, 200, {}, url.searchParams.get(\"pretty\") === \"1\" ? 2 : undefined),"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 21,
+                "newNo": 27,
+                "text": "};"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 22,
+                "newNo": 28,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 23,
+                "newNo": 29,
+                "text": "export async function handle(request: Request, env: Env = {}): Promise<Response> {"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      },
+      {
+        "path": "test/app.test.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 5,
+        "deletions": 0,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -23,6 +23,11 @@",
+            "oldStart": 23,
+            "oldLines": 6,
+            "newStart": 23,
+            "newLines": 11,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 23,
+                "newNo": 23,
+                "text": "    expect(res.status).toBe(200);"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 24,
+                "newNo": 24,
+                "text": "    expect(await res.json()).toEqual({ ok: true });"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 25,
+                "newNo": 25,
+                "text": "  });"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 26,
+                "text": ""
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 27,
+                "text": "  it(\"pretty-prints with ?pretty=1\", async () => {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 28,
+                "text": "    const res = await get(\"/health?pretty=1\");"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 29,
+                "text": "    expect(await res.text()).toBe('{\\n  \"ok\": true\\n}');"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 30,
+                "text": "  });"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 26,
+                "newNo": 31,
+                "text": "});"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 27,
+                "newNo": 32,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 28,
+                "newNo": 33,
+                "text": "describe(\"errors\", () => {"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      }
+    ],
+    "additions": 15,
+    "deletions": 4
+  }
+}

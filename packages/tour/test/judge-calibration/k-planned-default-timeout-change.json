@@ -1,0 +1,101 @@
+{
+  "id": "planned-default-timeout-change",
+  "title": "Raise the upstream timeout default from 5 s to 10 s (as planned)",
+  "expected": "in-scope",
+  "why": "The plan asks for exactly this default change.",
+  "plan": {
+    "title": "Raise fetchUpstream's default timeout to 10 s",
+    "intent": "The payments upstream regularly takes 6–8 s and our 5 s default times out. Raise the default timeout of fetchUpstream from 5 s to 10 s.",
+    "acceptanceCriteria": [
+      "fetchUpstream's default timeoutMs is 10_000",
+      "The https-only check and error handling are unchanged"
+    ],
+    "outOfScope": ["Retries"],
+    "scopePaths": ["src/upstream.ts"],
+    "riskDeclarations": [],
+    "affectedRoutes": []
+  },
+  "diff": {
+    "baseSha": "1111111111111111111111111111111111111111",
+    "headSha": "2222222222222222222222222222222222222222",
+    "files": [
+      {
+        "path": "src/upstream.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 2,
+        "deletions": 2,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -1,7 +1,7 @@",
+            "oldStart": 1,
+            "oldLines": 7,
+            "newStart": 1,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 1,
+                "newNo": 1,
+                "text": "/**"
+              },
+              {
+                "kind": "del",
+                "oldNo": 2,
+                "newNo": null,
+                "text": " * Fetch JSON from an upstream service, with a timeout. Only https URLs are allowed."
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 2,
+                "text": " * Fetch JSON from an upstream service, with a timeout (10 s by default). Only https URLs are allowed."
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 3,
+                "newNo": 3,
+                "text": " */"
+              },
+              {
+                "kind": "del",
+                "oldNo": 4,
+                "newNo": null,
+                "text": "export async function fetchUpstream(url: string, timeoutMs = 5_000): Promise<unknown> {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 4,
+                "text": "export async function fetchUpstream(url: string, timeoutMs = 10_000): Promise<unknown> {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 5,
+                "newNo": 5,
+                "text": "  if (!url.startsWith(\"https://\")) {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 6,
+                "newNo": 6,
+                "text": "    throw new Error(`refusing a non-https upstream: ${url}`);"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 7,
+                "newNo": 7,
+                "text": "  }"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      }
+    ],
+    "additions": 2,
+    "deletions": 2
+  }
+}

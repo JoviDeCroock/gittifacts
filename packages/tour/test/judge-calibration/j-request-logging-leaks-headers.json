@@ -1,0 +1,113 @@
+{
+  "id": "request-logging-leaks-headers",
+  "title": "Request logging that also logs all request headers",
+  "expected": "hidden-behavior",
+  "why": "The plan names method, path and status; the diff also logs every header, including Authorization and Cookie.",
+  "plan": {
+    "title": "Log every request",
+    "intent": "Write one log line per request with its method, path and response status (console.log, JSON), so Workers Logs show traffic per route.",
+    "acceptanceCriteria": [
+      "Every request logs one JSON line with method, path and status",
+      "Responses are unchanged"
+    ],
+    "outOfScope": ["Logging request or response bodies"],
+    "scopePaths": ["src/index.ts"],
+    "riskDeclarations": [],
+    "affectedRoutes": []
+  },
+  "concernAt": [
+    {
+      "file": "src/index.ts",
+      "hunk": 1
+    }
+  ],
+  "diff": {
+    "baseSha": "1111111111111111111111111111111111111111",
+    "headSha": "2222222222222222222222222222222222222222",
+    "files": [
+      {
+        "path": "src/index.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 4,
+        "deletions": 1,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -15,6 +15,9 @@",
+            "oldStart": 15,
+            "oldLines": 6,
+            "newStart": 15,
+            "newLines": 9,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 15,
+                "newNo": 15,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 16,
+                "newNo": 16,
+                "text": "export default {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 17,
+                "newNo": 17,
+                "text": "  async fetch(request: Request, env: Env): Promise<Response> {"
+              },
+              {
+                "kind": "del",
+                "oldNo": 18,
+                "newNo": null,
+                "text": "    return handle(request, env);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 18,
+                "text": "    const response = await handle(request, env);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 19,
+                "text": "    const path = new URL(request.url).pathname;"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 20,
+                "text": "    console.log(JSON.stringify({ method: request.method, path, status: response.status, headers: Object.fromEntries(request.headers) }));"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 21,
+                "text": "    return response;"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 19,
+                "newNo": 22,
+                "text": "  },"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 20,
+                "newNo": 23,
+                "text": "};"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      }
+    ],
+    "additions": 4,
+    "deletions": 1
+  }
+}

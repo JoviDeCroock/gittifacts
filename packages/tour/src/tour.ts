@@ -53,7 +53,11 @@ export interface ReviewerOptions {
   /** Principal recorded in `Tour.generatedBy` (the reviewer agent, never the author). */
   principalId?: string;
   prices?: PriceTable;
-  /** Output token limits per call. Defaults: tour 6000, judge 1500. */
+  /**
+   * Output token limits per call. Defaults: tour 6000, judge 6000. Reasoning models count their
+   * reasoning here: Kimi K2.7 Code used ~3.7k tokens to judge a small diff (2026-10-02), and a reply
+   * cut at the limit is unparseable, so every judgment becomes "unsure".
+   */
   maxOutputTokens?: { tour?: number; judge?: number };
   /** Upper bound on diff tokens in a prompt, before fitting to the budget. Defaults: tour 24 000, judge 16 000. */
   diffTokenBudget?: { tour?: number; judge?: number };
@@ -111,7 +115,7 @@ export interface TourReviewer {
 const DEFAULTS = {
   principalId: "reviewer-agent",
   tourMaxTokens: 6000,
-  judgeMaxTokens: 1500,
+  judgeMaxTokens: 6000,
   tourDiffTokens: 24_000,
   judgeDiffTokens: 16_000,
 } as const;

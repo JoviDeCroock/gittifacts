@@ -53,16 +53,75 @@ export type JudgeQuestion = (typeof JUDGE_QUESTIONS)[number];
 export const JudgeOutcome = z.enum(["no-concern", "concern", "unsure"]);
 export type JudgeOutcome = z.infer<typeof JudgeOutcome>;
 
+/**
+ * How a cited hunk relates to the plan:
+ * - "contradicts": it does something differently from what a plan sentence says;
+ * - "goes-beyond": it does more than a plan sentence asks;
+ * - "not-in-plan": nothing in the plan mentions the behavior (the only option without a plan).
+ */
+export const PLAN_BASES = ["contradicts", "goes-beyond", "not-in-plan"] as const;
+export const PlanBasis = z.enum(PLAN_BASES);
+export type PlanBasis = z.infer<typeof PlanBasis>;
+
+/**
+ * The evidence every "concern" must carry: a hunk of the diff the model was shown, and the plan
+ * sentence it contradicts or goes beyond (or the statement that the plan does not mention it).
+ * A concern without one valid citation is downgraded to "unsure" (see judge-citations.ts).
+ */
+export const ModelCitation = z.object({
+  /** Exactly as in the diff's `=== path ===` header. */
+  file: text(500),
+  /** N of `@@ hunk N` in that file (1-based). */
+  hunk: z.number().int().positive(),
+  /** What the hunk does that the plan does not ask for, in one sentence. */
+  behavior: text(600),
+  planBasis: PlanBasis,
+  /** Copied word for word from the plan; null only for "not-in-plan". */
+  planQuote: z.string().trim().max(1000).nullable(),
+});
+export type ModelCitation = z.infer<typeof ModelCitation>;
+
+/** Every field is required (strict structured output); "no-concern"/"unsure" send `citations: []`. */
 export const ModelJudgment = z.object({
   question: z.enum(JUDGE_QUESTIONS),
   outcome: JudgeOutcome,
   rationale: text(2000),
+  citations: z.array(ModelCitation).max(10),
 });
+export type ModelJudgment = z.infer<typeof ModelJudgment>;
 
 export const ModelJudgeOutput = z.object({
   judgments: z.array(ModelJudgment).min(1).max(6),
 });
 export type ModelJudgeOutput = z.infer<typeof ModelJudgeOutput>;
+
+/**
+ * What the judge reads back: the same fields, but lenient, so one malformed citation (or a model
+ * that ignores the schema) never discards the outcome itself. Citations are checked one by one.
+ */
+export const LenientModelJudgment = z.object({
+  question: z.enum(JUDGE_QUESTIONS),
+  outcome: JudgeOutcome,
+  rationale: text(2000),
+  /** Unreadable citations count as none: a concern then becomes "unsure", nothing else changes. */
+  citations: z.array(z.unknown()).max(50).optional().catch(undefined),
+});
+
+/** One citation, read leniently: a hunk given as "2" or "hunk 2" is accepted, `behavior` may be missing. */
+export const LenientModelCitation = z.object({
+  file: text(500),
+  hunk: z.union([
+    z.number().int().positive(),
+    z
+      .string()
+      .regex(/^\s*(?:@@\s*)?(?:hunk\s*)?#?\d+\b/i)
+      .transform((s) => Number(/\d+/.exec(s)![0])),
+  ]),
+  behavior: z.string().trim().max(600).optional().catch(undefined),
+  planBasis: PlanBasis,
+  planQuote: z.string().trim().max(1000).nullable().optional().catch(null),
+});
+export type LenientModelCitation = z.infer<typeof LenientModelCitation>;
 
 /** Keywords structured-output implementations reject; zod still enforces them client-side. */
 const UNSUPPORTED_KEYWORDS = new Set([
