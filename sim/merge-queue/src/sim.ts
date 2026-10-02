@@ -304,6 +304,30 @@ class Sim {
   /** Debug: passed batches that have waited > 20 min to land, and why. */
   private dumpStuck(): void {
     const s = this.core;
+    const byState = new Map<string, number>();
+    for (const e of Object.values(s.entries)) {
+      const k = `${e.state}/${e.hold ?? "-"}`;
+      byState.set(k, (byState.get(k) ?? 0) + 1);
+    }
+    const bstates = new Map<string, number>();
+    for (const b of Object.values(s.batches)) {
+      const k = `${b.kind}:${b.state}`;
+      bstates.set(k, (bstates.get(k) ?? 0) + 1);
+    }
+    process.stderr.write(
+      `t=${(this.now / MINUTE).toFixed(0)} entries ${JSON.stringify([...byState])} batches ${JSON.stringify([...bstates])} tracks=${Object.keys(s.tracks).length}\n`,
+    );
+    const waiting = Object.values(s.entries).filter(
+      (e) => e.state === "waiting" && e.hold === null,
+    );
+    for (const e of waiting.slice(0, 5)) {
+      const carriers = Object.values(s.batches).filter(
+        (b) => b.carried.includes(e.changeId) && s.tracks[b.trackId ?? ""]?.chain.includes(b.id),
+      );
+      process.stderr.write(
+        `  waiting ${e.changeId} since ${((this.now - e.enqueuedAt) / MINUTE).toFixed(0)}m deps=${e.dependsOn.join("+")} carriers=${carriers.map((b) => `${b.id}:${b.state}`).join(",")} aff=${e.affected?.complete}\n`,
+      );
+    }
     process.stderr.write(
       `freeze=${JSON.stringify(s.freeze.reasons.map((r) => [r.kind, r.changeId]))}\n`,
     );
@@ -320,8 +344,17 @@ class Sim {
       );
     }
     process.stderr.write(
-      `landing=${JSON.stringify(s.landing.map((id) => [id, s.batches[id]?.state, s.batches[id]?.members]))} cas=${s.cas?.batchId ?? null}\n`,
+      `landing=${JSON.stringify(s.landing.map((id) => [id, s.batches[id]?.state, s.batches[id]?.members, s.batches[id]?.targets === "all" ? "ALL" : (s.batches[id]?.targets as string[] | undefined)?.length, ((this.now - (s.batches[id]?.createdAt ?? 0)) / MINUTE).toFixed(1), s.batches[id]?.baseSha === s.main.sha]))} cas=${s.cas?.batchId ?? null} casRetryAt=${s.casRetryAt}\n`,
     );
+    const ready = Object.values(s.batches).filter(
+      (b) => b.kind === "chain" && b.state === "passed",
+    );
+    for (const b of ready.slice(0, 8)) {
+      const pend = b.carried.filter((x) => s.entries[x]?.state !== "merged");
+      process.stderr.write(
+        `  passed ${b.id} for ${((this.now - (b.readyAt ?? 0)) / MINUTE).toFixed(1)}m base==main=${b.baseSha === s.main.sha} carriedUnmerged=${pend.map((x) => `${x}:${s.entries[x]?.state}:${s.batches[s.entries[x]?.batchId ?? ""]?.state ?? "-"}`).join(",")} noReval=${b.noRevalidate}\n`,
+      );
+    }
     for (const b of Object.values(s.batches)) {
       if (
         b.kind !== "chain" ||
@@ -892,6 +925,15 @@ class Sim {
         this.onEmit(c.event);
         return;
       case "Audit":
+        if (
+          c.action === "merge-queue.debug-place" &&
+          process.env.MQ_DEBUG_PLACE !== undefined &&
+          this.now / MINUTE > Number(process.env.MQ_DEBUG_PLACE) &&
+          this.dbgN++ < 40
+        )
+          process.stderr.write(
+            `PLACE t=${(this.now / MINUTE).toFixed(1)} ${c.subject} ${JSON.stringify(c.payload)}\n`,
+          );
         if (c.action === "merge-queue.test-quarantined") this.m.quarantines++;
         if (c.action === "merge-queue.result-reused") this.reused++;
         if (c.action === "merge-queue.twin-adopted") this.adopted++;
@@ -1380,6 +1422,14 @@ class Sim {
     const merged = recs.filter((r) => r.mergedAt !== null);
     const ejected = recs.filter((r) => r.ejectedAt !== null && r.mergedAt === null);
     const unfinished = recs.filter((r) => r.mergedAt === null && r.ejectedAt === null);
+    if (process.env.MQ_DEBUG_UNFINISHED === "1")
+      for (const r of unfinished) {
+        const e = this.core.entries[r.id];
+        const b = this.core.batches[e?.batchId ?? ""];
+        process.stderr.write(
+          `unfinished ${r.id} state=${e?.state} hold=${e?.hold} deps=${e?.dependsOn.join("+")} waitFor=${e?.waitFor.join("+")} group=${e?.plangroup}/${e?.landTogether}/${e?.groupSize} approval=${e?.approvalRequired} lane=${e?.lane}/${e?.approvedLane} batch=${b?.id}:${b?.state}:${b?.kind} res=${JSON.stringify(e?.resolution)} dq=${r.dequeued}\n`,
+        );
+      }
     const end = this.now;
     // Time in queue: merged entries, plus censored waits of unfinished ones (conservative).
     const waits = [

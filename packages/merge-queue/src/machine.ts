@@ -742,11 +742,107 @@ class Machine {
     return [...out.values()];
   }
 
-  /** Active chain batches whose tree contains any of b's own entries. */
+  /**
+   * Active chain batches whose tree contains any of b's own entries — transitively under direct
+   * carrying, where a batch's tree holds only its direct predecessors' entries.
+   */
   private descendantsOf(b: Batch): Batch[] {
     const own = ownEntries(b);
     if (own.length === 0) return [];
-    return this.activeChain().filter((c) => c.id !== b.id && this.builtOn(c, own));
+    const chain = this.activeChain();
+    if (!this.cfg.features.directCarry)
+      return chain.filter((c) => c.id !== b.id && this.builtOn(c, own));
+    const out = new Map<string, Batch>();
+    let front = new Set(own);
+    while (front.size > 0) {
+      const next = new Set<string>();
+      for (const c of chain) {
+        if (c.id === b.id || out.has(c.id) || !c.carried.some((x) => front.has(x))) continue;
+        out.set(c.id, c);
+        for (const y of ownEntries(c)) next.add(y);
+      }
+      front = next;
+    }
+    return [...out.values()];
+  }
+
+  /** The active chain batch holding `id` as one of its own entries. */
+  private holderOf(id: string): Batch | undefined {
+    const b = this.batch(this.entry(id)?.batchId ?? null);
+    if (b === undefined || !this.isActiveChain(b)) return undefined;
+    return b.units.some((u) => u.changeIds.includes(id)) ? b : undefined;
+  }
+
+  /** The batches b's tree is built on: its parent's tip, or (direct carrying) its carried entries' holders. */
+  private preds(b: Batch): Batch[] {
+    if (b.parentId !== null) {
+      const p = this.batch(b.parentId);
+      return p === undefined ? [] : [p];
+    }
+    if (!this.cfg.features.directCarry) return [];
+    const out = new Map<string, Batch>();
+    for (const x of b.carried) {
+      const h = this.holderOf(x);
+      if (h !== undefined) out.set(h.id, h);
+    }
+    return [...out.values()];
+  }
+
+  /**
+   * Cancel one chain batch; its entries wait to be re-placed. Batches whose trees contain them stay:
+   * the entries are placed again ahead of them (direct carrying).
+   */
+  private releaseBatch(b: Batch, why: string): void {
+    invariant(!this.batchInCas(b), "cancel.in-cas", `cannot cancel ${b.id}: CAS in flight`);
+    const li = this.s.landing.findIndex((lid) => this.batch(lid)?.members.includes(b.id) === true);
+    if (li >= 0) this.invalidateLanding(li, why);
+    this.removeFromTrack(b);
+    this.cancelBatch(b, why);
+    this.returnUnits(b);
+  }
+
+  /** Release every active batch whose tree carries one of `ids` (direct carrying). */
+  private releaseContaining(ids: string[], why: string): void {
+    if (!this.cfg.features.directCarry || ids.length === 0) return;
+    const set = new Set(ids);
+    const victims = this.activeChain().filter((c) => c.carried.some((x) => set.has(x)));
+    if (victims.length === 0) return;
+    this.audit("merge-queue.batches-cancelled", `change:${ids[0]}`, {
+      why,
+      batches: victims.map((v) => v.id),
+      entries: victims.reduce((n, v) => n + ownEntries(v).length, 0),
+      running: victims.filter((v) => v.state === "running" || v.state === "rechecking").length,
+    });
+    for (const v of victims) if (this.isActiveChain(v)) this.releaseBatch(v, why);
+  }
+
+  /**
+   * Direct carrying: a batch's carried entries must still be on their way to main with the head it
+   * was built from — held by an active batch, waiting to be placed again, or merged. Anything else
+   * (ejected, resolving, a suspect of a failed batch, waiting for a human) invalidates its tree.
+   */
+  private checkCarried(): boolean {
+    if (!this.cfg.features.directCarry) return false;
+    let changed = false;
+    for (const b of this.activeChain()) {
+      if (!this.isActiveChain(b) || b.state === "landing" || this.batchInCas(b)) continue;
+      const bad = b.carried.find((x) => {
+        const e = this.entry(x);
+        if (e === undefined) return true;
+        if (e.state === "merged" || this.holderOf(x) !== undefined) return false;
+        return !(e.state === "waiting" && e.hold !== "approval");
+      });
+      if (bad === undefined) continue;
+      this.audit("merge-queue.batches-cancelled", `batch:${b.id}`, {
+        why: `carried ${bad} is no longer on its way`,
+        batches: [b.id],
+        entries: ownEntries(b).length,
+        running: b.state === "running" || b.state === "rechecking" ? 1 : 0,
+      });
+      this.releaseBatch(b, `carried ${bad} is no longer on its way`);
+      changed = true;
+    }
+    return changed;
   }
 
   private builtOn(c: Batch, entries: string[]): boolean {
@@ -832,14 +928,87 @@ class Machine {
         t !== undefined &&
         !batchDone(t) &&
         d !== undefined &&
-        this.isActiveChain(d) &&
-        d.parentId === tw.excludes &&
         p !== undefined &&
+        this.isActiveChain(d) &&
+        this.sitsOn(d, p) &&
         this.isActiveChain(p) &&
         inFlight(p);
       if (live) continue;
       this.dropTwin(id, "twin no longer needed");
       changed = true;
+    }
+    return changed;
+  }
+
+  /** d's tree is built on p: p's tip, or (direct carrying) some of p's own entries are carried. */
+  private sitsOn(d: Batch, p: Batch): boolean {
+    if (d.parentId !== null) return d.parentId === p.id;
+    const own = new Set(ownEntries(p));
+    return d.carried.some((x) => own.has(x));
+  }
+
+  /**
+   * Direct carrying: a built batch gets one twin per in-flight batch whose entries it carries — its
+   * tree without that batch's entries (and whatever is stacked on them). If that batch fails, the
+   * twin takes over: one level is all a failure reaches under direct carrying.
+   */
+  private forkTwinsDirect(): boolean {
+    const have = new Set(Object.values(this.s.twins).map((t) => `${t.of}|${t.excludes}`));
+    let changed = false;
+    for (const d of this.activeChain()) {
+      if (d.parentId !== null || d.carried.length === 0) continue;
+      if (!inFlight(d) || d.state === "pending" || this.holding(d)) continue;
+      for (const p of this.preds(d)) {
+        if (!inFlight(p) || have.has(`${d.id}|${p.id}`)) continue;
+        const drop = new Set(ownEntries(p));
+        // Whatever is stacked on the excluded entries goes too (fixed point over the carried list).
+        for (let grew = true; grew; ) {
+          grew = false;
+          for (const x of d.carried)
+            if (!drop.has(x) && (this.entry(x)?.dependsOn ?? []).some((y) => drop.has(y))) {
+              drop.add(x);
+              grew = true;
+            }
+        }
+        const own = ownEntries(d);
+        if (own.some((x) => (this.entry(x)?.dependsOn ?? []).some((y) => drop.has(y)))) continue;
+        const carried = d.carried.filter((x) => !drop.has(x));
+        const id = this.id("w");
+        this.s.batches[id] = {
+          ...d,
+          id,
+          trackId: null,
+          parentId: null,
+          mergeParents: [],
+          carried,
+          rootBase: this.s.main.sha,
+          rootSeq: this.s.main.seq,
+          baseSha: this.s.main.sha,
+          units: d.units,
+          lineage: [...carried, ...own],
+          state: "pending",
+          tipSha: null,
+          treeSha: null,
+          commits: [],
+          refName: `refs/queue/${id}`,
+          runId: null,
+          runSeq: 0,
+          startedAt: null,
+          targets: "all",
+          verdict: null,
+          recheck: null,
+          bisect: null,
+          probe: null,
+          members: [],
+          fallbackOf: null,
+          noRevalidate: false,
+          readyAt: null,
+          infraRetries: 0,
+        };
+        this.s.twins[id] = { of: d.id, excludes: p.id };
+        have.add(`${d.id}|${p.id}`);
+        changed = true;
+      }
     }
     return changed;
   }
@@ -851,6 +1020,7 @@ class Machine {
    */
   private forkTwins(): boolean {
     if (!this.cfg.features.twins) return false;
+    if (this.cfg.features.directCarry) return this.forkTwinsDirect();
     const have = new Set(Object.values(this.s.twins).map((t) => t.of));
     let changed = false;
     for (const d of this.activeChain()) {
@@ -926,12 +1096,25 @@ class Machine {
         track === undefined ||
         batchDone(t) ||
         !this.isActiveChain(d) ||
-        d.parentId !== p.id ||
+        !this.sitsOn(d, p) ||
         this.batchInCas(d)
       )
         continue;
       delete this.s.twins[tid];
-      this.cancelTree(d, `parent ${p.id} failed; twin ${tid} replaces ${d.id}`, true);
+      // Its other twins exclude batches that are still fine: they go with it.
+      for (const [oid, ot] of Object.entries(this.s.twins))
+        if (ot.of === d.id) this.dropTwin(oid, `${d.id} replaced by twin ${tid}`);
+      // Tip-built: its descendants contain the parent and re-form. Direct carrying: the batches
+      // carrying its entries stay (the twin holds the same entries).
+      if (!this.cfg.features.directCarry)
+        this.cancelTree(d, `parent ${p.id} failed; twin ${tid} replaces ${d.id}`, true);
+      else
+        this.audit("merge-queue.batches-cancelled", `batch:${d.id}`, {
+          why: `parent ${p.id} failed; twin ${tid} replaces ${d.id}`,
+          batches: [d.id],
+          entries: 0,
+          running: 0,
+        });
       track.chain = track.chain.map((x) => (x === d.id ? tid : x));
       t.trackId = track.id;
       for (const id of ownEntries(d)) {
@@ -958,7 +1141,11 @@ class Machine {
     // bisection). b itself leaves the DAG and is bisected on the side.
     if (this.isActiveChain(b)) {
       this.adoptTwins(b);
-      this.cancelTree(b, `ancestor ${b.id} failed`, true);
+      // Direct carrying: only batches whose tree holds b's (suspect) entries are rebuilt, without
+      // them; the batches above those keep running (their entries are placed again in front).
+      if (this.cfg.features.directCarry)
+        this.releaseContaining(ownEntries(b), `ancestor ${b.id} failed`);
+      else this.cancelTree(b, `ancestor ${b.id} failed`, true);
       this.removeFromTrack(b);
     }
     // Children already bisecting on top of b: their base is bad, their verdicts are moot.
@@ -1235,7 +1422,9 @@ class Machine {
     if (!own.includes(changeId)) {
       // A carried entry (another batch's) doesn't rebase onto current main: this merge can't be
       // built yet. Its units wait until that entry has landed (or left the queue).
-      this.cancelTree(b, `carried ${changeId} does not apply on main`);
+      if (this.cfg.features.directCarry && this.isActiveChain(b))
+        this.releaseBatch(b, `carried ${changeId} does not apply on main`);
+      else this.cancelTree(b, `carried ${changeId} does not apply on main`);
       for (const id of own) {
         const e = this.entry(id);
         if (e !== undefined && !isTerminal(e)) e.waitFor = [...new Set([...e.waitFor, changeId])];
@@ -1249,7 +1438,9 @@ class Machine {
     ];
     const at = b.lineage.indexOf(changeId);
     const lineageBefore = b.lineage.slice(0, at >= 0 ? at : b.lineage.length);
-    if (this.isActiveChain(b)) this.cancelTree(b, `rebase conflict on ${changeId}`);
+    if (this.isActiveChain(b) && this.cfg.features.directCarry)
+      this.releaseBatch(b, `rebase conflict on ${changeId}`);
+    else if (this.isActiveChain(b)) this.cancelTree(b, `rebase conflict on ${changeId}`);
     const e = this.entry(changeId);
     if (e === undefined || isTerminal(e)) return;
     if (e.batchId !== null) this.removeFromFlight(e);
@@ -1295,6 +1486,8 @@ class Machine {
       preceding: string[];
     },
   ): void {
+    // Its head will change: no tree may keep the current one.
+    this.releaseContaining([e.changeId], `${e.changeId} is being resolved`);
     const prev = e.resolution;
     const attempts = prev !== null && !prev.resolved && prev.kind === kind ? prev.attempts + 1 : 1;
     e.state = "resolving";
@@ -1869,6 +2062,16 @@ class Machine {
       }
       if (s.landing.length >= this.cfg.maxLandingDepth) continue;
       if (!this.lineageLanded(b, aheadIds)) continue;
+      // A member whose revalidation needs every test (unknown affected set) lands alone: its
+      // landing tree is then usually exactly the tree its full run passed on (only its carried
+      // entries landed since), so the cached result covers it instead of a second full run.
+      const alone = needsAllTests(unionAffected(own.map((x) => this.entry(x)?.affected ?? null)));
+      if (alone && members.length > 0) {
+        this.createLandingBatch(members);
+        changed = true;
+        members.length = 0;
+        if (s.landing.length >= this.cfg.maxLandingDepth) continue;
+      }
       if (members.length >= this.cfg.maxLandingMembers) {
         // Close this landing batch and open the next one on top of it.
         this.createLandingBatch(members);
@@ -1888,6 +2091,11 @@ class Machine {
       for (const id of own) {
         ahead.push({ changeId: id, affected: this.entry(id)?.affected ?? null });
         aheadIds.add(id);
+      }
+      if (alone) {
+        this.createLandingBatch(members);
+        changed = true;
+        members.length = 0;
       }
     }
     if (members.length > 0) {
@@ -2443,7 +2651,10 @@ class Machine {
     }
     invariant(!this.batchInCas(b), "remove.in-cas", `cannot pull ${e.changeId}: CAS in flight`);
     if (b.state === "bisecting") this.abortBisection(b, `${e.changeId} left the batch`);
-    else if (this.isActiveChain(b)) this.cancelTree(b, `${e.changeId} left the batch`);
+    else if (this.isActiveChain(b) && this.cfg.features.directCarry) {
+      this.releaseBatch(b, `${e.changeId} left the batch`);
+      this.releaseContaining([e.changeId], `${e.changeId} left the batch`);
+    } else if (this.isActiveChain(b)) this.cancelTree(b, `${e.changeId} left the batch`);
     else {
       this.cancelBatch(b, `${e.changeId} left the batch`);
       this.returnUnits(b);
@@ -2461,6 +2672,7 @@ class Machine {
   ): void {
     if (isTerminal(e)) return;
     invariant(e.batchId === null, "terminate.in-batch", `${e.changeId} must leave its batch first`);
+    this.releaseContaining([e.changeId], `${e.changeId} left the queue`);
     e.state = state;
     e.trackId = null;
     e.terminalAt = this.now;
@@ -2512,6 +2724,7 @@ class Machine {
     for (let i = 0; i < 12; i++) {
       let changed = false;
       if (isFrozen(this.s)) changed = this.ensureExpressRouting() || changed;
+      changed = this.checkCarried() || changed;
       changed = this.advanceLanding() || changed;
       changed = this.formBatches() || changed;
       changed = this.pruneTwins() || changed;
@@ -2560,7 +2773,8 @@ class Machine {
    * once its hold expired or it is full. Entries coming back (restarted, resolved) never wait twice.
    */
   private holding(b: Batch): boolean {
-    if (b.kind !== "chain" || b.parentId === null || this.isTwin(b)) return false;
+    if (b.kind !== "chain" || this.isTwin(b)) return false;
+    if (b.parentId === null && !this.cfg.features.directCarry) return false;
     if (this.holdExpired(b)) return false;
     return !ownEntries(b).some((id) => {
       const e = this.entry(id);
@@ -2570,10 +2784,10 @@ class Machine {
 
   /** A child batch runs once its hold expired or it is full (see `batchHoldMs`). */
   private holdExpired(b: Batch): boolean {
-    const p = this.batch(b.parentId);
-    if (p === undefined || !inFlight(p)) return true;
+    const ps = this.preds(b).filter(inFlight);
+    if (ps.length === 0) return true;
     if (ownEntries(b).length >= this.batchCapacity()) return true;
-    const since = Math.max(b.createdAt, p.startedAt ?? b.createdAt);
+    const since = Math.max(b.createdAt, ...ps.map((p) => p.startedAt ?? b.createdAt));
     return this.now >= since + this.cfg.batchHoldMs;
   }
 
@@ -2927,11 +3141,19 @@ class Machine {
       return "placed";
     };
 
+    const direct = cfg.features.directCarry ? this.directPlacer(active, frozen, blocked) : null;
+    if (direct !== null)
+      // Entries some active tree already carries are, logically, already in line: place them first.
+      units.sort(
+        (a, b) =>
+          (frozen ? Number(b.express) - Number(a.express) : 0) ||
+          Number(direct.anchored(b)) - Number(direct.anchored(a)),
+      );
     let queue = units;
     for (let sweep = 0; sweep < 4 && queue.length > 0; sweep++) {
       const retry: PlannedUnit[] = [];
       for (const u of queue) {
-        const r = place(u);
+        const r = direct === null ? place(u) : direct.place(u, inFlightPerFlow, planned, touched);
         if (r === "placed") changed = true;
         // While frozen an express unit that couldn't be placed still goes first: nothing that
         // conflicts with it may be placed in front of it (else the re-rooting above never ends).
@@ -2949,16 +3171,302 @@ class Machine {
     return changed;
   }
 
+  /**
+   * Placement under direct carrying (§4.3 partial re-speculation). Entries, not batches, are
+   * indexed: the own entries of active batches, plus "anchored" ones — waiting to be placed again
+   * while some active tree already carries them (they must land before that tree). A unit's batch
+   * is built on main and carries the entries its units conflict with (and their stacks), never an
+   * entry that has to land after it.
+   */
+  private directPlacer(active: Batch[], frozen: boolean, blocked: ConflictIndex) {
+    const cfg = this.cfg;
+    const index = new ConflictIndex();
+    /** entry → active batches carrying it (not as their own). */
+    const carriers = new Map<string, Set<string>>();
+    const noteCarrier = (b: Batch): void => {
+      for (const x of b.carried) {
+        let set = carriers.get(x);
+        if (set === undefined) {
+          set = new Set();
+          carriers.set(x, set);
+        }
+        set.add(b.id);
+      }
+    };
+    for (const b of active) {
+      noteCarrier(b);
+      for (const id of ownEntries(b)) index.add(id, this.entry(id)?.affected ?? null);
+    }
+    for (const id of carriers.keys()) {
+      const e = this.entry(id);
+      if (e !== undefined && e.state === "waiting") index.add(id, e.affected);
+    }
+    let inflight = active.filter(inFlight).length;
+    const depthMemo = new Map<string, number>();
+    /** entry → queued entries stacked on it (they land after it). */
+    const dependents = new Map<string, string[]>();
+    for (const e of Object.values(this.s.entries)) {
+      if (isTerminal(e)) continue;
+      for (const d of e.dependsOn) {
+        const list = dependents.get(d) ?? [];
+        list.push(e.changeId);
+        dependents.set(d, list);
+      }
+    }
+    /**
+     * Entries that have to land after `ids`: carried by a tree that carries them, stacked on them,
+     * or in the same unit as such an entry — transitively.
+     */
+    const laterThan = (ids: string[]): { entries: Set<string>; batches: Set<string> } => {
+      const entries = new Set<string>();
+      const batches = new Set<string>();
+      const add = (y: string, next: string[]): void => {
+        if (entries.has(y)) return;
+        entries.add(y);
+        next.push(y);
+        const unit = this.holderOf(y)?.units.find((un) => un.changeIds.includes(y));
+        for (const m of unit?.changeIds ?? []) if (!entries.has(m)) add(m, next);
+      };
+      let front = ids;
+      while (front.length > 0) {
+        const next: string[] = [];
+        for (const x of front) {
+          for (const bid of carriers.get(x) ?? []) {
+            if (batches.has(bid)) continue;
+            batches.add(bid);
+            for (const y of ownEntries(this.batch(bid) ?? ({ units: [] } as unknown as Batch)))
+              add(y, next);
+          }
+          for (const y of dependents.get(x) ?? []) add(y, next);
+        }
+        front = next;
+      }
+      for (const id of ids) entries.delete(id);
+      return { entries, batches };
+    };
+    /** Stack dependencies and unit-mates travel with a carried entry. */
+    const closeOver = (want: Set<string>): void => {
+      const todo = [...want];
+      for (let x = todo.pop(); x !== undefined; x = todo.pop()) {
+        const e = this.entry(x);
+        if (e === undefined) continue;
+        const more = e.dependsOn.filter((d) => {
+          const de = this.entry(d);
+          return de !== undefined && de.state !== "merged";
+        });
+        const unit = this.holderOf(x)?.units.find((u) => u.changeIds.includes(x));
+        if (unit !== undefined) more.push(...unit.changeIds);
+        for (const y of more)
+          if (!want.has(y)) {
+            want.add(y);
+            todo.push(y);
+          }
+      }
+    };
+    /** Landing order: whatever a carried entry's own tree (or stack) puts before it comes first. */
+    const order = (want: Set<string>): string[] => {
+      const rank = (x: string): [number, number] => {
+        const h = this.holderOf(x);
+        return [h?.createdAt ?? Number.MAX_SAFE_INTEGER, h?.lineage.indexOf(x) ?? 0];
+      };
+      const sorted = [...want].sort((a, b) => {
+        const [ca, pa] = rank(a);
+        const [cb, pb] = rank(b);
+        return ca - cb || pa - pb || (a < b ? -1 : 1);
+      });
+      const out: string[] = [];
+      const seen = new Set<string>();
+      const visit = (x: string): void => {
+        if (seen.has(x)) return;
+        seen.add(x);
+        const h = this.holderOf(x);
+        const before = h === undefined ? [] : h.lineage.slice(0, Math.max(0, h.lineage.indexOf(x)));
+        for (const y of [...before, ...(this.entry(x)?.dependsOn ?? [])]) if (want.has(y)) visit(y);
+        out.push(x);
+      };
+      for (const x of sorted) visit(x);
+      return out;
+    };
+    const anchored = (u: PlannedUnit): boolean => u.changeIds.some((id) => carriers.has(id));
+
+    const place = (
+      u: PlannedUnit,
+      flows: Map<string, number>,
+      planned: Map<string, PlannedUnit>,
+      touched: Set<string>,
+    ): "placed" | "blocked" | "deferred" | "dep" => {
+      for (const d of u.deps) {
+        const de = this.entry(d);
+        if (de === undefined) return "dep";
+        if (de.state !== "merged" && this.holderOf(d) === undefined) return "dep";
+      }
+      if (cfg.features.fairness && !u.express) {
+        for (const [f, n] of u.flows) {
+          const cur = flows.get(f) ?? 0;
+          if (cur > 0 && cur + n > cfg.maxInFlightPerSession) return "deferred";
+        }
+      }
+      const expressFirst = frozen && u.express;
+      if (
+        !expressFirst &&
+        (cfg.features.conflictGraph ? blocked.query(u.affected).size > 0 : blocked.size > 0)
+      )
+        return "blocked";
+      const mine = new Set(u.changeIds);
+      const later = laterThan(u.changeIds);
+      const hits = index.query(cfg.features.conflictGraph ? u.affected : unknownAffectedSet());
+      const want = new Set<string>();
+      for (const x of hits) if (!mine.has(x) && !later.entries.has(x)) want.add(x);
+      for (const d of u.deps) if (this.entry(d)?.state !== "merged") want.add(d);
+      closeOver(want);
+      for (const x of mine) want.delete(x);
+      // No consistent order yet (cannot happen while carried entries stay indexed): try again later.
+      if ([...want].some((x) => later.entries.has(x))) return "dep";
+      if (
+        expressFirst &&
+        [...want].some((x) => !isExpress(this.entry(x) ?? { priority: "normal" }))
+      )
+        return "blocked";
+      const holders = new Map<string, Batch>();
+      for (const x of want) {
+        const h = this.holderOf(x);
+        if (h !== undefined) holders.set(h.id, h);
+      }
+      const laterBatches = [...later.batches]
+        .map((id) => this.batch(id))
+        .filter((b): b is Batch => b !== undefined && this.isActiveChain(b));
+      // Its track: every component it is ordered with (before or after).
+      const trackIds = [...holders.values(), ...laterBatches].map((b) => b.trackId ?? "");
+      const record = (b: Batch): void => {
+        for (const id of u.changeIds) index.add(id, this.entry(id)?.affected ?? null);
+        planned.set(u.changeIds[0] ?? "", u);
+        touched.add(b.id);
+        for (const [f, n] of u.flows) flows.set(f, (flows.get(f) ?? 0) + n);
+      };
+      // 1) Join a batch still open for joiners whose tree can take the unit.
+      const capacity = this.batchCapacity();
+      let midBuild = false;
+      for (const o of [...active].reverse()) {
+        const open = o.state === "pending" || (o.state === "ready" && this.holding(o));
+        if ((!open && o.state !== "building") || !this.isActiveChain(o) || this.isTwin(o)) continue;
+        const oOwn = ownEntries(o);
+        // Something already carries o's entries: its tree would miss the newcomer.
+        if (oOwn.some((x) => carriers.has(x))) continue;
+        if (u.isolate || o.units.some((x) => x.changeIds.some((id) => this.entry(id)?.isolate)))
+          continue;
+        if (frozen && this.isExpressBatch(o) !== u.express) continue;
+        if (!this.appendable(o, u.affected)) continue;
+        if (o.lineage.some((x) => later.entries.has(x))) continue;
+        const inTree = new Set(o.lineage);
+        const missing = [...want].filter((x) => !inTree.has(x));
+        const covers =
+          want.size === 0
+            ? cfg.coBatch && o.carried.length === 0
+            : missing.length === 0 || oOwn.some((x) => want.has(x));
+        if (!covers) continue;
+        const size = oOwn.length;
+        if (size > 0 && size + u.changeIds.length > capacity) continue;
+        if (o.state === "building") {
+          if (this.holding(o)) midBuild = true;
+          continue;
+        }
+        if (o.state === "ready") this.unbuild(o);
+        if (missing.length > 0) {
+          const carried = order(new Set([...o.carried, ...missing]));
+          o.carried = carried;
+          o.lineage = [...carried, ...oOwn];
+          o.mergeParents = this.preds(o).map((p) => p.id);
+          noteCarrier(o);
+        }
+        this.mergeTracks([o.trackId ?? "", ...trackIds].filter((t) => t !== ""));
+        this.joinBatch(o, u);
+        record(o);
+        return "placed";
+      }
+      if (midBuild) return "deferred";
+      // 2) A new batch on main, within the speculation depth and the in-flight cap.
+      if (inflight >= cfg.maxInFlightBatches) return "blocked";
+      const preds = [...holders.values()];
+      const depth = 1 + Math.max(0, ...preds.map((p) => this.chainDepth(p, depthMemo)));
+      const tracks = new Set(trackIds);
+      // A unit joining several components is a barrier everything later queues behind; letting it
+      // wait for the deepest chain to drain would stall the whole repo.
+      if (depth > cfg.maxSpeculationDepth && tracks.size <= 1) return "blocked";
+      if (tracks.size === 0 && Object.keys(this.s.tracks).length >= cfg.maxTracks) return "blocked";
+      const b = this.createDirectBatch(u, order(want), [...tracks], preds);
+      active.push(b);
+      inflight++;
+      noteCarrier(b);
+      record(b);
+      return "placed";
+    };
+    return { place, anchored };
+  }
+
+  private createDirectBatch(
+    u: PlannedUnit,
+    carried: string[],
+    trackIds: string[],
+    preds: Batch[],
+  ): Batch {
+    const id = this.id("b");
+    let track = this.mergeTracks(trackIds.filter((t) => t !== ""));
+    if (track === undefined) {
+      const tid = this.id("t");
+      track = { id: tid, chain: [], createdAt: this.now, express: isFrozen(this.s) && u.express };
+      this.s.tracks[tid] = track;
+    }
+    const b: Batch = {
+      id,
+      kind: "chain",
+      trackId: track.id,
+      parentId: null,
+      mergeParents: preds.map((p) => p.id),
+      carried,
+      rootBase: this.s.main.sha,
+      rootSeq: this.s.main.seq,
+      baseSha: this.s.main.sha,
+      units: [],
+      lineage: [...carried],
+      state: "pending",
+      tipSha: null,
+      treeSha: null,
+      commits: [],
+      refName: `refs/queue/${id}`,
+      runId: null,
+      runSeq: 0,
+      startedAt: null,
+      targets: "all",
+      verdict: null,
+      recheck: null,
+      bisect: null,
+      probe: null,
+      members: [],
+      fallbackOf: null,
+      noRevalidate: false,
+      createdAt: this.now,
+      readyAt: null,
+      infraRetries: 0,
+    };
+    this.s.batches[id] = b;
+    track.chain = [...track.chain, id];
+    this.joinBatch(b, u);
+    return b;
+  }
+
   /** Longest path of in-flight (untested) batches ending at b, through its build parents. */
   private chainDepth(b: Batch, memo: Map<string, number>): number {
     const hit = memo.get(b.id);
     if (hit !== undefined) return hit;
     memo.set(b.id, 0); // cycle guard (cannot happen: parents are older)
     let up = 0;
-    for (const pid of [...(b.parentId === null ? [] : [b.parentId]), ...b.mergeParents]) {
-      const p = this.batch(pid);
-      if (p !== undefined && this.isActiveChain(p)) up = Math.max(up, this.chainDepth(p, memo));
-    }
+    const ps =
+      this.cfg.features.directCarry && b.parentId === null
+        ? this.preds(b)
+        : [b.parentId, ...b.mergeParents]
+            .map((pid) => this.batch(pid))
+            .filter((p) => p !== undefined);
+    for (const p of ps) if (this.isActiveChain(p)) up = Math.max(up, this.chainDepth(p, memo));
     const d = (inFlight(b) ? 1 : 0) + up;
     memo.set(b.id, d);
     return d;

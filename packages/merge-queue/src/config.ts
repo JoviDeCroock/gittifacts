@@ -23,6 +23,13 @@ export const QueueFeatures = z.object({
   fairness: z.boolean().default(true),
   /** Reuse a passing full run for a batch whose built tree is identical (tree-hash keyed). */
   resultCache: z.boolean().default(true),
+  /**
+   * §4.3 partial re-speculation. Each batch is built on main and carries only the unmerged entries
+   * its units directly conflict with (plus their stacks), not its predecessors' whole trees; when a
+   * batch fails only the batches containing its entries are rebuilt. Off: batches are built on a
+   * predecessor's tip (or merge whole lineages) and a failure restarts everything above it.
+   */
+  directCarry: z.boolean().default(false),
   /** §4.3 both-outcome speculation: twins of batches built on an in-flight parent. */
   twins: z.boolean().default(false),
 });
@@ -118,6 +125,7 @@ const ALL_OFF: QueueFeatures = {
   aging: false,
   fairness: false,
   resultCache: false,
+  directCarry: false,
   twins: false,
 };
 

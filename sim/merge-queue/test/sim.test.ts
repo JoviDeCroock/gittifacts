@@ -17,7 +17,9 @@ function short(
   mode = "full",
   invariantEvery = 0,
 ): RunMetrics {
-  const w = generate({ ...getScenario(name), hours, drainHours: 4 }, seed);
+  // Runs stop once idle; the window only matters for saturated scenarios (conflict-heavy merges
+  // ≈ 45/h against 200/h arrivals, so draining one hour of arrivals takes 4–7 hours).
+  const w = generate({ ...getScenario(name), hours, drainHours: 8 }, seed);
   return simulate(w, { mode, config: modeConfig(mode), invariantEvery });
 }
 
