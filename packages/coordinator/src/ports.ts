@@ -229,6 +229,8 @@ export interface CiRunRequest {
   budget?: { maxMinutes: number };
   /** `registries-only` for unclaimed projects (sandbox egress allowlisted to package registries). */
   network?: "open" | "registries-only";
+  /** Merge-queue revalidation: only these test targets (`GITTIFACTS_TEST_TARGETS` in user steps). */
+  testTargets?: string[];
 }
 
 export type CiRunState = "queued" | "running" | "passed" | "failed" | "cancelled" | "superseded";

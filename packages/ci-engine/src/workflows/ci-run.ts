@@ -41,6 +41,7 @@ import {
   resolveLimits,
   type StepStatus,
   type StepTimings,
+  stepEnv,
 } from "../engine.js";
 import {
   defaultEvidenceSteps,
@@ -550,7 +551,7 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       attempt,
       command: spec.command,
       ...(spec.cwd === undefined ? {} : { cwd: spec.cwd }),
-      env: spec.env ?? {},
+      env: stepEnv(spec.kind, spec.env, req.testTargets),
       instance: spec.instance,
       timeoutSeconds,
       artifactsRepo: req.artifactsRepo,

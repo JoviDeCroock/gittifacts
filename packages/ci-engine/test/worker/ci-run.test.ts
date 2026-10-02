@@ -312,6 +312,16 @@ describe("CiRunWorkflow", () => {
     expect(summary.evidenceErrors[0]?.message).toMatch(/not JSON/);
   });
 
+  it("passes merge-queue test targets to user steps (GITTIFACTS_TEST_TARGETS), never to evidence steps", async () => {
+    const req = request("targets", {
+      pipeline: pipeline([step("test", "fake:env")]),
+      testTargets: ["src/a.test.ts"],
+    });
+    expect(await runToCompletion(req)).toMatchObject({ status: "passed" });
+    const exec = (await events(req.runId, "test")).find((x) => x.kind === "exec");
+    expect(exec?.envKeys).toContain("GITTIFACTS_TEST_TARGETS");
+  });
+
   it("fails the run with the author's error when the pipeline file throws", async () => {
     const req = request("bad-file", { headSha: SHAS.badCiFile, pipelineFrom: "head" });
     delete req.evidenceSteps;

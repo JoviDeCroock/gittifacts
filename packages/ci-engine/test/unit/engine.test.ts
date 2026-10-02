@@ -5,8 +5,10 @@ import {
   InvalidRunRequestError,
   RunConflictError,
   RunNotFoundError,
-  type RunRequest,
+  RunRequest,
   type RunSummary,
+  stepEnv,
+  TEST_TARGETS_ENV,
 } from "../../src/engine.js";
 import type { StepSpec } from "../../src/plan/spec.js";
 import { buildRunStatus, RunKeys, writeStepRecord } from "../../src/run-store.js";
@@ -282,5 +284,31 @@ describe("buildRunStatus", () => {
     });
     expect(status.steps.map((s) => s.name)).toEqual(["x"]);
     expect(status.pipelineSource).toBeNull();
+  });
+});
+
+describe("testTargets (merge-queue revalidation runs)", () => {
+  it("is accepted on a run request and reaches user steps only, as GITTIFACTS_TEST_TARGETS", () => {
+    const req = RunRequest.parse({
+      runId: "mq-r1-b1-r1",
+      changeId: "c1",
+      repo: {
+        remote: "https://x.artifacts.cloudflare.net/git/ns/app.git",
+        tokenProvider: "artifacts",
+      },
+      artifactsRepo: "app",
+      headSha: "a".repeat(40),
+      baseSha: "b".repeat(40),
+      limits: { maxMinutes: 10 },
+      testTargets: ["src/a.test.ts", "src/b.test.ts"],
+    });
+    expect(req.testTargets).toEqual(["src/a.test.ts", "src/b.test.ts"]);
+    expect(stepEnv("user", { CI: "1" }, req.testTargets)).toEqual({
+      CI: "1",
+      [TEST_TARGETS_ENV]: "src/a.test.ts\nsrc/b.test.ts",
+    });
+    expect(stepEnv("evidence", { CI: "1" }, req.testTargets)).toEqual({ CI: "1" });
+    expect(stepEnv("user", undefined, undefined)).toEqual({});
+    expect(() => RunRequest.parse({ ...req, testTargets: [] })).toThrow();
   });
 });

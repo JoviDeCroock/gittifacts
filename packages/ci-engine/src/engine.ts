@@ -110,6 +110,12 @@ export const RunRequest = z
       .optional(),
     network: NetworkPolicy.default("open"),
     /**
+     * Merge-queue revalidation: run only these test targets (files, ids or globs). Exported to
+     * every user step as `GITTIFACTS_TEST_TARGETS` (newline-separated); a test command that does
+     * not read it runs everything, which still covers the targets. Evidence steps never see it.
+     */
+    testTargets: z.array(z.string().min(1).max(500)).min(1).max(2000).optional(),
+    /**
      * Seed run for a template: only the global-scoped cached steps run, no evidence, and their
      * snapshots are published for every repository with identical inputs.
      */
@@ -365,4 +371,17 @@ export async function deriveRunId(changeId: string, headSha: string, attempt = 0
   );
   const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
   return `r-${hex.slice(0, 32)}`;
+}
+
+/** Env var through which a run's `testTargets` reach its user steps. */
+export const TEST_TARGETS_ENV = "GITTIFACTS_TEST_TARGETS";
+
+/** A step's env: its own, plus the run's test targets for user steps (never evidence steps). */
+export function stepEnv(
+  kind: "user" | "evidence",
+  own: Record<string, string> | undefined,
+  testTargets: readonly string[] | undefined,
+): Record<string, string> {
+  if (kind !== "user" || testTargets === undefined || testTargets.length === 0) return own ?? {};
+  return { ...own, [TEST_TARGETS_ENV]: testTargets.join("\n") };
 }
