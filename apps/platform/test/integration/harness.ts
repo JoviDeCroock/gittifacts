@@ -2,6 +2,7 @@
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { cloudflareBindings, createCoordinator } from "@app/coordinator";
+import { repoAccessPort } from "../../src/access/port.js";
 import { createApp } from "../../src/app.js";
 import { facadeOptions } from "../../src/coordinator.js";
 import { buildPorts } from "../../src/runtime/ports.js";
@@ -17,12 +18,17 @@ export function fetchVia(app: TestApp) {
   };
 }
 
-/** The app with the real coordinator facade over the same Ports the DOs and Workflows get. */
+/**
+ * The app with the real coordinator facade over the same Ports the DOs and Workflows get, and,
+ * like production (src/coordinator.ts), the repo-access port on the facade.
+ */
 export function platformApp(): TestApp {
   return createApp({
     coordinator: (e, _ctx, origin) =>
       createCoordinator(
-        buildPorts(e, "default", { overrides: integrationOverrides("default", e) }),
+        buildPorts(e, "default", {
+          overrides: { ...integrationOverrides("default", e), access: repoAccessPort(e) },
+        }),
         cloudflareBindings(e),
         facadeOptions(origin),
       ),

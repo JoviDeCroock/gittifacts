@@ -150,13 +150,17 @@ export async function createProjectAs(
   }
 
   const extras = unclaimed === undefined ? null : await unclaimed.afterRepo(repo);
+  // afterRepo binds an unclaimed project's agent to the new repo (repoIds): act as the stored
+  // principal from here on, or the facade's repo-access check would not see the binding.
+  const acting =
+    unclaimed === undefined ? actor : ((await svc.store.getPrincipal(actor.id)) ?? actor);
 
   // 2 + 3, concurrently: the bootstrap (first CI + preview) and the caller's first Change.
   const runsCi = source !== "empty";
   const [bootstrap, first] = await Promise.all([
-    runsCi ? svc.coordinator.startBootstrapChange(actor, repo.id) : Promise.resolve(null),
+    runsCi ? svc.coordinator.startBootstrapChange(acting, repo.id) : Promise.resolve(null),
     svc.coordinator
-      .startChange(actor, {
+      .startChange(acting, {
         repoId: repo.id,
         title: FIRST_CHANGE_TITLE,
         category: "feature",
