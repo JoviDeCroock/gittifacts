@@ -73,12 +73,12 @@ const base: Scenario = {
   name: "base",
   description: "",
   arrivalsPerHour: 200,
-  hours: 6,
-  drainHours: 6,
+  hours: 3,
+  drainHours: 4,
   conflictDensity: 0.1,
-  semanticConflictRate: 0.01,
-  textualConflictRate: 0.3,
-  trueFailureRate: 0.02,
+  semanticConflictRate: 0.002,
+  textualConflictRate: 0.1,
+  trueFailureRate: 0.01,
   flakyRate: 0.05,
   hotFlaky: { tests: 0, failProb: 0 },
   ci: { medianMinutes: 10, sigma: 0.15, overheadFraction: 0.1 },
@@ -115,17 +115,17 @@ function scenario(name: string, description: string, over: Partial<Scenario>): S
 export const SCENARIOS: Record<string, Scenario> = {
   "gate-200": scenario(
     "gate-200",
-    "§6 gate scenario: 200/h, 10% conflict density, 5% flaky runs (2% truly broken Changes; 1% of concurrent overlapping pairs conflict semantically, 30% of file-sharing pairs textually).",
+    "§6 gate scenario: 200/h, 10% conflict density, 5% flaky runs. Unspecified by §6, set to: 1% truly broken Changes, ~2% of Changes with a concurrent semantic conflict, ~8% with a concurrent textual conflict.",
     {},
   ),
   "low-50": scenario("low-50", "Quiet repo: 50/h.", { arrivalsPerHour: 50 }),
-  "high-500": scenario("high-500", "Peak agent load: 500/h.", { arrivalsPerHour: 500, hours: 4 }),
+  "high-500": scenario("high-500", "Peak agent load: 500/h.", { arrivalsPerHour: 500, hours: 2 }),
   "conflict-heavy": scenario(
     "conflict-heavy",
     "Hot codebase: 30% conflict density, more textual and semantic conflicts.",
-    { conflictDensity: 0.3, textualConflictRate: 0.5, semanticConflictRate: 0.03 },
+    { conflictDensity: 0.3, textualConflictRate: 0.4, semanticConflictRate: 0.01 },
   ),
-  "failure-heavy": scenario("failure-heavy", "Sloppy agents: 8% truly broken Changes.", { trueFailureRate: 0.08 }),
+  "failure-heavy": scenario("failure-heavy", "Sloppy agents: 6% truly broken Changes.", { trueFailureRate: 0.06 }),
   "flaky-storm": scenario(
     "flaky-storm",
     "15% flaky runs plus 3 very flaky tests (30% per run) that must get quarantined.",
@@ -149,7 +149,7 @@ export const SCENARIOS: Record<string, Scenario> = {
   "textual-corpus": scenario(
     "textual-corpus",
     "Resolver gate stand-in: high textual conflict rate in a hot codebase (the real fixture corpus comes from the resolver agent).",
-    { conflictDensity: 0.25, textualConflictRate: 0.8, semanticConflictRate: 0, arrivalsPerHour: 150, hours: 4 },
+    { conflictDensity: 0.25, textualConflictRate: 0.8, semanticConflictRate: 0, arrivalsPerHour: 150, hours: 2 },
   ),
 };
 

@@ -100,31 +100,52 @@ export function evaluateGates(runs: RunMetrics[]): GateResult[] {
   return gates;
 }
 
-export function runGates(o: { seeds: number[]; log: (s: string) => void; scenarios?: string[]; ablations?: boolean }): GatesRun {
-  const runs: RunMetrics[] = [];
-  const workloads: GatesRun["workloads"] = [];
-  const scenarios = o.scenarios ?? Object.keys(SCENARIOS);
-  const want = new Map<string, Set<string>>(); // scenario → modes
+export interface GateJob {
+  scenario: string;
+  seed: number;
+  mode: string;
+}
+
+/** Every (scenario, seed, mode) the gates and the report need. */
+export function gateJobs(seeds: number[], scenarios: string[] = Object.keys(SCENARIOS), ablations = true): GateJob[] {
+  const want = new Map<string, Set<string>>();
   for (const s of scenarios) want.set(s, new Set(["full"]));
-  if (o.ablations !== false) {
+  if (ablations) {
     want.get("gate-200")?.add("serial");
     for (const a of ABLATIONS) want.get(a.scenario)?.add(a.without);
   }
-  for (const seed of o.seeds)
-    for (const [name, modes] of want) {
-      const w = generate(getScenario(name), seed);
-      workloads.push({ scenario: name, seed, clusters: w.clusters, density: w.measuredDensity });
-      for (const mode of modes) {
-        if (MODES[mode] === undefined) continue;
-        const m = simulate(w, { mode, config: modeConfig(mode) });
-        runs.push(m);
-        o.log(`${name} #${seed} ${mode}: merged ${m.merged}/${m.arrivals} p95 ${m.timeInQueueMin.p95.toFixed(1)}m ci ${m.ciRatio.toFixed(2)}x red ${m.mainRedEvents} (${(m.wallMs / 1000).toFixed(1)}s)`);
-      }
-    }
-  const comparisons: Comparison[] = ABLATIONS.filter((a) => want.get(a.scenario)?.has(a.without)).map((a) => {
+  const jobs: GateJob[] = [];
+  for (const seed of seeds) for (const [scenario, modes] of want) for (const mode of modes) jobs.push({ scenario, seed, mode });
+  return jobs;
+}
+
+export function runJob(j: GateJob): { metrics: RunMetrics; workload: GatesRun["workloads"][number] } {
+  const w = generate(getScenario(j.scenario), j.seed);
+  const metrics = simulate(w, { mode: j.mode, config: modeConfig(j.mode) });
+  return { metrics, workload: { scenario: j.scenario, seed: j.seed, clusters: w.clusters, density: w.measuredDensity } };
+}
+
+export function summarizeGates(seeds: number[], runs: RunMetrics[], workloads: GatesRun["workloads"]): GatesRun {
+  const has = (scenario: string, mode: string) => runs.some((r) => r.scenario === scenario && r.mode === mode);
+  const comparisons: Comparison[] = ABLATIONS.filter((a) => has(a.scenario, "full") && has(a.scenario, a.without)).map((a) => {
     const f = mean(runs.filter((r) => r.scenario === a.scenario && r.mode === "full").map((r) => metricOf(r, a.metric)));
     const x = mean(runs.filter((r) => r.scenario === a.scenario && r.mode === a.without).map((r) => metricOf(r, a.metric)));
     return { ...a, full: f, ablated: x, wins: a.better === "lower" ? f < x : f > x };
   });
-  return { seeds: o.seeds, runs, gates: evaluateGates(runs), comparisons, workloads };
+  const uniq = new Map(workloads.map((w) => [`${w.scenario}#${w.seed}`, w]));
+  return { seeds, runs, gates: evaluateGates(runs), comparisons, workloads: [...uniq.values()] };
+}
+
+/** Sequential run (tests, small subsets). The CLI runs jobs in parallel processes. */
+export function runGates(o: { seeds: number[]; log: (s: string) => void; scenarios?: string[]; ablations?: boolean }): GatesRun {
+  const runs: RunMetrics[] = [];
+  const workloads: GatesRun["workloads"] = [];
+  for (const j of gateJobs(o.seeds, o.scenarios, o.ablations !== false)) {
+    if (MODES[j.mode] === undefined) continue;
+    const r = runJob(j);
+    runs.push(r.metrics);
+    workloads.push(r.workload);
+    o.log(`${j.scenario} #${j.seed} ${j.mode}: p95 ${r.metrics.timeInQueueMin.p95.toFixed(1)}m ci ${r.metrics.ciRatio.toFixed(2)}x red ${r.metrics.mainRedEvents}`);
+  }
+  return summarizeGates(o.seeds, runs, workloads);
 }

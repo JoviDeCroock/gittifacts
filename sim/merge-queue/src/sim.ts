@@ -48,6 +48,11 @@ export interface ChangeRecord {
   ejectCode: string | null;
   falseEject: boolean;
   dequeued: boolean;
+  batches: number;
+  resolved: number;
+  approvals: number;
+  landingRuns: number;
+  firstLandingAt: number | null;
 }
 
 export interface RunMetrics {
@@ -157,6 +162,7 @@ class Sim {
   private records = new Map<string, ChangeRecord>();
   private batchSizes = new Map<string, number>();
   private laneSeen = new Map<string, number>();
+  private cancelTally = new Map<string, [number, number, number]>();
   private m = {
     mainRed: 0,
     masked: 0,
@@ -357,6 +363,11 @@ class Sim {
       ejectCode: null,
       falseEject: false,
       dequeued: false,
+      batches: 0,
+      resolved: 0,
+      approvals: 0,
+      landingRuns: 0,
+      firstLandingAt: null,
     });
     const deps = c.dependsOn.filter((d) => this.core.entries[d]?.state !== "merged");
     this.sendCore({
@@ -535,19 +546,30 @@ class Sim {
         return this.build(c);
       case "StartBatchRun": {
         const full = this.fullDuration(c.runId);
-        const ov = this.sc.ci.overheadFraction;
-        const dur = c.targets === "all" ? full : ov * full + (1 - ov) * full * (c.targets.length / Math.max(1, this.w.tests.length));
+        const ovf = this.sc.ci.overheadFraction;
+        const dur = c.targets === "all" ? full : ovf * full + (1 - ovf) * full * (c.targets.length / Math.max(1, this.w.tests.length));
         const scope = c.targets === "all" ? this.w.tests : c.targets;
         const scopeSet = new Set(scope);
         const real = this.failures(c.commitSha).filter((t) => c.targets === "all" || scopeSet.has(t));
         const failing = [...new Set([...real, ...this.flakes(c.runId, scope)])];
-        this.runs.set(c.runId, { start: this.now, dur, kind: c.kind, done: false, entries: c.entries });
+        // Fail fast: a failing run reports when its first failing test finishes, not at suite end.
+        const ov = this.sc.ci.overheadFraction * full;
+        const took = failing.length > 0 ? ov + (dur - ov) * draw(this.seed, "failat", c.runId) : dur;
+        this.runs.set(c.runId, { start: this.now, dur: took, kind: c.kind, done: false, entries: c.entries });
         if (c.kind === "probe") this.m.probes++;
-        if (c.kind === "landing") this.m.landings++;
-        this.push(this.now + dur, {
+        if (c.kind === "landing") {
+          this.m.landings++;
+          for (const id of c.entries) {
+            const r = this.records.get(id);
+            if (r === undefined) continue;
+            r.landingRuns++;
+            if (r.firstLandingAt === null || (r.passedAt !== null && r.firstLandingAt < r.passedAt)) r.firstLandingAt = this.now;
+          }
+        }
+        this.push(this.now + took, {
           k: "run-done",
           runId: c.runId,
-          e: { type: "BatchResult", batchId: c.batchId, runId: c.runId, treeSha: c.treeSha, outcome: failing.length > 0 ? "failed" : "passed", failingTests: failing, scope: c.targets, durationMs: dur },
+          e: { type: "BatchResult", batchId: c.batchId, runId: c.runId, treeSha: c.treeSha, outcome: failing.length > 0 ? "failed" : "passed", failingTests: failing, scope: c.targets, durationMs: took },
         });
         return;
       }
@@ -602,6 +624,8 @@ class Sim {
         this.refs.delete(c.refName);
         return;
       case "RequestApproval": {
+        const ra = this.records.get(c.changeId);
+        if (ra !== undefined) ra.approvals++;
         const delay = lognormal(this.sc.humanReviewMinutes * MINUTE, 0.5, draw(this.seed, "rv1", c.changeId, this.now), draw(this.seed, "rv2", c.changeId, this.now));
         this.push(this.now + delay, { k: "core", e: { type: "Approved", changeId: c.changeId, lane: c.lane, approver: { principalId: "human-reviewer", kind: "human" } } });
         return;
@@ -615,6 +639,11 @@ class Sim {
         return this.onEmit(c.event);
       case "Audit":
         if (c.action === "merge-queue.test-quarantined") this.m.quarantines++;
+        if (c.action === "merge-queue.batches-cancelled" && process.env.MQ_DEBUG_TAIL === "1") {
+          const why = String(c.payload.why).replace(/[a-z]\w*\d\w*/g, "#");
+          const t = this.cancelTally.get(why) ?? [0, 0, 0];
+          this.cancelTally.set(why, [t[0] + 1, t[1] + Number(c.payload.entries), t[2] + Number(c.payload.running)]);
+        }
         if (c.action === "merge-queue.full-run-fallback") {
           this.m.fallbacks++;
           if (process.env.MQ_DEBUG_STUCK === "1") {
@@ -743,6 +772,7 @@ class Sim {
         }
         const r = this.records.get(ev.changeId);
         if (r !== undefined && r.firstBatchAt === null) r.firstBatchAt = ev.at;
+        if (r !== undefined) r.batches++;
         this.batchSizes.set(ev.batchId, ev.batchSize);
         return;
       }
@@ -777,6 +807,8 @@ class Sim {
         return;
       }
       case "resolution_ready": {
+        const rr = this.records.get(ev.changeId);
+        if (rr !== undefined) rr.resolved++;
         const kind = this.m.openIncident.get(ev.changeId);
         if (kind !== undefined) {
           this.m[kind].resolved++;
@@ -847,6 +879,16 @@ class Sim {
 
   private metrics(wallMs: number): RunMetrics {
     const recs = [...this.records.values()];
+    if (process.env.MQ_DEBUG_TAIL === "1") {
+      const m = recs.filter((r) => r.mergedAt !== null).sort((a, b) => (b.mergedAt ?? 0) - b.enqueuedAt - ((a.mergedAt ?? 0) - a.enqueuedAt));
+      const tail = m.slice(0, Math.ceil(m.length * 0.05));
+      const avg = (f: (r: ChangeRecord) => number) => (tail.reduce((x, r) => x + f(r), 0) / Math.max(1, tail.length)).toFixed(2);
+      for (const [k, v] of [...this.cancelTally].sort((a, b) => b[1][1] - a[1][1])) process.stderr.write(`cancel ${v[0]}x entries=${v[1]} running=${v[2]} ${k}\n`);
+      const slow = m.filter((r) => r.passedAt !== null && (r.mergedAt ?? 0) - r.passedAt > 8 * MINUTE);
+      const avgS = (f: (r: ChangeRecord) => number) => (slow.reduce((x, r) => x + f(r), 0) / Math.max(1, slow.length)).toFixed(2);
+      process.stderr.write(`slow-landing n=${slow.length} wait-to-first-landing-run=${avgS((r) => ((r.firstLandingAt ?? r.mergedAt ?? 0) - (r.passedAt ?? 0)) / MINUTE)}m landingRuns=${avgS((r) => r.landingRuns)} direct=${slow.filter((r) => r.firstLandingAt === null).length}\n`);
+      process.stderr.write(`tail n=${tail.length} batches=${avg((r) => r.batches)} resolved=${avg((r) => r.resolved)} approvals=${avg((r) => r.approvals)} revert=${avg((r) => (r.revert ? 1 : 0))} | all batches=${(m.reduce((x, r) => x + r.batches, 0) / m.length).toFixed(2)}\n`);
+    }
     const merged = recs.filter((r) => r.mergedAt !== null);
     const ejected = recs.filter((r) => r.ejectedAt !== null && r.mergedAt === null);
     const unfinished = recs.filter((r) => r.mergedAt === null && r.ejectedAt === null);

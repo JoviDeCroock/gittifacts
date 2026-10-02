@@ -618,6 +618,13 @@ class Machine {
   private cancelTree(b: Batch, why: string, keepSelf = false): void {
     const victims = [...this.descendantsOf(b), ...(keepSelf ? [] : [b])];
     for (const v of victims) invariant(!this.batchInCas(v), "cancel.in-cas", `cannot cancel ${v.id}: CAS in flight`);
+    if (victims.length > 0)
+      this.audit("merge-queue.batches-cancelled", `batch:${b.id}`, {
+        why,
+        batches: victims.map((v) => v.id),
+        entries: victims.reduce((n, v) => n + ownEntries(v).length, 0),
+        running: victims.filter((v) => v.state === "running" || v.state === "rechecking").length,
+      });
     for (const v of victims) {
       const li = this.s.landing.findIndex((lid) => this.batch(lid)?.members.includes(v.id) === true);
       if (li >= 0) this.invalidateLanding(li, why);
@@ -2246,7 +2253,9 @@ class Machine {
       // Depth = the longest chain of untested batches the new one would sit on (independent
       // chains joined by a merge don't add up).
       const depth = 1 + Math.max(0, ...frontier.map((f) => this.chainDepth(f, depthMemo)));
-      if (depth > cfg.maxSpeculationDepth) return "blocked";
+      // A merge (several predecessors, e.g. an unknown affected set) is a barrier everything later
+      // queues behind; letting it wait for the deepest chain to drain would stall the whole repo.
+      if (depth > cfg.maxSpeculationDepth && frontier.length <= 1) return "blocked";
       if (frontier.length === 0 && Object.keys(s.tracks).length >= cfg.maxTracks) return "blocked";
       const b = this.createChainBatch(u, frontier);
       active.push(b);
@@ -2440,9 +2449,10 @@ class Machine {
       b.lineage = [...b.lineage.filter((x) => !inBatch.has(x)), ...out.flatMap((u) => u.changeIds)];
     }
     const own = ownEntries(b);
+    const fresh = new Set([...planned.values()].flatMap((u) => u.changeIds));
     own.forEach((cid, position) => {
       const e = this.entry(cid);
-      if (e === undefined || b.trackId === null) return;
+      if (e === undefined || b.trackId === null || !fresh.has(cid)) return;
       if (e.prediction !== null)
         this.telemetry("prediction", { changeId: cid, batchId: b.id, position, p: e.prediction.p, factors: e.prediction.factors, model: e.prediction.model });
       this.emit({
