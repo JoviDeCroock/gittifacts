@@ -454,6 +454,20 @@ export type PortsRole = "default" | "merge-queue";
 /** The platform's own principal id, used for machine actions in the audit log. */
 export const SYSTEM_PRINCIPAL_ID = "system";
 
+/** What an actor-driven facade call needs on a repo (apps/platform/src/access/roles.ts). */
+export type RepoNeed = "read" | "contribute" | "review" | "approve" | "admin";
+
+/**
+ * Repo access (membership) for the facade. Every actor-driven call (start a change, push token,
+ * review, kill switch, Lane 0, abandon, wait/watch) asks before acting, so the rule holds even
+ * when a route or tool forgets. `hidden`: the actor may not even see the repo (the facade answers
+ * not-found, which leaks nothing); `denied`: it sees the repo but may not do this (forbidden).
+ * Optional: without it the facade keeps only its own rules (unit tests with fakes).
+ */
+export interface RepoAccess {
+  check(actor: Principal, repoId: string, need: RepoNeed): Promise<"allowed" | "hidden" | "denied">;
+}
+
 export interface Ports {
   store: Store;
   git: GitHost;
@@ -471,4 +485,6 @@ export interface Ports {
   previews?: Previews;
   /** Onboarding metrics sink. */
   onboarding?: Onboarding;
+  /** Repo membership checks for actor-driven calls (the platform's src/access/). */
+  access?: RepoAccess;
 }

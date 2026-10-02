@@ -46,7 +46,7 @@ import { framesOf, normalizeIssue } from "./issues.js";
 import { FINAL_STATUSES, KILLABLE_STATUSES, PUSHABLE_STATUSES } from "./lifecycle.js";
 import { changeVersion, clampWait, withChangeNotifications } from "./milestones.js";
 import { errorMessage, parsePolicyExport, resolvePolicy } from "./policy.js";
-import { type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
+import { type Ports, type RepoNeed, SYSTEM_PRINCIPAL_ID } from "./ports.js";
 import { openRevertChange } from "./revert.js";
 
 export interface CoordinatorOptions {
@@ -227,6 +227,40 @@ export function createCoordinator(
     }
   }
 
+  const NEED_TEXT: Record<RepoNeed, string> = {
+    read: "read it",
+    contribute: "draft plans or start and push changes in it",
+    review: "review its changes",
+    approve: "approve its plans or pull its kill switch",
+    admin: "administer it",
+  };
+
+  /**
+   * Repo membership (the `access` port): `hidden` answers exactly like a missing repo or change,
+   * `denied` is forbidden. The system principal and facades without the port skip it.
+   */
+  async function assertAccess(
+    actor: Principal,
+    repoId: string,
+    need: RepoNeed,
+    hidden: () => never,
+  ): Promise<void> {
+    if (ports.access === undefined || actor.id === SYSTEM_PRINCIPAL_ID) return;
+    const r = await ports.access.check(actor, repoId, need);
+    if (r === "allowed") return;
+    if (r === "hidden") hidden();
+    fail("forbidden", `${actor.name} may not ${NEED_TEXT[need]} (repo ${repoId})`, {
+      explanation:
+        "Your role on this repo (an agent: its owner's role) does not allow this. Roles are reader < reviewer < maintainer < owner; ask an owner of the repo.",
+      call: `list_members({ repoId: "${repoId}" })`,
+    });
+  }
+
+  const noRepo = (id: string) => (): never =>
+    fail("not-found", `repo ${id} not found`, "Check the repo id; list your repos to find it.");
+  const noChange = (id: string) => (): never =>
+    fail("not-found", `change ${id} not found`, { explanation: "Check the change id.", call: status(id) });
+
   function canActOnChange(actor: Principal, change: Change, author: Principal | null): boolean {
     if (actor.id === change.authorId) return true;
     if (author?.kind === "agent" && author.ownerId === actor.id) return true;
@@ -352,6 +386,7 @@ export function createCoordinator(
         (owner === null
           ? actor.scopes.includes("change:create")
           : actor.id === owner || (actor.kind === "agent" && actor.ownerId === owner));
+      if (allowed) await assertAccess(actor, repo.id, "contribute", noRepo(repo.id));
       if (!allowed) {
         fail("forbidden", "only the repo's owner (or its agents) can bootstrap it", {
           explanation: "The bootstrap Change runs once, when the project is created.",
@@ -478,6 +513,7 @@ export function createCoordinator(
     async startChange(actor, input) {
       const parsed = parse(StartInput, input, "change");
       const repo = await requireRepo(parsed.repoId);
+      await assertAccess(actor, repo.id, "contribute", noRepo(repo.id));
       // Idempotent: the same (actor, key) always names the same change.
       const id =
         parsed.idempotencyKey === undefined
@@ -580,6 +616,7 @@ export function createCoordinator(
 
     async refreshPushGrant(actor, changeId) {
       const change = await requireChange(changeId);
+      await assertAccess(actor, change.repoId, "contribute", noChange(changeId));
       if (actor.id !== change.authorId) {
         fail("forbidden", "only the change's author can push to its fork", {
           explanation: "Start your own change instead of pushing to someone else's fork.",
@@ -618,6 +655,8 @@ export function createCoordinator(
     async submitReview(actor, changeId, input) {
       const review = parse(ReviewInput, input, "review");
       const change = await requireChange(changeId);
+      // Members (reviewer or above) only; nobody reviews an unclaimed project before its claim.
+      if (actor.kind === "human") await assertAccess(actor, change.repoId, "review", noChange(changeId));
       if (actor.kind !== "human") {
         fail("forbidden", "only humans review changes; agents prove conformance", {
           explanation:
@@ -757,6 +796,7 @@ export function createCoordinator(
       if (trimmed === "")
         fail("invalid-input", "a reason is required", "Say why the change is being killed.");
       const change = await requireChange(changeId);
+      await assertAccess(actor, change.repoId, "approve", noChange(changeId));
       if (isBootstrapChange(change)) {
         fail("invalid-state", "a bootstrap change has nothing to roll back", {
           explanation: "It only ran the first CI and preview of the initial commit.",
@@ -853,6 +893,7 @@ export function createCoordinator(
         );
       }
       const repo = await requireRepo(repoId);
+      await assertAccess(actor, repo.id, "admin", noRepo(repoId));
       if (enabled && repo.claim.status !== "claimed") {
         fail(
           "forbidden",
@@ -929,6 +970,8 @@ export function createCoordinator(
       const change = await requireChange(changeId);
       if (change.status === "abandoned") return change;
       const author = await store.getPrincipal(change.authorId);
+      const own = actor.id === change.authorId || author?.ownerId === actor.id;
+      await assertAccess(actor, change.repoId, own ? "contribute" : "review", noChange(changeId));
       if (!canActOnChange(actor, change, author)) {
         fail("forbidden", "only the author, its owner or a reviewer can abandon a change", {
           explanation: "Ask the change's author.",
@@ -968,9 +1011,10 @@ export function createCoordinator(
       return updated;
     },
 
-    async waitFor(_actor, changeId, until, timeoutMs) {
+    async waitFor(actor, changeId, until, timeoutMs) {
       const milestone = parse(WaitUntil, until, "wait");
-      await requireChange(changeId);
+      const watched = await requireChange(changeId);
+      await assertAccess(actor, watched.repoId, "read", noChange(changeId));
       const r = await bindings
         .changeCoordinator(changeId)
         .waitFor({ changeId, until: milestone, timeoutMs: clampWait(timeoutMs) });
@@ -978,8 +1022,9 @@ export function createCoordinator(
       return { change, reached: r.reached, reason: r.reason };
     },
 
-    async watchChange(_actor, changeId, opts) {
-      await requireChange(changeId);
+    async watchChange(actor, changeId, opts) {
+      const watched = await requireChange(changeId);
+      await assertAccess(actor, watched.repoId, "read", noChange(changeId));
       const r = await bindings
         .changeCoordinator(changeId)
         .watch({ changeId, since: opts.since, timeoutMs: clampWait(opts.timeoutMs) });
