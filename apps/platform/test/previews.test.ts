@@ -4,7 +4,7 @@ import { hardenHeaders, withBanner } from "../src/previews/gateway.js";
 import { parsePreviewHost, previewIdFor, previewUrlFor } from "../src/previews/ids.js";
 import { BANNER_TAG, bannerHtml, busyPage } from "../src/previews/pages.js";
 
-const ZONE = "preview.resynapse.dev";
+const ZONE = "-pv.resynapse.dev"; // host suffix: previews are first-level subdomains
 
 describe("preview hostnames", () => {
   it("maps change ids to latest and pinned labels and back", () => {
@@ -12,23 +12,29 @@ describe("preview hostnames", () => {
     expect(previewIdFor("abc123", "0123456789abcdef0123456789abcdef01234567")).toBe(
       "p-abc123-01234567",
     );
-    expect(previewUrlFor(ZONE, "bs-r1")).toBe(`https://p-bs-r1.${ZONE}`);
-    expect(parsePreviewHost(`p-bs-r1.${ZONE}`, ZONE)).toEqual({
+    expect(previewUrlFor(ZONE, "bs-r1")).toBe(`https://p-bs-r1${ZONE}`);
+    expect(parsePreviewHost(`p-bs-r1${ZONE}`, ZONE)).toEqual({
       kind: "latest",
       previewId: "p-bs-r1",
       changeId: "bs-r1",
     });
-    expect(parsePreviewHost(`P-ABC123-0123abcd.${ZONE}.`, ZONE)).toEqual({
+    expect(parsePreviewHost(`P-ABC123-0123abcd${ZONE}.`, ZONE)).toEqual({
       kind: "pinned",
       previewId: "p-abc123-0123abcd",
       changeId: "abc123",
       sha8: "0123abcd",
     });
-    expect(parsePreviewHost(`x.p-a.${ZONE}`, ZONE)).toBeNull();
+    expect(parsePreviewHost(`x.p-a${ZONE}`, ZONE)).toBeNull();
     expect(parsePreviewHost("gittifacts.example.com", ZONE)).toBeNull();
-    expect(parsePreviewHost(`evil.${ZONE}`, ZONE)).toBeNull();
-    // Labels longer than DNS allows are never minted.
+    expect(parsePreviewHost(`evil${ZONE}`, ZONE)).toBeNull();
+    // The user's other subdomains are never previews.
+    expect(parsePreviewHost("boris.resynapse.dev", ZONE)).toBeNull();
+    // Labels longer than DNS allows (suffix included) are never minted.
     expect(previewUrlFor(ZONE, "x".repeat(70))).toBeNull();
+    expect(previewUrlFor(ZONE, "x".repeat(58))).not.toBeNull(); // 60 + "-pv" = 63
+    expect(previewUrlFor(ZONE, "x".repeat(59))).toBeNull();
+    // A dedicated preview zone still works with a "." suffix.
+    expect(previewUrlFor(".previews.example", "bs-r1")).toBe("https://p-bs-r1.previews.example");
   });
 });
 

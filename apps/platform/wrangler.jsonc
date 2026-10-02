@@ -25,17 +25,18 @@
     "FLAGSHIP_APP_ID": "a829ecb3-7b1d-4640-9117-77d6fff4ca5d",
     // Not a secret: Artifacts remotes and the REST APIs (Versions, Flagship, Observability) need it.
     "CF_ACCOUNT_ID": "c8a74ade336909a754b36a7379edca30",
-    // Change previews: p-<changeId>[-<sha8>].<PREVIEW_ZONE> is served by the preview gateway in
+    // Change previews: p-<changeId>[-<sha8>]<PREVIEW_HOST_SUFFIX> is served by the preview gateway in
     // this Worker (src/previews/gateway.ts) from a PreviewHost container. See `routes` below.
-    "PREVIEW_ZONE": "preview.resynapse.dev",
+    "PREVIEW_HOST_SUFFIX": "-pv.resynapse.dev",
     // Analytics Engine dataset METRICS writes to (the time-to-first-green dashboard queries it).
     "METRICS_DATASET": "gittifacts_metrics"
   },
 
-  // The preview gateway: every *.preview.resynapse.dev request reaches this Worker (DNS: a proxied
-  // AAAA 100:: wildcard record, DECISIONS.md). workers.dev stays on for the platform itself.
+  // The preview gateway: every *-pv.resynapse.dev request reaches this Worker. Previews are
+  // first-level subdomains so Universal SSL covers them (DNS: proxied *.resynapse.dev AAAA 100::;
+  // the route only matches the -pv suffix, so the zone's other subdomains are untouched). workers.dev stays on for the platform itself.
   "workers_dev": true,
-  "routes": [{ "pattern": "*.preview.resynapse.dev/*", "zone_name": "resynapse.dev" }],
+  "routes": [{ "pattern": "*-pv.resynapse.dev/*", "zone_name": "resynapse.dev" }],
 
   // `wrangler types` reads this list; values live in `.dev.vars` locally (see .dev.vars.example)
   // and in `wrangler secret put` remotely.

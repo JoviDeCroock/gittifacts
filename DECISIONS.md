@@ -610,3 +610,20 @@ gateway route.
 - **Not a lane bypass.** The workspace pushes to the fork's branch; the PushRouter → ChangeWorkflow path decides
   everything after that. No workspace can mint a token for a main repo or reach production.
 - **Container labels** keys are ≤ 16 bytes (`gf-workspace`; live finding).
+
+## 2026-10-02 — Previews are first-level `<id>-pv.resynapse.dev` hosts (user decision)
+
+**Context.** Live, `*.preview.resynapse.dev` failed the TLS handshake. Universal SSL covers only the apex and one
+subdomain level, and a second-level wildcard certificate needs Advanced Certificate Manager ($10/month).
+
+**Decision (the user chose this over buying ACM).**
+- Preview hostnames are `p-<changeId>[-<sha8>]-pv.resynapse.dev`, all first-level and covered by Universal SSL.
+- DNS: a proxied `*.resynapse.dev` AAAA `100::` record. Explicit records such as `boris` or `drydock` still win.
+- The Worker route is `*-pv.resynapse.dev/*`, so only `-pv` hosts reach the preview gateway. Every other
+  subdomain of the zone behaves as before.
+- Configured as a host suffix (`PREVIEW_HOST_SUFFIX`), so a dedicated preview zone can be used later with a `.zone`
+  suffix and no code changes.
+- The obsolete `*.preview.resynapse.dev` DNS record is removed.
+
+**Consequence.** Undefined subdomains of resynapse.dev now resolve to Cloudflare (no matching route → Cloudflare error
+page) instead of NXDOMAIN.

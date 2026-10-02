@@ -52,7 +52,7 @@ export type PortsEnv = Pick<
   | "CI_ENGINE"
   | "PLATFORM_SIGNING_KEY"
   | "PREVIEW_HOST"
-  | "PREVIEW_ZONE"
+  | "PREVIEW_HOST_SUFFIX"
   | "METRICS"
 > & { AI?: Ai; AI_GATEWAY_TOKEN?: string; BROWSER?: BrowserRun };
 

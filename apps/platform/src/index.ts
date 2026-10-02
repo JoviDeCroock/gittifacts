@@ -36,7 +36,7 @@ export { Workspace } from "./workspace/workspace-do.js";
 const app = createApp();
 
 export default {
-  // *.preview.resynapse.dev is the preview gateway; every other host is the platform.
+  // *-pv.resynapse.dev is the preview gateway; every other host is the platform.
   fetch: (request, env, ctx) =>
     isPreviewHost(new URL(request.url).hostname, previewZone(env))
       ? handlePreviewRequest(request, env)

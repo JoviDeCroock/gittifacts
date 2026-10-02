@@ -1,5 +1,5 @@
 /**
- * The preview gateway: requests for `<previewId>.<PREVIEW_ZONE>` (wrangler route
+ * The preview gateway: requests for `<previewId><PREVIEW_HOST_SUFFIX>` (wrangler route
  * `*.preview.resynapse.dev/*`) go to the `PreviewHost` of that preview, never to the platform.
  *
  * - `p-<changeId>-<sha8>` is one head; `p-<changeId>` the change's newest previewed head.
@@ -23,6 +23,7 @@ export interface GatewayEnv {
   BLOBS: R2Bucket;
   PREVIEW_HOST: { getByName(name: string): { fetch(request: Request): Promise<Response> } };
   PREVIEW_ZONE?: string;
+  PREVIEW_HOST_SUFFIX?: string;
 }
 
 interface Resolved {

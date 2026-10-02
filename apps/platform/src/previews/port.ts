@@ -25,6 +25,7 @@ const VIEWPORTS = {
 export interface PreviewsEnv {
   BLOBS: R2Bucket;
   PREVIEW_ZONE?: string;
+  PREVIEW_HOST_SUFFIX?: string;
   PREVIEW_HOST: {
     getByName(name: string): {
       ensure(config: PreviewConfig, opts: { waitMs: number }): Promise<PreviewState>;

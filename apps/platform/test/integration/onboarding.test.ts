@@ -178,7 +178,7 @@ describe("create_project → first green (workerd, fake Artifacts/containers)", 
         // 4. The preview URL exists before the preview does: "Building…" while CI runs.
         const hasPreview = spec.manifest.previewCommand !== null;
         if (hasPreview) {
-          expect(p.previewUrl).toBe(`https://p-${p.bootstrapChangeId}.preview.resynapse.dev`);
+          expect(p.previewUrl).toBe(`https://p-${p.bootstrapChangeId}-pv.resynapse.dev`);
           const building = await SELF.fetch(p.previewUrl as string, {
             headers: { accept: "text/html" },
           });
@@ -246,7 +246,7 @@ describe("create_project → first green (workerd, fake Artifacts/containers)", 
           expect(page.headers.getSetCookie()).toEqual(["session=1; Path=/; HttpOnly"]);
           // The pinned URL serves the same head.
           const pinned = await SELF.fetch(
-            `https://p-${bootstrapId}-${(head as string).slice(0, 8)}.preview.resynapse.dev/about/`,
+            `https://p-${bootstrapId}-${(head as string).slice(0, 8)}-pv.resynapse.dev/about/`,
             { headers: { accept: "text/html" } },
           );
           expect(await pinned.text()).toContain("Hello from /about/");

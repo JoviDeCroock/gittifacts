@@ -44,7 +44,7 @@ Migration `0006_onboarding_previews_ttfg` adds the `previews` and `project_onboa
 
 `deploy` creates the four Workflows (`change-workflow`, `rollout-workflow`, `push-router`, `ci-run-workflow`), the
 `runner` and `preview` container applications (`scheduling_policy: durable_object`, both built from
-`apps/sandbox/Dockerfile`), the `*.preview.resynapse.dev/*` route on the `resynapse.dev` zone (DNS: the proxied
+`apps/sandbox/Dockerfile`), the `*-pv.resynapse.dev/*` route on the `resynapse.dev` zone (DNS: the proxied wildcard `*.resynapse.dev`; previous
 `*.preview` AAAA `100::` record) and the `cf.artifacts.repo.pushed` trigger
 (namespace `gittifacts-eu` → `push-router`).
 

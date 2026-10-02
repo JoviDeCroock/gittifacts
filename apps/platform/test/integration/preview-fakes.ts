@@ -74,7 +74,7 @@ export class FakePreviewContainer implements PreviewContainer {
         }
         const headers = new Headers({ "content-type": "text/html; charset=utf-8" });
         headers.append("set-cookie", "session=1; Path=/; HttpOnly");
-        headers.append("set-cookie", "tracker=1; Domain=preview.resynapse.dev; Path=/");
+        headers.append("set-cookie", "tracker=1; Domain=resynapse.dev; Path=/");
         return new Response(PREVIEW_PAGE(url.pathname), { status: 200, headers });
       },
     };

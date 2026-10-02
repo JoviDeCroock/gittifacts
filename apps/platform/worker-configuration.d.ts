@@ -17,7 +17,7 @@ interface __BaseEnv_Env {
 	AI_GATEWAY_ID: string;
 	FLAGSHIP_APP_ID: string;
 	CF_ACCOUNT_ID: string;
-	PREVIEW_ZONE: string;
+	PREVIEW_HOST_SUFFIX: string;
 	METRICS_DATASET: string;
 	PLATFORM_SIGNING_KEY: string;
 	BETTER_AUTH_SECRET: string;
@@ -50,5 +50,5 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "CI_ENGINE" | "CI_CACHE_NAMESPACE" | "ARTIFACTS_NAMESPACE" | "AI_GATEWAY_ID" | "FLAGSHIP_APP_ID" | "CF_ACCOUNT_ID" | "PREVIEW_ZONE" | "METRICS_DATASET" | "PLATFORM_SIGNING_KEY" | "BETTER_AUTH_SECRET" | "GITHUB_CLIENT_ID" | "GITHUB_CLIENT_SECRET" | "ISSUES_WEBHOOK_SECRET" | "CF_API_TOKEN">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "CI_ENGINE" | "CI_CACHE_NAMESPACE" | "ARTIFACTS_NAMESPACE" | "AI_GATEWAY_ID" | "FLAGSHIP_APP_ID" | "CF_ACCOUNT_ID" | "PREVIEW_HOST_SUFFIX" | "METRICS_DATASET" | "PLATFORM_SIGNING_KEY" | "BETTER_AUTH_SECRET" | "GITHUB_CLIENT_ID" | "GITHUB_CLIENT_SECRET" | "ISSUES_WEBHOOK_SECRET" | "CF_API_TOKEN">> {}
 }
