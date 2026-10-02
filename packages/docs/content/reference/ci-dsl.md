@@ -9,7 +9,12 @@ generated: true
 
 # CI DSL (.platform/ci.ts)
 
-`.platform/ci.ts` default-exports `async (ci) => { ... }`. The platform evaluates it in a sandbox in plan mode (no `node_modules`, git host only, 120 s) and records a static DAG of steps. `ci.runner(opts)` starts a step from a fresh checkout; `step.runner(opts)` starts one from that step's container snapshot (reusing its install). Steps you start without awaiting in between run in parallel. The platform adds its evidence steps after yours. Without the file, a default pipeline is detected from `package.json`.
+`.platform/ci.ts` default-exports `async (ci) => { ... }`. The platform evaluates it in a sandbox in plan mode (no `node_modules`, git host only, 120 s) and records a static graph of steps.
+
+- `ci.runner(opts)` starts a step from a fresh checkout.
+- `step.runner(opts)` starts a step from that step's container snapshot, so it reuses the install.
+- Steps you start without awaiting in between run in parallel.
+- The platform adds its evidence steps after yours. Without the file, a default pipeline is detected from `package.json`.
 
 > Generated from `packages/ci-engine/src/plan/recorder.ts`, `packages/ci-engine/src/plan/spec.ts`, `packages/ci-engine/RUNNER_CONTRACT.md`, `templates/workers-api/.platform/ci.ts` by `pnpm --filter @app/docs generate`. Don't edit this page by hand: change the code and regenerate.
 
@@ -42,7 +47,12 @@ generated: true
 
 ## Step environment
 
-Each step runs in its own container as user `runner` in `/workspace` (a shallow, blobless checkout at the head commit, no credentials). The whole environment is `HOME=/home/runner`, `CI=true`, `LANG=C.UTF-8`, `TERM=dumb`, the step's own `env`, then `GITTIFACTS=1`, `GITTIFACTS_RUN_ID`, `GITTIFACTS_STEP` and `GITTIFACTS_HEAD_SHA`. Evidence steps also get `GITTIFACTS_BASE_SHA`. In merge-queue batch runs, user steps get `GITTIFACTS_TEST_TARGETS` (the affected test targets); a test command that ignores it runs everything. Steps never get secrets or platform tokens.
+Each step runs in its own container as user `runner` in `/workspace`: a shallow, blobless checkout at the head commit, with no credentials. Steps never get secrets or platform tokens. The whole environment is:
+
+- `HOME=/home/runner`, `CI=true`, `LANG=C.UTF-8`, `TERM=dumb`, then the step's own `env`;
+- `GITTIFACTS=1`, `GITTIFACTS_RUN_ID`, `GITTIFACTS_STEP`, `GITTIFACTS_HEAD_SHA`;
+- evidence steps only: `GITTIFACTS_BASE_SHA`;
+- merge-queue batch runs only: `GITTIFACTS_TEST_TARGETS`, the affected test targets. A test command that ignores it runs everything.
 
 ## The file new projects get
 

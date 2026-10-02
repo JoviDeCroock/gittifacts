@@ -24,7 +24,7 @@ function builtinSection(b: (typeof BUILTINS)[number]): string {
   return join(
     `### \`gittifacts ${spec.command}\``,
     spec.description,
-    fence("sh", usageOf(spec)),
+    fence("text", usageOf(spec)),
     rows.length === 0 ? "" : table(["Flag", "Type", "Required", "Notes"], rows),
     b.examples && b.examples.length > 0 ? `Examples: ${b.examples.map(code).join(", ")}.` : "",
   );

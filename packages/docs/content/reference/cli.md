@@ -51,7 +51,7 @@ These run in the CLI itself (some call one MCP tool on your behalf).
 
 Create a project in one call (create_project): repo from a template or a GitHub import, .platform/ci.ts, policy and AGENTS.md, first CI and preview. Writes .gittifacts.json (host, projectId, remote). No account needed: you get an unclaimed project and a claim URL for a human.
 
-```sh
+```text
 gittifacts init [--template <workers-api|preact-app|ts-library|static-site>] [--from <string>] [--name <string>] [--description <string>] [--clone] [--dir <string>] [--force] [--show-token] [--idempotency-key <key>]
 ```
 
@@ -72,7 +72,7 @@ Examples: `gittifacts init --template workers-api --name my-api`, `gittifacts in
 
 Log in with the OAuth device flow (RFC 8628): open the printed URL, confirm the code, and the token is stored in ~/.config/gittifacts/credentials.json (0600) for this host. Optional: unclaimed projects work without it.
 
-```sh
+```text
 gittifacts login [--scope <string>] [--no-wait] [--device-code <string>] [--interval <integer>] [--expires-in <integer>] [--client-id <string>] [--device-code-url <string>] [--token-url <string>]
 ```
 
@@ -93,7 +93,7 @@ Examples: `gittifacts login --host https://gittifacts.example`, `gittifacts logi
 
 Forget this host's login token. --all also forgets the tokens of unclaimed projects created from this machine.
 
-```sh
+```text
 gittifacts logout [--all]
 ```
 
@@ -105,7 +105,7 @@ gittifacts logout [--all]
 
 Wait until a change reaches a milestone, re-issuing the wait_for_change long-poll until --timeout. Exit 0 when reached, 3 when it timed out or can no longer be reached.
 
-```sh
+```text
 gittifacts wait <changeId> --until <evidence_ready|lane_assigned|tour_ready|merged|reverted> [--timeout <integer>]
 ```
 
@@ -121,7 +121,7 @@ Examples: `gittifacts wait chg_123 --until evidence_ready`, `gittifacts wait chg
 
 List the commands generated from MCP tools (bundled with this CLI, or --remote: what the live server offers now).
 
-```sh
+```text
 gittifacts tools [--remote]
 ```
 
@@ -133,7 +133,7 @@ gittifacts tools [--remote]
 
 Fuzzy-search command names and descriptions (offline; mirrors the MCP search_tools). --remote searches the live server's tools.
 
-```sh
+```text
 gittifacts search-tools <query> [--remote] [--limit <integer>]
 ```
 
@@ -149,7 +149,7 @@ Examples: `gittifacts search-tools "wait for ci"`, `gittifacts search-tools revi
 
 Usage, commands, global flags and exit codes; `help <command>` for one command.
 
-```sh
+```text
 gittifacts help <command>
 ```
 
