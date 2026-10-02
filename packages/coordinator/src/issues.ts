@@ -147,3 +147,38 @@ export function normalizeIssue(payload: unknown, now: Date): NormalizedIssue | n
     payload.alert_event === "ALERT_STATE_EVENT_END" || at(data, "status") === "resolved";
   return { issue: parsed.data, scriptName, resolved, raw: payload };
 }
+
+const FRAME = /at (?:([\w$.<>[\]]+) )?\(?((?:[\w@.-]+\/)*[\w@.-]+\.[cm]?[jt]sx?):\d+(?::\d+)?\)?/g;
+
+/**
+ * Stack frames from a Workers Issues payload, leniently (the payload is undocumented): V8 stack
+ * strings anywhere in it, and objects with a `filename`/`file` field. Paths are repo-relative as
+ * far as the stack says; deploy-train attribution scores Changes by them (§4.8).
+ */
+export function framesOf(raw: unknown): { file: string; fn?: string }[] {
+  const out: { file: string; fn?: string }[] = [];
+  const seen = new Set<string>();
+  const push = (file: string, fn?: string) => {
+    const clean = file.replace(/^(\.\/|\/+)/, "");
+    const key = `${clean}#${fn ?? ""}`;
+    if (seen.has(key) || out.length >= 200) return;
+    seen.add(key);
+    out.push(fn === undefined ? { file: clean } : { file: clean, fn });
+  };
+  const visit = (v: unknown, depth: number): void => {
+    if (depth > 8 || out.length >= 200) return;
+    if (typeof v === "string") {
+      for (const m of v.matchAll(FRAME)) if (m[2] !== undefined) push(m[2], m[1]);
+    } else if (Array.isArray(v)) {
+      for (const x of v) visit(x, depth + 1);
+    } else if (isObj(v)) {
+      const file = v.filename ?? v.fileName ?? v.file;
+      const fn = v.function ?? v.functionName ?? v.fn;
+      if (typeof file === "string" && file !== "")
+        push(file, typeof fn === "string" ? fn : undefined);
+      for (const x of Object.values(v)) visit(x, depth + 1);
+    }
+  };
+  visit(raw, 0);
+  return out;
+}

@@ -10,6 +10,7 @@ import {
   defaultPolicy,
   type ErrorFix,
   type Jurisdiction,
+  type Lane,
   type Principal,
   type Repo,
   type ReviewDecision,
@@ -35,12 +36,13 @@ import {
   isBootstrapChange,
   isForkName,
   newId,
+  QUEUE_SCRATCH_PREFIX,
   repoSubject,
   rolloutWorkflowId,
   SEED_PREFIX,
   ZERO_SHA,
 } from "./ids.js";
-import { normalizeIssue } from "./issues.js";
+import { framesOf, normalizeIssue } from "./issues.js";
 import { FINAL_STATUSES, KILLABLE_STATUSES, PUSHABLE_STATUSES } from "./lifecycle.js";
 import { changeVersion, clampWait, withChangeNotifications } from "./milestones.js";
 import { errorMessage, parsePolicyExport, resolvePolicy } from "./policy.js";
@@ -206,6 +208,7 @@ export function createCoordinator(
     for (const [prefix, what] of [
       [FORK_PREFIX, "change forks"],
       [SEED_PREFIX, "the platform's template caches"],
+      [QUEUE_SCRATCH_PREFIX, "the merge queue's scratch repos"],
     ] as const) {
       if (name.startsWith(prefix)) {
         fail(
@@ -702,6 +705,26 @@ export function createCoordinator(
             approvedByAgentOwner: viaOwner,
           },
         });
+        // The agent-native merge queue may hold this Change for a fresh approval (its lane rose in
+        // the queue: a conflict resolution or a quarantined test). The ChangeWorkflow is past
+        // review then (it waits for the merge), so the queue gets the decision directly.
+        const queue = bindings.mergeQueue(change.repoId);
+        if (queue.approved !== undefined) {
+          if (decision.decision === "approve") {
+            const approved = queue.approved.bind(queue);
+            await upstream("tell the merge queue", () =>
+              approved({
+                changeId,
+                lane: Math.max(change.lane ?? 0, classification.lane) as Lane,
+                approver: { principalId: actor.id, kind: "human" },
+              }),
+            );
+          } else if (await queue.remove({ repoId: change.repoId, changeId }).catch(() => false)) {
+            await store.updateChange(changeId, {
+              status: decision.decision === "reject" ? "rejected" : "awaiting-push",
+            });
+          }
+        }
         const event: ReviewEvent = {
           reviewId: decision.id,
           headSha,
@@ -871,7 +894,21 @@ export function createCoordinator(
         change = await store.getChange(issue.changeId);
       const linked = { ...issue, changeId: change?.id ?? issue.changeId };
       await store.putIssue({ ...linked, scriptName, raw });
-      if (resolved || change === null || change.status !== "rolling-out") return;
+      if (resolved || change === null) return;
+      // A version a merge-queue deploy train shipped: the train attributes it (several Changes).
+      const queue = bindings.mergeQueue(change.repoId);
+      if (issue.versionId !== null && queue.onIssue !== undefined) {
+        const onIssue = queue.onIssue.bind(queue);
+        const versionId = issue.versionId;
+        const took = await onIssue({
+          worker: scriptName,
+          versionId,
+          issueId: issue.id,
+          frames: framesOf(raw),
+        }).catch(() => false);
+        if (took) return;
+      }
+      if (change.status !== "rolling-out") return;
       try {
         const instance = await bindings.rolloutWorkflow.get(rolloutWorkflowId(change.id));
         await instance.sendEvent({ type: EVENT_ISSUE, payload: linked });

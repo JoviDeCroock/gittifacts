@@ -29,6 +29,7 @@ import {
   EVENT_MERGED,
   EVENT_REVIEW,
   MergedEvent,
+  QueueEjectedEvent,
   ReviewEvent,
   type RolloutParams,
 } from "./events.js";
@@ -737,9 +738,16 @@ export async function runChangeWorkflow(
     step.do(name, RETRY.quick, async () => {
       // Queued before the RPC: the queue may merge (and set "merged") before this step returns.
       await store.updateChange(changeId, { status: "queued" });
-      const { position } = await bindings
-        .mergeQueue(repoId)
-        .enqueue({ repoId, changeId, headSha, workflowInstanceId: instanceId });
+      const { position } = await bindings.mergeQueue(repoId).enqueue({
+        repoId,
+        changeId,
+        headSha,
+        workflowInstanceId: instanceId,
+        lane: cls.lane,
+        // What admits it: the Lane 0 rule, the verified-revert policy, or a human's review.
+        approvedLane: via === "lane-0" ? 0 : cls.lane,
+        via,
+      });
       await log("change.queued", { via, reviewId, position, lane: cls.lane });
       return position;
     });
@@ -843,6 +851,13 @@ export async function runChangeWorkflow(
       merged = parsed.data;
       break;
     }
+    // The agent-native queue ejected it (machine-readable reason, `fix` aimed at the author).
+    const ejected = event === null ? null : QueueEjectedEvent.safeParse(event.payload);
+    if (ejected?.success) {
+      const r = ejected.data.reason;
+      failure = `merge queue ejected it (${r.code}): ${r.message} Next: ${r.fix.call ?? r.fix.explanation}`;
+      break;
+    }
     // Woke without a merge: the change row is the truth (the queue marks conflicts "failing").
     const status = await step.do(`merge-status-${round}`, RETRY.quick, async () => {
       const change = await store.getChange(changeId);
@@ -857,7 +872,12 @@ export async function runChangeWorkflow(
         rebasedFrom: status.mergedSha === headSha ? null : headSha,
         bundleRef: null,
       };
-    } else if (status.status !== "queued" && status.status !== "approved") {
+    } else if (
+      status.status !== "queued" &&
+      status.status !== "approved" &&
+      // The queue asks for a fresh approval when it raised the lane; it stays queued meanwhile.
+      status.status !== "awaiting-review"
+    ) {
       failure = `merge queue gave up: change is ${status.status}`;
     }
   }
@@ -889,6 +909,11 @@ export async function runChangeWorkflow(
         reason: "no deploy target",
       });
       return "none" as const;
+    }
+    if (mergedEvent.deployVia === "train") {
+      // The merge queue's deploy trains roll it out (with the Changes merged around it).
+      await log("rollout.via-train", { mergedSha: mergedEvent.mergedSha });
+      return "started" as const;
     }
     if (repo.claim.status !== "claimed") {
       // Previews only: unclaimed projects never get a production deploy.

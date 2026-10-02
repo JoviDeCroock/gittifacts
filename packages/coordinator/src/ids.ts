@@ -14,6 +14,9 @@ export const FORK_PREFIX = "task-";
  */
 export const SEED_PREFIX = "seed-";
 
+/** The merge queue's per-repo scratch repos (`mqs-<repoId>`): no project may use the prefix. */
+export const QUEUE_SCRATCH_PREFIX = "mqs-";
+
 /** Prefix of a repo's bootstrap Change (its first CI run and preview). */
 export const BOOTSTRAP_PREFIX = "bs-";
 

@@ -7,7 +7,7 @@ import type { Change, Repo } from "@app/domain";
 import type { QueueState } from "@app/merge-queue";
 import type { ConflictResolver } from "@app/resolver";
 import type { CoordinatorBindings, WorkflowHandle } from "../bindings.js";
-import { changeSubject, repoSubject } from "../ids.js";
+import { changeSubject, QUEUE_SCRATCH_PREFIX, repoSubject } from "../ids.js";
 import { withChangeNotifications } from "../milestones.js";
 import { errorMessage } from "../policy.js";
 import { type Ports, SYSTEM_PRINCIPAL_ID } from "../ports.js";
@@ -15,9 +15,9 @@ import type { BatchRunParams } from "./batch-run.js";
 import type { QueueJobs, ReplaySpec } from "./jobs.js";
 import type { QueueStore } from "./store.js";
 
-/** The queue's scratch repo: batch trees and resolutions are built here, never in main. */
-export const QUEUE_SCRATCH_PREFIX = "mqs-";
+export { QUEUE_SCRATCH_PREFIX };
 
+/** The queue's scratch repo: batch trees and resolutions are built here, never in main. */
 export function scratchRepoFor(repoId: string): string {
   return `${QUEUE_SCRATCH_PREFIX}${repoId}`;
 }
