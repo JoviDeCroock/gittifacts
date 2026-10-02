@@ -552,3 +552,61 @@ gateway route.
   when `CF_API_TOKEN` can (Account Analytics Read), D1 otherwise; the web page is `/internal/onboarding`.
 - **Template cache seeding**: `POST /api/v1/admin/seed-cache` writes each template once into `seed-<id>-<digest8>`
   and calls `ciEngine.seedCache`, so the first project per template hits a published install snapshot.
+
+## 2026-10-02 — O5: import detection as a Plan + Change, and remote workspaces
+
+**Import detection.**
+- `inspectRepo` (pure, `@app/conventions`) is the single source: `detectProject` plus test-runner configs,
+  tsconfig, every wrangler config's `name`, workspaces and pnpm 11 build-script approvals. `gittifacts-runner
+  detect` only lists tracked files and reads them (`::detect::<DetectReport>`); nothing is installed or run.
+- pnpm lockfiles don't record install scripts, so `buildScriptsNeedingApproval` = lockfile packages on a
+  well-known install-script list, minus `allowBuilds`/`onlyBuiltDependencies`. That is a heuristic and the
+  report says so in `uncertain`. Detection never approves build scripts.
+- **Platform service, not the coordinator.** `proposePlatformConfig` lives in `apps/platform/src/import/`: it
+  needs a sandbox job, a Plan (plans are platform-owned, not coordinator-owned), a Change (through the
+  coordinator facade like any caller) and a push. No coordinator change was needed.
+- It is a Workflow (`PlatformConfigWorkflow`, one instance per `(repo, default-branch sha)` unless `rerun`):
+  base → detect (Runner job on the main repo, read-only, `registries-only`) → Plan (draft, author `system`,
+  deterministic id) → Change (`chore`, idempotency key = proposal id) → commit → record. The commit step opens a
+  **system workspace** on the Change's fork, writes the files and pushes them: the same fork-only push path agents
+  use, so no new GitHost write primitive was added. The push starts the normal flow; `.platform/**` makes it
+  Lane 2 with `requiresHumanApproval`.
+- The Plan lists every doubt as `{ area: "detection", description: "Detection is unsure: …" }`, plus install
+  scripts needing approval and low confidence. Existing `.platform/*` files are kept; a non-generated AGENTS.md
+  gets the platform section appended (and a risk says so). Nothing to propose → status `not-needed`.
+- Until it merges, CI uses the default pipeline (verified: `ci-run.ts` and `gittifacts-runner plan` fall back to
+  `defaultPipeline(facts)` without `.platform/ci.ts`; the policy falls back to `defaultPolicy()`).
+- `create_project({ from })` should call `startPlatformConfigProposal(svc, { repoId, requestedBy })` after the
+  import (exported from `apps/platform/src/import/service.ts`; returns at once).
+
+**Remote workspaces.**
+- **Blobless clone, not ArtifactFS.** ArtifactFS needs FUSE (`SYS_ADMIN` + `/dev/fuse`); `ContainerStartupOptions`
+  has no capabilities or devices, so it can't be granted on `ctx.container`. `git fetch --depth=50
+  --filter=blob:none` (verified on Artifacts, artifacts.md §12) checks the fork out; the base commit is fetched
+  with blobs so `ws_diff` needs no credentials. Lazy fetches of old blobs from agent commands fail (no token).
+- **One `Workspace` DO per Change** (`ws-<changeId>`), own container app on the sandbox image (a container backs
+  one DO class). Start order: its sleep snapshot → the Change's CI dependency snapshot (`snapshots.install` of the
+  head's run, else the bootstrap run at base) → the image; an unrestorable snapshot falls back to the next.
+- **Tokens.** Minted just in time by the DO through the default-role GitHost (fork-only write guard), never
+  stored: a **read** token for the checkout exec, a **write** token for the commit-push exec only, both in
+  `GIT_CONFIG_*` env. Agent `ws_exec` commands never see a token. Before pushing, the script rewrites
+  `.git/config` from scratch (repo code could add `insteadOf`, credential helpers, fsmonitor or filters to
+  redirect or read the token) and disables hooks.
+- **Who.** Only the Change's author may open/use its workspace (it pushes to the fork, like `refresh_push_token`),
+  only for `task-*` forks (bootstrap Changes have none), only while the Change accepts pushes; the DO re-checks
+  the opener on every call. Delegated agents' `repoIds` are enforced before (MCP backend, via the Change).
+- **Lifecycle.** Idle `idleMs` (10 min claimed, 5 unclaimed) → DO alarm snapshots the root filesystem and stops
+  the container (`sleeping`); the next call resumes from it. `setInactivityTimeout(idle + 10 min)` is only a
+  backstop. Hard TTL from open: 2 h claimed, 30 min unclaimed (`WORKSPACE_TTL_*_MIN` vars) → `expired`;
+  `open_workspace` starts a fresh session from the fork's head.
+- **Quotas.** `ProjectLedger` DO per project: vCPU-seconds of container time per UTC day (container wall time ×
+  instance vCPUs, the closest to "CPU minutes" `ctx.container` exposes): 600 vCPU-min claimed, 30 unclaimed;
+  open workspaces: 5 claimed, 1 unclaimed. `ws_exec` timeouts are clamped to the remaining budget and TTL.
+  Platform-owned (proposal) workspaces don't count against the open limit.
+- **Egress.** Claimed: open, unless `policy.sandbox.network = "registries-only"` (new optional RepoPolicy field).
+  Unclaimed: always registries-only through `WorkspaceEgressGateway`, which reuses the CI engine's
+  `egressDecision`/`REGISTRY_HOSTS` and adds exactly one rule: `git-receive-pack` to the workspace's own fork path
+  (CI's gateway is fetch-only, which would block `ws_commit_push`). Denials are counted on the Workspace DO.
+- **Not a lane bypass.** The workspace pushes to the fork's branch; the PushRouter → ChangeWorkflow path decides
+  everything after that. No workspace can mint a token for a main repo or reach production.
+- **Container labels** keys are ≤ 16 bytes (`gf-workspace`; live finding).
