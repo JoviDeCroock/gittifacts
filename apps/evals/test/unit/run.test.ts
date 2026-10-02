@@ -145,7 +145,7 @@ describe("runEvalCore", () => {
       pass: false,
       detail: "1 shell calls",
     });
-    expect(r.checks.find((c) => c.name === "used-open-workspace")!.pass).toBe(false);
+    expect(r.checks.find((c) => c.name === "used-open-workspace (informational)")!.pass).toBe(true);
     expect(r.success).toBe(false);
   });
 

@@ -96,7 +96,7 @@ describe("EvalRunWorkflow, remote-only (task 4)", () => {
       ["project-created", true],
       ["preview-serves-time", true],
       ["no-shell", true],
-      ["used-open-workspace", true],
+      ["used-open-workspace (informational)", true],
     ]);
     expect(r).toMatchObject({
       success: true,

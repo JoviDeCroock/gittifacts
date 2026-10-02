@@ -8,7 +8,9 @@
  *   red/green item with verdict `proven` (signature verified).
  * - t3: a Change created during the run with `public-api` evidence classified `additive`, routed
  *   to Lane 1, with a tour.
- * - t4: t1's checks + zero `shell` calls + a successful `open_workspace`.
+ * - t4: t1's checks + zero `shell` calls. Whether `open_workspace` was used is recorded but does
+ *   not gate: the workers-api template already satisfies task 1, so a remote-only agent may
+ *   legitimately finish without editing anything (lead decision 2026-10-02).
  *
  * Attribution: only ids harvested from this run's own tool output count (never "any repo created
  * in the window"), so parallel runs can't pass on each other's work.
@@ -280,8 +282,8 @@ export async function checkOnce(input: CheckInput, deps: CheckDeps): Promise<Che
     checks.push({ name: "no-shell", pass: shell === 0, detail: `${shell} shell calls` });
     const ws = input.mcpCalls.filter((c) => c.name === "open_workspace");
     checks.push({
-      name: "used-open-workspace",
-      pass: ws.some((c) => !c.isError),
+      name: "used-open-workspace (informational)",
+      pass: true,
       detail: ws.length
         ? `${ws.length} open_workspace calls, ${ws.filter((c) => !c.isError).length} succeeded`
         : "open_workspace was never called",

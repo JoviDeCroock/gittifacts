@@ -95,10 +95,11 @@ describe("task 1 / 4 checker", () => {
       deps,
       { graceMs: 0 },
     );
-    expect(bad.checks.filter((c) => !c.pass).map((c) => c.name)).toEqual([
-      "no-shell",
-      "used-open-workspace",
-    ]);
+    // Only the shell call fails t4; workspace use is informational.
+    expect(bad.checks.filter((c) => !c.pass).map((c) => c.name)).toEqual(["no-shell"]);
+    expect(bad.checks.find((c) => c.name === "used-open-workspace (informational)")?.detail).toMatch(
+      /0 succeeded/,
+    );
     const good = await checkRun(
       { ...base, mcpCalls: [{ name: "open_workspace", isError: false }] },
       deps,
