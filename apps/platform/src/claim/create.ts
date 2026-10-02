@@ -16,7 +16,7 @@
 import { fixFor } from "@app/conventions";
 import { sha256Hex } from "@app/evidence";
 import type { ProjectCreated } from "@app/mcp";
-import { and, eq, gt, isNull, lt } from "drizzle-orm";
+import { and, eq, isNull, lt } from "drizzle-orm";
 import type { Services } from "../app-env.js";
 import { disablePrincipal } from "../auth/principals.js";
 import { projectClaims, unclaimedCreations } from "../db/schema.js";
@@ -230,18 +230,4 @@ export async function createUnclaimedProject(
       await disablePrincipal(svc.store, agent.id, now).catch(() => false);
     throw e;
   }
-}
-
-/** Unexpired unclaimed creations from one IP (for tests and the admin view). */
-export async function recentCreationsFrom(svc: Services, ipHash: string, sinceMs: number) {
-  return svc.store.db
-    .select({ repoId: projectClaims.repoId })
-    .from(projectClaims)
-    .where(
-      and(
-        eq(projectClaims.creatorIpHash, ipHash),
-        gt(projectClaims.createdAt, new Date(sinceMs).toISOString()),
-      ),
-    )
-    .all();
 }
