@@ -9,12 +9,12 @@ Every gate must hold for every seed (1, 2, 3). `pnpm --filter @sim/merge-queue g
 |  | gate | result |
 |---|---|---|
 | PASS | any scenario: main-red events = 0 | 0 in 30 runs |
-| PASS | any scenario: attribution failures = 0 | 0 failures over 7 production regressions |
+| PASS | any scenario: attribution failures = 0 | 0 failures over 6 production regressions |
 | PASS | any scenario: no invariant violation, no leaked refs/queue/*, no lane decrease | clean |
-| **FAIL** | gate-200: p95 time-in-queue ≤ 2× median CI (20 min) | worst seed 33.0 min (per seed: 33.0, 32.8, 30.6) |
-| PASS | gate-200: CI minutes per merged Change ≤ 1.5× an isolated run | worst seed 0.70× (per seed: 0.69, 0.70, 0.65) |
-| PASS | gate-200: false-eject rate ≤ 1% | worst seed 0.34% (per seed: 0.16, 0.34, 0.00) |
-| PASS | textual conflicts (simulator resolver model): resolver success ≥ 80%, zero lane downgrades | worst seed 97.6% over 220/428/248 incidents; 0 lane decreases (57 lower re-classifications ignored) |
+| **FAIL** | gate-200: p95 time-in-queue ≤ 2× median CI (20 min) | worst seed 20.8 min (per seed: 20.8, 18.7, 20.0) |
+| PASS | gate-200: CI minutes per merged Change ≤ 1.5× an isolated run | worst seed 1.12× (per seed: 1.12, 1.09, 1.08) |
+| PASS | gate-200: false-eject rate ≤ 1% | worst seed 0.17% (per seed: 0.00, 0.17, 0.17) |
+| PASS | textual conflicts (simulator resolver model): resolver success ≥ 80%, zero lane downgrades | worst seed 97.1% over 171/286/170 incidents; 0 lane decreases (40 lower re-classifications ignored) |
 
 ## Results per scenario (full queue, mean over seeds)
 
@@ -22,16 +22,16 @@ Time in queue is enqueue → merged, in minutes; Changes still unmerged when the
 
 | scenario | arrivals | merged/h | time in queue p50 / p95 / p99 | CI ratio | eject | false eject | resolved / conflicts | main red | attribution fail / regressions | batch size | freezes | quarantines |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| gate-200 | 603.0 | 162.7 | 17.1 / 32.1 / 52.4 | 0.68 | 2.82% | 0.17% | 34/45 | 0 | 0/0 | 2.16 | 0.0 | 0.0 |
-| low-50 | 155.3 | 46.7 | 13.9 / 19.5 / 29.8 | 0.95 | 1.08% | 0.00% | 2/4 | 0 | 0/0 | 1.26 | 0.0 | 0.0 |
-| high-500 | 989.7 | 166.0 | 33.1 / 152.3 / 198.8 | 0.81 | 7.81% | 0.59% | 197/251 | 0 | 0/0 | 3.08 | 0.0 | 0.0 |
-| conflict-heavy | 605.3 | 46.2 | 151.8 / 318.8 / 383.4 | 2.65 | 28.45% | 0.67% | 629/695 | 0 | 0/0 | 3.43 | 0.0 | 2.0 |
-| failure-heavy | 595.0 | 131.2 | 19.7 / 63.7 / 78.7 | 0.93 | 7.56% | 0.45% | 44/77 | 0 | 0/0 | 2.68 | 0.0 | 0.0 |
-| flaky-storm | 605.7 | 145.8 | 16.7 / 59.3 / 88.2 | 0.73 | 3.79% | 1.05% | 35/52 | 0 | 0/0 | 2.16 | 0.0 | 3.0 |
-| stacks-groups | 599.3 | 159.5 | 17.6 / 40.2 / 70.4 | 0.65 | 4.23% | 0.46% | 45/55 | 0 | 0/0 | 2.45 | 0.0 | 0.0 |
-| incidents | 563.7 | 101.9 | 60.2 / 118.9 / 172.9 | 1.04 | 4.61% | 0.59% | 74/94 | 0 | 0/7 | 3.01 | 4.7 | 0.0 |
-| runaway-agent | 606.0 | 79.0 | 28.6 / 351.5 / 359.1 | 0.91 | 4.59% | 0.51% | 83/106 | 0 | 0/0 | 1.63 | 0.0 | 0.0 |
-| textual-corpus | 307.7 | 62.9 | 23.8 / 153.9 / 205.8 | 0.69 | 10.14% | 0.12% | 292/305 | 0 | 0/0 | 2.81 | 0.0 | 0.3 |
+| gate-200 | 603.0 | 167.2 | 13.0 / 19.8 / 35.5 | 1.10 | 2.55% | 0.11% | 28/36 | 0 | 0/0 | 1.15 | 0.0 | 0.0 |
+| low-50 | 155.3 | 41.7 | 11.9 / 16.3 / 26.4 | 1.10 | 1.30% | 0.22% | 2/4 | 0 | 0/0 | 1.10 | 0.0 | 0.3 |
+| high-500 | 989.7 | 188.4 | 52.8 / 127.1 / 167.1 | 1.33 | 7.18% | 0.37% | 248/294 | 0 | 0/0 | 2.01 | 0.0 | 0.3 |
+| conflict-heavy | 605.3 | 51.6 | 122.6 / 303.9 / 338.0 | 5.02 | 25.30% | 0.15% | 676/748 | 0 | 0/0 | 2.28 | 0.0 | 1.7 |
+| failure-heavy | 595.0 | 135.5 | 13.3 / 29.1 / 51.3 | 1.23 | 7.05% | 0.34% | 34/64 | 0 | 0/0 | 1.23 | 0.0 | 0.0 |
+| flaky-storm | 605.7 | 154.8 | 13.4 / 47.6 / 82.2 | 1.11 | 3.41% | 1.05% | 31/45 | 0 | 0/0 | 1.16 | 0.0 | 3.0 |
+| stacks-groups | 599.3 | 170.7 | 13.2 / 24.6 / 49.2 | 0.92 | 2.96% | 0.40% | 29/35 | 0 | 0/0 | 1.45 | 0.0 | 0.0 |
+| incidents | 563.3 | 142.2 | 24.2 / 55.8 / 80.6 | 1.32 | 2.41% | 0.18% | 44/53 | 0 | 0/6 | 1.62 | 4.3 | 0.0 |
+| runaway-agent | 606.0 | 85.7 | 18.6 / 293.6 / 323.7 | 1.17 | 4.45% | 0.16% | 91/114 | 0 | 0/0 | 1.13 | 0.0 | 0.0 |
+| textual-corpus | 307.7 | 78.9 | 17.4 / 58.7 / 94.2 | 1.22 | 4.67% | 0.00% | 204/214 | 0 | 0/0 | 1.25 | 0.0 | 0.3 |
 
 ## Baselines on gate-200
 
@@ -39,11 +39,11 @@ Same workload (same seeds) for every configuration. *Strictly serial* is the coo
 
 | configuration | merged/h | backlog at end of arrivals | time in queue p50 / p95 | CI ratio | eject | false eject | main red |
 |---|---|---|---|---|---|---|---|
-| full (agent-native queue (all mechanisms)) | 162.7 | 72.3 | 17.1 / 32.1 | 0.68 | 2.82% | 0.17% | 0 |
+| full (agent-native queue (all mechanisms)) | 167.2 | 52.3 | 13.0 / 19.8 | 1.10 | 2.55% | 0.11% | 0 |
 | serial (baseline: strictly serial (coordinator's queue)) | 5.7 | 585.3 | 316.4 / 398.0 | 1.02 | 9.13% | 6.84% | 0 |
-| batch-all (baseline: batch everything, no conflict graph) | 110.5 | 239.3 | 48.9 / 113.4 | 0.45 | 4.42% | 0.17% | 0 |
-| no-speculation (no speculation (1 batch in flight per track)) | 68.0 | 395.0 | 151.3 / 274.2 | 0.62 | 4.39% | 0.27% | 0 |
-| no-revalidation (no impacted-target revalidation (stale tracks re-run in full)) | 13.2 | 558.3 | 304.3 / 385.8 | 4.69 | 22.92% | 0.88% | 0 |
+| batch-all (baseline: batch everything, no conflict graph) | 151.0 | 110.0 | 22.4 / 57.5 | 0.68 | 3.20% | 0.17% | 0 |
+| no-speculation (no speculation (1 batch in flight per track)) | 70.8 | 397.0 | 144.8 / 274.2 | 0.61 | 4.43% | 0.26% | 0 |
+| no-revalidation (no impacted-target revalidation (stale tracks re-run in full)) | 6.4 | 572.7 | 313.2 / 397.7 | 12.62 | 21.47% | 1.73% | 0 |
 
 ## What each mechanism earns
 
@@ -51,36 +51,51 @@ Each row switches one mechanism off (`no-*` modes in `src/modes.ts`) on the scen
 
 | mechanism | scenario | metric | with | without | earns its keep | why it exists |
 |---|---|---|---|---|---|---|
-| conflict graph (parallel tracks) | gate-200 | timeInQueueP95 (lower is better) | 32.14 | 113.40 | yes | independent work doesn't wait behind, or get invalidated by, unrelated failures |
-| speculation | gate-200 | timeInQueueP95 (lower is better) | 32.14 | 274.18 | yes | batch N+1 runs on N's tree before N finishes |
-| bisection | failure-heavy | ciRatio (lower is better) | 0.93 | 1.17 | yes | finds the culprit in log rounds with parallel prefix probes instead of re-testing every unit |
-| flake re-check + quarantine | flaky-storm | falseEjectRate (lower is better) | 1.05% | 42.14% | yes | a failure that doesn't reproduce on the tree (or also fails on main) doesn't eject anyone |
-| conflict resolver | conflict-heavy | ejectRate (lower is better) | 28.45% | 53.20% | yes | conflicts get fixed by an agent instead of bouncing back to the author |
-| impacted-target revalidation | gate-200 | ciRatio (lower is better) | 0.68 | 4.69 | yes | a stale passed track re-runs only its own targets on the new main |
-| fair queuing + in-flight cap | runaway-agent | othersP95 (lower is better) | 35.08 | 66.44 | yes | one flooding session can't starve everyone else |
+| conflict graph (parallel tracks) | gate-200 | timeInQueueP95 (lower is better) | 19.82 | 57.46 | yes | independent work doesn't wait behind, or get invalidated by, unrelated failures |
+| speculation | gate-200 | timeInQueueP95 (lower is better) | 19.82 | 274.24 | yes | batch N+1 runs on N's tree before N finishes |
+| bisection | failure-heavy | ciRatio (lower is better) | 1.23 | 2.47 | yes | finds the culprit in log rounds with parallel prefix probes instead of re-testing every unit |
+| flake re-check + quarantine | flaky-storm | falseEjectRate (lower is better) | 1.05% | 45.74% | yes | a failure that doesn't reproduce on the tree (or also fails on main) doesn't eject anyone |
+| conflict resolver | conflict-heavy | ejectRate (lower is better) | 25.30% | 43.42% | yes | conflicts get fixed by an agent instead of bouncing back to the author |
+| impacted-target revalidation | gate-200 | ciRatio (lower is better) | 1.10 | 12.62 | yes | a stale passed track re-runs only its own targets on the new main |
+| direct carrying (one-level re-speculation) | gate-200 | timeInQueueP95 (lower is better) | 19.82 | 21.10 | yes | a batch's tree holds only what it conflicts with, so a failure rebuilds one level, not everything above it |
+| early landing | gate-200 | timeInQueueP95 (lower is better) | 19.82 | 20.39 | yes | the revalidation run of a batch about to pass overlaps its full run instead of following it |
+| tree-keyed result cache | gate-200 | timeInQueueP95 (lower is better) | 19.82 | 23.92 | yes | a tree identical to one that already passed (an unknown-set barrier's landing, a rebuild) is not run again |
+| fair queuing + in-flight cap | runaway-agent | othersP95 (lower is better) | 21.48 | 51.53 | yes | one flooding session can't starve everyone else |
 
 Every mechanism beats its simpler alternative on the metric it exists for.
 
 ## The latency gate, honestly
 
-The p95 gate **does not hold** (worst seed 33.0 min (per seed: 33.0, 32.8, 30.6)). Median time in queue is 17.1 min (≈ one CI run + landing), and CI cost, false ejects and main-red are well inside their gates; the tail is not.
+The p95 gate **does not hold** (worst seed 20.8 min (per seed: 20.8, 18.7, 20.0)). Median time in queue is 13.0 min (≈ one CI run + landing); CI cost, false ejects, main-red and attribution are inside their gates.
 
-Where the tail comes from (measured with `MQ_DEBUG_TAIL=1`): in gate-200 a Component receives ~25 conflicting Changes/hour against a 10-minute run, so 4–5 Changes are always speculating on top of each other. A real failure (a broken Change or a semantic conflict, ≈3% of Changes here) invalidates every batch built on it: about ten entries restart per failure, so roughly a third of all Changes absorb at least one restart (≈ +15 min). The fixed part of the pipeline (analyzer, run p95 ≈ 12.8 min, revalidation and CAS) is ≈ 16 min, so the 20-minute budget leaves room for almost no restarts. At 0.5% broken / 1% semantic the p95 is ≈ 25–30 min; only below ≈ 0.5% failing Changes does it approach 20.
+How it got here (gate-200 mean p95 over seeds 1–8, each step against the one before; see "Decisions"): 34.4 min at the start → result cache 32.1 → joins check `appendable` (bug) 30.3 → held batches built at once, no second hold 28.0 → all-tests members land alone 28.6 (noise) → direct carrying 25.3 → no hold 21.3 → stale-order fix 20.3 → depth 16 20.0 → early landing 19.6 (max 22.6, CI 1.08×). Seeds 1–3 are 33.0/32.8/30.6 → 20.8/18.7/20.0.
 
-Shallower speculation makes it worse (depth 3: p95 222 min, depth 5: 79 min: arrivals wait for slots). What would move it: speculating on both outcomes for batches the predictor marks risky (SubmitQueue's speculation tree: build the next batch on the parent too, so a failure costs no restart), and re-using cached results of targets the culprit doesn't touch when a victim re-runs. Neither is implemented; they are the next step if the 2× target stands.
+What is left (`MQ_DEBUG_TAIL=1`; seed 1: 39 of 607 merged Changes over 20 min, 30 allowed):
+- About a third are costs of the workload rather than of scheduling: a conflict resolution that touched lines outside its hunks waits for a fresh human approval (≈ 30 min review), its stack or plan-group mates wait with it, and resolved Changes spend the resolver's 2–6 min plus a fresh run.
+- One-level cascades: a Change whose batch carried a failed batch's entries is re-run without them and loses the time its run had (≈ 4 entries per failure on seeds 1–3, instead of ≈ 11 before direct carrying).
+- Bisection innocents: units batched with a culprit wait for the probes and then run again (rare now: batches average ≈ 1.15 units).
+- Landing stalls: a revalidation that fails twice on a flaky test is treated as real (§4.7) and falls back to a full run; everything that carries those entries waits for it.
+
+Without real failures (no broken Changes, no semantic conflicts; unknown sets, textual conflicts and flakes kept) the p95 is 15.5–18.8 min on seeds 1–8 (mean 16.4), so ≈ 3 min of the p95 is the cost of the ≈ 3% of Changes that really fail. p95 is the 30th-slowest of ≈ 600 Changes, so a seed moves by ±3 min with tiny scheduling changes; the 8-seed mean sits at the threshold. What would still move it is both-outcome speculation on the carried batches (the cascades above), measured at 19.1 vs 19.6 min but only at 1.54× CI (see "Decisions").
 
 ## Decisions the simulator forced (and mechanisms removed)
 
-- **Tracks are a speculation DAG, not chains that drain.** The first design made a Change that conflicts with two tracks wait until both drained. With 5% cross-cutting Changes, tracks were draining permanently (gate-200 throughput ≈ 25/h). Now each batch is built on exactly the batches it conflicts with: on one predecessor's tip, or as a merge batch rebuilt on main carrying the predecessors' unmerged entries. Independent work never waits for unrelated work.
-- **Speculation depth is the longest chain of untested ancestors**, not their count. Counting all of them made a Change with an unknown affected set (conflicts with everything) exceed the depth limit and, through priority order, block the whole repo twice an hour. Merge batches skip the depth limit (everything after them still respects it).
-- **Revalidation runs in small pipelined landing batches** (≤ 2 passed batches each, up to 16 stacked). One landing batch per sweep of all ready batches meant "impacted targets" ≈ the whole suite and every landing took a full run (passed → merged p50 8 min instead of 2.5).
-- **A batch built on an in-flight predecessor stays open for joiners for 2 minutes.** It can't land before its parent anyway: CI ratio 1.11× → 0.73× on the failure-free workload for +1.4 min of p95.
-- **A batch can't grow once anything descends from it.** A unit joining an unbuilt batch after a merge batch had copied its lineage made the descendant's lineage incomplete (found by the simulator as repeated full-run fallbacks; would have been unsound).
-- **A quarantined test's failure is still re-checked; only failures that also happen on main are excused.** Masking every failure of a quarantined test let a real regression land (a main-red event once the flaky test was fixed and un-quarantined).
-- **Removed: prediction-driven batch sizing and ordering** (shrink batches when the recent pass rate drops, stop adding entries below a predicted batch pass probability, likely failures last). On gate-200 a fixed batch size of 4 beat it on both seeds: p95 33.0 vs 54.0 min and 32.8 vs 35.3 min, CI 0.69× vs 0.85×; same on failure-heavy (p95 54.7 vs 63.8, 54.8 vs 67.5). Predictions are still computed, returned to agents (`enqueue`, `queue_status`) and logged against outcomes for a learned model; they never skip a check and no longer steer scheduling.
-- **While frozen, only work that can land goes first.** An incident fix stacked on an ordinary Change can't land during a freeze, so it is not treated as express (it livelocked: its dependency was re-rooted out of the way and re-placed forever). A landing batch that can't land while frozen no longer blocks the reverts stacked behind it in the landing pipeline. Reverts and incident fixes are exempt from the per-session fair share.
-- **Removed: a cap on what a merge batch may carry** (wait for the in-flight set to shrink, then force a drain). Cross-cutting Changes tripped it constantly; forced drains cost more than the invalidations they avoided (measured at the time: gate-200 p95 54 → 102 min).
-- **Demoted: the global in-flight cap** is a safety limit (128), not a batching device: at 16 it serialized independent components instead of growing batches.
+Numbers in this section are gate-200 mean p95 over 8 seeds (1–8) unless noted; each change was measured against the configuration just before it.
+
+- **Direct carrying (§4.3 partial re-speculation).** A batch is built on main and carries only the unmerged entries its units directly conflict with (plus stacked dependencies and unit-mates), in landing order, instead of a predecessor's whole tree. Batch trees used to be transitive: a Change built on its predecessor's tip contained everything below it, and merge batches copied whole lineages (30–70 entries), so one culprit invalidated everything connected to it (≈ 11 restarts per failure, a third of all Changes restarted). Now a failure releases only the batches carrying the failed batch's entries; their own entries are placed again *ahead of* the trees that carry them, which keep running. Placement never carries an entry that must land after the unit (carried by a tree that carries it, or stacked on it), never orders an unplaced entry ahead of a tree that conflicts with it but lacks it, and never carries an entry parked behind another one or waiting for a human. With a 2-minute hold: 28.6 → 25.3; with everything below: 21.1 (tip-built) vs 19.8 on the gate seeds.
+- **No batch hold by default.** Holding a batch open for joiners saved CI (0.76× vs 1.05×) but cost latency once batches carry only direct conflicts (25.3 → 21.3 without it). The hold remains a knob (`batchHoldMs`): held batches are built at once, so a textual conflict shows up in seconds, and are rebuilt when a joiner arrives; entries coming back never wait twice. Speculation depth 16 (20.3 → 20.0).
+- **Early landing.** A batch whose full run should finish within 2.5 minutes may join the landing pipeline: its revalidation (impacted targets on the exact landing tree) runs alongside, and the CAS still waits for both verdicts; a failure voids that landing batch and those above it. 20.0 → 19.6, p50 14.0 → 12.8.
+- **Tree-keyed result cache.** A batch whose built tree already passed a full run (clean verdicts only) takes that verdict instead of running, audited as `merge-queue.result-reused` with the original run ids: a result counts only for exactly that tree. A landing member whose revalidation needs every test (unknown affected set) lands alone, so its landing tree is usually exactly the tree its full run passed on: the barrier's second 10-minute run disappears instead of blocking the landing pipeline. 34.4 → 32.1 when added.
+- **Bugs the simulator found (fixed).** Joining an open batch skipped the `appendable` check, so a conflicting change that had just landed was missing from its tree and it fell back to a full run (failure-free floor: max 30.5 → 18.5). A flake re-check finished on a batch a quarantine had just cancelled and bisected entries that were already waiting again. Two carried-conflict waits could point at each other and park both entries for good.
+- **Removed: both-outcome speculation (twins, SubmitQueue).** A built batch got a twin built without its in-flight predecessor (or, under direct carrying, without one carried in-flight batch); if that predecessor failed, the twin replaced it. Measured: on predecessor tips 30.7 vs 30.3 at CI 0.89× vs 0.68×; under direct carrying 24.3 vs 25.3 at CI 1.49× (max 1.62×); forked only where the predicted remaining failure risk was ≥ 5% (predictions only chose where to fork): 19.1 vs 19.6 at CI 1.54× (over the CI gate); at ≥ 10%: 20.0 vs 19.6 at 1.20×. Not worth its CI. The property tests also found a twin that kept failing being forked again forever.
+- **Removed: split on failure** (re-test every unit of a failed batch on its own at once instead of bisecting): 32.7 vs 25.3; the culprit is back in the index at once, new arrivals carry it and its second failure cascades. **Removed: re-placing bisection innocents on the cached probe tree**: it applied 0–1 times per run, because the batches that carried the failed batch are re-placed first and conflict with the innocents.
+- **Speculation depth is the longest chain of untested predecessors**, not their count. Batches joining several components (e.g. an unknown affected set) skip the depth limit: making such a barrier wait for the deepest chain to drain would stall the whole repo.
+- **Revalidation runs in small pipelined landing batches** (≤ 2 members each, up to 16 stacked); one landing batch per sweep made "impacted targets" ≈ the whole suite.
+- **A batch can't grow once anything carries its entries**: the carrier's tree would miss the newcomer.
+- **A quarantined test's failure is still re-checked; only failures that also happen on main are excused.** Masking every failure of a quarantined test let a real regression land.
+- **Removed (earlier): prediction-driven batch sizing and ordering** (lost to a fixed size: p95 33.0 vs 54.0 min), **a cap on what a merge batch may carry** (54 → 102 min), and **holding merge batches until what they carry has passed** (p95 ≈ 257 min). Predictions are computed, returned to agents and logged against outcomes; they never skip a check and don't steer scheduling.
+- **While frozen, only work that can land goes first** (reverts and incident fixes not stacked on ordinary work; exempt from the per-session fair share).
+- **The global in-flight cap** (128) is a safety limit, not a batching device.
 
 The CI model assumes **fail-fast** runs (a failing run reports when its failing test finishes): the engine reports step status, so the BatchRunWorkflow can report a failure as soon as a required step fails.
 
@@ -101,4 +116,4 @@ Conflict density is calibrated: the repo model (K clusters × 4 modules × 12 fi
 | runaway-agent | 100 | 3h | 10.00% | 1.00% | 5.00% | 0.002 / 0.1 | 10m σ0.15 | 5.00% / 2.00% | 1.00% | 0.00% | 0 | 100/h background from 25 sessions; one session floods 300 Changes at hour 1 (fair queuing + in-flight cap). |
 | textual-corpus | 150 | 2h | 25.00% | 1.00% | 5.00% | 0 / 0.8 | 10m σ0.15 | 5.00% / 2.00% | 1.00% | 0.00% | 0 | Resolver gate stand-in: high textual conflict rate in a hot codebase (the real fixture corpus comes from the resolver agent). |
 
-Workloads: gate-200#1 K=8 (density 10.26%); low-50#1 K=8 (density 10.26%); conflict-heavy#1 K=3 (density 28.00%); high-500#1 K=8 (density 10.26%); failure-heavy#1 K=8 (density 10.26%); flaky-storm#1 K=8 (density 10.26%); stacks-groups#1 K=8 (density 10.26%); incidents#1 K=8 (density 10.26%); runaway-agent#1 K=8 (density 10.26%); textual-corpus#1 K=3 (density 28.00%); gate-200#2 K=8 (density 9.26%); low-50#2 K=8 (density 9.26%); conflict-heavy#2 K=3 (density 26.70%); failure-heavy#2 K=8 (density 9.26%); high-500#2 K=8 (density 9.26%); flaky-storm#2 K=8 (density 9.26%); stacks-groups#2 K=8 (density 9.26%); incidents#2 K=8 (density 9.26%); runaway-agent#2 K=8 (density 9.26%); textual-corpus#2 K=3 (density 26.70%); gate-200#3 K=8 (density 10.00%); low-50#3 K=8 (density 10.00%); conflict-heavy#3 K=3 (density 25.62%); high-500#3 K=8 (density 10.00%); failure-heavy#3 K=8 (density 10.00%); flaky-storm#3 K=8 (density 10.00%); stacks-groups#3 K=8 (density 10.00%); incidents#3 K=8 (density 10.00%); runaway-agent#3 K=8 (density 10.00%); textual-corpus#3 K=3 (density 25.62%).
+Workloads: gate-200#1 K=8 (density 10.26%); low-50#1 K=8 (density 10.26%); failure-heavy#1 K=8 (density 10.26%); conflict-heavy#1 K=3 (density 28.00%); flaky-storm#1 K=8 (density 10.26%); stacks-groups#1 K=8 (density 10.26%); incidents#1 K=8 (density 10.26%); textual-corpus#1 K=3 (density 28.00%); runaway-agent#1 K=8 (density 10.26%); gate-200#2 K=8 (density 9.26%); low-50#2 K=8 (density 9.26%); conflict-heavy#2 K=3 (density 26.70%); failure-heavy#2 K=8 (density 9.26%); flaky-storm#2 K=8 (density 9.26%); high-500#1 K=8 (density 10.26%); stacks-groups#2 K=8 (density 9.26%); incidents#2 K=8 (density 9.26%); textual-corpus#2 K=3 (density 26.70%); gate-200#3 K=8 (density 10.00%); high-500#2 K=8 (density 9.26%); runaway-agent#2 K=8 (density 9.26%); low-50#3 K=8 (density 10.00%); conflict-heavy#3 K=3 (density 25.62%); failure-heavy#3 K=8 (density 10.00%); flaky-storm#3 K=8 (density 10.00%); stacks-groups#3 K=8 (density 10.00%); incidents#3 K=8 (density 10.00%); textual-corpus#3 K=3 (density 25.62%); runaway-agent#3 K=8 (density 10.00%); high-500#3 K=8 (density 10.00%).

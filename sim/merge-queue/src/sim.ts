@@ -189,7 +189,6 @@ class Sim {
   private kinds = new Map<string, number>();
   private dbgN = 0;
   private reused = 0;
-  private adopted = 0;
   private m = {
     mainRed: 0,
     masked: 0,
@@ -317,6 +316,48 @@ class Sim {
     process.stderr.write(
       `t=${(this.now / MINUTE).toFixed(0)} entries ${JSON.stringify([...byState])} batches ${JSON.stringify([...bstates])} tracks=${Object.keys(s.tracks).length}\n`,
     );
+    const lp = (process.env.MQ_DEBUG_LATER ?? "").split(",");
+    if (lp.length === 2) {
+      const [from, to] = lp as [string, string];
+      const active = Object.values(s.batches).filter((b) =>
+        s.tracks[b.trackId ?? ""]?.chain.includes(b.id),
+      );
+      const prev = new Map<string, string>([[from, "start"]]);
+      let front = [from];
+      while (front.length > 0 && !prev.has(to)) {
+        const next: string[] = [];
+        for (const x of front) {
+          for (const b of active)
+            if (b.carried.includes(x))
+              for (const y of b.units.flatMap((u) => u.changeIds))
+                if (!prev.has(y)) {
+                  prev.set(y, `${x} carried-by ${b.id}`);
+                  next.push(y);
+                }
+          for (const e of Object.values(s.entries))
+            if (e.dependsOn.includes(x) && !prev.has(e.changeId)) {
+              prev.set(e.changeId, `${x} stacked`);
+              next.push(e.changeId);
+            }
+        }
+        front = next;
+      }
+      const path: string[] = [];
+      for (let c: string | undefined = to; c !== undefined && c !== from; ) {
+        const p = prev.get(c);
+        path.push(`${c} <- ${p}`);
+        c = p?.split(" ")[0];
+        if (path.length > 30) break;
+      }
+      process.stderr.write(`  later ${from}->${to}: ${path.join(" | ")}\n`);
+    }
+    for (const id of (process.env.MQ_DEBUG_ENTRY ?? "").split(",").filter((x) => x !== "")) {
+      const e = s.entries[id];
+      const b = s.batches[e?.batchId ?? ""];
+      process.stderr.write(
+        `  entry ${id} ${e?.state}/${e?.hold} batch=${b?.id}:${b?.state} created=${((this.now - (b?.createdAt ?? 0)) / MINUTE).toFixed(1)}m carried=${b?.carried.map((x) => `${x}:${s.entries[x]?.state}:${s.batches[s.entries[x]?.batchId ?? ""]?.state ?? "-"}`).join(",")} infra=${b?.infraRetries} startedAt=${b?.startedAt === null || b === undefined ? "-" : ((this.now - (b.startedAt ?? 0)) / MINUTE).toFixed(1)}\n`,
+      );
+    }
     const waiting = Object.values(s.entries).filter(
       (e) => e.state === "waiting" && e.hold === null,
     );
@@ -936,7 +977,6 @@ class Sim {
           );
         if (c.action === "merge-queue.test-quarantined") this.m.quarantines++;
         if (c.action === "merge-queue.result-reused") this.reused++;
-        if (c.action === "merge-queue.twin-adopted") this.adopted++;
         if (
           c.action === "merge-queue.batches-cancelled" &&
           process.env.MQ_DEBUG_PROGRESS === "1" &&
@@ -1374,7 +1414,7 @@ class Sim {
           `${label} n=${set.length} toBatch=${a((r) => fb(r) - r.enqueuedAt)} restarts=${a((r) => le(r) - fb(r))} holdBuild=${a((r) => lr(r) - le(r))} ci=${a((r) => pa(r) - lr(r))} toLandingRun=${a((r) => lnd(r) - pa(r))} landing=${a((r) => mg(r) - lnd(r))} pendingAnc=${(set.reduce((x, r) => x + r.pendingAncestors, 0) / Math.max(1, set.length)).toFixed(2)} restarted=${set.filter((r) => r.batches > 1).length}\n`,
         );
       };
-      process.stderr.write(`reused ${this.reused} adopted ${this.adopted}\n`);
+      process.stderr.write(`reused ${this.reused}\n`);
       phases(tail, "phases tail5%");
       {
         const over = m.filter((r) => (r.mergedAt ?? 0) - r.enqueuedAt > 20 * MINUTE);

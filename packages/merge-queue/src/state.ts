@@ -50,16 +50,6 @@ export interface CachedResult {
   at: number;
 }
 
-/**
- * Both-outcome speculation (SubmitQueue): a twin runs `of`'s units on the tree without its
- * in-flight parent `excludes`. If the parent fails, the twin replaces `of` in the DAG (its run is
- * already under way); if the parent passes, the twin is cancelled. Twins never land by themselves.
- */
-export interface Twin {
-  of: string;
-  excludes: string;
-}
-
 export interface QueueStats {
   /** EWMA of first-run outcomes of chain batches (real failures only). */
   batchPassRate: number;
@@ -97,8 +87,6 @@ export interface QueueState {
   /** Tree-keyed passing full runs (bounded; oldest first in `resultOrder`). */
   results: Record<string, CachedResult>;
   resultOrder: string[];
-  /** Twin batch id → what it is a twin of. */
-  twins: Record<string, Twin>;
   seq: number;
   /** Terminal entries in the order they ended (GC'd beyond `retainTerminal`). */
   terminal: string[];
@@ -136,7 +124,6 @@ export function initialState(
     },
     results: {},
     resultOrder: [],
-    twins: {},
     seq: 0,
     terminal: [],
   };
@@ -171,10 +158,9 @@ export function cloneState(s: QueueState): QueueState {
     quarantine: { ...s.quarantine },
     fairness: { vtime: s.fairness.vtime, finish: { ...s.fairness.finish } },
     stats: { ...s.stats, authors, recentMerged: [...s.stats.recentMerged] },
-    // Older persisted states have no cache/twins yet.
+    // Older persisted states have no result cache yet.
     results: { ...(s.results ?? {}) },
     resultOrder: [...(s.resultOrder ?? [])],
-    twins: { ...(s.twins ?? {}) },
     terminal: [...s.terminal],
   };
 }

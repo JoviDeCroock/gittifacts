@@ -32,6 +32,18 @@ export const MODES: Record<string, { label: string; config: () => QueueConfig }>
     label: "no fair queuing / in-flight cap",
     config: () => queueConfig({ features: { fairness: false } }),
   },
+  "no-direct-carry": {
+    label: "tip-built speculation (a failure restarts every tree above it)",
+    config: () => queueConfig({ features: { directCarry: false } }),
+  },
+  "no-early-landing": {
+    label: "revalidation starts only after the full run passed",
+    config: () => queueConfig({ features: { earlyLanding: false } }),
+  },
+  "no-result-cache": {
+    label: "no tree-keyed result cache",
+    config: () => queueConfig({ features: { resultCache: false } }),
+  },
 };
 
 export function modeConfig(name: string): QueueConfig {

@@ -1259,6 +1259,56 @@ integrations are not member rows (their access always derives from a human's row
 `read` for the repos of an installation (the route's own scope list still applies). The O3 note "any signed-in
 human can review an unclaimed project's Changes" is closed by this entry.
 
+## 2026-10-02 — Merge-queue core: direct carrying, early landing, result cache (sim/merge-queue/report.md)
+
+The gate-200 p95 was 30.6–33.0 min against a 20-minute gate. The cause: batch trees were transitive. A batch built
+on its predecessor's tip contained everything below it, and merge batches copied whole lineages (30–70 entries),
+so one culprit restarted ≈ 11 Changes and a third of all Changes absorbed a restart.
+
+- **Kept, each beating its ablation on gate-200 (p95, mean of seeds 1–3):**
+  - direct carrying: 19.8 vs 21.1 min tip-built;
+  - early landing: 19.8 vs 20.4;
+  - tree-keyed result cache: 19.8 vs 23.9.
+- **Direct carrying (§4.3 partial re-speculation).** Every batch is built on main. It carries only the unmerged
+  entries its units directly conflict with, plus stacked dependencies and unit-mates, in landing order.
+  - A failure releases only the batches carrying the failed batch's entries (≈ 4 restarts per failure).
+  - Those batches' own entries are placed again ahead of the trees that carry them, and those trees keep running.
+  - Placement never carries an entry that must land after the unit (carried by a tree that carries the unit, or
+    stacked on it).
+  - Placement never orders an unplaced entry ahead of a tree that conflicts with it but lacks it.
+  - Placement never carries an entry parked behind another entry or waiting for a human.
+  - A sweep releases any batch whose carried entry stopped being on its way.
+  - Soundness rests on the existing revalidation rule: the CAS still needs a passing full run of each member's
+    own tree, everything landed since its root that is not in that tree must be disjoint from its own entries,
+    and impacted targets run on exactly the landing tree.
+  - Cost: more cherry-picks per `BuildBatchTree` (carried entries are rebuilt on main).
+- **Early landing.** A batch whose full run should end within 2.5 min joins the landing pipeline, so its
+  impacted-target revalidation runs alongside. The CAS waits for both verdicts (`membersVerified`), and a failure
+  voids that landing batch and those above it.
+- **Result cache.** A built tree that already passed a full run (clean verdicts only) reuses the verdict. It is
+  audited as `merge-queue.result-reused` with the original run ids: a result counts only for that exact tree, and
+  the checks are a function of the tree, which "passed on exactly that tree" already assumes. A landing member
+  whose revalidation needs all tests (unknown affected set) lands alone so its landing tree can hit the cache.
+- **Defaults.** No batch hold: 21.3 vs 25.3 min, at CI 1.05× vs 0.76×. The hold remains a knob, with batches
+  built eagerly and rebuilt on a join. Speculation depth 16. CI on gate-200 is 1.10×. In the non-gated hot
+  scenarios CI rose (conflict-heavy 2.65× → 5.0×, high-500 0.81× → 1.33×) while their p95 fell.
+- **Bugs fixed.**
+  - Joins skipped `appendable`, which forced full-run fallbacks.
+  - A flake re-check could finish on a batch that a quarantine had just cancelled. It then bisected entries that
+    were already waiting again (pre-existing).
+  - Two carried-conflict `waitFor`s could deadlock each other.
+- **Removed (measured, see report):**
+  - both-outcome twins: never better at acceptable CI (best: 19.1 vs 19.6 min at 1.54× CI);
+  - split-on-failure: 32.7 vs 25.3;
+  - re-placing bisection innocents on the cached probe tree: almost never applicable.
+- **Gate status.** p95 is 20.8 / 18.7 / 20.0 min on seeds 1–3 (8-seed mean 19.6, max 22.6). That is still 0.8 min
+  over on seed 1. Every other gate passes. Without real failures the p95 is 15.5–18.8, so what remains is the
+  failure cost plus workload-fixed costs: human re-approval of out-of-hunk resolutions, resolver round trips.
+  The workload was not changed.
+- **Interface.** No `protocol.ts`, `schema.ts` or `shell.ts` change. New internal `QueueState` fields
+  (`results`, `resultOrder`) are normalized by `cloneState` for older blobs. New `QueueConfig` keys have
+  defaults: `features.resultCache`, `directCarry`, `earlyLanding`, plus `resultCacheSize` and `earlyLandingLeadMs`.
+
 ## 2026-10-02 — Documentation: `packages/docs`, generated references, `/docs` served by the platform (docs/prompts/05-docs.md)
 
 - **Content** lives in `packages/docs/content/**.md` with front matter (`title`, `description`, `order`, `audience`,

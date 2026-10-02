@@ -3,8 +3,15 @@
  * counterexamples while debugging).
  */
 import fc from "fast-check";
-import { type AffectedSet, ALL_TESTS, CONFIG_SENTINEL, type queueConfig } from "../src/index.js";
-import { affected, type TestChange, World } from "./harness.js";
+import { expect } from "vitest";
+import {
+  type AffectedSet,
+  ALL_TESTS,
+  CONFIG_SENTINEL,
+  type queueConfig,
+  TERMINAL_STATES,
+} from "../src/index.js";
+import { affected, type TestChange, World, type WorldOptions } from "./harness.js";
 
 export const FILES = ["f0", "f1", "f2", "f3", "f4", "f5"];
 export const TESTS = ["t0", "t1", "t2", "t3"];
@@ -108,7 +115,11 @@ export function run(
   specs: Spec[],
   ops: Op[],
   picks: number[],
-  opts: { flakeRate: number; config?: ReturnType<typeof queueConfig> },
+  opts: {
+    flakeRate: number;
+    config?: ReturnType<typeof queueConfig>;
+    onStep?: WorldOptions["onStep"];
+  },
 ) {
   const changes = toChanges(specs);
   const w = new World({
@@ -116,6 +127,7 @@ export function run(
     flakeRepeat: 0.3,
     resolverSuccess: 0.7,
     ...(opts.config ? { config: opts.config } : {}),
+    ...(opts.onStep ? { onStep: opts.onStep } : {}),
   });
   let next = 0;
   let reverts = 0;
@@ -174,4 +186,47 @@ export function run(
     w.drain(30_000, pick);
   }
   return { w, changes };
+}
+
+/** The §1/§8 invariants every random run must end with. */
+export function checkRun(w: World): void {
+  // §1: main never red, only tested trees, frozen lands only reverts, lanes never drop.
+  expect(w.violations.join("; ")).toBe("");
+  // No entry lost: every enqueued change ends merged, ejected or dequeued.
+  for (const id of w.enqueued) {
+    const e = w.state.entries[id];
+    expect(e, `entry ${id}`).toBeDefined();
+    expect(
+      TERMINAL_STATES.has(e?.state ?? "waiting"),
+      `${id} is ${e?.state} (hold ${e?.hold})`,
+    ).toBe(true);
+  }
+  // ...and none duplicated: merged at most once, never both merged and ejected.
+  expect(new Set(w.merged).size).toBe(w.merged.length);
+  for (const id of w.merged) expect(w.state.entries[id]?.state).toBe("merged");
+  // Stacks never reordered: a dependency lands before (or in the same CAS ahead of) its dependent.
+  const order = new Map(w.merged.map((id, i) => [id, i]));
+  for (const [id, c] of w.changes)
+    for (const d of c.dependsOn ?? []) {
+      if (!order.has(id)) continue;
+      expect(order.has(d), `${id} merged without its dependency ${d}`).toBe(true);
+      expect(order.get(d) ?? Infinity).toBeLessThan(order.get(id) ?? -1);
+    }
+  // Plan groups all-or-nothing, in one CAS.
+  const group = [...w.changes.values()].filter((c) => c.landTogether);
+  const landedMembers = group.filter((c) => order.has(c.id));
+  if (landedMembers.length > 0) {
+    expect(landedMembers.length).toBe(group.length);
+    const cas = w.casLog.filter((l) =>
+      l.cas.entries.some((e) => group.some((g) => g.id === e.changeId)),
+    );
+    expect(cas.length).toBe(1);
+  }
+  // Refs are garbage-collected.
+  expect([...w.refs]).toEqual([]);
+  // No livelock: CI runs stay proportional to the work.
+  const runs = w.commands.filter(
+    (c) => c.type === "StartBatchRun" || c.type === "RunFlakeRecheck",
+  ).length;
+  expect(runs).toBeLessThan(40 * Math.max(1, w.enqueued.size));
 }

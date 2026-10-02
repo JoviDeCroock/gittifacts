@@ -5,9 +5,9 @@
  */
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { queueConfig, TERMINAL_STATES } from "../src/index.js";
+import { queueConfig } from "../src/index.js";
 import { affected, World } from "./harness.js";
-import { FILES, opArb, run, specArb } from "./prop-helpers.js";
+import { checkRun, FILES, opArb, run, specArb } from "./prop-helpers.js";
 
 describe("merge-queue core properties", () => {
   it("main only advances to tested, green trees; nothing lost or duplicated; stacks, groups, lanes, freezes hold", () => {
@@ -19,45 +19,7 @@ describe("merge-queue core properties", () => {
         fc.constantFrom(0, 0.1, 0.3),
         (specs, ops, picks, flakeRate) => {
           const { w } = run(specs, ops, picks, { flakeRate });
-          // §1: main never red, only tested trees, frozen lands only reverts, lanes never drop.
-          expect(w.violations.join("; ")).toBe("");
-          // No entry lost: every enqueued change ends merged, ejected or dequeued.
-          for (const id of w.enqueued) {
-            const e = w.state.entries[id];
-            expect(e, `entry ${id}`).toBeDefined();
-            expect(
-              TERMINAL_STATES.has(e?.state ?? "waiting"),
-              `${id} is ${e?.state} (hold ${e?.hold})`,
-            ).toBe(true);
-          }
-          // ...and none duplicated: merged at most once, never both merged and ejected.
-          expect(new Set(w.merged).size).toBe(w.merged.length);
-          for (const id of w.merged) expect(w.state.entries[id]?.state).toBe("merged");
-          // Stacks never reordered: a dependency lands before (or in the same CAS ahead of) its dependent.
-          const order = new Map(w.merged.map((id, i) => [id, i]));
-          for (const [id, c] of w.changes)
-            for (const d of c.dependsOn ?? []) {
-              if (!order.has(id)) continue;
-              expect(order.has(d), `${id} merged without its dependency ${d}`).toBe(true);
-              expect(order.get(d) ?? Infinity).toBeLessThan(order.get(id) ?? -1);
-            }
-          // Plan groups all-or-nothing, in one CAS.
-          const group = [...w.changes.values()].filter((c) => c.landTogether);
-          const landedMembers = group.filter((c) => order.has(c.id));
-          if (landedMembers.length > 0) {
-            expect(landedMembers.length).toBe(group.length);
-            const cas = w.casLog.filter((l) =>
-              l.cas.entries.some((e) => group.some((g) => g.id === e.changeId)),
-            );
-            expect(cas.length).toBe(1);
-          }
-          // Refs are garbage-collected.
-          expect([...w.refs]).toEqual([]);
-          // No livelock: CI runs stay proportional to the work.
-          const runs = w.commands.filter(
-            (c) => c.type === "StartBatchRun" || c.type === "RunFlakeRecheck",
-          ).length;
-          expect(runs).toBeLessThan(40 * Math.max(1, w.enqueued.size));
+          checkRun(w);
         },
       ),
       { numRuns: Number(process.env.FC_RUNS ?? 300) },

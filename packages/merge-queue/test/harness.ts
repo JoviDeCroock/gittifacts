@@ -101,6 +101,8 @@ export interface WorldOptions {
   precompute?: boolean;
   /** Names of the flaky tests (default flaky:0..2, always run). */
   flakyTests?: string[];
+  /** Called after every step with the new state and the commands it issued. */
+  onStep?: (w: World, commands: Command[], event: CoreEvent) => void;
 }
 
 export class World {
@@ -132,7 +134,8 @@ export class World {
   readonly authoredOn = new Map<string, Set<string>>();
   readonly resolvedPairs = new Set<string>();
   violations: string[] = [];
-  readonly opts: Required<Omit<WorldOptions, "config">>;
+  readonly opts: Required<Omit<WorldOptions, "config" | "onStep">>;
+  private readonly onStep: WorldOptions["onStep"];
 
   constructor(opts: WorldOptions = {}) {
     this.mainSha = sha("genesis");
@@ -149,6 +152,7 @@ export class World {
       precompute: opts.precompute ?? false,
       flakyTests: opts.flakyTests ?? ["flaky:0", "flaky:1", "flaky:2"],
     };
+    this.onStep = opts.onStep;
   }
 
   private rand(...parts: (string | number)[]): number {
@@ -170,6 +174,7 @@ export class World {
         this.violations.push(`lane of ${e.changeId} dropped ${prev} → ${e.lane}`);
       if (prev === undefined || e.lane > prev) this.laneHistory.set(e.changeId, e.lane);
     }
+    this.onStep?.(this, res.commands, ev);
     if (this.opts.checkInvariants) checkStateInvariants(this.state);
   }
 

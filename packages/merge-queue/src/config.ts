@@ -29,9 +29,13 @@ export const QueueFeatures = z.object({
    * batch fails only the batches containing its entries are rebuilt. Off: batches are built on a
    * predecessor's tip (or merge whole lineages) and a failure restarts everything above it.
    */
-  directCarry: z.boolean().default(false),
-  /** §4.3 both-outcome speculation: twins of batches built on an in-flight parent. */
-  twins: z.boolean().default(false),
+  directCarry: z.boolean().default(true),
+  /**
+   * A batch still running whose full run should finish within `earlyLandingLeadMs` may join the
+   * landing pipeline: its revalidation (impacted targets on the landing tree) runs alongside. The
+   * CAS still waits for both verdicts; a failure invalidates the landing batches from there on.
+   */
+  earlyLanding: z.boolean().default(true),
 });
 export type QueueFeatures = z.infer<typeof QueueFeatures>;
 
@@ -43,16 +47,13 @@ export const QueueConfig = z.object({
    */
   maxBatchSize: z.number().int().min(1).max(64).default(4),
   /** In-flight (untested) batches a new batch may speculate on, itself included (1 = no speculation). */
-  maxSpeculationDepth: z.number().int().min(1).max(32).default(8),
+  maxSpeculationDepth: z.number().int().min(1).max(32).default(16),
   /**
-   * A batch built on an in-flight predecessor can't land before it anyway, so it stays open for
-   * joiners this long after its parent started (free batching: fewer CI runs, no added latency).
+   * A batch built on an in-flight predecessor can't land before it anyway, so it may stay open for
+   * joiners this long after its predecessors started (fewer CI runs). Off by default: with direct
+   * carrying it cost more latency than the CI it saved (see sim/merge-queue/report.md).
    */
-  batchHoldMs: z
-    .number()
-    .int()
-    .min(0)
-    .default(2 * 60_000),
+  batchHoldMs: z.number().int().min(0).default(0),
   /**
    * In-flight chain batches across the repo. Backpressure: while it is reached, arrivals wait and
    * are batched together when a slot frees (bigger batches, fewer CI minutes).
@@ -105,6 +106,8 @@ export const QueueConfig = z.object({
   mainLogLimit: z.number().int().min(16).default(2000),
   /** Passing full runs remembered by tree sha (`features.resultCache`). */
   resultCacheSize: z.number().int().min(0).default(256),
+  /** How far ahead of its expected finish a running batch may join the landing pipeline. */
+  earlyLandingLeadMs: z.number().int().min(0).default(150_000),
   /** Terminal entries kept for status queries. */
   retainTerminal: z.number().int().min(0).default(500),
 });
@@ -126,7 +129,7 @@ const ALL_OFF: QueueFeatures = {
   fairness: false,
   resultCache: false,
   directCarry: false,
-  twins: false,
+  earlyLanding: false,
 };
 
 /**

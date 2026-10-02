@@ -20,10 +20,17 @@ const emitted = (w: World, type: string) =>
     .filter((c) => c.type === "Emit" && c.event.type === type)
     .map((c) => (c.type === "Emit" ? c.event : null));
 const human = { principalId: "human-1", kind: "human" as const, signature: "sig" };
+/** The tip-built speculation these examples document (the ablation of direct carrying). */
+const TIP = { batchHoldMs: 120_000, features: { directCarry: false, earlyLanding: false } };
 
 describe("bisection (§4.3)", () => {
   it("finds the culprit with parallel prefix probes, ejects only it, and re-forms the rest", () => {
-    const config = queueConfig({ maxBatchSize: 4, bisectProbes: 3, maxSpeculationDepth: 1 });
+    const config = queueConfig({
+      ...TIP,
+      maxBatchSize: 4,
+      bisectProbes: 3,
+      maxSpeculationDepth: 1,
+    });
     const w = new World({ config, precompute: true });
     // z occupies the track; a..d queue up behind it and form one batch.
     w.enqueue({ id: "z", affected: affected({ files: ["x.ts"], tests: ["tx"] }) });
@@ -51,7 +58,7 @@ describe("bisection (§4.3)", () => {
   });
 
   it("re-roots descendants immediately when an ancestor batch fails", () => {
-    const config = queueConfig({ maxBatchSize: 1, maxSpeculationDepth: 3 });
+    const config = queueConfig({ ...TIP, maxBatchSize: 1, maxSpeculationDepth: 3 });
     const w = new World({ config, precompute: true });
     for (const id of ["a", "b", "c"])
       w.enqueue({ id, affected: affected({ files: ["x.ts"] }), bad: id === "a" });
@@ -100,7 +107,7 @@ describe("independent tracks and revalidation (§4.2)", () => {
   });
 
   it("independent work speculates in parallel next to a conflicting chain (siblings, not a queue)", () => {
-    const w = new World({ precompute: true });
+    const w = new World({ config: queueConfig(TIP), precompute: true });
     w.enqueue({ id: "a", affected: affected({ files: ["s.ts"], modules: ["m1", "m2"] }) });
     w.enqueue({ id: "b", affected: affected({ files: ["x.ts"], modules: ["m1"] }) });
     w.enqueue({ id: "c", affected: affected({ files: ["y.ts"], modules: ["m2"] }) });
@@ -111,6 +118,46 @@ describe("independent tracks and revalidation (§4.2)", () => {
     w.drain();
     expect(w.violations).toEqual([]);
     expect(new Set(w.merged)).toEqual(new Set(["a", "b", "c"]));
+  });
+});
+
+describe("direct carrying and one-level re-speculation (§4.3)", () => {
+  it("a batch carries only the unmerged entries it conflicts with, rebuilt on main", () => {
+    const w = new World({ precompute: true });
+    w.enqueue({ id: "a", affected: affected({ files: ["s.ts"], modules: ["m1"] }) });
+    w.enqueue({ id: "b", affected: affected({ files: ["x.ts"], modules: ["m1"] }) });
+    w.enqueue({ id: "d", affected: affected({ files: ["x.ts"] }) });
+    const batchOf = (id: string) => w.state.batches[w.state.entries[id]?.batchId ?? ""];
+    expect(batchOf("b")?.carried).toEqual(["a"]);
+    // d conflicts with b only: its tree is main + b + d, not a.
+    expect(batchOf("d")?.carried).toEqual(["b"]);
+    expect(batchOf("d")?.parentId).toBeNull();
+    expect(batchOf("d")?.baseSha).toBe(w.mainSha);
+    w.drain();
+    expect(w.violations).toEqual([]);
+    expect(new Set(w.merged)).toEqual(new Set(["a", "b", "d"]));
+  });
+
+  it("a failure rebuilds only the batches carrying the failed entries; the next level keeps its tree", () => {
+    const w = new World({ precompute: true });
+    w.enqueue({ id: "a", affected: affected({ files: ["s.ts"], modules: ["m1"] }), bad: true });
+    w.enqueue({ id: "b", affected: affected({ files: ["x.ts"], modules: ["m1"] }) });
+    w.enqueue({ id: "d", affected: affected({ files: ["x.ts"] }) });
+    const bBatch = w.state.entries.b?.batchId;
+    const dBatch = w.state.entries.d?.batchId;
+    w.drain();
+    expect(w.violations).toEqual([]);
+    expect(w.ejected.get("a")).toBe("tests-failed");
+    expect(new Set(w.merged)).toEqual(new Set(["b", "d"]));
+    const cancelled = cmds(w, "Audit")
+      .filter((c) => c.action === "merge-queue.batches-cancelled")
+      .flatMap((c) => c.payload.batches as string[]);
+    // b's batch held a: rebuilt without it. d's batch held only b: it kept running and its own
+    // full run is the one carried into d's landing.
+    expect(cancelled).toContain(bBatch);
+    expect(cancelled).not.toContain(dBatch);
+    const landedFrom = cmds(w, "Cas").flatMap((c) => c.evidence.carried.map((x) => x.batchId));
+    expect(landedFrom).toContain(dBatch);
   });
 });
 
