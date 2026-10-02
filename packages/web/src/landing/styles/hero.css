@@ -155,6 +155,12 @@
 [data-state="failed"] .copyline__done {
   opacity: 1;
 }
+.copyline--scroll .copyline__text {
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-wrap: normal;
+  scrollbar-width: thin;
+}
 /* Commands stay on one line where there is room; they scroll inside their box. */
 @media (min-width: 640px) {
   .copyline__text {

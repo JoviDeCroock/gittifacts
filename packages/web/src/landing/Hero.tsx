@@ -74,6 +74,7 @@ export function CopyLine({
   originPath,
   label,
   children,
+  scroll = false,
 }: {
   id: string;
   text?: string;
@@ -81,9 +82,11 @@ export function CopyLine({
   label: string;
   /** Mixed content, e.g. a command with an origin-rewritten URL inside it. */
   children?: ComponentChildren;
+  /** Long commands scroll on one line at every width instead of breaking mid-word. */
+  scroll?: boolean;
 }) {
   return (
-    <div class="copyline">
+    <div class={scroll ? "copyline copyline--scroll" : "copyline"}>
       <code class="copyline__text" id={id} data-origin-text={originPath}>
         {children ?? (originPath === undefined ? text : `${DEFAULT_ORIGIN}${originPath}`)}
       </code>

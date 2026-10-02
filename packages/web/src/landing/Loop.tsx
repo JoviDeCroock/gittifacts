@@ -54,7 +54,7 @@ const STATIONS: Station[] = [
           alt={`Evidence for ${EXAMPLE.id}: signed and verified, with the platform key, signing time, head commit 19c18b6, digest and the git note it was written to.`}
         />
         <p class="art-evidence__verify">Verify it outside the platform, from a clone:</p>
-        <CopyLine id="verify-cmd" label="Copy the verify command">
+        <CopyLine id="verify-cmd" label="Copy the verify command" scroll>
           verify-attestation --repo . --commit 19c18b61ebbd --keys-url{" "}
           <span data-origin-text={KEYS_PATH}>{`${DEFAULT_ORIGIN}${KEYS_PATH}`}</span>
         </CopyLine>
