@@ -228,7 +228,9 @@ export interface ErrorCopy {
 
 /** What failed, why, and how to recover. Internal codes are never the headline. */
 export function describeError(err: unknown, what = "this"): ErrorCopy {
-  if (err instanceof ApiError && err.fix && err.status !== 401) {
+  // The server's fix is written for agents ("start one from an approved plan"); a person who
+  // follows a dead link or lacks access gets the human version below instead.
+  if (err instanceof ApiError && err.fix && err.status !== 401 && err.status !== 403 && err.status !== 404) {
     return { title: err.message, detail: err.fix.explanation, retry: err.status === 0 || err.status === 409 || err.status === 429 || err.status >= 500 };
   }
   if (err instanceof ApiError) {
@@ -238,9 +240,13 @@ export function describeError(err: unknown, what = "this"): ErrorCopy {
       case err.status === 401:
         return { title: "Your session ended", detail: "Sign in again to continue where you left off.", retry: false };
       case err.status === 403:
-        return { title: `You don't have access to ${what}`, detail: `${err.message} Ask a repo admin for the scope you need.`, retry: false };
+        return { title: `You don't have access to ${what}`, detail: `${sentence(err.message)} Ask the repository's owner for the role you need.`, retry: false };
       case err.status === 404:
-        return { title: `We couldn't find ${what}`, detail: "It may have been removed, or the link is wrong.", retry: false };
+        return {
+          title: `We couldn't find ${what}`,
+          detail: "It may have been removed, the link may be wrong, or it belongs to a repository you are not a member of. Its owner can add you under Members.",
+          retry: false,
+        };
       case err.status === 409:
         return { title: "That action conflicts with the current state", detail: err.message, retry: true };
       case err.status === 429:
@@ -252,6 +258,11 @@ export function describeError(err: unknown, what = "this"): ErrorCopy {
     }
   }
   return { title: `Couldn't load ${what}`, detail: err instanceof Error ? err.message : "Unknown error.", retry: true };
+}
+
+function sentence(s: string): string {
+  const t = capitalize(s.trim());
+  return /[.!?]$/.test(t) ? t : `${t}.`;
 }
 
 function capitalize(s: string): string {
