@@ -45,6 +45,8 @@ const AnonymousExtra = z.object({
   ipHash: z.string().min(1),
   asn: z.number().int().nullable(),
   country: z.string().nullable(),
+  /** Set by src/limits/client.ts only when the eval-traffic signature verified. */
+  evalRun: z.string().min(1).nullable().optional(),
 });
 
 /** A caller without credentials (only create_project and whoami reach here). */

@@ -58,6 +58,11 @@ export const UnclaimedLimits = z.object({
     asnDay: Bucket,
     globalHour: Bucket,
     globalDay: Bucket,
+    /**
+     * One eval run (signed `x-gittifacts-eval-run`, src/limits/eval-traffic.ts): replaces the IP
+     * and ASN buckets for that run; the global ones still apply.
+     */
+    evalRun: Bucket,
   }),
   /** Requests per minute per unclaimed token (mirrors the UNCLAIMED_TOKEN_LIMITER binding). */
   requestsPerMinute: z.number().int().min(1),
@@ -85,6 +90,9 @@ export const DEFAULT_UNCLAIMED_LIMITS: UnclaimedLimits = {
     asnDay: { capacity: 200, periodSec: 86_400 },
     globalHour: { capacity: 300, periodSec: 3600 },
     globalDay: { capacity: 2000, periodSec: 86_400 },
+    // A run needs one project (a retry or two on top); runs last minutes, so a week-long refill
+    // means "3 per run", and a leaked run signature is worth 3 projects a week.
+    evalRun: { capacity: 3, periodSec: 7 * 86_400 },
   },
   requestsPerMinute: 120,
 };

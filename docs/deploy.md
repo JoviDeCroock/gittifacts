@@ -121,3 +121,26 @@ creates the script with workers.dev on (`https://gf-<repoId>-api.<account>.worke
 Workers Issues on. Every version gets the `FLAGS` (Flagship app `FLAGSHIP_APP_ID`) and `VERSION`
 (`version_metadata`) bindings; bundles may declare plain vars only. Delete a project's Worker with
 `pnpm --filter @app/platform exec wrangler delete --name gf-<repoId>-<script> --force`.
+
+## O6: signed eval traffic (`EVAL_TRAFFIC_SECRET`)
+
+The onboarding eval's agents reach the platform from Cloudflare's Worker egress (shared addresses, one network),
+so a 40-run matrix would exhaust the per-IP (3/hour, 10/day) and per-ASN creation limits of credential-less
+`create_project`. The evals Worker signs its agents' platform requests (`x-gittifacts-eval-run: <runId>`,
+`x-gittifacts-eval-sig: hex(HMAC-SHA-256(EVAL_TRAFFIC_SECRET, runId))`). When the platform has the same secret and the
+signature verifies, the creation limits key on `eval:<runId>` (3 projects per run, `UNCLAIMED_LIMITS.creation.evalRun`)
+instead of the IP and ASN; the global caps and everything else (quotas, egress, TTL, no Lane 0, no production) are
+unchanged. A missing or wrong signature, or no secret on the platform, means the normal limits.
+
+Generate one value and set it on **both** Workers (never commit or print it):
+
+```sh
+openssl rand -hex 32                                                  # ≥ 32 characters; shorter ones are ignored
+pnpm --filter @app/platform exec wrangler secret put EVAL_TRAFFIC_SECRET
+pnpm --filter @app/evals exec wrangler secret put EVAL_TRAFFIC_SECRET
+```
+
+Rotate by setting a new value on both (in-flight runs fall back to the normal limits until the evals Worker has it).
+Without it on the platform, eval traffic is limited like anyone else's. Eval-keyed creations are audited
+(`project.unclaimed-created` with `creator.evalRun`); unverified signatures go to Workers Logs
+(`eval-traffic-unverified`), never to the audit log.

@@ -988,6 +988,36 @@ HTMLRewriter. The page extends DESIGN.md's world rather than forking it: same to
 if that fixture changes. The platform test for `/` needs a fresh `packages/web` build (it reads
 `dist/landing.html` through the ASSETS binding).
 
+## 2026-10-02 — Creation limits key signed eval traffic by run (O6 platform fix)
+
+**Triggered by:** O6 design review 2026-10-02 (no live run yet). Every eval agent reaches the platform from
+Cloudflare's Worker egress (shared IPs, one ASN), so the per-IP (3/hour, 10/day) and per-ASN creation buckets would
+let a 40-run matrix create about 3 projects an hour: most runs would fail on `rate-limited`, which measures the
+egress, not the onboarding.
+
+**What.** The evals Worker already sends `x-gittifacts-eval-run: <runId>` and `x-gittifacts-eval-sig:
+hex(HMAC-SHA-256(EVAL_TRAFFIC_SECRET, runId))` (apps/evals/src/env.ts). `src/limits/eval-traffic.ts` recomputes the
+HMAC with the platform's copy of the secret and compares in constant time (`crypto.subtle.timingSafeEqual` over two
+64-character hex strings). Verified → `AnonymousClient.evalRun`, and `creationKeys` uses `eval:<runId>` (bucket
+`creation.evalRun`, 3 per 7 days: "3 per run", since runs last minutes) **instead of** the IP and ASN keys. The
+`global` buckets are always taken, so eval traffic can never exceed the platform-wide cap. Everything else is an
+ordinary unclaimed project: the creator IP hash (per-IP quotas), CI/storage/ops quotas, egress, TTL, no Lane 0, no
+production. Eval-keyed creations carry `creator.evalRun` in their `project.unclaimed-created` audit event.
+
+**Fails closed to the normal keys:** no secret on the platform, a secret under 32 characters, a malformed run id
+(`[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`) or signature, or a mismatch. Unverified attempts go to Workers Logs
+(`eval-traffic-unverified`), not to the audit log (unauthenticated input must not write the audit chain).
+
+**Bounds.** The signature is a static per-run token (the evals side signs only the run id, no timestamp): a leaked
+pair is worth one run's budget, 3 projects a week, under the global cap; rotating the secret on both Workers revokes
+all pairs. Two touches outside `limits/`: the MCP backend's `AnonymousExtra` schema carries `evalRun` (zod would strip
+it otherwise, and MCP is how most agents create projects), and the creation audit payload.
+
+**Likely next stumble (not changed, by design):** per-IP *quotas* still aggregate by the creating IP, which is the
+shared egress for every eval project: 120 CI minutes/day, 600 Artifacts operations/day and 500 MB storage across all
+eval projects created that day. A full matrix may hit the CI-minutes one; if a run shows `quota-exceeded` with
+`scope: ip`, that is the next platform fix (e.g. the same signed run as the quota key).
+
 ## 2026-10-02 — External integrations: deploy platforms connect to gittifacts (docs/prompts/04-integrations.md)
 
 **Integration principals.** `Principal.kind` gained `"integration"` (additive, `@app/domain`). Each installation has

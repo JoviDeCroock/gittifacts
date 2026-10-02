@@ -5,6 +5,7 @@
  * which one subscriber usually controls entirely.
  */
 import { hexEncode } from "@app/evidence";
+import { type EvalTrafficEnv, verifiedEvalRun } from "./eval-traffic.js";
 
 export interface AnonymousClient {
   /** Keyed hash of the IP (IPv6: of its /64); "unknown" when the edge gave no IP. */
@@ -13,6 +14,12 @@ export interface AnonymousClient {
   asn: number | null;
   /** ISO country, informational. */
   country: string | null;
+  /**
+   * The eval run this request belongs to, when its `x-gittifacts-eval-sig` verifies
+   * (src/limits/eval-traffic.ts): creation limits then key on the run instead of the IP and
+   * ASN. Absent/null for everyone else.
+   */
+  evalRun?: string | null;
 }
 
 /** The address limits key on: IPv4 as is, IPv6 reduced to its first four hextets (/64). */
@@ -50,7 +57,7 @@ interface CfProps {
 
 export async function anonymousClient(
   request: Request,
-  env: { BETTER_AUTH_SECRET?: string },
+  env: { BETTER_AUTH_SECRET?: string } & EvalTrafficEnv,
 ): Promise<AnonymousClient> {
   const ip = request.headers.get("cf-connecting-ip");
   const cf = (request as Request & { cf?: CfProps }).cf;
@@ -60,5 +67,6 @@ export async function anonymousClient(
     ipHash: ip ? await hmacHex(secret, `ip:${limitAddress(ip)}`) : "unknown",
     asn: Number.isInteger(asnRaw) && asnRaw > 0 ? asnRaw : null,
     country: typeof cf?.country === "string" ? cf.country : null,
+    evalRun: await verifiedEvalRun(request, env),
   };
 }

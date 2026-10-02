@@ -196,7 +196,13 @@ export async function createUnclaimedProject(
               name: repo.name,
               template: repo.template,
               expiresAt,
-              creator: { ipHash: client.ipHash, asn: client.asn, country: client.country },
+              creator: {
+                ipHash: client.ipHash,
+                asn: client.asn,
+                country: client.country,
+                // Creation limits were keyed by this signed eval run (src/limits/eval-traffic.ts).
+                ...(client.evalRun ? { evalRun: client.evalRun } : {}),
+              },
             },
           });
         }
