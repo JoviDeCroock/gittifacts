@@ -96,4 +96,30 @@ describe("/docs", () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("");
   });
+
+  // With packages/docs built into packages/web/dist (deploy:prepare does it), the real assets
+  // binding must serve pages the way this route asks for them (html_handling, .md, index.json).
+  it("serves the real docs build through the assets binding when it is present", async () => {
+    const { app } = makeApp();
+    const probe = await env.ASSETS.fetch(new Request(`${ORIGIN}/docs/index.json`));
+    if (!(probe.headers.get("content-type") ?? "").includes("json")) return; // docs not built
+    const fetchReal = async (path: string, headers: Record<string, string> = {}) => {
+      const ctx = createExecutionContext();
+      const res = await app.fetch(new Request(`${ORIGIN}${path}`, { headers }), env, ctx);
+      await waitOnExecutionContext(ctx);
+      return res;
+    };
+    const home = await fetchReal("/docs", { accept: "text/html" });
+    expect(home.status).toBe(200);
+    expect(await home.text()).toContain("<h1");
+    const section = await fetchReal("/docs/guides", { accept: "text/html" });
+    expect(section.status).toBe(200);
+    const page = await fetchReal("/docs/guides/git", { accept: "text/html" });
+    expect(await page.text()).toContain("Commit and push with git");
+    const md = await fetchReal("/docs/guides/git.md");
+    expect(md.headers.get("content-type")).toContain("text/markdown");
+    expect(await md.text()).toMatch(/^# Commit and push with git/);
+    const missing = await fetchReal("/docs/guides/nope", { accept: "text/html" });
+    expect(missing.status).toBe(404);
+  });
 });
