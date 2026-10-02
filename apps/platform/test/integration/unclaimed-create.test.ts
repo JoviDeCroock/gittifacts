@@ -108,6 +108,29 @@ describe("credential-less create_project", () => {
     expect(get.status).toBe(405);
   });
 
+  it("a real MCP SDK client without credentials (what `gittifacts init` does) creates a project", async () => {
+    const app = platformApp();
+    // No token: the SDK's header ends up as a bare "Bearer", which carries no credentials.
+    const mcp = await createPlatformClient(`${ORIGIN}/mcp`, "", { fetch: fetchWith(app) });
+    try {
+      const tools = (await mcp.listTools()).map((t) => t.name);
+      expect(tools).toContain("create_project");
+      const created = await mcp.tools.create_project({
+        template: "static-site",
+        idempotencyKey: `cli_${crypto.randomUUID().slice(0, 16)}`,
+      });
+      if (created.isError) throw new Error(JSON.stringify(created.content));
+      expect(created.structuredContent).toMatchObject({
+        token: expect.stringMatching(/^gtf_/),
+        claimUrl: expect.stringContaining("/claim/"),
+      });
+      // Anything else answers the OAuth 401, which the SDK raises.
+      await expect(mcp.tools.list_repos({})).rejects.toThrow(/authentication required/);
+    } finally {
+      await mcp.client.close();
+    }
+  });
+
   it("HTTP: anonymous POST /api/v1/projects; credentials that don't verify never fall back", async () => {
     const app = platformApp();
     const p = await createUnclaimed(app, { template: "static-site" });
