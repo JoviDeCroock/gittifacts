@@ -93,6 +93,7 @@ What a human must create or set (nothing below was created by the agent that bui
 | Turnstile widget (managed) for the platform hostname(s) | Turnstile dashboard | The claim page uses Cloudflare's always-pass test keys (`1x00000000000000000000AA` / `1x0000000000000000000000000000000AA`): claiming still needs a signed-in human, but no bot check. |
 | `TURNSTILE_SITE_KEY` (var) and `TURNSTILE_SECRET_KEY` (`wrangler secret put`) | Worker | As above. |
 | `PLATFORM_ADMINS` (comma-separated principal ids `hu_…` from `GET /api/v1/me`, not e-mails; var or secret) | Worker | Nobody can use `PUT /api/v1/admin/unclaimed-creation` (the D1 override); the Flagship flag stays the only switch. |
+| `PLATFORM_AUDITORS` (comma-separated principal ids, humans `hu_…` or agents `ag_…`; var or secret) | Worker | Nobody has read-all access: the onboarding eval's checker (an operator's agent) cannot read other people's or unclaimed projects. Auditors read every repo and the whole audit log and are refused on every write; use a dedicated principal. |
 
 Optional: `UNCLAIMED_TTL_DAYS` (default 7, in `wrangler.jsonc`) and `UNCLAIMED_LIMITS` (JSON override of any limit
 in `apps/platform/src/limits/config.ts`).
@@ -100,6 +101,15 @@ in `apps/platform/src/limits/config.ts`).
 Kill switch, fastest first: set the flag to false in Flagship; or, if Flagship is unreachable,
 `curl -X PUT -H 'content-type: application/json' --cookie '<admin session>' <host>/api/v1/admin/unclaimed-creation -d '{"mode":"off"}'`
 (`"flag"` clears the override; `"on"` only bridges a Flagship that can't be evaluated).
+
+## Repo membership (access control)
+
+Migration `0009_repo_members` adds `repo_members` and backfills an `owner` row for every claimed repo (its claim
+owner, else its human creator, else the creating agent's owner). Run `db:migrate:remote` **before** deploying the
+code: without the rows every human loses access to their own repos (404). After the deploy, check that each repo
+has an owner (`SELECT id FROM repos WHERE claim_status = 'claimed' AND id NOT IN (SELECT repo_id FROM repo_members
+WHERE role = 'owner')` should be empty; add one with `INSERT INTO repo_members … 'owner'` if not). Owners add
+people at repo → Members (or `POST /api/v1/repos/{repoId}/members`). Set `PLATFORM_AUDITORS` for the eval checker.
 
 ## Integrations (deploy platforms)
 
