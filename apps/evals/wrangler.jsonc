@@ -6,7 +6,10 @@
   "name": "gittifacts-evals",
   "main": "./src/index.ts",
   "compatibility_date": "2026-09-30",
-  "compatibility_flags": ["nodejs_compat"],
+  // global_fetch_strictly_public: the platform is another Worker on the same workers.dev
+  // subdomain; without it such a fetch fails (error 1042). With it, agent traffic and checker
+  // reads reach the platform over the public path, like any external agent's.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": true,
 
   "observability": {
