@@ -10,7 +10,7 @@ Every gate must hold for every seed (1, 2, 3). `pnpm --filter @sim/merge-queue g
 |---|---|---|
 | PASS | any scenario: main-red events = 0 | 0 in 30 runs |
 | PASS | any scenario: attribution failures = 0 | 0 failures over 7 production regressions |
-| **FAIL** | any scenario: no invariant violation, no leaked refs/queue/*, no lane decrease | conflict-heavy#1, runaway-agent#1, conflict-heavy#2, runaway-agent#2 |
+| PASS | any scenario: no invariant violation, no leaked refs/queue/*, no lane decrease | clean |
 | **FAIL** | gate-200: p95 time-in-queue ≤ 2× median CI (20 min) | worst seed 33.0 min (per seed: 33.0, 32.8, 30.6) |
 | PASS | gate-200: CI minutes per merged Change ≤ 1.5× an isolated run | worst seed 0.70× (per seed: 0.69, 0.70, 0.65) |
 | PASS | gate-200: false-eject rate ≤ 1% | worst seed 0.34% (per seed: 0.16, 0.34, 0.00) |
@@ -79,7 +79,7 @@ Shallower speculation makes it worse (depth 3: p95 222 min, depth 5: 79 min: arr
 - **A quarantined test's failure is still re-checked; only failures that also happen on main are excused.** Masking every failure of a quarantined test let a real regression land (a main-red event once the flaky test was fixed and un-quarantined).
 - **Removed: prediction-driven batch sizing and ordering** (shrink batches when the recent pass rate drops, stop adding entries below a predicted batch pass probability, likely failures last). On gate-200 a fixed batch size of 4 beat it on both seeds: p95 33.0 vs 54.0 min and 32.8 vs 35.3 min, CI 0.69× vs 0.85×; same on failure-heavy (p95 54.7 vs 63.8, 54.8 vs 67.5). Predictions are still computed, returned to agents (`enqueue`, `queue_status`) and logged against outcomes for a learned model; they never skip a check and no longer steer scheduling.
 - **While frozen, only work that can land goes first.** An incident fix stacked on an ordinary Change can't land during a freeze, so it is not treated as express (it livelocked: its dependency was re-rooted out of the way and re-placed forever). A landing batch that can't land while frozen no longer blocks the reverts stacked behind it in the landing pipeline. Reverts and incident fixes are exempt from the per-session fair share.
-- **Removed: a cap on what a merge batch may carry** (wait for the in-flight set to shrink, then force a drain). Cross-cutting Changes tripped it constantly; forced drains cost more than the invalidations they avoided (gate-200 p95 54 → 102 min).
+- **Removed: a cap on what a merge batch may carry** (wait for the in-flight set to shrink, then force a drain). Cross-cutting Changes tripped it constantly; forced drains cost more than the invalidations they avoided (measured at the time: gate-200 p95 54 → 102 min).
 - **Demoted: the global in-flight cap** is a safety limit (128), not a batching device: at 16 it serialized independent components instead of growing batches.
 
 The CI model assumes **fail-fast** runs (a failing run reports when its failing test finishes): the engine reports step status, so the BatchRunWorkflow can report a failure as soon as a required step fails.
