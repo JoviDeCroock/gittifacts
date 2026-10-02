@@ -397,19 +397,8 @@ describe("integration events, deliveries and evidence", () => {
     expect(outside.status).toBe(403);
   });
 
-  it("serves /docs/integrations as markdown, HTML and JSON, and documents the API in OpenAPI", async () => {
+  it("documents the integration API in OpenAPI", async () => {
     const { app } = makeApp();
-    const md = await call(app, "GET", "/docs/integrations");
-    expect(md.headers.get("content-type")).toContain("text/markdown");
-    expect(await md.text()).toContain("X-Gittifacts-Signature-256");
-    const html = await call(app, "GET", "/docs/integrations", { headers: { accept: "text/html" } });
-    expect(html.headers.get("content-type")).toContain("text/html");
-    expect(await html.text()).toContain('<h2 id="7-example-connect-a-cloudflare-workers-project">');
-    const doc = await json<{ oauth: { token: string }; git: { refused: string[] } }>(
-      await call(app, "GET", "/docs/integrations", { headers: { accept: "application/json" } }),
-    );
-    expect(doc.oauth.token).toBe(`${ORIGIN}/api/oauth/token`);
-    expect(doc.git.refused).toEqual(["git-receive-pack"]);
     const spec = await json<{ paths: Record<string, unknown> }>(
       await call(app, "GET", "/api/v1/openapi.json"),
     );

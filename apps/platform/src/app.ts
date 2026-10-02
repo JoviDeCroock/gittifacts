@@ -33,8 +33,7 @@ export const OPENAPI_PATH = "/api/v1/openapi.json";
 export const BLOBS_PATH = "/api/v1/blobs";
 
 /** Paths the Worker owns; everything else is the SPA (static assets). */
-const WORKER_PATHS =
-  /^\/(api\/|mcp$|mcp\/|webhooks\/|\.well-known\/|internal\/ttfg$|git\/|docs\/integrations$)/;
+const WORKER_PATHS = /^\/(api\/|mcp$|mcp\/|webhooks\/|\.well-known\/|internal\/ttfg$|git\/)/;
 
 const OPENAPI_CONFIG = {
   openapi: "3.1.0",
@@ -96,7 +95,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerClaimRoutes(app);
   registerLimitRoutes(app);
   registerAuditRoutes(app);
-  // External integrations: developer portal, installs, deployments, /git/ proxy, /docs/integrations.
+  // External integrations: developer portal, installs, deployments, the /git/ proxy.
   registerIntegrationRoutes(app);
 
   // R2-backed references (logs, screenshots, spilled diffs). `:ref` may contain slashes.

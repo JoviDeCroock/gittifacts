@@ -1,8 +1,9 @@
 /**
  * Every external-integration route (docs/prompts/04-integrations.md), mounted by src/app.ts:
- * developer portal, install screen + installed integrations, deployments, the read-only git proxy
- * and the integrator docs. The OAuth protocol endpoints themselves stay in src/oauth/routes.ts,
- * which hands integration clients (`client_id` = `gtic_…`) to ./install.ts and ./tokens.ts.
+ * developer portal, install screen + installed integrations, deployments and the read-only git
+ * proxy. The OAuth protocol endpoints themselves stay in src/oauth/routes.ts, which hands
+ * integration clients (`client_id` = `gtic_…`) to ./install.ts and ./tokens.ts. The integrator
+ * guide is static markdown in packages/docs/content/guides/integrations/.
  */
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
@@ -20,7 +21,6 @@ import {
   getDeployment,
   listDeployments,
 } from "./deployments.js";
-import { registerIntegrationDocs } from "./docs.js";
 import { GIT_PREFIX, handleGit } from "./git-proxy.js";
 import { registerInstallRoutes } from "./routes-install.js";
 import { registerPortalRoutes } from "./routes-portal.js";
@@ -178,5 +178,4 @@ export function registerIntegrationRoutes(app: ApiApp): void {
   );
   app.on(["GET", "POST", "HEAD", "PUT", "DELETE"], `${GIT_PREFIX}*`, handleGit);
   registerGitDocs(app);
-  registerIntegrationDocs(app);
 }
