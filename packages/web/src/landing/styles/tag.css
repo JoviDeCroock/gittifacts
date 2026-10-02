@@ -71,7 +71,7 @@
 .case__chip {
   padding: 0 6px;
   border-radius: 6px;
-  background: var(--panel-strong);
+  background: var(--rule);
   color: var(--text-2);
   font-size: var(--text-meta);
   line-height: 1.6;
