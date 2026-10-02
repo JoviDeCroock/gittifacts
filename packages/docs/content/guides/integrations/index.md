@@ -32,7 +32,9 @@ In the developer portal (or `POST /api/v1/integrations` with a signed-in session
 - the **permissions** you need (below);
 - a **webhook URL** and the events you want.
 
-You get a `client_id` (`gtic_…`) and, for a confidential client, a `client_secret` (`gtis_…`) **shown once**. It is stored hashed. To rotate, generate a second secret, switch over, then revoke the old one (at most two are active; the last one can't be revoked). Without your own webhook secret one is generated (`whsec_…`) and shown once. Public clients (no secret, PKCE only) are allowed too.
+You get a `client_id` (`gtic_…`) and, for a confidential client, a `client_secret` (`gtis_…`) **shown once**. It is stored hashed.
+
+To rotate, generate a second secret, switch over, then revoke the old one (at most two are active; the last one can't be revoked). Without your own webhook secret one is generated (`whsec_…`) and shown once. Public clients (no secret, PKCE only) are allowed too.
 
 ## Permissions
 
