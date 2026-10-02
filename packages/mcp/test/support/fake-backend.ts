@@ -1,6 +1,6 @@
 import type { ApiError, Change, Plan, Repo, Tour } from "@app/domain";
 import { defaultPolicy } from "@app/domain";
-import type { McpBackend, WorkspaceView } from "../../src/index.js";
+import type { McpBackend, QueueEntry, WorkspaceView } from "../../src/index.js";
 
 export const SHA = "a".repeat(40);
 export const HEAD = "b".repeat(40);
@@ -93,6 +93,33 @@ export function workspaceView(over: Partial<WorkspaceView> = {}): WorkspaceView 
     idleSleepSec: 600,
     restoredFrom: "image",
     usage: { containerSeconds: 3, projectSecondsRemaining: null },
+    ...over,
+  };
+}
+
+/** A queue entry as the platform returns it. */
+export function queueEntry(over: Partial<QueueEntry> = {}): QueueEntry {
+  return {
+    changeId: "chg_1",
+    title: "Fix a",
+    authorId: "ag_1",
+    priority: "normal",
+    lane: 0,
+    state: "waiting",
+    hold: null,
+    trackId: null,
+    batch: null,
+    position: 0,
+    etaSeconds: 720,
+    blocking: [],
+    reason: "waiting for the next batch",
+    predictedPassProbability: 0.96,
+    frozen: false,
+    enqueuedAt: 1_759_312_800_000,
+    dependsOn: [],
+    plangroup: null,
+    ejectReason: null,
+    mergedSha: null,
     ...over,
   };
 }
@@ -329,6 +356,67 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
         },
         error: null,
         startedAt: "2026-10-01T00:00:00.000Z",
+      };
+    },
+    async enqueue(_caller, input, opts) {
+      calls.push(
+        `enqueue:${input.changeId}:${input.priority ?? "-"}:${opts.idempotencyKey ?? "-"}`,
+      );
+      return {
+        changeId: input.changeId,
+        admitted: true,
+        state: "waiting",
+        position: 0,
+        track: null,
+        etaSeconds: 720,
+        predictedPassProbability: 0.96,
+        reason: "waiting for the next batch",
+      };
+    },
+    async queueStatus(_caller, changeId) {
+      calls.push(`queueStatus:${changeId}`);
+      return queueEntry({ changeId });
+    },
+    async waitForMerge(_caller, changeId, timeoutMs) {
+      calls.push(`waitForMerge:${changeId}:${timeoutMs}`);
+      return {
+        reason: "merged",
+        frozen: false,
+        status: queueEntry({ changeId, state: "merged", mergedSha: SHA }),
+      };
+    },
+    async dequeue(_caller, changeId) {
+      calls.push(`dequeue:${changeId}`);
+      return { removed: true, status: queueEntry({ changeId, state: "dequeued" }) };
+    },
+    async reprioritize(_caller, input) {
+      calls.push(`reprioritize:${input.changeId}:${input.priority}`);
+      return { status: queueEntry({ changeId: input.changeId, priority: input.priority }) };
+    },
+    async queueOverview(_caller, repoId) {
+      calls.push(`queueOverview:${repoId}`);
+      return {
+        repoId,
+        mainSha: SHA,
+        frozen: false,
+        freezeReasons: [],
+        halted: null,
+        tracks: [
+          {
+            id: "t1",
+            express: false,
+            batches: [{ id: "b1", state: "running", kind: "chain", entries: ["chg_1"] }],
+          },
+        ],
+        landing: [],
+        entries: [queueEntry({ changeId: "chg_1", state: "speculating" })],
+        waiting: 0,
+        resolving: 0,
+        throughputPerHour: 4,
+        timeInQueueMs: { p50: 600_000, p95: 1_200_000 },
+        ciDurationMs: 600_000,
+        quarantined: [],
+        flakeRates: {},
       };
     },
     errorEnvelope(err: unknown): ApiError {

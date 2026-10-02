@@ -18,6 +18,16 @@ export {
   proposalNextSteps,
 } from "./tools/import.js";
 export {
+  type EnqueueView,
+  exampleCall,
+  type QueueEjectReason,
+  type QueueEntry,
+  type QueueOverview,
+  type QueueToolsBackend,
+  queueNextSteps,
+  searchTools,
+} from "./tools/queue.js";
+export {
   type WorkspaceNetwork,
   type WorkspaceStatus,
   type WorkspaceToolsBackend,

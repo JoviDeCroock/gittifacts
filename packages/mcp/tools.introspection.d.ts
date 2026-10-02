@@ -542,6 +542,413 @@ export type introspection = {
       }
     },
     /**
+     * Take a Change out of the merge queue
+     * Removes your Change from the merge queue (stack dependents leave with it). A Change that is landing right now leaves after its CAS settles.
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "dequeue": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "changeId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "removed": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "changeId": {
+                "type": "string"
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "authorId": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "string",
+                "description": "revert | incident | security | normal"
+              },
+              "lane": {
+                "type": "number"
+              },
+              "state": {
+                "type": "string",
+                "description": "waiting | speculating | resolving | passed | merged | ejected | dequeued"
+              },
+              "hold": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "affected | dependency | group | approval"
+              },
+              "trackId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "batch": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "number"
+                  },
+                  "chainPosition": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "state",
+                  "size",
+                  "chainPosition"
+                ]
+              },
+              "position": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Among waiting entries (0 = next)."
+              },
+              "etaSeconds": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "blocking": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Changes this one waits behind or on."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why it waits, in words."
+              },
+              "predictedPassProbability": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "frozen": {
+                "type": "boolean"
+              },
+              "enqueuedAt": {
+                "type": "number",
+                "description": "Epoch milliseconds."
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "plangroup": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ejectReason": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Why it left the queue and exactly what to do next (fix.call).",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "fix": {
+                    "type": "object",
+                    "properties": {
+                      "explanation": {
+                        "type": "string"
+                      },
+                      "call": {
+                        "type": "string"
+                      },
+                      "command": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "explanation"
+                    ]
+                  },
+                  "evidenceRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "failingTests": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "upstream": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Upstream Changes involved (the culprit of a conflict first)."
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "fix",
+                  "evidenceRefs",
+                  "failingTests",
+                  "upstream"
+                ]
+              },
+              "mergedSha": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "changeId",
+              "title",
+              "authorId",
+              "priority",
+              "lane",
+              "state",
+              "hold",
+              "trackId",
+              "batch",
+              "position",
+              "etaSeconds",
+              "blocking",
+              "reason",
+              "predictedPassProbability",
+              "frozen",
+              "enqueuedAt",
+              "dependsOn",
+              "plangroup",
+              "ejectReason",
+              "mergedSha"
+            ]
+          }
+        },
+        "required": [
+          "removed",
+          "status"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Enqueue a Change for merge
+     * Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode). It never skips review: an unapproved Change is registered and joins once approved (Lane 0 joins automatically). Returns position, track, ETA and the predicted pass probability.
+     * @param args.priority Default normal (ranked by lane). incident needs a human or incidentPlanId.
+     * @param args.dependsOn Changes this one is stacked on (they land first).
+     * @param args.landTogether Plan-group members merge in one CAS or not at all.
+     * @param args.landMode A stack lands as one unit or one by one.
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "enqueue": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "priority": {
+            "enum": [
+              "normal",
+              "security",
+              "incident"
+            ],
+            "description": "Default normal (ranked by lane). incident needs a human or incidentPlanId."
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "maxItems": 50,
+            "description": "Changes this one is stacked on (they land first)."
+          },
+          "plangroup": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "landTogether": {
+            "type": "boolean",
+            "description": "Plan-group members merge in one CAS or not at all."
+          },
+          "groupSize": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 100
+          },
+          "landMode": {
+            "enum": [
+              "atomic",
+              "incremental"
+            ],
+            "description": "A stack lands as one unit or one by one."
+          },
+          "incidentPlanId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "changeId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string"
+          },
+          "admitted": {
+            "type": "boolean",
+            "description": "In the queue now; false = registered, joins on approval."
+          },
+          "state": {
+            "type": "string"
+          },
+          "position": {
+            "type": "number"
+          },
+          "track": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "etaSeconds": {
+            "type": "number"
+          },
+          "predictedPassProbability": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "changeId",
+          "admitted",
+          "state",
+          "position",
+          "track",
+          "etaSeconds",
+          "predictedPassProbability",
+          "reason",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
      * Get change status
      * A change's status, lane (and why), pipeline runs for each head, and what to do next.
      */
@@ -1625,6 +2032,706 @@ export type introspection = {
       }
     },
     /**
+     * The repo's merge queue
+     * Tracks (independent parallel queues) with their speculative batches, the landing pipeline, freeze state, throughput, p50/p95 time in queue, quarantined tests and every entry with its reason and ETA.
+     */
+    "queue_overview": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "repoId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string"
+          },
+          "mainSha": {
+            "type": "string"
+          },
+          "frozen": {
+            "type": "boolean"
+          },
+          "freezeReasons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "number"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "changeId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "at",
+                "message",
+                "changeId"
+              ]
+            }
+          },
+          "halted": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The queue stopped on an invariant violation (an operator must resume it).",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "at": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "at"
+            ]
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "express": {
+                  "type": "boolean"
+                },
+                "batches": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "entries": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "state",
+                      "kind",
+                      "entries"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "express",
+                "batches"
+              ]
+            }
+          },
+          "landing": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "members": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "state",
+                "members"
+              ]
+            }
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "changeId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "authorId": {
+                  "type": "string"
+                },
+                "priority": {
+                  "type": "string",
+                  "description": "revert | incident | security | normal"
+                },
+                "lane": {
+                  "type": "number"
+                },
+                "state": {
+                  "type": "string",
+                  "description": "waiting | speculating | resolving | passed | merged | ejected | dequeued"
+                },
+                "hold": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "affected | dependency | group | approval"
+                },
+                "trackId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "batch": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "number"
+                    },
+                    "chainPosition": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "state",
+                    "size",
+                    "chainPosition"
+                  ]
+                },
+                "position": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Among waiting entries (0 = next)."
+                },
+                "etaSeconds": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "blocking": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Changes this one waits behind or on."
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Why it waits, in words."
+                },
+                "predictedPassProbability": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "frozen": {
+                  "type": "boolean"
+                },
+                "enqueuedAt": {
+                  "type": "number",
+                  "description": "Epoch milliseconds."
+                },
+                "dependsOn": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "plangroup": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "ejectReason": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "description": "Why it left the queue and exactly what to do next (fix.call).",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "fix": {
+                      "type": "object",
+                      "properties": {
+                        "explanation": {
+                          "type": "string"
+                        },
+                        "call": {
+                          "type": "string"
+                        },
+                        "command": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "explanation"
+                      ]
+                    },
+                    "evidenceRefs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "failingTests": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "upstream": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Upstream Changes involved (the culprit of a conflict first)."
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "fix",
+                    "evidenceRefs",
+                    "failingTests",
+                    "upstream"
+                  ]
+                },
+                "mergedSha": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "changeId",
+                "title",
+                "authorId",
+                "priority",
+                "lane",
+                "state",
+                "hold",
+                "trackId",
+                "batch",
+                "position",
+                "etaSeconds",
+                "blocking",
+                "reason",
+                "predictedPassProbability",
+                "frozen",
+                "enqueuedAt",
+                "dependsOn",
+                "plangroup",
+                "ejectReason",
+                "mergedSha"
+              ]
+            }
+          },
+          "waiting": {
+            "type": "number"
+          },
+          "resolving": {
+            "type": "number"
+          },
+          "throughputPerHour": {
+            "type": "number"
+          },
+          "timeInQueueMs": {
+            "type": "object",
+            "properties": {
+              "p50": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "p95": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "p50",
+              "p95"
+            ]
+          },
+          "ciDurationMs": {
+            "type": "number"
+          },
+          "quarantined": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "flakeRates": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "repoId",
+          "mainSha",
+          "frozen",
+          "freezeReasons",
+          "halted",
+          "tracks",
+          "landing",
+          "entries",
+          "waiting",
+          "resolving",
+          "throughputPerHour",
+          "timeInQueueMs",
+          "ciDurationMs",
+          "quarantined",
+          "flakeRates"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Where is my Change in the merge queue
+     * State, track, batch, position, ETA, the Changes it waits on and why (e.g. "waiting on conflicting Change X in track 2"), and for an ejected Change the reason with fix.call.
+     */
+    "queue_status": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "changeId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "queued": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "changeId": {
+                "type": "string"
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "authorId": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "string",
+                "description": "revert | incident | security | normal"
+              },
+              "lane": {
+                "type": "number"
+              },
+              "state": {
+                "type": "string",
+                "description": "waiting | speculating | resolving | passed | merged | ejected | dequeued"
+              },
+              "hold": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "affected | dependency | group | approval"
+              },
+              "trackId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "batch": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "number"
+                  },
+                  "chainPosition": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "state",
+                  "size",
+                  "chainPosition"
+                ]
+              },
+              "position": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Among waiting entries (0 = next)."
+              },
+              "etaSeconds": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "blocking": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Changes this one waits behind or on."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why it waits, in words."
+              },
+              "predictedPassProbability": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "frozen": {
+                "type": "boolean"
+              },
+              "enqueuedAt": {
+                "type": "number",
+                "description": "Epoch milliseconds."
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "plangroup": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ejectReason": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Why it left the queue and exactly what to do next (fix.call).",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "fix": {
+                    "type": "object",
+                    "properties": {
+                      "explanation": {
+                        "type": "string"
+                      },
+                      "call": {
+                        "type": "string"
+                      },
+                      "command": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "explanation"
+                    ]
+                  },
+                  "evidenceRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "failingTests": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "upstream": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Upstream Changes involved (the culprit of a conflict first)."
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "fix",
+                  "evidenceRefs",
+                  "failingTests",
+                  "upstream"
+                ]
+              },
+              "mergedSha": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "changeId",
+              "title",
+              "authorId",
+              "priority",
+              "lane",
+              "state",
+              "hold",
+              "trackId",
+              "batch",
+              "position",
+              "etaSeconds",
+              "blocking",
+              "reason",
+              "predictedPassProbability",
+              "frozen",
+              "enqueuedAt",
+              "dependsOn",
+              "plangroup",
+              "ejectReason",
+              "mergedSha"
+            ]
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "queued",
+          "status",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
      * Refresh the push token
      * A fresh short-lived push grant for your change's fork (author only). Use it when the old token expired.
      */
@@ -1677,6 +2784,270 @@ export type introspection = {
         },
         "required": [
           "remote"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Change a queued Change's priority
+     * Sets the priority class (normal, security, incident). The incident class needs a human or an approved incident Plan (incidentPlanId); reverts are prioritized automatically.
+     * @param args.incidentPlanId An approved incident Plan (required for the incident class unless you are human).
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "reprioritize": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "priority": {
+            "enum": [
+              "normal",
+              "security",
+              "incident"
+            ]
+          },
+          "incidentPlanId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "An approved incident Plan (required for the incident class unless you are human)."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "changeId",
+          "priority"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "changeId": {
+                "type": "string"
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "authorId": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "string",
+                "description": "revert | incident | security | normal"
+              },
+              "lane": {
+                "type": "number"
+              },
+              "state": {
+                "type": "string",
+                "description": "waiting | speculating | resolving | passed | merged | ejected | dequeued"
+              },
+              "hold": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "affected | dependency | group | approval"
+              },
+              "trackId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "batch": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "number"
+                  },
+                  "chainPosition": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "state",
+                  "size",
+                  "chainPosition"
+                ]
+              },
+              "position": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Among waiting entries (0 = next)."
+              },
+              "etaSeconds": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "blocking": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Changes this one waits behind or on."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why it waits, in words."
+              },
+              "predictedPassProbability": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "frozen": {
+                "type": "boolean"
+              },
+              "enqueuedAt": {
+                "type": "number",
+                "description": "Epoch milliseconds."
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "plangroup": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ejectReason": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Why it left the queue and exactly what to do next (fix.call).",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "fix": {
+                    "type": "object",
+                    "properties": {
+                      "explanation": {
+                        "type": "string"
+                      },
+                      "call": {
+                        "type": "string"
+                      },
+                      "command": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "explanation"
+                    ]
+                  },
+                  "evidenceRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "failingTests": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "upstream": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Upstream Changes involved (the culprit of a conflict first)."
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "fix",
+                  "evidenceRefs",
+                  "failingTests",
+                  "upstream"
+                ]
+              },
+              "mergedSha": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "changeId",
+              "title",
+              "authorId",
+              "priority",
+              "lane",
+              "state",
+              "hold",
+              "trackId",
+              "batch",
+              "position",
+              "etaSeconds",
+              "blocking",
+              "reason",
+              "predictedPassProbability",
+              "frozen",
+              "enqueuedAt",
+              "dependsOn",
+              "plangroup",
+              "ejectReason",
+              "mergedSha"
+            ]
+          }
+        },
+        "required": [
+          "status"
         ]
       },
       "annotations": {
@@ -1774,6 +3145,63 @@ export type introspection = {
       },
       "annotations": {
         "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Find the right tool
+     * Fuzzy search over every gittifacts tool's name and description. Returns matching tool names, a one-line description and an example call.
+     * @param args.query What you want to do, e.g. "merge my change" or "workspace exec".
+     */
+    "search_tools": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "What you want to do, e.g. \"merge my change\" or \"workspace exec\"."
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "example": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "description",
+                "example"
+              ]
+            }
+          }
+        },
+        "required": [
+          "tools"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false
       }
@@ -2254,6 +3682,292 @@ export type introspection = {
           "reached",
           "reason",
           "change",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Wait for the merge
+     * Long-polls until the Change merges, is ejected or dequeued, or the queue freezes (timeoutSec ≤ 55). Prefer this to polling; call again while reason is "timeout".
+     * @param args.timeoutSec Default 50 (your MCP client times out at 60 s). Call again while reason is "timeout".
+     */
+    "wait_for_merge": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "timeoutSec": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 55,
+            "description": "Default 50 (your MCP client times out at 60 s). Call again while reason is \"timeout\"."
+          }
+        },
+        "required": [
+          "changeId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "enum": [
+              "merged",
+              "ejected",
+              "dequeued",
+              "frozen",
+              "timeout",
+              "not-queued"
+            ]
+          },
+          "frozen": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "changeId": {
+                "type": "string"
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "authorId": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "string",
+                "description": "revert | incident | security | normal"
+              },
+              "lane": {
+                "type": "number"
+              },
+              "state": {
+                "type": "string",
+                "description": "waiting | speculating | resolving | passed | merged | ejected | dequeued"
+              },
+              "hold": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "affected | dependency | group | approval"
+              },
+              "trackId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "batch": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "number"
+                  },
+                  "chainPosition": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "state",
+                  "size",
+                  "chainPosition"
+                ]
+              },
+              "position": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Among waiting entries (0 = next)."
+              },
+              "etaSeconds": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "blocking": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Changes this one waits behind or on."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why it waits, in words."
+              },
+              "predictedPassProbability": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "frozen": {
+                "type": "boolean"
+              },
+              "enqueuedAt": {
+                "type": "number",
+                "description": "Epoch milliseconds."
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "plangroup": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ejectReason": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Why it left the queue and exactly what to do next (fix.call).",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "fix": {
+                    "type": "object",
+                    "properties": {
+                      "explanation": {
+                        "type": "string"
+                      },
+                      "call": {
+                        "type": "string"
+                      },
+                      "command": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "explanation"
+                    ]
+                  },
+                  "evidenceRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "failingTests": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "upstream": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Upstream Changes involved (the culprit of a conflict first)."
+                  }
+                },
+                "required": [
+                  "code",
+                  "message",
+                  "fix",
+                  "evidenceRefs",
+                  "failingTests",
+                  "upstream"
+                ]
+              },
+              "mergedSha": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "changeId",
+              "title",
+              "authorId",
+              "priority",
+              "lane",
+              "state",
+              "hold",
+              "trackId",
+              "batch",
+              "position",
+              "etaSeconds",
+              "blocking",
+              "reason",
+              "predictedPassProbability",
+              "frozen",
+              "enqueuedAt",
+              "dependsOn",
+              "plangroup",
+              "ejectReason",
+              "mergedSha"
+            ]
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "reason",
+          "frozen",
+          "status",
           "nextSteps"
         ]
       },

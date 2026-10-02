@@ -43,6 +43,7 @@ import {
   WhoamiOutput,
 } from "./schemas.js";
 import { importTools } from "./tools/import.js";
+import { queueTools } from "./tools/queue.js";
 import { workspaceTools } from "./tools/workspace.js";
 
 // ---------------------------------------------------------------- errors
@@ -595,6 +596,7 @@ export function buildTools(backend: McpBackend) {
     // Remote workspaces and import detection (one file per tool family, sharing these helpers).
     ...workspaceTools(backend, { callerOf, requireScope, parse, run, failure }),
     ...importTools(backend, { callerOf, requireScope, parse, run, failure }),
+    ...queueTools(backend, { callerOf, requireScope, parse, run, failure }),
   ]);
 }
 
