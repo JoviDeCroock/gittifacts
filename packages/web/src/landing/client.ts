@@ -1,0 +1,94 @@
+/**
+ * The landing page's only script: copy buttons, the theme switch (same storage key as the app),
+ * and the start URL on hosts the Worker did not rewrite (local preview). The page works without it.
+ */
+const DEFAULT_ORIGIN = "https://gittifacts.decroockjovi.workers.dev";
+const THEME_KEY = "gf:theme";
+type Theme = "system" | "light" | "dark";
+
+function fixOrigin(): void {
+  const origin = window.location.origin;
+  if (origin === DEFAULT_ORIGIN || !/^https?:/.test(origin)) return;
+  for (const el of document.querySelectorAll<HTMLElement>("[data-origin-text]")) {
+    if (el.textContent?.startsWith(DEFAULT_ORIGIN))
+      el.textContent = `${origin}${el.dataset.originText ?? ""}`;
+  }
+}
+
+function announce(text: string): void {
+  const status = document.getElementById("copy-status");
+  if (status) status.textContent = text;
+}
+
+function wireCopy(): void {
+  if (!navigator.clipboard) return;
+  for (const btn of document.querySelectorAll<HTMLButtonElement>("[data-copy]")) {
+    btn.hidden = false;
+    btn.addEventListener("click", async () => {
+      const text = document.getElementById(btn.dataset.copy ?? "")?.textContent?.trim();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.dataset.state = "done";
+        announce(`Copied ${text}`);
+        window.setTimeout(() => delete btn.dataset.state, 1600);
+      } catch {
+        announce("Copying failed. Select the text and copy it instead.");
+      }
+    });
+  }
+}
+
+function readTheme(): Theme {
+  try {
+    const v = window.localStorage.getItem(THEME_KEY);
+    return v === "light" || v === "dark" ? v : "system";
+  } catch {
+    return "system";
+  }
+}
+
+/** Screenshots follow a forced theme: dark sources match always (dark) or never (light). */
+function pointPictures(theme: Theme): void {
+  for (const src of document.querySelectorAll<HTMLSourceElement>("source[data-theme-src='dark']")) {
+    src.dataset.media ??= src.media;
+    const narrow = src.hasAttribute("data-narrow");
+    src.media =
+      theme === "system"
+        ? (src.dataset.media ?? "")
+        : theme === "dark"
+          ? narrow
+            ? "(max-width: 639px)"
+            : "all"
+          : "not all";
+  }
+}
+
+function applyTheme(theme: Theme): void {
+  const root = document.documentElement;
+  if (theme === "system") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", theme);
+  pointPictures(theme);
+  try {
+    if (theme === "system") window.localStorage.removeItem(THEME_KEY);
+    else window.localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    /* storage unavailable: the choice lasts for this page */
+  }
+}
+
+function wireTheme(): void {
+  const current = readTheme();
+  if (current !== "system") pointPictures(current);
+  const group = document.querySelector<HTMLFieldSetElement>(".footer__theme");
+  if (!group) return;
+  for (const input of group.querySelectorAll<HTMLInputElement>("input[name='theme']")) {
+    input.checked = input.value === current;
+    input.addEventListener("change", () => applyTheme(input.value as Theme));
+  }
+  group.hidden = false;
+}
+
+fixOrigin();
+wireCopy();
+wireTheme();

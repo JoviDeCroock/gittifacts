@@ -1,0 +1,150 @@
+/* ================================================================ page scale */
+:root {
+  --page-max: 80rem;
+  /* Marketing type scale: fixed steps per breakpoint, ratio about 1.25 above body. */
+  --l-display: 2.5rem;
+  --l-h2: 1.75rem;
+  --l-h3: 1.1875rem;
+  --l-lede: 1.1875rem;
+  --l-body: 1.0625rem;
+  --l-section: 4.5rem;
+}
+@media (min-width: 640px) {
+  :root {
+    --l-display: 3.25rem;
+    --l-h2: 2.125rem;
+    --l-lede: 1.25rem;
+    --l-section: 6rem;
+  }
+}
+@media (min-width: 1024px) {
+  :root {
+    --l-display: 3.5rem;
+    --l-h2: 2.5rem;
+    --l-h3: 1.3125rem;
+    --l-lede: 1.375rem;
+    --l-section: 8rem;
+  }
+}
+@media (min-width: 1280px) {
+  :root {
+    --l-display: 4.25rem;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+.wrap {
+  inline-size: 100%;
+  max-inline-size: calc(var(--page-max) + 2 * var(--gutter));
+  margin-inline: auto;
+  padding-inline: max(var(--gutter), env(safe-area-inset-left));
+}
+
+/* ================================================================ brand */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: var(--tap);
+  color: var(--text);
+  text-decoration: none;
+}
+.brand-mark {
+  fill: var(--text);
+  flex: none;
+}
+.brand-mark__lines {
+  stroke: var(--canvas);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.brand__word {
+  font-weight: 760;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+/* ================================================================ top bar */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: var(--canvas);
+  border-block-end: 1px solid var(--rule);
+}
+.topbar__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--s-5);
+  max-inline-size: calc(var(--page-max) + 2 * var(--gutter));
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+  min-block-size: 64px;
+}
+.topbar__nav {
+  display: none;
+  margin-inline-start: auto;
+}
+.topbar__nav ul {
+  display: flex;
+  gap: var(--s-1);
+  list-style: none;
+}
+.topbar__nav a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  padding-inline: var(--s-3);
+  border-radius: var(--r-control);
+  color: var(--text-2);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+.topbar__nav a:hover {
+  color: var(--text);
+  background: var(--panel);
+}
+.topbar__signin {
+  margin-inline-start: auto;
+}
+@media (min-width: 900px) {
+  .topbar__nav {
+    display: block;
+  }
+  .topbar__signin {
+    margin-inline-start: 0;
+  }
+}
+
+/* ================================================================ shared type */
+.l-h2 {
+  font-size: var(--l-h2);
+  font-weight: 740;
+  line-height: 1.12;
+  letter-spacing: -0.024em;
+  max-inline-size: 22ch;
+}
+.l-lede {
+  font-size: var(--l-lede);
+  line-height: 1.5;
+  color: var(--text-2);
+  max-inline-size: 40ch;
+}
+.l-body {
+  font-size: var(--l-body);
+  line-height: 1.6;
+  color: var(--text-2);
+  max-inline-size: 62ch;
+}
+.l-section {
+  padding-block: var(--l-section) 0;
+}
+.l-head {
+  display: grid;
+  gap: var(--s-4);
+  margin-block-end: var(--s-7);
+}

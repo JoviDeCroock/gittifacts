@@ -1,0 +1,13 @@
+/*
+ * Landing page styles. The app's tokens, base and components (buttons, lane tags, verdict
+ * marks, avatars) are the system; these files only add the marketing page's scale and layout.
+ */
+@import "../../styles/tokens.css";
+@import "../../styles/base.css";
+@import "../../styles/components.css";
+@import "./page.css";
+@import "./hero.css";
+@import "./tag.css";
+@import "./sections.css";
+@import "./loop.css";
+@import "./agents.css";

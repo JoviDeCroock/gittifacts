@@ -1,0 +1,238 @@
+/* ================================================================ case tag (signature) */
+.case {
+  --tag-ground: var(--surface);
+  --chamfer: 2.25rem;
+  --hole-y: 1.875rem;
+  --hole-r: 0.5625rem;
+  --perf: var(--rule-strong);
+  --notch:
+    radial-gradient(circle at 0 0, #0000 6px, #000 6.5px) left top / 51% 100% no-repeat,
+    radial-gradient(circle at 100% 0, #0000 6px, #000 6.5px) right top / 51% 100% no-repeat;
+  --notch4:
+    radial-gradient(circle at 0 0, #0000 6px, #000 6.5px) left top / 51% 51% no-repeat,
+    radial-gradient(circle at 100% 0, #0000 6px, #000 6.5px) right top / 51% 51% no-repeat,
+    radial-gradient(circle at 0 100%, #0000 6px, #000 6.5px) left bottom / 51% 51% no-repeat,
+    radial-gradient(circle at 100% 100%, #0000 6px, #000 6.5px) right bottom / 51% 51% no-repeat;
+  margin: 0;
+  inline-size: min(calc(100% - 0.75rem), 28rem);
+  display: grid;
+  gap: var(--s-7);
+}
+.case__tag {
+  position: relative;
+  filter: drop-shadow(0 1px 1px oklch(23% 0.035 262 / 0.1))
+    drop-shadow(0 10px 22px oklch(23% 0.035 262 / 0.1));
+}
+.case__body {
+  position: relative;
+  padding: calc(var(--hole-y) + var(--hole-r) + var(--s-5)) var(--s-5) var(--s-5);
+  background: var(--tag-ground);
+  clip-path: polygon(
+    var(--chamfer) 0,
+    calc(100% - var(--chamfer)) 0,
+    100% var(--chamfer),
+    100% 100%,
+    0 100%,
+    0 var(--chamfer)
+  );
+  -webkit-mask: radial-gradient(circle var(--hole-r) at 50% var(--hole-y), #0000 96%, #000);
+  mask: radial-gradient(circle var(--hole-r) at 50% var(--hole-y), #0000 96%, #000);
+}
+.case__eyelet {
+  position: absolute;
+  inset-block-start: calc(var(--hole-y) - var(--hole-r) - 5px);
+  inset-inline-start: calc(50% - var(--hole-r) - 5px);
+  inline-size: calc(2 * var(--hole-r) + 10px);
+  block-size: calc(2 * var(--hole-r) + 10px);
+  border: 5px solid var(--panel-strong);
+  border-radius: 50%;
+  box-shadow: inset 0 1px 2px oklch(23% 0.035 262 / 0.18);
+}
+.case__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-3);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--text-3);
+}
+.case__meta code {
+  color: var(--text-3);
+}
+.case__title {
+  margin-block-start: var(--s-2);
+  font-size: 1.3125rem;
+  font-weight: var(--weight-bold);
+  line-height: 1.25;
+  letter-spacing: -0.014em;
+  text-wrap: balance;
+}
+.case__who {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-block-start: var(--s-3);
+  font-size: var(--text-small);
+  color: var(--text-3);
+}
+.case__who b {
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+.case__rows {
+  margin: var(--s-5) 0 0;
+  border-block-start: 2px solid var(--text);
+}
+.case__row {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) 2rem;
+  align-items: center;
+  gap: var(--s-3);
+  padding-block: 0.5rem;
+  border-block-end: 1px solid var(--rule);
+}
+.case__row dt {
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--text-3);
+}
+.case__row dd {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+.case__row--lane1 {
+  margin-inline: calc(-1 * var(--s-2));
+  padding-inline: var(--s-2);
+  background: var(--lane1-tint);
+  border-block-end-color: transparent;
+}
+.case__row--lane1 dd {
+  font-weight: var(--weight-medium);
+}
+.case__mark {
+  display: grid;
+  justify-items: end;
+}
+.case__sig {
+  margin-block-start: var(--s-4);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+  color: var(--text-3);
+}
+.case__sig code {
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+
+/* ---------------------------------------------------------------- tear-off lane strips */
+.case__strip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-block-size: 4.75rem;
+  padding: var(--s-3) var(--s-5);
+  -webkit-mask: var(--notch);
+  mask: var(--notch);
+}
+/* The perforation: a dashed rule between two punched notches. */
+.case__strip::before {
+  content: "";
+  position: absolute;
+  inset-inline: 10px;
+  inset-block-start: 0;
+  border-block-start: 2px dashed var(--strip-perf);
+}
+.case__strip--1 {
+  --strip-perf: var(--lane1-edge);
+  background: var(--lane1);
+  color: var(--lane1-on);
+  -webkit-mask: var(--notch4);
+  mask: var(--notch4);
+}
+.case__strip--2 {
+  --strip-perf: color-mix(in oklch, var(--lane2-on) 45%, var(--lane2));
+  background: var(--lane2);
+  color: var(--lane2-on);
+  transform-origin: 6% 0;
+  transform: translate(0.5rem, 1.5rem) rotate(3deg);
+}
+@media (min-width: 640px) {
+  .case__strip--2 {
+    transform: translate(0.875rem, 1.75rem) rotate(4deg);
+  }
+}
+.case__num {
+  flex: none;
+  inline-size: 2.25rem;
+  font-size: 2.625rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.case__lane {
+  display: grid;
+  gap: 2px;
+  font-size: var(--text-small);
+  line-height: 1.35;
+}
+.case__lane b {
+  font-size: 1.125rem;
+  font-weight: 760;
+  letter-spacing: -0.01em;
+}
+.case__caption {
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--text-3);
+  max-inline-size: 44ch;
+}
+.case__demo {
+  display: block;
+  margin-block-start: var(--s-1);
+  color: var(--text-4);
+}
+
+/* ---------------------------------------------------------------- the one authored moment */
+@media (prefers-reduced-motion: no-preference) {
+  .case__mark {
+    animation: case-mark 420ms var(--ease-out) backwards;
+    animation-delay: calc(260ms + var(--i, 0) * 90ms);
+  }
+  .case__strip--2 {
+    animation: case-tear 1100ms cubic-bezier(0.16, 1, 0.3, 1) 1050ms backwards;
+  }
+}
+@keyframes case-mark {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+}
+@keyframes case-tear {
+  from {
+    transform: none;
+  }
+  18% {
+    transform: translate(0.0625rem, 0.125rem) rotate(0.8deg);
+  }
+}
+
+/* ---------------------------------------------------------------- night */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .case {
+    --tag-ground: var(--panel);
+  }
+  :root:not([data-theme="light"]) .case__tag {
+    filter: drop-shadow(0 12px 28px oklch(0% 0 0 / 0.45));
+  }
+}
+:root[data-theme="dark"] .case {
+  --tag-ground: var(--panel);
+}
+:root[data-theme="dark"] .case__tag {
+  filter: drop-shadow(0 12px 28px oklch(0% 0 0 / 0.45));
+}
