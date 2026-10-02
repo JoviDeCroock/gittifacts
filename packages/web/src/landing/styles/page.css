@@ -201,6 +201,8 @@ html {
 
 .l-head {
   display: grid;
+  /* minmax(0, 1fr): a one-line command inside must scroll in its box, not widen the page. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-4);
   margin-block-end: var(--s-7);
 }

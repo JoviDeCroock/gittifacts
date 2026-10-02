@@ -12,6 +12,9 @@
 }
 .hero__text {
   display: grid;
+  /* minmax(0, 1fr), not the implicit auto track: a one-line command's min-content width
+     would otherwise widen the column under the case tag. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-5);
   align-content: start;
 }
@@ -35,6 +38,7 @@
 }
 .hero__actions {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-6);
   justify-items: start;
   margin-block-start: var(--s-2);
@@ -47,6 +51,7 @@
 }
 .hero__agent {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-2);
   inline-size: min(100%, 34rem);
 }
