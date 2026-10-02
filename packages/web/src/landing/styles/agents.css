@@ -1,0 +1,156 @@
+/* ================================================================ for agents (band) */
+.agents {
+  margin-block-start: var(--l-section);
+  background: var(--panel);
+  border-block: 1px solid var(--rule);
+}
+.agents__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-7);
+  padding-block: var(--l-section);
+}
+.agents__head {
+  display: grid;
+  gap: var(--s-4);
+  justify-items: start;
+}
+.agents__head .copyline {
+  inline-size: min(100%, 30rem);
+  margin-block-start: var(--s-2);
+}
+.agents__head .l-lede code {
+  font-size: 0.9em;
+  color: var(--text);
+}
+.agents__inner h3 {
+  font-size: var(--l-h3);
+  margin-block-end: var(--s-3);
+}
+.agents__calls ol {
+  display: grid;
+  gap: var(--s-2);
+  margin-block-end: var(--s-4);
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  list-style: none;
+  counter-reset: call;
+}
+.agents__calls li {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  gap: var(--s-2);
+  counter-increment: call;
+}
+.agents__calls li::before {
+  content: counter(call);
+  font-size: var(--text-small);
+  font-weight: var(--weight-bold);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  padding-block-start: 1px;
+}
+.agents__calls li code {
+  overflow-wrap: anywhere;
+}
+.agents__calls > p,
+.agents__error > p {
+  color: var(--text-2);
+  max-inline-size: 54ch;
+}
+.agents__calls > p code {
+  color: var(--text);
+}
+.agents__facts {
+  display: grid;
+  margin: 0;
+  align-content: start;
+}
+.agents__facts > div {
+  padding-block: var(--s-4);
+  border-block-start: 1px solid var(--rule-strong);
+}
+.agents__facts > div:first-child {
+  padding-block-start: 0;
+  border: 0;
+}
+.agents__facts dt {
+  font-size: var(--l-h3);
+  font-weight: var(--weight-bold);
+}
+.agents__facts dd {
+  margin: var(--s-1) 0 0;
+  color: var(--text-2);
+  max-inline-size: 48ch;
+}
+.agents__facts code {
+  color: var(--text);
+}
+.agents__json {
+  max-inline-size: none;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+}
+@media (min-width: 1024px) {
+  .agents__inner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--s-8);
+    row-gap: var(--s-8);
+  }
+  .agents__head,
+  .ttfg {
+    align-self: end;
+  }
+  .agents__error {
+    align-self: start;
+  }
+}
+
+/* ---------------------------------------------------------------- time to first green */
+.ttfg {
+  margin: 0;
+  display: grid;
+  gap: var(--s-4);
+}
+.ttfg__axis {
+  position: relative;
+  block-size: 3.25rem;
+  margin-inline: 0 1.25rem;
+  border-block-end: 2px solid var(--text);
+}
+.ttfg__range {
+  position: absolute;
+  inset-block-end: 0.625rem;
+  block-size: 1rem;
+  border-radius: 3px;
+  background: var(--ok);
+}
+.ttfg__target {
+  position: absolute;
+  inset-block: 0.25rem 0;
+  border-inline-start: 2px dashed var(--text-3);
+}
+.ttfg__tick {
+  position: absolute;
+  inset-block-start: calc(100% + 0.375rem);
+  translate: -50% 0;
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ttfg figcaption {
+  margin-block-start: var(--s-5);
+  color: var(--text-2);
+  max-inline-size: 62ch;
+}
+.ttfg figcaption strong {
+  color: var(--text);
+}
+.agents__json .jl {
+  display: block;
+  padding-inline-start: calc(var(--indent) + 2ch);
+  text-indent: -2ch;
+}

@@ -1,0 +1,33 @@
+/**
+ * The marketing landing page, served at `/` to visitors without a session. Static HTML, no
+ * hydration: client.ts only adds copy buttons and the theme switch.
+ */
+import { Agents } from "./Agents.js";
+import { Close, Footer } from "./Close.js";
+import { Hero, TopBar } from "./Hero.js";
+import { Loop } from "./Loop.js";
+import { Migrate } from "./Migrate.js";
+import { Rules } from "./Rules.js";
+import { Shift } from "./Shift.js";
+
+export function Landing() {
+  return (
+    <>
+      <a class="skip-link" href="#main">
+        Skip to content
+      </a>
+      <TopBar />
+      <main id="main">
+        <Hero />
+        <Shift />
+        <Loop />
+        <Migrate />
+        <Agents />
+        <Rules />
+        <Close />
+      </main>
+      <Footer />
+      <p class="sr-only" id="copy-status" aria-live="polite" />
+    </>
+  );
+}
