@@ -964,3 +964,26 @@ directory, and running base first means a healthy main costs one base suite run 
 **Follow-up (not in this change, other owners):** AGENTS.md (`packages/conventions/src/agents-md.ts`, templates) still
 says a fix "must add or change a test", and the `red-green-missing` fix hint says "adds or changes no test". Both are
 still a valid way to get proof, but they should also say that fixing an already failing test counts.
+
+## 2026-10-02 — Marketing landing page at `/` for visitors without a session
+
+**Context.** `/` served the SPA, which shows the sign-in form to anyone without a session; the product
+had no page that explains itself to a person arriving from a link. Agents already get the machine
+guide from `/` by content negotiation.
+
+**Decision.** `packages/web/landing.html` is a second Vite entry, prerendered to static HTML at build
+time (`landing.vite.ts` loads `src/landing/render.tsx` through Vite's module runner); the browser gets
+the HTML, one stylesheet and about 1 KB of JS (copy buttons, theme switch, phone menu). The Worker's
+`GET /` (`apps/platform/src/routes/front-door.ts`) serves it from ASSETS at `/landing` when the request
+wants HTML and carries no valid better-auth session (`getSessionCookie` + `getSession`); signed-in
+people and `?mock` get the SPA; JSON/markdown requests still get `/start`. `Vary: Accept, Cookie`,
+the existing `Link` headers and `<link>` tags stay, and the page's absolute URLs (canonical, Open
+Graph, the copyable `/start`, `/mcp` and keys URLs) are rewritten to the request origin with
+HTMLRewriter. The page extends DESIGN.md's world rather than forking it: same tokens and components
+(lane tags, verdict marks, the observation chart), plus a marketing type scale and the case tag.
+
+**Consequences.** Every claim on the page is either measured on the live platform (time to first green
+36–48 s, push to signed evidence ~50 s, tour ~$0.015) or labeled demo data; the example change is the
+`chg_fx2r7` mock fixture and the screenshots are captured from mock mode, so they must be recaptured
+if that fixture changes. The platform test for `/` needs a fresh `packages/web` build (it reads
+`dist/landing.html` through the ASSETS binding).
