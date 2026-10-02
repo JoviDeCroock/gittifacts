@@ -661,3 +661,19 @@ Live dogfooding found that third-party model ids fail through the binding withou
 (`7003 User Input Error`). Both Workers AI models returned valid json_schema output in about 4 s.
 
 Costs are conservative per-token estimates; Workers AI bills in neurons, about $0.0006 per small call.
+
+## 2026-10-02 — Product direction: supersede GitHub over time; import is the on-ramp (user)
+
+The long-term goal is to supersede GitHub for teams whose code is mostly written by agents. Importing from GitHub is
+the deliberate on-ramp:
+- `create_project({ from: githubUrl })` imports history through Artifacts.
+- Detection proposes `.platform/*` as a Plan + Change that a human approves.
+- Standard git clients keep working against the Artifacts remote.
+
+The near-term non-goals of the platform prompt stay non-goals (no social, issues or OSS-community features yet). The
+optional GitHub mirror (main pushed back to GitHub, behind a flag) is the bridge for teams mid-migration.
+
+The marketing page contrasts the unit of work (PR vs Change) rather than the vendor.
+
+**Eval fixture.** The task-2 import fixture is published at https://github.com/JoviDeCroock/gittifacts-fixture-clock-api
+(public, user-approved), materialized from `fixtures/imports/clock-api`.
