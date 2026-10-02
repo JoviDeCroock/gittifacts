@@ -1,0 +1,8 @@
+{
+  // Build tooling (Node): generators, the static site build and the quality checks. The browser
+  // script (src/assets/docs.js) is plain JS and not type-checked here.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": ["node"], "lib": ["ES2023"], "declaration": false },
+  "include": ["src", "generate", "test", "*.ts"],
+  "exclude": ["generate/platform-entry.ts"]
+}

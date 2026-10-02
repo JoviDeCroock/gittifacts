@@ -1,0 +1,37 @@
+{
+  "name": "@app/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "gittifacts documentation: markdown content, generated references, and a static HTML build served at /docs.",
+  "scripts": {
+    "generate": "tsx generate/index.ts",
+    "build": "tsx src/build.ts",
+    "check": "tsx src/check.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fontsource-variable/atkinson-hyperlegible-mono": "^5.3.0",
+    "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
+    "marked": "18.0.14",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@app/ci-engine": "workspace:*",
+    "@app/classifier": "workspace:*",
+    "@app/conventions": "workspace:*",
+    "@app/domain": "workspace:*",
+    "@app/evidence": "workspace:*",
+    "@app/mcp": "workspace:*",
+    "@app/merge-queue": "workspace:*",
+    "@types/node": "^22.10.0",
+    "ajv": "^8.20.0",
+    "esbuild": "0.28.2",
+    "gittifacts": "workspace:*",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11",
+    "zod": "^4.6.5"
+  }
+}
