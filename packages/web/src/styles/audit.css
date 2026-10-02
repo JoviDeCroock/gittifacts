@@ -195,3 +195,12 @@ a.audit__subject {
     position: relative;
   }
 }
+
+/* A gap in the sequence: events in repositories this viewer can't see. Not a broken link. */
+.audit__gap {
+  padding-block: var(--s-2);
+  border-block-end: 1px dashed var(--rule);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}

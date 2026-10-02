@@ -1,20 +1,17 @@
 import { useSignal } from "@preact/signals";
 import { useLocation } from "preact-iso";
+import { Fragment } from "preact";
 import { useEffect } from "preact/hooks";
 import { api } from "../api/client.js";
 import type { AuditEvent, AuditPage, PrincipalRef } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
 import { Button, EmptyState, ErrorState, Hash, Loading, Who } from "../components/ui.js";
+import { actionLabel } from "../lib/audit-actions.js";
 import { formatDateTime } from "../lib/time.js";
 import { num } from "../lib/vocab.js";
 import { useResource } from "../state/resource.js";
 import "../styles/audit.css";
-
-function humanAction(action: string): string {
-  const words = action.replace(/[._-]+/g, " ").trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
 
 function subjectHref(subject: string): string | null {
   const [kind, id] = subject.split(":");
@@ -57,10 +54,18 @@ function EventRow({ e, who, linksToPrev }: { e: AuditEvent; who: PrincipalRef | 
       <time class="audit__time tnum" dateTime={e.at}>
         {formatDateTime(e.at)}
       </time>
-      <span class="audit__who">{who ? <Who kind={who.kind} name={who.name} size={20} compact /> : <span>{e.principalId}</span>}</span>
+      <span class="audit__who">
+        {who ? (
+          <Who kind={who.kind} name={who.name} size={20} compact />
+        ) : e.principalId.startsWith("system:") ? (
+          <Who kind="system" name={e.principalId.slice("system:".length)} size={20} compact />
+        ) : (
+          <span>{e.principalId}</span>
+        )}
+      </span>
       <span class="audit__what">
         <span class="audit__action" title={e.action}>
-          {humanAction(e.action)}
+          {actionLabel(e.action)}
         </span>
         <Subject subject={e.subject} />
       </span>
@@ -161,7 +166,7 @@ export function AuditView() {
         <label class="field audit-filter__field">
           <span class="field__label">Filter by subject or action</span>
           <span class="audit-filter__row">
-            <input class="input" type="search" placeholder="change:chg_tz7k2 or plan.approved" value={draft.value} onInput={(e) => (draft.value = e.currentTarget.value)} />
+            <input class="input" type="search" placeholder="change:ljrqxulb08q0u2za3n6w or plan.approved" value={draft.value} onInput={(e) => (draft.value = e.currentTarget.value)} />
             <Button type="submit" variant="secondary" icon="search">
               Filter
             </Button>
@@ -198,8 +203,22 @@ export function AuditView() {
           <ol class="audit" reversed>
             {events.map((e, i) => {
               const older = events[i + 1];
-              const links = older ? (subject ? null : older.hash === e.prevHash) : null;
-              return <EventRow key={e.seq} e={e} who={principals[e.principalId]} linksToPrev={links} />;
+              // Only adjacent events can be checked here: a gap in the sequence is events you
+              // can't see (other repositories) or a filter, not a broken link. The server checks
+              // the whole chain and reports it in the banner above.
+              const adjacent = older !== undefined && older.seq === e.seq - 1;
+              const links = adjacent && !subject ? older.hash === e.prevHash : null;
+              const hidden = older !== undefined && !subject ? e.seq - older.seq - 1 : 0;
+              return (
+                <Fragment key={e.seq}>
+                  <EventRow e={e} who={principals[e.principalId]} linksToPrev={links} />
+                  {hidden > 0 ? (
+                    <li class="audit__gap">
+                      {hidden === 1 ? `#${num.format(e.seq - 1)}` : `#${num.format(e.seq - hidden)} to #${num.format(e.seq - 1)}`} {hidden === 1 ? "is" : "are"} in repositories you can't see
+                    </li>
+                  ) : null}
+                </Fragment>
+              );
             })}
           </ol>
           {last?.nextCursor ? (

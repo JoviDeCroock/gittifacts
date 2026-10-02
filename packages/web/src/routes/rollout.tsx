@@ -6,6 +6,7 @@ import type { AuditEvent, LinkedIssue, RepoDetail } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
 import { Button, EmptyState, ErrorState, LinkButton, Loading, StatusChip } from "../components/ui.js";
+import { actionLabel, isBadAction } from "../lib/audit-actions.js";
 import { addMinutes, countdown, countdownWords, formatTime, formatWhen, relative } from "../lib/time.js";
 import { CHANGE_STATUS, ROLLOUT_STATUS, num, plural } from "../lib/vocab.js";
 import { useTick } from "../state/clock.js";
@@ -114,7 +115,10 @@ function headline(r: RolloutState, policy: RolloutPolicy, now: number): { title:
 
 function Health({ r, policy, now }: { r: RolloutState; policy: RolloutPolicy; now: number }) {
   const c = r.lastCheck;
-  if (!c) return <p class="ev-sub">No health check has run yet.</p>;
+  if (!c) {
+    const live = r.status === "rolling" || r.status === "watching" || r.status === "pending";
+    return <p class="ev-sub">{live ? "No health check has run yet." : "No health check result was recorded for this rollout. The timeline has what happened."}</p>;
+  }
   const base = c.baselineErrorRate;
   const limit = base !== null ? base + policy.maxErrorRateIncrease : null;
   const rate = c.errorRate;
@@ -233,27 +237,6 @@ function KillSwitch({ change, onKilled }: { change: Change; onKilled: (c: Change
   );
 }
 
-const ACTION_LABEL: Record<string, string> = {
-  "merge.completed": "Merged into main",
-  "rollout.stage.started": "Stage started",
-  "rollout.stage.completed": "Stage completed",
-  "rollout.check.passed": "Health check passed",
-  "rollout.check.failed": "Health check breached the limit",
-  "rollout.watch.started": "Watch window opened",
-  "rollout.released": "Released",
-  "rollout.rolled-back": "Rolled back to the previous version",
-  "rollout.killed": "Killed by a person",
-  "flag.disabled": "Flag turned off",
-  "revert.opened": "Revert change opened",
-  "review.approved": "Approved",
-  "change.created": "Change opened",
-};
-
-function humanAction(action: string): string {
-  const words = action.replace(/[._-]+/g, " ").trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
 function Timeline({ events, now }: { events: AuditEvent[]; now: number }) {
   if (events.length === 0) return null;
   const ordered = [...events].sort((a, b) => b.seq - a.seq);
@@ -262,11 +245,11 @@ function Timeline({ events, now }: { events: AuditEvent[]; now: number }) {
       <h2 id="timeline-title">Timeline</h2>
       <ol>
         {ordered.map((e) => (
-          <li key={e.seq} class={e.action.includes("failed") || e.action.includes("rolled-back") || e.action.includes("killed") ? "is-bad" : ""}>
+          <li key={e.seq} class={isBadAction(e.action) ? "is-bad" : ""}>
             <time class="tnum" dateTime={e.at}>
               {formatWhen(e.at, now)}
             </time>
-            <span>{ACTION_LABEL[e.action] ?? humanAction(e.action)}</span>
+            <span title={e.action}>{actionLabel(e.action)}</span>
             <a href={`/audit?subject=${encodeURIComponent(e.subject)}`} class="timeline__seq tnum" aria-label={`Audit event ${e.seq}`}>
               #{e.seq}
             </a>
