@@ -36,6 +36,8 @@ describe("llmsTxt", () => {
       `${MCP_URL}/server-card`,
       `${HOST}/.well-known/ai-catalog.json`,
       `${HOST}/.well-known/oauth-protected-resource/mcp`,
+      `${HOST}/docs`,
+      `${HOST}/docs/llms-full.txt`,
     ]) {
       expect(text).toContain(`](${url})`);
     }

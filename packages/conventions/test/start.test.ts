@@ -101,6 +101,8 @@ describe("startGuide JSON", () => {
         `${MCP_URL}/server-card`,
         `${HOST}/.well-known/ai-catalog.json`,
       ],
+      docs: `${HOST}/docs`,
+      docsFull: `${HOST}/docs/llms-full.txt`,
     });
     expect(json.templates.map((t) => t.id)).toEqual([...TEMPLATE_IDS]);
     expect(json.waitUntil).toEqual([
@@ -128,7 +130,13 @@ describe("startGuide markdown", () => {
 
   it("mentions the JSON variant and every link", () => {
     expect(markdown).toContain("Accept: application/json");
-    for (const url of [json.links.llmsTxt, json.links.openapi, json.mcp.serverCard])
+    for (const url of [
+      json.links.llmsTxt,
+      json.links.openapi,
+      json.mcp.serverCard,
+      json.links.docs,
+      json.links.docsFull,
+    ])
       expect(markdown).toContain(url);
   });
 });

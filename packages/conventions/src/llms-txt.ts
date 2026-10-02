@@ -62,6 +62,12 @@ export function llmsTxt(opts: LlmsTxtOptions): string {
       `streamable HTTP, MCP ${MCP_PROTOCOL_VERSION}; send Authorization: Bearer <token>${opts.oauth === true ? ", or use OAuth discovered from the 401" : ""}`,
     ),
     link("OpenAPI", opts.openapiUrl, "the HTTP API; every endpoint mirrors an MCP tool"),
+    link(
+      "Docs",
+      join(host, "/docs"),
+      "task-first guides and generated references (append .md to any page, or send Accept: text/markdown)",
+    ),
+    link("Docs, full text", join(host, "/docs/llms-full.txt"), "every docs page in one markdown file"),
     "",
     "## Discovery",
     link(

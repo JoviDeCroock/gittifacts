@@ -145,6 +145,10 @@ export const StartDoc = z
       openapi: z.string().url(),
       mcp: z.string().url(),
       discovery: z.array(z.string().url()).min(1),
+      /** Task-first documentation (HTML, or markdown with Accept: text/markdown). */
+      docs: z.string().url(),
+      /** Every docs page in one markdown file, for agents. */
+      docsFull: z.string().url(),
     }),
   })
   .strict();
@@ -295,6 +299,8 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
         serverCard,
         join(host, "/.well-known/ai-catalog.json"),
       ],
+      docs: join(host, "/docs"),
+      docsFull: join(host, "/docs/llms-full.txt"),
     },
   };
   return { markdown: renderStartMarkdown(StartDoc.parse(json)), json };
@@ -359,6 +365,7 @@ export function renderStartMarkdown(doc: StartDoc): string {
     ),
     "",
     "## More",
+    `- Docs: ${doc.links.docs} (guides and generated references; every page as markdown at ${doc.links.docsFull})`,
     `- [llms.txt](${doc.links.llmsTxt}) · [OpenAPI](${doc.links.openapi}) · [MCP server card](${doc.mcp.serverCard})`,
     ...(doc.auth.oauth.available ? [`- OAuth discovery: ${doc.auth.oauth.resourceMetadata}`] : []),
     "- Each repo's AGENTS.md has the full conventions: lanes, red/green proof, tours.",
