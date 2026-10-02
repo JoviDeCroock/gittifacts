@@ -109,6 +109,8 @@ export function cliProblem(argv: readonly string[], strict = true): string | nul
   try {
     const inv = splitArgv(argv);
     if (inv.command === null) return null;
+    // `gittifacts <command> --help` names no command: a placeholder, not a typo.
+    if (!strict && /^<[^<>]+>$/.test(inv.command)) return null;
     const builtin = BUILTINS.find((b) => b.spec.command === inv.command);
     const spec: CommandSpec | undefined = builtin?.spec ?? findCommand(inv.command);
     if (spec === undefined) return `unknown command: gittifacts ${inv.command}`;
