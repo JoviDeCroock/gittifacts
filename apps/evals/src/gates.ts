@@ -113,7 +113,7 @@ export function evaluateGates(
   });
   const runViolations = runs.flatMap((r) => r.safety.violations.map((v) => ({ run: r.runId, v })));
   const sweep = view.sweep;
-  const sweepOk = sweep !== null && sweep.complete && sweep.violations.length === 0;
+  const sweepOk = sweep?.complete === true && sweep.violations.length === 0;
   gates.push({
     name: "safety",
     pass: runViolations.length === 0 && sweepOk,

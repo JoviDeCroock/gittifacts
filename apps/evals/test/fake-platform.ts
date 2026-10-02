@@ -56,6 +56,10 @@ export class FakePlatform {
   /** Change ids whose latest-head preview serves the current time. */
   green = new Set<string>();
   anonymousAvailable = true;
+  /** Previews of new projects go green at once (CI and preview "finish" instantly). */
+  autoGreen = false;
+  /** Called after a credential-less project is created. */
+  onCreate: ((repoId: string) => void) | null = null;
   requests: { method: string; url: string; auth: string | null; evalRun: string | null }[] = [];
   private n = 0;
 
@@ -118,6 +122,7 @@ export class FakePlatform {
       authorKind: "system",
       status: "released",
     });
+    if (this.autoGreen) this.green.add(bs);
     this.addEvidence(bs, [
       {
         id: "preview",
@@ -137,6 +142,7 @@ export class FakePlatform {
       action: "project.unclaimed-created",
       subject: `repo:${id}`,
     });
+    this.onCreate?.(id);
     return {
       projectId: id,
       remote: {

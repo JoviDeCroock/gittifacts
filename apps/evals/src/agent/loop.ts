@@ -24,7 +24,7 @@ export interface ToolExecutor {
   observe(outcome: ToolOutcome): void;
 }
 
-export type StepKind = "clock" | "model" | "tool";
+export type StepKind = "clock" | "model" | "tool" | "io";
 export type DurableStep = <T>(name: string, kind: StepKind, fn: () => Promise<T>) => Promise<T>;
 
 export interface AgentLimits {

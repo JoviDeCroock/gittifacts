@@ -67,6 +67,7 @@ export class HarnessTools implements ToolExecutor {
   private mcpState: McpState | null = null;
   private found: Harvest = emptyHarvest();
   private green: { url: string; at: number } | null = null;
+  private readonly mcpCalls: { name: string; isError: boolean }[] = [];
   private readonly mcp: McpSessions;
 
   constructor(
@@ -80,13 +81,18 @@ export class HarnessTools implements ToolExecutor {
     return toolSpecs(this.names);
   }
 
-  /** What the run produced so far: harvested ids and the first green preview. */
-  collected(): { harvest: Harvest; firstGreen: { url: string; at: number } | null } {
-    return { harvest: this.found, firstGreen: this.green };
+  /** What the run produced so far: harvested ids, the first green preview, MCP tools called. */
+  collected(): {
+    harvest: Harvest;
+    firstGreen: { url: string; at: number } | null;
+    mcpCalls: { name: string; isError: boolean }[];
+  } {
+    return { harvest: this.found, firstGreen: this.green, mcpCalls: [...this.mcpCalls] };
   }
 
   observe(o: ToolOutcome): void {
     if ("mcp" in o.meta) this.mcpState = o.meta.mcp ?? null;
+    if (o.meta.mcpTool) this.mcpCalls.push({ name: o.meta.mcpTool, isError: o.isError });
     this.found = mergeHarvest(this.found, o.meta.harvest);
     if (o.meta.firstGreen && (this.green === null || o.meta.firstGreen.at < this.green.at)) {
       this.green = o.meta.firstGreen;
