@@ -29,6 +29,7 @@ import { FakeStore } from "./store.js";
 
 export * from "./git-host.js";
 export * from "./jobs.js";
+export * from "./queue.js";
 export * from "./runtime.js";
 export * from "./services.js";
 export * from "./store.js";

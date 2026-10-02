@@ -21,6 +21,8 @@ import { runChangeWorkflow } from "../change-flow.js";
 import type { ChangeWorkflowParams, RolloutParams } from "../events.js";
 import { MemoryQueueStorage, MergeQueueCore, type MergeQueueOptions } from "../merge-queue.js";
 import type { Ports } from "../ports.js";
+import { type BatchRunParams, runBatchRun } from "../queue/batch-run.js";
+import type { MergeQueueService } from "../queue/service.js";
 import { runRollout } from "../rollout-flow.js";
 import type { Duration, Step, StepConfig, StepEvent } from "../step.js";
 
@@ -244,6 +246,10 @@ export class FakeBindings implements CoordinatorBindings {
   /** Drain merge queues right after enqueue (on a macrotask). */
   autoDrain = true;
   private draining: Promise<unknown>[] = [];
+  /** BatchRunWorkflow instances (agent-native queue mode). */
+  readonly batchRuns = new FakeWorkflows<BatchRunParams>();
+  private agentFactory: ((repoId: string) => MergeQueueService) | null = null;
+  readonly agentQueues = new Map<string, MergeQueueService>();
 
   constructor(
     private readonly portsFor: (role: "default" | "merge-queue") => Ports,
@@ -287,7 +293,46 @@ export class FakeBindings implements CoordinatorBindings {
     return core;
   }
 
+  /**
+   * Use the agent-native queue (`MergeQueueService`, built by `factory` per repo) instead of the
+   * serial one; BatchRunWorkflow bodies run in `batchRuns` with sleeps that yield a macrotask.
+   */
+  useAgentQueue(factory: (repoId: string) => MergeQueueService): this {
+    this.agentFactory = factory;
+    this.batchRuns.runner = (params, step) =>
+      runBatchRun({ ports: this.portsFor("default"), bindings: this }, params, {
+        do: (name, config, cb) => step.do(name, config, cb),
+        waitForEvent: (name, options) => step.waitForEvent(name, options),
+        sleep: async (name, d) => {
+          await step.sleep(name, d);
+          await new Promise((r) => setTimeout(r, 0));
+        },
+      });
+    return this;
+  }
+
+  agentQueue(repoId: string): MergeQueueService {
+    if (this.agentFactory === null) throw new Error("useAgentQueue() first");
+    let svc = this.agentQueues.get(repoId);
+    if (svc === undefined) {
+      svc = this.agentFactory(repoId);
+      this.agentQueues.set(repoId, svc);
+    }
+    return svc;
+  }
+
   mergeQueue(repoId: string): MergeQueueClient {
+    if (this.agentFactory !== null) {
+      const svc = this.agentQueue(repoId);
+      return {
+        enqueue: (input) => svc.enqueue(input),
+        remove: (input) => svc.remove(input),
+        list: () => svc.list(),
+        onQueueResult: (input) => svc.onQueueResult(input),
+        approved: (input) => svc.approved(input),
+        onIssue: (input) => svc.onIssue(input),
+      };
+    }
     const core = this.queue(repoId);
     return {
       enqueue: async (input: EnqueueInput) => {
@@ -320,10 +365,14 @@ export class FakeBindings implements CoordinatorBindings {
   }
 
   get pendingDrains(): number {
-    return this.draining.length;
+    let busy = this.draining.length;
+    for (const q of this.agentQueues.values()) busy += q.loop.busy;
+    for (const i of this.batchRuns.instances.values()) if (i.state === "running") busy++;
+    return busy;
   }
 
   async settle(): Promise<void> {
     while (this.draining.length > 0) await Promise.allSettled([...this.draining]);
+    for (const q of this.agentQueues.values()) await q.loop.settle();
   }
 }

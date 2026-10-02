@@ -14,11 +14,11 @@
 import {
   type Command,
   CoreEvent,
-  initialState,
-  queueConfig,
   type CoreEventInput,
   InvariantViolation,
+  initialState,
   type QueueState,
+  queueConfig,
   step,
   type TrainCommand,
   TrainEvent,
