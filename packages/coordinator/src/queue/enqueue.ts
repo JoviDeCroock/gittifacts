@@ -26,16 +26,26 @@ export function evidenceSummary(evidence: Evidence | null): EvidenceSummary {
 }
 
 /**
- * A Change is individually switchable (it may share a deploy train) only if its own code reads
- * its kill-switch flag (`change-<id>`); otherwise it deploys alone (§4.8).
+ * A Change is individually switchable (it may share a deploy train, and a regression kills its
+ * flag) only if its own code reads its kill-switch flag: an added line names the flag key
+ * (`change-<id>`), or the added code calls `isChangeEnabled` (the helper in @app/coordinator/flags
+ * and the Workers templates) and quotes the Change id. Otherwise it deploys alone (§4.8).
  */
 export function switchableFlag(changeId: string, diff: ChangeDiff | null): string | null {
   if (diff === null) return null;
   const key = flagKeyFor(changeId);
+  const quoted = [`"${changeId}"`, `'${changeId}'`, `\`${changeId}\``];
+  let helper = false;
+  let id = false;
   for (const f of diff.files)
     for (const h of f.hunks)
-      for (const l of h.lines) if (l.kind === "add" && l.text.includes(key)) return key;
-  return null;
+      for (const l of h.lines) {
+        if (l.kind !== "add") continue;
+        if (l.text.includes(key)) return key;
+        helper ||= l.text.includes("isChangeEnabled");
+        id ||= quoted.some((q) => l.text.includes(q));
+      }
+  return helper && id ? key : null;
 }
 
 /** Priority from the Change and the options: reverts are reverts; the rest was validated on request. */
