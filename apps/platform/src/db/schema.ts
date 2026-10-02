@@ -4,3 +4,4 @@ export * from "./claim-schema.js";
 export * from "./oauth-schema.js";
 export * from "./onboarding-schema.js";
 export * from "./integration-schema.js";
+export * from "./access-schema.js";
