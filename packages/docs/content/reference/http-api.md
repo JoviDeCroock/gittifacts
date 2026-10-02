@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 94 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 97 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -94,6 +94,9 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `PATCH` | [`/api/v1/repos/{repoId}/deploy-target`](/docs/reference/http-repos) | Set or clear the Worker merged Changes roll out to (human repo admin, claimed projects) |
 | `GET` | [`/api/v1/repos/{repoId}/deployments`](/docs/reference/http-integrations) | Deployments reported for a repo (newest first) |
 | `POST` | [`/api/v1/repos/{repoId}/deployments`](/docs/reference/http-integrations) | Integrations: report a deployment of a commit (preview of a Change, or production) |
+| `GET` | [`/api/v1/repos/{repoId}/import-grant`](/docs/reference/http-repos) | The project's import-by-push grant (state only, never the token) |
+| `POST` | [`/api/v1/repos/{repoId}/import-grant`](/docs/reference/http-repos) | Open a new import-by-push grant for a project that has no default branch yet |
+| `DELETE` | [`/api/v1/repos/{repoId}/import-grant`](/docs/reference/http-repos) | Close the import-by-push grant now (revokes its token) |
 | `PATCH` | [`/api/v1/repos/{repoId}/lane0`](/docs/reference/http-repos) | Turn Lane 0 (auto-merge) on or off |
 | `GET` | [`/api/v1/repos/{repoId}/members`](/docs/reference/http-repos) | A repo's members and their roles (anyone who can read the repo) |
 | `POST` | [`/api/v1/repos/{repoId}/members`](/docs/reference/http-repos) | Add a member by e-mail or principal id, or change a member's role (human owner) |

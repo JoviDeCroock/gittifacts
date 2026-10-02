@@ -19,7 +19,34 @@ create_project({ from: "https://github.com/acme/clock-api", name: "clock-api" })
 gittifacts init --from https://github.com/acme/clock-api --name clock-api
 ```
 
-Expected: `projectId`, a bootstrap Change running CI with a default pipeline, and a push grant for your first Change. The import copies the repo and its history into an Artifacts repo in the EU jurisdiction. Public `https://` URLs only; **Coming soon:** private GitHub repos.
+Expected: `projectId`, a bootstrap Change running CI with a default pipeline, and a push grant for your first Change. The import copies the repo and its history into an Artifacts repo in the EU jurisdiction. `from` takes public `https://` URLs only; for a private repo, push it (below).
+
+### Private repos: import by push
+
+A human owner creates an empty project and pushes the history once. Signed in (your browser session; agents can't do this step):
+
+```sh
+curl -X POST "https://<host>/api/v1/projects" -b cookies.txt -H "content-type: application/json" \
+  --data '{ "name": "clock-api", "importMode": "push" }'
+```
+
+Expected: `projectId` and an `importGrant` with `url`, `token`, `expiresAt` and a `command`. The token writes the project's main repo, so treat it like a password: put it in an environment variable, never in the remote URL or git config, and push the whole default branch in **one** push:
+
+```sh
+export GITTIFACTS_IMPORT_TOKEN='<importGrant.token>'
+git -c http.extraHeader="Authorization: Bearer $GITTIFACTS_IMPORT_TOKEN" \
+  push "<importGrant.url>" main:refs/heads/main --follow-tags
+```
+
+The grant closes at the first of: the first push to the repo, the first Change, or 30 minutes. Closing revokes the token. From then on only the merge queue writes the default branch. This is the one exception to that rule: an empty repo, its human owner, before any Change, and both the opening and the closing are in the audit log (`project.import-push-opened`, `project.import-push-closed`).
+
+Check it closed, then go to step 3: detection starts by itself after a push import.
+
+```sh
+curl -b cookies.txt "https://<host>/api/v1/repos/<projectId>/import-grant"
+```
+
+Expected: `status: "closed"`, `closeReason: "pushed"`, `imported: true` and `mainSha` equal to your local `git rev-parse main`. If the push failed or the grant expired first, `imported` is `false` and the owner can open a new grant (`POST /api/v1/repos/<projectId>/import-grant`) as long as the default branch doesn't exist.
 
 ## 2. Check the history
 
@@ -35,6 +62,8 @@ Expected: the same commit count and head as on GitHub (`git ls-remote https://gi
 ```text
 propose_platform_config({ repoId: "8t4xc6kq2w9m0d7z3r1b", waitSec: 45 })
 ```
+
+After an import by push the platform has already started it; the same call returns that proposal.
 
 Detection reads the repo in a sandbox (nothing is installed or run): package manager, test runner, build command, TypeScript config, wrangler configs, workspaces. Expected: `status: "proposed"` with a `planId` and a `changeId`:
 

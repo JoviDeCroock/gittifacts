@@ -1421,3 +1421,57 @@ the eval prompt), the platform now says it up front:
 Also fixed on the way: `workspace-lifecycle.test.ts` used a fixed clock (2026-10-02T10:00Z) for the Workspace
 DO; once the wall clock passed it, the idle alarm was in the past, workerd fired it itself, and
 `runDurableObjectAlarm` found none, failing the deploy gate. The test clock now starts at the real time.
+## 2026-10-02 — Import by push: private repos, a one-time main-repo grant for a human owner (M5)
+
+**Why.** `Artifacts.import` reads public `https://` remotes only, so no private repo (this one included) could
+come onto the platform. The fix has to put a write token for a main repo in someone's hands, which every other
+rule forbids, so it is narrow by construction.
+
+**Flow.** `create_project({ name, importMode: "push" })` / `POST /api/v1/projects { importMode: "push" }`:
+1. **Humans only** (`human-required` for agents, delegated sessions and integrations, with a fix that says what
+   to ask the human; 401 for anonymous callers, checked before the creation kill switch). Not with `template`
+   or `from`. The human needs `repo:admin` and becomes the claimed project's owner (admin) in the same call.
+2. The coordinator creates the repo with `empty: true`: no initial commit, so there is no default branch.
+   No bootstrap Change and no first Change are started: either would close the grant.
+3. `GitHost.mintImportToken(repo, { branch, ttlSeconds })` mints an Artifacts write token for the **main** repo,
+   TTL clamped to 1800 s. Every role may call it (like `writeInitialCommit`), but it refuses forks, refuses when
+   `refs/heads/<default>` is advertised (read with `listRefs` right before minting), and refuses a token that
+   comes back without an id (it couldn't be revoked). The response carries `importGrant { url, branch, token,
+   expiresAt, command, closesWhen }` once; D1 `import_grants` (migration 0010) keeps only the token id, status
+   `open → closing → closed`, reason, `main_sha`. Audited `project.import-push-opened` on `repo:<id>`.
+4. The grant **closes at the first of**:
+   - **any push to the repo**: the PushRouter's observer (`platformPushObserver`: webhooks, then
+     `onImportPush`); the default branch head is read at close time, not taken from the event, so a multi-ref
+     push or a tag first is fine;
+   - **the first Change**: `guardImportGrants` wraps the request facade's `startChange` and
+     `startBootstrapChange` (production `getCoordinator` and the test harness): a live grant is closed before
+     the coordinator forks anything;
+   - **TTL**: the 10-minute cron (`runImportGrantSweep`) and any `GET …/import-grant` close expired grants;
+   - **the owner**: `DELETE /api/v1/repos/{repoId}/import-grant`.
+
+   Closing = `revokeToken(tokenId)` (retried: the token index is eventually consistent), then record the head.
+   **Fail closed:** if Artifacts doesn't confirm the revocation and the token hasn't expired, the grant stays
+   `closing`, `start_change` answers 503 `import-grant-closing` (no fork is made), the observer step throws to
+   retry, and the cron retries until revoked or expired. Audited `project.import-push-closed { reason, revoked,
+   expired, mainSha, openedBy }`; exactly one closer wins (conditional D1 update) and audits.
+5. Closed with the default branch present = **imported**: the bootstrap Change (first CI on main) and the O5
+   detection proposal (`startPlatformConfigProposal`, requested by the owner) start; the proposal is the usual
+   Plan (author `system`) + Lane 2 Change a human approves.
+6. Re-open: `POST /api/v1/repos/{repoId}/import-grant` (human owner, `need: admin`) while the default branch
+   doesn't exist; a live grant is closed (revoked) first, so a repo never has two live tokens. Once the
+   default branch exists: 409 `already-imported`.
+
+**The rule, restated.** "Only the merge queue writes main" has exactly this exception: the initial import of an
+empty repo, by its human owner, before any Change exists, for at most 30 minutes, audited at open and close.
+
+**Can an agent write main through it? No path found.** Agents (incl. delegated sessions), integrations,
+auditors and anonymous callers can't open or re-open a grant; the token is never stored or shown again; no
+Change can fork while a grant is live (closed first, fail closed); the merge queue only merges Changes; the
+grant can't be issued once main exists. Residual, by design: a human may hand their own token to an agent
+(that is the human pushing); a push in the seconds between the first push and the revocation is still the
+owner's token; if Artifacts caches token validation after a confirmed revoke, a late push by the owner would
+make the queue's CAS go stale (it retries), never an agent write.
+
+**Not done.** No web UI for it yet (the response and `GET …/import-grant` are the interface). The MCP tool
+accepts `importMode` so agents learn the human step from the error. `create_project({ from })` still doesn't
+start detection by itself (the guide says to call `propose_platform_config`); push imports do.

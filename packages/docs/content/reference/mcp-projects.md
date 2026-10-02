@@ -22,6 +22,7 @@ One call: a repo from a template (or an import, or empty) with .platform/ci.ts, 
 | `name` | string |  | Project (and repo) name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>. max 63 chars |
 | `template` | "workers-api" \| "preact-app" \| "ts-library" \| "static-site" |  | Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty project. |
 | `from` | string |  | Import a public https git repository (e.g. GitHub) instead of a template. max 500 chars |
+| `importMode` | "push" |  | Private repos: "push" creates an empty project whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in). |
 | `description` | string |  | One line about the project. max 500 chars |
 
 ```text

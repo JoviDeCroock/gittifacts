@@ -17,14 +17,14 @@ generated: true
 
 Create a project in one call: repo + .platform/* + AGENTS.md + first CI + first preview
 
-Template (workers-api, preact-app, ts-library, static-site), import (`from`: a public https git URL) or empty. Returns at once; CI and the preview finish in the background (wait on `bootstrapChangeId`). Not stored by the idempotency middleware (the response holds a push grant): the key is forwarded, so a retry with the same Idempotency-Key returns the same project with a fresh grant.
+Template (workers-api, preact-app, ts-library, static-site), import (`from`: a public https git URL), import by push (`importMode: "push"`: private repos; a signed-in human owner gets an empty project and a one-time `importGrant`, closed at the first push, the first Change or after 30 minutes) or empty. Returns at once; CI and the preview finish in the background (wait on `bootstrapChangeId`). Not stored by the idempotency middleware (the response holds a push grant): the key is forwarded, so a retry with the same Idempotency-Key returns the same project with a fresh grant.
 
 **No credentials needed**: without an Authorization header (and while the kill switch allows it) you get an *unclaimed* project, `token` (a Bearer token for that project only, valid until it expires) and `claimUrl` for a human. Unclaimed projects expire unless claimed and have hard limits (see /start). 429 `rate-limited` per IP, network or platform-wide; 503 `creation-disabled` when switched off. Without credentials an Idempotency-Key must be at least 16 characters.
 
 - **Auth:** session cookie or bearer token
 - **Idempotency-Key:** accepted
-- **Body:** `{ name?, template?, from?, description? }`
-- **201:** `ProjectCreated { projectId, name, template, defaultBranch, remote, token, mcpUrl, previewUrl, claimUrl, bootstrapChangeId, nextSteps }`
+- **Body:** `{ name?, template?, from?, description?, importMode? }`
+- **201:** `ProjectCreated { projectId, name, template, defaultBranch, remote, token, mcpUrl, previewUrl, claimUrl, bootstrapChangeId, nextSteps, importGrant? }`
 - **Errors:** 400, 401, 403, 409, 429, 502, 503
 
 ## repos
@@ -68,6 +68,35 @@ The Worker is `gf-<repoId>-<script>` in the platform's account (namespaced, so a
 - **Body:** `{ script }`
 - **200:** `{ repo: Repo, script }`
 - **Errors:** 400, 401, 403, 404
+
+### `GET /api/v1/repos/{repoId}/import-grant`
+
+The project's import-by-push grant (state only, never the token)
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `repoId` (path, required)
+- **200:** `{ grant: ImportGrantStatus }`
+- **Errors:** 401, 403, 404
+
+### `POST /api/v1/repos/{repoId}/import-grant`
+
+Open a new import-by-push grant for a project that has no default branch yet
+
+Human owners only. A live grant is closed (its token revoked) first. 409 `already-imported` once the default branch exists: from then on only the merge queue writes it.
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `repoId` (path, required)
+- **201:** `{ grant, status: ImportGrantStatus }`
+- **Errors:** 401, 403, 404, 409, 502, 503
+
+### `DELETE /api/v1/repos/{repoId}/import-grant`
+
+Close the import-by-push grant now (revokes its token)
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `repoId` (path, required)
+- **200:** `{ grant: ImportGrantStatus }`
+- **Errors:** 401, 403, 404
 
 ### `PATCH /api/v1/repos/{repoId}/lane0`
 
