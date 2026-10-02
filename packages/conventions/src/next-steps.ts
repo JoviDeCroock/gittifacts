@@ -104,14 +104,14 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
       {
         title: "Lane 0: the merge queue merges it without a human",
         why: "Every Lane 0 gate passed.",
-        call: call("wait_for_change", { changeId, until: "merged", timeoutSec: 600 }),
+        call: call("wait_for_change", { changeId, until: "merged", timeoutSec: 50 }),
       },
     ];
   }
   const review = [
     {
       title: "Wait for the reviewer's tour",
-      call: call("wait_for_change", { changeId, until: "tour_ready", timeoutSec: 300 }),
+      call: call("wait_for_change", { changeId, until: "tour_ready", timeoutSec: 50 }),
     },
     {
       title: "Ask a human to review it (you can't approve)",
@@ -119,7 +119,7 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
     },
     {
       title: "Wait until it merges",
-      call: call("wait_for_change", { changeId, until: "merged", timeoutSec: 3600 }),
+      call: call("wait_for_change", { changeId, until: "merged", timeoutSec: 50 }),
     },
   ];
   if (c.lane === 0) {
@@ -127,7 +127,7 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
       {
         title: "Lane 0 in shadow mode: a human still glances (handled like Lane 1)",
         why: "Lane 0 is off until the repo owner enables it after enough agreement (unclaimed projects: always off). Your Change still counts towards that agreement.",
-        call: call("wait_for_change", { changeId, until: "tour_ready", timeoutSec: 300 }),
+        call: call("wait_for_change", { changeId, until: "tour_ready", timeoutSec: 50 }),
       },
       ...review.slice(1),
     ];
@@ -157,10 +157,31 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
   ];
 }
 
+/**
+ * `wait_for_change` returns within `timeoutSec` (≤ 50 s by default, under the MCP SDK's 60 s
+ * client request timeout); agents call it again while `reason` is "timeout".
+ */
+export const WAIT_TIMEOUT_SEC = 50;
+export const WAIT_AGAIN = `Returns within ${WAIT_TIMEOUT_SEC} s; call it again while reason is "timeout".`;
+
+/** Every wait step says to call again on timeout. */
+function withWaitHint(step: NextStep): NextStep {
+  if (step.call === undefined || !step.call.startsWith("wait_for_change(")) return step;
+  if (step.why?.includes(WAIT_AGAIN)) return step;
+  return {
+    ...step,
+    why: clip(step.why === undefined ? WAIT_AGAIN : `${step.why} ${WAIT_AGAIN}`, 600),
+  };
+}
+
 export function nextStepsFor<E extends NextStepEvent>(
   event: E,
   ctx: NextStepContexts[E],
 ): NextStep[] {
+  return stepsFor(event, ctx).map(withWaitHint);
+}
+
+function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): NextStep[] {
   switch (event) {
     case "project_created": {
       const c = ctx as NextStepContexts["project_created"];
@@ -172,7 +193,7 @@ export function nextStepsFor<E extends NextStepEvent>(
           call: call("wait_for_change", {
             changeId: c.changeId,
             until: "evidence_ready",
-            timeoutSec: 120,
+            timeoutSec: 50,
           }),
         });
       }
@@ -196,7 +217,7 @@ export function nextStepsFor<E extends NextStepEvent>(
             call: call("wait_for_change", {
               changeId: f.changeId,
               until: "evidence_ready",
-              timeoutSec: 300,
+              timeoutSec: 50,
             }),
           },
         );
@@ -245,7 +266,7 @@ export function nextStepsFor<E extends NextStepEvent>(
           call: call("wait_for_change", {
             changeId: c.changeId,
             until: "evidence_ready",
-            timeoutSec: 300,
+            timeoutSec: 50,
           }),
         },
       ];
@@ -259,7 +280,7 @@ export function nextStepsFor<E extends NextStepEvent>(
           call: call("wait_for_change", {
             changeId: c.changeId,
             until: "evidence_ready",
-            timeoutSec: 300,
+            timeoutSec: 50,
           }),
         },
       ];
@@ -286,7 +307,7 @@ export function nextStepsFor<E extends NextStepEvent>(
           call: call("wait_for_change", {
             changeId: c.changeId,
             until: "evidence_ready",
-            timeoutSec: 300,
+            timeoutSec: 50,
           }),
         },
       ];
@@ -304,7 +325,7 @@ export function nextStepsFor<E extends NextStepEvent>(
             call: call("wait_for_change", {
               changeId: c.changeId,
               until: "evidence_ready",
-              timeoutSec: 300,
+              timeoutSec: 50,
             }),
           },
         ];
@@ -315,7 +336,7 @@ export function nextStepsFor<E extends NextStepEvent>(
           call: call("wait_for_change", {
             changeId: c.changeId,
             until: "lane_assigned",
-            timeoutSec: 120,
+            timeoutSec: 50,
           }),
         },
         {
@@ -342,7 +363,7 @@ export function nextStepsFor<E extends NextStepEvent>(
           call: call("wait_for_change", {
             changeId: c.changeId,
             until: "merged",
-            timeoutSec: 3600,
+            timeoutSec: 50,
           }),
         },
       ];

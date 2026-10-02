@@ -119,7 +119,7 @@ describe("nextStepsFor", () => {
       claimed: false,
     });
     expect(steps[0]?.call).toBe(
-      'wait_for_change({ changeId: "chg_1", until: "evidence_ready", timeoutSec: 120 })',
+      'wait_for_change({ changeId: "chg_1", until: "evidence_ready", timeoutSec: 50 })',
     );
     expect(steps.at(-1)?.why).toContain("https://h/claim/x");
     expect(
@@ -140,10 +140,10 @@ describe("nextStepsFor", () => {
       claimed: true,
     });
     expect(steps.map((s) => s.call ?? s.command)).toEqual([
-      'wait_for_change({ changeId: "bs-rep_1", until: "evidence_ready", timeoutSec: 120 })',
+      'wait_for_change({ changeId: "bs-rep_1", until: "evidence_ready", timeoutSec: 50 })',
       'git -c http.extraHeader="Authorization: Bearer <remote.token>" clone https://git.example/task-chg_2.git',
       'git -c http.extraHeader="Authorization: Bearer <remote.token>" push https://git.example/task-chg_2.git HEAD:main',
-      'wait_for_change({ changeId: "chg_2", until: "evidence_ready", timeoutSec: 300 })',
+      'wait_for_change({ changeId: "chg_2", until: "evidence_ready", timeoutSec: 50 })',
       expect.stringContaining("create_plan("),
       expect.stringContaining("start_change("),
     ]);

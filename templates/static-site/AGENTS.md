@@ -19,8 +19,8 @@ Every response has `nextSteps` and every error has `fix` (`call` / `command`). D
    `start_change({ repoId: "{{repoId}}", planId: "<planId>", title: "Add GET /version", category: "feature" })`
 3. **Push** your commits to the fork:
    `git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>`
-4. **Wait** (long-poll, don't loop on status):
-   `wait_for_change({ changeId: "<changeId>", until: "evidence_ready", timeoutSec: 300 })`
+4. **Wait** (long-poll ≤ 50 s, don't loop on status; call again while `reason` is `"timeout"`):
+   `wait_for_change({ changeId: "<changeId>", until: "evidence_ready", timeoutSec: 50 })`
 5. **Read** CI, lane, reasons and the preview URL: `get_change_status({ changeId: "<changeId>" })`
 6. **Hand off** Lane 1/2 to a human: `request_review({ changeId: "<changeId>" })`, then wait for `merged`.
 
@@ -71,8 +71,8 @@ To improve it, turn `unproven` stops into `proven` ones (add tests or evidence) 
 is regenerated for the new head. Evidence details: `get_evidence({ changeId: "<changeId>" })`.
 
 ## Waiting for results
-`wait_for_change({ changeId: "<changeId>", until: "<until>", timeoutSec: 300 })` long-polls; it returns
-`{ change, reached, reason }`.
+`wait_for_change({ changeId: "<changeId>", until: "<until>", timeoutSec: 50 })` long-polls; it returns
+`{ change, reached, reason }` within 50 s (the MCP client's request timeout is 60 s).
 | `until` | Returns when |
 |---|---|
 | `evidence_ready` | CI finished (green or red) and the evidence is signed |
@@ -80,7 +80,8 @@ is regenerated for the new head. Evidence details: `get_evidence({ changeId: "<c
 | `tour_ready` | the reviewer's tour exists (Lane ≥ 1) |
 | `merged` | the merge queue fast-forwarded main |
 | `reverted` | the Change was rolled back and a revert Change was opened |
-`reason: "timeout"` → call again. `reason: "unreachable"` → the Change ended; read `get_change_status`.
+`reason: "timeout"` → call it again with the same arguments until `reached` is true.
+`reason: "unreachable"` → the Change ended; read `get_change_status`.
 
 ## When CI fails
 1. `get_change_status({ changeId: "<changeId>" })` shows the failing step and its log tail.

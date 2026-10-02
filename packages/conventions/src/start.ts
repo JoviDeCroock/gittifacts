@@ -97,7 +97,7 @@ export const RULES = [
   "Never push to main: only the merge queue writes the default branch. Push to your Change's fork remote.",
   "Agents never approve a Plan or a Change, including their own. Ask a human with request_review.",
   "A Change claiming a fix needs a test that fails on the base commit and passes on its head (red/green).",
-  "Wait, don't poll: wait_for_change long-polls until a milestone.",
+  'Wait, don\'t poll: wait_for_change long-polls until a milestone (up to 50 s per call); call it again while reason is "timeout".',
   "Send an Idempotency-Key on every create/mutate call and reuse it when you retry.",
   "Every error has fix.call or fix.command: run it.",
 ];
@@ -125,8 +125,9 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
       step: 2,
       title: "Wait for the first green",
       why: "create_project already committed the template and started CI and the preview; the changeId is in nextSteps[0]. Later edits go start_change, git push to the fork, then this same wait (see the loop below).",
-      call: call("wait_for_change", { changeId: CH, until: "evidence_ready", timeoutSec: 120 }),
-      returns: '{ change, reached, reason }. reason "timeout": call again.',
+      call: call("wait_for_change", { changeId: CH, until: "evidence_ready", timeoutSec: 50 }),
+      returns:
+        '{ change, reached, reason } within 50 s (under the MCP client\'s 60 s request timeout). reason "timeout": call it again, and keep calling while reason is "timeout".',
     },
     {
       step: 3,
@@ -163,13 +164,13 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
         'git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>',
     },
     {
-      title: "Wait for the lane",
-      call: call("wait_for_change", { changeId: CH, until: "lane_assigned", timeoutSec: 300 }),
+      title: 'Wait for the lane (call again while reason is "timeout")',
+      call: call("wait_for_change", { changeId: CH, until: "lane_assigned", timeoutSec: 50 }),
     },
     { title: "Ask a human to review (Lane 1/2)", call: call("request_review", { changeId: CH }) },
     {
-      title: "Wait until merged",
-      call: call("wait_for_change", { changeId: CH, until: "merged", timeoutSec: 600 }),
+      title: 'Wait until merged (call again while reason is "timeout")',
+      call: call("wait_for_change", { changeId: CH, until: "merged", timeoutSec: 50 }),
     },
   ];
 

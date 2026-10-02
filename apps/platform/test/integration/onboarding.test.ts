@@ -172,7 +172,7 @@ describe("create_project → first green (workerd, fake Artifacts/containers)", 
         }
         expect(parseCall(p.nextSteps[0]?.call ?? "")).toEqual({
           tool: "wait_for_change",
-          args: { changeId: p.bootstrapChangeId, until: "evidence_ready", timeoutSec: 120 },
+          args: { changeId: p.bootstrapChangeId, until: "evidence_ready", timeoutSec: 50 },
         });
 
         // 4. The preview URL exists before the preview does: "Building…" while CI runs.
