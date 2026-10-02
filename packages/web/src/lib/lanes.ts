@@ -109,6 +109,14 @@ export type ReasonFamily =
   | "model"
   | "transform"
   | "revert"
+  | "checks"
+  | "signature"
+  | "migration"
+  | "budget"
+  | "tour"
+  | "informational"
+  | "resolution"
+  | "lane0"
   | "missing"
   | "shadow"
   | "other";
@@ -126,18 +134,78 @@ const FAMILY_LABEL: Record<ReasonFamily, string> = {
   model: "Model judgment",
   transform: "Transform",
   revert: "Revert",
+  checks: "CI checks",
+  signature: "Signature",
+  migration: "Migrations",
+  budget: "Model budget",
+  tour: "Tour",
+  informational: "Previews and traces",
+  resolution: "Conflict resolution",
+  lane0: "Lane 0 setting",
   missing: "Missing signal",
   shadow: "Shadow mode",
   other: "Other",
 };
 
+/** What a `signal.*.<measurement>` code measured, so "skip accepted" rows sit in their own family. */
+const MEASUREMENT_FAMILY: Record<string, ReasonFamily> = {
+  coverage: "coverage",
+  mutation: "mutation",
+  "public-api": "api",
+  dependencies: "dependencies",
+  "sensitive-paths": "sensitive",
+  "red-green": "proof",
+  "test-run": "proof",
+  "llm-judgment": "model",
+  transform: "transform",
+  "conflict-resolution": "resolution",
+};
+
+/** Names a missing or failed measurement in its row label ("Test run", not "Missing signal"). */
+const MEASUREMENT_LABEL: Record<string, string> = {
+  coverage: "Coverage",
+  mutation: "Mutation",
+  "public-api": "Public API",
+  dependencies: "Dependencies",
+  "sensitive-paths": "Sensitive paths",
+  "red-green": "Red → green proof",
+  "test-run": "Test run",
+  "llm-judgment": "Model judgment",
+  transform: "Transform",
+  "conflict-resolution": "Conflict resolution",
+  screenshots: "Screenshots",
+  preview: "Preview",
+  "agent-trace": "Agent trace",
+  quarantine: "Quarantine",
+  evidence: "Evidence",
+  "diff-stats": "Diff size",
+};
+
 export function reasonFamily(code: string): ReasonFamily {
   const head = code.split(".")[0] ?? "";
   if (code.startsWith("signal.missing") || code.startsWith("signal.error")) return "missing";
+  if (code.startsWith("signal.skip-accepted.")) return MEASUREMENT_FAMILY[code.split(".")[2] ?? ""] ?? "other";
   switch (head) {
     case "proof":
     case "tests":
+    case "red-green":
       return "proof";
+    case "ci":
+      return "checks";
+    case "evidence":
+      return "signature";
+    case "migration":
+      return "migration";
+    case "budget":
+      return "budget";
+    case "tour":
+      return "tour";
+    case "informational":
+      return "informational";
+    case "resolution":
+      return "resolution";
+    case "lane0":
+      return "lane0";
     case "coverage":
       return "coverage";
     case "mutation":
@@ -145,6 +213,7 @@ export function reasonFamily(code: string): ReasonFamily {
     case "api":
       return "api";
     case "deps":
+    case "dependency":
     case "dependencies":
       return "dependencies";
     case "sensitive":
@@ -170,8 +239,15 @@ export function reasonFamily(code: string): ReasonFamily {
   }
 }
 
+/** A row label: the family, or for a missing or failed measurement, what was not measured. */
 export function familyLabel(code: string): string {
-  return FAMILY_LABEL[reasonFamily(code)];
+  const family = reasonFamily(code);
+  if (family === "missing") {
+    const parts = code.split(".");
+    const what = MEASUREMENT_LABEL[parts[2] ?? ""];
+    if (what) return `${what} ${parts[1] === "error" ? "failed" : "missing"}`;
+  }
+  return FAMILY_LABEL[family];
 }
 
 export interface ChartRow {
@@ -213,7 +289,7 @@ export function triageChart(reasons: LaneReason[], computed: Lane | null, routed
       return {
         reason,
         family,
-        label: FAMILY_LABEL[family],
+        label: familyLabel(reason.code),
         lane: reason.lane,
         unknown: family === "missing" || /\.(missing|error|skipped|unknown)\b/.test(reason.code),
         decisive: reason.lane === computedLane && computedLane > 0,

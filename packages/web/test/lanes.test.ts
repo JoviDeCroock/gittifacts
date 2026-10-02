@@ -1,6 +1,6 @@
 import type { Change, LaneReason } from "@app/domain";
 import { describe, expect, it } from "vitest";
-import { groupByLane, matchesFilter, pct, reasonFamily, shadowProgress, triageChart } from "../src/lib/lanes.js";
+import { familyLabel, groupByLane, matchesFilter, pct, reasonFamily, shadowProgress, triageChart } from "../src/lib/lanes.js";
 
 type C = Pick<Change, "lane" | "computedLane" | "status" | "updatedAt"> & { id: string };
 const c = (id: string, lane: C["lane"], computedLane: C["computedLane"], status: C["status"] = "awaiting-review", updatedAt = "2026-10-01T10:00:00Z"): C => ({
@@ -94,6 +94,23 @@ describe("triageChart", () => {
     expect(reasonFamily("deps.install-script")).toBe("dependencies");
     expect(reasonFamily("signal.error.coverage")).toBe("missing");
     expect(reasonFamily("whatever")).toBe("other");
+  });
+
+  it("names every family the live classifier sends (no row reads 'Other')", () => {
+    const live = ["ci.passed", "budget.ok", "evidence.verified", "dependency.none", "migration.none", "red-green.not-required", "tour.failed", "informational.ok", "resolution.semantic", "lane0.enabled"];
+    for (const code of live) expect(familyLabel(code), code).not.toBe("Other");
+    expect(reasonFamily("dependency.none")).toBe("dependencies");
+    expect(reasonFamily("red-green.proven")).toBe("proof");
+    expect(reasonFamily("signal.skip-accepted.mutation")).toBe("mutation");
+  });
+
+  it("labels a missing or failed measurement by what was not measured", () => {
+    expect(familyLabel("signal.missing.test-run")).toBe("Test run missing");
+    expect(familyLabel("signal.error.llm-judgment")).toBe("Model judgment failed");
+    expect(familyLabel("signal.error.something-new")).toBe("Missing signal");
+    const chart = triageChart([{ code: "signal.error.screenshots", lane: 1, message: "Screenshots errored." }], 1, 1);
+    expect(chart.rows[0]?.label).toBe("Screenshots failed");
+    expect(chart.rows[0]?.unknown).toBe(true);
   });
 });
 
