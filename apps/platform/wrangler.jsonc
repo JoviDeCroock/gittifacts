@@ -39,15 +39,10 @@
 
   // `wrangler types` reads this list; values live in `.dev.vars` locally (see .dev.vars.example)
   // and in `wrangler secret put` remotely.
+  // Required to run at all. Optional secrets (feature degrades with a clear error when absent):
+  // GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET (GitHub sign-in), CF_API_TOKEN (rollouts, flags, telemetry).
   "secrets": {
-    "required": [
-      "PLATFORM_SIGNING_KEY",
-      "BETTER_AUTH_SECRET",
-      "GITHUB_CLIENT_ID",
-      "GITHUB_CLIENT_SECRET",
-      "ISSUES_WEBHOOK_SECRET",
-      "CF_API_TOKEN"
-    ]
+    "required": ["PLATFORM_SIGNING_KEY", "BETTER_AUTH_SECRET", "ISSUES_WEBHOOK_SECRET"]
   },
 
   "d1_databases": [
