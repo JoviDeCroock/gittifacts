@@ -61,6 +61,7 @@ export function ShadowLine({
 function RepoRow({ repo }: { repo: RepoSummary }) {
   const c = repo.counts;
   const shadow = !repo.policy.lane0Enabled;
+  const plans = c.plansAwaitingApproval ?? 0;
   const empty = c.lane0 + c.lane1 + c.lane2 + c.awaitingReview + c.rollingOut + c.failing === 0;
   return (
     <li>
@@ -85,9 +86,13 @@ function RepoRow({ repo }: { repo: RepoSummary }) {
             <span class="waiting tnum">
               <b>{c.awaitingReview}</b> awaiting review
             </span>
-          ) : (
-            <span class="waiting waiting--none">Nothing to review</span>
-          )}
+          ) : null}
+          {plans > 0 ? (
+            <span class="waiting tnum">
+              <b>{plans}</b> {plans === 1 ? "plan" : "plans"} to approve
+            </span>
+          ) : null}
+          {c.awaitingReview === 0 && plans === 0 ? <span class="waiting waiting--none">Nothing to review</span> : null}
           <span class="repo-row__flight">
             {c.rollingOut > 0 ? (
               <span class="flight">
@@ -127,8 +132,9 @@ export function Repos() {
   // Triage order: work waiting for you first, then live rollouts and failures, then the rest by name.
   const repos = st.status === "ok" ? [...st.data.repos].sort(byAttention) : [];
   const waiting = repos.reduce((n, r) => n + r.counts.awaitingReview, 0);
+  const plansWaiting = repos.reduce((n, r) => n + (r.counts.plansAwaitingApproval ?? 0), 0);
   const rolling = repos.reduce((n, r) => n + r.counts.rollingOut, 0);
-  const withWaiting = repos.filter((r) => r.counts.awaitingReview > 0).length;
+  const withWaiting = repos.filter((r) => r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0) > 0).length;
 
   return (
     <Page
@@ -137,9 +143,12 @@ export function Repos() {
       meta={
         st.status === "ok" && repos.length > 0 ? (
           <p class="repos-summary">
-            {waiting > 0 ? (
+            {waiting + plansWaiting > 0 ? (
               <>
-                <b class="tnum">{plural(waiting, "change")}</b> {waiting === 1 ? "waits" : "wait"} for review across {plural(withWaiting, "repository", "repositories")}.
+                {waiting > 0 ? <b class="tnum">{plural(waiting, "change")}</b> : null}
+                {waiting > 0 && plansWaiting > 0 ? " and " : null}
+                {plansWaiting > 0 ? <b class="tnum">{plural(plansWaiting, "plan")}</b> : null} {waiting + plansWaiting === 1 ? "waits" : "wait"} for you across{" "}
+                {plural(withWaiting, "repository", "repositories")}.
               </>
             ) : (
               "Nothing waits for your review."

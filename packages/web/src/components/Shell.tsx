@@ -107,9 +107,12 @@ function Sidebar() {
               <li key={r.id}>
                 <a href={`/repos/${r.id}`} class="repo-link" aria-current={path.startsWith(`/repos/${r.id}`) ? "page" : undefined}>
                   <span class="repo-link__name">{r.name}</span>
-                  {r.counts.awaitingReview > 0 ? (
-                    <span class="repo-link__count tnum" aria-label={`${r.counts.awaitingReview} awaiting review`}>
-                      {r.counts.awaitingReview}
+                  {r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0) > 0 ? (
+                    <span
+                      class="repo-link__count tnum"
+                      aria-label={`${r.counts.awaitingReview} awaiting review, ${r.counts.plansAwaitingApproval ?? 0} plans to approve`}
+                    >
+                      {r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0)}
                     </span>
                   ) : null}
                 </a>
