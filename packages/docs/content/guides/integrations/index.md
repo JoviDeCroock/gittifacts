@@ -42,7 +42,7 @@ You get a `client_id` (`gtic_…`) and, for a confidential client, a `client_sec
 | `contents:read` | Clone the code | Clone and fetch the repository and its Change heads over git, read-only. |
 | `webhooks` | Receive events | Get notified when the default branch or a Change is pushed, and when Changes are created, updated, merged or reverted. |
 | `deployments:write` | Report deployments | Post deployment status and preview URLs. A successful preview is attached to its Change as signed evidence. |
-| `checks:write` | Report checks | Attach external check results to Changes. They can only raise a Change's risk lane, never lower it. |
+| `checks:write` | Report checks | Attach external check results to Changes. They can only raise a Change's risk lane, never lower it. *Reserved: you can register and be granted it, but there is no checks endpoint yet.* |
 
 A deploy platform needs `repo:read contents:read webhooks deployments:write`. These can never be requested:
 
