@@ -47,17 +47,20 @@ const Aggregates = z
 const VERSION_KEY = "$workers.scriptVersion.id";
 const OUTCOME_KEY = "$workers.outcome";
 
+/**
+ * One aggregate query over the script, grouped by version (× outcome). Versions are not filtered
+ * with `in` (its value shape is undocumented); the caller picks the two versions it needs from the
+ * groups, and a script has only a handful of versions live in a rollout window.
+ */
 export function telemetryQuery(input: {
   queryId: string;
   script: string;
   from: number;
   to: number;
-  versionIds: string[];
   serverErrorsOnly: boolean;
 }): Record<string, unknown> {
   const filters: Array<Record<string, unknown>> = [
     { key: "$workers.scriptName", operation: "eq", type: "string", value: input.script },
-    { key: VERSION_KEY, operation: "in", type: "string", value: input.versionIds },
   ];
   if (input.serverErrorsOnly) {
     filters.push({ key: OUTCOME_KEY, operation: "eq", type: "string", value: "ok" });
@@ -110,11 +113,7 @@ export class ObservabilityTelemetry implements Telemetry {
   }) {
     const to = this.opts.clock.now().getTime();
     const from = Math.min(Date.parse(input.since), to - 60_000);
-    const versionIds =
-      input.baselineVersionId === null
-        ? [input.versionId]
-        : [input.versionId, input.baselineVersionId];
-    const base = { script: input.script, from, to, versionIds };
+    const base = { script: input.script, from, to };
     const [byOutcome, serverErrors] = await Promise.all([
       this.query(
         telemetryQuery({

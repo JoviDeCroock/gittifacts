@@ -348,8 +348,11 @@ describe("ObservabilityTelemetry", () => {
       parameters: {
         groupBys: [{ value: "$workers.scriptVersion.id" }, { value: "$workers.outcome" }],
         calculations: [{ operator: "count" }],
+        filters: [{ key: "$workers.scriptName", operation: "eq", value: "api" }],
       },
     });
+    // Versions come from the groups, never an `in` filter (its value shape is undocumented).
+    expect(JSON.stringify(calls.map((c) => c.body))).not.toContain('"operation":"in"');
     // No traffic → unknown rate, never 0.
     const empty = mockFetch([[/telemetry\/query$/, () => ok({ calculations: [] })]]);
     const r2 = await new ObservabilityTelemetry({ ...api, fetch: empty.fetch, store, clock }).check(
