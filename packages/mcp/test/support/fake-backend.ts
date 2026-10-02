@@ -1,6 +1,6 @@
 import type { ApiError, Change, Plan, Repo, Tour } from "@app/domain";
 import { defaultPolicy } from "@app/domain";
-import type { McpBackend } from "../../src/index.js";
+import type { McpBackend, WorkspaceView } from "../../src/index.js";
 
 export const SHA = "a".repeat(40);
 export const HEAD = "b".repeat(40);
@@ -77,6 +77,25 @@ export const tour: Tour = {
   },
   createdAt: "2026-10-01T00:02:00.000Z",
 };
+
+export function workspaceView(over: Partial<WorkspaceView> = {}): WorkspaceView {
+  return {
+    workspaceId: "ws-chg_1",
+    changeId: "chg_1",
+    repoId: repo.id,
+    forkName: "task-chg_1",
+    branch: "main",
+    baseSha: SHA,
+    headSha: HEAD,
+    status: "ready",
+    network: "open",
+    expiresAt: "2026-10-01T02:00:00.000Z",
+    idleSleepSec: 600,
+    restoredFrom: "image",
+    usage: { containerSeconds: 3, projectSecondsRemaining: null },
+    ...over,
+  };
+}
 
 /** In-memory McpBackend; records calls. */
 export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { calls: string[] } {
@@ -228,6 +247,89 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
     },
     async waitForChange(_caller, _id, _until) {
       return { change: change({ status: "merged" }), reached: true, reason: "reached" };
+    },
+    // Remote workspaces (tools/workspace.ts) and import detection (tools/import.ts).
+    async openWorkspace(_caller, input, opts) {
+      calls.push(`openWorkspace:${input.changeId}:${opts.idempotencyKey ?? "-"}`);
+      if (input.changeId !== "chg_1") throw new NotFound(`change ${input.changeId}`);
+      return workspaceView({ status: "ready" });
+    },
+    async closeWorkspace(_caller, workspaceId) {
+      calls.push(`closeWorkspace:${workspaceId}`);
+      return workspaceView({ status: "closed" });
+    },
+    async wsExec(_caller, input) {
+      calls.push(`wsExec:${input.command}:${input.timeoutSec ?? "-"}`);
+      return {
+        exitCode: 0,
+        timedOut: false,
+        durationMs: 12,
+        stdout: "ok\n",
+        stderr: "",
+        stdoutBytes: 3,
+        stderrBytes: 0,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+      };
+    },
+    async wsRead(_caller, input) {
+      calls.push(`wsRead:${input.path}`);
+      return {
+        path: input.path,
+        content: "line 1\n",
+        binary: false,
+        sizeBytes: 7,
+        totalLines: 1,
+        startLine: 1,
+        endLine: 1,
+        truncated: false,
+      };
+    },
+    async wsWrite(_caller, input) {
+      calls.push(`wsWrite:${input.path}:${input.patch === undefined ? "content" : "patch"}`);
+      return {
+        path: input.path,
+        mode: input.patch === undefined ? "content" : "patch",
+        bytes: (input.content ?? input.patch ?? "").length,
+        created: false,
+      };
+    },
+    async wsDiff() {
+      return { baseSha: SHA, files: [], patch: "", truncated: false };
+    },
+    async wsCommitPush(_caller, input) {
+      calls.push(`wsCommitPush:${input.message}`);
+      return {
+        changeId: "chg_1",
+        branch: "main",
+        commitSha: "c".repeat(40),
+        previousHead: HEAD,
+        filesChanged: 1,
+        pushed: true,
+      };
+    },
+    async proposePlatformConfig(_caller, input, opts) {
+      calls.push(
+        `proposePlatformConfig:${input.repoId}:${input.rerun}:${opts.idempotencyKey ?? "-"}`,
+      );
+      return {
+        proposalId: "pcfg-1",
+        repoId: input.repoId,
+        status: "proposed",
+        baseSha: SHA,
+        planId: "plan_9",
+        changeId: "chg_9",
+        detection: {
+          confidence: "medium",
+          packageManager: "pnpm",
+          testRunner: "vitest",
+          workers: ["clock-api"],
+          uncertain: ["No typecheck script: CI runs `tsc --noEmit` with the root tsconfig.json."],
+          buildScriptsNeedingApproval: [],
+        },
+        error: null,
+        startedAt: "2026-10-01T00:00:00.000Z",
+      };
     },
     errorEnvelope(err: unknown): ApiError {
       if (err instanceof NotFound) {

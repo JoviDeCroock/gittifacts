@@ -8,6 +8,157 @@
 export type introspection = {
   "tools": {
     /**
+     * Close the workspace
+     * Stops the workspace and deletes its sleep snapshot. Uncommitted changes are lost; the fork keeps everything you pushed. open_workspace starts a fresh one.
+     * @param args.workspaceId From open_workspace.
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "close_workspace": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 100,
+            "pattern": "^ws-[A-Za-z0-9_-]+$",
+            "description": "From open_workspace."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "workspaceId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "changeId": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "forkName": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "baseSha": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "starting",
+              "ready",
+              "sleeping",
+              "closed",
+              "expired"
+            ]
+          },
+          "network": {
+            "enum": [
+              "open",
+              "registries-only"
+            ]
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "idleSleepSec": {
+            "type": "integer"
+          },
+          "restoredFrom": {
+            "enum": [
+              "sleep-snapshot",
+              "dependency-snapshot",
+              "image",
+              null
+            ]
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "containerSeconds": {
+                "type": "number"
+              },
+              "projectSecondsRemaining": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "containerSeconds",
+              "projectSecondsRemaining"
+            ]
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "workspaceId",
+          "changeId",
+          "repoId",
+          "forkName",
+          "branch",
+          "baseSha",
+          "headSha",
+          "status",
+          "network",
+          "expiresAt",
+          "idleSleepSec",
+          "restoredFrom",
+          "usage",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      }
+    },
+    /**
      * Create a plan
      * Draft a plan: intent, acceptance criteria and the paths you expect to touch. A human other than you approves it before you start a change. Returns the plan id.
      * @param args.intent Why: the problem and the intended outcome.
@@ -1126,6 +1277,353 @@ export type introspection = {
       }
     },
     /**
+     * Open a remote workspace
+     * A sandbox with your Change's fork checked out at its head, for agents without a local shell or git. Starts or resumes it (idempotent per Change; author only) and returns the ws_* tools to use. It sleeps when idle and ends at expiresAt.
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "open_workspace": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "changeId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "changeId": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "forkName": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "baseSha": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "starting",
+              "ready",
+              "sleeping",
+              "closed",
+              "expired"
+            ]
+          },
+          "network": {
+            "enum": [
+              "open",
+              "registries-only"
+            ]
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "idleSleepSec": {
+            "type": "integer"
+          },
+          "restoredFrom": {
+            "enum": [
+              "sleep-snapshot",
+              "dependency-snapshot",
+              "image",
+              null
+            ]
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "containerSeconds": {
+                "type": "number"
+              },
+              "projectSecondsRemaining": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "containerSeconds",
+              "projectSecondsRemaining"
+            ]
+          },
+          "tools": {
+            "type": "array",
+            "description": "The workspace tools, each with a ready-to-use call.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "call",
+                "description"
+              ]
+            }
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "workspaceId",
+          "changeId",
+          "repoId",
+          "forkName",
+          "branch",
+          "baseSha",
+          "headSha",
+          "status",
+          "network",
+          "expiresAt",
+          "idleSleepSec",
+          "restoredFrom",
+          "usage",
+          "tools",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Propose .platform config for an imported repo
+     * Detects how an imported repo installs, tests and builds (in a sandbox) and proposes .platform/ci.ts, .platform/policy.ts and AGENTS.md as a draft Plan plus a Change a human approves (never applied silently). Uncertain guesses are listed as risks. Idempotent per default-branch commit; waits up to waitSec.
+     * @param args.rerun Detect again even if a proposal exists for the current default-branch commit (e.g. after a human rejected it).
+     * @param args.waitSec How long to wait for the proposal to finish (default 45).
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "propose_platform_config": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "rerun": {
+            "type": "boolean",
+            "description": "Detect again even if a proposal exists for the current default-branch commit (e.g. after a human rejected it)."
+          },
+          "waitSec": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50,
+            "description": "How long to wait for the proposal to finish (default 45)."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "repoId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "proposed",
+              "failed"
+            ]
+          },
+          "baseSha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "planId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detection": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "confidence": {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "packageManager": {
+                "type": "string"
+              },
+              "testRunner": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "workers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "uncertain": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "buildScriptsNeedingApproval": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "confidence",
+              "packageManager",
+              "testRunner",
+              "workers",
+              "uncertain",
+              "buildScriptsNeedingApproval"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "proposalId",
+          "repoId",
+          "status",
+          "baseSha",
+          "planId",
+          "changeId",
+          "detection",
+          "error",
+          "startedAt",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
      * Refresh the push token
      * A fresh short-lived push grant for your change's fork (author only). Use it when the old token expired.
      */
@@ -1906,6 +2404,533 @@ export type introspection = {
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Commit and push the workspace
+     * Commits every change in the workspace (as you) and pushes it to the Change's fork branch. That push starts CI, evidence, the lane and the tour, exactly like a git push.
+     * @param args.workspaceId From open_workspace.
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "ws_commit_push": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 100,
+            "pattern": "^ws-[A-Za-z0-9_-]+$",
+            "description": "From open_workspace."
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10000
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "commitSha": {
+            "type": "string"
+          },
+          "previousHead": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "filesChanged": {
+            "type": "integer"
+          },
+          "pushed": {
+            "type": "boolean"
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "changeId",
+          "branch",
+          "commitSha",
+          "previousHead",
+          "filesChanged",
+          "pushed",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Diff the workspace
+     * Every change in the workspace (committed or not, new files included) against the Change's base commit: per-file stats and a unified diff (capped).
+     * @param args.workspaceId From open_workspace.
+     */
+    "ws_diff": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 100,
+            "pattern": "^ws-[A-Za-z0-9_-]+$",
+            "description": "From open_workspace."
+          }
+        },
+        "required": [
+          "workspaceId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "baseSha": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "added",
+                    "modified",
+                    "deleted",
+                    "renamed",
+                    "copied",
+                    "type-changed"
+                  ]
+                },
+                "additions": {
+                  "type": "integer"
+                },
+                "deletions": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "path",
+                "status",
+                "additions",
+                "deletions"
+              ]
+            }
+          },
+          "patch": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "baseSha",
+          "files",
+          "patch",
+          "truncated",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Run a command in the workspace
+     * Runs `sh -c <command>` in the workspace checkout as the unprivileged runner user, with a hard timeout. Returns the exit code and stdout/stderr (each capped; the middle of long output is dropped).
+     * @param args.workspaceId From open_workspace.
+     * @param args.command A shell command (sh -c), run as the unprivileged runner user.
+     * @param args.cwd Working directory relative to the repository root.
+     * @param args.timeoutSec Default 120. Capped by the project's quota; keep it under your client's request timeout and background long jobs (nohup … &).
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "ws_exec": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 100,
+            "pattern": "^ws-[A-Za-z0-9_-]+$",
+            "description": "From open_workspace."
+          },
+          "command": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384,
+            "description": "A shell command (sh -c), run as the unprivileged runner user."
+          },
+          "cwd": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "Working directory relative to the repository root."
+          },
+          "timeoutSec": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1800,
+            "description": "Default 120. Capped by the project's quota; keep it under your client's request timeout and background long jobs (nohup … &)."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "command"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "exitCode": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "timedOut": {
+            "type": "boolean"
+          },
+          "durationMs": {
+            "type": "integer"
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "stdoutBytes": {
+            "type": "integer"
+          },
+          "stderrBytes": {
+            "type": "integer"
+          },
+          "stdoutTruncated": {
+            "type": "boolean"
+          },
+          "stderrTruncated": {
+            "type": "boolean"
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "exitCode",
+          "timedOut",
+          "durationMs",
+          "stdout",
+          "stderr",
+          "stdoutBytes",
+          "stderrBytes",
+          "stdoutTruncated",
+          "stderrTruncated",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      }
+    },
+    /**
+     * Read a file in the workspace
+     * Reads a file from the workspace checkout, optionally a 1-based inclusive line range. Large files are truncated (truncated: true); binary files come back empty with binary: true.
+     * @param args.workspaceId From open_workspace.
+     * @param args.path Relative to the repository root (/workspace). Paths outside it are rejected.
+     * @param args.startLine 1-based, inclusive.
+     * @param args.endLine 1-based, inclusive.
+     */
+    "ws_read": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 100,
+            "pattern": "^ws-[A-Za-z0-9_-]+$",
+            "description": "From open_workspace."
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "Relative to the repository root (/workspace). Paths outside it are rejected."
+          },
+          "startLine": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "1-based, inclusive."
+          },
+          "endLine": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "1-based, inclusive."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "binary": {
+            "type": "boolean"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "totalLines": {
+            "type": "integer"
+          },
+          "startLine": {
+            "type": "integer"
+          },
+          "endLine": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "content",
+          "binary",
+          "sizeBytes",
+          "totalLines",
+          "startLine",
+          "endLine",
+          "truncated"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Write a file in the workspace
+     * Writes a whole file (`content`, creating parent directories) or applies a unified diff to it (`patch`). Paths outside the repository are rejected. Nothing is committed until ws_commit_push.
+     * @param args.workspaceId From open_workspace.
+     * @param args.path The file to write (or the one file the patch changes).
+     * @param args.content The whole new file content (creates parent directories). Pass this or patch.
+     * @param args.patch A unified diff (git apply) that changes only `path`. Pass this or content.
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "ws_write": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 100,
+            "pattern": "^ws-[A-Za-z0-9_-]+$",
+            "description": "From open_workspace."
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "The file to write (or the one file the patch changes)."
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 1048576,
+            "description": "The whole new file content (creates parent directories). Pass this or patch."
+          },
+          "patch": {
+            "type": "string",
+            "maxLength": 1048576,
+            "description": "A unified diff (git apply) that changes only `path`. Pass this or content."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "content",
+              "patch"
+            ]
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "created": {
+            "type": "boolean"
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "path",
+          "mode",
+          "bytes",
+          "created",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
         "openWorldHint": false
       }
     }

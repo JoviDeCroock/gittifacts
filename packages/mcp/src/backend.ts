@@ -20,6 +20,8 @@ import type {
 } from "@app/domain";
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import type { z } from "zod";
+import type { ImportToolsBackend } from "./tools/import.js";
+import type { WorkspaceToolsBackend } from "./tools/workspace.js";
 
 /** The authenticated agent, from the bearer verifier's `AuthInfo`. */
 export interface McpCaller {
@@ -98,7 +100,8 @@ export interface ProjectCreated {
   nextSteps: NextStepData[];
 }
 
-export interface McpBackend {
+/** Every tool family's backend: the core tools below, remote workspaces and import detection. */
+export interface McpBackend extends WorkspaceToolsBackend, ImportToolsBackend {
   whoami(caller: McpCaller): Promise<WhoamiData>;
   /** Repo (template / import / empty) + first CI + first preview + a first Change's fork. */
   createProject(

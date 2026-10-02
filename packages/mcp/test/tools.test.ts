@@ -29,6 +29,7 @@ describe("gittifacts MCP tools", () => {
   it("lists every tool with input and output schemas", async () => {
     const tools = await mcp.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
+      "close_workspace",
       "create_plan",
       "create_project",
       "get_change_status",
@@ -36,11 +37,18 @@ describe("gittifacts MCP tools", () => {
       "get_tour",
       "list_issues_for_change",
       "list_repos",
+      "open_workspace",
+      "propose_platform_config",
       "refresh_push_token",
       "request_review",
       "start_change",
       "wait_for_change",
       "whoami",
+      "ws_commit_push",
+      "ws_diff",
+      "ws_exec",
+      "ws_read",
+      "ws_write",
     ]);
     for (const t of tools) {
       expect(t.description?.length, t.name).toBeGreaterThan(20);
