@@ -41,6 +41,7 @@ import {
   shadowSamples,
   tours,
 } from "../db/schema.js";
+import { ownerMembershipSql } from "../access/members-store.js";
 import { guardUnclaimedRepoWrite } from "../limits/refusals.js";
 import {
   changeFromRow,
@@ -181,7 +182,11 @@ export class D1Store implements Store {
 
   async insertRepo(repo: Repo, createdBy: string | null = null): Promise<void> {
     // O3: an unclaimed repo never stores a deploy target, Lane 0 or revert auto-merge.
-    await this.db.insert(repos).values(repoToRow(guardUnclaimedRepoWrite(repo), createdBy));
+    const insert = this.db.insert(repos).values(repoToRow(guardUnclaimedRepoWrite(repo), createdBy));
+    // A claimed repo's owner is its first `owner` member, in the same batch (src/access/).
+    const owner = repo.claim.status === "claimed" ? repo.claim.ownerId : null;
+    if (owner === null) await insert;
+    else await this.db.batch([insert, this.db.run(ownerMembershipSql(repo.id, owner, this.iso()))]);
   }
 
   async updateRepo(id: string, patch: Partial<Omit<Repo, "id" | "createdAt">>): Promise<Repo> {
@@ -194,7 +199,14 @@ export class D1Store implements Store {
       createdAt: current.createdAt,
     });
     const { createdBy: _c, ...row } = repoToRow(next);
-    await this.db.update(repos).set(row).where(eq(repos.id, id));
+    const update = this.db.update(repos).set(row).where(eq(repos.id, id));
+    // Claiming (or any new claim owner) makes that human an `owner` member (src/access/).
+    const owner = next.claim.status === "claimed" ? next.claim.ownerId : null;
+    const newOwner =
+      owner !== null &&
+      (current.claim.status !== "claimed" || current.claim.ownerId !== owner);
+    if (!newOwner) await update;
+    else await this.db.batch([update, this.db.run(ownerMembershipSql(id, owner, this.iso()))]);
     return next;
   }
 
@@ -809,8 +821,11 @@ export class D1Store implements Store {
     subject?: string;
     beforeSeq?: number;
     limit: number;
+    /** Extra condition (src/access/audit.ts: the events a principal may read). */
+    visible?: SQL;
   }): Promise<AuditEvent[]> {
     const where: SQL[] = [eq(auditEvents.log, filter.log)];
+    if (filter.visible !== undefined) where.push(filter.visible);
     if (filter.subject !== undefined) where.push(eq(auditEvents.subject, filter.subject));
     if (filter.beforeSeq !== undefined) where.push(lt(auditEvents.seq, filter.beforeSeq));
     const rows = await this.db

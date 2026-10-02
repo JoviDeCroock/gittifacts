@@ -15,6 +15,8 @@ export type Bindings = Env & {
   TURNSTILE_SECRET_KEY?: string;
   /** Comma-separated principal ids (hu_…) of platform admins (kill-switch override). */
   PLATFORM_ADMINS?: string;
+  /** Comma-separated principal ids (humans or agents) with read-only access to every repo. */
+  PLATFORM_AUDITORS?: string;
   /** JSON override of unclaimed-project limits (src/limits/config.ts). */
   UNCLAIMED_LIMITS?: string;
 };
