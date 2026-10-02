@@ -10,7 +10,7 @@
     "deploy": "pnpm run deploy:prepare && wrangler deploy",
     "deploy:dry-run": "pnpm run deploy:prepare && wrangler deploy --dry-run --outdir .wrangler/dry-run",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
-    "test": "pnpm run bundle-templates && vitest run --passWithNoTests",
+    "test": "pnpm run bundle-templates && vitest run --passWithNoTests && vitest run -c vitest.node.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",

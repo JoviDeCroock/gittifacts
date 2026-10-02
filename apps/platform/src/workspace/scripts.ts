@@ -3,17 +3,26 @@
  * strings: the inputs always arrive as positional arguments or environment variables, never
  * interpolated into the script text.
  *
- * Every script that touches a path resolves it with `realpath -m` and refuses anything that
- * leaves /workspace (symlinks included), on top of the Worker-side check in model.ts.
+ * Every script that touches a path resolves it (symlinks included, with node's `realpathSync` on
+ * the deepest existing ancestor) and refuses anything that leaves the checkout, on top of the
+ * Worker-side check in model.ts. The checkout is `$WS_ROOT` (/workspace in the container; the machine always sets it), so the scripts
+ * also run against a temp dir in tests; they only use POSIX sh, git and node.
  */
 
 export const WS_MARKER = "::ws::";
 
 /** Lines shared by path-taking scripts: `$r` is the resolved absolute path of `$1`. */
+/** Resolves `$2` against `$1` like `realpath -m` (missing tail components allowed). */
+const RESOLVE_JS =
+  'const fs=require("fs"),p=require("path");let x=p.resolve(process.argv[1],process.argv[2]);const rest=[];for(;;){try{x=fs.realpathSync(x);break}catch{rest.unshift(p.basename(x));const up=p.dirname(x);if(up===x)break;x=up}}process.stdout.write(p.join(x,...rest))';
+
+const ROOT = 'root="$(cd "$WS_ROOT" && pwd -P)"';
+
 const RESOLVE = [
-  'r="$(realpath -m -- "/workspace/$1")"',
-  'case "$r" in /workspace/*) ;; *) echo "path resolves outside the workspace" >&2; exit 3;; esac',
-  'case "$r" in /workspace/.git|/workspace/.git/*) echo "path is inside .git" >&2; exit 3;; esac',
+  ROOT,
+  `r="$(node -e '${RESOLVE_JS}' "$root" "$1")"`,
+  'case "$r" in "$root"/*) ;; *) echo "path resolves outside the workspace" >&2; exit 3;; esac',
+  'case "$r" in "$root"/.git|"$root"/.git/*) echo "path is inside .git" >&2; exit 3;; esac',
 ];
 
 /**
@@ -25,8 +34,8 @@ const RESOLVE = [
  */
 export const CHECKOUT_SCRIPT = [
   "set -eu",
-  "mkdir -p /workspace",
-  "cd /workspace",
+  'mkdir -p "$WS_ROOT"',
+  'cd "$WS_ROOT"',
   "if [ ! -d .git ]; then git init -q .; fi",
   "git remote remove origin >/dev/null 2>&1 || true",
   'git remote add origin "$WS_REMOTE"',
@@ -42,7 +51,7 @@ export const READ_SCRIPT = [
   ...RESOLVE,
   'if [ ! -e "$r" ]; then echo "no such file" >&2; exit 4; fi',
   'if [ ! -f "$r" ]; then echo "not a regular file" >&2; exit 5; fi',
-  'echo "size $(stat -c %s -- "$r")" >&2',
+  'echo "size $(wc -c < "$r" | tr -d " ")" >&2',
   'exec head -c "$2" -- "$r"',
 ].join("\n");
 
@@ -54,7 +63,7 @@ export const WRITE_SCRIPT = [
   'created=true; if [ -e "$r" ]; then created=false; fi',
   'mkdir -p -- "$(dirname -- "$r")"',
   // Re-resolve after mkdir: a parent created as a symlink earlier must still land inside.
-  'case "$(realpath -m -- "$(dirname -- "$r")")" in /workspace|/workspace/*) ;; *) echo "path resolves outside the workspace" >&2; exit 3;; esac',
+  `case "$(node -e '${RESOLVE_JS}' "$root" "$(dirname -- "$r")")" in "$root"|"$root"/*) ;; *) echo "path resolves outside the workspace" >&2; exit 3;; esac`,
   'cat > "$r"',
   `printf '%s{"created":%s}\\n' '${WS_MARKER}' "$created"`,
 ].join("\n");
@@ -67,16 +76,16 @@ export const WRITE_SCRIPT = [
 export const PATCH_SCRIPT = [
   "set -eu",
   ...RESOLVE,
-  "cd /workspace",
+  'cd "$WS_ROOT"',
   "patch=/tmp/gittifacts-ws.patch",
   'cat > "$patch"',
   // `git diff` style (a/ b/ prefixes) strips one level; a plain `--- src/x.ts` patch strips none.
   "p=1",
   "if ! grep -qE '^(---|[+][+][+]) (a/|b/|/dev/null)' \"$patch\"; then p=0; fi",
-  'git apply -p"$p" --check --whitespace=nowarn -- "$patch"',
   'files="$(git apply -p"$p" --numstat -- "$patch" | cut -f3- | sort -u)"',
   'if [ -z "$files" ]; then echo "the patch changes nothing" >&2; exit 6; fi',
   'if [ "$files" != "$1" ]; then echo "the patch changes other files than $1: $(echo "$files" | tr "\\n" " ")" >&2; exit 6; fi',
+  'git apply -p"$p" --check --whitespace=nowarn -- "$patch"',
   'git apply -p"$p" --whitespace=nowarn -- "$patch"',
   'rm -f "$patch"',
   `printf '%s{"applied":true}\\n' '${WS_MARKER}'`,
@@ -89,7 +98,7 @@ export const PATCH_SCRIPT = [
  */
 export const DIFF_STAT_SCRIPT = [
   "set -eu",
-  "cd /workspace",
+  'cd "$WS_ROOT"',
   "export GIT_INDEX_FILE=/tmp/gittifacts-ws-index",
   'rm -f "$GIT_INDEX_FILE"',
   "git read-tree HEAD",
@@ -102,7 +111,7 @@ export const DIFF_STAT_SCRIPT = [
 /** The unified diff for DIFF_STAT_SCRIPT's index (run right after it). */
 export const DIFF_PATCH_SCRIPT = [
   "set -eu",
-  "cd /workspace",
+  'cd "$WS_ROOT"',
   "export GIT_INDEX_FILE=/tmp/gittifacts-ws-index",
   'git diff --cached -M --no-color --no-ext-diff "$WS_BASE"',
 ].join("\n");
@@ -118,7 +127,7 @@ export const DIFF_PATCH_SCRIPT = [
  */
 export const COMMIT_PUSH_SCRIPT = [
   "set -eu",
-  "cd /workspace",
+  'cd "$WS_ROOT"',
   "cat > .git/config <<EOF",
   "[core]",
   "\trepositoryformatversion = 1",

@@ -264,6 +264,13 @@ const OP_TIMEOUT_SEC = 120;
 const WATCHDOG_GRACE_SEC = 40;
 const MAX_INACTIVITY_MS = 6 * 60 * 60_000;
 
+/** Container label keys are limited to 16 bytes (live: "Label names cannot exceed 16 bytes"). */
+export const MAX_LABEL_KEY_BYTES = 16;
+
+export function workspaceLabels(workspaceId: string): Record<string, string> {
+  return { "gf-workspace": workspaceId.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 63) };
+}
+
 /** The exports entrypoint the platform Worker exposes for workspace egress (./egress.ts). */
 export const WORKSPACE_EGRESS_EXPORT = "WorkspaceEgressGateway";
 
@@ -290,6 +297,7 @@ function baseEnv(author?: Author): Record<string, string> {
     COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
     GITTIFACTS: "1",
     GITTIFACTS_WORKSPACE: "1",
+    WS_ROOT: "/workspace",
     ...(author === undefined
       ? {}
       : {
@@ -362,9 +370,7 @@ export class ContainerMachine implements WorkspaceMachine {
     const common = {
       enableInternet: gateway === null,
       instance: spec.instance,
-      labels: {
-        "gittifacts-workspace": spec.workspaceId.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 63),
-      },
+      labels: workspaceLabels(spec.workspaceId),
     };
     try {
       if (spec.from.kind === "image") {
