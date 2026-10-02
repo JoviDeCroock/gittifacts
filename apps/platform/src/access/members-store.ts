@@ -117,10 +117,27 @@ export async function changeRoleRow(store: D1Store, row: MemberRow): Promise<boo
   return rows.length > 0;
 }
 
-/** The SQL that makes a claimed repo's owner an `owner` member (used by D1Store). */
-export function ownerMembershipSql(repoId: string, ownerId: string, at: string) {
-  return sql`INSERT INTO ${repoMembers} (repo_id, principal_id, role, added_by, added_at)
-    SELECT ${repoId}, ${principals.id}, 'owner', 'system', ${at} FROM ${principals}
-    WHERE ${principals.id} = ${ownerId} AND ${principals.kind} = 'human'
-    ON CONFLICT (repo_id, principal_id) DO UPDATE SET role = 'owner'`;
+/** True when `id` is a human principal (only humans are members). */
+export async function isHumanPrincipal(store: D1Store, id: string): Promise<boolean> {
+  const p = await store.db
+    .select({ kind: principals.kind })
+    .from(principals)
+    .where(eq(principals.id, id))
+    .get();
+  return p?.kind === "human";
+}
+
+/**
+ * The (unexecuted) statement that makes `ownerId` an `owner` member of a claimed repo; D1Store
+ * batches it with the repo write after `isHumanPrincipal` (so it can never fail on the FK and sink
+ * the repo write). Not async on purpose: drizzle builders are thenables.
+ */
+export function ownerMembershipInsert(store: D1Store, repoId: string, ownerId: string, at: string) {
+  return store.db
+    .insert(repoMembers)
+    .values({ repoId, principalId: ownerId, role: "owner", addedBy: "system", addedAt: at })
+    .onConflictDoUpdate({
+      target: [repoMembers.repoId, repoMembers.principalId],
+      set: { role: "owner" },
+    });
 }

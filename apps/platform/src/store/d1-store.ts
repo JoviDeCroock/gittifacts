@@ -41,7 +41,7 @@ import {
   shadowSamples,
   tours,
 } from "../db/schema.js";
-import { ownerMembershipSql } from "../access/members-store.js";
+import { isHumanPrincipal, ownerMembershipInsert } from "../access/members-store.js";
 import { guardUnclaimedRepoWrite } from "../limits/refusals.js";
 import {
   changeFromRow,
@@ -185,8 +185,8 @@ export class D1Store implements Store {
     const insert = this.db.insert(repos).values(repoToRow(guardUnclaimedRepoWrite(repo), createdBy));
     // A claimed repo's owner is its first `owner` member, in the same batch (src/access/).
     const owner = repo.claim.status === "claimed" ? repo.claim.ownerId : null;
-    if (owner === null) await insert;
-    else await this.db.batch([insert, this.db.run(ownerMembershipSql(repo.id, owner, this.iso()))]);
+    if (owner === null || !(await isHumanPrincipal(this, owner))) await insert;
+    else await this.db.batch([insert, ownerMembershipInsert(this, repo.id, owner, this.iso())]);
   }
 
   async updateRepo(id: string, patch: Partial<Omit<Repo, "id" | "createdAt">>): Promise<Repo> {
@@ -205,8 +205,8 @@ export class D1Store implements Store {
     const newOwner =
       owner !== null &&
       (current.claim.status !== "claimed" || current.claim.ownerId !== owner);
-    if (!newOwner) await update;
-    else await this.db.batch([update, this.db.run(ownerMembershipSql(id, owner, this.iso()))]);
+    if (!newOwner || !(await isHumanPrincipal(this, owner))) await update;
+    else await this.db.batch([update, ownerMembershipInsert(this, id, owner, this.iso())]);
     return next;
   }
 
