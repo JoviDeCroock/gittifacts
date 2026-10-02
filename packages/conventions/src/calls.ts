@@ -27,6 +27,9 @@ export const TOOL_NAMES = [
   "ws_write",
   "ws_diff",
   "ws_commit_push",
+  "close_workspace",
+  // imported repos
+  "propose_platform_config",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
