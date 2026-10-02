@@ -58,7 +58,12 @@ export class FakeGitHost implements GitHost {
     scope: "read" | "write";
     ttlSeconds: number;
     token: string;
+    /** Import grants (mintImportToken) carry an id and can be revoked. */
+    id?: string;
+    revoked?: boolean;
   }> = [];
+  /** Make revokeToken report failure (a revocation the host could not confirm). */
+  revokeFails = false;
   /** Every write: op + repo (+ ref). */
   readonly writes: Array<{ op: string; repo: string; ref?: string }> = [];
   readonly deleted: string[] = [];
@@ -253,6 +258,36 @@ export class FakeGitHost implements GitHost {
     const token = `fake_${scope}_${repo}_${++this.tokenCounter}`;
     this.tokens.push({ repo, scope, ttlSeconds: capped, token });
     return { token, expiresAt: new Date(Date.UTC(2030, 0, 1) + capped * 1000).toISOString() };
+  }
+
+  /** Like ArtifactsGitHost: any role, main repos only, and only before `branch` exists. */
+  async mintImportToken(
+    repo: string,
+    input: { branch: string; ttlSeconds: number },
+  ): Promise<{ token: string; tokenId: string; expiresAt: string }> {
+    const r = this.repo(repo);
+    if (isForkName(repo)) throw new FakeGitError("FORBIDDEN", `import grant on fork ${repo}`);
+    if (r.refs.has(`refs/heads/${input.branch}`)) {
+      throw new FakeGitError("FORBIDDEN", `${repo} already has ${input.branch}`);
+    }
+    const ttlSeconds = Math.min(Math.max(60, input.ttlSeconds), 1800);
+    const n = ++this.tokenCounter;
+    const token = `fake_import_${repo}_${n}`;
+    const id = `imp${n.toString().padStart(13, "0")}`;
+    this.tokens.push({ repo, scope: "write", ttlSeconds, token, id, revoked: false });
+    return {
+      token,
+      tokenId: id,
+      expiresAt: new Date(Date.UTC(2030, 0, 1) + ttlSeconds * 1000).toISOString(),
+    };
+  }
+
+  async revokeToken(repo: string, tokenId: string): Promise<boolean> {
+    if (this.revokeFails) return false;
+    const t = this.tokens.find((x) => x.repo === repo && x.id === tokenId);
+    if (t === undefined) return false;
+    t.revoked = true;
+    return true;
   }
 
   async branchHead(repo: string, branch: string): Promise<string | null> {

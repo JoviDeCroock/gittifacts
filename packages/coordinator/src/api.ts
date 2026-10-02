@@ -97,6 +97,11 @@ export interface CoordinatorApi {
       template?: string;
       description?: string;
       idempotencyKey?: string;
+      /**
+       * No initial commit even with a provider: the repo has no default branch until its owner
+       * pushes one (import by push). Not with `template`.
+       */
+      empty?: boolean;
     },
   ): Promise<Repo>;
 

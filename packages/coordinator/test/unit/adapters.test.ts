@@ -574,11 +574,26 @@ describe("ArtifactsGitHost", () => {
     const created: string[] = [];
     const tokens: Array<[string, string | undefined, number | undefined]> = [];
     const wireCalls: string[] = [];
+    const advertised = new Map<string, string>();
+    const revoked: string[] = [];
+    let revokeMisses = 0;
     let forkError: Error | null = null;
     const repo = (name: string): ArtifactsRepoLike => ({
       createToken: async (scope, ttl) => {
         tokens.push([name, scope, ttl]);
-        return { plaintext: `tok-${name}-${scope}`, expiresAt: "2030-01-01T00:00:00Z" };
+        return {
+          id: `id-${tokens.length}`,
+          plaintext: `tok-${name}-${scope}`,
+          expiresAt: "2030-01-01T00:00:00Z",
+        };
+      },
+      revokeToken: async (id) => {
+        if (revokeMisses > 0) {
+          revokeMisses--;
+          return false;
+        }
+        revoked.push(`${name}:${id}`);
+        return true;
       },
       info: async () => ({
         defaultBranch: "main",
@@ -630,6 +645,10 @@ describe("ArtifactsGitHost", () => {
       encodeCommit: (c) => new TextEncoder().encode(`tree ${c.tree}\n\n${c.message}`),
       hashObject: async () => "d".repeat(40),
       buildPack: async () => new Uint8Array([1]),
+      listRefs: async () => {
+        wireCalls.push("listRefs");
+        return advertised;
+      },
     };
     const h = new ArtifactsGitHost({
       binding,
@@ -639,8 +658,52 @@ describe("ArtifactsGitHost", () => {
       sleep: async () => undefined,
       ...opts,
     });
-    return { h, created, tokens, wireCalls, setForkError: (e: Error) => (forkError = e) };
+    return {
+      h,
+      created,
+      tokens,
+      wireCalls,
+      advertised,
+      revoked,
+      missRevokes: (n: number) => (revokeMisses = n),
+      setForkError: (e: Error) => (forkError = e),
+    };
   }
+
+  it("mints an import grant only before the branch exists, from any role, TTL <= 30 min", async () => {
+    // The default (fork-only) host: the import grant is the narrow exception it allows.
+    const { h, tokens, wireCalls, advertised, revoked, missRevokes } = host();
+    const grant = await h.mintImportToken("app", { branch: "main", ttlSeconds: 99_999 });
+    expect(grant).toEqual({
+      token: "tok-app-write",
+      tokenId: "id-2",
+      expiresAt: "2030-01-01T00:00:00Z",
+    });
+    // A read token to list the refs, then the write token with the TTL clamped to 1800 s.
+    expect(tokens).toEqual([
+      ["app", "read", 300],
+      ["app", "write", 1800],
+    ]);
+    expect(wireCalls).toEqual(["listRefs"]);
+    // Other refs don't matter; the default branch does.
+    advertised.set("refs/heads/other", "a".repeat(40));
+    await expect(
+      h.mintImportToken("app", { branch: "main", ttlSeconds: 60 }),
+    ).resolves.toBeTruthy();
+    advertised.set("refs/heads/main", "b".repeat(40));
+    await expect(
+      h.mintImportToken("app", { branch: "main", ttlSeconds: 60 }),
+    ).rejects.toBeInstanceOf(GitWriteForbiddenError);
+    await expect(
+      h.mintImportToken("task-1", { branch: "x", ttlSeconds: 60 }),
+    ).rejects.toBeInstanceOf(GitWriteForbiddenError);
+    // Revocation retries a miss (the token index is eventually consistent), then reports it.
+    missRevokes(2);
+    expect(await h.revokeToken("app", "id-2")).toBe(true);
+    expect(revoked).toEqual(["app:id-2"]);
+    missRevokes(9);
+    expect(await h.revokeToken("app", "id-4")).toBe(false);
+  });
 
   it("refuses main-repo writes unless built for the merge queue; caps token TTLs", async () => {
     const { h, tokens } = host();

@@ -45,6 +45,26 @@ describe("createRepo with an initial commit", () => {
     ]);
   });
 
+  it("creates a repo without any commit when asked for an empty one (import by push)", async () => {
+    const e = env();
+    const human = principal({ kind: "human" });
+    const repo = await e.coordinator.createRepo(human, { name: "pushed", empty: true });
+    expect(e.ports.git.head("pushed")).toBeNull();
+    expect(repo).toMatchObject({ policySha: null, template: null });
+    expect(repo.claim).toMatchObject({ status: "claimed", ownerId: human.id });
+    expect(e.ports.git.writes).toEqual([]);
+    // The default-role host may mint the import grant for it, and only while main is absent.
+    const grant = await e.ports.git.mintImportToken("pushed", { branch: "main", ttlSeconds: 1800 });
+    expect(grant.tokenId).toMatch(/^imp/);
+    e.ports.git.commit("pushed", "main", { "a.txt": "a" });
+    await expect(
+      e.ports.git.mintImportToken("pushed", { branch: "main", ttlSeconds: 60 }),
+    ).rejects.toThrow(/already has main/);
+    await expect(
+      e.coordinator.createRepo(human, { name: "both", empty: true, template: "workers-api" }),
+    ).rejects.toMatchObject({ code: "invalid-input" });
+  });
+
   it("fails an unknown template before creating anything", async () => {
     const e = env();
     const human = principal({ kind: "human" });

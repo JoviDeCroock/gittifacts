@@ -93,6 +93,11 @@ export type FastForwardResult =
  * The one exception is `writeInitialCommit`: every role may use it, because it can only create
  * the first commit of a branch that does not exist yet (CAS against the zero SHA). It can never
  * rewrite or extend history, so "only the merge queue moves main" still holds.
+ *
+ * `mintImportToken` is the other, narrower one (import by push, DECISIONS 2026-10-02): a write
+ * token for a main repo whose default branch does not exist yet, handed to a human owner for the
+ * repo's initial import. The platform revokes it (`revokeToken`) at the first push to the repo,
+ * the first Change, or its TTL (<= 30 min), whichever comes first.
  */
 export interface GitHost {
   /** Artifacts namespace this host operates on (e.g. "gittifacts-eu"). */
@@ -120,6 +125,17 @@ export interface GitHost {
     scope: "read" | "write",
     ttlSeconds: number,
   ): Promise<{ token: string; expiresAt: string }>;
+  /**
+   * Import by push: a write token for main repo `repo`, only while `refs/heads/<branch>` does
+   * not exist (checked against the advertised refs right before minting; refused otherwise, and
+   * for change forks). TTL clamped to <= 1800 s. Returns the token id, so it can be revoked.
+   */
+  mintImportToken(
+    repo: string,
+    input: { branch: string; ttlSeconds: number },
+  ): Promise<{ token: string; tokenId: string; expiresAt: string }>;
+  /** Revoke a token of `repo` by id. False when the host could not confirm the revocation. */
+  revokeToken(repo: string, tokenId: string): Promise<boolean>;
   /** Tip of a branch, or null if the branch does not exist. */
   branchHead(repo: string, branch: string): Promise<string | null>;
   /** Parent shas of a commit (null if the commit is unknown in this repo). */

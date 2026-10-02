@@ -85,6 +85,8 @@ const CreateRepoInput = z.object({
   template: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
   idempotencyKey: z.string().min(1).max(200).optional(),
+  /** No initial commit: the default branch arrives with the owner's push (import by push). */
+  empty: z.boolean().optional(),
 });
 const ImportRepoInput = z.object({
   name: CreateRepoInput.shape.name,
@@ -277,11 +279,14 @@ export function createCoordinator(
 
   const api: CoordinatorApi = {
     async createRepo(actor, input) {
-      const { name, defaultBranch, template, description, idempotencyKey } = parse(
+      const { name, defaultBranch, template, description, idempotencyKey, empty } = parse(
         CreateRepoInput,
         input,
         "repo",
       );
+      if (empty === true && template !== undefined) {
+        fail("invalid-input", "an empty repo has no template", "Pass template or empty, not both.");
+      }
       // Idempotent: the same (actor, key) always names the same repo.
       const id =
         idempotencyKey === undefined ? makeId() : await derivedId("repo", actor.id, idempotencyKey);
@@ -302,7 +307,7 @@ export function createCoordinator(
       const claim = claimFor(actor, clock.now(), unclaimedTtlMs);
       // Before anything exists, so an unknown template fails without side effects.
       const initial =
-        options.initialCommit === undefined
+        options.initialCommit === undefined || empty === true
           ? null
           : await options.initialCommit({
               repoId: id,

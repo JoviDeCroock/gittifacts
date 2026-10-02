@@ -83,6 +83,8 @@ export interface GitWire {
   }): Uint8Array;
   hashObject(obj: WireObject): Promise<string>;
   buildPack(objects: readonly WireObject[]): Promise<Uint8Array>;
+  /** Advertised refs (ref → sha); an empty repo advertises none. */
+  listRefs(remote: WireRemote): Promise<ReadonlyMap<string, string>>;
 }
 
 /** Structural slice of the Artifacts repo handle (`ArtifactsRepo` satisfies it). */
@@ -90,7 +92,9 @@ export interface ArtifactsRepoLike {
   createToken(
     scope?: "write" | "read",
     ttl?: number,
-  ): Promise<{ plaintext: string; expiresAt: string }>;
+  ): Promise<{ id?: string; plaintext: string; expiresAt: string }>;
+  /** True when the token (plaintext or id) was revoked. */
+  revokeToken?(tokenOrId: string): Promise<boolean>;
   info(): Promise<{ defaultBranch: string; remote: string }>;
   readBlob(hash: string): Promise<Blob | null>;
   readTree(hash: string): Promise<Array<{
@@ -142,6 +146,8 @@ export interface ArtifactsGitHostOptions {
 /** Fork push tokens (agents) may live an hour; main-repo write tokens at most five minutes. */
 export const MAX_FORK_TOKEN_TTL = 3600;
 export const MAX_MAIN_WRITE_TOKEN_TTL = 300;
+/** Import-by-push grants (a human owner's initial push to an empty repo): at most 30 minutes. */
+export const MAX_IMPORT_TOKEN_TTL = 1800;
 const INTERNAL_TOKEN_TTL = 300;
 
 export class GitWriteForbiddenError extends Error {
@@ -377,6 +383,45 @@ export class ArtifactsGitHost implements GitHost {
     }
     const { plaintext, expiresAt } = await this.withRepo(repo, (r) => r.createToken(scope, ttl));
     return { token: plaintext, expiresAt };
+  }
+
+  /**
+   * Import by push (see `GitHost.mintImportToken`): every role may call it, because it only
+   * mints for a main repo that has no `refs/heads/<branch>` (read from the repo's advertised
+   * refs just before minting). A token Artifacts returns without an id could never be revoked,
+   * so it is refused (it expires unused).
+   */
+  async mintImportToken(
+    repo: string,
+    input: { branch: string; ttlSeconds: number },
+  ): Promise<{ token: string; tokenId: string; expiresAt: string }> {
+    if (isForkName(repo)) {
+      throw new GitWriteForbiddenError(`import grants are for project repos, not forks (${repo})`);
+    }
+    const refs = await this.opts.wire.listRefs(await this.remote(repo, "read"));
+    if (refs.has(`refs/heads/${input.branch}`)) {
+      throw new GitWriteForbiddenError(
+        `${repo} already has ${input.branch}: an import grant is only for a repo before its first push`,
+      );
+    }
+    const ttl = Math.min(Math.max(60, Math.trunc(input.ttlSeconds)), MAX_IMPORT_TOKEN_TTL);
+    const created = await this.withRepo(repo, (r) => r.createToken("write", ttl));
+    if (typeof created.id !== "string" || created.id === "") {
+      throw new Error("Artifacts returned a token without an id: refusing an unrevocable grant");
+    }
+    return { token: created.plaintext, tokenId: created.id, expiresAt: created.expiresAt };
+  }
+
+  /** The token index is eventually consistent (about 1 s after minting): retry a miss briefly. */
+  async revokeToken(repo: string, tokenId: string): Promise<boolean> {
+    for (let attempt = 0; ; attempt++) {
+      const revoked = await this.withRepo(repo, async (r) => {
+        if (r.revokeToken === undefined) throw new Error("this Artifacts binding cannot revoke");
+        return r.revokeToken(tokenId);
+      });
+      if (revoked || attempt >= 3) return revoked;
+      await this.sleep(500 * (attempt + 1));
+    }
   }
 
   // ------------------------------------------------------------ reads
