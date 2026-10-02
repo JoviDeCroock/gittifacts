@@ -77,3 +77,26 @@ publishes the install snapshot under the global cache key every project from tha
 `create_project({ template: "workers-api" })` over MCP, then `wait_for_change` on `bootstrapChangeId` with
 `until: "evidence_ready"`, then open `previewUrl`. `GET /internal/ttfg` (or `/internal/onboarding` in the web app)
 shows the measured time to first green.
+
+## O3: claimable projects and abuse limits
+
+Migration `0007_unclaimed_projects` adds `project_claims`, `unclaimed_creations` and `platform_settings`
+(`db:migrate:remote` before the deploy). The deploy also adds the `AbuseLimiter` Durable Object class, the
+`UNCLAIMED_TOKEN_LIMITER` rate-limit binding (namespace id `4301`, chosen by us; no resource to create) and the
+`*/10 * * * *` cron that expires unclaimed projects.
+
+What a human must create or set (nothing below was created by the agent that built O3):
+
+| What | Where | Without it |
+|---|---|---|
+| Flagship flag `unclaimed-creation-enabled` (boolean, **on**) | app `gittifacts-changes` | The kill switch fails closed: credential-less `create_project` answers 503 `creation-disabled`, and /start + llms.txt say so. |
+| Turnstile widget (managed) for the platform hostname(s) | Turnstile dashboard | The claim page uses Cloudflare's always-pass test keys (`1x00000000000000000000AA` / `1x0000000000000000000000000000000AA`): claiming still needs a signed-in human, but no bot check. |
+| `TURNSTILE_SITE_KEY` (var) and `TURNSTILE_SECRET_KEY` (`wrangler secret put`) | Worker | As above. |
+| `PLATFORM_ADMINS` (comma-separated e-mails; var or secret) | Worker | Nobody can use `PUT /api/v1/admin/unclaimed-creation` (the D1 override); the Flagship flag stays the only switch. |
+
+Optional: `UNCLAIMED_TTL_DAYS` (default 7, in `wrangler.jsonc`) and `UNCLAIMED_LIMITS` (JSON override of any limit
+in `apps/platform/src/limits/config.ts`).
+
+Kill switch, fastest first: set the flag to false in Flagship; or, if Flagship is unreachable,
+`curl -X PUT -H 'content-type: application/json' --cookie '<admin session>' <host>/api/v1/admin/unclaimed-creation -d '{"mode":"off"}'`
+(`"flag"` clears the override; `"on"` only bridges a Flagship that can't be evaluated).

@@ -677,3 +677,70 @@ The marketing page contrasts the unit of work (PR vs Change) rather than the ven
 
 **Eval fixture.** The task-2 import fixture is published at https://github.com/JoviDeCroock/gittifacts-fixture-clock-api
 (public, user-approved), materialized from `fixtures/imports/clock-api`.
+
+## 2026-10-02 — O3: claimable projects and abuse limits
+
+**Lifecycle.** `create_project` without credentials (MCP or `POST /api/v1/projects`) → kill switch → creation rate
+limits → a fresh **ownerless agent principal** (`ownerId: null`; only repo:read, plan:create, change:create;
+`repoIds: [project]`) → the project, created *as* that agent (the coordinator already makes an ownerless agent's repo
+unclaimed) → a `gtf_` token valid until the project expires, and a `claimUrl` (`/claim/gtc_…`). The claim token is
+HMAC-SHA-256(BETTER_AUTH_SECRET, repo + agent + createdAt), so the platform can repeat the link to the project's own
+agent (quota errors carry it) while storing only its SHA-256. Unclaimed projects expire after `UNCLAIMED_TTL_DAYS`
+(default 7): a cron (`*/10 * * * *`) revokes the agent's tokens, disables it, stops workflows/CI/workspaces/previews,
+deletes the Artifacts repo and forks (through a GitHost whose write guard admits exactly those names), R2 objects and
+D1 rows; audit events stay and `project_claims` keeps a tombstone (`expired`). A failed step leaves `expiring`; the
+next run resumes. Claims and expiry race through one conditional update on `project_claims.status`.
+
+**MCP gate.** Without a bearer, only `initialize`, `notifications/initialized`, `ping`, `tools/list` and
+`tools/call` of `create_project`/`whoami` are served (GET/DELETE reach the stateless handler's 405); everything else
+keeps the RFC 9728 401 challenge, so OAuth clients still discover the authorization server on their first real tool
+call. HTTP: credentials that don't verify never fall back to an unclaimed project (401). Anonymous idempotency keys
+must be ≥ 16 characters (they find the project again, so they must be unguessable); a replay mints a fresh token for
+the same project and is not charged against the rate limits again.
+
+**Rate limits: Durable Object token buckets, not the rate-limit binding, for creation.** The Workers Rate Limiting
+binding counts per Cloudflare location with a 10 s or 60 s period; "3 per IP per hour", "200 per ASN per day" and a
+platform-wide cap need long windows and one global counter. `AbuseLimiter` (one DO per `ip:<hmac>` (IPv6 /64),
+`asn:<request.cf.asn>`, `global`) takes from every key or none (refusals refund), fails closed, and answers 429
+`rate-limited` with `Retry-After`. The binding (`UNCLAIMED_TOKEN_LIMITER`, 120/min) does what it is good at:
+per-token request rates of unclaimed agents, on the HTTP API and MCP, fail closed. Raw IPs are never stored.
+
+**Kill switch.** Flagship flag `unclaimed-creation-enabled` via `FLAGS`, fail closed (missing binding, unknown flag,
+evaluation error → off), plus a D1 override (`PUT /api/v1/admin/unclaimed-creation`, humans listed in
+`PLATFORM_ADMINS`): `off` always wins; `on` only bridges an unevaluable flag (a flag set to false still stops
+creation). Off → 503 `creation-disabled`; /start and llms.txt say so. Repo scopes don't make a platform admin (every
+human holds them).
+
+**Quotas (ProjectLedger, per project and per creating IP, plus a global CI ledger).** Defaults in
+`apps/platform/src/limits/config.ts`, overridable by `UNCLAIMED_LIMITS` JSON: CI 60 min/day, 10 min/run, 120 min/day
+per IP, 1500 min/day for all unclaimed projects; storage 200 MB (500 MB per IP) of what the platform stores (CI logs +
+build artifacts); 300 Artifacts operations/day (600 per IP: forks, push tokens, CI checkouts, workspace tokens);
+≤ 5 open Changes; the 3 newest previews live; workspaces keep O5's 30 vCPU-min/day, 1 open, 30 min TTL. CI minutes
+are reserved when a run starts and settled to `usage.ciMinutes` when it finishes (the platform's `ChangeCoordinator`
+subclass hooks the run sink). Enforcement points: the CI port (wrapped at the runtime seam for every role:
+expiry/storage/ops/minutes; a refused run never starts a container and is reported as a failed run whose single
+step `unclaimed-limits` says why — the Change turns `failing` instead of hanging), `start_change`,
+`refresh_push_token`, `open_workspace`, `ws_commit_push` (429 `quota-exceeded`, fix with the claim link,
+`limit.hit` audited). Claimed projects pass straight through; claiming lifts every limit at once.
+
+**Egress / previews / production.** CI runs of unclaimed projects are clamped by the platform too
+(`network: registries-only`, read-only global cache so they can't publish shared snapshots, smaller log/artifact caps,
+`standard-2` ceiling) on top of the coordinator's `registries-only`. Workspaces were already registries-only;
+previews have no internet for everyone. The preview banner leads with "Unclaimed project — not verified" (UNCLAIMED
+badge) until claimed. No API sets secrets, custom domains or a deploy target (a test scans OpenAPI and the MCP tools);
+`D1Store` refuses a deploy target on an unclaimed repo and stores its policy with Lane 0 and verified-revert
+auto-merge off; the coordinator's `restrictForClaim`, `autoMerge = claimed && …` and rollout skip are verified end to
+end (a coordinator test now covers a verified pure revert in an unclaimed project).
+
+**Claim.** `GET/POST /api/v1/claims/{token}`, web page `/claim/<token>`. Signed-in human + Turnstile (Siteverify with
+`TURNSTILE_SECRET_KEY`; unset → Cloudflare's documented test keys, whose answers are reproduced locally so tests
+never reach the network). Single-use (others get 409), idempotent for the claimer (a retry skips Turnstile and
+returns `alreadyClaimed`), expired → 410. Transfer: repo claimed (owner, no expiry), agent `ownerId` = the human
+(same scopes and repo; it still can never approve), previews re-bannered, `project.claimed` audited. The cached repo
+policy keeps verified-revert auto-merge off until the next default-branch commit re-reads the policy (conservative).
+
+**Known gaps (reported).** Artifacts exposes no repo size, so git object storage of an unclaimed project can't be
+metered: it is bounded by Artifacts' 1 GB/repo × (1 + ≤ 5 open forks), the TTL, and the creation limits. Preview
+container time is bounded (3 live previews, 10-minute idle sleep, internet off) but not metered. Any signed-in human
+can review an unclaimed project's Changes (scopes are platform-wide today); that can merge into the project's own
+main, never deploy it.
