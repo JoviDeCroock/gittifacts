@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .t { fill: #141d2d; }
+    .l { stroke: #f7fafc; }
+    @media (prefers-color-scheme: dark) {
+      .t { fill: #e8edf3; }
+      .l { stroke: #0c1118; }
+    }
+  </style>
+  <g transform="translate(0 5)">
+    <path class="t" fill-rule="evenodd" d="M7.5 1H29q2 0 2 2v16q0 2-2 2H7.5L1 14.2V7.8ZM11.6 11a2.4 2.4 0 1 0-4.8 0 2.4 2.4 0 1 0 4.8 0Z"/>
+    <path class="l" fill="none" stroke-width="2" stroke-linecap="round" d="M16 7.2h10.5M16 11h10.5M16 14.8h6.5"/>
+  </g>
+</svg>
