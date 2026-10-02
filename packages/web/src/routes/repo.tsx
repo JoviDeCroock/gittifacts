@@ -4,7 +4,7 @@ import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { ChangeSummary, Plan, RepoDetail } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
-import { Button, EmptyState, ErrorState, LaneTag, Loading, Segmented, StatusChip, Who } from "../components/ui.js";
+import { Button, EmptyState, ErrorState, LaneTag, LinkButton, Loading, Segmented, StatusChip, Who } from "../components/ui.js";
 import { type ChangeFilter, FILTERS, LANES, type LaneGroup, groupByLane, matchesFilter, topReason } from "../lib/lanes.js";
 import { shortAge } from "../lib/time.js";
 import { CATEGORY_LABEL, CHANGE_STATUS, PLAN_STATUS, plural } from "../lib/vocab.js";
@@ -208,6 +208,11 @@ export function RepoChanges({ repoId }: { repoId: string }) {
     <Page
       title={repo.name}
       wide
+      actions={
+        <LinkButton href={`/repos/${repoId}/queue`} size="sm" icon="list-ordered">
+          Merge queue
+        </LinkButton>
+      }
       crumbs={[{ href: "/", label: "Repositories" }]}
       meta={
         <>
