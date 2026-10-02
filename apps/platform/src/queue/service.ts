@@ -78,13 +78,22 @@ const STATUS: Record<string, 400 | 403 | 404 | 409> = {
 
 /** A refusal from the DO as the platform's error envelope. */
 export function unwrap<T extends object>(r: QueueResult<T>): T {
-  if (r.ok) return r;
+  if (r.ok) {
+    const { ok: _ok, ...rest } = r;
+    return rest as unknown as T;
+  }
   const fix: Partial<ErrorFix> = r.error.fix;
   throw new ApiError(STATUS[r.error.code] ?? 409, r.error.code, r.error.message, undefined, fix);
 }
 
 export function actorOf(caller: Caller): QueueActor {
-  return { principalId: caller.principal.id, kind: caller.principal.kind, sessionId: null };
+  const k = caller.principal.kind;
+  // Anything that is not a human or the platform is treated as an agent (least privilege).
+  return {
+    principalId: caller.principal.id,
+    kind: k === "human" || k === "system" ? k : "agent",
+    sessionId: null,
+  };
 }
 
 /** Author, the human owning the authoring agent, or a human reviewer. */

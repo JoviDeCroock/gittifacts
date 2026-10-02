@@ -84,7 +84,8 @@ export async function buildEnqueued(
     authorId: change.authorId,
     enqueuedBy: intent?.requestedBy ?? {
       principalId: change.authorId,
-      kind: author?.kind ?? "agent",
+      // Anything that is not a human or the platform counts as an agent (fair share per agent).
+      kind: author?.kind === "human" || author?.kind === "system" ? author.kind : "agent",
       sessionId: null,
     },
     priority: priorityFor(change, intent),

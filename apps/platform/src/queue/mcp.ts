@@ -20,7 +20,7 @@ export function createQueueMcpBackend(svc: Services, h: McpBackendHelpers): Queu
     async enqueue(mc, input, opts) {
       const caller = await h.scoped(mc, { changeId: input.changeId });
       return h.idem(caller, "enqueue", opts.idempotencyKey, input, async () => {
-        const { ok: _ok, ...out } = (await enqueueChange(svc, caller, {
+        return enqueueChange(svc, caller, {
           changeId: input.changeId,
           ...(input.priority === undefined ? {} : { priority: input.priority }),
           ...(input.dependsOn === undefined ? {} : { dependsOn: input.dependsOn }),
@@ -29,8 +29,7 @@ export function createQueueMcpBackend(svc: Services, h: McpBackendHelpers): Queu
           ...(input.groupSize === undefined ? {} : { groupSize: input.groupSize }),
           ...(input.landMode === undefined ? {} : { landMode: input.landMode }),
           ...(input.incidentPlanId === undefined ? {} : { incidentPlanId: input.incidentPlanId }),
-        })) as Awaited<ReturnType<typeof enqueueChange>> & { ok?: true };
-        return out;
+        });
       });
     },
     async queueStatus(mc, changeId) {

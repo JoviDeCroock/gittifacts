@@ -6,6 +6,8 @@
  */
 
 import { inspectRepo } from "@app/conventions";
+import { workflowHandle } from "@app/coordinator";
+import { FakeQueueJobs } from "@app/coordinator/fakes";
 import { configureCoordinatorRuntime } from "@app/coordinator/workers";
 import type { Bindings } from "../src/app-env.js";
 import { COORDINATOR_OPTIONS } from "../src/coordinator.js";
@@ -26,6 +28,12 @@ configureCoordinatorRuntime<Bindings>({
   ports: (env, role) =>
     withUnclaimedLimits(buildPorts(env, role, { overrides: integrationOverrides(role, env) }), env),
   coordinatorOptions: COORDINATOR_OPTIONS,
+  // The real MergeQueue DO and BatchRunWorkflow; its sandbox jobs replay on FakeGitHost files.
+  mergeQueue: (env) => ({
+    jobs: new FakeQueueJobs(integrationFakes().git),
+    batchRuns: workflowHandle(env.BATCH_RUN_WORKFLOW),
+    targetsSupported: true,
+  }),
 });
 
 // Workspaces: the real Workspace DO over an in-memory machine (no containers in workerd).

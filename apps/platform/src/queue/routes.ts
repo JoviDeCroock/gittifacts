@@ -202,8 +202,7 @@ export function registerQueueRoutes(app: ApiApp): void {
       changeId: c.req.valid("param").changeId,
       ...c.req.valid("json"),
     });
-    const { ok: _ok, ...out } = r as typeof r & { ok?: true };
-    return c.json(out, 200);
+    return c.json(r, 200);
   });
   app.openapi(reprioritize, async (c) => {
     const r = await reprioritizeChange(c.get("services"), callerOf(c), {
