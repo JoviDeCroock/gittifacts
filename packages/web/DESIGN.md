@@ -74,6 +74,23 @@ typography:
     fontSize: "0.8125rem"
     fontWeight: 400
     lineHeight: 1.6
+  landing-display:
+    fontFamily: "Atkinson Hyperlegible Next Variable, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "2.625rem"
+    fontWeight: 760
+    lineHeight: 1
+    letterSpacing: "-0.032em"
+  landing-headline:
+    fontFamily: "Atkinson Hyperlegible Next Variable, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1.75rem"
+    fontWeight: 740
+    lineHeight: 1.12
+    letterSpacing: "-0.024em"
+  landing-lede:
+    fontFamily: "Atkinson Hyperlegible Next Variable, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1.1875rem"
+    fontWeight: 400
+    lineHeight: 1.5
 rounded:
   mark: "2px"
   tag: "3px"
@@ -144,6 +161,37 @@ components:
     backgroundColor: "{colors.tag-green}"
     textColor: "{colors.sheet}"
     rounded: "{rounded.tag}"
+  copy-line:
+    backgroundColor: "{colors.sheet}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.control}"
+    padding: "8px 12px"
+    height: "46px"
+  case-tag:
+    backgroundColor: "{colors.sheet}"
+    textColor: "{colors.ink}"
+    padding: "63px 24px 24px"
+    width: "28rem"
+  case-strip-1-attached:
+    backgroundColor: "{colors.tag-ochre}"
+    textColor: "{colors.ink}"
+    padding: "12px 24px"
+    height: "76px"
+  case-strip-2-torn:
+    backgroundColor: "{colors.carmine-tint}"
+    textColor: "{colors.carmine-ink}"
+    padding: "12px 24px"
+    height: "76px"
+  station-marker-done:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.form-paper}"
+    rounded: "{rounded.pill}"
+    size: "40px"
+  station-marker-now:
+    backgroundColor: "{colors.form-paper}"
+    textColor: "{colors.scrub-teal}"
+    rounded: "{rounded.pill}"
+    size: "40px"
 ---
 
 # Design System: gittifacts
@@ -158,19 +206,22 @@ The ground is cool form paper under ink-navy text, quiet enough to read for thre
 
 Dark mode is composed for the on-call reviewer at night: a deep navy-black ground, lighter surfaces for elevation, desaturated bands, a brighter teal, and slightly wider tracking and leading for light-on-dark text.
 
+The marketing landing is a Persuade surface inside this world, not a second brand. It loads the app's tokens, base, components and triage styles unchanged and adds only a page type scale, a page layout and three landing components: the lane tag set at poster scale as a case tag, the station strip turned into a vertical spine, and a copy line for values a reader will paste. Product screens appear as themselves, at 1:1.
+
 **Key Characteristics:**
 - Die-cut lane tags with a punched hole, numeral and word: never color alone.
 - Banded observation chart (lane columns tinted, hairline armature) explains every lane.
 - Three verdict shapes: filled disc with check, dashed ring, triangle.
 - One family (Atkinson Hyperlegible Next) for all UI; its Mono sibling only for code, hashes and data.
 - Hairline-separated rows instead of cards; panels only where a block is one decision.
+- On the landing, the same world at poster scale: a case tag whose signed evidence tears off the review it proves.
 
 ## Colors
 
 A restrained cool-neutral ground, one action ink, and a printed triage set that only ever means lane, verdict or state.
 
 ### Primary
-- **Scrub Teal** (`scrub-teal`): the primary action (Approve, Sign and approve, Sign in, Create agent), links, the current station marker in the tour strip, focus rings (as `focus-teal`) and text selection (tint). Counts, status chips, secondary actions and "awaiting" states are ink, not teal.
+- **Scrub Teal** (`scrub-teal`): the primary action (Approve, Sign and approve, Sign in, Create agent), links, the current station marker in the tour strip and on the landing's station spine, copy buttons, focus rings (as `focus-teal`) and text selection (tint). Counts, status chips, secondary actions and "awaiting" states are ink, not teal.
 
 ### Secondary
 - **Tag Carmine** (`tag-carmine`, ink `carmine-ink`, tint `carmine-tint`): Lane 2, risk verdicts, failing checks, breaches, the kill switch, broken signatures. Printed flat, never glowing.
@@ -214,6 +265,16 @@ A restrained cool-neutral ground, one action ink, and a printed triage set that 
 
 **The Sentence Case Rule.** No tracked all-caps labels and no kicker above a heading. Headings speak for themselves; metadata sits below them.
 
+### Landing scale (Persuade surface)
+The landing keeps the one family and steps above the app's ramp at a ratio of about 1.25, in fixed steps per breakpoint rather than fluid clamps. Token values are the phone steps.
+- **Landing Display** (`landing-display`): 2.625rem on phones, 3.75rem from 640px, 4rem from 1024px, 4.75rem from 1280px. The hero headline and the closing title only; the close answers the hero at the same scale.
+- **Landing Headline** (`landing-headline`): 1.75rem, 2.125rem from 640px, 2.5rem from 1024px, at a 22ch measure. Section heads.
+- **Landing Lede** (`landing-lede`): 1.1875rem, 1.25rem from 640px, 1.375rem from 1024px, in ink-2 at a 40ch measure (36ch in the hero). The one line under a section head.
+- **Title and body:** the app's Title, stepping to 1.3125rem from 1024px, for the case title, step headings and measured figures; the app's Reading style in ink-2 at a 62ch measure for body copy.
+- **In-between steps** for the tag and the spine: rows and copy lines 0.9375rem; station leads, strip titles and rule titles 1.125rem; station names 1.375rem, 1.625rem from 1024px (760); the wordmark 1.25rem (760); strip numerals 2.625rem (800, tabular).
+
+The display line is set as a typographic object, not left to wrap: each sentence takes two lines, broken after its verb (subject and verb, then object: "Humans approve / intent. / Machines prove / conformance."), every line its own block with balanced wrapping, so the two sentences read as a parallel pair at 390px and at 1440px.
+
 ## Layout
 
 Mobile-first on a 4px spacing scale (4, 8, 12, 16, 24, 32, 48, 64). Page gutter is 16px on phones, 24px from 640px, 32px from 1024px. Content tops out at 960px, or 1240px for dense screens.
@@ -222,6 +283,13 @@ From 1024px a 248px sidebar holds navigation, repository shortcuts with review c
 
 Primary actions on phones sit in a fixed bottom bar in the thumb zone with safe-area padding. Rows are separated by hairlines; spacing groups first, containers second.
 
+### Landing page
+Same gutters and 4px scale. Content tops out at 80rem (1280px) inside the gutters, wider than the app's reading widths because the page carries product screens at 1:1. Each section opens with a head (headline, then lede, 16px apart, 48px above the content), and sections are spaced by one section step: 72px on phones, 96px from 640px, 128px from 1024px.
+
+Three panel bands open, break and close the page: the hero band (panel ground, hairline below), the agents band (panel, hairlines above and below, one section step above it) and the close band (panel, hairline above), with the footer on panel under a strong hairline. Everything between them sits on form paper and is organized by hairlines and 2px ink rules, not cards.
+
+From 64em the hero splits into the text and a 28rem tag column, 64px apart, and each loop station into a 48px marker column, a 25rem text column and its artifact, with 48px gaps. These switches are written in em so the page stays stacked when a reader enlarges text. Comparison tables, step lists and the agents band turn to two columns at 1024px; the rules list goes to two columns at 768px and three at 1024px.
+
 ## Elevation & Depth
 
 Mostly flat and tonal. Depth comes from the surface ladder (paper, sheet, panel) and hairlines. Two soft shadows exist and both mean something: a raise for the selected segment, the active nav item and decision panels, and a sheet shadow for anything fixed to the bottom of the screen. Dark mode uses lighter surfaces, not shadows, for elevation.
@@ -229,6 +297,8 @@ Mostly flat and tonal. Depth comes from the surface ladder (paper, sheet, panel)
 ### Shadow Vocabulary
 - **Raise** (`0 1px 2px ink/6%, 0 4px 14px ink/6%`): selected segment, current nav item, decision and signing panels.
 - **Sheet** (`0 -6px 28px ink/14%`): the fixed decision bar and the plan signing bar on phones; the nav drawer.
+- **Tag lift** (landing only; `drop-shadow(0 1px 1px ink/10%) drop-shadow(0 10px 22px ink/10%)`, at night `drop-shadow(0 12px 28px black/45%)`): the case tag, the one object lifted off the hero band. A drop shadow, so it follows the die-cut silhouette rather than a box.
+- **Eyelet** (landing only; `inset 0 2px 3px ink/30%`): falls inside the case tag's punched hole, so the hole reads as punched rather than printed.
 
 ### Named Rules
 **The Edge Or Lift Rule.** A container has a hairline edge or a raise, not a hairline plus a wide shadow. The one exception is a decision panel, which carries a stronger 2px ink edge because it is where a signature happens.
@@ -236,6 +306,8 @@ Mostly flat and tonal. Depth comes from the surface ladder (paper, sheet, panel)
 ## Shapes
 
 Small, functional radii: tick marks 2px, tags and inline code 3px, chips and agent avatars 6px, controls 8px, panels and code blocks 12px, sheets 18px, and fully round pills only for count badges. Circles mean people (avatars) and stops (station numbers); squares mean agents and the platform. The lane tag is the one custom silhouette: a rectangle with a chamfered left end and a punched hole, drawn as an SVG path with an even-odd hole so it reads on any ground.
+
+On the landing the same silhouette turns portrait at poster scale as the case tag: both top corners chamfered (2.25rem), a hole (9px radius) punched through at center 30px from the top and ringed by a 5px panel-strong eyelet. Tear-off strips hang below it; a strip's perforation is a 2px dashed rule between 6px punched notches, and a torn strip trades the perforation for a toothed torn edge (10px teeth).
 
 ## Components
 
@@ -246,6 +318,7 @@ Small, functional radii: tick marks 2px, tags and inline code 3px, chips and age
 - **Quiet:** teal text on transparent; teal tint on hover.
 - **Danger / Danger outline:** carmine for irreversible actions (reject, kill, revoke) only after an inline confirmation names the action.
 - **States:** pressed nudges down 1px; busy swaps the icon for a spinner and the label for the operation ("Signing approval…"); disabled drops to 55% opacity.
+- **Landing call to action:** the same primary button at 52px with 1.0625rem bold text and 32px side padding, once in the hero and once in the close; the top bar's Sign in stays secondary.
 
 ### Lane Tag (signature)
 The die-cut tag at 31×18, 37×22 or 47×28. Lane 2 carmine with sheet numeral, Lane 1 ochre with ink numeral and darker edge, Lane 0 green with sheet numeral, shadow mode as a dashed green outline on green tint, unrouted as a dashed ink-4 outline with an en dash. Always labelled for assistive tech ("Lane 1, glance, shadow mode").
@@ -269,6 +342,8 @@ Visible labels above, 44px minimum, 16px text, ink-4 boundary; 2px teal focus ri
 ### Navigation
 Sidebar links are 40px rows; the current one is a raised sheet with a teal icon. The phone drawer repeats the same list at 44px.
 
+On the landing, a sticky 64px top bar on the page ground with a hairline below holds the wordmark, the section anchors (ink-2, 44px targets, panel on hover) from 900px, and a secondary Sign in. Below 900px the anchors sit behind a disclosure menu that needs no script, in a raised sheet.
+
 ### Diff Excerpt
 A bordered code block (12px radius) with a sheet header (path in mono with the directory dimmed and file name bold, cited line range, file status). A pinned gutter shows the old and the new line number side by side, so a reviewer can cite either. Additions and deletions carry +/− signs and green or carmine tints; cited lines are stronger; uncited context is dimmed; gaps say how many lines are skipped. Syntax-light: comments, strings, numbers and keywords only.
 
@@ -276,7 +351,25 @@ A bordered code block (12px radius) with a sheet header (path in mono with the d
 Before, after and a computed difference, registered at one scale (frames 250px wide on phones, three 200px columns from 640px). On phones a Before / After / Difference segmented control swaps frames in place, which is itself the registered comparison. The difference frame fades the "after" capture to grey and marks changed pixels in carmine, computed in the browser from the two captures.
 
 ### Approval Seal
-The system's one authored motion moment. When the server confirms an approval, a ring and check draw themselves (520ms then 320ms, ease-out) on a panel that settles into the green tint. Reduced motion shows the finished seal without drawing.
+The system's one authored motion moment in the app. When the server confirms an approval, a ring and check draw themselves (520ms then 320ms, ease-out) on a panel that settles into the green tint. Reduced motion shows the finished seal without drawing. The landing has one moment of its own, on the case tag.
+
+### Case Tag (landing signature)
+One change at poster scale: the lane tag's die-cut read as a case record, on a sheet ground (the strongest night panel in dark mode), up to 28rem wide, with the hole and eyelet at the top (see Shapes). Inside: the repository, a "Demo data" chip and the change id in mono; the change title; the authoring agent with its square avatar; then evidence rows under a 2px ink rule, separated by hairlines. Each row is a label (ink-3) and a value with its verdict mark at the end. A row that holds the lane up takes its lane's tint and ends in the small lane tag instead of a verdict mark. Below 480px each label sits above its value. A meta-size signature line names the key and the git ref.
+
+Tear-off strips hang under the body, one per lane the change started out owing. Each pairs a 2.625rem numeral with the lane word and its status ("Glance: still owed", "Full review: torn off").
+
+**The Torn Strip Rule.** A strip still attached is review still owed, printed in its lane's full band with the band's edge on its perforation. A strip the evidence tore off drops to its lane's tint behind a torn edge and hangs rotated 3 to 4 degrees below the tag. The loudest thing on the tag is always what a person still has to do.
+
+Motion: on load the verdict marks settle in row by row (420ms ease-out each, from 55% scale and transparent, starting at 260ms, 90ms apart), then the torn strip comes away: it starts attached, gives once and falls to its hanging angle (1100ms, `cubic-bezier(0.16, 1, 0.3, 1)`, from 1050ms). Reduced motion shows the settled tag with the strip already torn, with no movement.
+
+### Station Spine (landing)
+The tour's station strip turned vertical, as one change's progress through numbered stations. A 2px ink-4 spine runs behind circular markers (40px, 48px from 64em) in the rollout track's vocabulary: a done station is a filled ink disc with a paper numeral; the station the change is at now is a paper disc with a teal ring and teal numeral, haloed by a teal-tint ring, and its name carries a teal-tint "Now at …" chip (6px radius). Each station has a name, a one-line lead, body copy, an optional measured figure above a hairline (title size, tabular), and its artifact. On phones the artifact takes the full column and the spine passes behind it.
+
+### Copy Line (landing)
+A value a reader will paste: the URL or command in mono at 0.9375rem in a sheet field with an ink-4 boundary (8px radius, 46px tall), and a 44px teal copy button behind a hairline divider. The value is real, selectable text first. The button stays hidden until script finds the clipboard; it confirms with a small ink "Copied" bubble and a polite announcement, and when copying fails it says to select the text. Commands keep one line from 640px and scroll inside their box; on phones they wrap. An inline copy button (44px target, teal icon) does the same for a value inside a sentence.
+
+### Product Screens (landing)
+Screens from the product appear without browser or device chrome, at 1:1: each capture is made at the width it is shown (736px in the desktop station column, 358px on a 390px phone) and served at 1x and 2x, with a light and a dark capture and, for wide screens, a phone-width crop below 640px. The dark sources follow the theme forced in the footer switch, not only the system setting. Phone-width tour screens sit in an 18px-radius hairline frame, two side by side from 640px and one on phones. Demo data is labeled where it is seen.
 
 ## Do's and Don'ts
 
@@ -286,6 +379,8 @@ The system's one authored motion moment. When the server confirms an approval, a
 - **Do** make signing deliberate: name the consequence, gate on an explicit attestation where the act is a plan approval, wait for the server, and say what was recorded.
 - **Do** use tabular numerals for counts, percentages, times and line numbers.
 - **Do** keep primary phone actions in the bottom bar with `env(safe-area-inset-bottom)` padding.
+- **Do** show product screens on the landing at 1:1 with light, dark and phone-width captures, and label demo data where it is seen.
+- **Do** make every landing copy control work without script: the value is selectable text first, the copy button an enhancement.
 
 ### Don't:
 - **Don't** encode a lane as a colored side stripe on a card or row; use the tag and the tinted group band.
@@ -293,4 +388,4 @@ The system's one authored motion moment. When the server confirms an approval, a
 - **Don't** put a kicker or tracked uppercase label above a heading.
 - **Don't** show a pulsing live dot; live data is shown as a ticking countdown or a "checked N seconds ago" line.
 - **Don't** let anything but code blocks and rails scroll horizontally.
-- **Don't** spend motion anywhere except state feedback and the approval seal.
+- **Don't** spend motion anywhere except state feedback and the approval seal (on the landing, the case tag's one load moment).
