@@ -6,6 +6,7 @@ Specs:
 - `docs/prompts/01-platform.md`: platform, M1–M5
 - `docs/prompts/02-onboarding.md`: agent onboarding, O1–O6
 - `docs/prompts/03-merge-queue.md`: agent-native merge queue, Q1–Q6
+- `docs/prompts/04-integrations.md`: external integrations (deploy platforms connect to gittifacts)
 
 ## Milestones
 | Milestone | State |
@@ -21,6 +22,7 @@ Specs:
 | O4 Delegated auth (MCP OAuth, device flow) | **built and tested locally**: MCP OAuth (code + PKCE S256, CIMD, RFC 8707 audience), device flow, per-session agent principals with repo scoping, consent/device/sessions screens; deploy pending |
 | O5 Import detection + remote workspaces | **built and tested locally**: `gittifacts-runner detect` + `inspectRepo`, `propose_platform_config` (Plan + Lane 2 Change via a system workspace), `open_workspace` + `ws_*` on a Workspace DO (blobless fork checkout, idle sleep, TTL, quotas, registries-only egress); remote-only acceptance test over MCP passes; live: `scripts/e2e/remote-workspace.ts` after deploy |
 | O6 Onboarding eval | planned |
+| Integrations (deploy platforms) | **built and tested locally** (workerd, mock deploy platform): developer portal (register, hashed client secrets with rotation, sealed webhook secrets), OAuth install on the O4 authorization server (`gtic_` clients, client_secret_basic/post or public, PKCE S256, audience `<origin>/api`, install screen with repo picker → installation + `integration` principal, `gti_`/`gtir_` rotating tokens), read-only `/git/<owner>/<repo>.git` proxy (receive-pack refused), signed webhooks through `WEBHOOK_QUEUE` (retries, delivery log, redeliver), deployments API (preview → signed `preview` evidence, production → rollout timeline), UI (Settings → Integrations, developer portal, delivery log, `/integrations/install`), guide in `packages/docs/content/guides/integrations/`. Needs before going live: migration 0008, queues `gittifacts-webhooks` + `gittifacts-webhooks-dlq` (docs/deploy.md). Not yet: a `checks:write` endpoint |
 | Q1–Q6 Merge queue | **Q1 integrated, passes locally**: the MergeQueue DO is the agent-native queue (SQLite outbox loop around the pure core, InvariantViolation halts), scratch-repo batch trees, BatchRunWorkflow on CiEngine (fail fast), CAS on main (stale old-oid → retry), refs/queue GC; resolver + approval binding; deploy trains in the DO; MCP/HTTP queue API + SSE; web queue view. Tests: Q1 over fakes (speculation, bisection, CAS-stale, resolver through the ChangeWorkflow, re-approval, main never red), workerd (real DO + BatchRunWorkflow, platform HTTP + MCP). Live: `scripts/e2e/merge-queue.ts` after deploy. Simulator p95 gate still being tuned (core) |
 
 ## What works (tested)

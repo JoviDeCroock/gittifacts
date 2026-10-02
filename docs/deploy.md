@@ -101,6 +101,25 @@ Kill switch, fastest first: set the flag to false in Flagship; or, if Flagship i
 `curl -X PUT -H 'content-type: application/json' --cookie '<admin session>' <host>/api/v1/admin/unclaimed-creation -d '{"mode":"off"}'`
 (`"flag"` clears the override; `"on"` only bridges a Flagship that can't be evaluated).
 
+## Integrations (deploy platforms)
+
+Migration `0008_integrations` adds `integrations`, `integration_secrets`, `installations`, `installation_repos`,
+`integration_authorizations`, `webhook_deliveries`, `deployments`, `deployment_statuses` and `account_handles`
+(`db:migrate:remote` before the deploy). The deploy also adds the `WEBHOOK_QUEUE` producer + consumer, the
+`INTEGRATION_LIMITER` rate-limit binding (namespace id `4302`, chosen by us; nothing to create) and a webhook sweep
+on the existing `*/10` cron.
+
+What a human must create (nothing below was created by the agent that built integrations):
+
+| What | How | Without it |
+|---|---|---|
+| Queue `gittifacts-webhooks` | `wrangler queues create gittifacts-webhooks` | The deploy fails (the binding points at a missing queue). |
+| Queue `gittifacts-webhooks-dlq` (dead letters) | `wrangler queues create gittifacts-webhooks-dlq` | The deploy fails (the consumer names it). |
+| `BETTER_AUTH_URL` = the public origin (var or secret), if not set already | Worker | Webhook payloads built outside a request (pushes, Change events) use `https://gittifacts.decroockjovi.workers.dev`. |
+
+`BETTER_AUTH_SECRET` also seals webhook secrets (AES-GCM): rotating it makes stored webhook secrets unreadable, and
+every integration developer must generate a new one in the developer portal.
+
 ## M4 live check (rollout, regression, automatic revert)
 
 ```sh
