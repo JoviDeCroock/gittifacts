@@ -15,7 +15,7 @@ Specs:
 | M3 Classifier + tour | **acceptance passes locally**: all 9 fixtures classify exactly, and the breaking-api tour puts `formatMoney` as its riskiest stop |
 | M4 Merge, rollout, revert | coordinator merge/rollout/revert built (152 tests); live e2e after deploy |
 | M5 Mutation, transforms, screenshots, dogfood | mutation + transforms done in the sandbox; screenshots and dogfood pending |
-| O1 Front door + templates | conventions + 4 templates done; `create_project` + preview gateway next |
+| O1 Front door + templates | **acceptance passes locally** (workerd, fakes): front door discovery, `create_project` per template → initial commit → bootstrap CI → preview through the gateway with banner → `evidence_ready`; TTFG metrics + dashboard; live check after deploy (docs/deploy.md) |
 | O2 Ergonomics | errors with `fix`, idempotency, `wait_for_change`, `whoami` done; CLI in progress |
 | O3 Claimable projects + abuse limits | next after integration |
 | O4 Delegated auth (MCP OAuth, device flow) | **built and tested locally**: MCP OAuth (code + PKCE S256, CIMD, RFC 8707 audience), device flow, per-session agent principals with repo scoping, consent/device/sessions screens; deploy pending |
@@ -34,8 +34,8 @@ Specs:
 | `@app/tour` | reviewer agent; AI binding + gateway clients; budget; risk-ordered, evidence-anchored tours; conflict-resolution stop | 116 |
 | `@app/resolver` | merge-queue conflict resolver (`system:resolver`): verified patches, mechanical scope, ejections with fixes; 14-case conflict corpus | 68 |
 | `@app/conventions` | `AGENTS.md`, `/start`, `/llms.txt`, MCP discovery, fix hints, next steps, `.platform` generators | 226 |
-| `@app/mcp` | 11 tools on mcp-tada-server, typed client, contract snapshot | 8 |
-| `apps/platform` | the one Worker: Hono API + OpenAPI, better-auth, D1, AuditLog DO, MCP, SSE, Ports per role wiring the coordinator, CI engine (Runner container) and reviewer; M1 vertical-slice test | 85 |
+| `@app/mcp` | 12 tools (incl. `create_project`) on mcp-tada-server, typed client, contract snapshot | 9 |
+| `apps/platform` | the one Worker: Hono API + OpenAPI, better-auth, D1, AuditLog DO, MCP, SSE, Ports per role wiring the coordinator, CI engine (Runner container) and reviewer; front door, `create_project`, preview gateway + PreviewHost container, TTFG metrics; M1 and O1 integration tests | 116 |
 | `apps/sandbox` | `gittifacts-runner` (plan, policy, evidence ×9, diff, preview) and its container image | 57, incl. 9-fixture e2e |
 | `@app/web` | 9 screens, mock backend, 45 screenshots in `docs/screenshots/` | 35 |
 
@@ -53,7 +53,7 @@ Also: `templates/` (4 templates, CI path 5–8 s each) and `fixtures/` (9 change
 - Nothing is deployed yet. Containers have only run under local Docker; `ctx.container` hasn't run on Cloudflare yet.
 
 ## Next
-1. Deploy (`pnpm --filter @app/platform deploy`, docs/deploy.md) → `scripts/e2e/m1.ts` → M4 live e2e.
+1. Deploy (`pnpm --filter @app/platform deploy`, docs/deploy.md) → seed template caches → `scripts/e2e/m1.ts` → O1 live check (time-to-first-green) → M4 live e2e.
 2. O1 `create_project` + preview gateway; O3 claimable projects and abuse limits; O5; O6 eval loop.
 3. Merge queue Q1–Q6: DO shell + BatchRunWorkflow around the pure core, MCP tools, queue UI, deploy trains.
 4. **Final phase (requested):** large-scale dogfooding of everything, a large-scale UI/UX review, and recorded videos of
