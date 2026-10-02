@@ -627,3 +627,37 @@ subdomain level, and a second-level wildcard certificate needs Advanced Certific
 
 **Consequence.** Undefined subdomains of resynapse.dev now resolve to Cloudflare (no matching route → Cloudflare error
 page) instead of NXDOMAIN.
+
+## 2026-10-02 — Merge-queue core: what the simulator kept and removed (sim/merge-queue/report.md)
+
+- **Kept, each beating its ablation on the metric it exists for:**
+  - the conflict graph: p95 32 vs 113 min;
+  - speculation: p95 32 vs 274 min;
+  - bisection: CI 0.93× vs 1.17×;
+  - flake re-check: false-eject 1.05% vs 42%;
+  - impacted-target revalidation: CI 0.68× vs 4.69×;
+  - fair queuing: other sessions' p95 35 vs 66 min.
+- **Speculation is a DAG,** not tracks that drain: each batch builds on exactly the batches it conflicts with. Small
+  pipelined revalidation batches and a 2-minute hold let siblings join a batch whose parent is still running.
+- **Removed: prediction-driven batch sizing/ordering.** A fixed batch size of 4 beat it on every seed (p95 33 vs 54 min,
+  CI 0.69× vs 0.85×). Predictions are still computed, returned to agents and logged against outcomes, but they don't
+  steer scheduling.
+- **Removed: a cap on what a merge batch may carry** (its forced drains made p95 worse, 54 → 102 min).
+- **Gates.**
+  - main-red 0/30 runs, attribution failures 0, CI ≤ 1.5× (0.70× worst), false-eject ≤ 1% (0.34% worst) and
+    resolver ≥ 80% (model) all pass.
+  - **p95 time-in-queue on gate-200 fails: 30.6–33.0 min vs 20 min.** One conflict cluster gets ~25 arrivals/h
+    against a 10-minute run, and each real failure restarts ~10 speculative descendants. Next: speculate on both
+    outcomes for risky batches (SubmitQueue style) and reuse cached per-Change results after a cancel.
+- **Simulator assumption:** CI fails fast (a failing run reports when its failing test finishes).
+
+## 2026-10-02 — Reviewer model on this platform
+
+The policy's `ai.reviewerModel: "auto"` resolves to `@cf/moonshotai/kimi-k2.7-code` on Workers AI, called through
+AI Gateway by the AI binding. `REVIEWER_MODEL` overrides it, and `@cf/openai/gpt-oss-120b` is the measured
+alternative.
+
+Live dogfooding found that third-party model ids fail through the binding without Unified Billing credits
+(`7003 User Input Error`). Both Workers AI models returned valid json_schema output in about 4 s.
+
+Costs are conservative per-token estimates; Workers AI bills in neurons, about $0.0006 per small call.
