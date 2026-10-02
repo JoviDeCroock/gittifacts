@@ -596,12 +596,24 @@ async function main(): Promise<void> {
     ];
 
     // ------------------------------------------------------------ 7. the revert Change
+    // A verified pure revert restores an approved tree: it should merge (and deploy) by itself.
     const revert = await until(
       revertId,
-      "the revert to be verified",
-      (c) => c.laneReasons.some((r) => r.code === "revert.verified") || c.mergedSha !== null,
+      "the revert to merge",
+      (c) => c.mergedSha !== null || c.status === "awaiting-review",
       (c) => (c.status === "failing" ? "revert CI failed" : null),
     );
+    if (revert.mergedSha !== null) mark("revert-merged");
+    const revertDeployed =
+      revert.mergedSha === null
+        ? null
+        : await until(
+            revertId,
+            "the revert to deploy",
+            (c) => c.rolloutState?.versionId != null,
+            (c) => (c.status === "released" && c.rolloutState === null ? "never deployed" : null),
+          );
+    if (revertDeployed !== null) mark("revert-deployed");
     const revertAudit = await auditOf(`change:${revertId}`);
     const pure = revertAudit.events.some(
       (e) => e.action === "change.revert-verified" && /Verified as a pure revert/.test(e.summary),
@@ -632,6 +644,12 @@ async function main(): Promise<void> {
     console.log(`  detected → rolled back:         ${latency(detectedAt, rolledBackAt)}`);
     console.log(`  detected → revert opened:       ${latency(detectedAt, revertOpenedAt)}`);
     console.log(
+      `  revert opened → merged:         ${latency(revertOpenedAt, marks["revert-merged"] ?? null)}`,
+    );
+    console.log(
+      `  revert merged → deployed:       ${latency(marks["revert-merged"] ?? null, marks["revert-deployed"] ?? null)} (seen by polling)`,
+    );
+    console.log(
       `  traffic: ${traffic.hits.length} requests, ${traffic.hits.filter((h) => h.status >= 500).length} 5xx`,
     );
     console.log(
@@ -652,6 +670,14 @@ async function main(): Promise<void> {
       ],
       ["no errors after the rollback settled", after.total > 0 && after.errors === 0],
       [`revert ${revertId} opened (revertOf ${revert.revertOf})`, revert.revertOf === bad.id],
+      [
+        `the revert merged by itself (lane ${revert.lane}: ${revert.laneReasons
+          .filter((r) => r.code.startsWith("revert.") || r.code.startsWith("llm."))
+          .map((r) => r.code)
+          .join(", ")})`,
+        revert.mergedSha !== null && revert.laneReasons.some((r) => r.code === "revert.auto-merge"),
+      ],
+      ["the revert deployed", revertDeployed !== null],
       [
         "the revert is a verified pure revert",
         pure || revert.laneReasons.some((r) => r.code === "revert.verified"),
