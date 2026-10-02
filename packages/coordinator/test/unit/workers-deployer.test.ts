@@ -64,6 +64,7 @@ const input = {
   sha: "a".repeat(40),
   bundleRef: "ci-artifacts/run/build/bundle.tgz",
   message: "change c1",
+  flagshipAppId: "app-1",
 };
 
 async function metadataOf(call: Call | undefined): Promise<Record<string, unknown>> {
@@ -92,7 +93,6 @@ describe("WorkersDeployer first deploy", () => {
       accountId: "acc",
       apiToken: "tok",
       fetch,
-      flagshipAppId: "app-1",
       loadBundle: async () => bundle(),
     });
     expect(await d.uploadVersion(input)).toEqual({
@@ -162,7 +162,6 @@ describe("WorkersDeployer later uploads", () => {
       accountId: "acc",
       apiToken: "tok",
       fetch,
-      flagshipAppId: "app-1",
       loadBundle: async () => bundle([{ type: "plain_text", name: "GREETING", text: "hi" }]),
     });
     expect(await d.uploadVersion(input)).toEqual({ versionId: "ver-2" });
@@ -228,11 +227,50 @@ describe("deployBindings", () => {
     );
   });
 
-  it("adds VERSION always and FLAGS only with a Flagship app", () => {
-    expect(deployBindings(undefined, undefined)).toEqual([
-      { type: "version_metadata", name: "VERSION" },
+  it("binds FLAGS to the project's own app (required) and VERSION", () => {
+    expect(deployBindings(undefined, "app-1")).toEqual(PLATFORM_BINDINGS);
+    expect(() => deployBindings([], "")).toThrow(BundleBindingError);
+    // A bundle cannot bind any Flagship app itself (another project's, or the platform's).
+    expect(() =>
+      deployBindings([{ type: "flagship", name: "OTHER", app_id: "platform-app" }], "app-1"),
+    ).toThrow(BundleBindingError);
+  });
+
+  it("two projects' Workers bind two different apps, each only its own", async () => {
+    const { fetch, calls } = mockFetch([
+      [/^POST .*\/versions$/, () => ok({ id: "v" })],
+      [/^PATCH .*\/script-settings$/, () => ok({})],
     ]);
-    expect(deployBindings([], "app-1")).toEqual(PLATFORM_BINDINGS);
+    const d = new WorkersDeployer({
+      accountId: "acc",
+      apiToken: "tok",
+      fetch,
+      loadBundle: async () => bundle(),
+    });
+    await d.uploadVersion({ ...input, script: "gf-r1-api", flagshipAppId: "app-r1" });
+    await d.uploadVersion({ ...input, script: "gf-r2-api", flagshipAppId: "app-r2" });
+    const flagsOf = async (i: number) =>
+      ((await metadataOf(calls[i])).bindings as Array<Record<string, unknown>>).filter(
+        (b) => b.type === "flagship",
+      );
+    expect(await flagsOf(0)).toEqual([{ type: "flagship", name: "FLAGS", app_id: "app-r1" }]);
+    expect(await flagsOf(2)).toEqual([{ type: "flagship", name: "FLAGS", app_id: "app-r2" }]);
+  });
+
+  it("deletes a project's Worker with force; a missing one is fine", async () => {
+    const { fetch, calls } = mockFetch([
+      [/^DELETE .*\/workers\/scripts\/gf-r1-api\?force=true$/, () => ok(null)],
+      [/^DELETE .*\/workers\/scripts\/gf-gone-api\?force=true$/, notFound],
+    ]);
+    const d = new WorkersDeployer({
+      accountId: "acc",
+      apiToken: "tok",
+      fetch,
+      loadBundle: async () => bundle(),
+    });
+    await d.deleteScript("gf-r1-api");
+    await d.deleteScript("gf-gone-api");
+    expect(calls.map((c) => c.method)).toEqual(["DELETE", "DELETE"]);
   });
 
   it("hyphenates bare UUIDs only", () => {

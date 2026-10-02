@@ -8,7 +8,9 @@
  * 2. its agent's tokens are revoked and the agent is disabled (every request fails at once);
  * 3. every Change's workflow and CI run is stopped, its workspace closed, its previews destroyed;
  * 4. the Artifacts repos are deleted: the change forks and the project repo (deleting a repo
- *    also revokes its Artifacts tokens);
+ *    also revokes its Artifacts tokens); then the project's Worker (if it ever had a deploy
+ *    target) and its own Flagship app, in that order (Flagship refuses to delete an app a Worker
+ *    still binds);
  * 5. R2 objects (CI runs, logs, evidence, artifacts, screenshots, spilled diffs/evidence) and the
  *    D1 rows (repo and everything that cascades from it, previews, onboarding, notifications)
  *    are deleted; audit events are kept, and so is the claim row as a tombstone (`expired`);
@@ -44,6 +46,10 @@ export interface ExpiryDeps {
   abandonChange(changeId: string): Promise<void>;
   closeWorkspace(changeId: string): Promise<void>;
   destroyPreview(previewId: string): Promise<void>;
+  /** Delete a project Worker (`gf-…`); a missing one is fine. */
+  deleteWorker(script: string): Promise<void>;
+  /** Delete a project's own Flagship app; a missing one is fine. */
+  deleteFlagApp(appId: string): Promise<void>;
   now(): Date;
 }
 
@@ -52,9 +58,14 @@ export interface ExpiredProject {
   name: string;
   ok: boolean;
   reposDeleted: string[];
+  /** The project's Worker and Flagship app, when it had them. */
+  workerDeleted?: string;
+  flagAppDeleted?: string;
   objectsDeleted: number;
   error: string | null;
 }
+
+const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 /** Projects due now: their claim row says so, or (no claim row) the repo row does. */
 async function due(store: D1Store, nowIso: string, limit: number): Promise<string[]> {
@@ -189,6 +200,26 @@ async function expireOne(deps: ExpiryDeps, repoId: string): Promise<ExpiredProje
     }
   }
 
+  // 4b. The project's Worker, then its Flagship app (an app a Worker binds cannot be deleted).
+  if (repo?.deployTarget) {
+    try {
+      await deps.deleteWorker(repo.deployTarget);
+      out.workerDeleted = repo.deployTarget;
+    } catch (e) {
+      out.error = `could not delete the Worker ${repo.deployTarget}: ${errorText(e)}`;
+      return out;
+    }
+  }
+  if (repo?.flagshipAppId) {
+    try {
+      await deps.deleteFlagApp(repo.flagshipAppId);
+      out.flagAppDeleted = repo.flagshipAppId;
+    } catch (e) {
+      out.error = `could not delete the Flagship app ${repo.flagshipAppId}: ${errorText(e)}`;
+      return out;
+    }
+  }
+
   // 5. R2, then D1 (audit events stay).
   const spilled =
     changeIds.length === 0
@@ -252,6 +283,8 @@ async function expireOne(deps: ExpiryDeps, repoId: string): Promise<ExpiredProje
       changes: changeIds.length,
       previews: previewRows.length,
       reposDeleted: out.reposDeleted,
+      workerDeleted: out.workerDeleted ?? null,
+      flagAppDeleted: out.flagAppDeleted ?? null,
       objectsDeleted: out.objectsDeleted,
     },
   });

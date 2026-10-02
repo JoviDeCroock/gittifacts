@@ -20,7 +20,7 @@ import {
   ReviewDecision,
   Tour,
 } from "@app/domain";
-import { and, asc, desc, eq, gte, inArray, lt, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, type SQL, sql } from "drizzle-orm";
 import { type DrizzleD1Database, drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { isHumanPrincipal, ownerMembershipInsert } from "../access/members-store.js";
@@ -200,7 +200,10 @@ export class D1Store implements Store {
       id: current.id,
       createdAt: current.createdAt,
     });
-    const { createdBy: _c, ...row } = repoToRow(next);
+    const { createdBy: _c, flagshipAppId, ...rest } = repoToRow(next);
+    // The Flagship app is written by `setRepoFlagshipApp` (compare-and-set) or an explicit patch,
+    // never as a side effect of another update that read the row before the app was recorded.
+    const row = "flagshipAppId" in patch ? { ...rest, flagshipAppId } : rest;
     const update = this.db.update(repos).set(row).where(eq(repos.id, id));
     // Claiming (or any new claim owner) makes that human an `owner` member (src/access/).
     const owner = next.claim.status === "claimed" ? next.claim.ownerId : null;
@@ -209,6 +212,21 @@ export class D1Store implements Store {
     if (!newOwner || !(await isHumanPrincipal(this, owner))) await update;
     else await this.db.batch([update, ownerMembershipInsert(this, id, owner, this.iso())]);
     return next;
+  }
+
+  async setRepoFlagshipApp(repoId: string, appId: string): Promise<string> {
+    await this.db
+      .update(repos)
+      .set({ flagshipAppId: appId })
+      .where(and(eq(repos.id, repoId), isNull(repos.flagshipAppId)));
+    const r = await this.db
+      .select({ flagshipAppId: repos.flagshipAppId })
+      .from(repos)
+      .where(eq(repos.id, repoId))
+      .get();
+    if (r === undefined) throw new NotFoundInStore(`repo ${repoId} not found`);
+    if (r.flagshipAppId === null) throw new Error(`repo ${repoId}: Flagship app not recorded`);
+    return r.flagshipAppId;
   }
 
   async setRepoPolicy(repoId: string, policy: RepoPolicy, sha: string): Promise<void> {

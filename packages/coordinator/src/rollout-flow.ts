@@ -2,7 +2,7 @@
  * The RolloutWorkflow body (docs/architecture.md, Rollout). One instance per merged change, id
  * `rollout-<changeId>`:
  *
- *  load → slot-* (one rollout per script at a time) → flag → upload →
+ *  load → slot-* (one rollout per script at a time) → flag-app → flag → upload →
  *  for each stage: stage-i (split) → [wait (issue | 1 min) → check]* until stageMinutes elapsed →
  *  watch → [wait → check]* until watchMinutes elapsed → released
  *  on regression: regression → flag-off → rollback → revert
@@ -18,6 +18,7 @@ import { changeSubject } from "./ids.js";
 import { withChangeNotifications } from "./milestones.js";
 import { errorMessage } from "./policy.js";
 import { SYSTEM_PRINCIPAL_ID } from "./ports.js";
+import { ensureProjectFlagApp } from "./project-flags.js";
 import { openRevertChange } from "./revert.js";
 import { RETRY, type Step, waitOrTimeout } from "./step.js";
 
@@ -148,9 +149,12 @@ export async function runRollout(
   // Without a previous version there is nothing to split against (or roll back to): go to 100%.
   const stages = previousVersionId === null ? [100] : policy.stages;
 
-  // ------------------------------------------------------------ 1. flag
+  // ------------------------------------------------------------ 1. flag (in the project's own app)
+  const appId = await step.do("flag-app", RETRY.remote, async () =>
+    ensureProjectFlagApp(ports, ctx.repoId),
+  );
   const flagKey = await step.do("flag", RETRY.remote, async () => {
-    const key = await flags.ensureChangeFlag(changeId, {
+    const key = await flags.ensureChangeFlag(appId, changeId, {
       enabled: true,
       description: `change ${changeId}: ${ctx.title}`.slice(0, 500),
     });
@@ -168,6 +172,7 @@ export async function runRollout(
       sha: ctx.mergedSha,
       bundleRef,
       message: `change ${changeId}: ${ctx.title}`.slice(0, 1000),
+      flagshipAppId: appId,
     });
     await patchState({
       status: "rolling",
@@ -333,8 +338,8 @@ export async function runRollout(
     return true;
   });
   await step.do("flag-off", RETRY.remote, async () => {
-    await flags.setEnabled(flagKey, false);
-    await log("rollout.flag-off", { flagKey });
+    await flags.setEnabled(appId, flagKey, false);
+    await log("rollout.flag-off", { flagKey, appId });
     return true;
   });
   await step.do("rollback", RETRY.remote, async () => {

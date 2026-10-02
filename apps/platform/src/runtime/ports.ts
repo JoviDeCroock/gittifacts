@@ -45,7 +45,6 @@ export type PortsEnv = Pick<
   | "ARTIFACTS_NAMESPACE"
   | "CF_ACCOUNT_ID"
   | "CF_API_TOKEN"
-  | "FLAGSHIP_APP_ID"
   | "AI_GATEWAY_ID"
   | "AUDIT_LOG"
   | "RUNNER"
@@ -230,10 +229,10 @@ export function buildPorts(env: PortsEnv, role: PortsRole, opts: BuildPortsOptio
       loadBundle: r2BundleLoader(env.CI_BUCKET, {
         compatibilityDate: DEFAULT_BUNDLE_COMPAT_DATE,
       }),
-      // Every deployed version gets FLAGS (the change kill-switch flags) and VERSION.
-      flagshipAppId: env.FLAGSHIP_APP_ID,
     }),
-    flags: new FlagshipFlags({ ...api, appId: env.FLAGSHIP_APP_ID }),
+    // One Flagship app per project (its change flags; its Workers bind FLAGS to it only). The
+    // platform's own flags (FLAGSHIP_APP_ID, bound as the platform Worker's FLAGS) stay apart.
+    flags: new FlagshipFlags(api),
     telemetry: new ObservabilityTelemetry({ ...api, store, clock }),
     audit: new DoAudit(env),
     notifier: new D1Notifier(store, now),

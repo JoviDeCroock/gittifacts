@@ -70,6 +70,15 @@ export class FakeStore implements Store {
     this.repos.set(id, next);
     return clone(next);
   }
+  async setRepoFlagshipApp(repoId: string, appId: string) {
+    const r = this.repos.get(repoId);
+    if (r === undefined) throw new Error(`repo ${repoId} not found`);
+    if (r.flagshipAppId) return r.flagshipAppId;
+    for (const other of this.repos.values())
+      if (other.flagshipAppId === appId) throw new Error(`app ${appId} belongs to ${other.id}`);
+    this.repos.set(repoId, { ...r, flagshipAppId: appId });
+    return appId;
+  }
   async setRepoPolicy(repoId: string, policy: RepoPolicy, sha: string) {
     await this.updateRepo(repoId, { policy, policySha: sha });
   }

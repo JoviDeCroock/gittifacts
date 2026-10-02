@@ -98,6 +98,12 @@ export const Repo = z.object({
   /** Worker script the repo deploys to (for rollout), if any. */
   deployTarget: z.string().nullable(),
   /**
+   * The project's own Flagship app: its change kill-switch flags live there, and its deployed
+   * Workers bind `FLAGS` to it and to nothing else (no project can read another's flags). Created
+   * when a deploy target is set (or lazily on the first deploy); deleted with the project.
+   */
+  flagshipAppId: z.string().min(1).max(64).nullable().optional(),
+  /**
    * Unclaimed projects are created without an account (onboarding §4): previews only, no
    * secrets, no production deploys, no Lane 0, tight quotas, and they expire unless claimed.
    */
@@ -220,7 +226,15 @@ export const RolloutStage = z.object({
 });
 
 export const RolloutState = z.object({
-  status: z.enum(["pending", "rolling", "watching", "released", "rolling-back", "rolled-back", "failed"]),
+  status: z.enum([
+    "pending",
+    "rolling",
+    "watching",
+    "released",
+    "rolling-back",
+    "rolled-back",
+    "failed",
+  ]),
   versionId: z.string().nullable(),
   previousVersionId: z.string().nullable(),
   stages: z.array(RolloutStage),
@@ -450,7 +464,15 @@ export function diffStatsOf(diff: ChangeDiff): DiffStats {
   };
 }
 
-export const RunStatus = z.enum(["queued", "running", "passed", "failed", "cancelled", "superseded", "errored"]);
+export const RunStatus = z.enum([
+  "queued",
+  "running",
+  "passed",
+  "failed",
+  "cancelled",
+  "superseded",
+  "errored",
+]);
 export type RunStatus = z.infer<typeof RunStatus>;
 
 export const PipelineRun = z.object({
@@ -518,7 +540,13 @@ export const NextStep = z.object({
 });
 export type NextStep = z.infer<typeof NextStep>;
 
-export const WaitUntil = z.enum(["evidence_ready", "lane_assigned", "tour_ready", "merged", "reverted"]);
+export const WaitUntil = z.enum([
+  "evidence_ready",
+  "lane_assigned",
+  "tour_ready",
+  "merged",
+  "reverted",
+]);
 export type WaitUntil = z.infer<typeof WaitUntil>;
 
 /** Header carrying a client-chosen idempotency key on every create/mutate call. */

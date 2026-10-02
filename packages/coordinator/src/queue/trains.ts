@@ -15,6 +15,7 @@ import type { TrainCommand, TrainEventInput, TrainState } from "@app/merge-queue
 import { evaluateHealth, type HealthSample } from "../health.js";
 import { changeSubject } from "../ids.js";
 import { errorMessage } from "../policy.js";
+import { ensureProjectFlagApp } from "../project-flags.js";
 import { openRevertChange } from "../revert.js";
 import { shaKey } from "./cas.js";
 import type { QueueContext, QueueIntent } from "./context.js";
@@ -111,9 +112,11 @@ export class CoordinatorTrainShell {
         trainId: cmd.trainId,
         message: "no bundle for the train's merged commit",
       });
+    // The project's own Flagship app: its flags live there and its Worker binds FLAGS to it only.
+    const appId = await ensureProjectFlagApp(this.ctx.ports, this.ctx.repoId);
     for (const c of cmd.changes) {
       if (c.flagKey === null) continue;
-      await flags.ensureChangeFlag(c.changeId, {
+      await flags.ensureChangeFlag(appId, c.changeId, {
         enabled: true,
         description: `change ${c.changeId} (train ${cmd.trainId})`,
       });
@@ -137,6 +140,7 @@ export class CoordinatorTrainShell {
           0,
           1000,
         ),
+        flagshipAppId: appId,
       });
       uploaded = { versionId, previous };
       this.ctx.deps.store.putRun(uploadKey, uploaded);
@@ -206,7 +210,8 @@ export class CoordinatorTrainShell {
   }
 
   async killFlag(cmd: Extract<TrainCommand, { type: "KillFlag" }>): Promise<void> {
-    await this.ctx.ports.flags.setEnabled(cmd.flagKey, false);
+    const appId = await ensureProjectFlagApp(this.ctx.ports, this.ctx.repoId);
+    await this.ctx.ports.flags.setEnabled(appId, cmd.flagKey, false);
     const p = this.progress(cmd.trainId);
     if (p !== null)
       this.save({

@@ -14,9 +14,10 @@
  *
  * **Bindings.** User Workers run in the platform's account, so a bundle may declare only plain vars
  * (`plain_text`, `json`); anything else could bind the platform's own resources and is refused.
- * The deployer adds the platform's bindings to every version: `FLAGS` (the Flagship app holding the
- * per-change kill-switch flags, read with `isChangeEnabled(env.FLAGS, changeId)`) and `VERSION`
- * (`version_metadata`: `{ id, tag, timestamp }`).
+ * The deployer adds the platform's bindings to every version: `FLAGS` (the deploying project's own
+ * Flagship app holding its per-change kill-switch flags, read with `isChangeEnabled(env.FLAGS,
+ * changeId)`; never another project's app or the platform's) and `VERSION` (`version_metadata`:
+ * `{ id, tag, timestamp }`).
  *
  * The bundle comes from the CI `build` step (stored by reference); `loadBundle` turns a
  * `bundleRef` into modules + metadata (e.g. from R2).
@@ -43,8 +44,6 @@ export interface WorkerBundle {
 
 export interface WorkersDeployerOptions extends CfApiOptions {
   loadBundle(bundleRef: string): Promise<WorkerBundle>;
-  /** Flagship app bound as `FLAGS` in every version (env FLAGSHIP_APP_ID); absent: no `FLAGS`. */
-  flagshipAppId?: string;
   /** Turn workers.dev on for scripts the deployer creates (default true). */
   workersDev?: boolean;
 }
@@ -91,13 +90,16 @@ export function hyphenateUuid(id: string): string {
 }
 
 /**
- * The bindings a deployed version gets: the bundle's own plain vars (validated) plus `FLAGS` and
- * `VERSION`. Throws `BundleBindingError` for any other binding or a reserved name.
+ * The bindings a deployed version gets: the bundle's own plain vars (validated) plus `FLAGS` (the
+ * project's own Flagship app, required) and `VERSION`. Throws `BundleBindingError` for any other
+ * binding or a reserved name.
  */
 export function deployBindings(
   declared: unknown,
-  flagshipAppId: string | undefined,
+  flagshipAppId: string,
 ): Array<Record<string, unknown>> {
+  if (flagshipAppId.trim() === "")
+    throw new BundleBindingError("a deploy needs the project's own Flagship app for FLAGS");
   const own = Array.isArray(declared) ? declared : [];
   const reserved = new Set([FLAGS_BINDING, VERSION_BINDING]);
   const out: Array<Record<string, unknown>> = [];
@@ -113,8 +115,7 @@ export function deployBindings(
       throw new BundleBindingError(`binding name ${name} is reserved for the platform`);
     out.push(binding);
   }
-  if (flagshipAppId !== undefined && flagshipAppId !== "")
-    out.push({ type: "flagship", name: FLAGS_BINDING, app_id: flagshipAppId });
+  out.push({ type: "flagship", name: FLAGS_BINDING, app_id: flagshipAppId });
   out.push({ type: "version_metadata", name: VERSION_BINDING });
   return out;
 }
@@ -148,12 +149,13 @@ export class WorkersDeployer implements Deployer {
     sha: string;
     bundleRef: string;
     message: string;
+    flagshipAppId: string;
   }): Promise<{ versionId: string }> {
     const bundle = await this.opts.loadBundle(input.bundleRef);
     const metadata = {
       ...bundle.metadata,
       main_module: bundle.mainModule,
-      bindings: deployBindings(bundle.metadata.bindings, this.opts.flagshipAppId),
+      bindings: deployBindings(bundle.metadata.bindings, input.flagshipAppId),
       annotations: {
         "workers/message": input.message.slice(0, 1000),
         "workers/tag": input.changeId.slice(0, 100),
@@ -227,6 +229,23 @@ export class WorkersDeployer implements Deployer {
       },
       z.unknown(),
     );
+  }
+
+  /**
+   * Delete a project's Worker (project deletion), with `force` so its bindings do not block it.
+   * A missing script is fine. Its Flagship app can be deleted only after this.
+   */
+  async deleteScript(script: string): Promise<void> {
+    try {
+      await cfRequest(
+        this.opts,
+        { method: "DELETE", path: this.scriptPath(script), query: { force: "true" } },
+        z.unknown(),
+      );
+    } catch (e) {
+      if (isScriptNotFound(e)) return;
+      throw e;
+    }
   }
 
   /** Versions of the newest deployment; `[]` for a script that does not exist yet. */

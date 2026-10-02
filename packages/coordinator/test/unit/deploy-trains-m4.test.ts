@@ -109,7 +109,11 @@ describe("M4 through deploy trains", () => {
     await tick(env, 1);
     telemetry.fallback = healthy; // v0 is back at 100%: healthy again
 
-    expect(flags.history).toContainEqual({ key: "change-c1", enabled: false });
+    // Killed in the project's own Flagship app, the one its Worker binds.
+    const appId = (await store.getRepo(env.repo.id))?.flagshipAppId;
+    expect(appId).toBeTruthy();
+    expect(deployer.uploads[0]?.flagshipAppId).toBe(appId);
+    expect(flags.history).toContainEqual({ appId, key: "change-c1", enabled: false });
     expect(deployer.rollbacks).toEqual([
       expect.objectContaining({ script: SCRIPT, versionId: "v0" }),
     ]);

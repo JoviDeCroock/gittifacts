@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { DoAudit } from "../../src/audit/audit.js";
 import { expireUnclaimedProjects } from "../../src/claim/expire.js";
 import { TEST_DUMMY_TOKEN, TEST_SECRET_FAIL } from "../../src/claim/turnstile.js";
-import { previews, principals, projectClaims } from "../../src/db/schema.js";
+import { previews, principals, projectClaims, repos } from "../../src/db/schema.js";
 import { store } from "../fixtures.js";
 import { createAgent, signUpHuman } from "../http.js";
 import { type IntegrationFakes, resetIntegrationFakes } from "./fakes.js";
@@ -202,6 +202,10 @@ describe("claim flow", () => {
 });
 
 describe("TTL expiry (cron)", () => {
+  const released: string[] = [];
+  beforeEach(() => {
+    released.length = 0;
+  });
   const deps = (nowMs: number, git: { deleteRepo(n: string): Promise<void> } = fakes.git) => ({
     store: store(),
     blobs: env.BLOBS,
@@ -213,6 +217,12 @@ describe("TTL expiry (cron)", () => {
     closeWorkspace: async () => {},
     destroyPreview: async (id: string) => {
       await env.PREVIEW_HOST.getByName(id).destroy();
+    },
+    deleteWorker: async (script: string) => {
+      released.push(`worker:${script}`);
+    },
+    deleteFlagApp: async (appId: string) => {
+      released.push(`app:${appId}`);
     },
     now: () => new Date(nowMs),
   });
@@ -313,5 +323,26 @@ describe("TTL expiry (cron)", () => {
     ]);
     expect(await store().getRepo(p.projectId)).toBeNull();
     await createAgent(app, human.cookie);
+  });
+  it("deletes a project's Worker, then its own Flagship app (a bound app cannot be deleted)", async () => {
+    const app = platformApp();
+    const p = await createUnclaimed(app, { template: "static-site", name: "with-app" });
+    const expiresAt = Date.parse((await store().getRepo(p.projectId))?.claim.expiresAt ?? "");
+    // Unclaimed projects never get a deploy target through the API; write one directly to cover
+    // project deletion in general (the Worker goes first, then the app it binds).
+    await store()
+      .db.update(repos)
+      .set({ deployTarget: `gf-${p.projectId}-api`, flagshipAppId: `app-${p.projectId}` })
+      .where(eq(repos.id, p.projectId));
+    const results = await expireUnclaimedProjects(deps(expiresAt + 1000));
+    expect(results).toEqual([
+      expect.objectContaining({
+        ok: true,
+        workerDeleted: `gf-${p.projectId}-api`,
+        flagAppDeleted: `app-${p.projectId}`,
+      }),
+    ]);
+    expect(released).toEqual([`worker:gf-${p.projectId}-api`, `app:app-${p.projectId}`]);
+    expect(await store().getRepo(p.projectId)).toBeNull();
   });
 });

@@ -110,6 +110,8 @@ export const repos = sqliteTable(
     policy: text("policy", { mode: "json" }).$type<unknown>().notNull(),
     policySha: text("policy_sha"),
     deployTarget: text("deploy_target"),
+    /** The project's own Flagship app (change flags; its Workers bind FLAGS to it only). */
+    flagshipAppId: text("flagship_app_id"),
     /** Onboarding §4: unclaimed projects are created without an account and expire unless claimed. */
     claimStatus: text("claim_status", { enum: ["claimed", "unclaimed"] })
       .notNull()
@@ -123,6 +125,8 @@ export const repos = sqliteTable(
   (t) => [
     uniqueIndex("repos_artifacts_name_uq").on(t.artifactsName),
     uniqueIndex("repos_namespace_name_uq").on(t.namespace, t.name),
+    // Two projects never share a Flagship app (NULLs are distinct in SQLite).
+    uniqueIndex("repos_flagship_app_uq").on(t.flagshipAppId),
     index("repos_claim_expiry_idx").on(t.claimStatus, t.claimExpiresAt),
     index("repos_claim_owner_idx").on(t.claimOwnerId),
   ],

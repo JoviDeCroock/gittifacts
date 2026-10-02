@@ -21,6 +21,7 @@ export const unavailableCoordinator: CoordinatorApi = {
   submitReview: async () => down(),
   kill: async () => down(),
   setLane0: async () => down(),
+  ensureProjectFlags: async () => down(),
   onIssue: async () => down(),
   abandon: async () => down(),
   waitFor: async () => down(),

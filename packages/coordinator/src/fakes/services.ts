@@ -154,6 +154,7 @@ export class FakeDeployer implements Deployer {
     changeId: string;
     sha: string;
     bundleRef: string;
+    flagshipAppId: string;
     versionId: string;
   }> = [];
   readonly splits: Array<{
@@ -169,6 +170,7 @@ export class FakeDeployer implements Deployer {
     sha: string;
     bundleRef: string;
     message: string;
+    flagshipAppId: string;
   }) {
     const versionId = `v${++this.n}-${input.changeId}`;
     this.uploads.push({ ...input, versionId });
@@ -187,20 +189,52 @@ export class FakeDeployer implements Deployer {
   }
 }
 
+/**
+ * In-memory Flagship: apps with their flags. `flags` is every app's flags by key (keys embed the
+ * change id, so they never collide); `apps` keeps them per app for isolation tests.
+ */
 export class FakeFlags implements Flags {
+  readonly apps = new Map<string, { name: string; flags: Map<string, boolean> }>();
   readonly flags = new Map<string, boolean>();
-  readonly history: Array<{ key: string; enabled: boolean }> = [];
-  async ensureChangeFlag(changeId: string, opts: { enabled: boolean }) {
+  readonly history: Array<{ appId: string; key: string; enabled: boolean }> = [];
+  readonly deleted: string[] = [];
+  private n = 0;
+  async ensureApp(name: string) {
+    for (const [id, app] of this.apps) if (app.name === name) return id;
+    const id = `app-${++this.n}-${name}`;
+    this.apps.set(id, { name, flags: new Map() });
+    return id;
+  }
+  async deleteApp(appId: string) {
+    const app = this.apps.get(appId);
+    if (app === undefined) return;
+    for (const key of app.flags.keys()) this.flags.delete(key);
+    this.apps.delete(appId);
+    this.deleted.push(appId);
+  }
+  private app(appId: string) {
+    const app = this.apps.get(appId);
+    if (app === undefined) throw new Error(`Flagship app ${appId} not found`);
+    return app;
+  }
+  async ensureChangeFlag(
+    appId: string,
+    changeId: string,
+    opts: { enabled: boolean; description?: string },
+  ) {
+    const app = this.app(appId);
     const key = flagKeyFor(changeId);
-    if (!this.flags.has(key)) {
+    if (!app.flags.has(key)) {
+      app.flags.set(key, opts.enabled);
       this.flags.set(key, opts.enabled);
-      this.history.push({ key, enabled: opts.enabled });
+      this.history.push({ appId, key, enabled: opts.enabled });
     }
     return key;
   }
-  async setEnabled(flagKey: string, enabled: boolean) {
+  async setEnabled(appId: string, flagKey: string, enabled: boolean) {
+    this.app(appId).flags.set(flagKey, enabled);
     this.flags.set(flagKey, enabled);
-    this.history.push({ key: flagKey, enabled });
+    this.history.push({ appId, key: flagKey, enabled });
   }
 }
 

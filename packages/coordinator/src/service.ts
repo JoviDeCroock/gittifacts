@@ -47,6 +47,7 @@ import { FINAL_STATUSES, KILLABLE_STATUSES, PUSHABLE_STATUSES } from "./lifecycl
 import { changeVersion, clampWait, withChangeNotifications } from "./milestones.js";
 import { errorMessage, parsePolicyExport, resolvePolicy } from "./policy.js";
 import { type Ports, type RepoNeed, SYSTEM_PRINCIPAL_ID } from "./ports.js";
+import { ensureProjectFlagApp } from "./project-flags.js";
 import { openRevertChange } from "./revert.js";
 
 export interface CoordinatorOptions {
@@ -830,7 +831,9 @@ export function createCoordinator(
       const state = change.rolloutState;
       const flagKey = change.flagKey ?? state?.flagKey ?? null;
       if (flagKey !== null)
-        await upstream("disable the change's flag", () => ports.flags.setEnabled(flagKey, false));
+        await upstream("disable the change's flag", async () =>
+          ports.flags.setEnabled(await ensureProjectFlagApp(ports, repo), flagKey, false),
+        );
       const script = repo.deployTarget;
       const previous = state?.previousVersionId ?? null;
       const ours = state?.versionId ?? null;
@@ -933,6 +936,29 @@ export function createCoordinator(
         payload: { agreement },
       });
       return updated;
+    },
+
+    async ensureProjectFlags(actor, repoId) {
+      const repo = await requireRepo(repoId);
+      await assertAccess(actor, repo.id, "admin", noRepo(repoId));
+      if (repo.claim.status !== "claimed" || repo.deployTarget === null) {
+        fail(
+          "invalid-state",
+          "only a claimed project with a deploy target gets a Flagship app",
+          "Set the project's deploy target first.",
+        );
+      }
+      if (repo.flagshipAppId) return repo;
+      const appId = await upstream("create the project's Flagship app", () =>
+        ensureProjectFlagApp(ports, repo),
+      );
+      await audit.append({
+        principalId: actor.id,
+        action: "repo.flag-app-created",
+        subject: repoSubject(repoId),
+        payload: { flagshipAppId: appId },
+      });
+      return (await store.getRepo(repoId)) ?? { ...repo, flagshipAppId: appId };
     },
 
     async onIssue(payload) {

@@ -132,13 +132,24 @@ export async function setDeployTarget(
       `the Worker name ${target} is longer than ${MAX_SCRIPT_NAME} characters; use a shorter script name`,
     );
   }
-  if (target === repo.deployTarget) return { repo, script: target };
-  const updated = await svc.store.updateRepo(repo.id, { deployTarget: target });
-  await svc.audit.append({
-    principalId: caller.principal.id,
-    action: target === null ? "repo.deploy-target-cleared" : "repo.deploy-target-set",
-    subject: `repo:${repo.id}`,
-    payload: { script: target, previous: repo.deployTarget },
-  });
+  let updated = repo;
+  if (target !== repo.deployTarget) {
+    updated = await svc.store.updateRepo(repo.id, { deployTarget: target });
+    await svc.audit.append({
+      principalId: caller.principal.id,
+      action: target === null ? "repo.deploy-target-cleared" : "repo.deploy-target-set",
+      subject: `repo:${repo.id}`,
+      payload: { script: target, previous: repo.deployTarget },
+    });
+  }
+  // The project's own Flagship app (cross-tenant isolation). Clearing the target keeps it: the
+  // Worker still exists and binds it. Best effort: every deploy also creates it when missing.
+  if (target !== null && !updated.flagshipAppId) {
+    try {
+      updated = await svc.coordinator.ensureProjectFlags(caller.principal, repo.id);
+    } catch (e) {
+      console.warn("deploy-target: Flagship app not created yet", repo.id, e);
+    }
+  }
   return { repo: updated, script: target };
 }

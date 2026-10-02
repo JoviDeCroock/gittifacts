@@ -61,6 +61,7 @@ export {
   withLane0Toggle,
 } from "./policy.js";
 export * from "./ports.js";
+export { ensureProjectFlagApp, projectFlagAppName } from "./project-flags.js";
 export {
   ArtifactsPushEvent,
   type ParsedPush,

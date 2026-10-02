@@ -30,6 +30,11 @@ export interface Store {
   insertRepo(repo: Repo): Promise<void>;
   /** Shallow-merges `patch`, returns the new row. */
   updateRepo(id: string, patch: Partial<Omit<Repo, "id" | "createdAt">>): Promise<Repo>;
+  /**
+   * Record the repo's own Flagship app unless it already has one (compare-and-set on null), and
+   * return the app the repo has afterwards: `appId`, or the one a concurrent writer stored first.
+   */
+  setRepoFlagshipApp(repoId: string, appId: string): Promise<string>;
   /** Cache the policy evaluated from the default branch at `sha`. */
   setRepoPolicy(repoId: string, policy: RepoPolicy, sha: string): Promise<void>;
 
@@ -382,13 +387,17 @@ export interface Signer {
 // ---------------------------------------------------------------- release
 
 export interface Deployer {
-  /** Upload a Worker version built from `sha` without routing traffic to it. */
+  /**
+   * Upload a Worker version built from `sha` without routing traffic to it. The version binds
+   * `FLAGS` to `flagshipAppId`, the deploying project's own Flagship app, and to no other.
+   */
   uploadVersion(input: {
     script: string;
     changeId: string;
     sha: string;
     bundleRef: string;
     message: string;
+    flagshipAppId: string;
   }): Promise<{ versionId: string }>;
   currentVersions(script: string): Promise<Array<{ versionId: string; percentage: number }>>;
   /** Split traffic between two versions (percentages must sum to 100). */
@@ -401,13 +410,26 @@ export interface Deployer {
   rollback(script: string, versionId: string, message: string): Promise<void>;
 }
 
+/**
+ * Kill-switch flags. Every project with a deploy target has its own Flagship app (cross-tenant
+ * isolation: a project's Workers bind only their own app); change flags are created and flipped
+ * in that app. The platform's own flags live in a separate app no project Worker binds.
+ */
 export interface Flags {
+  /**
+   * The id of the app named `name`, created when there is none. Names are not unique in
+   * Flagship: with several, the oldest wins (so a retried create converges).
+   */
+  ensureApp(name: string): Promise<string>;
+  /** Delete an app and its flags; a missing app is fine. Fails while a Worker still binds it. */
+  deleteApp(appId: string): Promise<void>;
   /** Idempotent; returns the flag key (e.g. "change-<id>"). */
   ensureChangeFlag(
+    appId: string,
     changeId: string,
     opts: { enabled: boolean; description: string },
   ): Promise<string>;
-  setEnabled(flagKey: string, enabled: boolean): Promise<void>;
+  setEnabled(appId: string, flagKey: string, enabled: boolean): Promise<void>;
 }
 
 export interface Telemetry {

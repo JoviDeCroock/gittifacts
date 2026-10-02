@@ -160,6 +160,13 @@ export interface CoordinatorApi {
   /** Turn Lane 0 on/off for a repo (on requires the shadow agreement threshold). */
   setLane0(actor: Principal, repoId: string, enabled: boolean): Promise<Repo>;
 
+  /**
+   * Give a claimed project with a deploy target its own Flagship app (idempotent; repo admins).
+   * Its change flags live there and its Workers bind `FLAGS` to it only. Deploys also create it
+   * lazily, so a failure here only delays it.
+   */
+  ensureProjectFlags(actor: Principal, repoId: string): Promise<Repo>;
+
   /** Verified Workers Issues webhook payload (already authenticated by the HTTP layer). */
   onIssue(payload: unknown): Promise<void>;
 

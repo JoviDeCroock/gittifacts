@@ -69,10 +69,10 @@ describe("FlagshipFlags", () => {
       ],
       [/^POST .*\/flagship\/apps\/app-1\/flags$/, () => ok({})],
     ]);
-    const flags = new FlagshipFlags({ ...api, appId: "app-1", fetch });
-    expect(await flags.ensureChangeFlag("c1", { enabled: true, description: "change c1" })).toBe(
-      "change-c1",
-    );
+    const flags = new FlagshipFlags({ ...api, fetch });
+    expect(
+      await flags.ensureChangeFlag("app-1", "c1", { enabled: true, description: "change c1" }),
+    ).toBe("change-c1");
     expect(calls[1]).toMatchObject({
       method: "POST",
       url: "https://api.cloudflare.com/client/v4/accounts/acc/flagship/apps/app-1/flags",
@@ -102,7 +102,8 @@ describe("FlagshipFlags", () => {
       [/^GET .*\/flags\/change-c1$/, () => ok(existing)],
       [/^PUT .*\/flags\/change-c1$/, () => ok({})],
     ]);
-    await new FlagshipFlags({ ...api, appId: "app-1", fetch }).setEnabled("change-c1", false);
+    await new FlagshipFlags({ ...api, fetch }).setEnabled("app-1", "change-c1", false);
+    expect(calls.every((c) => c.url.includes("/flagship/apps/app-1/flags/change-c1"))).toBe(true);
     expect(calls.map((c) => c.method)).toEqual(["GET", "PUT"]);
     expect(calls[1]?.body).toEqual({
       key: "change-c1",
@@ -123,9 +124,9 @@ describe("FlagshipFlags", () => {
       rules: [],
     };
     const { fetch, calls } = mockFetch([[/^GET /, () => ok(same)]]);
-    const flags = new FlagshipFlags({ ...api, appId: "app-1", fetch });
-    await flags.ensureChangeFlag("c1", { enabled: true, description: "" });
-    await flags.setEnabled("change-c1", true);
+    const flags = new FlagshipFlags({ ...api, fetch });
+    await flags.ensureChangeFlag("app-1", "c1", { enabled: true, description: "" });
+    await flags.setEnabled("app-1", "change-c1", true);
     expect(calls.every((c) => c.method === "GET")).toBe(true);
     const broken = mockFetch([
       [
@@ -134,8 +135,57 @@ describe("FlagshipFlags", () => {
       ],
     ]);
     await expect(
-      new FlagshipFlags({ ...api, appId: "a", fetch: broken.fetch }).setEnabled("k", false),
+      new FlagshipFlags({ ...api, fetch: broken.fetch }).setEnabled("a", "k", false),
     ).rejects.toBeInstanceOf(CfApiError);
+  });
+});
+
+describe("FlagshipFlags apps (one per project)", () => {
+  it("reuses the oldest app with the name, else creates one; names are not unique", async () => {
+    const apps = [
+      { id: "newer", name: "gf-r1", created_at: "2026-10-02T10:00:00Z" },
+      { id: "older", name: "gf-r1", created_at: "2026-10-01T10:00:00Z" },
+      { id: "other", name: "gf-r2", created_at: "2026-09-01T10:00:00Z" },
+    ];
+    const { fetch, calls } = mockFetch([
+      [/^GET .*\/flagship\/apps$/, () => ok(apps)],
+      [
+        /^POST .*\/flagship\/apps$/,
+        (c) => ok({ id: "fresh", name: (c.body as { name: string }).name }),
+      ],
+    ]);
+    const flags = new FlagshipFlags({ ...api, fetch });
+    expect(await flags.ensureApp("gf-r1")).toBe("older");
+    expect(await flags.ensureApp("gf-r3")).toBe("fresh");
+    expect(calls.map((c) => c.method)).toEqual(["GET", "GET", "POST"]);
+    expect(calls[2]?.body).toEqual({ name: "gf-r3" });
+  });
+
+  it("deletes an app; a missing app is fine, a bound app (409) fails", async () => {
+    const { fetch, calls } = mockFetch([
+      [/^DELETE .*\/apps\/a1$/, () => ok({ id: "a1" })],
+      [
+        /^DELETE .*\/apps\/gone$/,
+        () => ({
+          status: 404,
+          body: { success: false, errors: [{ code: 404, message: "App not found" }] },
+        }),
+      ],
+      [
+        /^DELETE .*\/apps\/bound$/,
+        () => ({
+          status: 409,
+          body: { success: false, errors: [{ code: 409, message: "referenced by a Worker" }] },
+        }),
+      ],
+    ]);
+    const flags = new FlagshipFlags({ ...api, fetch });
+    await flags.deleteApp("a1");
+    await flags.deleteApp("gone");
+    await expect(flags.deleteApp("bound")).rejects.toBeInstanceOf(CfApiError);
+    expect(calls[0]?.url).toBe(
+      "https://api.cloudflare.com/client/v4/accounts/acc/flagship/apps/a1",
+    );
   });
 });
 
@@ -163,6 +213,7 @@ describe("WorkersDeployer", () => {
       sha: "a".repeat(40),
       bundleRef: "bundles/c1",
       message: "change c1",
+      flagshipAppId: "app-of-r1",
     });
     expect(versionId).toBe("ver-9");
     const form = calls[0]?.form;
@@ -180,6 +231,11 @@ describe("WorkersDeployer", () => {
         "workers/message": "change c1",
       },
     });
+    // FLAGS binds the deploying project's own app, and no other Flagship app.
+    const bindings = metadata.bindings as Array<Record<string, unknown>>;
+    expect(bindings.filter((x) => x.type === "flagship")).toEqual([
+      { type: "flagship", name: "FLAGS", app_id: "app-of-r1" },
+    ]);
     expect((form.get("index.js") as Blob).type).toBe("application/javascript+module");
     expect((form.get("lib.wasm") as Blob).type).toBe("application/wasm");
     expect(moduleContentType("x.map")).toBe("application/source-map");

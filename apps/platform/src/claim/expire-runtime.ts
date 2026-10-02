@@ -5,15 +5,24 @@
  * only writer of any other main repo).
  */
 import { SYSTEM_PRINCIPAL_ID } from "@app/coordinator";
-import { ArtifactsGitHost } from "@app/coordinator/adapters";
+import { ArtifactsGitHost, FlagshipFlags, WorkersDeployer } from "@app/coordinator/adapters";
 import * as gitwire from "@app/gitwire";
 import type { Bindings } from "../app-env.js";
 import { DoAudit } from "../audit/audit.js";
+import { DEPLOY_SCRIPT_PREFIX } from "../services/repos.js";
 import { D1Store } from "../store/d1-store.js";
 import { workspaceIdFor } from "../workspace/model.js";
 import { type ExpiredProject, type ExpiryDeps, expireUnclaimedProjects } from "./expire.js";
 
 export function expiryDeps(env: Bindings, now: () => Date = () => new Date()): ExpiryDeps {
+  const api = { accountId: env.CF_ACCOUNT_ID, apiToken: env.CF_API_TOKEN };
+  const workers = new WorkersDeployer({
+    ...api,
+    loadBundle: async () => {
+      throw new Error("expiry never deploys");
+    },
+  });
+  const flags = new FlagshipFlags(api);
   return {
     store: new D1Store(env.DB, env.BLOBS, now),
     blobs: env.BLOBS,
@@ -38,6 +47,13 @@ export function expiryDeps(env: Bindings, now: () => Date = () => new Date()): E
     destroyPreview: async (previewId) => {
       await env.PREVIEW_HOST.getByName(previewId).destroy();
     },
+    deleteWorker: async (script) => {
+      // Only ever a project Worker: never the platform's own or anything outside `gf-`.
+      if (!script.startsWith(DEPLOY_SCRIPT_PREFIX))
+        throw new Error(`not a project Worker: ${script}`);
+      await workers.deleteScript(script);
+    },
+    deleteFlagApp: (appId) => flags.deleteApp(appId),
     now,
   };
 }
