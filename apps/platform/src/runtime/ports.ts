@@ -27,6 +27,7 @@ import {
 import * as gitwire from "@app/gitwire";
 import { createReviewer, DEFAULT_PRICES, type PriceTable, reviewerLlmFromEnv } from "@app/tour";
 import { DoAudit } from "../audit/audit.js";
+import { withIntegrationEvents } from "../integrations/runtime.js";
 import { D1Notifier } from "../notifier.js";
 import { PlatformPreviews } from "../previews/port.js";
 import { OnboardingMetrics } from "../projects/onboarding.js";
@@ -240,7 +241,8 @@ export function buildPorts(env: PortsEnv, role: PortsRole, opts: BuildPortsOptio
     previews: new PlatformPreviews(env, store, now),
     onboarding: new OnboardingMetrics(store, env),
   };
-  return { ...ports, ...opts.overrides };
+  // Change rows and sealed evidence also feed external integrations (webhooks, preview evidence).
+  return withIntegrationEvents({ ...ports, ...opts.overrides }, env);
 }
 
 /** Plans keyed by `.platform/ci.ts` content hash, so unchanged pipelines skip the plan container. */

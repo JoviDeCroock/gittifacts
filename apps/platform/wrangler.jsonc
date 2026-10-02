@@ -131,8 +131,28 @@
   // Per-token request limit for unclaimed projects' tokens (src/limits/request-limit.ts). The
   // namespace id is ours to choose (no resource to create); keep it unique within the account.
   "ratelimits": [
-    { "name": "UNCLAIMED_TOKEN_LIMITER", "namespace_id": "4301", "simple": { "limit": 120, "period": 60 } }
+    { "name": "UNCLAIMED_TOKEN_LIMITER", "namespace_id": "4301", "simple": { "limit": 120, "period": 60 } },
+    // One request budget per external integration (all its installations), API + /git/ proxy
+    // (src/integrations/auth.ts). Namespace id is ours to choose; nothing to create.
+    { "name": "INTEGRATION_LIMITER", "namespace_id": "4302", "simple": { "limit": 600, "period": 60 } }
   ],
+
+  // Integration webhooks (src/integrations/delivery.ts): one message per delivery, at least once.
+  // The consumer retries with its own backoff (msg.retry delaySeconds); after max_retries a message
+  // goes to the dead-letter queue (the delivery row already says `failed` by then).
+  // Create once: `wrangler queues create gittifacts-webhooks` and `… gittifacts-webhooks-dlq`.
+  "queues": {
+    "producers": [{ "binding": "WEBHOOK_QUEUE", "queue": "gittifacts-webhooks" }],
+    "consumers": [
+      {
+        "queue": "gittifacts-webhooks",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 10,
+        "dead_letter_queue": "gittifacts-webhooks-dlq"
+      }
+    ]
+  },
 
   // Declarative exports (SQLite DOs). Mutually exclusive with `migrations`. CiEgressGateway is the
   // WorkerEntrypoint the Runner reaches through ctx.exports for `network: "registries-only"`.

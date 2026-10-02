@@ -8,6 +8,7 @@ import { createApp } from "./app.js";
 import type { Bindings } from "./app-env.js";
 import { runExpiry } from "./claim/expire-runtime.js";
 import { COORDINATOR_OPTIONS } from "./coordinator.js";
+import { onPushEvent, runWebhookQueue, runWebhookSweep } from "./integrations/worker.js";
 import { withUnclaimedLimits } from "./limits/ci-quota.js";
 import { handlePreviewRequest } from "./previews/gateway.js";
 import { isPreviewHost, previewZone } from "./previews/ids.js";
@@ -23,6 +24,8 @@ configureCoordinatorRuntime<Bindings>({
   coordinatorOptions: COORDINATOR_OPTIONS,
   // The agent-native merge queue (MergeQueue DO): scratch-repo jobs, BatchRunWorkflow, resolver.
   mergeQueue: (env, ports) => buildQueueRuntime(env, ports),
+  // Every push (default branch, change forks) → `push` webhooks of installed integrations.
+  onPushEvent: (env, push) => onPushEvent(env, push),
 });
 
 export { CiEgressGateway, CiRunWorkflow, Runner } from "@app/ci-engine";
@@ -51,8 +54,12 @@ export default {
     isPreviewHost(new URL(request.url).hostname, previewZone(env))
       ? handlePreviewRequest(request, env)
       : app.fetch(request, env, ctx),
-  // Cron (wrangler.jsonc triggers.crons): delete unclaimed projects whose TTL ran out.
+  // Cron (wrangler.jsonc triggers.crons): delete unclaimed projects whose TTL ran out; re-queue
+  // integration webhook deliveries a lost queue send left pending.
   scheduled: (_controller, env, ctx) => {
     ctx.waitUntil(runExpiry(env).then(() => undefined));
+    ctx.waitUntil(runWebhookSweep(env).then(() => undefined));
   },
+  // WEBHOOK_QUEUE consumer: signed integration webhook deliveries (src/integrations/delivery.ts).
+  queue: (batch, env) => runWebhookQueue(batch, env),
 } satisfies ExportedHandler<Bindings>;
