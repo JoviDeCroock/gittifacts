@@ -426,6 +426,44 @@ describe("ContainerSandboxJobs", () => {
     );
   });
 
+  it("caches plans by .platform/ci.ts content and skips the plan container on a hit", async () => {
+    const store = new Map<string, unknown>();
+    let plans = 0;
+    const files: Record<string, string | null> = { a: "export default 1", b: "export default 1", c: null };
+    const sandbox = new ContainerSandboxJobs({
+      runner: () => ({
+        run: async () => ({}),
+        plan: async () => {
+          plans += 1;
+          return { ok: true, stdout: `::plan::${JSON.stringify({ version: 1, n: plans })}`, stderr: "", exitCode: 0 };
+        },
+      }),
+      git: {
+        remoteOf: (r) => `https://git/${r}.git`,
+        mintToken: async () => ({ token: "t", expiresAt: "x" }),
+        transferObjects: async () => undefined,
+        readFile: async (repo) => {
+          const text = files[repo];
+          return text === null || text === undefined ? null : new TextEncoder().encode(text);
+        },
+      },
+      planCache: { get: async (k) => store.get(k) ?? null, put: async (k, v) => void store.set(k, v) },
+      logKey: (id, step) => `logs/${id}/${step}`,
+      newJobId: () => "j1",
+    });
+    const sha = "a".repeat(40);
+    expect(await sandbox.planPipeline({ repo: "a", sha })).toEqual({ version: 1, n: 1 });
+    // Same content in another repo: a cache hit, no container.
+    expect(await sandbox.planPipeline({ repo: "b", sha })).toEqual({ version: 1, n: 1 });
+    expect(plans).toBe(1);
+    // No pipeline file: never cached (defaults depend on the repo, not on a file).
+    await sandbox.planPipeline({ repo: "c", sha });
+    await sandbox.planPipeline({ repo: "c", sha });
+    expect(plans).toBe(3);
+    expect([...store.keys()]).toHaveLength(1);
+    expect([...store.keys()][0]).toMatch(/^v1\/[0-9a-f]{64}$/);
+  });
+
   it("evaluates the policy at a sha (no file → null; evaluation error → throws)", async () => {
     const doc = (o: object) =>
       `::evidence::${JSON.stringify({ kind: "policy", sha: "s", path: ".platform/policy.ts", resolved: null, platformChanged: false, platformPaths: [], policyChanged: false, issues: [], ...o })}`;

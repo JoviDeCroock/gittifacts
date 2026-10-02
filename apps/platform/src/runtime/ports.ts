@@ -20,6 +20,7 @@ import {
   ContainerSandboxJobs,
   FlagshipFlags,
   ObservabilityTelemetry,
+  type PlanCache,
   type RunnerLike,
   WorkersDeployer,
 } from "@app/coordinator/adapters";
@@ -183,6 +184,7 @@ export function buildPorts(env: PortsEnv, role: PortsRole, opts: BuildPortsOptio
       runner: (name) => env.RUNNER.getByName(name) as unknown as RunnerLike,
       git,
       logKey: (jobId, step) => RunKeys.log(jobId, step),
+      planCache: r2PlanCache(env.BLOBS),
     }),
     ci: lazyCiEngine(env),
     reviewer: lazyReviewer(env),
@@ -202,4 +204,19 @@ export function buildPorts(env: PortsEnv, role: PortsRole, opts: BuildPortsOptio
     onboarding: new OnboardingMetrics(store, env),
   };
   return { ...ports, ...opts.overrides };
+}
+
+/** Plans keyed by `.platform/ci.ts` content hash, so unchanged pipelines skip the plan container. */
+function r2PlanCache(bucket: R2Bucket): PlanCache {
+  return {
+    async get(key) {
+      const object = await bucket.get(`plan-cache/${key}.json`);
+      return object === null ? null : ((await object.json()) as unknown);
+    },
+    async put(key, spec) {
+      await bucket.put(`plan-cache/${key}.json`, JSON.stringify(spec), {
+        httpMetadata: { contentType: "application/json" },
+      });
+    },
+  };
 }

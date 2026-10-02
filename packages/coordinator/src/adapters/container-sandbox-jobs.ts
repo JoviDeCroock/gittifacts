@@ -23,12 +23,31 @@ export interface RunnerLike {
 export interface ContainerSandboxJobsOptions {
   /** `(name) => env.RUNNER.getByName(name)`. */
   runner(name: string): RunnerLike;
-  git: Pick<GitHost, "remoteOf" | "mintToken" | "transferObjects">;
+  git: Pick<GitHost, "remoteOf" | "mintToken" | "transferObjects"> & Partial<Pick<GitHost, "readFile">>;
+  /**
+   * Plan results keyed by the content hash of `.platform/ci.ts`. Plan mode is deterministic in
+   * the file's content, and starting a container just to re-plan an unchanged pipeline dominates
+   * time-to-first-green. Only successful plans are cached.
+   */
+  planCache?: PlanCache;
   /** R2 key for a job's log. */
   logKey(jobId: string, step: string): string;
   newJobId?: () => string;
   /** Write-token TTL for rebase/revert pushes (seconds, ≤ 600). */
   pushTokenTtlSeconds?: number;
+}
+
+export interface PlanCache {
+  get(key: string): Promise<unknown | null>;
+  put(key: string, spec: unknown): Promise<void>;
+}
+
+/** Bump when the recorder's output format changes, so stale plans are never reused. */
+export const PLAN_CACHE_VERSION = "v1";
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 const PLAN_PREFIX = "::plan::";
@@ -183,6 +202,29 @@ export class ContainerSandboxJobs implements SandboxJobs {
   }
 
   async planPipeline(input: { repo: string; sha: string }): Promise<unknown> {
+    const cacheKey = await this.planCacheKey(input);
+    if (cacheKey !== null) {
+      const cached = await this.opts.planCache?.get(cacheKey).catch(() => null);
+      if (cached !== null && cached !== undefined) return cached;
+    }
+    const spec = await this.planInSandbox(input);
+    if (cacheKey !== null) await this.opts.planCache?.put(cacheKey, spec).catch(() => undefined);
+    return spec;
+  }
+
+  /** `null` when there is nothing safe to key on (no cache, no file, or the read failed). */
+  private async planCacheKey(input: { repo: string; sha: string }): Promise<string | null> {
+    if (this.opts.planCache === undefined || this.opts.git.readFile === undefined) return null;
+    try {
+      const file = await this.opts.git.readFile(input.repo, input.sha, ".platform/ci.ts");
+      if (file === null) return null;
+      return `${PLAN_CACHE_VERSION}/${await sha256Hex(file)}`;
+    } catch {
+      return null;
+    }
+  }
+
+  private async planInSandbox(input: { repo: string; sha: string }): Promise<unknown> {
     const runId = this.jobId("plan");
     const raw = await this.opts.runner(`${runId}:plan`).plan({
       runId,
