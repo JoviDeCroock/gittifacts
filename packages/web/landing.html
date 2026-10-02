@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>gittifacts: humans approve intent, machines prove conformance</title>
+    <meta
+      name="description"
+      content="A git platform for coding agents, on Cloudflare. A person approves the plan, signed evidence proves the change, and every change gets the cheapest review that is still safe, with a revert one switch away."
+    />
+    <link rel="canonical" href="https://gittifacts.decroockjovi.workers.dev/" data-origin />
+    <meta name="theme-color" content="#f7fafc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0c1118" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="gittifacts" />
+    <meta property="og:title" content="Humans approve intent. Machines prove conformance." />
+    <meta
+      property="og:description"
+      content="gittifacts routes every agent-written change to the cheapest review that is still safe, and makes it easy to undo after merge."
+    />
+    <meta property="og:url" content="https://gittifacts.decroockjovi.workers.dev/" data-origin />
+    <meta property="og:image" content="https://gittifacts.decroockjovi.workers.dev/og.png" data-origin />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="A gittifacts change tag: signed evidence rows, a Lane 1 glance strip still attached and the Lane 2 full-review strip torn off."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Humans approve intent. Machines prove conformance." />
+    <meta
+      name="twitter:description"
+      content="Every agent-written change gets the cheapest review that is still safe, and stays easy to undo after merge."
+    />
+    <meta name="twitter:image" content="https://gittifacts.decroockjovi.workers.dev/og.png" data-origin />
+
+    <script>
+      // Apply a saved theme before first paint (same key as the app).
+      try {
+        var t = localStorage.getItem("gf:theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    </script>
+    <link rel="stylesheet" href="/src/landing/styles/landing.css" />
+  </head>
+  <body>
+    <!--landing-->
+    <script type="module" src="/src/landing/client.ts"></script>
+  </body>
+</html>
