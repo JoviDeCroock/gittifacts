@@ -1,6 +1,7 @@
 /**
  * Migration: bring a GitHub repository over in one call; config arrives as a plan to approve.
  */
+import { CLI_PATH, DEFAULT_ORIGIN } from "./content.js";
 import { CopyLine } from "./Hero.js";
 
 const STEPS = [
@@ -35,11 +36,11 @@ export function Migrate() {
               label="Copy the import call"
             />
             <p class="migrate__cmd-label">From a terminal</p>
-            <CopyLine
-              id="import-cli"
-              text="npx gittifacts init --from https://github.com/you/repo"
-              label="Copy the import command"
-            />
+            <CopyLine id="import-cli" label="Copy the import command" scroll>
+              npx -y <span data-origin-text={CLI_PATH}>{`${DEFAULT_ORIGIN}${CLI_PATH}`}</span>{" "}
+              --host <span data-origin-text="">{DEFAULT_ORIGIN}</span> init --from
+              https://github.com/you/repo
+            </CopyLine>
           </div>
         </div>
         <ol class="migrate__steps">

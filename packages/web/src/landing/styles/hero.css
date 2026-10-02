@@ -54,13 +54,6 @@
   font-weight: var(--weight-medium);
   color: var(--text-2);
 }
-.hero__cli {
-  font-size: var(--text-small);
-  color: var(--text-3);
-}
-.hero__cli code {
-  color: var(--text-2);
-}
 .copybtn {
   position: relative;
   display: inline-grid;

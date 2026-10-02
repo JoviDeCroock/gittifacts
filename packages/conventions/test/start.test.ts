@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   claimingLines,
+  cliCommand,
   PLATFORM_SUMMARY,
   StartDoc,
   startGuide,
@@ -20,7 +21,7 @@ const opts = {
     unclaimedProjects: true,
     unclaimedTtlDays: 7,
     oauth: true,
-    deviceFlowCommand: "npx gittifacts login",
+    deviceFlowCommand: cliCommand(HOST, "login"),
   },
 };
 
@@ -73,7 +74,10 @@ describe("startGuide JSON", () => {
     expect(json.auth.oauth.resourceMetadata).toBe(
       `${HOST}/.well-known/oauth-protected-resource/mcp`,
     );
-    expect(json.auth.deviceFlow).toEqual({ available: true, command: "npx gittifacts login" });
+    expect(json.auth.deviceFlow).toEqual({
+      available: true,
+      command: `npx -y ${HOST}/cli/gittifacts.tgz --host ${HOST} login`,
+    });
     const off = startGuide({
       ...opts,
       authHints: { unclaimedProjects: false, unclaimedTtlDays: 7, oauth: false },
@@ -112,6 +116,24 @@ describe("startGuide JSON", () => {
       "merged",
       "reverted",
     ]);
+  });
+});
+
+describe("startGuide CLI", () => {
+  const { json, markdown } = startGuide(opts);
+  const tarball = `${HOST}/cli/gittifacts.tgz`;
+
+  it("runs the CLI from the platform's tarball (not on npm yet), with the host passed", () => {
+    expect(json.cli.tarball).toBe(tarball);
+    expect(json.cli.command).toBe(
+      `npx -y ${tarball} --host ${HOST} init --template workers-api --name my-api --clone`,
+    );
+    expect(json.cli.alias).toBe(`alias gittifacts="npx -y ${tarball}"`);
+    expect(json.cli.note).toContain("npx gittifacts");
+    expect(json.auth.deviceFlow.command).toBe(`npx -y ${tarball} --host ${HOST} login`);
+    expect(markdown).toContain(`\`${json.cli.command}\``);
+    expect(markdown).toContain(json.cli.alias);
+    expect(markdown).not.toMatch(/npx gittifacts (login|init)/);
   });
 });
 

@@ -91,6 +91,11 @@ describe.each(
     expect(md).toContain(opts.claimed ? "**claimed**" : "**unclaimed**");
   });
 
+  it("runs the CLI from the platform's tarball, not npm", () => {
+    expect(md).toContain(`\`npx -y ${HOST}/cli/gittifacts.tgz --host ${HOST} --help\``);
+    expect(md).not.toContain("npx gittifacts");
+  });
+
   it("has no line wider than needed for a code sample", () => {
     for (const line of lines)
       if (!line.startsWith("   `") && !line.startsWith("|"))

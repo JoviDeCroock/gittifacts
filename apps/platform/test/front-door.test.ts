@@ -55,7 +55,11 @@ describe("front door", () => {
     const doc = StartDoc.parse(await startRes.json());
     expect(doc.mcp.url).toBe(`${ORIGIN}/mcp`);
     expect(doc.auth.oauth.available).toBe(true);
-    expect(doc.auth.deviceFlow).toEqual({ available: true, command: "npx gittifacts login" });
+    expect(doc.auth.deviceFlow).toEqual({
+      available: true,
+      command: `npx -y ${ORIGIN}/cli/gittifacts.tgz --host ${ORIGIN} login`,
+    });
+    expect(doc.cli.tarball).toBe(`${ORIGIN}/cli/gittifacts.tgz`);
     const calls = doc.ship.map((s) => parseCall(s.call ?? ""));
     expect(calls.map((c) => c?.tool)).toEqual([
       "create_project",

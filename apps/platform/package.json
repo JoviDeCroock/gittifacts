@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "bundle-templates": "tsx scripts/bundle-templates.ts",
-    "deploy:prepare": "pnpm run bundle-templates && pnpm --filter @app/web build && pnpm --filter @app/docs build && pnpm --filter @app/sandbox build",
+    "deploy:prepare": "pnpm run bundle-templates && pnpm --filter @app/web build && pnpm --filter @app/docs build && pnpm --filter gittifacts pack:assets && pnpm --filter @app/sandbox build",
     "deploy": "pnpm run deploy:prepare && wrangler deploy",
     "deploy:dry-run": "pnpm run deploy:prepare && wrangler deploy --dry-run --outdir .wrangler/dry-run",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",

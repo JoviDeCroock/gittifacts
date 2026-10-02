@@ -275,3 +275,8 @@ fieldset.agent__confirm {
   border: 0;
   min-inline-size: 0;
 }
+
+/* The CLI login command carries this host's tarball URL: let it wrap on phones. */
+.ev-sub code {
+  overflow-wrap: anywhere;
+}

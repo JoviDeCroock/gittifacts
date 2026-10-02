@@ -592,9 +592,7 @@ export function exampleCall(name: string, inputSchema: unknown): string {
   if (required.length === 0) return `${name}({})`;
   const value = (r: string) => {
     const options = schema?.properties?.[r]?.enum;
-    return options !== undefined && options.length > 0
-      ? JSON.stringify(options[0])
-      : `"<${r}>"`;
+    return options !== undefined && options.length > 0 ? JSON.stringify(options[0]) : `"<${r}>"`;
   };
   return `${name}({ ${required.map((r) => `${r}: ${value(r)}`).join(", ")} })`;
 }

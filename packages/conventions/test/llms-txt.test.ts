@@ -38,9 +38,11 @@ describe("llmsTxt", () => {
       `${HOST}/.well-known/oauth-protected-resource/mcp`,
       `${HOST}/docs`,
       `${HOST}/docs/llms-full.txt`,
+      `${HOST}/cli/gittifacts.tgz`,
     ]) {
       expect(text).toContain(`](${url})`);
     }
+    expect(text).toContain(`npx -y ${HOST}/cli/gittifacts.tgz --host ${HOST} --help`);
   });
 
   it("leaves OAuth out when it isn't offered", () => {

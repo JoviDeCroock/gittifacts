@@ -5,6 +5,7 @@
  */
 import { call } from "./calls.js";
 import { isTemplateId, TEMPLATES } from "./catalog.js";
+import { cliCommand } from "./cli.js";
 import { type Commands, commandsFor } from "./project.js";
 import { CONVENTIONS_MARKER } from "./version.js";
 
@@ -87,6 +88,8 @@ export function agentsMd(opts: AgentsMdOptions): string {
     `- Project: \`${repoId}\`${opts.template === undefined ? "" : ` (template \`${opts.template}\`)`}`,
     `- MCP: ${opts.mcpUrl}`,
     `- Guide: ${host}/start · API: ${host}/openapi.json`,
+    "- CLI (every MCP tool as a shell command, JSON output; not on npm yet, the platform serves it):",
+    `   \`${cliCommand(host, "--help")}\``,
     `- Status: ${status[0]}`,
     ...status.slice(1),
     "",

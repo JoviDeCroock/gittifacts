@@ -6,6 +6,7 @@ import type { CreateAgentResponse } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
 import { Avatar, Button, CopyButton, ErrorState, Loading } from "../components/ui.js";
+import { cliCommand } from "../lib/cli.js";
 import { neverSentence, sessionLine } from "../lib/consent-copy.js";
 import { relative } from "../lib/time.js";
 import { plural } from "../lib/vocab.js";
@@ -339,7 +340,7 @@ export function AgentsView() {
               {active.length === 0 ? (
                 <p class="ev-sub">
                   No agent can act for you right now. Connect an MCP client to <code>/mcp</code>,
-                  run <code>npx gittifacts login</code>, or add one by hand.
+                  run <code>{cliCommand("login")}</code>, or add one by hand.
                 </p>
               ) : (
                 <ul class="agents">

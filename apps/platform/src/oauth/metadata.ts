@@ -11,6 +11,7 @@
  */
 import {
   type AuthHints,
+  cliCommand,
   type JsonValue,
   mcpDiscovery,
   type WellKnownDocument,
@@ -75,9 +76,12 @@ export const AS_METADATA_PATH = OAUTH_PATHS.asMetadata;
  * (POST /api/auth/device/code, client_id=gittifacts-cli) and `token_endpoint` (/api/oauth/token),
  * both discovered from /.well-known/oauth-authorization-server.
  */
-export const DEVICE_FLOW_COMMAND = "npx gittifacts login";
+export function deviceFlowCommand(origin: string): string {
+  // The CLI tarball this platform serves (/cli/gittifacts.tgz); `npx gittifacts` once on npm.
+  return cliCommand(origin, "login");
+}
 
 /** The delegated-auth part of `/start` and `/llms.txt` (@app/conventions `authHints`). */
-export function delegatedAuthHints(): Pick<AuthHints, "oauth" | "deviceFlowCommand"> {
-  return { oauth: true, deviceFlowCommand: DEVICE_FLOW_COMMAND };
+export function delegatedAuthHints(origin: string): Pick<AuthHints, "oauth" | "deviceFlowCommand"> {
+  return { oauth: true, deviceFlowCommand: deviceFlowCommand(origin) };
 }

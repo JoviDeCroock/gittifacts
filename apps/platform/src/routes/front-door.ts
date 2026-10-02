@@ -88,7 +88,7 @@ export function startDocument(urls: FrontDoorUrls, unclaimed: UnclaimedHints) {
       unclaimedProjects: unclaimed.enabled,
       unclaimedTtlDays: Math.max(1, Math.round(unclaimed.quotas.ttlDays)),
       unclaimedQuotas: unclaimed.quotas,
-      ...delegatedAuthHints(),
+      ...delegatedAuthHints(urls.origin),
     },
   });
 }
@@ -202,7 +202,7 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
       host: urls.origin,
       mcpUrl: urls.mcpUrl,
       openapiUrl: urls.openapiUrl,
-      oauth: delegatedAuthHints().oauth,
+      oauth: delegatedAuthHints(urls.origin).oauth,
       unclaimed: await unclaimedHints(c),
     });
     return etagged(c, text, "text/plain; charset=utf-8", { ...CACHE, link: frontDoorLinks(urls) });

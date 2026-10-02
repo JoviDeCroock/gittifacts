@@ -11,6 +11,7 @@ import { useLocation } from "preact-iso";
 import { type ConsentView, oauthApi } from "../api/oauth.js";
 import { ConsentFrame, ConsentOutcome, ConsentPanel } from "../components/ConsentPanel.js";
 import { Button, ErrorState, Loading } from "../components/ui.js";
+import { cliCommand } from "../lib/cli.js";
 import { formatUserCode } from "../lib/consent-copy.js";
 import { useResource } from "../state/resource.js";
 
@@ -69,7 +70,7 @@ function EnterCode({ initial, onSubmit }: { initial: string; onSubmit: (code: st
       </Button>
       <div class="device-entry__how">
         <span>No code yet? On the device, run</span>
-        <code>npx gittifacts login</code>
+        <code>{cliCommand("login")}</code>
       </div>
     </form>
   );

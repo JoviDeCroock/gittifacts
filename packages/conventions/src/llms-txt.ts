@@ -4,6 +4,7 @@
  * agent may skip when its context is short.
  */
 import { TEMPLATE_IDS } from "./catalog.js";
+import { cliCommand, cliTarballUrl } from "./cli.js";
 import { MCP_PROTOCOL_VERSION, PLATFORM_SUMMARY, type UnclaimedQuotaHints } from "./start.js";
 import { join, normalizeOrigin, pathOf } from "./urls.js";
 
@@ -63,11 +64,20 @@ export function llmsTxt(opts: LlmsTxtOptions): string {
     ),
     link("OpenAPI", opts.openapiUrl, "the HTTP API; every endpoint mirrors an MCP tool"),
     link(
+      "CLI",
+      cliTarballUrl(host),
+      `every MCP tool as a shell command with JSON output, served as an npm tarball (not on npm yet): \`${cliCommand(host, "--help")}\``,
+    ),
+    link(
       "Docs",
       join(host, "/docs"),
       "task-first guides and generated references (append .md to any page, or send Accept: text/markdown)",
     ),
-    link("Docs, full text", join(host, "/docs/llms-full.txt"), "every docs page in one markdown file"),
+    link(
+      "Docs, full text",
+      join(host, "/docs/llms-full.txt"),
+      "every docs page in one markdown file",
+    ),
     "",
     "## Discovery",
     link(

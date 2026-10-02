@@ -7,6 +7,7 @@ import { NextStep, WaitUntil } from "@app/domain";
 import { z } from "zod";
 import { call } from "./calls.js";
 import { DEFAULT_TEMPLATE, TEMPLATE_IDS, TEMPLATES, TemplateId } from "./catalog.js";
+import { CLI_NPM_NOTE, cliAlias, cliCommand, cliTarballUrl } from "./cli.js";
 import { join, normalizeOrigin, pathOf } from "./urls.js";
 import { CONVENTIONS_VERSION } from "./version.js";
 
@@ -84,7 +85,7 @@ export interface AuthHints {
   unclaimedQuotas?: UnclaimedQuotaHints | undefined;
   /** MCP OAuth (RFC 9728 discovery from the 401) is available for logged-in users. */
   oauth: boolean;
-  /** CLI device flow, e.g. `npx gittifacts login`. Omit when not available. */
+  /** CLI device flow, e.g. `cliCommand(host, "login")`. Omit when not available. */
   deviceFlowCommand?: string | undefined;
 }
 
@@ -125,6 +126,15 @@ export const StartDoc = z
       oauth: z.object({ available: z.boolean(), resourceMetadata: z.string().url() }),
       deviceFlow: z.object({ available: z.boolean(), command: z.string().optional() }),
       agentToken: z.string(),
+    }),
+    /** The CLI (every MCP tool as a command), served by the platform as an npm tarball. */
+    cli: z.object({
+      tarball: z.string().url(),
+      /** A first command, runnable as is: creates a project and clones it. */
+      command: z.string(),
+      /** Makes the `gittifacts …` commands the CLI prints runnable. */
+      alias: z.string(),
+      note: z.string(),
     }),
     ship: z.array(StartStep).length(3),
     /** The loop for every later change. */
@@ -279,6 +289,12 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
           : { available: true, command: a.deviceFlowCommand },
       agentToken: `A human creates one for you (POST ${host}/api/v1/principals/agents) with the scopes they choose.`,
     },
+    cli: {
+      tarball: cliTarballUrl(host),
+      command: cliCommand(host, `init --template ${DEFAULT_TEMPLATE} --name my-api --clone`),
+      alias: cliAlias(host),
+      note: `Node 22 or later. ${CLI_NPM_NOTE}`,
+    },
     ship,
     loop,
     waitUntil: [...WaitUntil.options],
@@ -348,6 +364,13 @@ export function renderStartMarkdown(doc: StartDoc): string {
       `   Returns ${s.returns}`,
     );
   }
+  lines.push(
+    "",
+    "## Or from a shell: the CLI",
+    `Every MCP tool is a command; output is JSON. ${doc.cli.note}`,
+    `   \`${doc.cli.command}\``,
+    `   Then \`${doc.cli.alias}\` makes the \`gittifacts …\` commands it prints runnable.`,
+  );
   lines.push("", "## Then, for every change");
   doc.loop.forEach((s, i) => {
     lines.push(`${i + 1}. ${s.title}:`, ...step(s));

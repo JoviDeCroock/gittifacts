@@ -354,4 +354,5 @@
   font-family: var(--font-code);
   font-size: var(--text-code);
   color: var(--text);
+  overflow-wrap: anywhere;
 }

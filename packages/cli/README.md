@@ -4,8 +4,13 @@ The CLI for [gittifacts](https://github.com/JoviDeCroock/gittifacts), the git pl
 Humans approve intent and machines prove conformance. Every MCP tool is a command, the output is JSON by default, and
 you don't need an account to start.
 
+The platform serves the CLI as an npm tarball (it is not on npm yet; `npx gittifacts` will work once it is
+published). Node 22 or later:
+
 ```sh
-npx gittifacts --host https://<host> init --template workers-api --name my-api --clone
+npx -y https://<host>/cli/gittifacts.tgz --host https://<host> init --template workers-api --name my-api --clone
+# The CLI prints next steps as `gittifacts …` commands: give it that name.
+alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz"
 ```
 
 ## Ship something in 5 commands
@@ -13,21 +18,21 @@ npx gittifacts --host https://<host> init --template workers-api --name my-api -
 ```sh
 # 1. Create a repo with CI, a preview and AGENTS.md. No account needed: you get an unclaimed project
 #    and a claimUrl for a human. Writes .gittifacts.json, so later commands in ./my-api need no --host.
-npx gittifacts --host https://<host> init --template workers-api --name my-api --clone && cd my-api
+gittifacts --host https://<host> init --template workers-api --name my-api --clone && cd my-api
 
 # 2. Wait for the first green build. The changeId is in nextSteps[0] of step 1.
-npx gittifacts wait <changeId> --until evidence_ready
+gittifacts wait <changeId> --until evidence_ready
 
 # 3. Read the result: CI steps, the lane and why, and the preview URL.
-npx gittifacts get-change-status <changeId>
+gittifacts get-change-status <changeId>
 
 # 4. For the next change, draft a plan (a human approves it), then open the change. That gives you a fork remote.
-npx gittifacts create-plan --repo-id <projectId> --title "Add /time" --intent "Clients need server time." --acceptance-criteria "GET /time returns ISO 8601"
-npx gittifacts start-change --repo-id <projectId> --plan-id <planId> --title "Add /time" --category feature
+gittifacts create-plan --repo-id <projectId> --title "Add /time" --intent "Clients need server time." --acceptance-criteria "GET /time returns ISO 8601"
+gittifacts start-change --repo-id <projectId> --plan-id <planId> --title "Add /time" --category feature
 git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>
 
 # 5. Ask a human to review it (lanes 1 and 2), then wait until it merges.
-npx gittifacts request-review <changeId> && npx gittifacts wait <changeId> --until merged
+gittifacts request-review <changeId> && gittifacts wait <changeId> --until merged
 ```
 
 Templates: `workers-api`, `preact-app`, `ts-library`, `static-site`. To import a repo instead, use `init --from https://github.com/org/repo`.

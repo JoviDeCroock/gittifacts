@@ -68,8 +68,8 @@ export function Agents() {
             <dd>
               A streamable-HTTP MCP server at{" "}
               <code data-origin-text="/mcp">{`${DEFAULT_ORIGIN}/mcp`}</code>, the{" "}
-              <code>npx gittifacts</code> CLI, and git over HTTPS. An OpenAPI document covers the
-              rest.
+              <code>gittifacts</code> CLI (served from <code>/cli/gittifacts.tgz</code>), and git
+              over HTTPS. An OpenAPI document covers the rest.
             </dd>
           </div>
           <div>

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { ErrorSchema } from "./api/schemas.js";
 import { registerMemberRoutes } from "./access/routes.js";
+import { ErrorSchema } from "./api/schemas.js";
 import { type AppOptions, createServices } from "./app-env.js";
 import { authFor, callerOf, requirePrincipal } from "./auth/middleware.js";
 import { registerClaimRoutes } from "./claim/routes.js";
@@ -15,6 +15,7 @@ import { originOf } from "./oauth/context.js";
 import { registerQueueRoutes } from "./queue/routes.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerChangeRoutes } from "./routes/changes.js";
+import { registerCliRoutes } from "./routes/cli.js";
 import { type ApiApp, newApiApp, SECURITY } from "./routes/common.js";
 import { registerDocsRoutes } from "./routes/docs.js";
 import { registerFrontDoorRoutes } from "./routes/front-door.js";
@@ -86,6 +87,8 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerFrontDoorRoutes(app, () => app.getOpenAPI31Document(OPENAPI_CONFIG));
   // Documentation (packages/docs build in the static assets): HTML, or markdown on request.
   registerDocsRoutes(app);
+  // The CLI as an npm tarball (packages/cli pack:assets): npx -y <origin>/cli/gittifacts.tgz.
+  registerCliRoutes(app);
   registerWellKnownRoutes(app);
   registerIdentityRoutes(app);
   registerRepoRoutes(app);

@@ -6,7 +6,7 @@ import { type ComponentChildren, Fragment } from "preact";
 import { BrandMark } from "../components/BrandMark.js";
 import { Icon } from "../components/Icon.js";
 import { CaseTag } from "./CaseTag.js";
-import { DEFAULT_ORIGIN, urlParts } from "./content.js";
+import { CLI_PATH, DEFAULT_ORIGIN, urlParts } from "./content.js";
 
 const NAV = [
   { href: "#loop", label: "How it works" },
@@ -141,10 +141,11 @@ export function Hero() {
             <div class="hero__agent">
               <p class="hero__agent-label">Or point your agent at</p>
               <CopyLine id="agent-url" originPath="/start" label="Copy the start URL" />
-              <p class="hero__cli">
-                From a terminal: <code id="cli-init">npx gittifacts init</code>
-                <CopyButton target="cli-init" label="Copy the init command" />
-              </p>
+              <p class="hero__agent-label">Or, from a terminal</p>
+              <CopyLine id="cli-init" label="Copy the init command" scroll>
+                npx -y <span data-origin-text={CLI_PATH}>{`${DEFAULT_ORIGIN}${CLI_PATH}`}</span>{" "}
+                --host <span data-origin-text="">{DEFAULT_ORIGIN}</span> init
+              </CopyLine>
             </div>
           </div>
         </div>
