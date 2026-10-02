@@ -92,8 +92,8 @@ Up to 8 attempts, retried after 10 s, 30 s, 2 min, 10 min, 30 min, 60 min, 120 m
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `maxBatchSize` | 4 | Entries per batch (a land-together unit may exceed it). Fixed: prediction-driven sizing and ordering lost to it in the simulator (see sim/merge-queue/report.md) and was removed. |
-| `maxSpeculationDepth` | 8 | In-flight (untested) batches a new batch may speculate on, itself included (1 = no speculation). |
-| `batchHoldMs` | 2 min | A batch built on an in-flight predecessor can't land before it anyway, so it stays open for joiners this long after its parent started (free batching: fewer CI runs, no added latency). |
+| `maxSpeculationDepth` | 16 | In-flight (untested) batches a new batch may speculate on, itself included (1 = no speculation). |
+| `batchHoldMs` | 0 min | A batch built on an in-flight predecessor can't land before it anyway, so it may stay open for joiners this long after its predecessors started (fewer CI runs). Off by default: with direct carrying it cost more latency than the CI it saved (see sim/merge-queue/report.md). |
 | `maxInFlightBatches` | 128 | In-flight chain batches across the repo. Backpressure: while it is reached, arrivals wait and are batched together when a slot frees (bigger batches, fewer CI minutes). |
 | `coBatch` | true | Independent units placed in the same pass may share one batch (saves CI; couples their fate). |
 | `maxTracks` | 32 |  |
@@ -110,6 +110,5 @@ Up to 8 attempts, retried after 10 s, 30 s, 2 min, 10 min, 30 min, 60 min, 120 m
 | `initialCiDurationMs` | 10 min | Prior for the CI duration estimate (ETAs) before any run has finished. |
 | `mainLogLimit` | 2000 | Landed main commits remembered for staleness checks. |
 | `resultCacheSize` | 256 | Passing full runs remembered by tree sha (`features.resultCache`). |
-| `twinMinRisk` | 0 | Both-outcome speculation is forked only against in-flight batches whose remaining failure risk — 1 − Π predicted pass probability of their entries, times the share of the run still ahead (failures report fail-fast) — is at least this. Predictions only choose where to fork; they never skip a check. |
 | `earlyLandingLeadMs` | 150 s | How far ahead of its expected finish a running batch may join the landing pipeline. |
 | `retainTerminal` | 500 | Terminal entries kept for status queries. |
