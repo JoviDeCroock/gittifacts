@@ -105,7 +105,13 @@
       { "name": "RUNNER", "class_name": "Runner" },
       // One per pinned preview (p-<changeId>-<sha8>): the change's built Worker under workerd in
       // its own container (same sandbox image), started from the CI build snapshot.
-      { "name": "PREVIEW_HOST", "class_name": "PreviewHost" }
+      { "name": "PREVIEW_HOST", "class_name": "PreviewHost" },
+      // One per Change workspace (ws-<changeId>): a remote sandbox with the Change's fork checked
+      // out, for agents without a shell (open_workspace / ws_*). Its own container app.
+      { "name": "WORKSPACE", "class_name": "Workspace" },
+      // One per project (repo id): workspace quota (vCPU-seconds/day), open workspaces, and the
+      // latest .platform proposal of an import.
+      { "name": "PROJECT_LEDGER", "class_name": "ProjectLedger" }
     ]
   },
 
@@ -117,7 +123,11 @@
     "MergeQueue": { "type": "durable-object", "storage": "sqlite" },
     "Runner": { "type": "durable-object", "storage": "sqlite", "container": "runner" },
     "PreviewHost": { "type": "durable-object", "storage": "sqlite", "container": "preview" },
-    "CiEgressGateway": { "type": "worker" }
+    "CiEgressGateway": { "type": "worker" },
+    "Workspace": { "type": "durable-object", "storage": "sqlite", "container": "workspace" },
+    "ProjectLedger": { "type": "durable-object", "storage": "sqlite" },
+    // registries-only egress for workspaces: the CI policy plus `git push` to the own fork.
+    "WorkspaceEgressGateway": { "type": "worker" }
   },
 
   // compute.md §3.1. The durable_object policy rejects image / instance_type / max_instances: the
@@ -140,6 +150,17 @@
     {
       "name": "preview",
       "class_name": "PreviewHost",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": { "dockerfile": "../sandbox/Dockerfile", "build_context": "../sandbox" }
+      },
+      "observability": { "logs": { "enabled": true } }
+    },
+    // Remote workspaces: same image again (one container app per DO class). They restore the
+    // Runner's install snapshots when the digests match, else fall back to the image.
+    {
+      "name": "workspace",
+      "class_name": "Workspace",
       "scheduling_policy": "durable_object",
       "images": {
         "base": { "dockerfile": "../sandbox/Dockerfile", "build_context": "../sandbox" }
