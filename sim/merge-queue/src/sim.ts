@@ -1248,7 +1248,11 @@ class Sim {
     for (const r of ejected) codes[r.ejectCode ?? "?"] = (codes[r.ejectCode ?? "?"] ?? 0) + 1;
     const decided = merged.length + ejected.length;
     const sizes = [...this.batchSizes.values()];
-    const runsLeaked = this.refs.size;
+    // A ref is leaked only if its batch is gone or finished (in-flight batches legitimately own refs).
+    const runsLeaked = [...this.refs].filter((ref) => {
+      const b = this.core.batches[ref.slice("refs/queue/".length)];
+      return b === undefined || b.state === "landed" || b.state === "cancelled" || b.state === "failed";
+    }).length;
     return {
       scenario: this.sc.name,
       mode: this.opts.mode,
