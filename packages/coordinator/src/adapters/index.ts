@@ -8,5 +8,6 @@ export * from "./container-sandbox-jobs.js";
 export * from "./flagship-flags.js";
 export * from "./line-diff.js";
 export * from "./observability-telemetry.js";
+export * from "./queue-jobs.js";
 export * from "./tree-diff.js";
 export * from "./workers-deployer.js";

@@ -34,6 +34,8 @@ export interface Store {
   setRepoPolicy(repoId: string, policy: RepoPolicy, sha: string): Promise<void>;
 
   getPlan(id: string): Promise<Plan | null>;
+  /** Platform-authored plans (the merge queue's "fix the flaky test"); optional. */
+  insertPlan?(plan: Plan): Promise<void>;
 
   getChange(id: string): Promise<Change | null>;
   getChangeByFork(forkName: string): Promise<Change | null>;

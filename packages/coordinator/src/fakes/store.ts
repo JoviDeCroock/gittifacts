@@ -79,6 +79,10 @@ export class FakeStore implements Store {
     const p = this.plans.get(id);
     return p === undefined ? null : clone(p);
   }
+  async insertPlan(plan: Plan) {
+    if (this.plans.has(plan.id)) throw new Error(`plan ${plan.id} exists`);
+    this.plans.set(plan.id, clone(plan));
+  }
 
   // ------------------------------------------------------------ changes
   async getChange(id: string) {

@@ -62,8 +62,34 @@ export const MergedEvent = z.object({
   rebasedFrom: Sha.nullable(),
   /** Bundle for the merged sha when the queue re-built after a rebase, else null. */
   bundleRef: z.string().nullable(),
+  /**
+   * `train`: the merge queue's deploy trains roll this Change out (with the others merged around
+   * it); the ChangeWorkflow must not start its own RolloutWorkflow. Default: `rollout`.
+   */
+  deployVia: z.enum(["rollout", "train"]).default("rollout"),
 });
-export type MergedEvent = z.infer<typeof MergedEvent>;
+export type MergedEvent = z.input<typeof MergedEvent>;
+
+/**
+ * The agent-native merge queue ejected the Change. Sent with the `merged` event type (the only
+ * one the ChangeWorkflow waits for while queued) so the workflow wakes at once; it fails
+ * `MergedEvent` validation and carries the machine-readable reason.
+ */
+export const QueueEjectedEvent = z.object({
+  ejected: z.literal(true),
+  reason: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      fix: z.object({
+        explanation: z.string(),
+        call: z.string().optional(),
+        command: z.string().optional(),
+      }),
+    })
+    .passthrough(),
+});
+export type QueueEjectedEvent = z.infer<typeof QueueEjectedEvent>;
 
 export const MergeConflictEvent = z.object({
   reason: z.enum(["conflict", "checks-failed", "stale-exhausted", "rejected", "error"]),

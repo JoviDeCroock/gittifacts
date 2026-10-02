@@ -111,6 +111,12 @@ export interface EnqueueInput {
   headSha: string;
   /** The ChangeWorkflow instance that receives `merged` / `merge-conflict`. */
   workflowInstanceId: string;
+  /** Lane the classifier assigned (the agent-native queue; default: the change row's). */
+  lane?: 0 | 1 | 2;
+  /** Highest lane the approval that admitted it covers (lane 0 auto-merge: 0). */
+  approvedLane?: 0 | 1 | 2;
+  /** Why it was admitted (auto-merge rule or a human review). */
+  via?: "lane-0" | "verified-revert" | "review";
 }
 
 export interface MergeQueueEntry {
@@ -126,6 +132,24 @@ export interface MergeQueueClient {
   enqueue(input: EnqueueInput): Promise<{ position: number }>;
   remove(input: { repoId: string; changeId: string }): Promise<boolean>;
   list(repoId: string): Promise<MergeQueueEntry[]>;
+  /**
+   * Agent-native queue only (absent on the serial queue): a result of a queue command that ran
+   * outside the DO (BatchRunWorkflow), validated by the DO like any event.
+   */
+  onQueueResult?(input: { event: unknown; meta?: Record<string, unknown> }): Promise<void>;
+  /** Agent-native queue only: a human approved the Change at `lane` (queue re-approval). */
+  approved?(input: {
+    changeId: string;
+    lane: 0 | 1 | 2;
+    approver: { principalId: string; kind: "human" | "agent" | "system" };
+  }): Promise<void>;
+  /** Agent-native queue only: a Workers Issues regression for a deployed version (trains). */
+  onIssue?(input: {
+    worker: string;
+    versionId: string;
+    issueId: string;
+    frames: { file: string; fn?: string }[];
+  }): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------- all together
