@@ -25,7 +25,7 @@ import {
   WorkersDeployer,
 } from "@app/coordinator/adapters";
 import * as gitwire from "@app/gitwire";
-import { createReviewer, reviewerLlmFromEnv } from "@app/tour";
+import { createReviewer, DEFAULT_PRICES, type PriceTable, reviewerLlmFromEnv } from "@app/tour";
 import { DoAudit } from "../audit/audit.js";
 import { D1Notifier } from "../notifier.js";
 import { PlatformPreviews } from "../previews/port.js";
@@ -58,6 +58,26 @@ export type PortsEnv = Pick<
 
 /** The reviewer model when the repo policy does not override it (policy default is "auto"). */
 export const DEFAULT_REVIEWER_MODEL = "auto";
+
+/**
+ * What a policy's `ai.reviewerModel: "auto"` resolves to on this platform: a Workers AI model,
+ * routed through AI Gateway by the AI binding (no third-party key or credits needed). Live
+ * dogfooding showed third-party ids fail through the binding without Unified Billing credits
+ * (7003), and that Kimi K2.7 Code returns valid structured JSON in ~4 s (DECISIONS.md 2026-10-02).
+ * Override with the `REVIEWER_MODEL` var.
+ */
+export const PLATFORM_AUTO_REVIEWER_MODEL = "@cf/moonshotai/kimi-k2.7-code";
+
+/**
+ * Conservative per-token estimates for Workers AI models (billed in neurons; measured: Kimi
+ * K2.7 Code ≈ 51 neurons for 63 in + 126 out tokens ≈ $0.0006). Over-estimating only makes
+ * the per-change budget escalate sooner, never later.
+ */
+export const WORKERS_AI_PRICES: PriceTable = {
+  "@cf/moonshotai/kimi-k2.7-code": { inputPerMTok: 1, outputPerMTok: 5 },
+  "@cf/openai/gpt-oss-120b": { inputPerMTok: 0.5, outputPerMTok: 2 },
+  "@cf/deepseek-ai/deepseek-v4-pro-0813": { inputPerMTok: 2, outputPerMTok: 8 },
+};
 /** Compatibility date for deployed bundles that do not carry one. */
 export const DEFAULT_BUNDLE_COMPAT_DATE = "2026-09-30";
 
@@ -124,12 +144,19 @@ function declaredKeyId(secret: string | undefined): string | null {
 export function lazyReviewer(
   env: unknown,
   defaultModel: string = DEFAULT_REVIEWER_MODEL,
-  factory: (model: string) => Reviewer = (model) =>
-    createReviewer(reviewerLlmFromEnv(env, { model }), { principalId: "reviewer-agent" }),
+  factory: (model: string) => Reviewer = (model) => {
+    const prices = { ...DEFAULT_PRICES, ...WORKERS_AI_PRICES };
+    return createReviewer(reviewerLlmFromEnv(env, { model, prices }), {
+      principalId: "reviewer-agent",
+      prices,
+    });
+  },
 ): Reviewer {
   const reviewers = new Map<string, Reviewer>();
+  const autoModel = reviewerAutoModel(env);
   const get = (model: string | undefined): Reviewer => {
-    const key = model === undefined || model.trim() === "" ? defaultModel : model;
+    const requested = model === undefined || model.trim() === "" ? defaultModel : model.trim();
+    const key = requested === "auto" ? autoModel : requested;
     let reviewer = reviewers.get(key);
     if (reviewer === undefined) {
       reviewer = factory(key);
@@ -141,6 +168,14 @@ export function lazyReviewer(
     judge: async ({ model, ...input }) => get(model).judge(input),
     tour: async ({ model, ...input }) => get(model).tour(input),
   };
+}
+
+function reviewerAutoModel(env: unknown): string {
+  if (typeof env === "object" && env !== null && "REVIEWER_MODEL" in env) {
+    const v = (env as { REVIEWER_MODEL?: unknown }).REVIEWER_MODEL;
+    if (typeof v === "string" && v.trim() !== "") return v.trim();
+  }
+  return PLATFORM_AUTO_REVIEWER_MODEL;
 }
 
 /** `CiEngine` (@app/ci-engine `selectCiEngine`) chosen by `CI_ENGINE`, built on first use. */
