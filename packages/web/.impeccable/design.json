@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-01T16:52:43.763Z",
+  "generatedAt": "2026-10-02T05:53:36.000Z",
   "title": "Design System: gittifacts",
   "extensions": {
     "colorMeta": {
@@ -127,6 +127,18 @@
       "code": {
         "displayName": "Code",
         "purpose": "Diffs, hashes, globs, commands only."
+      },
+      "landing-display": {
+        "displayName": "Landing Display",
+        "purpose": "Landing hero headline and closing title only. 2.625rem, 3.75rem from 640px, 4rem from 1024px, 4.75rem from 1280px."
+      },
+      "landing-headline": {
+        "displayName": "Landing Headline",
+        "purpose": "Landing section heads, 22ch. 1.75rem, 2.125rem from 640px, 2.5rem from 1024px."
+      },
+      "landing-lede": {
+        "displayName": "Landing Lede",
+        "purpose": "The line under a landing section head, ink-2, 40ch. 1.1875rem, 1.25rem from 640px, 1.375rem from 1024px."
       }
     },
     "shadows": [
@@ -139,6 +151,16 @@
         "name": "sheet",
         "value": "0 -6px 28px oklch(23% 0.035 262 / 0.14)",
         "purpose": "Bottom-fixed decision and signing bars, nav drawer."
+      },
+      {
+        "name": "tag-lift",
+        "value": "drop-shadow(0 1px 1px oklch(23% 0.035 262 / 0.1)) drop-shadow(0 10px 22px oklch(23% 0.035 262 / 0.1))",
+        "purpose": "Landing only: the case tag, lifted off the hero band along its die-cut silhouette (filter, not box-shadow). Night: drop-shadow(0 12px 28px oklch(0% 0 0 / 0.45))."
+      },
+      {
+        "name": "eyelet",
+        "value": "inset 0 2px 3px oklch(23% 0.035 262 / 0.3)",
+        "purpose": "Landing only: inside the case tag's punched hole, so it reads as punched rather than printed."
       }
     ],
     "motion": [
@@ -170,7 +192,17 @@
       {
         "name": "seal-draw",
         "value": "520ms ring + 320ms check, cubic-bezier(0.22, 1, 0.36, 1)",
-        "purpose": "The approval seal, the one authored moment."
+        "purpose": "The approval seal, the app's one authored moment."
+      },
+      {
+        "name": "case-mark-settle",
+        "value": "420ms cubic-bezier(0.22, 1, 0.36, 1), delay 260ms + 90ms per row, from scale(0.55) and opacity 0",
+        "purpose": "Landing only: the case tag's verdict marks settle in row by row on load. Reduced motion: no movement."
+      },
+      {
+        "name": "case-tear",
+        "value": "1100ms cubic-bezier(0.16, 1, 0.3, 1), delay 1050ms",
+        "purpose": "Landing only: the torn strip starts attached, gives once and falls to its hanging angle. Reduced motion shows it already torn."
       }
     ],
     "breakpoints": [
@@ -189,6 +221,22 @@
       {
         "name": "rail",
         "value": "1100px"
+      },
+      {
+        "name": "xs",
+        "value": "480px"
+      },
+      {
+        "name": "tablet",
+        "value": "768px"
+      },
+      {
+        "name": "lg-em",
+        "value": "64em"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
       }
     ]
   },
@@ -246,6 +294,30 @@
       "description": "Sidebar destination; current item is raised.",
       "html": "<nav class=\"ds-nav\"><a aria-current=\"page\" href=\"#\">Repositories</a><a href=\"#\">Audit log</a></nav>",
       "css": ".ds-nav{display:grid;gap:2px;padding:8px;background:oklch(96.4% 0.006 250)}.ds-nav a{display:flex;align-items:center;min-height:40px;padding:0 12px;border-radius:8px;color:oklch(42% 0.028 258);font:560 16px/1.2 \"Atkinson Hyperlegible Next Variable\",system-ui,sans-serif;text-decoration:none}.ds-nav a:hover{background:oklch(94% 0.008 250);color:oklch(23% 0.035 262)}.ds-nav a[aria-current=page]{background:oklch(99.5% 0.002 250);color:oklch(23% 0.035 262);box-shadow:0 1px 2px oklch(23% 0.035 262 / 0.06),0 4px 14px oklch(23% 0.035 262 / 0.06)}"
+    },
+    {
+      "name": "Copy Line",
+      "kind": "input",
+      "refersTo": "copy-line",
+      "description": "Landing: a value to paste in mono, with a teal copy button that only appears when the clipboard is available.",
+      "html": "<div class=\"ds-copyline\"><code class=\"ds-copyline__text\">https://gittifacts.dev/start</code><button type=\"button\" class=\"ds-copyline__btn\" aria-label=\"Copy the start URL\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\"/><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\"/></svg></button></div>",
+      "css": ".ds-copyline{display:flex;align-items:stretch;max-width:30rem;min-height:46px;border:1px solid var(--control-border,oklch(62% 0.02 254));border-radius:8px;background:var(--surface,oklch(99.5% 0.002 250))}.ds-copyline__text{flex:1;min-width:0;align-self:center;padding:8px 12px;font:400 15px/1.4 \"Atkinson Hyperlegible Mono Variable\",ui-monospace,Menlo,monospace;color:var(--text,oklch(23% 0.035 262));white-space:nowrap;overflow-x:auto;user-select:all}.ds-copyline__btn{display:inline-grid;place-items:center;flex:none;width:44px;border:0;border-left:1px solid var(--rule-strong,oklch(84.5% 0.013 252));border-radius:0 7px 7px 0;background:transparent;color:var(--action-ink,oklch(47% 0.088 196));cursor:pointer;transition:background-color 120ms cubic-bezier(0.22,1,0.36,1)}.ds-copyline__btn:hover{background:var(--action-tint,oklch(95.5% 0.025 192))}.ds-copyline__btn:focus-visible{outline:2px solid var(--focus,oklch(55% 0.1 194));outline-offset:-3px}"
+    },
+    {
+      "name": "Case Tag",
+      "kind": "custom",
+      "refersTo": "case-tag",
+      "description": "Landing signature: one change at poster scale, evidence rows with verdict marks, the owed strip attached in its band and the proven-away strip torn off in its tint.",
+      "html": "<figure class=\"ds-case\"><div class=\"ds-case__tag\"><span class=\"ds-case__eyelet\" aria-hidden=\"true\"></span><div class=\"ds-case__body\"><p class=\"ds-case__meta\"><span>billing-api</span><code>chg_fx2r7</code></p><p class=\"ds-case__title\">Cache FX rates for 60 seconds when totalling invoices</p><dl class=\"ds-case__rows\"><div class=\"ds-case__row\"><dt>Tests</dt><dd><span>418 passed, none failing</span><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-label=\"Proven\"><circle cx=\"12\" cy=\"12\" r=\"9.5\" fill=\"oklch(45% 0.1 152)\"/><path d=\"m7.6 12.4 3 3 5.8-6\" fill=\"none\" stroke=\"#fff\" stroke-width=\"2.4\" stroke-linecap=\"round\"/></svg></dd></div><div class=\"ds-case__row\"><dt>Public API</dt><dd><span>No change</span><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-label=\"Proven\"><circle cx=\"12\" cy=\"12\" r=\"9.5\" fill=\"oklch(45% 0.1 152)\"/><path d=\"m7.6 12.4 3 3 5.8-6\" fill=\"none\" stroke=\"#fff\" stroke-width=\"2.4\" stroke-linecap=\"round\"/></svg></dd></div><div class=\"ds-case__row ds-case__row--lane1\"><dt>Model check</dt><dd><span>Rates may be up to 60 s old</span><svg width=\"31\" height=\"18\" viewBox=\"0 0 37 22\" role=\"img\" aria-label=\"Lane 1, glance\"><path d=\"M6.6 0.75 H34 Q36.25 0.75 36.25 3 V19 Q36.25 21.25 34 21.25 H6.6 L0.75 15.4 V6.6 Z M12.6 11 a2.2 2.2 0 1 0 -4.4 0 a2.2 2.2 0 1 0 4.4 0 Z\" fill-rule=\"evenodd\" fill=\"oklch(84% 0.13 82)\" stroke=\"oklch(64% 0.12 74)\"/><text x=\"24\" y=\"11\" dy=\"0.36em\" text-anchor=\"middle\" font-weight=\"800\" font-size=\"13\" fill=\"oklch(23% 0.035 262)\">1</text></svg></dd></div></dl></div><div class=\"ds-case__strip ds-case__strip--1\"><span class=\"ds-case__num\" aria-hidden=\"true\">1</span><b>Glance: still owed</b></div><div class=\"ds-case__strip ds-case__strip--2\"><span class=\"ds-case__num\" aria-hidden=\"true\">2</span><b>Full review: torn off</b></div></div></figure>",
+      "css": ".ds-case{margin:0;width:min(100%,28rem);padding-bottom:3rem;font:400 15px/1.35 \"Atkinson Hyperlegible Next Variable\",system-ui,sans-serif;color:oklch(23% 0.035 262)}.ds-case__tag{position:relative;filter:drop-shadow(0 1px 1px oklch(23% 0.035 262 / 0.1)) drop-shadow(0 10px 22px oklch(23% 0.035 262 / 0.1))}.ds-case__body{padding:63px 24px 24px;background:oklch(99.5% 0.002 250);clip-path:polygon(2.25rem 0,calc(100% - 2.25rem) 0,100% 2.25rem,100% 100%,0 100%,0 2.25rem);-webkit-mask:radial-gradient(circle 9px at 50% 30px,#0000 96%,#000);mask:radial-gradient(circle 9px at 50% 30px,#0000 96%,#000)}.ds-case__eyelet{position:absolute;top:16px;left:calc(50% - 14px);width:28px;height:28px;box-sizing:border-box;z-index:1;border:5px solid oklch(94% 0.008 250);border-radius:50%;box-shadow:inset 0 2px 3px oklch(23% 0.035 262 / 0.3)}.ds-case__meta{display:flex;justify-content:space-between;margin:0;font-size:14px;font-weight:560;color:oklch(51% 0.024 256)}.ds-case__meta code{font-family:\"Atkinson Hyperlegible Mono Variable\",ui-monospace,Menlo,monospace}.ds-case__title{margin:8px 0 0;font-size:19px;font-weight:720;line-height:1.3;letter-spacing:-0.014em}.ds-case__rows{margin:24px 0 0;border-top:2px solid oklch(23% 0.035 262)}.ds-case__row{display:grid;grid-template-columns:6.5rem minmax(0,1fr);align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid oklch(90.5% 0.01 250)}.ds-case__row dt{font-size:14px;font-weight:560;color:oklch(51% 0.024 256)}.ds-case__row dd{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0}.ds-case__row--lane1{margin:0 -8px;padding:8px;background:oklch(97% 0.03 88);border-bottom-color:transparent}.ds-case__row--lane1 dd{font-weight:560}.ds-case__strip{position:relative;display:flex;align-items:center;gap:16px;min-height:76px;box-sizing:border-box;padding:12px 24px}.ds-case__strip b{font-size:18px;font-weight:760;letter-spacing:-0.01em}.ds-case__num{width:2.25rem;font-size:42px;font-weight:800;line-height:1;text-align:center;font-variant-numeric:tabular-nums}.ds-case__strip--1{background:oklch(84% 0.13 82);color:oklch(23% 0.035 262);-webkit-mask:radial-gradient(circle at 0 0,#0000 6px,#000 6.5px) left top/51% 100% no-repeat,radial-gradient(circle at 100% 0,#0000 6px,#000 6.5px) right top/51% 100% no-repeat;mask:radial-gradient(circle at 0 0,#0000 6px,#000 6.5px) left top/51% 100% no-repeat,radial-gradient(circle at 100% 0,#0000 6px,#000 6.5px) right top/51% 100% no-repeat}.ds-case__strip--1::before{content:\"\";position:absolute;left:10px;right:10px;top:0;border-top:2px dashed oklch(64% 0.12 74)}.ds-case__strip--2{background:oklch(96% 0.02 25);color:oklch(46% 0.16 27);transform-origin:6% 0;transform:translate(1rem,2.25rem) rotate(4deg);-webkit-mask:conic-gradient(from 135deg at 50% 0,#000 90deg,#0000 0) 0 0/10px 6px repeat-x,linear-gradient(#000 0 0) 0 5.5px/100% calc(100% - 5.5px) no-repeat;mask:conic-gradient(from 135deg at 50% 0,#000 90deg,#0000 0) 0 0/10px 6px repeat-x,linear-gradient(#000 0 0) 0 5.5px/100% calc(100% - 5.5px) no-repeat}@media (prefers-reduced-motion:no-preference){.ds-case__strip--2{animation:ds-case-tear 1100ms cubic-bezier(0.16,1,0.3,1) 1050ms backwards}}@keyframes ds-case-tear{from{transform:none}18%{transform:translate(0.0625rem,0.125rem) rotate(0.8deg)}}"
+    },
+    {
+      "name": "Station Spine",
+      "kind": "custom",
+      "refersTo": "station-marker-now",
+      "description": "Landing: one change's progress as a vertical spine. Done stations are filled ink discs; the current one is a teal ring with a Now at chip.",
+      "html": "<ol class=\"ds-spine\"><li class=\"ds-station\"><span class=\"ds-station__num\" aria-hidden=\"true\">6</span><span class=\"ds-station__name\">Merge queue</span></li><li class=\"ds-station ds-station--now\"><span class=\"ds-station__num\" aria-hidden=\"true\">7</span><span class=\"ds-station__name\">Rollout<span class=\"ds-station__chip\">Now at 25% of traffic</span></span></li></ol>",
+      "css": ".ds-spine{position:relative;margin:0;padding:0;list-style:none;font:760 22px/1.2 \"Atkinson Hyperlegible Next Variable\",system-ui,sans-serif;color:oklch(23% 0.035 262)}.ds-spine::before{content:\"\";position:absolute;top:24px;bottom:24px;left:19px;border-left:2px solid oklch(62% 0.02 254)}.ds-station{position:relative;display:grid;grid-template-columns:40px minmax(0,1fr);column-gap:16px;align-items:center;padding:24px 0}.ds-station__num{display:grid;place-items:center;width:40px;height:40px;box-sizing:border-box;border:2px solid oklch(23% 0.035 262);border-radius:50%;background:oklch(23% 0.035 262);color:oklch(98.3% 0.004 250);font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}.ds-station--now .ds-station__num{border-color:oklch(47% 0.088 196);background:oklch(98.3% 0.004 250);color:oklch(47% 0.088 196);box-shadow:0 0 0 4px oklch(98.3% 0.004 250),0 0 0 6px oklch(95.5% 0.025 192)}.ds-station__name{letter-spacing:-0.016em}.ds-station__chip{display:inline-block;margin-left:12px;padding:2px 8px;border-radius:6px;background:oklch(95.5% 0.025 192);color:oklch(47% 0.088 196);font-size:14px;font-weight:560;letter-spacing:0;vertical-align:0.25em}"
     }
   ],
   "narrative": {
@@ -256,7 +328,8 @@
       "Banded observation chart (lane columns tinted, hairline armature) explains every lane.",
       "Three verdict shapes: filled disc with check, dashed ring, triangle.",
       "One family (Atkinson Hyperlegible Next) for all UI; its Mono sibling only for code, hashes and data.",
-      "Hairline-separated rows instead of cards; panels only where a block is one decision."
+      "Hairline-separated rows instead of cards; panels only where a block is one decision.",
+      "On the landing, the same world at poster scale: a case tag whose signed evidence tears off the review it proves."
     ],
     "rules": [
       {
@@ -288,6 +361,11 @@
         "name": "The Edge Or Lift Rule",
         "body": "A container has a hairline edge or a raise, not both; decision panels carry a 2px ink edge.",
         "section": "elevation"
+      },
+      {
+        "name": "The Torn Strip Rule",
+        "body": "A strip still attached is review still owed, printed in its lane's full band with the band's edge on its perforation. A strip the evidence tore off drops to its lane's tint behind a torn edge and hangs rotated 3 to 4 degrees below the tag. The loudest thing on the tag is always what a person still has to do.",
+        "section": "components"
       }
     ],
     "dos": [
@@ -295,7 +373,9 @@
       "Do keep tour prose at 1.0625rem with a 68ch measure, and put the reviewer agent's least-confident and not-done lists before the stops on a neutral surface with a 3px ink top rule.",
       "Do make signing deliberate: name the consequence, gate on an explicit attestation where the act is a plan approval, wait for the server, and say what was recorded.",
       "Do use tabular numerals for counts, percentages, times and line numbers.",
-      "Do keep primary phone actions in the bottom bar with env(safe-area-inset-bottom) padding."
+      "Do keep primary phone actions in the bottom bar with env(safe-area-inset-bottom) padding.",
+      "Do show product screens on the landing at 1:1 with light, dark and phone-width captures, and label demo data where it is seen.",
+      "Do make every landing copy control work without script: the value is selectable text first, the copy button an enhancement."
     ],
     "donts": [
       "Don't encode a lane as a colored side stripe on a card or row; use the tag and the tinted group band.",
@@ -303,7 +383,7 @@
       "Don't put a kicker or tracked uppercase label above a heading.",
       "Don't show a pulsing live dot; live data is shown as a ticking countdown or a checked N seconds ago line.",
       "Don't let anything but code blocks and rails scroll horizontally.",
-      "Don't spend motion anywhere except state feedback and the approval seal."
+      "Don't spend motion anywhere except state feedback and the approval seal (on the landing, the case tag's one load moment)."
     ]
   }
 }
