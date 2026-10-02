@@ -25,16 +25,21 @@ function wireCopy(): void {
   for (const btn of document.querySelectorAll<HTMLButtonElement>("[data-copy]")) {
     btn.hidden = false;
     btn.addEventListener("click", async () => {
-      const text = document.getElementById(btn.dataset.copy ?? "")?.textContent?.trim();
+      // innerText keeps line breaks (the three calls copy as three lines).
+      const text = document.getElementById(btn.dataset.copy ?? "")?.innerText.trim();
       if (!text) return;
+      const bubble = btn.querySelector<HTMLElement>(".copyline__done");
       try {
         await navigator.clipboard.writeText(text);
+        if (bubble) bubble.textContent = "Copied";
         btn.dataset.state = "done";
         announce(`Copied ${text}`);
-        window.setTimeout(() => delete btn.dataset.state, 1600);
       } catch {
+        if (bubble) bubble.textContent = "Copy failed: select the text";
+        btn.dataset.state = "failed";
         announce("Copying failed. Select the text and copy it instead.");
       }
+      window.setTimeout(() => delete btn.dataset.state, 2000);
     });
   }
 }
@@ -64,7 +69,18 @@ function pointPictures(theme: Theme): void {
   }
 }
 
+const THEME_COLOR = { light: "#f7fafc", dark: "#0c1118" } as const;
+
+/** The browser chrome follows a forced theme too. */
+function pointThemeColor(theme: Theme): void {
+  for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+    meta.dataset.content ??= meta.content;
+    meta.content = theme === "system" ? (meta.dataset.content ?? "") : THEME_COLOR[theme];
+  }
+}
+
 function applyTheme(theme: Theme): void {
+  pointThemeColor(theme);
   const root = document.documentElement;
   if (theme === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", theme);
@@ -79,7 +95,10 @@ function applyTheme(theme: Theme): void {
 
 function wireTheme(): void {
   const current = readTheme();
-  if (current !== "system") pointPictures(current);
+  if (current !== "system") {
+    pointPictures(current);
+    pointThemeColor(current);
+  }
   const group = document.querySelector<HTMLFieldSetElement>(".footer__theme");
   if (!group) return;
   for (const input of group.querySelectorAll<HTMLInputElement>("input[name='theme']")) {
@@ -89,6 +108,15 @@ function wireTheme(): void {
   group.hidden = false;
 }
 
+/** The phone menu is a <details>; close it once a section is chosen. */
+function wireMenu(): void {
+  const menu = document.querySelector<HTMLDetailsElement>(".topbar__menu");
+  menu?.addEventListener("click", (e) => {
+    if ((e.target as Element).closest("a")) menu.open = false;
+  });
+}
+
 fixOrigin();
 wireCopy();
 wireTheme();
+wireMenu();

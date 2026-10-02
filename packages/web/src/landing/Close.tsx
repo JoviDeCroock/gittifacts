@@ -7,20 +7,15 @@ import { CopyLine } from "./Hero.js";
 
 export function Close() {
   return (
-    <section class="l-section close wrap" aria-labelledby="close-title">
-      <p class="close__stack">
-        <strong>Runs on Cloudflare.</strong> Repositories live in Artifacts. Workflows and Durable
-        Objects run each change and the merge queue, CI runs in Containers, the reviewer agent
-        reaches its models through AI Gateway, and every change gets a Flagship flag.
-      </p>
-      <div class="close__cta">
-        <h2 class="l-h2" id="close-title">
+    <section class="close-band" aria-labelledby="close-title">
+      <div class="close wrap">
+        <h2 class="close__title" id="close-title">
           Start with one change.
         </h2>
         <p class="l-lede">Approve a plan, read a tour, or let an agent find its own way in.</p>
         <div class="close__actions">
-          <a class="btn btn--primary hero__cta" href="/signin">
-            Sign in to review
+          <a class="btn btn--primary hero__cta" href="/signin?mode=signup">
+            Create an account
           </a>
           <CopyLine id="agent-url-3" originPath="/start" label="Copy the start URL" />
         </div>

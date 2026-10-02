@@ -11,10 +11,12 @@ export function CaseTag() {
   return (
     <figure class="case" aria-labelledby="case-title" aria-describedby="case-caption">
       <div class="case__tag">
+        {/* Outside the body's mask, so its inner shadow falls into the punched hole. */}
+        <span class="case__eyelet" aria-hidden="true" />
         <div class="case__body">
-          <span class="case__eyelet" aria-hidden="true" />
           <p class="case__meta">
             <span>{e.repo}</span>
+            <span class="case__chip">Demo data</span>
             <code>{e.id}</code>
           </p>
           <p class="case__title" id="case-title">
@@ -30,17 +32,19 @@ export function CaseTag() {
             {e.rows.map((r, i) => (
               <div class={`case__row case__row--${r.mark}`} key={r.label}>
                 <dt>{r.label}</dt>
-                <dd>{r.value}</dd>
-                <span class="case__mark" style={{ "--i": i }}>
-                  {r.mark === "proven" ? (
-                    <>
-                      <VerdictMark verdict="proven" size={18} />
-                      <span class="sr-only">Proven</span>
-                    </>
-                  ) : (
-                    <LaneTag lane={1} size="sm" />
-                  )}
-                </span>
+                <dd>
+                  <span>{r.value}</span>
+                  <span class="case__mark" style={{ "--i": i }}>
+                    {r.mark === "proven" ? (
+                      <>
+                        <VerdictMark verdict="proven" size={18} />
+                        <span class="sr-only">Proven</span>
+                      </>
+                    ) : (
+                      <LaneTag lane={1} size="sm" />
+                    )}
+                  </span>
+                </dd>
               </div>
             ))}
           </dl>
@@ -54,7 +58,7 @@ export function CaseTag() {
           </span>
           <span class="case__lane">
             <b>
-              <span class="sr-only">Lane 1, </span>Glance
+              <span class="sr-only">Lane 1, </span>Glance: still owed
             </b>
             <span>A model check found a behavior change, so a person approves the tour.</span>
           </span>
@@ -65,16 +69,15 @@ export function CaseTag() {
           </span>
           <span class="case__lane">
             <b>
-              <span class="sr-only">Lane 2, </span>Full review
+              <span class="sr-only">Lane 2, </span>Full review: torn off
             </b>
-            <span>Torn off: no signal calls for it.</span>
+            <span>The evidence covers everything a full review would check.</span>
           </span>
         </div>
       </div>
       <figcaption class="case__caption" id="case-caption">
         Every change starts owing a full review. Signed evidence tears off what it proves; anything
-        missing or unproven stays attached.{" "}
-        <span class="case__demo">Example change, demo data.</span>
+        missing or unproven stays attached.
       </figcaption>
     </figure>
   );

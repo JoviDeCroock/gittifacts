@@ -15,7 +15,10 @@ const SAMPLE = [
 ];
 
 export function SignIn() {
-  const mode = useSignal<"signin" | "signup">("signin");
+  // `/signin?mode=signup` (the landing page's "Create an account") opens on the sign-up form.
+  const mode = useSignal<"signin" | "signup">(
+    new URLSearchParams(window.location.search).get("mode") === "signup" ? "signup" : "signin",
+  );
   const busy = useSignal<"github" | "email" | null>(null);
   const error = useSignal<string | null>(null);
   const name = useSignal("");
@@ -27,14 +30,22 @@ export function SignIn() {
   }, []);
 
   const s = session.value;
-  const notice = s.status === "anon" && s.reason === "expired" ? "Your session ended. Sign in again to pick up where you left off." : s.status === "error" ? `The server could not check your session: ${s.message}` : null;
+  const notice =
+    s.status === "anon" && s.reason === "expired"
+      ? "Your session ended. Sign in again to pick up where you left off."
+      : s.status === "error"
+        ? `The server could not check your session: ${s.message}`
+        : null;
 
   async function submit(e: Event) {
     e.preventDefault();
     if (busy.value) return;
     error.value = null;
     busy.value = "email";
-    const res = mode.value === "signin" ? await signInWithEmail(email.value.trim(), password.value) : await signUpWithEmail(name.value.trim(), email.value.trim(), password.value);
+    const res =
+      mode.value === "signin"
+        ? await signInWithEmail(email.value.trim(), password.value)
+        : await signUpWithEmail(name.value.trim(), email.value.trim(), password.value);
     busy.value = null;
     if (!res.ok) error.value = res.message ?? "Sign-in failed.";
   }
@@ -55,8 +66,12 @@ export function SignIn() {
           <BrandMark size={26} />
           <span class="brand__word">gittifacts</span>
         </div>
-        <h1 class="signin__title">{mode.value === "signin" ? "Sign in to review" : "Create your account"}</h1>
-        <p class="signin__lede">Approve plans, read tours, and watch rollouts for the changes your agents write.</p>
+        <h1 class="signin__title">
+          {mode.value === "signin" ? "Sign in to review" : "Create your account"}
+        </h1>
+        <p class="signin__lede">
+          Approve plans, read tours, and watch rollouts for the changes your agents write.
+        </p>
 
         {notice ? (
           <p class="signin__notice" role="status">
@@ -65,7 +80,14 @@ export function SignIn() {
           </p>
         ) : null}
 
-        <Button variant="secondary" wide class="signin__github" busy={busy.value === "github"} busyLabel="Opening GitHub…" onClick={github}>
+        <Button
+          variant="secondary"
+          wide
+          class="signin__github"
+          busy={busy.value === "github"}
+          busyLabel="Opening GitHub…"
+          onClick={github}
+        >
           <GitHubMark />
           Continue with GitHub
         </Button>
@@ -78,7 +100,14 @@ export function SignIn() {
           {mode.value === "signup" ? (
             <label class="field">
               <span class="field__label">Name</span>
-              <input class="input" name="name" autoComplete="name" required value={name.value} onInput={(e) => (name.value = e.currentTarget.value)} />
+              <input
+                class="input"
+                name="name"
+                autoComplete="name"
+                required
+                value={name.value}
+                onInput={(e) => (name.value = e.currentTarget.value)}
+              />
             </label>
           ) : null}
           <label class="field">
@@ -116,7 +145,13 @@ export function SignIn() {
               {error.value}
             </p>
           ) : null}
-          <Button type="submit" variant="primary" wide busy={busy.value === "email"} busyLabel={mode.value === "signin" ? "Signing in…" : "Creating account…"}>
+          <Button
+            type="submit"
+            variant="primary"
+            wide
+            busy={busy.value === "email"}
+            busyLabel={mode.value === "signin" ? "Signing in…" : "Creating account…"}
+          >
             {mode.value === "signin" ? "Sign in" : "Create account"}
           </Button>
         </form>
@@ -147,9 +182,16 @@ export function SignIn() {
         <div class="signin__specimen-inner">
           <p class="signin__specimen-title">Every change arrives with the reason for its lane.</p>
           <div class="panel">
-            <TriageChart reasons={SAMPLE} computedLane={2} lane={2} caption="Example: why a breaking SDK change needs a full review" />
+            <TriageChart
+              reasons={SAMPLE}
+              computedLane={2}
+              lane={2}
+              caption="Example: why a breaking SDK change needs a full review"
+            />
           </div>
-          <p class="signin__specimen-note">Example from a synthetic breaking API change. Lane 2 means a person reads the diff.</p>
+          <p class="signin__specimen-note">
+            Example from a synthetic breaking API change. Lane 2 means a person reads the diff.
+          </p>
         </div>
       </aside>
     </div>

@@ -2,16 +2,22 @@
 :root {
   --page-max: 80rem;
   /* Marketing type scale: fixed steps per breakpoint, ratio about 1.25 above body. */
-  --l-display: 2.5rem;
+  --l-display: 2.625rem;
   --l-h2: 1.75rem;
   --l-h3: 1.1875rem;
   --l-lede: 1.1875rem;
   --l-body: 1.0625rem;
   --l-section: 4.5rem;
+  /* Steps between the app's ramp, used by the tag, stations and code lines. */
+  --l-row: 0.9375rem;
+  --l-strong: 1.125rem;
+  --l-station: 1.375rem;
+  --l-brand: 1.25rem;
+  --l-numeral: 2.625rem;
 }
 @media (min-width: 640px) {
   :root {
-    --l-display: 3.25rem;
+    --l-display: 3.75rem;
     --l-h2: 2.125rem;
     --l-lede: 1.25rem;
     --l-section: 6rem;
@@ -19,16 +25,17 @@
 }
 @media (min-width: 1024px) {
   :root {
-    --l-display: 3.5rem;
+    --l-display: 4rem;
     --l-h2: 2.5rem;
     --l-h3: 1.3125rem;
     --l-lede: 1.375rem;
     --l-section: 8rem;
+    --l-station: 1.625rem;
   }
 }
 @media (min-width: 1280px) {
   :root {
-    --l-display: 4.25rem;
+    --l-display: 4.75rem;
   }
 }
 
@@ -64,7 +71,7 @@ html {
 }
 .brand__word {
   font-weight: 760;
-  font-size: 1.25rem;
+  font-size: var(--l-brand);
   letter-spacing: -0.02em;
 }
 
@@ -111,12 +118,60 @@ html {
 .topbar__signin {
   margin-inline-start: auto;
 }
+.topbar__menu {
+  position: relative;
+  margin-inline-start: calc(-1 * var(--s-3));
+}
+.topbar__menu summary {
+  display: grid;
+  place-items: center;
+  inline-size: var(--tap);
+  block-size: var(--tap);
+  border-radius: var(--r-control);
+  list-style: none;
+  cursor: pointer;
+}
+.topbar__menu summary::-webkit-details-marker {
+  display: none;
+}
+.topbar__menu[open] summary {
+  background: var(--panel);
+}
+.topbar__menu nav {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + var(--s-2));
+  min-inline-size: 15rem;
+  padding: var(--s-2);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow-raise);
+}
+.topbar__menu ul {
+  list-style: none;
+}
+.topbar__menu a {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  padding-inline: var(--s-3);
+  border-radius: var(--r-control);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+.topbar__menu a:hover {
+  background: var(--panel);
+}
 @media (min-width: 900px) {
   .topbar__nav {
     display: block;
   }
   .topbar__signin {
     margin-inline-start: 0;
+  }
+  .topbar__menu {
+    display: none;
   }
 }
 
@@ -143,6 +198,7 @@ html {
 .l-section {
   padding-block: var(--l-section) 0;
 }
+
 .l-head {
   display: grid;
   gap: var(--s-4);

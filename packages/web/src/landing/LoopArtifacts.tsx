@@ -2,7 +2,10 @@
  * Small artifacts drawn in the app's own components for the loop stations that have no
  * screenshot: the approved plan, the change's fork, and the three lanes. All for chg_fx2r7.
  */
+
+import type { LaneReason } from "@app/domain";
 import { Icon } from "../components/Icon.js";
+import { TriageChart } from "../components/TriageChart.js";
 import { LaneTag } from "../components/ui.js";
 import { EXAMPLE } from "./content.js";
 
@@ -10,21 +13,24 @@ export function PlanArtifact() {
   return (
     <div class="art art-plan">
       <p class="art-plan__head">
-        <Icon name="file-text" size={16} /> Plan for {EXAMPLE.repo}
+        <Icon name="file-text" size={16} /> Plan for {EXAMPLE.repo}, drafted by {EXAMPLE.agent}
       </p>
-      <p class="art-plan__title">Cache FX rates for 60 seconds</p>
+      <p class="art-plan__title">FX rate caching</p>
       <p class="art-plan__intent">
-        Totalling a 200-line invoice makes 200 rate lookups. Cap it at one lookup per currency per
-        minute.
+        Cut FX lookups per invoice total to one per currency per minute.
       </p>
       <dl class="art-plan__facts">
         <div>
           <dt>Done when</dt>
-          <dd>One rate lookup per currency per minute; totals use a rate at most 60 s old</dd>
+          <dd>Rates are cached for at most 60 seconds.</dd>
+        </div>
+        <div>
+          <dt>Risk</dt>
+          <dd>Totals may use a rate up to 60 s old; finance accepted this.</dd>
         </div>
         <div>
           <dt>Out of scope</dt>
-          <dd>A metric for cache hit rate</dd>
+          <dd>Persisted rate history.</dd>
         </div>
         <div>
           <dt>May touch</dt>
@@ -53,7 +59,7 @@ export function ChangeArtifact() {
         <span class="c-out">→ fork chg_fx2r7, with a push token for that fork only</span>
         {"\n\n"}
         <span class="c-call">git push</span> &lt;fork&gt; HEAD:chg_fx2r7{"\n"}
-        <span class="c-out">→ CI started on 7f3c2a1</span>
+        <span class="c-out">→ CI started on 19c18b6</span>
         {"\n\n"}
         <span class="c-call">git push</span> origin main{"\n"}
         <span class="c-err">→ refused: only the merge queue writes main</span>
@@ -62,35 +68,36 @@ export function ChangeArtifact() {
   );
 }
 
-const LANE_RULES = [
-  { lane: 2, name: "Full review", text: "A person reads the diff, with the tour as a guide." },
-  { lane: 1, name: "Glance", text: "A person approves the tour, often on a phone." },
+/** chg_fx2r7's lane reasons, as the classifier reports them (fixture: api/scenarios.ts). */
+const FX_REASONS: LaneReason[] = [
+  { code: "scope.within", lane: 0, message: "The diff stays inside the plan's scope paths." },
+  { code: "tests.passed", lane: 0, message: "418 tests pass, none fail." },
+  { code: "coverage.changed-lines", lane: 0, message: "91% of changed lines covered." },
+  { code: "api.none", lane: 0, message: "No change to the public API." },
+  { code: "dependencies.none", lane: 0, message: "No dependency added or bumped." },
+  { code: "sensitive.none", lane: 0, message: "No sensitive path touched." },
   {
-    lane: 0,
-    name: "Auto-merge",
-    text: "Merges on evidence alone, once shadow mode has earned it.",
+    code: "llm.hidden-behavior-change",
+    lane: 1,
+    message: "Totals can use a rate up to 60 seconds old.",
   },
-] as const;
+];
 
+/** The app's observation chart for this change: every signal, and the one that forced Lane 1. */
 export function LaneArtifact() {
   return (
     <div class="art art-lanes">
-      <ul>
-        {LANE_RULES.map((l) => (
-          <li key={l.lane} class={`art-lanes__row art-lanes__row--${l.lane}`}>
-            <LaneTag lane={l.lane} size="lg" />
-            <span>
-              <b>{l.name}</b>
-              {l.text}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <TriageChart
+        reasons={FX_REASONS}
+        computedLane={1}
+        lane={1}
+        caption={`Why ${EXAMPLE.id} is in Lane 1`}
+      />
       <p class="art-lanes__shadow">
         <LaneTag lane={0} shadow size="sm" />
         <span>
-          Lane 0 starts in shadow mode: computed on every change, while a person still glances,
-          until reviewers have agreed with it on 95% of at least 25 changes.
+          Lane 0 starts in shadow mode: computed on every change while a person still glances, until
+          reviewers have agreed with it on 95% of at least 25 changes.
         </span>
       </p>
     </div>

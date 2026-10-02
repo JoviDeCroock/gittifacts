@@ -10,7 +10,7 @@
   position: absolute;
   inset-block: var(--s-5) var(--s-5);
   inset-inline-start: calc(var(--num) / 2 - 1px);
-  border-inline-start: 2px solid var(--rule-strong);
+  border-inline-start: 2px solid var(--text-4);
 }
 .station {
   position: relative;
@@ -20,6 +20,8 @@
   row-gap: var(--s-5);
   padding-block: var(--s-5) var(--s-7);
 }
+/* The spine is this change's progress, in the rollout track's vocabulary: done stations are
+   filled ink, the station it is at now is the teal current marker. */
 .station__num {
   display: grid;
   place-items: center;
@@ -27,9 +29,30 @@
   block-size: var(--num);
   border: 2px solid var(--text);
   border-radius: 50%;
-  background: var(--canvas);
+  background: var(--text);
+  color: var(--canvas);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+}
+.station--now .station__num {
+  border-color: var(--action);
+  background: var(--canvas);
+  color: var(--action-ink);
+  box-shadow:
+    0 0 0 4px var(--canvas),
+    0 0 0 6px var(--action-tint);
+}
+.station__now {
+  display: inline-block;
+  margin-inline-start: var(--s-3);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--action-tint);
+  color: var(--action-ink);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
+  vertical-align: 0.25em;
 }
 .station__text {
   display: grid;
@@ -38,12 +61,12 @@
   padding-block-start: 0.375rem;
 }
 .station__name {
-  font-size: 1.375rem;
+  font-size: var(--l-station);
   font-weight: 760;
   letter-spacing: -0.016em;
 }
 .station__lead {
-  font-size: 1.125rem;
+  font-size: var(--l-strong);
   font-weight: var(--weight-medium);
   line-height: 1.4;
   text-wrap: balance;
@@ -56,23 +79,26 @@
   max-inline-size: 58ch;
 }
 .station__measured {
-  justify-self: start;
-  margin-block-start: var(--s-2);
-  padding: var(--s-1) var(--s-3);
-  border-radius: 6px;
-  background: var(--panel-strong);
+  margin-block-start: var(--s-3);
+  padding-block-start: var(--s-3);
+  border-block-start: 1px solid var(--rule);
   font-size: var(--text-small);
   color: var(--text-2);
+  max-inline-size: 40ch;
 }
 .station__measured b {
+  display: block;
   color: var(--text);
-  font-weight: var(--weight-medium);
+  font-size: var(--l-h3);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
 }
 .station__art {
   grid-column: 2;
   min-inline-size: 0;
 }
-@media (min-width: 1024px) {
+/* em, so the stations stay stacked when the reader enlarges text. */
+@media (min-width: 64em) {
   .loop__list {
     --num: 3rem;
   }
@@ -85,10 +111,7 @@
     grid-column: 3;
   }
   .station__num {
-    font-size: 1.125rem;
-  }
-  .station__name {
-    font-size: 1.625rem;
+    font-size: var(--l-strong);
   }
 }
 
@@ -97,23 +120,44 @@
 .shot img {
   display: block;
   inline-size: 100%;
-  max-inline-size: 40rem;
   block-size: auto;
 }
+.art-figure {
+  margin: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+.art-figure figcaption {
+  font-size: var(--text-small);
+  color: var(--text-3);
+}
+/* Two phone screens of one tour, side by side; on phones they scroll sideways. */
+.phones {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 78%;
+  gap: var(--s-4);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  padding-block-end: var(--s-2);
+}
 .phone {
-  inline-size: min(100%, 18rem);
+  scroll-snap-align: start;
   border-radius: var(--r-sheet);
   border: 1px solid var(--rule-strong);
   overflow: hidden;
-  box-shadow: var(--shadow-raise);
 }
-.phone .shot img {
-  max-inline-size: none;
+@media (min-width: 640px) {
+  .phones {
+    grid-auto-columns: minmax(0, 21.25rem);
+    overflow: visible;
+  }
 }
 
 /* ================================================================ drawn artifacts */
 .art {
-  max-inline-size: 34rem;
   border: 1px solid var(--rule);
   border-radius: var(--r-panel);
   background: var(--surface);
@@ -122,7 +166,6 @@
   display: grid;
   gap: var(--s-3);
   padding: var(--s-5);
-  border-block-start: 3px solid var(--text);
 }
 .art-plan__head {
   display: flex;
@@ -150,7 +193,7 @@
   gap: var(--s-3);
   padding-block: var(--s-2);
   border-block-end: 1px solid var(--rule);
-  font-size: 0.9375rem;
+  font-size: var(--l-row);
 }
 .art-plan__facts dt {
   font-size: var(--text-small);
@@ -179,7 +222,6 @@
 }
 .art-code {
   margin: 0;
-  max-inline-size: 36rem;
   padding: var(--s-4) var(--s-5);
   border: 0;
   border-radius: var(--r-panel);
@@ -203,35 +245,7 @@
   color: var(--danger);
 }
 .art-lanes {
-  padding: var(--s-3);
-}
-.art-lanes ul {
-  list-style: none;
-  display: grid;
-  gap: var(--s-2);
-}
-.art-lanes__row {
-  display: flex;
-  align-items: center;
-  gap: var(--s-4);
-  padding: var(--s-3) var(--s-4);
-  border-radius: var(--r-control);
-  color: var(--text-2);
-  font-size: 0.9375rem;
-}
-.art-lanes__row b {
-  display: block;
-  color: var(--text);
-  font-size: 1.0625rem;
-}
-.art-lanes__row--2 {
-  background: var(--lane2-tint);
-}
-.art-lanes__row--1 {
-  background: var(--lane1-tint);
-}
-.art-lanes__row--0 {
-  background: var(--lane0-tint);
+  padding: var(--s-2) var(--s-3) var(--s-3);
 }
 .art-lanes__shadow {
   display: flex;

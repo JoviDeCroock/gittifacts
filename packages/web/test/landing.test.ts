@@ -16,7 +16,12 @@ function all(re: RegExp): string[] {
 describe("landing page", () => {
   it("has one h1 with the rule, then h2 sections and no skipped heading levels", () => {
     expect(all(/<h1[^>]*>/g)).toHaveLength(1);
-    expect(html).toMatch(/<h1[^>]*>.*Humans approve intent\..*Machines prove conformance\./);
+    const h1 = /<h1[^>]*>(.*?)<\/h1>/.exec(html)?.[1] ?? "";
+    const text = h1
+      .replace(/<[^>]+>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    expect(text).toBe("Humans approve intent. Machines prove conformance.");
     const levels = all(/<h([1-6])\b/g).map(Number);
     for (let i = 1; i < levels.length; i++) {
       expect(levels[i]! - levels[i - 1]!).toBeLessThanOrEqual(1);
@@ -54,7 +59,8 @@ describe("landing page", () => {
   });
 
   it("labels the example as demo data and quotes only measured numbers", () => {
-    expect(html).toContain("Example change, demo data.");
+    expect(html).toContain(">Demo data</span>");
+    expect(html).toContain("Screens are");
     expect(html).toContain(EXAMPLE.id);
     expect(html).toContain("36 to 48 seconds");
     expect(html).toContain(MEASURED.pushToEvidence);

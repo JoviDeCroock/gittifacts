@@ -1,7 +1,7 @@
 /**
  * The problem and the shift: the pull request's assumption, then what changes and what stays.
  */
-import { SHIFTS } from "./content.js";
+import { SHIFTS, STAYS } from "./content.js";
 
 export function Shift() {
   return (
@@ -16,8 +16,8 @@ export function Shift() {
           answers for what ships.
         </p>
         <p class="l-body">
-          gittifacts is the git platform for what comes after the pull request. The unit of work is
-          a change: the intent, the diff and the evidence that one matches the other, kept together.
+          gittifacts is built for what comes after the pull request. Its unit of work is the change:
+          the intent, the diff and the evidence that one matches the other, kept together.
         </p>
       </div>
       <div class="shift__table">
@@ -27,7 +27,7 @@ export function Shift() {
           </caption>
           <thead>
             <tr>
-              <th scope="col">Before</th>
+              <th scope="col">With pull requests</th>
               <th scope="col">With gittifacts</th>
             </tr>
           </thead>
@@ -42,11 +42,23 @@ export function Shift() {
               </tr>
             ))}
           </tbody>
+          <tbody class="shift__stays">
+            <tr>
+              <th scope="rowgroup" colspan={2}>
+                What stays
+              </th>
+            </tr>
+            {STAYS.map((s) => (
+              <tr key={s.what}>
+                <th scope="row">{s.what}</th>
+                <td>
+                  <strong>{s.how}</strong>
+                  <span>{s.detail}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
         </table>
-        <p class="shift__stays">
-          <strong>What stays:</strong> git. Your history, branches and git clients keep working
-          against the new remote.
-        </p>
       </div>
     </section>
   );

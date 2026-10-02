@@ -12,6 +12,17 @@ interface RenderModule {
   renderLanding(): Promise<string>;
 }
 
+const CSS_STUB = "\0landing-css-stub";
+
+function cssStub(): Plugin {
+  return {
+    name: "gittifacts:landing-css-stub",
+    enforce: "pre",
+    resolveId: (source) => (source.endsWith(".css") ? CSS_STUB : null),
+    load: (id) => (id === CSS_STUB ? "export default {};" : null),
+  };
+}
+
 export function landingPrerender(): Plugin {
   let root = "";
   let server: ViteDevServer | undefined;
@@ -36,9 +47,49 @@ export function landingPrerender(): Plugin {
                 root,
                 logLevel: "error",
                 oxc: { jsx: { runtime: "automatic", importSource: "preact" } },
+                // Components import their stylesheets (landing.css bundles them for the page);
+                // the prerender only needs markup, so CSS imports resolve to an empty module.
+                plugins: [cssStub()],
               })
             ).module;
         return html.replace(MARKER, await mod.renderLanding());
+      },
+    },
+  };
+}
+
+/**
+ * Preloads the latin subset of the UI face on the landing page, so the display headline does
+ * not shift when the font swaps in. Build only: the hashed file name exists after bundling.
+ */
+export function landingFontPreload(): Plugin {
+  return {
+    name: "gittifacts:landing-font-preload",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler(html, ctx) {
+        if (!ctx.filename.endsWith("landing.html") || !ctx.bundle) return html;
+        const font = Object.keys(ctx.bundle).find((f) =>
+          /atkinson-hyperlegible-next-latin-wght-normal.*\.woff2$/.test(f),
+        );
+        if (!font) return html;
+        return {
+          html,
+          tags: [
+            {
+              tag: "link",
+              attrs: {
+                rel: "preload",
+                href: `/${font}`,
+                as: "font",
+                type: "font/woff2",
+                crossorigin: "",
+              },
+              injectTo: "head-prepend",
+            },
+          ],
+        };
       },
     },
   };

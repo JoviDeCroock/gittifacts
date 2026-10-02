@@ -5,6 +5,7 @@
 @import "../../styles/tokens.css";
 @import "../../styles/base.css";
 @import "../../styles/components.css";
+@import "../../styles/triage.css";
 @import "./page.css";
 @import "./hero.css";
 @import "./tag.css";

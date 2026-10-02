@@ -6,7 +6,7 @@
     <title>gittifacts: humans approve intent, machines prove conformance</title>
     <meta
       name="description"
-      content="A git platform for coding agents, on Cloudflare. A person approves the plan, signed evidence proves the change, and every change gets the cheapest review that is still safe, with a revert one switch away."
+      content="The git platform for code agents write. A person approves the plan, signed evidence proves the change, and each change gets the cheapest safe review."
     />
     <link rel="canonical" href="https://gittifacts.decroockjovi.workers.dev/" data-origin />
     <meta name="theme-color" content="#f7fafc" media="(prefers-color-scheme: light)" />
@@ -38,13 +38,20 @@
       content="Every agent-written change gets the cheapest review that is still safe, and stays easy to undo after merge."
     />
     <meta name="twitter:image" content="https://gittifacts.decroockjovi.workers.dev/og.png" data-origin />
+    <meta
+      name="twitter:image:alt"
+      content="A gittifacts change tag: signed evidence rows, a Lane 1 glance strip still attached and the Lane 2 full-review strip torn off."
+    />
 
     <script>
       // Apply a saved theme before first paint (same key as the app).
+      var theme = null;
       try {
-        var t = localStorage.getItem("gf:theme");
-        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+        theme = localStorage.getItem("gf:theme");
       } catch (e) {}
+      if (theme === "light" || theme === "dark") {
+        document.documentElement.setAttribute("data-theme", theme);
+      }
     </script>
     <link rel="stylesheet" href="/src/landing/styles/landing.css" />
   </head>

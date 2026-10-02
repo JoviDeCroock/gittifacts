@@ -117,7 +117,7 @@
 .ttfg__axis {
   position: relative;
   block-size: 3.25rem;
-  margin-inline: 0 1.25rem;
+  margin-inline: 0.75rem 1.5rem;
   border-block-end: 2px solid var(--text);
 }
 .ttfg__range {
@@ -153,4 +153,20 @@
   display: block;
   padding-inline-start: calc(var(--indent) + 2ch);
   text-indent: -2ch;
+}
+.ttfg__target > span {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 6px;
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.agents__calls h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.agents__calls h3 .copybtn {
+  margin-block: -10px;
 }

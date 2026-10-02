@@ -1,13 +1,12 @@
 /* ================================================================ hero */
-body {
-  overflow-x: clip;
-}
 .hero-band {
+  overflow-x: clip;
   background: var(--panel);
   border-block-end: 1px solid var(--rule);
 }
 .hero {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-7);
   padding-block: var(--s-7) var(--s-6);
 }
@@ -19,9 +18,11 @@ body {
 .hero__title {
   font-size: var(--l-display);
   font-weight: 760;
-  line-height: 1.02;
+  line-height: 1;
   letter-spacing: -0.032em;
   text-wrap: balance;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 .hero__title > span {
   display: block;
@@ -60,11 +61,30 @@ body {
 .hero__cli code {
   color: var(--text-2);
 }
+.copybtn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--tap);
+  block-size: var(--tap);
+  margin-block: -14px;
+  vertical-align: middle;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--action-ink);
+}
+.copybtn:hover {
+  background: var(--action-tint);
+}
+.copybtn[data-state="done"] .copyline__done {
+  opacity: 1;
+}
 .hero__tag {
   display: grid;
   justify-items: center;
 }
-@media (min-width: 1024px) {
+@media (min-width: 64em) {
   .hero {
     grid-template-columns: minmax(0, 1fr) minmax(0, 28rem);
     column-gap: var(--s-8);
@@ -81,11 +101,10 @@ body {
 .copyline {
   display: flex;
   align-items: stretch;
-  min-block-size: var(--tap);
+  min-block-size: calc(var(--tap) + 2px);
   border: 1px solid var(--control-border);
   border-radius: var(--r-control);
   background: var(--surface);
-  overflow: hidden;
 }
 .copyline__text {
   flex: 1;
@@ -93,7 +112,7 @@ body {
   display: flex;
   align-items: center;
   padding: var(--s-2) var(--s-3);
-  font-size: 0.9375rem;
+  font-size: var(--l-row);
   color: var(--text);
   overflow-wrap: anywhere;
   user-select: all;
@@ -106,6 +125,7 @@ body {
   inline-size: var(--tap);
   border: 0;
   border-inline-start: 1px solid var(--rule-strong);
+  border-radius: 0 calc(var(--r-control) - 1px) calc(var(--r-control) - 1px) 0;
   background: transparent;
   color: var(--action-ink);
   transition: background-color var(--dur-feedback) var(--ease-out);
@@ -130,6 +150,15 @@ body {
   pointer-events: none;
   transition: opacity var(--dur-state) var(--ease-out);
 }
-.copyline__btn[data-state="done"] .copyline__done {
+.copyline__btn[data-state="done"] .copyline__done,
+[data-state="failed"] .copyline__done {
   opacity: 1;
+}
+/* Commands stay on one line where there is room; they scroll inside their box. */
+@media (min-width: 640px) {
+  .copyline__text {
+    white-space: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
 }

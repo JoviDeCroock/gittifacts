@@ -31,11 +31,38 @@ export function TopBar() {
             ))}
           </ul>
         </nav>
-        <a class="btn btn--secondary btn--sm topbar__signin" href="/signin">
+        <a class="btn btn--secondary topbar__signin" href="/signin">
           Sign in
         </a>
+        {/* Phones: the same sections behind a disclosure that needs no script. */}
+        <details class="topbar__menu">
+          <summary aria-label="Sections">
+            <Icon name="menu" size={22} />
+          </summary>
+          <nav aria-label="Sections">
+            <ul>
+              {NAV.map((n) => (
+                <li key={n.href}>
+                  <a href={n.href}>{n.label}</a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </details>
       </div>
     </header>
+  );
+}
+
+/** A small copy button for an inline value; client.ts enables it. */
+export function CopyButton({ target, label }: { target: string; label: string }) {
+  return (
+    <button type="button" class="copybtn" data-copy={target} aria-label={label} hidden>
+      <Icon name="copy" size={16} />
+      <span class="copyline__done" aria-hidden="true">
+        Copied
+      </span>
+    </button>
   );
 }
 
@@ -72,7 +99,9 @@ export function Hero() {
       <div class="hero wrap">
         <div class="hero__text">
           <h1 class="hero__title" id="hero-title">
-            <span>Humans approve intent.</span> <span>Machines prove conformance.</span>
+            {/* Two parallel sentences, each broken after its verb. */}
+            <span>Humans approve</span> <span>intent.</span> <span>Machines prove</span>{" "}
+            <span>conformance.</span>
           </h1>
           <p class="hero__lede">
             gittifacts is the git platform for teams whose code is mostly written by agents. It
@@ -80,14 +109,15 @@ export function Hero() {
             after merge.
           </p>
           <div class="hero__actions">
-            <a class="btn btn--primary hero__cta" href="/signin">
-              Sign in to review
+            <a class="btn btn--primary hero__cta" href="/signin?mode=signup">
+              Create an account
             </a>
             <div class="hero__agent">
               <p class="hero__agent-label">Or point your agent at</p>
               <CopyLine id="agent-url" originPath="/start" label="Copy the start URL" />
               <p class="hero__cli">
-                From a terminal: <code>npx gittifacts init</code>
+                From a terminal: <code id="cli-init">npx gittifacts init</code>
+                <CopyButton target="cli-init" label="Copy the init command" />
               </p>
             </div>
           </div>

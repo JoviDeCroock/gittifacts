@@ -2,9 +2,8 @@
  * For agents: one URL, three calls, the measured time to first green, errors that say what to
  * do next, and starting without an account.
  */
-
-import { ERROR_EXAMPLE, SHIP_CALLS } from "./content.js";
-import { CopyLine } from "./Hero.js";
+import { DEFAULT_ORIGIN, ERROR_EXAMPLE, SHIP_CALLS } from "./content.js";
+import { CopyButton, CopyLine } from "./Hero.js";
 
 /** Time to first green on the live platform: 36 to 48 s against a 60 s target. */
 function FirstGreen() {
@@ -13,7 +12,9 @@ function FirstGreen() {
     <figure class="ttfg" aria-labelledby="ttfg-caption">
       <div class="ttfg__axis" aria-hidden="true">
         <span class="ttfg__range" style={{ left: pct(36), width: pct(12) }} />
-        <span class="ttfg__target" style={{ left: "100%" }} />
+        <span class="ttfg__target" style={{ left: "100%" }}>
+          <span>target</span>
+        </span>
         {[0, 15, 30, 45, 60].map((s) => (
           <span class="ttfg__tick" key={s} style={{ left: pct(s) }}>
             {s} s
@@ -22,7 +23,7 @@ function FirstGreen() {
       </div>
       <figcaption id="ttfg-caption">
         <strong>First green in 36 to 48 seconds,</strong> measured on the live platform: from one
-        URL to a repo, a passing CI run and a live preview. The target is a minute.
+        URL to a repo, a passing CI run and a live preview. The target is under a minute.
       </figcaption>
     </figure>
   );
@@ -44,8 +45,11 @@ export function Agents() {
         </div>
         <FirstGreen />
         <div class="agents__calls">
-          <h3>Three calls to ship something</h3>
-          <ol>
+          <h3>
+            Three calls to ship something
+            <CopyButton target="ship-calls" label="Copy the three calls" />
+          </h3>
+          <ol id="ship-calls">
             {SHIP_CALLS.map((c) => (
               <li key={c}>
                 <code>{c}</code>
@@ -62,8 +66,10 @@ export function Agents() {
           <div>
             <dt>MCP, CLI or plain git</dt>
             <dd>
-              A streamable-HTTP MCP server, <code>npx gittifacts</code>, and git over HTTPS. An
-              OpenAPI document covers the rest.
+              A streamable-HTTP MCP server at{" "}
+              <code data-origin-text="/mcp">{`${DEFAULT_ORIGIN}/mcp`}</code>, the{" "}
+              <code>npx gittifacts</code> CLI, and git over HTTPS. An OpenAPI document covers the
+              rest.
             </dd>
           </div>
           <div>

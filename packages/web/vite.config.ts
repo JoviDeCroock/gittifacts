@@ -1,11 +1,11 @@
 import preact from "@preact/preset-vite";
 import { defineConfig } from "vite";
-import { landingPrerender } from "./landing.vite.js";
+import { landingFontPreload, landingPrerender } from "./landing.vite.js";
 
 const backend = "http://localhost:8787";
 
 export default defineConfig({
-  plugins: [preact(), landingPrerender()],
+  plugins: [preact(), landingPrerender(), landingFontPreload()],
   server: {
     proxy: {
       "/api": { target: backend, changeOrigin: true },

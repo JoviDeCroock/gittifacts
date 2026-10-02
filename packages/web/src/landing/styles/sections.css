@@ -1,6 +1,7 @@
 /* ================================================================ shift: what changes */
 .shift {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-7);
 }
 .shift__intro {
@@ -47,12 +48,12 @@
   font-size: var(--text-small);
   color: var(--text-2);
 }
-.shift__stays {
-  margin-block-start: var(--s-5);
-  color: var(--text-2);
-}
-.shift__stays strong {
+.shift__stays th[scope="rowgroup"] {
+  padding-block: var(--s-7) var(--s-3);
+  border-block-end: 2px solid var(--text);
   color: var(--text);
+  font-weight: var(--weight-bold);
+  font-size: var(--l-strong);
 }
 @media (min-width: 1024px) {
   .shift {
@@ -64,6 +65,7 @@
 /* ================================================================ migrate */
 .migrate__grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-6);
   padding-block-start: var(--s-7);
   border-block-start: 1px solid var(--rule);
@@ -135,7 +137,7 @@
   border-block-start: 1px solid var(--rule);
 }
 .rules__list h3 {
-  font-size: 1.125rem;
+  font-size: var(--l-strong);
   letter-spacing: -0.01em;
 }
 .rules__list p {
@@ -143,32 +145,58 @@
   color: var(--text-2);
   max-inline-size: 50ch;
 }
+.rules__refusal {
+  margin-block-start: var(--s-2);
+}
+.rules__refusal code {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: var(--text-meta);
+  overflow-wrap: anywhere;
+}
+.rules__ops {
+  margin-block-start: var(--s-5);
+  padding-block-start: var(--s-5);
+  border-block-start: 1px solid var(--rule);
+  color: var(--text-2);
+  max-inline-size: 70ch;
+}
+.rules__ops strong {
+  color: var(--text);
+}
 @media (min-width: 768px) {
   .rules__list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+@media (min-width: 1024px) {
+  .rules__list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 
 /* ================================================================ close */
+.close-band {
+  margin-block-start: var(--l-section);
+  background: var(--panel);
+  border-block-start: 1px solid var(--rule);
+}
 .close {
   display: grid;
-  gap: var(--s-8);
-  padding-block-end: var(--l-section);
-}
-.close__stack {
-  padding-block-start: var(--s-5);
-  border-block-start: 1px solid var(--rule);
-  font-size: var(--text-small);
-  color: var(--text-3);
-  max-inline-size: 78ch;
-}
-.close__stack strong {
-  color: var(--text-2);
-}
-.close__cta {
-  display: grid;
-  gap: var(--s-4);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
   justify-items: start;
+  padding-block: var(--l-section);
+}
+/* The close answers the hero at the same scale. */
+.close__title {
+  font-size: var(--l-display);
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: -0.032em;
 }
 .close__actions {
   justify-self: stretch;
@@ -185,11 +213,12 @@
 /* ================================================================ footer */
 .footer {
   background: var(--panel);
-  border-block-start: 1px solid var(--rule);
+  border-block-start: 1px solid var(--rule-strong);
   padding-block: var(--s-7) max(var(--s-7), env(safe-area-inset-bottom));
 }
 .footer__inner {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-6);
 }
 .footer__brand {

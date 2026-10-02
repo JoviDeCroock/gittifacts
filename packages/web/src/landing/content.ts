@@ -10,8 +10,8 @@ export const DEFAULT_ORIGIN = "https://gittifacts.decroockjovi.workers.dev";
 /** Measured on the live platform (2026-10-02). Never round these up. */
 export const MEASURED = {
   firstGreen: "36 to 48 seconds",
-  pushToEvidence: "about 50 seconds",
-  tourCost: "about $0.015",
+  pushToEvidence: "~50 s",
+  tourCost: "~$0.015",
 } as const;
 
 export type Mark = "proven" | "lane1";
@@ -30,12 +30,12 @@ export const EXAMPLE = {
   title: "Cache FX rates for 60 seconds when totalling invoices",
   agent: "fleet-coder-07",
   owner: "Maya Okafor",
-  approver: "Daniel Ruiz",
-  head: "7f3c2a1",
+  approver: "Dev Patel",
+  head: "19c18b6",
   rows: [
-    { label: "Intent", value: "Plan approved by Daniel Ruiz", mark: "proven" },
+    { label: "Intent", value: "Plan approved by Dev Patel", mark: "proven" },
+    { label: "Tests", value: "418 passed, none failing", mark: "proven" },
     { label: "Coverage", value: "91% of changed lines", mark: "proven" },
-    { label: "Mutation", value: "81% of mutants caught", mark: "proven" },
     { label: "Public API", value: "No change", mark: "proven" },
     { label: "Dependencies", value: "None added or bumped", mark: "proven" },
     { label: "Sensitive paths", value: "None touched", mark: "proven" },
@@ -66,9 +66,28 @@ export const SHIFTS: { before: string; after: string; detail: string }[] = [
     detail: "Evidence decides who looks; the queue keeps main green.",
   },
   {
-    before: "Deploy and hope",
+    before: "Deploy, then revert by hand",
     after: "Flag, gradual rollout, automatic revert",
     detail: "Every change ships behind its own switch.",
+  },
+];
+
+/** What a team keeps when it moves over. */
+export const STAYS: { what: string; how: string; detail: string }[] = [
+  {
+    what: "git",
+    how: "Same commands, new remote",
+    detail: "Clone, branch, commit and push the way you do today.",
+  },
+  {
+    what: "Your history",
+    how: "Comes with you",
+    detail: "Importing a repository brings its full history.",
+  },
+  {
+    what: "Your tools",
+    how: "Keep working",
+    detail: "Editors, scripts and any git client; agents add MCP and a CLI on top.",
   },
 ];
 

@@ -1,38 +1,33 @@
 /**
- * Trust and safety: the invariants the platform enforces, stated plainly.
+ * Trust and safety: the invariants the platform enforces. Where a rule produces a refusal an
+ * agent actually sees, the refusal is quoted (apps/platform/src/services/plans.ts).
  */
-const RULES = [
+const RULES: { title: string; text: string; refusal?: string }[] = [
   {
     title: "Nobody approves their own work",
-    text: "No principal, human or agent, approves a plan or change it wrote.",
+    text: "No one, person or agent, approves a plan or a change they wrote.",
+    refusal: "403 self-approval: a principal cannot approve its own plan",
   },
   {
     title: "Agents never approve",
     text: "They draft plans, push changes and ask for review. Approval is a person's signed act.",
+    refusal: "403 forbidden: only a human may approve or reject a plan",
   },
   {
     title: "Policy comes from the base branch",
-    text: "A change is judged by main's rules, never by rules it edits itself. Policy edits always get a full review.",
+    text: "A change is judged by main's rules, never by rules it edits itself. A policy edit always gets a full review.",
   },
   {
     title: "Unknown escalates",
-    text: "A missing or failed signal can only raise a lane. A model's judgment can only raise it too.",
+    text: "A signal that is missing or failed to run can only raise the lane, never lower it.",
   },
   {
     title: "Evidence is signed and portable",
-    text: "Ed25519 signatures over every item, stored as git notes. Verify them in your own clone.",
+    text: "One Ed25519 signature covers every item, stored as git notes beside the commit. Verify it in your own clone.",
   },
   {
     title: "The audit log is hash-chained",
-    text: "Approvals, merges, flag changes and reverts are recorded in order; editing one entry breaks the chain.",
-  },
-  {
-    title: "CI is sandboxed and holds no secrets",
-    text: "Steps run in containers without credentials, so agent-written code never sees a secret.",
-  },
-  {
-    title: "Data stays in the EU",
-    text: "Repositories, the database and blob storage live in Cloudflare's EU jurisdiction.",
+    text: "Approvals, merges, flag changes and reverts are recorded in order; changing one entry breaks the chain.",
   },
 ];
 
@@ -43,18 +38,28 @@ export function Rules() {
         <h2 class="l-h2" id="rules-title">
           Rules the platform will not bend.
         </h2>
-        <p class="l-lede">
-          Enforced by the platform on every request, for people and agents alike.
-        </p>
+        <p class="l-lede">Enforced on every request, for people and agents alike.</p>
       </div>
       <ul class="rules__list">
         {RULES.map((r) => (
           <li key={r.title}>
             <h3>{r.title}</h3>
             <p>{r.text}</p>
+            {r.refusal ? (
+              <p class="rules__refusal">
+                <code>{r.refusal}</code>
+              </p>
+            ) : null}
           </li>
         ))}
       </ul>
+      <p class="rules__ops">
+        <strong>Where it runs.</strong> On Cloudflare. Repositories live in Artifacts, Workflows and
+        Durable Objects run each change and the merge queue, CI steps run in sandboxed Containers
+        that hold no secrets, the reviewer agent reaches its models through AI Gateway, and every
+        change gets a Flagship flag. Repositories, the database and blob storage stay in the EU
+        jurisdiction.
+      </p>
     </section>
   );
 }
