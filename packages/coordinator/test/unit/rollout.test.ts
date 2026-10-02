@@ -118,6 +118,30 @@ describe("RolloutWorkflow", () => {
     }
   });
 
+  it("unclaimed projects: even a verified pure revert waits for a human (no auto-merge, no rollout)", async () => {
+    const s = await scenario({
+      deployTarget: "api",
+      policy: { rollout: fast, autoMergeVerifiedReverts: true, lane0Enabled: true },
+      claim: { status: "unclaimed", ownerId: null, expiresAt: "2026-10-08T00:00:00.000Z" },
+    });
+    const { change } = await mergeOne(s);
+    expect((await reload(s, change.id)).status).toBe("merged");
+    expect(s.bindings.rolloutWorkflow.instances.size).toBe(0);
+    await s.coordinator.kill(s.reviewer, change.id, "broke something");
+    await s.settle();
+    const revert = await reload(s, revertIdFor(change.id));
+    expect(revert).toMatchObject({
+      revertOf: change.id,
+      status: "awaiting-review",
+      mergedSha: null,
+    });
+    // A verified pure revert (which a claimed project would auto-merge), still routed to a human.
+    expect(revert.laneReasons.map((r) => r.code)).toContain("revert.verified");
+    expect(revert.laneReasons.map((r) => r.code)).not.toContain("revert.auto-merge");
+    expect(s.ports.audit.actions(`change:${revert.id}`)).not.toContain("change.queued");
+    expect(s.ports.deployer.uploads).toHaveLength(0);
+  });
+
   it("a Workers Issues webhook is linked to the version and short-circuits the wait", async () => {
     const s = await withRollout();
     // Hold the first wait so the webhook can arrive while the rollout is waiting.
