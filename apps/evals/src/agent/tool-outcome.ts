@@ -32,6 +32,8 @@ export interface ToolOutcome {
     mcp?: McpState | null;
     /** A preview URL first seen serving a current ISO timestamp, and when. */
     firstGreen?: { url: string; at: number };
+    /** mcp_call only: the MCP tool that was called. */
+    mcpTool?: string;
   };
 }
 
