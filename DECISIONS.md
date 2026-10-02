@@ -1396,3 +1396,28 @@ Fixes for the four issues the documentation work found (entry above), and the do
   and so are rollouts (`scripts/e2e/m4.ts` passed live): their "coming soon" markers are gone. Still marked:
   deploying asset-based projects (`preact-app`, `static-site`), private GitHub imports, the GitHub mirror,
   third-party deploy connectors, before/after screenshots, other jurisdictions, and npm publishing.
+
+## 2026-10-02 — Anonymous create_project: reconnect with the token first (eval m-20261002-073146-qzvw)
+
+Onboarding eval run `m-20261002-073146-qzvw` (task 1, Kimi) passed with a 50.5 s time-to-first-green but stumbled
+once: after an anonymous `create_project` the agent kept its unauthenticated MCP session, and its next call
+(`wait_for_change`) got `401 unauthorized`. The fix hint let it recover. Per the O6 rule (fix the platform, never
+the eval prompt), the platform now says it up front:
+
+- **nextSteps.** When `create_project` ran without credentials, its first next step is "Reconnect to `<mcpUrl>`
+  with Authorization: Bearer <token>". Its `why` carries `ANONYMOUS_RECONNECT` ("Reconnect with
+  `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this
+  project's tools are unavailable without it."), the MCP URL, and `call: whoami({})`, which then lists the project.
+  New `project_created` context field `anonymous: { mcpUrl }`, set by `createProjectAs` when it minted a project
+  token; the "open your first Change" fallback step goes after it.
+- **Before the call.** The same sentence is in `create_project`'s tool description (4 sentences, so the
+  generated MCP reference passes the style check) and the `token` output field says to reconnect. `/start`'s
+  no-account line and `/llms.txt`'s no-account paragraph end with `ANONYMOUS_RECONNECT_BEFORE`, the same rule in
+  one line.
+- **Tests.** conventions: first step for an anonymous caller (and none for an authenticated one), the /start and
+  llms.txt line, the tool description containing the sentence (against `buildTools()`); platform
+  `unclaimed-create`: over real MCP, the anonymous response's `nextSteps[0]` and the listed description.
+
+Also fixed on the way: `workspace-lifecycle.test.ts` used a fixed clock (2026-10-02T10:00Z) for the Workspace
+DO; once the wall clock passed it, the idle alarm was in the past, workerd fired it itself, and
+`runDurableObjectAlarm` found none, failing the deploy gate. The test clock now starts at the real time.
