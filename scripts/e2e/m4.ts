@@ -550,6 +550,9 @@ async function main(): Promise<void> {
     const revertId = reverted.revertedBy ?? "";
     log(`reverted by ${revertId}`);
 
+    // Let the rollback settle (and late audit entries land) before reading the timeline.
+    await sleep(75_000);
+
     // Train (if the queue deployed it) → its audit subject.
     const overview = await api<Record<string, unknown>>(
       "GET",
@@ -562,10 +565,16 @@ async function main(): Promise<void> {
         } | null
       )?.trains ?? [];
     const train = trains.find((t) => t.changeIds.includes(bad.id)) ?? null;
-    const subjects = [`change:${bad.id}`, ...(train ? [`train:${train.id}`] : [])];
+    // `train:<repoId>/<id>`; older deploys used `train:<id>` (not unique across repos: time-boxed).
+    const subjects = [
+      `change:${bad.id}`,
+      ...(train ? [`train:${repoId}/${train.id}`, `train:${train.id}`] : []),
+    ];
     const audits = await Promise.all(subjects.map(auditOf));
+    const since = (marks["bad-merged"] ?? t0) - 60_000;
     const events = audits
       .flatMap((a) => a.events)
+      .filter((e) => e.subject.startsWith("change:") || Date.parse(e.at) >= since)
       .sort((a, b) => a.at.localeCompare(b.at) || a.seq - b.seq);
     const firstAt = (...actions: string[]) => {
       const e = events.find((x) => actions.includes(x.action));
@@ -577,11 +586,14 @@ async function main(): Promise<void> {
     const revertOpenedAt = firstAt("change.revert-opened", "rollout.reverted");
     const deployedAt = firstAt("deploy.train-deployed", "rollout.stage");
 
-    // Traffic after the rollback: the previous version only, and no more errors.
-    await sleep(75_000);
     const firstError = traffic.firstError(marks["bad-merged"] ?? 0);
     const after = traffic.errorsBetween((rolledBackAt ?? Date.now()) + 45_000);
-    const lastVersions = traffic.versions.slice(-4).map((v) => v.version);
+    // Versions served once the rollback settled: the previous one (or, later, the revert's own
+    // deploy, which carries the same code), never the bad one.
+    const settledAt = (rolledBackAt ?? Date.now()) + 45_000;
+    const lastVersions = [
+      ...new Set(traffic.versions.filter((v) => v.at >= settledAt).map((v) => v.version)),
+    ];
 
     // ------------------------------------------------------------ 7. the revert Change
     const revert = await until(
@@ -636,7 +648,7 @@ async function main(): Promise<void> {
       ],
       [
         "traffic is back on the previous version",
-        lastVersions.length > 0 && lastVersions.every((v) => v === v1Version),
+        lastVersions.includes(v1Version) && !lastVersions.includes(badVersion),
       ],
       ["no errors after the rollback settled", after.total > 0 && after.errors === 0],
       [`revert ${revertId} opened (revertOf ${revert.revertOf})`, revert.revertOf === bad.id],
