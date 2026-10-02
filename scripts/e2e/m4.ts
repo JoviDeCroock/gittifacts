@@ -424,6 +424,7 @@ interface AuditRow {
   action: string;
   subject: string;
   summary: string;
+  payload?: unknown;
 }
 
 async function auditOf(subject: string): Promise<{ events: AuditRow[]; verified: boolean }> {
@@ -447,6 +448,7 @@ async function main(): Promise<void> {
   log(`agent ${me.name} (${me.principalId})`);
   let traffic: Traffic | null = null;
   let script: string | null = null;
+  let flagApp: string | null = null;
   try {
     // ------------------------------------------------------------ 1. project
     let repoId = args.project ?? "";
@@ -484,11 +486,15 @@ async function main(): Promise<void> {
     mark("policy-merged");
 
     // ------------------------------------------------------------ 3. deploy target
-    const target = await api<{ script: string }>("PATCH", `/api/v1/repos/${repoId}/deploy-target`, {
-      body: { script: "api" },
-      key: `m4-target-${repoId}`,
-    });
+    const target = await api<{ script: string; repo: { flagshipAppId?: string | null } }>(
+      "PATCH",
+      `/api/v1/repos/${repoId}/deploy-target`,
+      { body: { script: "api" }, key: `m4-target-${repoId}` },
+    );
     script = target.script;
+    // The project's own Flagship app (its Worker binds FLAGS to it and to nothing else).
+    flagApp = target.repo.flagshipAppId ?? null;
+    log(`project Flagship app: ${flagApp ?? "(not yet: created on the first deploy)"}`);
     const sub =
       args["workers-subdomain"] ?? new URL(BASE_URL).hostname.split(".").slice(1).join(".");
     const workerUrl = `https://${script}.${sub}`;
@@ -581,6 +587,22 @@ async function main(): Promise<void> {
       return e === undefined ? null : Date.parse(e.at);
     };
     const detectedAt = firstAt("deploy.regression-attributed", "rollout.regression");
+    // Who saw it first: a Workers Issues webhook (an Issues id) or the telemetry poll.
+    const attributed = events.find((x) => x.action === "deploy.regression-attributed");
+    const issueId = String(
+      (attributed?.payload as { issueId?: unknown } | undefined)?.issueId ?? "",
+    );
+    const detectedBy =
+      attributed === undefined
+        ? "RolloutWorkflow health check"
+        : issueId.startsWith("telemetry-")
+          ? `telemetry poll (${issueId})`
+          : `Workers Issues webhook (${issueId || attributed.summary})`;
+    const repoNow = await api<{ repo?: { flagshipAppId?: string | null } }>(
+      "GET",
+      `/api/v1/repos/${repoId}`,
+    ).catch(() => null);
+    flagApp = repoNow?.repo?.flagshipAppId ?? flagApp;
     const flagOffAt = firstAt("deploy.flag-off", "rollout.flag-off");
     const rolledBackAt = firstAt("deploy.train-rolled-back", "rollout.rolled-back");
     const revertOpenedAt = firstAt("change.revert-opened", "rollout.reverted");
@@ -639,7 +661,9 @@ async function main(): Promise<void> {
       a === null || b === null ? "n/a" : `${((b - a) / 1000).toFixed(1)} s`;
     console.log("\n== Latencies");
     console.log(`  deploy → first error seen:      ${latency(deployedAt, firstError)}`);
-    console.log(`  first error → detected:         ${latency(firstError, detectedAt)}`);
+    console.log(
+      `  first error → detected:         ${latency(firstError, detectedAt)} (${detectedBy})`,
+    );
     console.log(`  detected → flag off:            ${latency(detectedAt, flagOffAt)}`);
     console.log(`  detected → rolled back:         ${latency(detectedAt, rolledBackAt)}`);
     console.log(`  detected → revert opened:       ${latency(detectedAt, revertOpenedAt)}`);
@@ -657,6 +681,7 @@ async function main(): Promise<void> {
     );
 
     const checks: Array<[string, boolean]> = [
+      [`the project has its own Flagship app (${flagApp ?? "none"})`, flagApp !== null],
       ["the bad version served errors (traffic saw 5xx)", firstError !== null],
       ["the platform detected the regression", detectedAt !== null],
       ["the change's flag was switched off", flagOffAt !== null],
@@ -711,6 +736,17 @@ async function main(): Promise<void> {
           : `could not delete ${script}: ${(res.stderr ?? "").slice(-300)}`,
       );
     } else if (script !== null) log(`kept Worker ${script}`);
+    if (flagApp !== null && !args.keep) {
+      // Only after the Worker is gone: Flagship refuses to delete an app a Worker still binds.
+      const res = spawnSync("cf", ["flagship", "apps", "delete", flagApp, "--force"], {
+        encoding: "utf8",
+      });
+      log(
+        res.status === 0
+          ? `deleted Flagship app ${flagApp}`
+          : `could not delete Flagship app ${flagApp}: ${(res.stderr ?? "").slice(-300)}`,
+      );
+    } else if (flagApp !== null) log(`kept Flagship app ${flagApp}`);
   }
 }
 
