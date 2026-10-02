@@ -26,6 +26,8 @@
     "@app/evidence": "workspace:*",
     "@app/gitwire": "workspace:*",
     "@app/mcp": "workspace:*",
+    "@app/merge-queue": "workspace:*",
+    "@app/resolver": "workspace:*",
     "@app/tour": "workspace:*",
     "@better-auth/api-key": "1.7.7",
     "@better-auth/mcp": "1.7.7",

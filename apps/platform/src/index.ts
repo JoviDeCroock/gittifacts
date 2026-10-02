@@ -12,6 +12,7 @@ import { withUnclaimedLimits } from "./limits/ci-quota.js";
 import { handlePreviewRequest } from "./previews/gateway.js";
 import { isPreviewHost, previewZone } from "./previews/ids.js";
 import { buildPorts } from "./runtime/ports.js";
+import { buildQueueRuntime } from "./runtime/queue.js";
 
 // Durable Objects and Workflows are instantiated by the runtime with only `env`; this is how they
 // get their Ports. The MergeQueue DO asks for the "merge-queue" role (the only main-repo writer).
@@ -20,10 +21,13 @@ import { buildPorts } from "./runtime/ports.js";
 configureCoordinatorRuntime<Bindings>({
   ports: (env, role) => withUnclaimedLimits(buildPorts(env, role), env),
   coordinatorOptions: COORDINATOR_OPTIONS,
+  // The agent-native merge queue (MergeQueue DO): scratch-repo jobs, BatchRunWorkflow, resolver.
+  mergeQueue: (env, ports) => buildQueueRuntime(env, ports),
 });
 
 export { CiEgressGateway, CiRunWorkflow, Runner } from "@app/ci-engine";
 export {
+  BatchRunWorkflow,
   ChangeWorkflow,
   MergeQueue,
   PushRouter,

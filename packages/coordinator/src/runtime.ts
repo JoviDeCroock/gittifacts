@@ -42,7 +42,7 @@ export interface CoordinatorRuntime<Env = unknown> {
   coordinatorOptions?: CoordinatorOptions;
   mergeQueueOptions?: Partial<MergeQueueOptions>;
   /** The agent-native merge queue's dependencies (the MergeQueue DO refuses to run without). */
-  mergeQueue?(env: Env): MergeQueueRuntime;
+  mergeQueue?(env: Env, ports: Ports): MergeQueueRuntime;
 }
 
 let current: CoordinatorRuntime<unknown> | null = null;

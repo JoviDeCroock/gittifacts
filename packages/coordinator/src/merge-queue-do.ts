@@ -43,7 +43,8 @@ export class MergeQueue extends DurableObject<unknown> implements MergeQueueClie
     if (this.svc !== null) return this.svc;
     const id = await this.repoIdOf(repoId);
     const { ports, bindings, runtime } = resolveRuntime(this.env, "merge-queue");
-    const q = runtime.mergeQueue?.(this.env);
+    // `ports` are the merge-queue role's: the only GitHost that may write main repos.
+    const q = runtime.mergeQueue?.(this.env, ports);
     if (q === undefined)
       throw new Error("the agent-native merge queue is not configured (runtime.mergeQueue)");
     const storage = this.ctx.storage;

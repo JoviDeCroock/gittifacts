@@ -68,6 +68,12 @@ importers:
       '@app/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
+      '@app/merge-queue':
+        specifier: workspace:*
+        version: link:../../packages/merge-queue
+      '@app/resolver':
+        specifier: workspace:*
+        version: link:../../packages/resolver
       '@app/tour':
         specifier: workspace:*
         version: link:../../packages/tour

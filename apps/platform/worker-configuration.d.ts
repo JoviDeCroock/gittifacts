@@ -20,6 +20,7 @@ interface __BaseEnv_Env {
 	PREVIEW_HOST_SUFFIX: string;
 	METRICS_DATASET: string;
 	UNCLAIMED_TTL_DAYS: string;
+	MERGE_QUEUE_TRAINS: string;
 	UNCLAIMED_TOKEN_LIMITER: RateLimit;
 	PLATFORM_SIGNING_KEY: string;
 	BETTER_AUTH_SECRET: string;
@@ -39,6 +40,7 @@ interface __BaseEnv_Env {
 	ROLLOUT_WORKFLOW: Workflow<Parameters<import("./src/index").RolloutWorkflow['run']>[0]['payload']>;
 	PUSH_ROUTER: Workflow<Parameters<import("./src/index").PushRouter['run']>[0]['payload']>;
 	CI_RUN_WORKFLOW: Workflow<Parameters<import("./src/index").CiRunWorkflow['run']>[0]['payload']>;
+	BATCH_RUN_WORKFLOW: Workflow<Parameters<import("./src/index").BatchRunWorkflow['run']>[0]['payload']>;
 	PLATFORM_CONFIG_WORKFLOW: Workflow<Parameters<import("./src/index").PlatformConfigWorkflow['run']>[0]['payload']>;
 }
 declare namespace Cloudflare {
@@ -53,5 +55,5 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "CI_ENGINE" | "CI_CACHE_NAMESPACE" | "ARTIFACTS_NAMESPACE" | "AI_GATEWAY_ID" | "FLAGSHIP_APP_ID" | "CF_ACCOUNT_ID" | "PREVIEW_HOST_SUFFIX" | "METRICS_DATASET" | "UNCLAIMED_TTL_DAYS" | "PLATFORM_SIGNING_KEY" | "BETTER_AUTH_SECRET" | "GITHUB_CLIENT_ID" | "GITHUB_CLIENT_SECRET" | "ISSUES_WEBHOOK_SECRET" | "CF_API_TOKEN">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "CI_ENGINE" | "CI_CACHE_NAMESPACE" | "ARTIFACTS_NAMESPACE" | "AI_GATEWAY_ID" | "FLAGSHIP_APP_ID" | "CF_ACCOUNT_ID" | "PREVIEW_HOST_SUFFIX" | "METRICS_DATASET" | "UNCLAIMED_TTL_DAYS" | "MERGE_QUEUE_TRAINS" | "PLATFORM_SIGNING_KEY" | "BETTER_AUTH_SECRET" | "GITHUB_CLIENT_ID" | "GITHUB_CLIENT_SECRET" | "ISSUES_WEBHOOK_SECRET" | "CF_API_TOKEN">> {}
 }
