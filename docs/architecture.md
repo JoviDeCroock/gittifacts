@@ -15,6 +15,8 @@ agents / humans
 │  MergeQueue        (per repo)       ChangeWorkflow (per change × head) │   └──────────────┘
 │  AuditLog          (per org)        CiRunWorkflow  (per run)           │
 │  Runner            (per CI step) ── ctx.container (sandbox image)      │
+│  PreviewHost  (per change head) ── ctx.container, behind the preview   │
+│               gateway on *.preview.resynapse.dev (banner, noindex)     │
 │                                     RolloutWorkflow (per merged change)│
 │ D1 (Drizzle)  R2 (logs, screenshots, cache)  AI Gateway  Flagship      │
 │ Browser Run   Analytics Engine   Secrets (signing key, CF API token)   │
@@ -37,6 +39,8 @@ and tests provide fakes.
 | `Flags` | Flagship | Create a per-change flag, turn it off (kill switch) |
 | `Telemetry` | Workers Issues webhook store + Analytics Engine SQL | Error rate per version, new issue groups per version |
 | `Audit` | AuditLog DO | Append a signed, hash-chained event |
+| `Previews` | PreviewHost DO (own container app) + D1 `previews` + Browser Run | Boot a change's preview from the CI build snapshot; screenshot it |
+| `Onboarding` | D1 `project_onboarding` + Analytics Engine | Time-to-first-green of new projects |
 | `Clock` | `Date` | Deterministic time in tests |
 
 ## Change lifecycle
