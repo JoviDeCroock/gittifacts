@@ -57,6 +57,13 @@
       "when": 1790915146313,
       "tag": "0007_unclaimed_projects",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790919045275,
+      "tag": "0008_integrations",
+      "breakpoints": true
     }
   ]
 }
