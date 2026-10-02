@@ -12,8 +12,15 @@
 import type { Change, Repo } from "@app/domain";
 import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { Services } from "../app-env.js";
-import { installationRepos, installations, integrations, webhookDeliveries } from "../db/schema.js";
-import { canInstallOn } from "./access.js";
+import {
+  installationRepos,
+  installations,
+  integrations,
+  repoMembers,
+  webhookDeliveries,
+} from "../db/schema.js";
+import type { D1Store } from "../store/d1-store.js";
+import { installationCovers } from "./access.js";
 import { changeCloneUrl, type NamingDeps, type RepoNames, repoNames } from "./handles.js";
 import { type WebhookEvent, integrationScopesOf } from "./scopes.js";
 import { eventsOf } from "./registry.js";
@@ -35,20 +42,16 @@ export interface Target {
   url: string;
 }
 
-/** Installations that should hear about `event` on `repo`. */
+/** Installations that should hear about `event` on `repo` (webhooks fire only for their repos). */
 export async function targetsForRepo(
   deps: EventDeps,
   repo: Repo,
   event: WebhookEvent,
 ): Promise<Target[]> {
-  if (repo.claim.status !== "claimed" || repo.claim.ownerId === null) return [];
-  const owner = repo.claim.ownerId;
+  if (repo.claim.status !== "claimed") return [];
   const rows = await deps.store.db
     .select({
-      installationId: installations.id,
-      accountId: installations.accountId,
-      scopes: installations.scopes,
-      integrationId: integrations.id,
+      installation: installations,
       url: integrations.webhookUrl,
       events: integrations.webhookEvents,
     })
@@ -57,22 +60,27 @@ export async function targetsForRepo(
     .where(
       and(
         eq(installations.status, "active"),
-        eq(installations.accountId, owner),
         isNull(integrations.deletedAt),
         isNotNull(integrations.webhookUrl),
         eq(integrations.webhookActive, true),
         or(
-          eq(installations.repoSelection, "all"),
           sql`exists (select 1 from ${installationRepos} where ${installationRepos.installationId} = ${installations.id} and ${installationRepos.repoId} = ${repo.id})`,
+          and(
+            eq(installations.repoSelection, "all"),
+            sql`exists (select 1 from ${repoMembers} where ${repoMembers.repoId} = ${repo.id} and ${repoMembers.principalId} = ${installations.accountId})`,
+          ),
         ),
       ),
     )
     .all();
-  return rows
-    .filter((r) => canInstallOn({ id: r.accountId, kind: "human" }, repo))
-    .filter((r) => integrationScopesOf(r.scopes).includes("webhooks"))
-    .filter((r) => eventsOf(r.events).includes(event))
-    .map((r) => ({ integrationId: r.integrationId, installationId: r.installationId, url: r.url ?? "" }));
+  const out: Target[] = [];
+  for (const r of rows) {
+    if (!integrationScopesOf(r.installation.scopes).includes("webhooks")) continue;
+    if (!eventsOf(r.events).includes(event) || !r.url) continue;
+    if (!(await installationCovers(deps.store, r.installation, repo))) continue;
+    out.push({ integrationId: r.installation.integrationId, installationId: r.installation.id, url: r.url });
+  }
+  return out;
 }
 
 /** Insert one pending delivery per target and queue them. Returns the delivery ids. */

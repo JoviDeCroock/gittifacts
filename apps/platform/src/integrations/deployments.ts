@@ -14,10 +14,10 @@
 import { Sha } from "@app/evidence";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { assertRepoAccess } from "../access/access.js";
 import type { Caller, Services } from "../app-env.js";
 import { changes, deploymentStatuses, deployments, installations, integrations } from "../db/schema.js";
 import { ApiError, forbidden, notFound } from "../errors.js";
-import { integrationRepoAllowed } from "./access.js";
 import { attachPreview, type DeploymentRow } from "./evidence.js";
 
 const Url = z.string().url().max(2048).refine((u) => /^https?:\/\//.test(u), "must be an http(s) URL");
@@ -163,11 +163,8 @@ export async function createDeployment(
   input: z.infer<typeof DeploymentInput>,
 ): Promise<DeploymentView> {
   requireIntegration(caller);
-  if (!integrationRepoAllowed(caller.principal, repoId)) {
-    throw forbidden(`this installation was not granted repo ${repoId}`);
-  }
-  const repo = await svc.store.getRepo(repoId);
-  if (!repo) throw notFound(`repo ${repoId}`);
+  // The chokepoint: reader on the installation's repos while the installer is still a member.
+  const repo = await assertRepoAccess(svc, caller.principal, repoId, "read");
   if (repo.claim.status !== "claimed") {
     throw new ApiError(403, "unclaimed-project", "unclaimed projects can't take deployment reports", { repoId }, {
       explanation: "Integrations can't be connected to unclaimed projects; claim it first.",
@@ -239,9 +236,7 @@ export async function addDeploymentStatus(
 ): Promise<DeploymentView> {
   const d = await ownDeployment(svc, caller, deploymentId);
   await installationOf(svc, caller);
-  if (!integrationRepoAllowed(caller.principal, d.repoId)) {
-    throw forbidden(`this installation no longer has repo ${d.repoId}`);
-  }
+  await assertRepoAccess(svc, caller.principal, d.repoId, "read");
   const now = svc.clock.now().toISOString();
   await svc.store.db.insert(deploymentStatuses).values({
     id: `dps_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,

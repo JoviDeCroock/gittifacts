@@ -14,14 +14,14 @@
  * refused for everyone: nothing pushes through this proxy (agents push to their fork with
  * `refresh_push_token`; only the merge queue moves a default branch).
  */
+import type { Principal } from "@app/domain";
 import type { Context } from "hono";
+import { canAccess } from "../access/access.js";
 import type { AppEnv } from "../app-env.js";
 import { isAgentToken, verifyAgentToken } from "../auth/agent-tokens.js";
-import { repoAllowed } from "../auth/repo-scope.js";
 import { enforceUnclaimedRequestRate } from "../limits/request-limit.js";
 import { urlsFor } from "../oauth/context.js";
 import { audienceAllows } from "../oauth/urls.js";
-import { integrationRepoAllowed } from "./access.js";
 import { enforceIntegrationRate, verifyIntegrationToken } from "./auth.js";
 import { looksLikeIntegrationToken } from "./crypto.js";
 import { gitHostFor } from "./git-host.js";
@@ -93,7 +93,7 @@ const receivePackRefused = () =>
   "Deploy platforms only clone and fetch here. Agents push a Change to its own fork with the token from refresh_push_token; only the merge queue moves a default branch.",
 );
 
-type Authed = { kind: "integration" | "agent"; allowed: (repoId: string) => boolean };
+type Authed = { kind: "integration" | "agent"; principal: Principal };
 
 /** Resolve the git credential to a principal that may read code here, or a ready error response. */
 async function authenticate(c: Context<AppEnv>, token: string): Promise<Authed | Response> {
@@ -106,7 +106,7 @@ async function authenticate(c: Context<AppEnv>, token: string): Promise<Authed |
     if (!v.principal.scopes.includes("contents:read")) {
       return errorJson(403, "insufficient-scope", "missing scope contents:read", "Request contents:read when installing the integration; cloning needs it.");
     }
-    return { kind: "integration", allowed: (repoId) => integrationRepoAllowed(v.principal, repoId) };
+    return { kind: "integration", principal: v.principal };
   }
   if (isAgentToken(token)) {
     const v = await verifyAgentToken(svc.store, token, svc.clock.now(), svc.waitUntil);
@@ -118,8 +118,7 @@ async function authenticate(c: Context<AppEnv>, token: string): Promise<Authed |
     if (!v.principal.scopes.includes("repo:read")) {
       return errorJson(403, "insufficient-scope", "missing scope repo:read", "Agent tokens need repo:read to clone.");
     }
-    const p = v.principal;
-    return { kind: "agent", allowed: (repoId) => repoAllowed(p, repoId) };
+    return { kind: "agent", principal: v.principal };
   }
   return errorJson(401, "unauthorized", "unsupported git credential", "Authenticate with an integration access token (Basic x-access-token:<token>, or Bearer) or an agent token (gtf_…). Browser sessions are not git credentials.", CHALLENGE);
 }
@@ -147,7 +146,8 @@ export async function handleGit(c: Context<AppEnv>): Promise<Response> {
 
   const svc = c.get("services");
   const repo = await resolveRepoPath(svc, parsed.owner, parsed.repo);
-  if (!repo || !auth.allowed(repo.id)) return repoNotFound();
+  // The chokepoint decides (memberships, session/installation grants, unclaimed rules).
+  if (!repo || !(await canAccess(svc, auth.principal, repo, "read"))) return repoNotFound();
   let artifactsName = repo.artifactsName;
   if (parsed.changeId !== null) {
     const change = await svc.store.getChange(parsed.changeId);

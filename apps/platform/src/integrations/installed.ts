@@ -142,9 +142,9 @@ export async function updateInstallationRepos(
     if (repoIds.length === 0) throw new ApiError(400, "invalid-request", "pick at least one repository");
     for (const repoId of repoIds) {
       const repo = await svc.store.getRepo(repoId);
-      if (!repo || !canInstallOn(caller.principal, repo)) {
+      if (!repo || !(await canInstallOn(svc.store, caller.principal, repo))) {
         throw new ApiError(403, "repo-not-installable", `you cannot connect integrations to repo ${repoId}`, { repoId }, {
-          explanation: "Only claimed repositories you own can be connected to integrations.",
+          explanation: "Only claimed repositories you own or maintain can be connected to integrations.",
         });
       }
     }

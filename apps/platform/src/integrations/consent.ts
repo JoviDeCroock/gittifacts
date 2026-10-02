@@ -191,12 +191,12 @@ export async function approveInstall(
     }
     for (const repoId of repoIds) {
       const repo = await svc.store.getRepo(repoId);
-      if (!repo || !canInstallOn(caller.principal, repo)) {
+      if (!repo || !(await canInstallOn(svc.store, caller.principal, repo))) {
         throw new ApiError(403, "repo-not-installable", `you cannot connect integrations to repo ${repoId}`, { repoId }, {
           explanation:
             repo?.claim.status === "unclaimed"
               ? "Unclaimed projects can't be connected to integrations. Claim the project first."
-              : "Only a repository's owner can connect integrations to it. Pick from the install screen's list.",
+              : "Only a repository's owners and maintainers can connect integrations to it. Pick from the install screen's list.",
         });
       }
     }
