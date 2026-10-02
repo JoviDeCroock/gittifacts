@@ -101,6 +101,8 @@ export interface LaneCounts {
   awaitingReview: number;
   rollingOut: number;
   failing: number;
+  /** Draft plans waiting for a person's approval (docs/api.md additions); older servers omit it. */
+  plansAwaitingApproval?: number;
 }
 
 export interface ShadowStats {

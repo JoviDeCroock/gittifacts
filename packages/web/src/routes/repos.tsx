@@ -23,7 +23,14 @@ function LaneCount({ lane, count, shadow = false }: { lane: Lane; count: number;
   );
 }
 
-export function ShadowLine({ repo }: { repo: RepoSummary | { policy: RepoSummary["policy"]; shadow: RepoSummary["shadow"] } }) {
+export function ShadowLine({
+  repo,
+  detail = true,
+}: {
+  repo: RepoSummary | { policy: RepoSummary["policy"]; shadow: RepoSummary["shadow"] };
+  /** The explanation under the bar. Off in the repository list, where it would repeat on every row. */
+  detail?: boolean;
+}) {
   const p = shadowProgress(repo.shadow);
   const enabled = repo.policy.lane0Enabled;
   const fill = p.state === "collecting" ? p.samples / Math.max(1, p.samples + p.needed) : (p.ratio ?? 0);
@@ -46,7 +53,7 @@ export function ShadowLine({ repo }: { repo: RepoSummary | { policy: RepoSummary
           {value}
         </span>
       </div>
-      <p class="shadow-line__detail">{enabled ? `Agreement held at ${pct(p.ratio ?? 0, 1)} over ${p.samples} reviews.` : p.detail}</p>
+      {detail ? <p class="shadow-line__detail">{enabled ? `Agreement held at ${pct(p.ratio ?? 0, 1)} over ${p.samples} reviews.` : p.detail}</p> : null}
     </div>
   );
 }
@@ -57,7 +64,7 @@ function RepoRow({ repo }: { repo: RepoSummary }) {
   const empty = c.lane0 + c.lane1 + c.lane2 + c.awaitingReview + c.rollingOut + c.failing === 0;
   return (
     <li>
-      <a class="repo-row" href={`/repos/${repo.id}`}>
+      <a class={`repo-row ${empty ? "repo-row--idle" : ""}`} href={`/repos/${repo.id}`}>
         <div class="repo-row__id">
           <span class="repo-row__name">{repo.name}</span>
           <span class="repo-row__sub">
@@ -79,7 +86,7 @@ function RepoRow({ repo }: { repo: RepoSummary }) {
               <b>{c.awaitingReview}</b> awaiting review
             </span>
           ) : (
-            <span class="waiting waiting--none">{empty ? "No changes yet" : "Nothing to review"}</span>
+            <span class="waiting waiting--none">Nothing to review</span>
           )}
           <span class="repo-row__flight">
             {c.rollingOut > 0 ? (
@@ -100,7 +107,7 @@ function RepoRow({ repo }: { repo: RepoSummary }) {
           <LaneCount lane={0} count={c.lane0} shadow={shadow} />
         </div>
         <div class="repo-row__shadow">
-          <ShadowLine repo={repo} />
+          <ShadowLine repo={repo} detail={false} />
         </div>
         <Icon name="chevron-right" class="repo-row__chev" />
       </a>
@@ -108,10 +115,17 @@ function RepoRow({ repo }: { repo: RepoSummary }) {
   );
 }
 
+function byAttention(a: RepoSummary, b: RepoSummary): number {
+  const waiting = (r: RepoSummary) => r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0);
+  const live = (r: RepoSummary) => r.counts.failing + r.counts.rollingOut;
+  return waiting(b) - waiting(a) || Number(live(b) > 0) - Number(live(a) > 0) || a.name.localeCompare(b.name);
+}
+
 export function Repos() {
   const res = useResource(() => api.repos(), []);
   const st = res.state.value;
-  const repos = st.status === "ok" ? st.data.repos : [];
+  // Triage order: work waiting for you first, then live rollouts and failures, then the rest by name.
+  const repos = st.status === "ok" ? [...st.data.repos].sort(byAttention) : [];
   const waiting = repos.reduce((n, r) => n + r.counts.awaitingReview, 0);
   const rolling = repos.reduce((n, r) => n + r.counts.rollingOut, 0);
   const withWaiting = repos.filter((r) => r.counts.awaitingReview > 0).length;

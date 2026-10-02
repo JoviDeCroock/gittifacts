@@ -196,3 +196,10 @@
     padding-block-start: 2px;
   }
 }
+
+/* Phones: a repository with nothing open skips its row of zero counts. */
+@media (max-width: 899px) {
+  .repo-row--idle .repo-row__lanes {
+    display: none;
+  }
+}
