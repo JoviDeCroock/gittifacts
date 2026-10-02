@@ -30,6 +30,8 @@ Agent-native git platform on Cloudflare. Product rule (drives every judgment cal
 - Imports inside packages use `.js` suffixes on relative paths (bundler resolution maps to .ts).
 - Tests: vitest 4 (`@cloudflare/vitest-pool-workers` for Worker code). Run `pnpm -r test`.
 - Commit small and often with clear messages. Don't edit files owned by another in-flight agent.
+- Keep each Write/Edit under ~150 lines (skeleton first, then append sections): very large single writes
+  stall the agent stream. Run anything slower than ~2 minutes in the background with output to a file.
 - Several agents share one git index: always commit with an explicit pathspec
   (`git commit -m "..." -- <your paths>`), never a bare `git commit` or `git add -A`.
 - Keep DECISIONS.md (dated ADR entries) and STATUS.md current.
