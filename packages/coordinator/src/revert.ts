@@ -182,6 +182,25 @@ export async function openRevertChange(
  * `mergedSha`: either the head's tree equals the pre-merge tree with the merge as base, or the
  * diff base→head is the line-for-line inverse of the merge's own diff.
  */
+/**
+ * The revert's head tree and the tree it should restore (the reverted merge's first parent), or
+ * null when the merge has no single parent. Equal trees: the revert restores exactly the state the
+ * platform had before it merged that Change.
+ */
+export async function revertTrees(
+  git: Ports["git"],
+  input: { repo: string; headSha: string; mergedSha: string },
+): Promise<{ headTree: string; restoredTree: string } | null> {
+  const parents = await git.commitParents(input.repo, input.mergedSha);
+  const pre = parents?.[0];
+  if (pre === undefined || parents === null || parents.length !== 1) return null;
+  const [headTree, restoredTree] = await Promise.all([
+    git.treeOf(input.repo, input.headSha),
+    git.treeOf(input.repo, pre),
+  ]);
+  return headTree === null || restoredTree === null ? null : { headTree, restoredTree };
+}
+
 export async function verifyPureRevert(
   git: Ports["git"],
   input: { repo: string; baseSha: string; headSha: string; mergedSha: string },

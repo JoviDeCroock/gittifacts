@@ -3,7 +3,8 @@
  * instance per (change, head) with id `${changeId}-${head[0..12]}`.
  *
  *  load → diff → policy (BASE) → plan-ci → ci-start ⇢ ci-finished → ci-outcome → evidence →
- *  judge → evidence-note → verify-revert → classify → tour → reclassify → route →
+ *  verify-revert → revert-tree → judge (skipped for a tree-identical verified revert) →
+ *  evidence-note → classify → tour → reclassify → route →
  *  (enqueue | request-review ⇢ review) ⇢ merged → rollout
  *
  * Every external call is its own `step.do` (idempotent, retried per RETRY). Code between steps is
@@ -58,7 +59,7 @@ import {
   type PreviewOutcome,
   SYSTEM_PRINCIPAL_ID,
 } from "./ports.js";
-import { verifyPureRevert } from "./revert.js";
+import { revertTrees, verifyPureRevert } from "./revert.js";
 import { toPipelineRun } from "./run-sink.js";
 import { RETRY, type Step, waitOrTimeout } from "./step.js";
 
@@ -135,6 +136,8 @@ interface Classified {
   shadow: boolean;
   blocked: boolean;
   requiresHumanApproval: boolean;
+  /** The classifier waived every raised reason of a verified pure revert (`revert.auto-merge`). */
+  revertAutoMerge?: boolean;
 }
 
 function placeholderRun(runId: string, changeId: string, headSha: string, at: string): PipelineRun {
@@ -486,79 +489,6 @@ export async function runChangeWorkflow(
     return done(released ? "bootstrapped" : "blocked", null, released ? null : "ci failed");
   }
 
-  // ------------------------------------------------------------ 6. judge (raise-only, within budget)
-  const coordinator = bindings.changeCoordinator(changeId);
-  const limitUsd = policy.ai.budgetUsdPerChange;
-  let budgetExceeded = false;
-  const reseal = async (extra: EvidenceItem[]): Promise<SealedEvidence> => {
-    const current = await store.getEvidence(changeId, headSha);
-    if (current === null) throw new Error("evidence disappeared");
-    const keep = current.items.filter((i) => i.kind !== "llm-judgment");
-    return sealEvidence(ports, { changeId, headSha, baseSha, items: [...keep, ...extra] });
-  };
-  try {
-    const judged = await step.do("judge", RETRY.model, async () => {
-      const spentUsd = await coordinator.spent(changeId);
-      if (spentUsd >= limitUsd) {
-        return { sealed: null, budgetExceeded: true, costUsd: 0, judgments: 0 };
-      }
-      const [plan, diff] = await Promise.all([
-        ctx.planId === null ? null : store.getPlan(ctx.planId),
-        store.getDiff(changeId, headSha),
-      ]);
-      if (diff === null) throw new Error("diff missing");
-      const out = await ports.reviewer.judge({
-        plan,
-        diff,
-        budget: { changeId, limitUsd, spentUsd },
-        model: policy.ai.reviewerModel,
-      });
-      const total = await coordinator.recordSpend({ changeId, usd: out.costUsd });
-      const items = judgmentItems(out.items);
-      const resealed = items.length > 0 ? await reseal(items) : null;
-      await log("change.judged", {
-        judgments: items.length,
-        costUsd: out.costUsd,
-        totalUsd: total,
-      });
-      return {
-        sealed: resealed,
-        budgetExceeded: out.budgetExceeded || total > limitUsd,
-        costUsd: out.costUsd,
-        judgments: items.length,
-      };
-    });
-    if (judged.sealed !== null) sealed = judged.sealed;
-    budgetExceeded = judged.budgetExceeded;
-  } catch (e) {
-    const reason = errorMessage(e);
-    sealed = await step.do("judge-failed", RETRY.quick, async () => {
-      const out = await reseal([erroredJudgment(`judge failed: ${reason}`)]);
-      await log("change.judge-failed", { error: reason });
-      return out;
-    });
-  }
-
-  // ------------------------------------------------------------ evidence note on the fork
-  try {
-    await step.do("evidence-note", RETRY.remote, async () => {
-      const evidence = await store.getEvidence(changeId, headSha);
-      if (evidence === null) throw new Error("evidence missing");
-      await git.writeNote(forkName, headSha, encodeNote(evidence), {
-        notesRef: EVIDENCE_NOTES_REF,
-        mode: "replace",
-      });
-      await store.putEvidence({ ...evidence, notesWritten: true });
-      return true;
-    });
-  } catch (e) {
-    const reason = errorMessage(e);
-    await step.do("evidence-note-failed", RETRY.quick, async () => {
-      await log("change.evidence-note-failed", { error: reason });
-      return true;
-    });
-  }
-
   // ------------------------------------------------------------ pure revert? (platform-verified)
   let pureRevertVerified = false;
   if (ctx.revertOf !== null && ctx.category === "revert") {
@@ -583,6 +513,117 @@ export async function runChangeWorkflow(
     } catch {
       pureRevertVerified = false; // unknown is not verified
     }
+  }
+
+  // A verified revert whose tree IS the pre-merge tree of the Change it reverts restores a state
+  // the platform already merged under review: the LLM judge is skipped for it (and only for it),
+  // so a model can't keep the undo of a regression waiting for a human. Anything else is judged.
+  let skipJudge: { headTree: string; restoredTree: string; mergedSha: string } | null = null;
+  if (pureRevertVerified && ctx.revertOf !== null) {
+    const revertOf = ctx.revertOf;
+    try {
+      skipJudge = await step.do("revert-tree", RETRY.remote, async () => {
+        const original = await store.getChange(revertOf);
+        if (original?.mergedSha == null) return null;
+        const trees = await revertTrees(git, {
+          repo: forkName,
+          headSha,
+          mergedSha: original.mergedSha,
+        });
+        return trees === null || trees.headTree !== trees.restoredTree
+          ? null
+          : { ...trees, mergedSha: original.mergedSha };
+      });
+    } catch {
+      skipJudge = null; // unknown: judge as usual
+    }
+  }
+
+  // ------------------------------------------------------------ 6. judge (raise-only, within budget)
+  const coordinator = bindings.changeCoordinator(changeId);
+  const limitUsd = policy.ai.budgetUsdPerChange;
+  let budgetExceeded = false;
+  const reseal = async (extra: EvidenceItem[]): Promise<SealedEvidence> => {
+    const current = await store.getEvidence(changeId, headSha);
+    if (current === null) throw new Error("evidence disappeared");
+    const keep = current.items.filter((i) => i.kind !== "llm-judgment");
+    return sealEvidence(ports, { changeId, headSha, baseSha, items: [...keep, ...extra] });
+  };
+  if (skipJudge !== null) {
+    const skipped = skipJudge;
+    await step.do("judge-skipped", RETRY.quick, async () => {
+      await log("change.judge-skipped", {
+        reason: "verified-pure-revert",
+        revertOf: ctx.revertOf,
+        mergedSha: skipped.mergedSha,
+        headTree: skipped.headTree,
+        restoredTree: skipped.restoredTree,
+      });
+      return true;
+    });
+  } else {
+    try {
+      const judged = await step.do("judge", RETRY.model, async () => {
+        const spentUsd = await coordinator.spent(changeId);
+        if (spentUsd >= limitUsd) {
+          return { sealed: null, budgetExceeded: true, costUsd: 0, judgments: 0 };
+        }
+        const [plan, diff] = await Promise.all([
+          ctx.planId === null ? null : store.getPlan(ctx.planId),
+          store.getDiff(changeId, headSha),
+        ]);
+        if (diff === null) throw new Error("diff missing");
+        const out = await ports.reviewer.judge({
+          plan,
+          diff,
+          budget: { changeId, limitUsd, spentUsd },
+          model: policy.ai.reviewerModel,
+        });
+        const total = await coordinator.recordSpend({ changeId, usd: out.costUsd });
+        const items = judgmentItems(out.items);
+        const resealed = items.length > 0 ? await reseal(items) : null;
+        await log("change.judged", {
+          judgments: items.length,
+          costUsd: out.costUsd,
+          totalUsd: total,
+        });
+        return {
+          sealed: resealed,
+          budgetExceeded: out.budgetExceeded || total > limitUsd,
+          costUsd: out.costUsd,
+          judgments: items.length,
+        };
+      });
+      if (judged.sealed !== null) sealed = judged.sealed;
+      budgetExceeded = judged.budgetExceeded;
+    } catch (e) {
+      const reason = errorMessage(e);
+      sealed = await step.do("judge-failed", RETRY.quick, async () => {
+        const out = await reseal([erroredJudgment(`judge failed: ${reason}`)]);
+        await log("change.judge-failed", { error: reason });
+        return out;
+      });
+    }
+  }
+
+  // ------------------------------------------------------------ evidence note on the fork
+  try {
+    await step.do("evidence-note", RETRY.remote, async () => {
+      const evidence = await store.getEvidence(changeId, headSha);
+      if (evidence === null) throw new Error("evidence missing");
+      await git.writeNote(forkName, headSha, encodeNote(evidence), {
+        notesRef: EVIDENCE_NOTES_REF,
+        mode: "replace",
+      });
+      await store.putEvidence({ ...evidence, notesWritten: true });
+      return true;
+    });
+  } catch (e) {
+    const reason = errorMessage(e);
+    await step.do("evidence-note-failed", RETRY.quick, async () => {
+      await log("change.evidence-note-failed", { error: reason });
+      return true;
+    });
   }
 
   // ------------------------------------------------------------ 7. classify (pure)
@@ -638,6 +679,7 @@ export async function runChangeWorkflow(
         shadow: result.shadow,
         blocked: result.blocked,
         requiresHumanApproval: result.requiresHumanApproval,
+        revertAutoMerge: result.reasons.some((r) => r.code === "revert.auto-merge"),
       };
     });
   let cls = await classifyStep("classify", "not-generated", budgetExceeded, sealed.verified);
@@ -753,13 +795,12 @@ export async function runChangeWorkflow(
     });
 
   // Unclaimed projects never auto-merge (their policy already has Lane 0 and revert auto-merge off;
-  // this is the belt to that pair of braces).
-  const autoMerge =
-    ctx.claimed &&
-    !cls.requiresHumanApproval &&
-    (cls.lane === 0 || (pureRevertVerified && policy.autoMergeVerifiedReverts));
+  // this is the belt to that pair of braces). The classifier's lane decides: a verified pure revert
+  // is Lane 0 only when every raised reason was waivable (`revert.auto-merge`); anything else
+  // raised (a model concern, a sensitive path) still goes to a human.
+  const autoMerge = ctx.claimed && !cls.requiresHumanApproval && cls.lane === 0;
   if (autoMerge) {
-    await enqueue("enqueue", cls.lane === 0 ? "lane-0" : "verified-revert", null);
+    await enqueue("enqueue", cls.revertAutoMerge === true ? "verified-revert" : "lane-0", null);
   } else {
     await step.do("request-review", RETRY.quick, async () => {
       await store.updateChange(changeId, { status: "awaiting-review" });

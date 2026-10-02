@@ -933,6 +933,20 @@ started, from whatever policy it had then (60 min with the default policy).
 - A retried deploy reuses its one upload and the previous version it measured.
 - Train audit subjects are `train:<repoId>/<trainId>`, because train ids count per repo.
 
+**Verified pure reverts skip the LLM judge (lead decision).** The ChangeWorkflow verifies the revert *before* judging.
+- The judge is skipped only when the revert is platform-verified *and* its tree equals the pre-merge tree of the
+  Change it reverts: a state the platform already merged under review. This is audited as `change.judge-skipped`
+  `{ reason: "verified-pure-revert", revertOf, mergedSha, headTree, restoredTree }`.
+- No other path skips the judge. A verified revert on top of later Changes, whose tree differs, is judged normally.
+- This is consistent with "LLM judgments only raise": nothing an LLM raised is lowered or waived. The classifier just
+  sees `llm.none`.
+- Live, the judge had flagged the revert's own diff as an "unmentioned behavior change".
+
+**Route by the classifier's lane.** The route step used to auto-merge any verified pure revert (`pureRevertVerified &&
+autoMergeVerifiedReverts`), even one the classifier put in Lane 2 for a reason that can't be waived. Live, a Lane 2
+revert merged that way. Now only `lane === 0` auto-merges, and a verified revert is Lane 0 only when `revert.auto-merge`
+waived every raised reason. Unclaimed projects still never auto-merge.
+
 **Rollout timing for the e2e.** Policy is read from BASE, so `scripts/e2e/m4.ts` gets short stages the honest way: the
 agent proposes a `.platform/policy.ts` change (`stages [50, 100]`, `stageMinutes 2`, `watchMinutes 3`,
 `minRequests 20`, `maxErrorRateIncrease 0.05`). It is Lane 2, a human approves it, and the merge queue merges it
