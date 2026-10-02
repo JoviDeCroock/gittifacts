@@ -24,12 +24,21 @@ export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch] ?? ch);
 }
 
-export function bannerText(projectName: string, changeId: string): string {
-  return `Preview of ${projectName} · change ${changeId} · not production · gittifacts`;
+/** What the banner says first on an unclaimed project's preview (onboarding §4). */
+export const UNCLAIMED_BANNER = "Unclaimed project — not verified";
+
+/**
+ * `claimed: false` (an unclaimed project, or unknown) leads with "Unclaimed project — not
+ * verified": nobody has vouched for what an unclaimed project serves.
+ */
+export function bannerText(projectName: string, changeId: string, claimed = false): string {
+  const base = `Preview of ${projectName} · change ${changeId} · not production · gittifacts`;
+  return claimed ? base : `${UNCLAIMED_BANNER} · ${base}`;
 }
 
 /** The banner element plus a spacer that keeps normal-flow content below it. */
-export function bannerHtml(projectName: string, changeId: string): string {
+export function bannerHtml(projectName: string, changeId: string, claimed = false): string {
+  const edge = claimed ? "#f5b800" : "#e5484d";
   const host = [
     "all:initial",
     "position:fixed",
@@ -47,11 +56,12 @@ export function bannerHtml(projectName: string, changeId: string): string {
   ]
     .map((d) => `${d} !important`)
     .join(";");
-  const style = `:host{all:initial}div{box-sizing:border-box;height:${BANNER_HEIGHT_PX}px;padding:0 12px;display:flex;align-items:center;gap:8px;background:#1d1b16;color:#fffbe8;font:600 13px/1 ui-sans-serif,system-ui,sans-serif;border-bottom:2px solid #f5b800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}b{color:#f5b800}`;
-  const text = escapeHtml(bannerText(projectName, changeId));
+  const style = `:host{all:initial}div{box-sizing:border-box;height:${BANNER_HEIGHT_PX}px;padding:0 12px;display:flex;align-items:center;gap:8px;background:#1d1b16;color:#fffbe8;font:600 13px/1 ui-sans-serif,system-ui,sans-serif;border-bottom:2px solid ${edge};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}b{color:${edge}}`;
+  const text = escapeHtml(bannerText(projectName, changeId, claimed));
+  const badge = claimed ? "PREVIEW" : "UNCLAIMED";
   return (
     `<${BANNER_TAG} role="note" aria-label="${text}" style="${host}">` +
-    `<template shadowrootmode="closed"><style>${style}</style><div><b>PREVIEW</b><span>${text}</span></div></template>` +
+    `<template shadowrootmode="closed"><style>${style}</style><div><b>${badge}</b><span>${text}</span></div></template>` +
     `</${BANNER_TAG}>` +
     `<div aria-hidden="true" style="all:initial !important;display:block !important;height:${BANNER_HEIGHT_PX}px !important"></div>`
   );
@@ -73,11 +83,11 @@ function page(
   status: number,
   title: string,
   body: string,
-  opts: { refreshSeconds?: number; projectName?: string; changeId?: string },
+  opts: { refreshSeconds?: number; projectName?: string; changeId?: string; claimed?: boolean },
 ): string {
   const banner =
     opts.projectName !== undefined && opts.changeId !== undefined
-      ? bannerHtml(opts.projectName, opts.changeId)
+      ? bannerHtml(opts.projectName, opts.changeId, opts.claimed ?? false)
       : "";
   const refresh =
     opts.refreshSeconds === undefined
@@ -94,6 +104,7 @@ export function busyPage(
     body: string;
     projectName?: string;
     changeId?: string;
+    claimed?: boolean;
     retryAfter?: number;
   },
 ): Response {
@@ -126,7 +137,7 @@ export function errorPage(
   status: 404 | 410 | 502 | 503,
   title: string,
   body: string,
-  opts: { projectName?: string; changeId?: string } = {},
+  opts: { projectName?: string; changeId?: string; claimed?: boolean } = {},
 ): Response {
   if (!wantsHtml(request)) {
     return new Response(`${title}: ${body}\n`, {

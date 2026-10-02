@@ -191,6 +191,7 @@ export class PreviewHost extends DurableObject<PreviewHostEnv> {
       body: `Waking up the preview of ${config.projectName} (${config.headSha.slice(0, 8)}). This page reloads by itself.`,
       projectName: config.projectName,
       changeId: config.changeId,
+      claimed: config.claimed,
     });
   }
 

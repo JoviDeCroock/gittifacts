@@ -32,6 +32,8 @@ interface Resolved {
   projectName: string;
   status: "starting" | "ready" | "failed";
   detail: string | null;
+  /** Claimed project: the banner drops "Unclaimed project — not verified". */
+  claimed: boolean;
 }
 
 /** Latest-alias lookups are cached briefly per isolate (a preview request should not cost a D1 read). */
@@ -56,6 +58,7 @@ async function resolve(
     projectName: previews.projectName,
     status: previews.status,
     detail: previews.detail,
+    claimed: previews.claimed,
   };
   let row: Resolved | undefined;
   if (target.kind === "pinned") {
@@ -101,8 +104,13 @@ function isHtml(res: Response): boolean {
 }
 
 /** Inject the banner at the start of <body> (or the end of a body-less document). */
-export function withBanner(res: Response, projectName: string, changeId: string): Response {
-  const banner = bannerHtml(projectName, changeId);
+export function withBanner(
+  res: Response,
+  projectName: string,
+  changeId: string,
+  claimed = false,
+): Response {
+  const banner = bannerHtml(projectName, changeId, claimed);
   let inserted = false;
   const headers = new Headers(res.headers);
   headers.delete("content-length");
@@ -123,9 +131,15 @@ export function withBanner(res: Response, projectName: string, changeId: string)
   return rewritten;
 }
 
-async function changeStatus(env: GatewayEnv, changeId: string): Promise<string | null> {
-  const change = await new D1Store(env.DB, env.BLOBS).getChange(changeId);
-  return change?.status ?? null;
+async function changeStatus(
+  env: GatewayEnv,
+  changeId: string,
+): Promise<{ status: string; claimed: boolean } | null> {
+  const store = new D1Store(env.DB, env.BLOBS);
+  const change = await store.getChange(changeId);
+  if (change === null) return null;
+  const repo = await store.getRepo(change.repoId);
+  return { status: change.status, claimed: repo?.claim.status === "claimed" };
 }
 
 export async function handlePreviewRequest(request: Request, env: GatewayEnv): Promise<Response> {
@@ -143,7 +157,8 @@ export async function handlePreviewRequest(request: Request, env: GatewayEnv): P
     );
   }
   if (row === null) {
-    const status = await changeStatus(env, target.changeId);
+    const known = await changeStatus(env, target.changeId);
+    const status = known?.status ?? null;
     if (status === null) {
       return errorPage(request, 404, "No such preview", `There is no change ${target.changeId}.`);
     }
@@ -153,6 +168,7 @@ export async function handlePreviewRequest(request: Request, env: GatewayEnv): P
         body: "CI is building this change; its preview appears here as soon as the build is green. This page reloads by itself.",
         changeId: target.changeId,
         projectName: "this project",
+        claimed: known?.claimed ?? false,
         retryAfter: 5,
       });
     }
@@ -175,6 +191,7 @@ export async function handlePreviewRequest(request: Request, env: GatewayEnv): P
     return errorPage(request, 502, "The preview failed to start", row.detail ?? "unknown error", {
       projectName: row.projectName,
       changeId: row.changeId,
+      claimed: row.claimed,
     });
   }
 
@@ -203,6 +220,7 @@ export async function handlePreviewRequest(request: Request, env: GatewayEnv): P
       {
         projectName: row.projectName,
         changeId: row.changeId,
+        claimed: row.claimed,
       },
     );
   }
@@ -216,7 +234,7 @@ export async function handlePreviewRequest(request: Request, env: GatewayEnv): P
   if (!isHtml(hardened) || request.method === "HEAD") return hardened;
   return res.headers.get("x-gittifacts-page") === "1"
     ? hardened
-    : withBanner(hardened, row.projectName, row.changeId);
+    : withBanner(hardened, row.projectName, row.changeId, row.claimed);
 }
 
 export { BANNER_TAG };
