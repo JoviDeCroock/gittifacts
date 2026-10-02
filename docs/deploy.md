@@ -23,8 +23,10 @@ Run `wrangler login` again before deploying. The `cf` CLI token has all of these
 Optional: `AI_GATEWAY_TOKEN` (HTTP fallback for the reviewer when the `AI` binding fails).
 `CF_ACCOUNT_ID` is a plain var in `wrangler.jsonc`; don't also put it as a secret.
 
-`CF_API_TOKEN` needs Workers Scripts Edit (versions and deployments for rollouts), Flagship Edit and Workers
-Observability Read (telemetry). Artifacts goes through the binding, so the token needs no Artifacts permission.
+`CF_API_TOKEN` needs Workers Scripts Edit (versions and deployments for rollouts), Flagship Edit, Workers
+Observability Read (telemetry) and Account Analytics Read (the time-to-first-green dashboard queries the Analytics
+Engine SQL API; without it `/internal/ttfg` falls back to D1). Artifacts goes through the binding, so the token needs
+no Artifacts permission.
 
 ## Deploy the platform Worker
 
@@ -37,8 +39,13 @@ pnpm --filter @app/platform deploy:dry-run        # builds web + sandbox bundle,
 pnpm --filter @app/platform deploy                # same, then uploads; registers the push trigger
 ```
 
+`deploy:prepare` also regenerates `apps/platform/src/generated/templates.ts` from `templates/` (bundle-templates).
+Migration `0006_onboarding_previews_ttfg` adds the `previews` and `project_onboarding` tables.
+
 `deploy` creates the four Workflows (`change-workflow`, `rollout-workflow`, `push-router`, `ci-run-workflow`), the
-`runner` container application (`scheduling_policy: durable_object`) and the `cf.artifacts.repo.pushed` trigger
+`runner` and `preview` container applications (`scheduling_policy: durable_object`, both built from
+`apps/sandbox/Dockerfile`), the `*.preview.resynapse.dev/*` route on the `resynapse.dev` zone (DNS: the proxied
+`*.preview` AAAA `100::` record) and the `cf.artifacts.repo.pushed` trigger
 (namespace `gittifacts-eu` → `push-router`).
 
 ## M1 live check
@@ -51,3 +58,22 @@ The agent token comes from `POST /api/v1/principals/agents` (signed in as a huma
 least one commit on its default branch, and `POST /api/v1/repos { name }` creates an empty one (only the merge queue
 writes main). Until `create_project` seeds templates, import one instead:
 `POST /api/v1/repos { "name": "m1", "importFrom": "https://github.com/<owner>/<public-repo>" }`.
+
+## After a deploy: warm the template caches
+
+The first project per template should not pay a cold `pnpm install`. Once per template change (the seed repos are
+named by content digest, so a re-run reuses them), as a human with repo:admin:
+
+```sh
+curl -X POST -H "Cookie: better-auth.session_token=…" https://gittifacts.<subdomain>.workers.dev/api/v1/admin/seed-cache
+# one template: …/api/v1/admin/seed-cache?template=workers-api
+```
+
+It creates `seed-<template>-<digest8>` Artifacts repos and starts one `seedCache` CI run per template; each run
+publishes the install snapshot under the global cache key every project from that template computes.
+
+## O1 live check
+
+`create_project({ template: "workers-api" })` over MCP, then `wait_for_change` on `bootstrapChangeId` with
+`until: "evidence_ready"`, then open `previewUrl`. `GET /internal/ttfg` (or `/internal/onboarding` in the web app)
+shows the measured time to first green.
