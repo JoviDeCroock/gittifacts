@@ -744,3 +744,24 @@ metered: it is bounded by Artifacts' 1 GB/repo × (1 + ≤ 5 open forks), the TT
 container time is bounded (3 live previews, 10-minute idle sleep, internet off) but not metered. Any signed-in human
 can review an unclaimed project's Changes (scopes are platform-wide today); that can merge into the project's own
 main, never deploy it.
+
+## 2026-10-02 — Unclaimed creation stays OFF until repo membership ships; access control by membership
+
+**Found.** O3's own review found that repo access depended only on global scopes. With open sign-up, any human could
+list, read and approve any repo, including unclaimed projects.
+
+**Fixing it.** That's a §6 violation (least privilege, separation of duties), so it's being fixed with basic repo
+membership (owner / maintainer / reviewer / reader), enforced through one access chokepoint.
+- Nobody may review an unclaimed project until a human claims it. The claimer becomes its owner.
+
+**Until it ships,** the Flagship flag `unclaimed-creation-enabled` is deliberately **not created**. The kill switch
+fails closed, so credential-less `create_project` stays disabled.
+
+**Done.** The Turnstile widget `gittifacts-claim` (managed) exists for gittifacts.decroockjovi.workers.dev:
+- the site key is a var, and the secret is a Worker secret, never printed;
+- `PLATFORM_ADMINS` holds the operator's principal id.
+
+**Known bounds, not meters (O3).** Neither of these can be metered with today's primitives; both are bounded instead.
+- **Artifacts repo storage.** There's no repo-size API, so it's bounded by Artifacts' 1 GB per repo × (main + ≤ 5
+  forks), the 7-day TTL and the creation rate limits.
+- **Preview container time.** Bounded by ≤ 3 live previews per project, 10-minute idle sleep and internet off.
