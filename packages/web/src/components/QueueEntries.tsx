@@ -91,12 +91,16 @@ function EjectPanel({ r, find }: { r: EjectReason; find: Find }) {
 
 function Facts({ e, trackName }: { e: QueueEntryView; trackName: string | null }) {
   const done = isTerminal(e.state);
+  // A finished entry keeps only facts that still say something: no "none yet", no pass chance.
+  if (done && trackName === null && !e.batch) return null;
   return (
     <dl class="q-facts">
-      <div>
-        <dt>Track</dt>
-        <dd>{trackName ?? <span class="q-dim">none yet</span>}</dd>
-      </div>
+      {done && trackName === null ? null : (
+        <div>
+          <dt>Track</dt>
+          <dd>{trackName ?? <span class="q-dim">none yet</span>}</dd>
+        </div>
+      )}
       {!done || e.batch ? (
         <div>
           <dt>Batch</dt>
@@ -124,12 +128,14 @@ function Facts({ e, trackName }: { e: QueueEntryView; trackName: string | null }
           <dd class={`tnum ${e.etaSeconds === null ? "q-dim" : ""}`}>{etaLabel(e.etaSeconds)}</dd>
         </div>
       )}
-      <div>
-        <dt>Pass chance</dt>
-        <dd class={`tnum ${e.predictedPassProbability === null ? "q-dim" : ""}`}>
-          {percentLabel(e.predictedPassProbability)}
-        </dd>
-      </div>
+      {done ? null : (
+        <div>
+          <dt>Pass chance</dt>
+          <dd class={`tnum ${e.predictedPassProbability === null ? "q-dim" : ""}`}>
+            {percentLabel(e.predictedPassProbability)}
+          </dd>
+        </div>
+      )}
     </dl>
   );
 }
@@ -185,7 +191,10 @@ function EntryRow({
             </span>
           ) : null}
         </div>
-        <p class="q-entry__reason">{e.reason}</p>
+        {/* A reason that only repeats the state chip ("merged") adds nothing. */}
+        {e.reason.trim().toLowerCase() === e.state || e.reason.trim().toLowerCase() === ENTRY_STATE[e.state].label.toLowerCase() ? null : (
+          <p class="q-entry__reason">{e.reason}</p>
+        )}
         {e.blocking.length > 0 ? (
           <p class="q-entry__rel">
             Blocked by <ChangeLinks ids={e.blocking} find={find} />
