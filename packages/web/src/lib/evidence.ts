@@ -35,9 +35,14 @@ const QUESTION_LABEL = {
   "hidden-behavior-change": "Hidden behavior change",
 } as const;
 
+/** Index label: a change can carry several model judgments, so each is named by its question. */
+function shortLabel(item: EvidenceItem): string {
+  return item.kind === "llm-judgment" ? QUESTION_LABEL[item.question] : KIND_LABEL[item.kind];
+}
+
 export function summarize(item: EvidenceItem): ItemSummary {
-  if (item.status === "error") return { label: KIND_LABEL[item.kind], value: "Failed to measure", tone: "danger" };
-  if (item.status === "skipped") return { label: KIND_LABEL[item.kind], value: "Not measured", tone: "warn" };
+  if (item.status === "error") return { label: shortLabel(item), value: "Failed to measure", tone: "danger" };
+  if (item.status === "skipped") return { label: shortLabel(item), value: "Not measured", tone: "warn" };
   switch (item.kind) {
     case "red-green":
       return {
