@@ -14,14 +14,16 @@ import { fetchVia, platformApp } from "./harness.js";
 import { fakeMachineFor, resetFakeWorkspaces } from "./workspace-fakes.js";
 
 let fakes: IntegrationFakes;
-let clock = Date.parse("2026-10-02T10:00:00.000Z");
+// The workspace clock starts at the real time: a fixed date turns into a past alarm once the
+// wall clock passes it, workerd fires it on its own and runDurableObjectAlarm finds none.
+let clock = Date.now();
 let app: TestApp;
 let clients: PlatformClient[] = [];
 
 beforeEach(() => {
   fakes = resetIntegrationFakes();
   resetFakeWorkspaces();
-  clock = Date.parse("2026-10-02T10:00:00.000Z");
+  clock = Date.now();
   configureWorkspaceRuntime({ machine: (_c, name) => fakeMachineFor(name), now: () => clock });
   app = platformApp();
 });
