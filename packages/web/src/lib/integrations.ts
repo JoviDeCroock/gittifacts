@@ -1,9 +1,10 @@
 /**
  * Plain words and pure helpers for external integrations. No DOM, no clocks.
  *
- * The install screen and installed-integrations page render the server's `ScopeExplained`
- * strings. The developer portal works from `IntegrationView.scopes` (raw ids), so it uses this
- * catalog, which mirrors the server's wording word for word.
+ * Every screen renders the server's `ScopeExplained` strings (`scopes` on installs and
+ * installations, `scopesExplained` on an integration). This catalog mirrors that wording and is
+ * only a fallback: the register form (nothing on the server yet) and scopes an integration
+ * doesn't hold yet.
  */
 import type {
   DeliveryStatus,

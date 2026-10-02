@@ -3,7 +3,7 @@
  * each can do in plain words, on which repositories, and one-click uninstall.
  */
 import { useSignal } from "@preact/signals";
-import { api, inlineError, newIdempotencyKey } from "../api/client.js";
+import { inlineError, newIdempotencyKey } from "../api/client.js";
 import { type InstallationView, integrationsApi } from "../api/integrations.js";
 import { Icon } from "../components/Icon.js";
 import { ConfirmAction, IntegrationLogo, RepoPicker } from "../components/Integrations.js";
@@ -13,19 +13,7 @@ import { hostOf, repoLine } from "../lib/integrations.js";
 import { relative } from "../lib/time.js";
 import { minuteClock } from "../state/clock.js";
 import { useResource } from "../state/resource.js";
-import { principal } from "../state/session.js";
 import "../styles/integrations.css";
-
-/** Repositories this human can install on: claimed, and they own them. */
-function useEligibleRepos() {
-  const me = principal.value;
-  return useResource(async () => {
-    const { repos } = await api.repos();
-    return repos
-      .filter((r) => r.claim.status === "claimed" && (!me || r.claim.ownerId === me.id))
-      .map((r) => ({ id: r.id, name: r.name, fullName: `${r.namespace}/${r.name}` }));
-  }, [me?.id]);
-}
 
 function RepoEditor({
   inst,
@@ -36,13 +24,11 @@ function RepoEditor({
   onSaved: (i: InstallationView) => void;
   onCancel: () => void;
 }) {
-  const eligible = useEligibleRepos();
   const selection = useSignal(inst.repoSelection);
   const picked = useSignal(inst.repos.map((r) => r.id));
   const busy = useSignal(false);
   const error = useSignal<string | null>(null);
   const key = useSignal(newIdempotencyKey());
-  const st = eligible.state.value;
   const missing = selection.value === "selected" && picked.value.length === 0;
 
   async function save(e: Event) {
@@ -66,22 +52,16 @@ function RepoEditor({
 
   return (
     <form class="inst__editor" onSubmit={save} aria-label={`Repositories for ${inst.integration.name}`}>
-      {st.status === "loading" ? <Loading label="Loading your repositories" lines={3} /> : null}
-      {st.status === "error" ? (
-        <ErrorState error={st.error} what="your repositories" onRetry={eligible.reload} />
-      ) : null}
-      {st.status === "ok" ? (
-        <RepoPicker
-          name={`repos-${inst.id}`}
-          repos={st.data}
-          selection={selection.value}
-          picked={picked.value}
-          onSelection={(s) => (selection.value = s)}
-          onToggle={(id, on) => {
-            picked.value = on ? [...picked.value, id] : picked.value.filter((x) => x !== id);
-          }}
-        />
-      ) : null}
+      <RepoPicker
+        name={`repos-${inst.id}`}
+        repos={inst.eligibleRepos}
+        selection={selection.value}
+        picked={picked.value}
+        onSelection={(s) => (selection.value = s)}
+        onToggle={(id, on) => {
+          picked.value = on ? [...picked.value, id] : picked.value.filter((x) => x !== id);
+        }}
+      />
       {error.value ? (
         <p class="field__error" role="alert">
           {error.value}
@@ -97,7 +77,7 @@ function RepoEditor({
           size="sm"
           busy={busy.value}
           busyLabel="Saving…"
-          disabled={missing || st.status !== "ok"}
+          disabled={missing}
         >
           Save repositories
         </Button>
@@ -159,7 +139,7 @@ function InstallationRow({
         <p class="inst__repos">
           <Icon name="layers" size={16} />
           <span>
-            {inst.repoSelection === "all" ? "All repositories you own" : repoLine("selected", inst.repos)}
+            {inst.repoSelection === "all" ? "All repositories you own or maintain" : repoLine("selected", inst.repos)}
           </span>
           {!editing.value ? (
             <button type="button" class="inst__change" onClick={() => (editing.value = true)}>
@@ -284,7 +264,7 @@ export function InstalledIntegrations() {
                   onUpdated={(u) =>
                     replace(
                       u,
-                      `${u.integration.name} now sees ${u.repoSelection === "all" ? "all repositories you own" : repoLine("selected", u.repos)}.`,
+                      `${u.integration.name} now sees ${u.repoSelection === "all" ? "all repositories you own or maintain" : repoLine("selected", u.repos)}.`,
                     )
                   }
                 />

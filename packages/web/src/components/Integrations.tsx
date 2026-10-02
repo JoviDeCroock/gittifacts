@@ -4,7 +4,7 @@
  */
 import { useSignal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
-import type { IntegrationScope, WebhookEvent } from "../api/integrations.js";
+import type { IntegrationScope, ScopeExplained, WebhookEvent } from "../api/integrations.js";
 import { ALL_EVENTS, EVENT_CATALOG, SCOPE_CATALOG, sortScopes } from "../lib/integrations.js";
 import { Icon } from "./Icon.js";
 import { Button, CopyButton } from "./ui.js";
@@ -170,7 +170,7 @@ export interface PickerRepo {
 }
 
 /**
- * "All repositories you own" or "Only selected repositories" with a checklist. Used on the
+ * "All repositories you own or maintain" or "Only selected repositories" with a checklist. Used on the
  * install screen and when changing an installation's repositories.
  */
 export function RepoPicker({
@@ -197,11 +197,11 @@ export function RepoPicker({
           checked={selection === "all"}
           onChange={() => onSelection("all")}
         />
-        <span>All repositories you own</span>
+        <span>All repositories you own or maintain</span>
         <span class="check__hint">
           {repos.length === 0
-            ? "None yet. Repositories you claim later are included."
-            : `${repos.length === 1 ? "1 repository" : `${repos.length} repositories`} today, and any you claim later.`}
+            ? "None yet. Ones you own or maintain later are included."
+            : `${repos.length === 1 ? "1 repository" : `${repos.length} repositories`} today, and any you own or maintain later.`}
         </span>
       </label>
       <label class="check repo-picker__mode">
@@ -218,8 +218,8 @@ export function RepoPicker({
         <p class="repo-picker__none" role="note">
           <Icon name="info" size={16} />
           <span>
-            You don't own any claimed repositories yet. Only claimed repositories you own can be
-            connected to an integration; unclaimed projects can't.
+            You don't own or maintain any claimed repositories yet. Only claimed repositories you
+            own or maintain can be connected to an integration; unclaimed projects can't.
           </span>
         </p>
       ) : selection === "selected" ? (
@@ -242,20 +242,26 @@ export function RepoPicker({
   );
 }
 
-/** Permissions with the server's plain words; the raw scope id is secondary. */
+/**
+ * Permissions in plain words; the raw scope id is secondary. `explained` is the server's wording
+ * for the integration's current scopes; the local catalog only fills in the ones it lacks.
+ */
 export function ScopeChecklist({
   value,
   onChange,
+  explained = [],
   legend = "Permissions",
 }: {
   value: IntegrationScope[];
   onChange: (next: IntegrationScope[]) => void;
+  explained?: ScopeExplained[];
   legend?: string;
 }) {
+  const options = SCOPE_CATALOG.map((c) => explained.find((e) => e.scope === c.scope) ?? c);
   return (
     <fieldset class="int-checks">
       <legend class="field__label">{legend}</legend>
-      {SCOPE_CATALOG.map((s) => (
+      {options.map((s) => (
         <label key={s.scope} class="check">
           <input
             type="checkbox"

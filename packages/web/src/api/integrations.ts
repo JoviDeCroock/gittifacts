@@ -60,6 +60,10 @@ export interface IntegrationView {
   redirectUris: string[];
   clientType: ClientType;
   scopes: IntegrationScope[];
+  /** The same scopes in the server's plain words (what people see on the install screen). */
+  scopesExplained: ScopeExplained[];
+  /** Who people see as the developer ("by …"). */
+  developer: { name: string };
   webhook: WebhookConfig;
   secrets: SecretView[];
   installationCount: number;
@@ -157,6 +161,8 @@ export interface InstallationView {
   scopes: ScopeExplained[];
   repoSelection: RepoSelection;
   repos: RepoRef[];
+  /** Claimed repositories the account owns or maintains: the choices for "Change repositories". */
+  eligibleRepos: RepoRef[];
   status: "active" | "deleted";
   createdAt: string;
   updatedAt: string;

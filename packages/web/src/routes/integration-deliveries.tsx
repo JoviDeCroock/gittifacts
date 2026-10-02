@@ -73,7 +73,7 @@ function DetailPane({ integrationId, deliveryId, base, onRedelivered }: {
           <Button variant="primary" icon="redo" busy={busy.value} busyLabel="Queuing…" onClick={redeliver}>
             Redeliver
           </Button>
-          <span class="dlv-detail__note">Sends the same payload again as a new delivery.</span>
+          <span class="dlv-detail__note">Sends the same payload again with the same X-Gittifacts-Delivery ID.</span>
         </>
       }
     />

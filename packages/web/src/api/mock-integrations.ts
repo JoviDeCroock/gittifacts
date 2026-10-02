@@ -36,7 +36,7 @@ const fail = (status: number, code: string, message: string, explanation: string
 const ME = { id: "prn_maya", name: "Maya Okafor", handle: "maya" };
 const ORIGIN = typeof window === "undefined" ? "https://gittifacts.dev" : window.location.origin;
 
-/** Claimed repositories Maya owns: the only ones an integration can be installed on. */
+/** Claimed repositories Maya owns or maintains: the only ones an integration can be installed on. */
 const REPOS: RepoRef[] = fixtureRepos()
   .map((r) => r.repo)
   .filter((r) => r.claim.status === "claimed" && r.claim.ownerId === ME.id)
@@ -87,6 +87,8 @@ const integrations: IntegrationView[] = [
     ],
     clientType: "confidential",
     scopes: DEPLOY,
+    scopesExplained: explain(DEPLOY),
+    developer: { name: "Cloudflare" },
     webhook: {
       url: "https://builds.workers.example/hooks/gittifacts",
       active: true,
@@ -108,6 +110,8 @@ const integrations: IntegrationView[] = [
     redirectUris: ["https://app.staging.netlify.example/auth/gittifacts/callback"],
     clientType: "public",
     scopes: [...DEPLOY, "checks:write"],
+    scopesExplained: explain([...DEPLOY, "checks:write"]),
+    developer: { name: "Netlify" },
     webhook: {
       url: "https://api.staging.netlify.example/hooks/gittifacts",
       active: false,
@@ -239,7 +243,7 @@ const deliveries: DeliveryDetail[] = [
   { id: "dlv_05", integrationId: "int_cfwb", event: "change.created", repoId: "repo_dashboard", status: "delivered", attempts: 1, responseStatus: 202, durationMs: 214, createdMin: 18, responseBody: '{"queued":true,"build":"bld_7Hc2"}' },
   { id: "dlv_04", integrationId: "int_cfwb", event: "push", repoId: "repo_edge", status: "delivered", attempts: 1, responseStatus: 200, durationMs: 388, createdMin: 41, redeliveryOf: "dlv_03" },
   { id: "dlv_03", integrationId: "int_cfwb", event: "push", repoId: "repo_edge", status: "failed", attempts: 8, responseStatus: 502, durationMs: 1_204, createdMin: 60 * 7, lastAttemptMin: 52, responseBody: BAD_GATEWAY, error: "Gave up after 8 attempts over 6 h. The last answer was 502 Bad Gateway." },
-  { id: "dlv_02", integrationId: "int_cfwb", event: "change.merged", repoId: "repo_billing", status: "cancelled", attempts: 0, responseStatus: null, durationMs: null, createdMin: 60 * 26, lastAttemptMin: null, error: "Cancelled: the webhook was paused before the first attempt." },
+  { id: "dlv_02", integrationId: "int_cfwb", event: "change.merged", repoId: "repo_billing", status: "cancelled", attempts: 0, responseStatus: null, durationMs: null, createdMin: 60 * 26, lastAttemptMin: null, error: "webhook disabled" },
   { id: "dlv_01", integrationId: "int_cfwb", event: "installation.created", repoId: null, status: "delivered", attempts: 1, responseStatus: 204, durationMs: 96, createdMin: 60 * 24 * 3, responseBody: "" },
   { id: "dlv_00", integrationId: "int_cfwb", event: "ping", repoId: null, status: "delivered", attempts: 1, responseStatus: 200, durationMs: 121, createdMin: 60 * 24 * 9 },
   { id: "dlv_n1", integrationId: "int_netlify_stg", event: "ping", repoId: null, status: "failed", attempts: 3, responseStatus: null, durationMs: 10_000, createdMin: 60 * 24 * 2, lastAttemptMin: 60 * 24 * 2 - 30, error: "Couldn't connect to api.staging.netlify.example: the connection timed out." },
@@ -266,6 +270,7 @@ const installations: InstallationView[] = [
     scopes: explain(DEPLOY),
     repoSelection: "selected",
     repos: [repo("repo_billing"), repo("repo_edge")],
+    eligibleRepos: REPOS.map((r) => ({ ...r })),
     status: "active",
     createdAt: ago(60 * 24 * 3),
     updatedAt: ago(60 * 24 * 3),
@@ -285,6 +290,7 @@ const installations: InstallationView[] = [
     scopes: explain(["repo:read", "contents:read", "webhooks", "deployments:write", "checks:write"]),
     repoSelection: "all",
     repos: [...REPOS],
+    eligibleRepos: REPOS.map((r) => ({ ...r })),
     status: "active",
     createdAt: ago(60 * 24 * 21),
     updatedAt: ago(60 * 24 * 8),
@@ -361,6 +367,7 @@ function applyInstall(view: InstallView, repoSelection: "all" | "selected", repo
     scopes: view.scopes,
     repoSelection,
     repos,
+    eligibleRepos: REPOS.map((r) => ({ ...r })),
     status: "active",
     createdAt: now,
     updatedAt: now,
@@ -369,7 +376,7 @@ function applyInstall(view: InstallView, repoSelection: "all" | "selected", repo
   });
 }
 
-/** Body of approve / PATCH installation: an explicit choice, repos you own. */
+/** Body of approve / PATCH installation: an explicit choice, repos you own or maintain. */
 function readSelection(body: unknown): { repoSelection: "all" | "selected"; repoIds: string[] } | MockResponse {
   const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
   const sel = b.repoSelection;
@@ -378,11 +385,11 @@ function readSelection(body: unknown): { repoSelection: "all" | "selected"; repo
     return fail(400, "invalid-request", "repoSelection must be all or selected", "Choose All repositories or pick some.");
   }
   if (sel === "selected" && ids.length === 0) {
-    return fail(400, "invalid-request", "pick at least one repository", "Tick at least one repository, or choose All repositories you own.");
+    return fail(400, "invalid-request", "pick at least one repository", "Tick at least one repository, or choose All repositories you own or maintain.");
   }
   const foreign = ids.filter((x) => !REPOS.some((r) => r.id === x));
   if (foreign.length > 0) {
-    return fail(403, "repo-not-installable", `you can't install on ${foreign.join(", ")}`, "Only claimed repositories you own can be connected. Claim the project first.");
+    return fail(403, "repo-not-installable", `you can't install on ${foreign.join(", ")}`, "Only claimed repositories you own or maintain can be connected. Claim the project first, or ask its owner to make you a maintainer.");
   }
   return { repoSelection: sel, repoIds: sel === "all" ? [] : ids };
 }
@@ -432,6 +439,8 @@ function create(body: unknown): MockResponse {
     redirectUris: i.redirectUris,
     clientType: confidential ? "confidential" : "public",
     scopes: i.scopes,
+    scopesExplained: explain(i.scopes),
+    developer: { name: ME.name },
     webhook: { url: hookUrl, active: i.webhook?.active ?? true, events: i.webhook?.events ?? [], secretSet: Boolean(hookUrl) },
     secrets: secret ? [{ id: `sec_${b64u(id, 8)}`, prefix: secret.slice(0, 12), createdAt: now, lastUsedAt: null }] : [],
     installationCount: 0,
@@ -451,7 +460,10 @@ function patch(it: IntegrationView, body: unknown): MockResponse {
   if (p.logoUrl !== undefined) it.logoUrl = p.logoUrl;
   if (p.homepageUrl !== undefined) it.homepageUrl = p.homepageUrl;
   if (p.redirectUris !== undefined) it.redirectUris = p.redirectUris;
-  if (p.scopes !== undefined) it.scopes = p.scopes;
+  if (p.scopes !== undefined) {
+    it.scopes = p.scopes;
+    it.scopesExplained = explain(p.scopes);
+  }
   if (p.webhook !== undefined) {
     it.webhook = {
       url: p.webhook.url,
@@ -479,13 +491,18 @@ function queueDelivery(it: IntegrationView, event: WebhookEvent, redeliveryOf: D
     lastAttemptMin: null,
     redeliveryOf: redeliveryOf?.id ?? null,
   });
-  if (redeliveryOf) d.payload = redeliveryOf.payload;
+  // A redelivery is a new row with the original's body and guid (X-Gittifacts-Delivery stays the same).
+  if (redeliveryOf) {
+    d.payload = redeliveryOf.payload;
+    d.guid = redeliveryOf.guid;
+    d.requestHeaders = { ...redeliveryOf.requestHeaders };
+  }
   deliveries.unshift(d);
   // The mock receiver answers a moment later: pings and redeliveries succeed while the hook is active.
   setTimeout(() => {
     Object.assign(d, it.webhook.active
       ? { status: "delivered", attempts: 1, responseStatus: 200, durationMs: 163, lastAttemptAt: new Date().toISOString(), responseBody: '{"ok":true}' }
-      : { status: "cancelled", error: "Cancelled: the webhook is paused." });
+      : { status: "cancelled", error: "webhook disabled" });
   }, 1500);
   return d;
 }
@@ -578,7 +595,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
     }
     if (rest === "secrets" && method === "POST") {
       if (it.clientType === "public") {
-        return fail(409, "public-client", "public clients have no secret", "Public clients prove themselves with PKCE. Switch to confidential to use a secret.");
+        return fail(409, "invalid-state", "public clients have no secret", "Public clients prove themselves with PKCE. Switch to confidential to use a secret.");
       }
       const id = nextId("sec");
       const clientSecret = secretValue(id);
@@ -591,6 +608,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       const idx = it.secrets.findIndex((s) => s.id === decodeURIComponent(sm[1] ?? ""));
       if (idx < 0) return notFound("secret");
       if (it.secrets.length === 1) {
+        // Exactly `last-secret`: the only active client secret can't be revoked.
         return fail(409, "last-secret", "can't revoke the only secret", "Generate a new secret first, deploy it, then revoke this one.");
       }
       it.secrets.splice(idx, 1);

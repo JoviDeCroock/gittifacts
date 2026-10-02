@@ -249,8 +249,10 @@ function IntegrationRow({ it }: { it: IntegrationView }) {
         <span class="dev-int__main">
           <span class="dev-int__name">{it.name}</span>
           <span class="dev-int__meta">
-            <code>{it.clientId}</code> · {it.clientType === "public" ? "Public client" : "Confidential"} ·{" "}
-            {hostOf(it.homepageUrl, it.homepageUrl)}
+            by {it.developer.name} · {hostOf(it.homepageUrl, it.homepageUrl)}
+          </span>
+          <span class="dev-int__meta">
+            <code>{it.clientId}</code> · {it.clientType === "public" ? "Public client" : "Confidential"}
           </span>
           <span class="dev-int__meta">
             {it.installationCount === 0 ? "Not installed yet" : `Installed on ${plural(it.installationCount, "account")}`}{" "}

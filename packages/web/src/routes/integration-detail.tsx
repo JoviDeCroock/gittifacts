@@ -303,7 +303,7 @@ function Webhook({ it, onChange, base }: { it: IntegrationView; onChange: (i: In
           <label class="check">
             <input type="checkbox" checked={active.value} onChange={(e) => (active.value = e.currentTarget.checked)} />
             <span>Active</span>
-            <span class="check__hint">Untick to pause deliveries and keep the settings.</span>
+            <span class="check__hint">Untick to pause. While paused, deliveries are cancelled, not queued.</span>
           </label>
           <EventChecklist value={events.value} onChange={(v) => (events.value = v)} />
           <SaveBar dirty={dirty} busy={saving.value} label="Save webhook" onDiscard={() => { url.value = it.webhook.url ?? ""; active.value = it.webhook.active; events.value = it.webhook.events; }} />
@@ -414,7 +414,12 @@ function Permissions({ it, onChange }: { it: IntegrationView; onChange: (i: Inte
           else void s.save({ scopes: scopes.value }, "Permissions saved.");
         }}
       >
-        <ScopeChecklist value={scopes.value} onChange={(v) => (scopes.value = v)} legend="What it asks for when people install it" />
+        <ScopeChecklist
+          value={scopes.value}
+          onChange={(v) => (scopes.value = v)}
+          explained={it.scopesExplained}
+          legend="What it asks for when people install it"
+        />
         <p class="field__hint">
           People see these in plain words on the install screen. It can never push, approve or merge,
           whatever it asks for.
@@ -584,6 +589,7 @@ export function IntegrationDetail() {
         it ? (
           <span class="int-head-meta">
             <IntegrationLogo name={it.name} logoUrl={it.logoUrl} size={24} />
+            by {it.developer.name} ·{" "}
             <a href={it.homepageUrl} target="_blank" rel="noopener noreferrer">
               {hostOf(it.homepageUrl, it.homepageUrl)}
             </a>
