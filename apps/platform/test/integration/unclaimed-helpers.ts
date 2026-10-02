@@ -89,10 +89,13 @@ export function fetchWith(app: TestApp, over: EnvOver = {}) {
   };
 }
 
-/** Credential-less POST /api/v1/projects; asserts 201. */
+/**
+ * Credential-less POST /api/v1/projects; asserts 201. Default: an empty project (no bootstrap CI
+ * left running in the background when the test ends).
+ */
 export async function createUnclaimed(
   app: TestApp,
-  body: Record<string, unknown> = { template: "workers-api" },
+  body: Record<string, unknown> = {},
   o: Omit<Req, "body" | "token" | "cookie"> = {},
 ): Promise<ProjectCreated> {
   const res = await request(app, "POST", "/api/v1/projects", { ...o, body });

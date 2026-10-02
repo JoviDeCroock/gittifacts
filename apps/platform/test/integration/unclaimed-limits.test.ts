@@ -13,11 +13,12 @@ import { createPlatformClient } from "@app/mcp/client";
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { previews } from "../../src/db/schema.js";
+import { toErrorResponse } from "../../src/errors.js";
 import { UnclaimedLimitError } from "../../src/limits/refusals.js";
 import { UNCLAIMED_BANNER } from "../../src/previews/pages.js";
 import { PlatformPreviews } from "../../src/previews/port.js";
 import { store } from "../fixtures.js";
-import { ORIGIN } from "../http.js";
+import { ORIGIN, signUpHuman } from "../http.js";
 import { type IntegrationFakes, NAMESPACE, resetIntegrationFakes } from "./fakes.js";
 import { platformApp } from "./harness.js";
 import { fakeBrowser, previewFakes, resetPreviewFakes } from "./preview-fakes.js";
@@ -297,7 +298,6 @@ describe("never production, never auto-merge", () => {
       .updateRepo(p.projectId, { deployTarget: "prod-worker" })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(UnclaimedLimitError);
-    const { toErrorResponse } = await import("../../src/errors.js");
     expect(toErrorResponse(err)).toMatchObject({
       status: 403,
       body: { error: { code: "unclaimed-limit" } },
@@ -341,20 +341,22 @@ describe("never production, never auto-merge", () => {
 });
 
 describe("no API can give an unclaimed project secrets, custom domains or a deploy target", () => {
-  it("the OpenAPI document and the MCP tools have no such inputs", async () => {
+  it("the OpenAPI document and the MCP tools have no secret or domain inputs; a deploy target is refused", async () => {
     const app = platformApp();
     const doc = (await (await request(app, "GET", "/openapi.json")).json()) as {
       paths: Record<string, Record<string, unknown>>;
     };
-    // Input names that would give a project secrets, a custom domain or a production target.
+    // Input names that would give a project secrets or its own hostname.
     const forbidden =
-      /"(secrets?|env(ironment)?Vars?|custom_?domains?|domains?|hostnames?|deploy_?target|workers?_?script|production)":/i;
+      /"(secrets?|env(ironment)?Vars?|custom_?domains?|domains?|hostnames?|routes?Pattern|production)":/i;
+    const deployPaths: string[] = [];
     for (const [path, ops] of Object.entries(doc.paths)) {
       if (path.startsWith("/api/oauth") || path.includes("/oauth/")) continue; // OAuth client_secret is protocol, not a project secret
-      expect(path).not.toMatch(/secret|domain|deploy-target/i);
+      expect(path).not.toMatch(/secret|domain/i);
       for (const op of Object.values(ops)) {
         const body = JSON.stringify((op as { requestBody?: unknown }).requestBody ?? {});
         expect(body, `${path}`).not.toMatch(forbidden);
+        if (/deploy.?target/i.test(path) || /"deployTarget":/.test(body)) deployPaths.push(path);
       }
     }
     const p = await createUnclaimed(app);
@@ -363,10 +365,23 @@ describe("no API can give an unclaimed project secrets, custom domains or a depl
     });
     try {
       const tools = await mcp.listTools();
-      expect(JSON.stringify(tools.map((t) => [t.name, t.inputSchema]))).not.toMatch(forbidden);
+      const inputs = JSON.stringify(tools.map((t) => [t.name, t.inputSchema]));
+      expect(inputs).not.toMatch(forbidden);
+      expect(inputs).not.toMatch(/"deploy_?target":/i);
     } finally {
       await mcp.client.close();
     }
+    // Any route that sets a deploy target refuses an unclaimed project, even for a human admin.
+    const human = await signUpHuman(app);
+    for (const path of new Set(deployPaths)) {
+      const res = await request(app, "PATCH", path.replace("{repoId}", p.projectId), {
+        cookie: human.cookie,
+        body: { script: "prod" },
+      });
+      expect(res.status, path).toBe(403);
+      expect(((await res.json()) as Envelope).error.code, path).toBe("unclaimed-limit");
+    }
+    expect((await store().getRepo(p.projectId))?.deployTarget).toBeNull();
   });
 });
 

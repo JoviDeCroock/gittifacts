@@ -706,8 +706,8 @@ platform-wide cap need long windows and one global counter. `AbuseLimiter` (one 
 per-token request rates of unclaimed agents, on the HTTP API and MCP, fail closed. Raw IPs are never stored.
 
 **Kill switch.** Flagship flag `unclaimed-creation-enabled` via `FLAGS`, fail closed (missing binding, unknown flag,
-evaluation error → off), plus a D1 override (`PUT /api/v1/admin/unclaimed-creation`, humans listed in
-`PLATFORM_ADMINS`): `off` always wins; `on` only bridges an unevaluable flag (a flag set to false still stops
+evaluation error → off), plus a D1 override (`PUT /api/v1/admin/unclaimed-creation`, humans whose principal id is in
+`PLATFORM_ADMINS`; e-mails are not accepted because e-mail sign-up is unverified): `off` always wins; `on` only bridges an unevaluable flag (a flag set to false still stops
 creation). Off → 503 `creation-disabled`; /start and llms.txt say so. Repo scopes don't make a platform admin (every
 human holds them).
 

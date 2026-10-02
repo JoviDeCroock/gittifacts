@@ -4,9 +4,9 @@
  *   GET /api/v1/admin/unclaimed-creation   kill-switch state (flag, override, effective)
  *   PUT /api/v1/admin/unclaimed-creation   set the D1 override: "off" | "on" | "flag" (clear)
  *
- * Platform admins are humans whose e-mail is listed in `PLATFORM_ADMINS` (comma-separated). Repo
- * scopes don't make anyone a platform admin: every human holds them on their own repos. With the
- * list unset, nobody can change the override (Flagship remains the switch).
+ * Platform admins are humans whose principal id (`hu_…`, see GET /api/v1/me) or user id is listed in
+ * `PLATFORM_ADMINS` (comma-separated). Repo scopes don't make anyone a platform admin: every human
+ * holds them. With the list unset, nobody can change the override (Flagship remains the switch).
  */
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
@@ -27,12 +27,14 @@ const StateSchema = z
   .meta({ id: "UnclaimedCreationState" });
 
 export function assertPlatformAdmin(caller: Caller, env: { PLATFORM_ADMINS?: string }): void {
+  // Principal ids (or better-auth user ids), never e-mails: e-mail sign-up is not verified, so
+  // anyone could register an admin's address before they do.
   const admins = (env.PLATFORM_ADMINS ?? "")
     .split(",")
-    .map((s) => s.trim().toLowerCase())
+    .map((s) => s.trim())
     .filter((s) => s.length > 0);
-  const email = caller.user?.email.toLowerCase() ?? null;
-  if (caller.principal.kind !== "human" || email === null || !admins.includes(email)) {
+  const ids = [caller.principal.id, caller.user?.id].filter((x): x is string => !!x);
+  if (caller.principal.kind !== "human" || !ids.some((id) => admins.includes(id))) {
     throw forbidden("only a platform admin may do this", undefined, {
       explanation:
         admins.length === 0

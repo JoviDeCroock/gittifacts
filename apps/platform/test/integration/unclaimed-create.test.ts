@@ -78,7 +78,7 @@ describe("credential-less create_project", () => {
             method: "tools/call",
             params: {
               name: "create_project",
-              arguments: { template: "workers-api", name: "anon api" },
+              arguments: { name: "anon api" },
             },
           },
           { from },
@@ -116,7 +116,7 @@ describe("credential-less create_project", () => {
       const tools = (await mcp.listTools()).map((t) => t.name);
       expect(tools).toContain("create_project");
       const created = await mcp.tools.create_project({
-        template: "static-site",
+        name: "made by sdk",
         idempotencyKey: `cli_${crypto.randomUUID().slice(0, 16)}`,
       });
       if (created.isError) throw new Error(JSON.stringify(created.content));
@@ -133,7 +133,7 @@ describe("credential-less create_project", () => {
 
   it("HTTP: anonymous POST /api/v1/projects; credentials that don't verify never fall back", async () => {
     const app = platformApp();
-    const p = await createUnclaimed(app, { template: "static-site" });
+    const p = await createUnclaimed(app, {});
     expect(p.token).toMatch(/^gtf_/);
     expect(p.claimUrl).toContain("/claim/gtc_");
     const repo = await store().getRepo(p.projectId);
@@ -143,7 +143,7 @@ describe("credential-less create_project", () => {
     expect(expires - Date.now()).toBeLessThanOrEqual(7 * 86_400_000);
     const bad = await request(app, "POST", "/api/v1/projects", {
       token: "gtf_not-a-real-token-0000000000000000000000000",
-      body: { template: "static-site" },
+      body: {},
     });
     expect(bad.status).toBe(401);
     // nextSteps tell the agent how to keep it.
@@ -155,15 +155,15 @@ describe("credential-less create_project", () => {
     const from = { ip: freshIp() };
     const key = crypto.randomUUID();
     const headers = { "idempotency-key": key };
-    const a = await createUnclaimed(app, { template: "workers-api" }, { headers, from });
-    const b = await createUnclaimed(app, { template: "workers-api" }, { headers, from });
+    const a = await createUnclaimed(app, { name: "idem" }, { headers, from });
+    const b = await createUnclaimed(app, { name: "idem" }, { headers, from });
     expect(b.projectId).toBe(a.projectId);
     expect(b.claimUrl).toBe(a.claimUrl);
     expect(b.token).not.toBe(a.token);
     expect(b.remote?.changeId).toBe(a.remote?.changeId);
     const reuse = await request(app, "POST", "/api/v1/projects", {
       headers,
-      body: { template: "static-site" },
+      body: {},
       from,
     });
     expect(reuse.status).toBe(409);
@@ -248,31 +248,31 @@ describe("creation rate limits: per IP, per network (ASN), platform-wide", () =>
     const app = platformApp();
     const env = tight({ ipHour: { capacity: 2, periodSec: 3600 } });
     const from = { ip: freshIp() };
-    await createUnclaimed(app, { template: "static-site" }, { env, from });
-    await createUnclaimed(app, { template: "static-site" }, { env, from });
+    await createUnclaimed(app, {}, { env, from });
+    await createUnclaimed(app, {}, { env, from });
     const third = await request(app, "POST", "/api/v1/projects", {
       env,
       from,
-      body: { template: "static-site" },
+      body: {},
     });
     expect(third.status).toBe(429);
     expect(Number(third.headers.get("retry-after"))).toBeGreaterThan(0);
     const body = await json<Envelope & { error: { details: { scope: string } } }>(third);
     expect(body.error).toMatchObject({ code: "rate-limited", details: { scope: "ip" } });
     // Another address is unaffected.
-    await createUnclaimed(app, { template: "static-site" }, { env });
+    await createUnclaimed(app, {}, { env });
   });
 
   it("per ASN: many addresses in one network share its bucket", async () => {
     const app = platformApp();
     const env = tight({ asnHour: { capacity: 2, periodSec: 3600 } });
     const asn = 65_100;
-    await createUnclaimed(app, { template: "static-site" }, { env, from: { ip: freshIp(), asn } });
-    await createUnclaimed(app, { template: "static-site" }, { env, from: { ip: freshIp(), asn } });
+    await createUnclaimed(app, {}, { env, from: { ip: freshIp(), asn } });
+    await createUnclaimed(app, {}, { env, from: { ip: freshIp(), asn } });
     const third = await request(app, "POST", "/api/v1/projects", {
       env,
       from: { ip: freshIp(), asn },
-      body: { template: "static-site" },
+      body: {},
     });
     expect(third.status).toBe(429);
     expect((await json<{ error: { details: { scope: string } } }>(third)).error.details.scope).toBe(
@@ -283,17 +283,13 @@ describe("creation rate limits: per IP, per network (ASN), platform-wide", () =>
   it("global: a platform-wide cap across addresses and networks (also over MCP)", async () => {
     const app = platformApp();
     const env = tight({ globalHour: { capacity: 1, periodSec: 3600 } });
-    await createUnclaimed(
-      app,
-      { template: "static-site" },
-      { env, from: { ip: freshIp(), asn: 1 } },
-    );
+    await createUnclaimed(app, {}, { env, from: { ip: freshIp(), asn: 1 } });
     const r = await rpc(
       app,
       {
         id: 1,
         method: "tools/call",
-        params: { name: "create_project", arguments: { template: "static-site" } },
+        params: { name: "create_project", arguments: {} },
       },
       { env, from: { ip: freshIp(), asn: 2 } },
     );
@@ -350,7 +346,7 @@ describe("per-token request limits (UNCLAIMED_TOKEN_LIMITER)", () => {
 
 describe("kill switch", () => {
   const create = (app: ReturnType<typeof platformApp>, over: Record<string, unknown>) =>
-    request(app, "POST", "/api/v1/projects", { env: over, body: { template: "static-site" } });
+    request(app, "POST", "/api/v1/projects", { env: over, body: {} });
 
   it("Flagship off, or unreachable (fail closed) → 503 creation-disabled with a fix; authenticated creation still works", async () => {
     const app = platformApp();
@@ -373,7 +369,7 @@ describe("kill switch", () => {
     const claimed = await request(app, "POST", "/api/v1/projects", {
       cookie: human.cookie,
       env: { FLAGS: flagOff },
-      body: { template: "static-site" },
+      body: {},
     });
     expect(claimed.status).toBe(201);
   });
@@ -382,10 +378,8 @@ describe("kill switch", () => {
     const app = platformApp();
     const admin = await signUpHuman(app, "Admin");
     const someone = await signUpHuman(app, "Someone");
-    const me = await json<{ user: { email: string } }>(
-      await call(app, "GET", "/api/v1/me", { cookie: admin.cookie }),
-    );
-    const admins = { PLATFORM_ADMINS: me.user.email };
+    // By principal id; an e-mail would not do (e-mail sign-up is unverified).
+    const admins = { PLATFORM_ADMINS: `hu_nobody, ${admin.principal.id}` };
     const put = (cookie: string, mode: string, over: Record<string, unknown> = admins) =>
       request(app, "PUT", "/api/v1/admin/unclaimed-creation", {
         cookie,

@@ -13,7 +13,7 @@ export type Bindings = Env & {
   /** O3 claim page (unset: Cloudflare's always-pass test keys; src/claim/turnstile.ts). */
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
-  /** Comma-separated e-mails of platform admins (kill-switch override). */
+  /** Comma-separated principal ids (hu_…) of platform admins (kill-switch override). */
   PLATFORM_ADMINS?: string;
   /** JSON override of unclaimed-project limits (src/limits/config.ts). */
   UNCLAIMED_LIMITS?: string;

@@ -34,7 +34,7 @@
     // Every other unclaimed limit has a default in src/limits/config.ts; override any subset with
     // an `UNCLAIMED_LIMITS` JSON var. Optional, set outside this file: TURNSTILE_SITE_KEY (var)
     // and TURNSTILE_SECRET_KEY (secret) for the claim page (unset: Cloudflare's test keys), and
-    // PLATFORM_ADMINS (comma-separated e-mails) for the kill-switch override endpoint.
+    // PLATFORM_ADMINS (comma-separated principal ids, hu_…) for the kill-switch override endpoint.
     "UNCLAIMED_TTL_DAYS": "7",
     // Merge queue deploy trains (docs/prompts/03-merge-queue.md §4.8): merged Changes deploy in
     // per-Worker trains with flag-first attribution. "off" = one RolloutWorkflow per Change.
