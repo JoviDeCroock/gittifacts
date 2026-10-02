@@ -20,6 +20,13 @@ import { ErrorSchema, IdempotencyHeaders } from "../api/schemas.js";
 import type { AppEnv } from "../app-env.js";
 import { authFor, callerOf, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
+import { isIntegrationClientId } from "../integrations/crypto.js";
+import { authorizeIntegration } from "../integrations/install.js";
+import {
+  integrationRevokeEndpoint,
+  integrationTokenEndpoint,
+  isIntegrationRequest,
+} from "../integrations/tokens.js";
 import { type ApiApp, body, errors, json, SECURITY } from "../routes/common.js";
 import { startAuthorization } from "./authorize.js";
 import {
@@ -48,13 +55,6 @@ import {
   revokeToken,
   type TokenResponse,
 } from "./tokens.js";
-import { isIntegrationClientId } from "../integrations/crypto.js";
-import { authorizeIntegration } from "../integrations/install.js";
-import {
-  integrationRevokeEndpoint,
-  integrationTokenEndpoint,
-  isIntegrationRequest,
-} from "../integrations/tokens.js";
 import { OAUTH_PATHS } from "./urls.js";
 
 const CORS_OPEN: Record<string, string> = {

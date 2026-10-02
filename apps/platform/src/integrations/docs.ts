@@ -13,7 +13,11 @@ import { INTEGRATION_SCOPES, SCOPE_WORDS, WebhookEvent } from "./scopes.js";
 export const DOCS_PATH = "/docs/integrations";
 
 function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function inline(s: string): string {
@@ -36,13 +40,18 @@ export function renderMarkdown(md: string): string {
       i++;
       while (i < lines.length && !(lines[i] ?? "").startsWith("```")) body.push(lines[i++] ?? "");
       i++;
-      out.push(`<pre><code${lang ? ` data-lang="${esc(lang)}"` : ""}>${esc(body.join("\n"))}</code></pre>`);
+      out.push(
+        `<pre><code${lang ? ` data-lang="${esc(lang)}"` : ""}>${esc(body.join("\n"))}</code></pre>`,
+      );
       continue;
     }
     const h = /^(#{1,3})\s+(.*)$/.exec(line);
     if (h?.[1] && h[2] !== undefined) {
       const n = h[1].length;
-      const id = h[2].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const id = h[2]
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
       out.push(`<h${n} id="${id}">${inline(h[2])}</h${n}>`);
       i++;
       continue;
@@ -50,7 +59,10 @@ export function renderMarkdown(md: string): string {
     if (line.startsWith("|")) {
       const rows: string[][] = [];
       while (i < lines.length && (lines[i] ?? "").startsWith("|")) {
-        const cells = (lines[i] ?? "").split("|").slice(1, -1).map((c) => c.trim());
+        const cells = (lines[i] ?? "")
+          .split("|")
+          .slice(1, -1)
+          .map((c) => c.trim());
         if (!cells.every((c) => /^-+$/.test(c))) rows.push(cells);
         i++;
       }
@@ -80,7 +92,11 @@ export function renderMarkdown(md: string): string {
       continue;
     }
     const para: string[] = [];
-    while (i < lines.length && (lines[i] ?? "").trim() !== "" && !/^(#|```|\||\s*-\s|\s*\d+\.\s)/.test(lines[i] ?? "")) {
+    while (
+      i < lines.length &&
+      (lines[i] ?? "").trim() !== "" &&
+      !/^(#|```|\||\s*-\s|\s*\d+\.\s)/.test(lines[i] ?? "")
+    ) {
       para.push(lines[i++] ?? "");
     }
     out.push(`<p>${inline(para.join(" "))}</p>`);
@@ -124,7 +140,12 @@ export function integrationsJson(origin: string) {
     },
     webhooks: {
       events: WebhookEvent.options,
-      headers: ["X-Gittifacts-Event", "X-Gittifacts-Delivery", "X-Gittifacts-Signature-256", "X-Gittifacts-Installation-Id"],
+      headers: [
+        "X-Gittifacts-Event",
+        "X-Gittifacts-Delivery",
+        "X-Gittifacts-Signature-256",
+        "X-Gittifacts-Installation-Id",
+      ],
       signature: "sha256=<hex HMAC-SHA-256(webhook secret, raw body)>",
       retries: "10s, 30s, 2m, 10m, 30m, 1h, 2h",
     },
@@ -149,7 +170,11 @@ function negotiate(c: Context<AppEnv>): "html" | "json" | "markdown" {
 export function registerIntegrationDocs(app: ApiApp): void {
   app.get(DOCS_PATH, (c) => {
     const origin = urlsFor(c).origin;
-    const headers = { vary: "Accept", "cache-control": "public, max-age=300", link: `<${origin}${DOCS_PATH}>; rel="service-doc"` };
+    const headers = {
+      vary: "Accept",
+      "cache-control": "public, max-age=300",
+      link: `<${origin}${DOCS_PATH}>; rel="service-doc"`,
+    };
     const kind = negotiate(c);
     if (kind === "json") return c.json(integrationsJson(origin), 200, headers);
     const md = integrationsMarkdown(origin);

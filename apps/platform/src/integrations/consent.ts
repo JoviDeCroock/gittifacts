@@ -64,20 +64,30 @@ export type InstallView = z.infer<typeof InstallViewSchema>;
 
 function requireHuman(caller: Caller): void {
   if (caller.principal.kind !== "human") {
-    throw forbidden("only a signed-in human can install integrations", { kind: caller.principal.kind }, {
-      explanation: "Agents and integrations can never install integrations. Send the person the install link.",
-    });
+    throw forbidden(
+      "only a signed-in human can install integrations",
+      { kind: caller.principal.kind },
+      {
+        explanation:
+          "Agents and integrations can never install integrations. Send the person the install link.",
+      },
+    );
   }
 }
 
 async function load(svc: Services, caller: Caller, id: string): Promise<AuthorizationRow> {
   requireHuman(caller);
   const find = () =>
-    svc.store.db.select().from(integrationAuthorizations).where(eq(integrationAuthorizations.id, id)).get();
+    svc.store.db
+      .select()
+      .from(integrationAuthorizations)
+      .where(eq(integrationAuthorizations.id, id))
+      .get();
   let row = await find();
   if (!row) {
     throw notFound("install request", {
-      explanation: "This link is invalid or was already used. Start the connection again from the deploy platform.",
+      explanation:
+        "This link is invalid or was already used. Start the connection again from the deploy platform.",
     });
   }
   if (row.ownerId === null) {
@@ -87,7 +97,8 @@ async function load(svc: Services, caller: Caller, id: string): Promise<Authoriz
   }
   if (row.ownerId !== caller.principal.id) {
     throw forbidden("this install request belongs to another signed-in person", undefined, {
-      explanation: "Only the person who opened the link first can decide it. Start again from the deploy platform.",
+      explanation:
+        "Only the person who opened the link first can decide it. Start again from the deploy platform.",
     });
   }
   return row;
@@ -102,12 +113,14 @@ function assertPending(row: AuthorizationRow, now: Date): void {
   const s = statusOf(row, now);
   if (s === "expired") {
     throw new ApiError(409, "invalid-state", "this install request expired", undefined, {
-      explanation: "Install requests last 10 minutes. Start the connection again from the deploy platform.",
+      explanation:
+        "Install requests last 10 minutes. Start the connection again from the deploy platform.",
     });
   }
   if (s !== "pending") {
     throw new ApiError(409, "invalid-state", `this install request was already ${s}`, undefined, {
-      explanation: "Each request can be decided once. Start again from the deploy platform if needed.",
+      explanation:
+        "Each request can be decided once. Start again from the deploy platform if needed.",
     });
   }
 }
@@ -120,7 +133,11 @@ async function integrationOf(svc: Services, row: AuthorizationRow) {
   return integration;
 }
 
-export async function getInstallRequest(svc: Services, caller: Caller, id: string): Promise<InstallView> {
+export async function getInstallRequest(
+  svc: Services,
+  caller: Caller,
+  id: string,
+): Promise<InstallView> {
   const row = await load(svc, caller, id);
   const integration = await integrationOf(svc, row);
   const developer = await svc.store.db
@@ -192,12 +209,18 @@ export async function approveInstall(
     for (const repoId of repoIds) {
       const repo = await svc.store.getRepo(repoId);
       if (!repo || !(await canInstallOn(svc.store, caller.principal, repo))) {
-        throw new ApiError(403, "repo-not-installable", `you cannot connect integrations to repo ${repoId}`, { repoId }, {
-          explanation:
-            repo?.claim.status === "unclaimed"
-              ? "Unclaimed projects can't be connected to integrations. Claim the project first."
-              : "Only a repository's owners and maintainers can connect integrations to it. Pick from the install screen's list.",
-        });
+        throw new ApiError(
+          403,
+          "repo-not-installable",
+          `you cannot connect integrations to repo ${repoId}`,
+          { repoId },
+          {
+            explanation:
+              repo?.claim.status === "unclaimed"
+                ? "Unclaimed projects can't be connected to integrations. Claim the project first."
+                : "Only a repository's owners and maintainers can connect integrations to it. Pick from the install screen's list.",
+          },
+        );
       }
     }
   }
@@ -222,7 +245,9 @@ export async function approveInstall(
       codeExpiresAt: new Date(now.getTime() + INSTALL_CODE_TTL_MS).toISOString(),
       decidedAt: now.toISOString(),
     })
-    .where(and(eq(integrationAuthorizations.id, id), eq(integrationAuthorizations.status, "pending")))
+    .where(
+      and(eq(integrationAuthorizations.id, id), eq(integrationAuthorizations.status, "pending")),
+    )
     .returning({ id: integrationAuthorizations.id });
   if (updated.length === 0) {
     throw new ApiError(409, "invalid-state", "this install request was decided concurrently");
@@ -234,7 +259,13 @@ export async function approveInstall(
     for (const repoId of grant?.repoIds ?? []) {
       const repo = await svc.store.getRepo(repoId);
       const names = repo ? await repoNames(svc, repo) : null;
-      if (repo && names) repositories.push({ id: repo.id, name: repo.name, fullName: names.fullName, cloneUrl: names.cloneUrl });
+      if (repo && names)
+        repositories.push({
+          id: repo.id,
+          name: repo.name,
+          fullName: names.fullName,
+          cloneUrl: names.cloneUrl,
+        });
     }
     await emitInstallationEvent(deps, "created", installation.id, {
       account: { id: caller.principal.id, handle: await handleFor(svc, caller.principal.id) },
@@ -263,7 +294,9 @@ export async function denyInstall(
   await svc.store.db
     .update(integrationAuthorizations)
     .set({ status: "denied", decidedAt: now.toISOString() })
-    .where(and(eq(integrationAuthorizations.id, id), eq(integrationAuthorizations.status, "pending")));
+    .where(
+      and(eq(integrationAuthorizations.id, id), eq(integrationAuthorizations.status, "pending")),
+    );
   await svc.audit.append({
     principalId: caller.principal.id,
     action: "integration.install-denied",
@@ -271,6 +304,12 @@ export async function denyInstall(
     payload: { summary: "Declined to install the integration", requestId: id },
   });
   return {
-    redirectTo: errorRedirect(row.redirectUri, "access_denied", "the user declined the installation", row.state, urls.issuer),
+    redirectTo: errorRedirect(
+      row.redirectUri,
+      "access_denied",
+      "the user declined the installation",
+      row.state,
+      urls.issuer,
+    ),
   };
 }

@@ -46,7 +46,10 @@ const RedirectUri = z
 
 const WebhookInput = z.object({
   url: HttpsUrl.nullable(),
-  events: z.array(WebhookEvent).max(WebhookEvent.options.length).default([...DEFAULT_EVENTS]),
+  events: z
+    .array(WebhookEvent)
+    .max(WebhookEvent.options.length)
+    .default([...DEFAULT_EVENTS]),
   active: z.boolean().optional(),
   /** Your own secret (16-200 chars); omitted: one is generated and shown once. */
   secret: z.string().min(16).max(200).optional(),
@@ -126,9 +129,11 @@ export const IntegrationViewSchema = z
 export type IntegrationView = z.infer<typeof IntegrationViewSchema>;
 
 export function eventsOf(raw: unknown): WebhookEvent[] {
-  return z.array(z.string()).catch([]).parse(raw).filter((e): e is WebhookEvent =>
-    WebhookEvent.safeParse(e).success,
-  );
+  return z
+    .array(z.string())
+    .catch([])
+    .parse(raw)
+    .filter((e): e is WebhookEvent => WebhookEvent.safeParse(e).success);
 }
 
 function humanOnly(caller: Caller): void {
@@ -143,12 +148,20 @@ async function secretsOf(svc: Services, integrationId: string): Promise<SecretRo
   return svc.store.db
     .select()
     .from(integrationSecrets)
-    .where(and(eq(integrationSecrets.integrationId, integrationId), isNull(integrationSecrets.revokedAt)))
+    .where(
+      and(
+        eq(integrationSecrets.integrationId, integrationId),
+        isNull(integrationSecrets.revokedAt),
+      ),
+    )
     .orderBy(desc(integrationSecrets.createdAt))
     .all();
 }
 
-export async function integrationView(svc: Services, row: IntegrationRow): Promise<IntegrationView> {
+export async function integrationView(
+  svc: Services,
+  row: IntegrationRow,
+): Promise<IntegrationView> {
   const [secrets, installs, developer] = await Promise.all([
     secretsOf(svc, row.id),
     svc.store.db
@@ -156,7 +169,11 @@ export async function integrationView(svc: Services, row: IntegrationRow): Promi
       .from(installations)
       .where(and(eq(installations.integrationId, row.id), eq(installations.status, "active")))
       .get(),
-    svc.store.db.select({ name: principals.name }).from(principals).where(eq(principals.id, row.ownerId)).get(),
+    svc.store.db
+      .select({ name: principals.name })
+      .from(principals)
+      .where(eq(principals.id, row.ownerId))
+      .get(),
   ]);
   return {
     id: row.id,
@@ -222,7 +239,10 @@ export async function ownIntegration(
   return row;
 }
 
-async function addSecret(svc: Services, integrationId: string): Promise<{ plaintext: string; row: SecretRow }> {
+async function addSecret(
+  svc: Services,
+  integrationId: string,
+): Promise<{ plaintext: string; row: SecretRow }> {
   const plaintext = randomSecret(CLIENT_SECRET_PREFIX);
   const row: SecretRow = {
     id: `isec_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
@@ -268,7 +288,8 @@ export async function createIntegration(
   const id = `itg_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`;
   const webhookUrl = input.webhook?.url ?? null;
   let webhookSecret: string | null = null;
-  if (webhookUrl !== null) webhookSecret = input.webhook?.secret ?? randomSecret(WEBHOOK_SECRET_PREFIX);
+  if (webhookUrl !== null)
+    webhookSecret = input.webhook?.secret ?? randomSecret(WEBHOOK_SECRET_PREFIX);
   const row: IntegrationRow = {
     id,
     clientId: newClientId(),
@@ -307,7 +328,8 @@ export async function createIntegration(
     integration: await integrationView(svc, row),
     clientSecret: secret?.plaintext ?? null,
     // Only a generated secret is echoed back; one the developer chose, they already know.
-    webhookSecret: webhookSecret !== null && input.webhook?.secret === undefined ? webhookSecret : null,
+    webhookSecret:
+      webhookSecret !== null && input.webhook?.secret === undefined ? webhookSecret : null,
   };
 }
 
@@ -358,24 +380,40 @@ export async function createSecret(
   svc: Services,
   caller: Caller,
   id: string,
-): Promise<{ clientSecret: string; secret: z.infer<typeof SecretViewSchema>; integration: IntegrationView }> {
+): Promise<{
+  clientSecret: string;
+  secret: z.infer<typeof SecretViewSchema>;
+  integration: IntegrationView;
+}> {
   const row = await ownIntegration(svc, caller, id);
   if (row.clientType !== "confidential") {
     throw new ApiError(409, "invalid-state", "public clients have no client secret", undefined, {
-      explanation: "Public clients authenticate with PKCE only. Register a confidential integration to use a secret.",
+      explanation:
+        "Public clients authenticate with PKCE only. Register a confidential integration to use a secret.",
     });
   }
   if ((await secretsOf(svc, id)).length >= MAX_ACTIVE_SECRETS) {
-    throw new ApiError(409, "invalid-state", `at most ${MAX_ACTIVE_SECRETS} secrets can be active`, undefined, {
-      explanation: "Revoke the old secret (DELETE /api/v1/integrations/{id}/secrets/{secretId}) once your platform uses the new one, then generate another.",
-    });
+    throw new ApiError(
+      409,
+      "invalid-state",
+      `at most ${MAX_ACTIVE_SECRETS} secrets can be active`,
+      undefined,
+      {
+        explanation:
+          "Revoke the old secret (DELETE /api/v1/integrations/{id}/secrets/{secretId}) once your platform uses the new one, then generate another.",
+      },
+    );
   }
   const { plaintext, row: s } = await addSecret(svc, id);
   await svc.audit.append({
     principalId: caller.principal.id,
     action: "integration.secret-created",
     subject: `integration:${id}`,
-    payload: { summary: `New client secret ${s.prefix}… for ${row.name}`, secretId: s.id, prefix: s.prefix },
+    payload: {
+      summary: `New client secret ${s.prefix}… for ${row.name}`,
+      secretId: s.id,
+      prefix: s.prefix,
+    },
   });
   return {
     clientSecret: plaintext,
@@ -393,9 +431,16 @@ export async function revokeSecret(
   const row = await ownIntegration(svc, caller, id);
   const active = await secretsOf(svc, id);
   if (active.length <= 1 && active.some((s) => s.id === secretId)) {
-    throw new ApiError(409, "last-secret", "this is the integration's only active client secret", undefined, {
-      explanation: "Generate a new secret first (POST /api/v1/integrations/{id}/secrets), switch your platform to it, then revoke this one.",
-    });
+    throw new ApiError(
+      409,
+      "last-secret",
+      "this is the integration's only active client secret",
+      undefined,
+      {
+        explanation:
+          "Generate a new secret first (POST /api/v1/integrations/{id}/secrets), switch your platform to it, then revoke this one.",
+      },
+    );
   }
   const updated = await svc.store.db
     .update(integrationSecrets)
@@ -427,7 +472,10 @@ export async function rotateWebhookSecret(
   const webhookSecret = randomSecret(WEBHOOK_SECRET_PREFIX);
   await svc.store.db
     .update(integrations)
-    .set({ webhookSecretEnc: await sealWebhookSecret(svc, webhookSecret), updatedAt: svc.clock.now().toISOString() })
+    .set({
+      webhookSecretEnc: await sealWebhookSecret(svc, webhookSecret),
+      updatedAt: svc.clock.now().toISOString(),
+    })
     .where(eq(integrations.id, id));
   await svc.audit.append({
     principalId: caller.principal.id,

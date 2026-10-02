@@ -34,7 +34,10 @@ export function integrationPreviewItem(d: DeploymentRow, integrationName: string
     kind: "preview",
     status: "ok",
     ...(d.url ? { url: d.url } : {}),
-    note: `Preview deployed by ${integrationName}${d.description ? `: ${d.description}` : ""}`.slice(0, 4000),
+    note: `Preview deployed by ${integrationName}${d.description ? `: ${d.description}` : ""}`.slice(
+      0,
+      4000,
+    ),
     source: {
       kind: "integration",
       id: d.integrationId,
@@ -46,14 +49,27 @@ export function integrationPreviewItem(d: DeploymentRow, integrationName: string
 }
 
 /** `items` with each preview replaced (same id) or appended. */
-function merged(items: readonly EvidenceItem[], previews: readonly PreviewDeploy[]): EvidenceItem[] {
+function merged(
+  items: readonly EvidenceItem[],
+  previews: readonly PreviewDeploy[],
+): EvidenceItem[] {
   const ids = new Set(previews.map((p) => p.id));
   return [...items.filter((i) => !ids.has(i.id)), ...previews];
 }
 
 async function resign(deps: EvidenceDeps, ev: Evidence, items: EvidenceItem[]): Promise<Evidence> {
-  const signed = await deps.signer.signEvidence({ changeId: ev.changeId, headSha: ev.headSha, items });
-  return { ...signed, id: ev.id, baseSha: ev.baseSha, createdAt: ev.createdAt, notesWritten: ev.notesWritten };
+  const signed = await deps.signer.signEvidence({
+    changeId: ev.changeId,
+    headSha: ev.headSha,
+    items,
+  });
+  return {
+    ...signed,
+    id: ev.id,
+    baseSha: ev.baseSha,
+    createdAt: ev.createdAt,
+    notesWritten: ev.notesWritten,
+  };
 }
 
 async function namesOf(deps: EvidenceDeps, ids: string[]): Promise<Map<string, string>> {
@@ -82,10 +98,14 @@ export async function attachPreview(
   deps: EvidenceDeps,
   d: DeploymentRow,
 ): Promise<"attached" | "pending" | "not-applicable"> {
-  if (d.environment !== "preview" || d.state !== "success" || d.changeId === null) return "not-applicable";
+  if (d.environment !== "preview" || d.state !== "success" || d.changeId === null)
+    return "not-applicable";
   const ev = await deps.store.getEvidence(d.changeId, d.sha);
   if (ev === null) {
-    await deps.store.db.update(deployments).set({ evidenceStatus: "pending" }).where(eq(deployments.id, d.id));
+    await deps.store.db
+      .update(deployments)
+      .set({ evidenceStatus: "pending" })
+      .where(eq(deployments.id, d.id));
     return "pending";
   }
   const name = (await namesOf(deps, [d.integrationId])).get(d.integrationId) ?? d.integrationId;

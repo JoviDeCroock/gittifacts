@@ -94,7 +94,10 @@ export async function verifyIntegrationToken(
 
   if (now.getTime() - (row.lastUsedAt ? Date.parse(row.lastUsedAt) : 0) > LAST_USED_RESOLUTION_MS) {
     svc.waitUntil(
-      svc.store.db.update(agentTokens).set({ lastUsedAt: now.toISOString() }).where(eq(agentTokens.id, row.id)),
+      svc.store.db
+        .update(agentTokens)
+        .set({ lastUsedAt: now.toISOString() })
+        .where(eq(agentTokens.id, row.id)),
     );
   }
   return {
@@ -126,9 +129,12 @@ export async function enforceIntegrationRate(env: unknown, integrationId: string
   }
   if (!ok) {
     // One budget per integration across all its installations; the binding's period is 60 s.
-    throw new RateLimited("token", 60, "too many requests from this integration", { integrationId });
+    throw new RateLimited("token", 60, "too many requests from this integration", {
+      integrationId,
+    });
   }
 }
 
 /** Is this bearer token shaped like an integration token (routing only; not verification)? */
-export const isIntegrationBearer = (token: string): boolean => token.startsWith(ACCESS_TOKEN_PREFIX);
+export const isIntegrationBearer = (token: string): boolean =>
+  token.startsWith(ACCESS_TOKEN_PREFIX);

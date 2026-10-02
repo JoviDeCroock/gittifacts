@@ -39,7 +39,11 @@ export async function startIntegrationAuthorization(
 ): Promise<AuthorizeOutcome> {
   const rawRedirect = single(q, "redirect_uri");
   if (rawRedirect === "repeated") {
-    return { kind: "error", message: "redirect_uri must appear once", explanation: "Send one redirect_uri." };
+    return {
+      kind: "error",
+      message: "redirect_uri must appear once",
+      explanation: "Send one redirect_uri.",
+    };
   }
   const registered = integration.redirectUris;
   const redirectUri = rawRedirect ?? (registered.length === 1 ? (registered[0] ?? null) : null);
@@ -63,14 +67,21 @@ export async function startIntegrationAuthorization(
     return fail("unsupported_response_type", "only response_type=code is supported");
   }
   const challenge = single(q, "code_challenge");
-  if (challenge === null || challenge === "repeated" || single(q, "code_challenge_method") !== "S256") {
+  if (
+    challenge === null ||
+    challenge === "repeated" ||
+    single(q, "code_challenge_method") !== "S256"
+  ) {
     return fail(
       "invalid_request",
       "PKCE is required for every integration: send code_challenge with code_challenge_method=S256",
     );
   }
   if (!CODE_CHALLENGE.test(challenge)) {
-    return fail("invalid_request", "code_challenge must be a base64url SHA-256 of the code_verifier");
+    return fail(
+      "invalid_request",
+      "code_challenge must be a base64url SHA-256 of the code_verifier",
+    );
   }
   const scopeRaw = single(q, "scope");
   if (scopeRaw === "repeated") return fail("invalid_scope", "scope must appear once");
@@ -142,12 +153,14 @@ export async function authorizeIntegration(
   q: URLSearchParams,
 ): Promise<AuthorizeOutcome> {
   const all = q.getAll("client_id");
-  const integration = all.length === 1 && all[0] ? await getIntegrationByClientId(svc, all[0]) : null;
+  const integration =
+    all.length === 1 && all[0] ? await getIntegrationByClientId(svc, all[0]) : null;
   if (!integration) {
     return {
       kind: "error",
       message: "unknown integration client_id",
-      explanation: "Register the integration in the developer portal (Settings → Integrations → Developer) and use its client_id.",
+      explanation:
+        "Register the integration in the developer portal (Settings → Integrations → Developer) and use its client_id.",
     };
   }
   return startIntegrationAuthorization(svc, urls, q, integration);

@@ -16,11 +16,21 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { assertRepoAccess } from "../access/access.js";
 import type { Caller, Services } from "../app-env.js";
-import { changes, deploymentStatuses, deployments, installations, integrations } from "../db/schema.js";
+import {
+  changes,
+  deploymentStatuses,
+  deployments,
+  installations,
+  integrations,
+} from "../db/schema.js";
 import { ApiError, forbidden, notFound } from "../errors.js";
 import { attachPreview, type DeploymentRow } from "./evidence.js";
 
-const Url = z.string().url().max(2048).refine((u) => /^https?:\/\//.test(u), "must be an http(s) URL");
+const Url = z
+  .string()
+  .url()
+  .max(2048)
+  .refine((u) => /^https?:\/\//.test(u), "must be an http(s) URL");
 
 export const DeploymentInput = z
   .object({
@@ -88,8 +98,17 @@ async function views(svc: Services, rows: DeploymentRow[]): Promise<DeploymentVi
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
   const [statuses, names] = await Promise.all([
-    svc.store.db.select().from(deploymentStatuses).where(inArray(deploymentStatuses.deploymentId, ids)).orderBy(asc(deploymentStatuses.createdAt)).all(),
-    svc.store.db.select({ id: integrations.id, name: integrations.name }).from(integrations).where(inArray(integrations.id, [...new Set(rows.map((r) => r.integrationId))])).all(),
+    svc.store.db
+      .select()
+      .from(deploymentStatuses)
+      .where(inArray(deploymentStatuses.deploymentId, ids))
+      .orderBy(asc(deploymentStatuses.createdAt))
+      .all(),
+    svc.store.db
+      .select({ id: integrations.id, name: integrations.name })
+      .from(integrations)
+      .where(inArray(integrations.id, [...new Set(rows.map((r) => r.integrationId))]))
+      .all(),
   ]);
   const nameOf = new Map(names.map((n) => [n.id, n.name]));
   return rows.map((d) => ({
@@ -108,7 +127,14 @@ async function views(svc: Services, rows: DeploymentRow[]): Promise<DeploymentVi
     evidence: { status: d.evidenceStatus, itemId: d.evidenceItemId },
     statuses: statuses
       .filter((s) => s.deploymentId === d.id)
-      .map((s) => ({ id: s.id, state: s.state, url: s.url, logUrl: s.logUrl, description: s.description, createdAt: s.createdAt })),
+      .map((s) => ({
+        id: s.id,
+        state: s.state,
+        url: s.url,
+        logUrl: s.logUrl,
+        description: s.description,
+        createdAt: s.createdAt,
+      })),
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
   }));
@@ -116,15 +142,24 @@ async function views(svc: Services, rows: DeploymentRow[]): Promise<DeploymentVi
 
 function requireIntegration(caller: Caller): void {
   if (caller.principal.kind !== "integration") {
-    throw forbidden("only an installed integration reports deployments", { kind: caller.principal.kind }, {
-      explanation: "Deploy platforms report with the access token from the integration install flow (scope deployments:write).",
-    });
+    throw forbidden(
+      "only an installed integration reports deployments",
+      { kind: caller.principal.kind },
+      {
+        explanation:
+          "Deploy platforms report with the access token from the integration install flow (scope deployments:write).",
+      },
+    );
   }
 }
 
 async function installationOf(svc: Services, caller: Caller) {
-  const inst = await svc.store.db.select().from(installations).where(eq(installations.principalId, caller.principal.id)).get();
-  if (!inst || inst.status !== "active") throw forbidden("this installation was removed");
+  const inst = await svc.store.db
+    .select()
+    .from(installations)
+    .where(eq(installations.principalId, caller.principal.id))
+    .get();
+  if (inst?.status !== "active") throw forbidden("this installation was removed");
   return inst;
 }
 
@@ -166,9 +201,15 @@ export async function createDeployment(
   // The chokepoint: reader on the installation's repos while the installer is still a member.
   const repo = await assertRepoAccess(svc, caller.principal, repoId, "read");
   if (repo.claim.status !== "claimed") {
-    throw new ApiError(403, "unclaimed-project", "unclaimed projects can't take deployment reports", { repoId }, {
-      explanation: "Integrations can't be connected to unclaimed projects; claim it first.",
-    });
+    throw new ApiError(
+      403,
+      "unclaimed-project",
+      "unclaimed projects can't take deployment reports",
+      { repoId },
+      {
+        explanation: "Integrations can't be connected to unclaimed projects; claim it first.",
+      },
+    );
   }
   const inst = await installationOf(svc, caller);
   const changeId = await changeFor(svc, repoId, input.sha, input.environment, input.changeId);
@@ -215,12 +256,20 @@ async function ownDeployment(svc: Services, caller: Caller, id: string): Promise
   requireIntegration(caller);
   const d = await svc.store.db.select().from(deployments).where(eq(deployments.id, id)).get();
   if (!d || d.principalId !== caller.principal.id) {
-    throw notFound(`deployment ${id}`, { explanation: "Report statuses for deployments this installation created." });
+    throw notFound(`deployment ${id}`, {
+      explanation: "Report statuses for deployments this installation created.",
+    });
   }
   return d;
 }
 
-function statusSummary(d: DeploymentRow, who: string, state: string, url: string | null, logUrl: string | null): string {
+function statusSummary(
+  d: DeploymentRow,
+  who: string,
+  state: string,
+  url: string | null,
+  logUrl: string | null,
+): string {
   const env = d.environment === "production" ? "Production" : "Preview";
   const what = `${env} deployment of ${d.sha.slice(0, 12)} by ${who}: ${state.replace("_", " ")}`;
   if (state === "success" && url) return `${what}: ${url}`;
@@ -274,16 +323,28 @@ export async function addDeploymentStatus(
   if (row.environment === "preview" && row.state === "success" && row.changeId !== null) {
     await attachPreview({ store: svc.store, signer: await svc.signer() }, row);
   }
-  const after = await svc.store.db.select().from(deployments).where(eq(deployments.id, deploymentId)).get();
+  const after = await svc.store.db
+    .select()
+    .from(deployments)
+    .where(eq(deployments.id, deploymentId))
+    .get();
   const [view] = await views(svc, [after ?? row]);
   if (!view) throw new Error("deployment view missing");
   return view;
 }
 
-export async function getDeployment(svc: Services, caller: Caller, id: string): Promise<DeploymentView> {
+export async function getDeployment(
+  svc: Services,
+  caller: Caller,
+  id: string,
+): Promise<DeploymentView> {
   const d = await svc.store.db.select().from(deployments).where(eq(deployments.id, id)).get();
   const p = caller.principal;
-  const visible = d && (p.kind === "integration" ? d.principalId === p.id : (p.repoIds ?? null) === null || (p.repoIds ?? []).includes(d.repoId));
+  const visible =
+    d &&
+    (p.kind === "integration"
+      ? d.principalId === p.id
+      : (p.repoIds ?? null) === null || (p.repoIds ?? []).includes(d.repoId));
   if (!d || !visible) throw notFound(`deployment ${id}`);
   const [view] = await views(svc, [d]);
   if (!view) throw notFound(`deployment ${id}`);
@@ -299,6 +360,12 @@ export async function listDeployments(
   const conds = [eq(deployments.repoId, repoId)];
   if (q.environment) conds.push(eq(deployments.environment, q.environment));
   if (q.changeId) conds.push(eq(deployments.changeId, q.changeId));
-  const rows = await svc.store.db.select().from(deployments).where(and(...conds)).orderBy(desc(deployments.createdAt)).limit(q.limit).all();
+  const rows = await svc.store.db
+    .select()
+    .from(deployments)
+    .where(and(...conds))
+    .orderBy(desc(deployments.createdAt))
+    .limit(q.limit)
+    .all();
   return views(svc, rows);
 }

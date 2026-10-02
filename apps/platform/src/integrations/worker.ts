@@ -7,7 +7,7 @@ import type { PushEventInfo } from "@app/coordinator/workers";
 import type { Bindings } from "../app-env.js";
 import { D1Store } from "../store/d1-store.js";
 import { type DeliveryDeps, handleWebhookBatch, sweepDeliveries } from "./delivery.js";
-import { emitPushEvent, type EventDeps } from "./events.js";
+import { type EventDeps, emitPushEvent } from "./events.js";
 import { platformOrigin, webhookQueueOf } from "./runtime.js";
 
 function clock() {

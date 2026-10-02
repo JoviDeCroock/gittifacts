@@ -11,7 +11,6 @@
  */
 import type { Change, Repo } from "@app/domain";
 import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
-import type { Services } from "../app-env.js";
 import {
   installationRepos,
   installations,
@@ -19,11 +18,10 @@ import {
   repoMembers,
   webhookDeliveries,
 } from "../db/schema.js";
-import type { D1Store } from "../store/d1-store.js";
 import { installationCovers } from "./access.js";
 import { changeCloneUrl, type NamingDeps, type RepoNames, repoNames } from "./handles.js";
-import { type WebhookEvent, integrationScopesOf } from "./scopes.js";
 import { eventsOf } from "./registry.js";
+import { integrationScopesOf, type WebhookEvent } from "./scopes.js";
 
 export interface WebhookMessage {
   deliveryId: string;
@@ -78,7 +76,11 @@ export async function targetsForRepo(
     if (!integrationScopesOf(r.installation.scopes).includes("webhooks")) continue;
     if (!eventsOf(r.events).includes(event) || !r.url) continue;
     if (!(await installationCovers(deps.store, r.installation, repo))) continue;
-    out.push({ integrationId: r.installation.integrationId, installationId: r.installation.id, url: r.url });
+    out.push({
+      integrationId: r.installation.integrationId,
+      installationId: r.installation.id,
+      url: r.url,
+    });
   }
   return out;
 }
@@ -124,7 +126,11 @@ export async function enqueueDeliveries(
   return ids;
 }
 
-export async function sendAll(queue: WebhookQueue | null, ids: readonly string[], delaySeconds = 0): Promise<void> {
+export async function sendAll(
+  queue: WebhookQueue | null,
+  ids: readonly string[],
+  delaySeconds = 0,
+): Promise<void> {
   if (queue === null) return;
   for (const deliveryId of ids) {
     try {
@@ -168,7 +174,13 @@ export function changeJson(deps: NamingDeps, change: Change, names: RepoNames) {
   };
 }
 
-function envelope(event: WebhookEvent, action: string | null, deliveryId: string, deps: NamingDeps, t: Target) {
+function envelope(
+  event: WebhookEvent,
+  action: string | null,
+  deliveryId: string,
+  deps: NamingDeps,
+  t: Target,
+) {
   return {
     event,
     action,
@@ -224,7 +236,8 @@ const REBASE_REF = "refs/heads/gittifacts/rebased";
  * change fork. Deletes, tags, notes and queue refs are not `push` events.
  */
 export async function emitPushEvent(deps: EventDeps, push: PushInput): Promise<string[]> {
-  if (!push.ref.startsWith("refs/heads/") || ZERO.test(push.after) || push.ref === REBASE_REF) return [];
+  if (!push.ref.startsWith("refs/heads/") || ZERO.test(push.after) || push.ref === REBASE_REF)
+    return [];
   let repo: Repo | null;
   let change: Change | null = null;
   if (push.repoName.startsWith("task-")) {
@@ -260,11 +273,22 @@ export async function emitInstallationEvent(
   deps: EventDeps,
   action: "created" | "deleted",
   installationId: string,
-  detail: { account: { id: string; handle: string }; repoSelection: string; repositories: unknown[]; scopes: string[] },
+  detail: {
+    account: { id: string; handle: string };
+    repoSelection: string;
+    repositories: unknown[];
+    scopes: string[];
+  },
 ): Promise<string[]> {
-  const event: WebhookEvent = action === "created" ? "installation.created" : "installation.deleted";
+  const event: WebhookEvent =
+    action === "created" ? "installation.created" : "installation.deleted";
   const row = await deps.store.db
-    .select({ integrationId: installations.integrationId, url: integrations.webhookUrl, events: integrations.webhookEvents, active: integrations.webhookActive })
+    .select({
+      integrationId: installations.integrationId,
+      url: integrations.webhookUrl,
+      events: integrations.webhookEvents,
+      active: integrations.webhookActive,
+    })
     .from(installations)
     .innerJoin(integrations, eq(integrations.id, installations.integrationId))
     .where(eq(installations.id, installationId))
@@ -279,7 +303,11 @@ export async function emitInstallationEvent(
 
 /** `ping` to the integration's webhook URL (always allowed while a URL is set). */
 export async function emitPing(deps: EventDeps, integrationId: string): Promise<string | null> {
-  const row = await deps.store.db.select().from(integrations).where(eq(integrations.id, integrationId)).get();
+  const row = await deps.store.db
+    .select()
+    .from(integrations)
+    .where(eq(integrations.id, integrationId))
+    .get();
   if (!row?.webhookUrl) return null;
   const target: Target = { integrationId, installationId: null, url: row.webhookUrl };
   const [id] = await enqueueDeliveries(deps, [target], "ping", null, null, (deliveryId, t) => ({

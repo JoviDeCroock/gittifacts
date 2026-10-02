@@ -127,9 +127,11 @@ export function parseIntegrationScopes(
 
 /** Narrow a stored scope list to integration scopes (anything else is dropped, fail closed). */
 export function integrationScopesOf(raw: unknown): IntegrationScope[] {
-  return z.array(z.string()).catch([]).parse(raw).filter((s): s is IntegrationScope =>
-    IntegrationScope.safeParse(s).success,
-  );
+  return z
+    .array(z.string())
+    .catch([])
+    .parse(raw)
+    .filter((s): s is IntegrationScope => IntegrationScope.safeParse(s).success);
 }
 
 export function asScopes(scopes: readonly IntegrationScope[]): Scope[] {

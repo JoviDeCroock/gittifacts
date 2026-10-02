@@ -34,7 +34,11 @@ export function authorizationServerMetadata(urls: OAuthUrls): { [key: string]: J
     code_challenge_methods_supported: ["S256"],
     // "none": public clients (agents, CLI, public integrations); secrets: confidential integrations.
     token_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post"],
-    revocation_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post"],
+    revocation_endpoint_auth_methods_supported: [
+      "none",
+      "client_secret_basic",
+      "client_secret_post",
+    ],
     // Agent scopes, then integration scopes (src/integrations/scopes.ts).
     scopes_supported: [...new Set<string>([...DELEGABLE_SCOPES, ...IntegrationScope.options])],
     client_id_metadata_document_supported: true,

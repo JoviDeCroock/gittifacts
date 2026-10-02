@@ -40,7 +40,10 @@ export type DeliveryOutcome =
   | { outcome: "delivered" | "failed" | "cancelled" | "skipped" }
   | { outcome: "retry"; delaySeconds: number };
 
-export function headersFor(d: Pick<DeliveryRow, "event" | "guid" | "installationId">, signature: string): Record<string, string> {
+export function headersFor(
+  d: Pick<DeliveryRow, "event" | "guid" | "installationId">,
+  signature: string,
+): Record<string, string> {
   return {
     "content-type": "application/json",
     "user-agent": USER_AGENT,
@@ -60,7 +63,10 @@ async function claim(deps: DeliveryDeps, id: string): Promise<DeliveryRow | null
       and(
         eq(webhookDeliveries.id, id),
         eq(webhookDeliveries.status, "pending"),
-        or(isNull(webhookDeliveries.leaseUntil), lt(webhookDeliveries.leaseUntil, now.toISOString())),
+        or(
+          isNull(webhookDeliveries.leaseUntil),
+          lt(webhookDeliveries.leaseUntil, now.toISOString()),
+        ),
       ),
     )
     .returning();
@@ -68,14 +74,21 @@ async function claim(deps: DeliveryDeps, id: string): Promise<DeliveryRow | null
 }
 
 async function finish(deps: DeliveryDeps, id: string, set: Partial<DeliveryRow>): Promise<void> {
-  await deps.store.db.update(webhookDeliveries).set({ ...set, leaseUntil: null }).where(eq(webhookDeliveries.id, id));
+  await deps.store.db
+    .update(webhookDeliveries)
+    .set({ ...set, leaseUntil: null })
+    .where(eq(webhookDeliveries.id, id));
 }
 
 /** Send one delivery now (if it is still due and nobody else holds it). */
 export async function deliver(deps: DeliveryDeps, id: string): Promise<DeliveryOutcome> {
   const d = await claim(deps, id);
   if (d === null) return { outcome: "skipped" };
-  const integration = await deps.store.db.select().from(integrations).where(eq(integrations.id, d.integrationId)).get();
+  const integration = await deps.store.db
+    .select()
+    .from(integrations)
+    .where(eq(integrations.id, d.integrationId))
+    .get();
   const cancel = async (why: string): Promise<DeliveryOutcome> => {
     await finish(deps, id, { status: "cancelled", nextAttemptAt: null, error: why });
     return { outcome: "cancelled" };
@@ -127,7 +140,12 @@ export async function deliver(deps: DeliveryDeps, id: string): Promise<DeliveryO
     return { outcome: "delivered" };
   }
   if (attempts >= MAX_ATTEMPTS) {
-    await finish(deps, id, { ...common, status: "failed", nextAttemptAt: null, error: error ?? `HTTP ${status}` });
+    await finish(deps, id, {
+      ...common,
+      status: "failed",
+      nextAttemptAt: null,
+      error: error ?? `HTTP ${status}`,
+    });
     return { outcome: "failed" };
   }
   const delaySeconds = BACKOFF_SECONDS[attempts - 1] ?? 3600;
@@ -142,7 +160,10 @@ export async function deliver(deps: DeliveryDeps, id: string): Promise<DeliveryO
 const Message = z.object({ deliveryId: z.string().min(1).max(64) });
 
 /** The queue consumer (`queue()` of the Worker). */
-export async function handleWebhookBatch(batch: MessageBatch<unknown>, deps: DeliveryDeps): Promise<void> {
+export async function handleWebhookBatch(
+  batch: MessageBatch<unknown>,
+  deps: DeliveryDeps,
+): Promise<void> {
   for (const msg of batch.messages) {
     const parsed = Message.safeParse(msg.body);
     if (!parsed.success) {
@@ -172,12 +193,19 @@ export async function sweepDeliveries(deps: DeliveryDeps, limit = 100): Promise<
       and(
         eq(webhookDeliveries.status, "pending"),
         lte(webhookDeliveries.nextAttemptAt, overdue),
-        or(isNull(webhookDeliveries.leaseUntil), lt(webhookDeliveries.leaseUntil, now.toISOString())),
+        or(
+          isNull(webhookDeliveries.leaseUntil),
+          lt(webhookDeliveries.leaseUntil, now.toISOString()),
+        ),
       ),
     )
     .limit(limit)
     .all();
-  if (deps.queue) await sendAll(deps.queue, due.map((d) => d.id));
+  if (deps.queue)
+    await sendAll(
+      deps.queue,
+      due.map((d) => d.id),
+    );
   else for (const d of due) await deliver(deps, d.id);
   return due.length;
 }

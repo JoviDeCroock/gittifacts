@@ -59,11 +59,17 @@ export interface ClientCredentials {
 }
 
 /** RFC 6749 §2.3.1: Basic (form-urlencoded id:secret) or body parameters, never both. */
-export function clientCredentials(authorization: string | undefined, p: URLSearchParams): ClientCredentials {
+export function clientCredentials(
+  authorization: string | undefined,
+  p: URLSearchParams,
+): ClientCredentials {
   const m = /^Basic\s+([A-Za-z0-9+/=_-]+)\s*$/i.exec(authorization ?? "");
   if (m?.[1]) {
     if (p.has("client_secret")) {
-      throw new OAuthProtocolError("invalid_request", "use one client authentication method, not Basic and client_secret");
+      throw new OAuthProtocolError(
+        "invalid_request",
+        "use one client authentication method, not Basic and client_secret",
+      );
     }
     let decoded: string;
     try {
@@ -77,17 +83,28 @@ export function clientCredentials(authorization: string | undefined, p: URLSearc
     const secret = decodeURIComponent(decoded.slice(i + 1).replace(/\+/g, " "));
     const bodyId = p.get("client_id");
     if (bodyId !== null && bodyId !== id) {
-      throw new OAuthProtocolError("invalid_request", "client_id in the body differs from the Basic credentials");
+      throw new OAuthProtocolError(
+        "invalid_request",
+        "client_id in the body differs from the Basic credentials",
+      );
     }
     return { clientId: id, clientSecret: secret, via: "basic" };
   }
   const secrets = p.getAll("client_secret");
-  if (secrets.length > 1) throw new OAuthProtocolError("invalid_request", "client_secret must appear once");
-  return { clientId: p.get("client_id"), clientSecret: secrets[0] ?? null, via: secrets.length > 0 ? "post" : "none" };
+  if (secrets.length > 1)
+    throw new OAuthProtocolError("invalid_request", "client_secret must appear once");
+  return {
+    clientId: p.get("client_id"),
+    clientSecret: secrets[0] ?? null,
+    via: secrets.length > 0 ? "post" : "none",
+  };
 }
 
 /** Is this token request (or revocation) from an integration client? */
-export function isIntegrationRequest(authorization: string | undefined, p: URLSearchParams): boolean {
+export function isIntegrationRequest(
+  authorization: string | undefined,
+  p: URLSearchParams,
+): boolean {
   try {
     return isIntegrationClientId(clientCredentials(authorization, p).clientId);
   } catch {
@@ -95,12 +112,19 @@ export function isIntegrationRequest(authorization: string | undefined, p: URLSe
   }
 }
 
-export async function authenticateClient(svc: Services, creds: ClientCredentials): Promise<IntegrationRow> {
+export async function authenticateClient(
+  svc: Services,
+  creds: ClientCredentials,
+): Promise<IntegrationRow> {
   const integration = creds.clientId ? await getIntegrationByClientId(svc, creds.clientId) : null;
   if (!integration) throw new OAuthProtocolError("invalid_client", "unknown client_id", 401);
   if (integration.clientType === "public") {
     if (creds.clientSecret !== null) {
-      throw new OAuthProtocolError("invalid_client", "public clients have no secret; authenticate with PKCE only", 401);
+      throw new OAuthProtocolError(
+        "invalid_client",
+        "public clients have no secret; authenticate with PKCE only",
+        401,
+      );
     }
     return integration;
   }
@@ -117,7 +141,11 @@ export async function authenticateClient(svc: Services, creds: ClientCredentials
     .from(integrationSecrets)
     .where(and(eq(integrationSecrets.secretHash, hash), isNull(integrationSecrets.revokedAt)))
     .get();
-  if (!secret || secret.integrationId !== integration.id || !timingSafeEqual(secret.secretHash, hash)) {
+  if (
+    !secret ||
+    secret.integrationId !== integration.id ||
+    !timingSafeEqual(secret.secretHash, hash)
+  ) {
     throw new OAuthProtocolError("invalid_client", "client authentication failed", 401);
   }
   svc.waitUntil(
@@ -152,7 +180,11 @@ function scopesOf(raw: unknown): IntegrationScope[] {
 }
 
 /** Kill every token of an installation (code or refresh replay); the installation stays. */
-async function revokeInstallationTokens(svc: Services, inst: InstallationRow, reason: string): Promise<void> {
+async function revokeInstallationTokens(
+  svc: Services,
+  inst: InstallationRow,
+  reason: string,
+): Promise<void> {
   const revoked = await revokeAgentTokens(svc.store, inst.principalId, svc.clock.now());
   await svc.audit.append({
     principalId: inst.principalId,
@@ -203,10 +235,17 @@ async function issuePair(
   };
 }
 
-async function liveInstallation(svc: Services, id: string | null, integration: IntegrationRow): Promise<InstallationRow> {
+async function liveInstallation(
+  svc: Services,
+  id: string | null,
+  integration: IntegrationRow,
+): Promise<InstallationRow> {
   const inst = id ? await getInstallation(svc, id) : null;
   if (!inst || inst.integrationId !== integration.id || inst.status !== "active") {
-    throw new OAuthProtocolError("invalid_grant", "the installation was removed; install the integration again");
+    throw new OAuthProtocolError(
+      "invalid_grant",
+      "the installation was removed; install the integration again",
+    );
   }
   return inst;
 }
@@ -232,34 +271,55 @@ export async function exchangeIntegrationCode(
   if (row.status === "redeemed") {
     const inst = row.installationId ? await getInstallation(svc, row.installationId) : null;
     if (inst) await revokeInstallationTokens(svc, inst, "authorization code reused");
-    throw new OAuthProtocolError("invalid_grant", "authorization code already used; the installation's tokens are revoked");
+    throw new OAuthProtocolError(
+      "invalid_grant",
+      "authorization code already used; the installation's tokens are revoked",
+    );
   }
-  if (row.status !== "approved") throw new OAuthProtocolError("invalid_grant", "authorization code is not approved");
+  if (row.status !== "approved")
+    throw new OAuthProtocolError("invalid_grant", "authorization code is not approved");
   if (row.codeExpiresAt === null || Date.parse(row.codeExpiresAt) <= now.getTime()) {
     throw new OAuthProtocolError("invalid_grant", "authorization code expired");
   }
   if (redirectUri !== null && redirectUri !== row.redirectUri) {
-    throw new OAuthProtocolError("invalid_grant", "redirect_uri does not match the authorization request");
+    throw new OAuthProtocolError(
+      "invalid_grant",
+      "redirect_uri does not match the authorization request",
+    );
   }
-  if (verifier === null) throw new OAuthProtocolError("invalid_request", "code_verifier is required (PKCE S256)");
+  if (verifier === null)
+    throw new OAuthProtocolError("invalid_request", "code_verifier is required (PKCE S256)");
   if (!VERIFIER.test(verifier) || (await s256(verifier)) !== row.codeChallenge) {
-    throw new OAuthProtocolError("invalid_grant", "code_verifier does not match the code_challenge");
+    throw new OAuthProtocolError(
+      "invalid_grant",
+      "code_verifier does not match the code_challenge",
+    );
   }
   for (const r of p.getAll("resource")) {
     if (r.replace(/\/+$/, "") !== urls.apiResource) {
-      throw new OAuthProtocolError("invalid_target", `integration tokens are for ${urls.apiResource} only`);
+      throw new OAuthProtocolError(
+        "invalid_target",
+        `integration tokens are for ${urls.apiResource} only`,
+      );
     }
   }
   const claimed = await svc.store.db
     .update(integrationAuthorizations)
     .set({ status: "redeemed" })
-    .where(and(eq(integrationAuthorizations.id, row.id), eq(integrationAuthorizations.status, "approved")))
+    .where(
+      and(
+        eq(integrationAuthorizations.id, row.id),
+        eq(integrationAuthorizations.status, "approved"),
+      ),
+    )
     .returning({ id: integrationAuthorizations.id });
-  if (claimed.length === 0) throw new OAuthProtocolError("invalid_grant", "authorization code already used");
+  if (claimed.length === 0)
+    throw new OAuthProtocolError("invalid_grant", "authorization code already used");
   const inst = await liveInstallation(svc, row.installationId, integration);
   const granted = scopesOf(inst.scopes);
   const scopes = scopesOf(row.requestedScopes).filter((s) => granted.includes(s));
-  if (scopes.length === 0) throw new OAuthProtocolError("invalid_grant", "none of the requested permissions is granted");
+  if (scopes.length === 0)
+    throw new OAuthProtocolError("invalid_grant", "none of the requested permissions is granted");
   return issuePair(svc, urls, inst, scopes, "authorization_code");
 }
 
@@ -270,7 +330,8 @@ export async function refreshIntegrationToken(
   integration: IntegrationRow,
 ): Promise<IntegrationTokenResponse> {
   const token = required(p, "refresh_token");
-  if (!isIntegrationRefreshToken(token)) throw new OAuthProtocolError("invalid_grant", "unknown refresh token");
+  if (!isIntegrationRefreshToken(token))
+    throw new OAuthProtocolError("invalid_grant", "unknown refresh token");
   const now = svc.clock.now();
   const rt = await svc.store.db
     .select()
@@ -278,39 +339,65 @@ export async function refreshIntegrationToken(
     .where(eq(oauthRefreshTokens.tokenHash, await sha256Hex(token)))
     .get();
   const inst = rt
-    ? await svc.store.db.select().from(installations).where(eq(installations.sessionId, rt.sessionId)).get()
+    ? await svc.store.db
+        .select()
+        .from(installations)
+        .where(eq(installations.sessionId, rt.sessionId))
+        .get()
     : undefined;
   if (!rt || !inst || inst.integrationId !== integration.id) {
     throw new OAuthProtocolError("invalid_grant", "unknown refresh token");
   }
-  if (inst.status !== "active") throw new OAuthProtocolError("invalid_grant", "the installation was removed");
+  if (inst.status !== "active")
+    throw new OAuthProtocolError("invalid_grant", "the installation was removed");
   if (rt.revokedAt !== null) throw new OAuthProtocolError("invalid_grant", "refresh token revoked");
   if (rt.rotatedAt !== null) {
     await revokeInstallationTokens(svc, inst, "refresh token reused");
-    throw new OAuthProtocolError("invalid_grant", "refresh token already used; the installation's tokens are revoked");
+    throw new OAuthProtocolError(
+      "invalid_grant",
+      "refresh token already used; the installation's tokens are revoked",
+    );
   }
   if (Date.parse(rt.expiresAt) <= now.getTime()) {
-    throw new OAuthProtocolError("invalid_grant", "refresh token expired; run the install flow again");
+    throw new OAuthProtocolError(
+      "invalid_grant",
+      "refresh token expired; run the install flow again",
+    );
   }
   let scopes = scopesOf(inst.scopes);
   const narrow = param(p, "scope");
   if (narrow !== null) {
     const asked = narrow.split(/\s+/).filter(Boolean);
     const wider = asked.filter((s) => !scopes.includes(s as IntegrationScope));
-    if (wider.length > 0) throw new OAuthProtocolError("invalid_scope", `not granted to this installation: ${wider.join(", ")}`);
+    if (wider.length > 0)
+      throw new OAuthProtocolError(
+        "invalid_scope",
+        `not granted to this installation: ${wider.join(", ")}`,
+      );
     scopes = scopes.filter((s) => asked.includes(s));
   }
   const rotated = await svc.store.db
     .update(oauthRefreshTokens)
     .set({ rotatedAt: now.toISOString() })
-    .where(and(eq(oauthRefreshTokens.id, rt.id), isNull(oauthRefreshTokens.rotatedAt), isNull(oauthRefreshTokens.revokedAt)))
+    .where(
+      and(
+        eq(oauthRefreshTokens.id, rt.id),
+        isNull(oauthRefreshTokens.rotatedAt),
+        isNull(oauthRefreshTokens.revokedAt),
+      ),
+    )
     .returning({ id: oauthRefreshTokens.id });
-  if (rotated.length === 0) throw new OAuthProtocolError("invalid_grant", "refresh token already used");
+  if (rotated.length === 0)
+    throw new OAuthProtocolError("invalid_grant", "refresh token already used");
   return issuePair(svc, urls, inst, scopes, "refresh_token");
 }
 
 /** RFC 7009: revoke one access or refresh token of this integration (unknown tokens: no-op). */
-export async function revokeIntegrationToken(svc: Services, p: URLSearchParams, integration: IntegrationRow): Promise<void> {
+export async function revokeIntegrationToken(
+  svc: Services,
+  p: URLSearchParams,
+  integration: IntegrationRow,
+): Promise<void> {
   const token = required(p, "token");
   const now = svc.clock.now().toISOString();
   const hash = await sha256Hex(token);
@@ -318,22 +405,45 @@ export async function revokeIntegrationToken(svc: Services, p: URLSearchParams, 
     (await svc.store.db
       .select({ id: installations.id })
       .from(installations)
-      .where(and(eq(installations.principalId, principalId), eq(installations.integrationId, integration.id)))
+      .where(
+        and(
+          eq(installations.principalId, principalId),
+          eq(installations.integrationId, integration.id),
+        ),
+      )
       .get()) !== undefined;
   if (isIntegrationAccessToken(token)) {
-    const row = await svc.store.db.select().from(agentTokens).where(eq(agentTokens.tokenHash, hash)).get();
+    const row = await svc.store.db
+      .select()
+      .from(agentTokens)
+      .where(eq(agentTokens.tokenHash, hash))
+      .get();
     if (row && (await ownsPrincipal(row.principalId))) {
-      await svc.store.db.update(agentTokens).set({ revokedAt: now }).where(and(eq(agentTokens.id, row.id), isNull(agentTokens.revokedAt)));
+      await svc.store.db
+        .update(agentTokens)
+        .set({ revokedAt: now })
+        .where(and(eq(agentTokens.id, row.id), isNull(agentTokens.revokedAt)));
     }
     return;
   }
   if (isIntegrationRefreshToken(token)) {
-    const rt = await svc.store.db.select().from(oauthRefreshTokens).where(eq(oauthRefreshTokens.tokenHash, hash)).get();
+    const rt = await svc.store.db
+      .select()
+      .from(oauthRefreshTokens)
+      .where(eq(oauthRefreshTokens.tokenHash, hash))
+      .get();
     const inst = rt
-      ? await svc.store.db.select().from(installations).where(eq(installations.sessionId, rt.sessionId)).get()
+      ? await svc.store.db
+          .select()
+          .from(installations)
+          .where(eq(installations.sessionId, rt.sessionId))
+          .get()
       : undefined;
     if (rt && inst?.integrationId === integration.id) {
-      await svc.store.db.update(oauthRefreshTokens).set({ revokedAt: now }).where(and(eq(oauthRefreshTokens.id, rt.id), isNull(oauthRefreshTokens.revokedAt)));
+      await svc.store.db
+        .update(oauthRefreshTokens)
+        .set({ revokedAt: now })
+        .where(and(eq(oauthRefreshTokens.id, rt.id), isNull(oauthRefreshTokens.revokedAt)));
     }
   }
 }

@@ -50,11 +50,19 @@ export async function activeInstallation(
 }
 
 export async function getInstallation(svc: Services, id: string): Promise<InstallationRow | null> {
-  return (await svc.store.db.select().from(installations).where(eq(installations.id, id)).get()) ?? null;
+  return (
+    (await svc.store.db.select().from(installations).where(eq(installations.id, id)).get()) ?? null
+  );
 }
 
-async function setRepos(svc: Services, installationId: string, repoIds: readonly string[]): Promise<void> {
-  await svc.store.db.delete(installationRepos).where(eq(installationRepos.installationId, installationId));
+async function setRepos(
+  svc: Services,
+  installationId: string,
+  repoIds: readonly string[],
+): Promise<void> {
+  await svc.store.db
+    .delete(installationRepos)
+    .where(eq(installationRepos.installationId, installationId));
   for (const repoId of new Set(repoIds)) {
     await svc.store.db.insert(installationRepos).values({ installationId, repoId });
   }
@@ -141,7 +149,9 @@ export async function upsertInstallation(
     clientUri: integration.homepageUrl,
     audience: [`${svc.origin}/api`],
     createdAt: nowIso,
-    expiresAt: new Date(now.getTime() + INSTALLATION_SESSION_YEARS * 365 * 86_400_000).toISOString(),
+    expiresAt: new Date(
+      now.getTime() + INSTALLATION_SESSION_YEARS * 365 * 86_400_000,
+    ).toISOString(),
     revokedAt: null,
     revokedBy: null,
   });
@@ -193,7 +203,12 @@ export async function uninstall(
   const now = svc.clock.now();
   const flipped = await svc.store.db
     .update(installations)
-    .set({ status: "deleted", deletedAt: now.toISOString(), deletedBy: by, updatedAt: now.toISOString() })
+    .set({
+      status: "deleted",
+      deletedAt: now.toISOString(),
+      deletedBy: by,
+      updatedAt: now.toISOString(),
+    })
     .where(and(eq(installations.id, inst.id), eq(installations.status, "active")))
     .returning({ id: installations.id });
   if (flipped.length === 0) return false;
@@ -240,7 +255,11 @@ export async function activeInstallationsOf(
   const conds = [eq(installations.status, "active")];
   if (where.integrationIds) conds.push(inArray(installations.integrationId, where.integrationIds));
   if (where.accountId) conds.push(eq(installations.accountId, where.accountId));
-  return svc.store.db.select().from(installations).where(and(...conds)).all();
+  return svc.store.db
+    .select()
+    .from(installations)
+    .where(and(...conds))
+    .all();
 }
 
 export function callerIsAccount(caller: Caller, inst: InstallationRow): boolean {

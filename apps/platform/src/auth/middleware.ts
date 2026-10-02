@@ -1,7 +1,7 @@
 import type { Scope } from "@app/domain";
 import type { Context, MiddlewareHandler } from "hono";
-import { assertRouteAccess } from "../access/route.js";
 import { needForScopes, type RepoNeed } from "../access/roles.js";
+import { assertRouteAccess } from "../access/route.js";
 import type { AppEnv, Caller } from "../app-env.js";
 import { ApiError, forbidden, unauthorized } from "../errors.js";
 import {
@@ -48,7 +48,12 @@ export async function resolveCaller(c: Context<AppEnv>): Promise<Caller | null> 
     const v = await verifyIntegrationToken(c.get("services"), token);
     if (v) await enforceIntegrationRate(c.env, v.integration.id);
     caller = v
-      ? { principal: v.principal, user: null, via: "integration-token", expiresAtSec: v.expiresAtSec }
+      ? {
+          principal: v.principal,
+          user: null,
+          via: "integration-token",
+          expiresAtSec: v.expiresAtSec,
+        }
       : null;
   } else if (token && isAgentToken(token)) {
     const v = await verifyAgentToken(store, token, clock.now(), (p) => c.executionCtx.waitUntil(p));

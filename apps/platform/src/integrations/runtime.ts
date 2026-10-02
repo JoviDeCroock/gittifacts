@@ -11,8 +11,8 @@ import type { Ports } from "@app/coordinator";
 import type { Change, Evidence } from "@app/domain";
 import type { Services } from "../app-env.js";
 import type { D1Store } from "../store/d1-store.js";
+import { type ChangeAction, type EventDeps, emitChangeEvent, type WebhookQueue } from "./events.js";
 import { attachPendingPreviews } from "./evidence.js";
-import { type ChangeAction, emitChangeEvent, type EventDeps, type WebhookQueue } from "./events.js";
 
 /** The bindings integrations read beyond `Env` (declared in wrangler.jsonc). */
 export interface IntegrationBindings {
@@ -84,7 +84,10 @@ export function withIntegrationEvents(ports: Ports, env: unknown): Ports {
         return async (id: string, patch: Partial<Change>) => {
           const row = await target.updateChange(id, patch);
           const a = actionFor(patch);
-          if (a) await quietly(`change.${a.action}`, () => emitChangeEvent(deps, a.action, row, a.fields));
+          if (a)
+            await quietly(`change.${a.action}`, () =>
+              emitChangeEvent(deps, a.action, row, a.fields),
+            );
           return row;
         };
       }
@@ -100,7 +103,9 @@ export function withIntegrationEvents(ports: Ports, env: unknown): Ports {
         };
       }
       const value: unknown = Reflect.get(target, prop);
-      return typeof value === "function" ? (value as (...a: unknown[]) => unknown).bind(target) : value;
+      return typeof value === "function"
+        ? (value as (...a: unknown[]) => unknown).bind(target)
+        : value;
     },
   });
   return { ...ports, store: wrapped };

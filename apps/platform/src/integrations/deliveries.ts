@@ -55,7 +55,11 @@ export const DeliveryListQuery = z.object({
 
 async function repoNamesById(svc: Services, ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
-  const rows = await svc.store.db.select({ id: repos.id, name: repos.name }).from(repos).where(inArray(repos.id, ids)).all();
+  const rows = await svc.store.db
+    .select({ id: repos.id, name: repos.name })
+    .from(repos)
+    .where(inArray(repos.id, ids))
+    .all();
   return new Map(rows.map((r) => [r.id, r.name]));
 }
 
@@ -95,23 +99,42 @@ export async function listDeliveries(
     .orderBy(desc(webhookDeliveries.createdAt))
     .limit(q.limit)
     .all();
-  const names = await repoNamesById(svc, [...new Set(rows.flatMap((r) => (r.repoId ? [r.repoId] : [])))]);
+  const names = await repoNamesById(svc, [
+    ...new Set(rows.flatMap((r) => (r.repoId ? [r.repoId] : []))),
+  ]);
   return rows.map((r) => summary(r, r.repoId ? names.get(r.repoId) : undefined));
 }
 
-async function ownDelivery(svc: Services, caller: Caller, integrationId: string, id: string): Promise<DeliveryRow> {
+async function ownDelivery(
+  svc: Services,
+  caller: Caller,
+  integrationId: string,
+  id: string,
+): Promise<DeliveryRow> {
   await ownIntegration(svc, caller, integrationId);
-  const d = await svc.store.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, id)).get();
+  const d = await svc.store.db
+    .select()
+    .from(webhookDeliveries)
+    .where(eq(webhookDeliveries.id, id))
+    .get();
   if (!d || d.integrationId !== integrationId) throw notFound(`delivery ${id}`);
   return d;
 }
 
-export async function getDelivery(svc: Services, caller: Caller, integrationId: string, id: string): Promise<DeliveryDetail> {
+export async function getDelivery(
+  svc: Services,
+  caller: Caller,
+  integrationId: string,
+  id: string,
+): Promise<DeliveryDetail> {
   const d = await ownDelivery(svc, caller, integrationId, id);
   const integration = await ownIntegration(svc, caller, integrationId);
   let signature = "(no webhook secret)";
   if (integration.webhookSecretEnc) {
-    signature = await signWebhook(await decryptSecret(masterSecretOf(svc.env), integration.webhookSecretEnc), d.payload);
+    signature = await signWebhook(
+      await decryptSecret(masterSecretOf(svc.env), integration.webhookSecretEnc),
+      d.payload,
+    );
   }
   const names = await repoNamesById(svc, d.repoId ? [d.repoId] : []);
   return {
@@ -124,7 +147,12 @@ export async function getDelivery(svc: Services, caller: Caller, integrationId: 
   };
 }
 
-export async function redeliver(svc: Services, caller: Caller, integrationId: string, id: string): Promise<DeliverySummary> {
+export async function redeliver(
+  svc: Services,
+  caller: Caller,
+  integrationId: string,
+  id: string,
+): Promise<DeliverySummary> {
   const d = await ownDelivery(svc, caller, integrationId, id);
   if (d.status === "pending") {
     throw new ApiError(409, "invalid-state", "this delivery is still being retried", undefined, {
@@ -159,7 +187,11 @@ export async function redeliver(svc: Services, caller: Caller, integrationId: st
   return summary(row, d.repoId ? names.get(d.repoId) : undefined);
 }
 
-export async function ping(svc: Services, caller: Caller, integrationId: string): Promise<DeliverySummary> {
+export async function ping(
+  svc: Services,
+  caller: Caller,
+  integrationId: string,
+): Promise<DeliverySummary> {
   const integration = await ownIntegration(svc, caller, integrationId);
   if (!integration.webhookUrl) {
     throw new ApiError(409, "invalid-state", "this integration has no webhook URL", undefined, {
@@ -168,7 +200,11 @@ export async function ping(svc: Services, caller: Caller, integrationId: string)
   }
   const id = await emitPing(eventDepsFor(svc), integrationId);
   if (id === null) throw new ApiError(409, "invalid-state", "could not queue the ping");
-  const d = await svc.store.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, id)).get();
+  const d = await svc.store.db
+    .select()
+    .from(webhookDeliveries)
+    .where(eq(webhookDeliveries.id, id))
+    .get();
   if (!d) throw new Error(`delivery ${id} vanished`);
   return summary(d, undefined);
 }

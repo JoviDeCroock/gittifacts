@@ -75,7 +75,9 @@ export async function installationRepoIds(
   const memberships = await membershipsOf(svc.store, inst.accountId);
   let candidates: string[];
   if (inst.repoSelection === "all") {
-    candidates = [...memberships].filter(([, role]) => INSTALLER_ROLES.includes(role)).map(([id]) => id);
+    candidates = [...memberships]
+      .filter(([, role]) => INSTALLER_ROLES.includes(role))
+      .map(([id]) => id);
   } else {
     const rows = await svc.store.db
       .select({ repoId: installationRepos.repoId })

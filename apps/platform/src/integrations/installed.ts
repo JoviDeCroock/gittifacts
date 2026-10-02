@@ -9,11 +9,18 @@ import { IntegrationScope } from "@app/domain";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Caller, Services } from "../app-env.js";
-import { agentTokens, installations, integrations, principals, webhookDeliveries } from "../db/schema.js";
+import {
+  agentTokens,
+  installations,
+  integrations,
+  principals,
+  webhookDeliveries,
+} from "../db/schema.js";
 import { ApiError, forbidden, notFound } from "../errors.js";
 import { canInstallOn, installableRepos, installationRepoIds } from "./access.js";
 import { emitInstallationEvent } from "./events.js";
 import { handleFor, repoNames } from "./handles.js";
+import type { InstallDecisionBody } from "./install.js";
 import {
   activeInstallationsOf,
   getInstallation,
@@ -21,7 +28,6 @@ import {
   uninstall,
   upsertInstallation,
 } from "./installations.js";
-import type { InstallDecisionBody } from "./install.js";
 import { getIntegration, ownIntegration } from "./registry.js";
 import { eventDepsFor } from "./runtime.js";
 import { explainScopes, integrationScopesOf, ScopeExplainedSchema } from "./scopes.js";
@@ -64,7 +70,11 @@ export const RepositoryRefSchema = z
   .meta({ id: "InstallationRepository" });
 
 async function nameOf(svc: Services, principalId: string): Promise<string> {
-  const p = await svc.store.db.select({ name: principals.name }).from(principals).where(eq(principals.id, principalId)).get();
+  const p = await svc.store.db
+    .select({ name: principals.name })
+    .from(principals)
+    .where(eq(principals.id, principalId))
+    .get();
   return p?.name ?? principalId;
 }
 
@@ -74,14 +84,27 @@ async function repoRefs(svc: Services, ids: readonly string[]) {
     const repo = await svc.store.getRepo(id);
     const names = repo ? await repoNames(svc, repo) : null;
     if (repo && names) {
-      out.push({ id: repo.id, name: repo.name, fullName: names.fullName, defaultBranch: repo.defaultBranch, cloneUrl: names.cloneUrl });
+      out.push({
+        id: repo.id,
+        name: repo.name,
+        fullName: names.fullName,
+        defaultBranch: repo.defaultBranch,
+        cloneUrl: names.cloneUrl,
+      });
     }
   }
   return out;
 }
 
-export async function installationView(svc: Services, inst: InstallationRow): Promise<InstallationView> {
-  const integration = await svc.store.db.select().from(integrations).where(eq(integrations.id, inst.integrationId)).get();
+export async function installationView(
+  svc: Services,
+  inst: InstallationRow,
+): Promise<InstallationView> {
+  const integration = await svc.store.db
+    .select()
+    .from(integrations)
+    .where(eq(integrations.id, inst.integrationId))
+    .get();
   const repos = await repoRefs(svc, await installationRepoIds(svc, inst));
   return {
     id: inst.id,
@@ -92,13 +115,20 @@ export async function installationView(svc: Services, inst: InstallationRow): Pr
       homepageUrl: integration?.homepageUrl ?? "",
       developer: { name: integration ? await nameOf(svc, integration.ownerId) : "unknown" },
     },
-    account: { id: inst.accountId, kind: inst.accountKind, handle: await handleFor(svc, inst.accountId) },
+    account: {
+      id: inst.accountId,
+      kind: inst.accountKind,
+      handle: await handleFor(svc, inst.accountId),
+    },
     scopes: explainScopes(integrationScopesOf(inst.scopes)),
     repoSelection: inst.repoSelection,
     repos: repos.map(({ id, name, fullName }) => ({ id, name, fullName })),
-    eligibleRepos: (await repoRefs(svc, (await installableRepos(svc, { id: inst.accountId, kind: "human" })).map((r) => r.id))).map(
-      ({ id, name, fullName }) => ({ id, name, fullName }),
-    ),
+    eligibleRepos: (
+      await repoRefs(
+        svc,
+        (await installableRepos(svc, { id: inst.accountId, kind: "human" })).map((r) => r.id),
+      )
+    ).map(({ id, name, fullName }) => ({ id, name, fullName })),
     status: inst.status,
     createdAt: inst.createdAt,
     updatedAt: inst.updatedAt,
@@ -116,13 +146,21 @@ async function lastUsedAt(svc: Services, principalId: string): Promise<string | 
   return row?.at ?? null;
 }
 
-export async function listInstallations(svc: Services, caller: Caller): Promise<InstallationView[]> {
-  if (caller.principal.kind !== "human") throw forbidden("only a signed-in human has installed integrations");
+export async function listInstallations(
+  svc: Services,
+  caller: Caller,
+): Promise<InstallationView[]> {
+  if (caller.principal.kind !== "human")
+    throw forbidden("only a signed-in human has installed integrations");
   const rows = await activeInstallationsOf(svc, { accountId: caller.principal.id });
   return Promise.all(rows.map((r) => installationView(svc, r)));
 }
 
-async function ownInstallation(svc: Services, caller: Caller, id: string): Promise<InstallationRow> {
+async function ownInstallation(
+  svc: Services,
+  caller: Caller,
+  id: string,
+): Promise<InstallationRow> {
   const inst = await getInstallation(svc, id);
   if (!inst || caller.principal.kind !== "human" || inst.accountId !== caller.principal.id) {
     throw notFound(`installation ${id}`, {
@@ -139,18 +177,27 @@ export async function updateInstallationRepos(
   body: InstallDecisionBody,
 ): Promise<InstallationView> {
   const inst = await ownInstallation(svc, caller, id);
-  if (inst.status !== "active") throw new ApiError(409, "invalid-state", "this installation was removed");
+  if (inst.status !== "active")
+    throw new ApiError(409, "invalid-state", "this installation was removed");
   const integration = await getIntegration(svc, inst.integrationId);
   if (!integration) throw notFound("integration", { explanation: "Its developer deleted it." });
   const repoIds = [...new Set(body.repoIds)];
   if (body.repoSelection === "selected") {
-    if (repoIds.length === 0) throw new ApiError(400, "invalid-request", "pick at least one repository");
+    if (repoIds.length === 0)
+      throw new ApiError(400, "invalid-request", "pick at least one repository");
     for (const repoId of repoIds) {
       const repo = await svc.store.getRepo(repoId);
       if (!repo || !(await canInstallOn(svc.store, caller.principal, repo))) {
-        throw new ApiError(403, "repo-not-installable", `you cannot connect integrations to repo ${repoId}`, { repoId }, {
-          explanation: "Only claimed repositories you own or maintain can be connected to integrations.",
-        });
+        throw new ApiError(
+          403,
+          "repo-not-installable",
+          `you cannot connect integrations to repo ${repoId}`,
+          { repoId },
+          {
+            explanation:
+              "Only claimed repositories you own or maintain can be connected to integrations.",
+          },
+        );
       }
     }
   }
@@ -165,7 +212,12 @@ export async function updateInstallationRepos(
   return installationView(svc, installation);
 }
 
-async function uninstallAndNotify(svc: Services, inst: InstallationRow, by: string, reason: string): Promise<void> {
+async function uninstallAndNotify(
+  svc: Services,
+  inst: InstallationRow,
+  by: string,
+  reason: string,
+): Promise<void> {
   const repos = await repoRefs(svc, await installationRepoIds(svc, inst));
   if (!(await uninstall(svc, inst, by, reason))) return;
   await emitInstallationEvent(eventDepsFor(svc), "deleted", inst.id, {
@@ -177,7 +229,11 @@ async function uninstallAndNotify(svc: Services, inst: InstallationRow, by: stri
 }
 
 /** One click: tokens stop working now, no more events (except the final installation.deleted). */
-export async function uninstallInstallation(svc: Services, caller: Caller, id: string): Promise<InstallationView> {
+export async function uninstallInstallation(
+  svc: Services,
+  caller: Caller,
+  id: string,
+): Promise<InstallationView> {
   const inst = await ownInstallation(svc, caller, id);
   await uninstallAndNotify(svc, inst, caller.principal.id, "uninstalled by the account");
   const after = await getInstallation(svc, id);
@@ -186,15 +242,23 @@ export async function uninstallInstallation(svc: Services, caller: Caller, id: s
 }
 
 /** The developer deletes an integration: uninstalled everywhere, pending deliveries cancelled. */
-export async function deleteIntegration(svc: Services, caller: Caller, id: string): Promise<{ deleted: true; uninstalled: number }> {
+export async function deleteIntegration(
+  svc: Services,
+  caller: Caller,
+  id: string,
+): Promise<{ deleted: true; uninstalled: number }> {
   const row = await ownIntegration(svc, caller, id);
   const active = await activeInstallationsOf(svc, { integrationIds: [id] });
   let n = 0;
   for (const inst of active) {
-    if (await uninstall(svc, inst, caller.principal.id, "integration deleted by its developer")) n++;
+    if (await uninstall(svc, inst, caller.principal.id, "integration deleted by its developer"))
+      n++;
   }
   const now = svc.clock.now().toISOString();
-  await svc.store.db.update(integrations).set({ deletedAt: now, updatedAt: now }).where(eq(integrations.id, id));
+  await svc.store.db
+    .update(integrations)
+    .set({ deletedAt: now, updatedAt: now })
+    .where(eq(integrations.id, id));
   await svc.store.db
     .update(webhookDeliveries)
     .set({ status: "cancelled", nextAttemptAt: null, error: "integration deleted" })
@@ -223,11 +287,18 @@ export const CurrentInstallationSchema = z
   .meta({ id: "CurrentInstallation" });
 
 /** What an integration token sees about itself. */
-export async function currentInstallation(svc: Services, caller: Caller): Promise<z.infer<typeof CurrentInstallationSchema>> {
+export async function currentInstallation(
+  svc: Services,
+  caller: Caller,
+): Promise<z.infer<typeof CurrentInstallationSchema>> {
   if (caller.principal.kind !== "integration") {
-    throw forbidden("only an integration token has an installation", { kind: caller.principal.kind }, {
-      explanation: "Call this with the access token from the integration install flow.",
-    });
+    throw forbidden(
+      "only an integration token has an installation",
+      { kind: caller.principal.kind },
+      {
+        explanation: "Call this with the access token from the integration install flow.",
+      },
+    );
   }
   const inst = await svc.store.db
     .select()
@@ -239,8 +310,16 @@ export async function currentInstallation(svc: Services, caller: Caller): Promis
   return {
     installation: {
       id: inst.id,
-      integration: { id: inst.integrationId, clientId: integration?.clientId ?? "", name: integration?.name ?? "" },
-      account: { id: inst.accountId, kind: inst.accountKind, handle: await handleFor(svc, inst.accountId) },
+      integration: {
+        id: inst.integrationId,
+        clientId: integration?.clientId ?? "",
+        name: integration?.name ?? "",
+      },
+      account: {
+        id: inst.accountId,
+        kind: inst.accountKind,
+        handle: await handleFor(svc, inst.accountId),
+      },
       repoSelection: inst.repoSelection,
       scopes: integrationScopesOf(inst.scopes),
       createdAt: inst.createdAt,

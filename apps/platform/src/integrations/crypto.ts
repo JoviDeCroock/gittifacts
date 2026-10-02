@@ -68,7 +68,11 @@ export async function signWebhook(secret: string, body: string): Promise<string>
   return `sha256=${hex(mac)}`;
 }
 
-export async function verifyWebhook(secret: string, body: string, header: string): Promise<boolean> {
+export async function verifyWebhook(
+  secret: string,
+  body: string,
+  header: string,
+): Promise<boolean> {
   return timingSafeEqual(await signWebhook(secret, body), header);
 }
 
