@@ -1,9 +1,10 @@
 /**
  * What an unclaimed project can never have (onboarding §4): secrets, custom domains, production
  * deploys (a `deployTarget`), Lane 0 / auto-merge. The platform has no API that sets secrets or
- * custom domains at all, and none that sets a deploy target; these refusals are the gate any such
- * API must call first, and the store calls `assertUnclaimedRepoWrite` on every repo write as the
- * last line of defence (a deploy target on an unclaimed repo is refused even from internal code).
+ * custom domains at all; `PATCH /repos/{id}/deploy-target` calls `assertClaimedFor` first. These
+ * refusals are the gate any such API must call first, and the store calls
+ * `guardUnclaimedRepoWrite` on every repo write as the last line of defence (a deploy target on an
+ * unclaimed repo is refused even from internal code).
  *
  * Dependency-free on purpose: the store (src/store/d1-store.ts) and the error mapper
  * (src/errors.ts) both import it.

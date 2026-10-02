@@ -4,6 +4,7 @@ import {
   ChangeListQuery,
   ChangeSummarySchema,
   CreateRepoBody,
+  DeployTargetBody,
   IdempotencyHeaders,
   Lane0Body,
   LaneCountsSchema,
@@ -20,7 +21,13 @@ import { filterRepos } from "../auth/repo-scope.js";
 import { idempotent } from "../idempotency.js";
 import { listChangeSummaries } from "../services/changes.js";
 import { listPlans } from "../services/plans.js";
-import { createRepo, getRepoDetail, listRepoSummaries, setLane0 } from "../services/repos.js";
+import {
+  createRepo,
+  getRepoDetail,
+  listRepoSummaries,
+  setDeployTarget,
+  setLane0,
+} from "../services/repos.js";
 import { type ApiApp, body, errors, json, SECURITY } from "./common.js";
 
 const list = createRoute({
@@ -82,6 +89,29 @@ const lane0 = createRoute({
   },
 });
 
+const deployTarget = createRoute({
+  method: "patch",
+  path: "/api/v1/repos/{repoId}/deploy-target",
+  tags: ["repos"],
+  summary:
+    "Set or clear the Worker merged Changes roll out to (human repo admin, claimed projects)",
+  description:
+    "The Worker is `gf-<repoId>-<script>` in the platform's account (namespaced, so a project can never target the platform's own Worker or another project's). The first rollout creates it with a workers.dev URL. 403 `unclaimed-limit` for unclaimed projects.",
+  security: SECURITY,
+  middleware: [requirePrincipal(["repo:admin"], { humanOnly: true }), idempotent()] as const,
+  request: { headers: IdempotencyHeaders, params: RepoIdParam, body: body(DeployTargetBody) },
+  responses: {
+    200: json(
+      z.object({
+        repo: RepoSchema,
+        script: z.string().nullable().describe("The Worker name rollouts deploy to"),
+      }),
+      "Updated",
+    ),
+    ...errors(400, 401, 403, 404),
+  },
+});
+
 const plans = createRoute({
   method: "get",
   path: "/api/v1/repos/{repoId}/plans",
@@ -135,6 +165,15 @@ export function registerRepoRoutes(app: ApiApp): void {
       c.req.valid("json").enabled,
     );
     return c.json({ repo }, 200);
+  });
+  app.openapi(deployTarget, async (c) => {
+    const result = await setDeployTarget(
+      c.get("services"),
+      callerOf(c),
+      c.req.valid("param").repoId,
+      c.req.valid("json").script,
+    );
+    return c.json(result, 200);
   });
   app.openapi(plans, async (c) =>
     c.json(await listPlans(c.get("services"), c.req.valid("param").repoId), 200),

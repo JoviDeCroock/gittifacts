@@ -197,6 +197,15 @@ export const CreateRepoBody = z.object({
 });
 
 export const Lane0Body = z.object({ enabled: z.boolean() });
+export const DeployTargetBody = z.object({
+  script: z
+    .string()
+    .regex(/^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/)
+    .nullable()
+    .describe(
+      "Short Worker name (lowercase letters, digits, dashes; 1–39 chars); the platform deploys to `gf-<repoId>-<script>`. null clears the deploy target.",
+    ),
+});
 
 export const PlanDraftBody = PlanDraftInput.meta({ id: "PlanDraftInput" });
 export const ApprovePlanBody = z.object({ comment: z.string().max(10_000).optional() });

@@ -3,7 +3,8 @@ import type { Repo } from "@app/domain";
 import type { z } from "zod";
 import type { CreateRepoBody, ShadowStatsSchema } from "../api/schemas.js";
 import type { Caller, Services } from "../app-env.js";
-import { notFound } from "../errors.js";
+import { badRequest, notFound } from "../errors.js";
+import { assertClaimedFor } from "../limits/refusals.js";
 import { EMPTY_LANE_COUNTS, type LaneCounts } from "../store/d1-store.js";
 
 export type ShadowStats = z.infer<typeof ShadowStatsSchema>;
@@ -90,4 +91,52 @@ export async function setLane0(
 ): Promise<Repo> {
   if (!(await svc.store.getRepo(repoId))) throw notFound(`repo ${repoId}`);
   return svc.coordinator.setLane0(caller.principal, repoId, enabled);
+}
+
+/** Every Worker the platform deploys for a project is named `gf-<repoId>-<script>` (DECISIONS.md). */
+export const DEPLOY_SCRIPT_PREFIX = "gf-";
+const MAX_SCRIPT_NAME = 63;
+
+/**
+ * The Worker a repo deploys to. Projects deploy into the platform's own Cloudflare account, so the
+ * name is namespaced by repo: no project can target the platform's Worker (`gittifacts`) or another
+ * project's, and `gf-` is reserved for project Workers.
+ */
+export function deployScriptName(repoId: string, script: string): string {
+  const slug = repoId
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${DEPLOY_SCRIPT_PREFIX}${slug}-${script}`;
+}
+
+/**
+ * Set (or clear, with `null`) the Worker a repo's merged Changes roll out to. Human repo admins
+ * only (the route checks), claimed projects only: an unclaimed project never gets a production
+ * deploy (onboarding §4).
+ */
+export async function setDeployTarget(
+  svc: Services,
+  caller: Caller,
+  repoId: string,
+  script: string | null,
+): Promise<{ repo: Repo; script: string | null }> {
+  const repo = await svc.store.getRepo(repoId);
+  if (!repo) throw notFound(`repo ${repoId}`);
+  if (script !== null) assertClaimedFor(repo, "a deploy target");
+  const target = script === null ? null : deployScriptName(repo.id, script);
+  if (target !== null && target.length > MAX_SCRIPT_NAME) {
+    throw badRequest(
+      `the Worker name ${target} is longer than ${MAX_SCRIPT_NAME} characters; use a shorter script name`,
+    );
+  }
+  if (target === repo.deployTarget) return { repo, script: target };
+  const updated = await svc.store.updateRepo(repo.id, { deployTarget: target });
+  await svc.audit.append({
+    principalId: caller.principal.id,
+    action: target === null ? "repo.deploy-target-cleared" : "repo.deploy-target-set",
+    subject: `repo:${repo.id}`,
+    payload: { script: target, previous: repo.deployTarget },
+  });
+  return { repo: updated, script: target };
 }
