@@ -33,7 +33,7 @@ import "../styles/integrations.css";
 
 type Reveal = { title: string; items: SecretItem[] } | null;
 
-export function Section({
+function Section({
   id,
   title,
   aside,
@@ -587,8 +587,11 @@ export function IntegrationDetail() {
             <a href={it.homepageUrl} target="_blank" rel="noopener noreferrer">
               {hostOf(it.homepageUrl, it.homepageUrl)}
             </a>
-            <span>· {it.installationCount === 0 ? "Not installed yet" : `Installed on ${it.installationCount === 1 ? "1 account" : `${it.installationCount} accounts`}`}</span>
-            <span>· Updated {relative(it.updatedAt, now)}</span>
+            {" · "}
+            {it.installationCount === 0
+              ? "Not installed yet"
+              : `Installed on ${it.installationCount === 1 ? "1 account" : `${it.installationCount} accounts`}`}
+            {` · Updated ${relative(it.updatedAt, now)}`}
           </span>
         ) : null
       }

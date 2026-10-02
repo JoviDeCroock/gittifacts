@@ -549,6 +549,10 @@ fieldset.confirm {
 .dlv-page--detail .page__meta {
   display: none;
 }
+/* The Redeliver bar ends the page on phones. */
+.dlv-page--detail .page__main {
+  padding-block-end: 0;
+}
 @media (min-width: 1100px) {
   .dlv-layout {
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
@@ -561,6 +565,9 @@ fieldset.confirm {
   }
   .dlv-page--detail .page__meta {
     display: flex;
+  }
+  .dlv-page--detail .page__main {
+    padding-block-end: var(--s-8);
   }
   .dlv-pane {
     position: sticky;
@@ -848,13 +855,12 @@ fieldset.confirm {
 
 /* ---------------------------------------------------------------- integration detail */
 .int-head-meta {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px var(--s-2);
+  display: block;
+  line-height: 1.7;
 }
 .int-head-meta .int-logo {
-  font-size: 10px !important;
+  vertical-align: middle;
+  margin-inline-end: 6px;
 }
 .int-detail {
   display: grid;
