@@ -21,6 +21,7 @@ const NAV: { href: string; label: string; icon: IconId; match: (path: string) =>
   { href: "/", label: "Repositories", icon: "layers", match: (p) => p === "/" || p.startsWith("/repos") || p.startsWith("/changes") || p.startsWith("/plans") },
   { href: "/audit", label: "Audit log", icon: "scroll-text", match: (p) => p.startsWith("/audit") },
   { href: "/agents", label: "Agents", icon: "key", match: (p) => p.startsWith("/agents") },
+  { href: "/settings/integrations", label: "Integrations", icon: "plug", match: (p) => p.startsWith("/settings/integrations") },
 ];
 
 const sidebarRepos = { value: null as RepoSummary[] | null };

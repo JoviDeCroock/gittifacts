@@ -19,9 +19,11 @@ const NotFound = lazy(() => import("./routes/notfound.js").then((m) => m.NotFoun
 const OAuthConsent = lazy(() => import("./routes/oauth-consent.js").then((m) => m.OAuthConsent));
 const DeviceView = lazy(() => import("./routes/device.js").then((m) => m.DeviceView));
 const ClaimPage = lazy(() => import("./routes/claim.js").then((m) => m.ClaimPage));
+const InstalledIntegrations = lazy(() => import("./routes/integrations.js").then((m) => m.InstalledIntegrations));
+const IntegrationInstall = lazy(() => import("./routes/integration-install.js").then((m) => m.IntegrationInstall));
 
 /** Agent consent screens: one decision, no navigation to wander off to. */
-const FOCUSED = /^\/(oauth\/consent|device)\/?$/;
+const FOCUSED = /^\/(oauth\/consent|device|integrations\/install)\/?$/;
 
 /** Claim links: public (an agent hands one to a person who may not be signed in yet) and focused. */
 const PUBLIC = /^\/claim\/[^/]+\/?$/;
@@ -34,6 +36,7 @@ function AuthedApp() {
         <Router>
           <Route path="/oauth/consent" component={OAuthConsent} />
           <Route path="/device" component={DeviceView} />
+          <Route path="/integrations/install" component={IntegrationInstall} />
         </Router>
       </ErrorBoundary>
     );
@@ -51,6 +54,7 @@ function AuthedApp() {
           <Route path="/changes/:changeId/rollout" component={RolloutView} />
           <Route path="/audit" component={AuditView} />
           <Route path="/agents" component={AgentsView} />
+          <Route path="/settings/integrations" component={InstalledIntegrations} />
           <Route path="/internal/onboarding" component={OnboardingView} />
           <Route path="/signin" component={RedirectHome} />
           <Route default component={NotFound} />
