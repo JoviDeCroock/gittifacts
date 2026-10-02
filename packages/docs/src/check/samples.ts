@@ -50,7 +50,7 @@ export function checkToolCalls(page: Page, text: string, line: number): Problem[
     if (!names.has(name) && !referenced.has(name) && !name.includes("_")) continue;
     const at = (m.index ?? 0) + name.length;
     const args = balanced(text, at);
-    const where = { file: page.file, line, rule: "tool-call" };
+    const where = { file: page.file, line, rule: "tool-call" as const };
     if (!names.has(name)) {
       problems.push({ ...where, message: `${name}(…) is not an MCP tool` });
       continue;
@@ -161,7 +161,7 @@ function jsonSchemaFor(name: string): object | ZodType | null {
 }
 
 export function checkJson(page: Page, text: string, info: readonly string[], line: number): Problem[] {
-  const where = { file: page.file, line, rule: "json" };
+  const where = { file: page.file, line, rule: "json" as const };
   let value: unknown;
   try {
     value = JSON.parse(text);
