@@ -139,6 +139,8 @@ export interface QueueEnvOptions {
   resolver?: (input: ResolverInput) => Record<string, string | null> | null;
   /** Override the scripted resolver's scope (e.g. novel lines). */
   scope?: { novelLines?: number; touchesOutsideConflictHunks?: boolean };
+  /** Deploy merged Changes in trains (the platform default). */
+  trains?: boolean;
 }
 
 export async function queueEnv(opts: QueueEnvOptions = {}): Promise<QueueEnv> {
@@ -173,6 +175,7 @@ export function attachAgentQueue(
         ? {}
         : { resolver: () => scriptedResolver(opts.resolver ?? (() => null), opts.scope) }),
       config: { batchHoldMs: 0, ...opts.config },
+      ...(opts.trains === true ? { trains: true } : {}),
       alarm: {
         get: async () => alarm.at,
         set: async (at) => {

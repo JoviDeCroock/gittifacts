@@ -241,6 +241,25 @@ describe("RolloutWorkflow", () => {
     expect(s.ports.audit.actions(`change:${change.id}`)).toContain("change.killed");
   });
 
+  it("a revert that regresses is rolled back but never reverted automatically", async () => {
+    const s = await withRollout();
+    // The change regresses; then its (auto-merged) revert regresses too (environmental).
+    s.ports.telemetry.queue.push(
+      { errorRate: 0.2, baselineErrorRate: 0.001 },
+      { errorRate: 0.3, baselineErrorRate: 0.001 },
+    );
+    const { change } = await mergeOne(s);
+    const revertId = revertIdFor(change.id);
+    const revert = await reload(s, revertId);
+    expect(revert.mergedSha).not.toBeNull();
+    expect(s.ports.deployer.rollbacks).toHaveLength(2);
+    expect(revert.status).toBe("merged");
+    expect(revert.rolloutState?.status).toBe("rolled-back");
+    expect(await s.ports.store.getChange(revertIdFor(revertId))).toBeNull();
+    expect(s.ports.audit.actions(`change:${revertId}`)).toContain("rollout.revert-skipped");
+    expect(s.ports.notifier.kinds(revertId)).toContain("regression-detected");
+  });
+
   it("killing a change after later releases does not roll their code back (revert only)", async () => {
     const s = await withRollout();
     const { change } = await mergeOne(s);

@@ -108,7 +108,13 @@ export const TrainEvent = z.discriminatedUnion("type", [
     files: z.array(z.string()),
     modules: z.array(z.string()).default([]),
   }),
-  z.object({ type: z.literal("TrainDeployed"), trainId: z.string(), versionId: z.string() }),
+  z.object({
+    type: z.literal("TrainDeployed"),
+    trainId: z.string(),
+    versionId: z.string(),
+    /** This train's watch window (the base policy's stages + watch); default `config.watchMs`. */
+    watchMs: z.number().int().min(1).optional(),
+  }),
   z.object({ type: z.literal("TrainDeployFailed"), trainId: z.string(), message: z.string() }),
   z.object({
     type: z.literal("IssueReported"),
@@ -246,7 +252,7 @@ export function trainStep(
       t.state = "watching";
       t.versionId = event.versionId;
       t.deployedAt = now;
-      t.watchUntil = now + s.config.watchMs;
+      t.watchUntil = now + (event.watchMs ?? s.config.watchMs);
       out.push({
         type: "Emit",
         event: {

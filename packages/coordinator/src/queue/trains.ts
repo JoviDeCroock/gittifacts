@@ -40,6 +40,14 @@ export interface TrainProgress {
 
 const progressKey = (trainId: string) => `train:${trainId}`;
 
+/**
+ * How long a train holds its Worker: every traffic stage for `stageMinutes`, then the watch window
+ * at 100%, from the policy at deploy time (the queue's default is fixed when the queue starts).
+ */
+export function watchMsFor(policy: RolloutPolicy, stages: readonly number[]): number {
+  return Math.max(60_000, (stages.length * policy.stageMinutes + policy.watchMinutes) * 60_000);
+}
+
 export class CoordinatorTrainShell {
   constructor(private readonly ctx: QueueContext) {}
 
@@ -79,7 +87,12 @@ export class CoordinatorTrainShell {
     const { deployer, flags, store } = this.ctx.ports;
     const done = this.progress(cmd.trainId);
     if (done !== null)
-      return emit({ type: "TrainDeployed", trainId: cmd.trainId, versionId: done.versionId });
+      return emit({
+        type: "TrainDeployed",
+        trainId: cmd.trainId,
+        versionId: done.versionId,
+        watchMs: watchMsFor(await this.policy(), done.stages),
+      });
     // Merge order: the last Change's merged commit contains every earlier one.
     const last = cmd.changes[cmd.changes.length - 1];
     const bundleRef =
@@ -150,7 +163,12 @@ export class CoordinatorTrainShell {
         },
       });
     }
-    await emit({ type: "TrainDeployed", trainId: cmd.trainId, versionId });
+    await emit({
+      type: "TrainDeployed",
+      trainId: cmd.trainId,
+      versionId,
+      watchMs: watchMsFor(policy, stages),
+    });
   }
 
   private async split(
@@ -208,6 +226,23 @@ export class CoordinatorTrainShell {
     const { store, notifier } = this.ctx.ports;
     const original = await store.getChange(cmd.changeId);
     if (original === null || original.mergedSha === null) return;
+    if (original.revertOf !== null) {
+      // Never revert a revert automatically: that would re-apply the Change that just regressed
+      // (a regression after a revert is more likely environmental). Rolled back; a human decides.
+      if (original.status === "rolling-out")
+        await store.updateChange(original.id, { status: "merged" });
+      await this.ctx.audit(changeSubject(original.id), "deploy.revert-skipped", {
+        issueId: cmd.issueId,
+        reason: "the regressing Change is itself a revert; rolled back, a human decides",
+      });
+      await notifier.notify({
+        kind: "regression-detected",
+        changeId: original.id,
+        repoId: original.repoId,
+        message: `${original.title} regressed after deploy and was rolled back. It reverts ${original.revertOf}, so it is not reverted automatically: a human decides.`,
+      });
+      return;
+    }
     const result = await openRevertChange(
       { ports: this.ctx.ports, bindings: this.ctx.deps.bindings },
       { original, reason: cmd.reason },

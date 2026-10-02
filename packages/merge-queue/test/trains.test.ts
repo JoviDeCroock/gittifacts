@@ -214,6 +214,26 @@ describe("Q5 acceptance shape: one of three Changes in a train throws in product
   });
 });
 
+describe("train watch window", () => {
+  it("follows the deploy-time window carried by TrainDeployed (default: config.watchMs)", () => {
+    const t = new Trains();
+    t.merged("a", "api", ["src/a.ts"]);
+    const a = t.of("StartDeployTrain")[0]?.trainId ?? "";
+    t.send({ type: "TrainDeployed", trainId: a, versionId: "v1", watchMs: 7 * 60_000 });
+    expect(t.state.trains[a]?.watchUntil).toBe(7 * 60_000);
+    t.now = 7 * 60_000 - 1;
+    t.send({ type: "Tick" });
+    expect(t.state.trains[a]?.state).toBe("watching");
+    t.now = 7 * 60_000;
+    t.send({ type: "Tick" });
+    expect(t.state.trains[a]?.state).toBe("released");
+    t.merged("b", "api", ["src/b.ts"]);
+    const b = t.of("StartDeployTrain")[1]?.trainId ?? "";
+    t.send({ type: "TrainDeployed", trainId: b, versionId: "v2" });
+    expect(t.state.trains[b]?.watchUntil).toBe(t.now + 30 * 60_000);
+  });
+});
+
 describe("regressions always end in a revert (platform spec §4F.3, §4.8)", () => {
   const deployFirst = (t: Trains, versionId = "v1") => {
     const train = t.of("StartDeployTrain")[0];

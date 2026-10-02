@@ -356,6 +356,20 @@ export async function runRollout(
   const revertChangeId = await step.do("revert", RETRY.remote, async () => {
     const original = await store.getChange(changeId);
     if (original === null) throw new Error("change disappeared");
+    if (original.revertOf !== null) {
+      // Never revert a revert automatically: that would re-apply the Change that just regressed.
+      await store.updateChange(changeId, { status: "merged" });
+      await log("rollout.revert-skipped", {
+        reason: "the regressing Change is itself a revert; rolled back, a human decides",
+      });
+      await notifier.notify({
+        kind: "regression-detected",
+        changeId,
+        repoId: ctx.repoId,
+        message: `${ctx.title} regressed and was rolled back. It reverts ${original.revertOf}, so it is not reverted automatically: a human decides.`,
+      });
+      return null;
+    }
     const result = await openRevertChange(
       { ports, bindings: deps.bindings },
       { original, reason: `rollout regression: ${reasons.join("; ")}` },
