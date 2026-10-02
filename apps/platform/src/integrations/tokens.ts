@@ -38,6 +38,11 @@ import {
 import { getInstallation, type InstallationRow } from "./installations.js";
 import { getIntegrationByClientId, type IntegrationRow } from "./registry.js";
 
+const CLIENT_FIX = {
+  explanation:
+    "Authenticate with your integration's client_id and client_secret from the developer portal (client_secret_basic or client_secret_post, one of them); public integrations send client_id only, with PKCE.",
+};
+
 /** Refresh tokens live this long after their last rotation (an idle installation re-authorizes). */
 export const REFRESH_TOKEN_TTL_DAYS = 180;
 const VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
@@ -75,10 +80,21 @@ export function clientCredentials(
     try {
       decoded = atob(m[1]);
     } catch {
-      throw new OAuthProtocolError("invalid_client", "malformed Basic credentials", 401);
+      throw new OAuthProtocolError(
+        "invalid_client",
+        "malformed Basic credentials",
+        401,
+        CLIENT_FIX,
+      );
     }
     const i = decoded.indexOf(":");
-    if (i < 0) throw new OAuthProtocolError("invalid_client", "malformed Basic credentials", 401);
+    if (i < 0)
+      throw new OAuthProtocolError(
+        "invalid_client",
+        "malformed Basic credentials",
+        401,
+        CLIENT_FIX,
+      );
     const id = decodeURIComponent(decoded.slice(0, i).replace(/\+/g, " "));
     const secret = decodeURIComponent(decoded.slice(i + 1).replace(/\+/g, " "));
     const bodyId = p.get("client_id");
@@ -117,13 +133,15 @@ export async function authenticateClient(
   creds: ClientCredentials,
 ): Promise<IntegrationRow> {
   const integration = creds.clientId ? await getIntegrationByClientId(svc, creds.clientId) : null;
-  if (!integration) throw new OAuthProtocolError("invalid_client", "unknown client_id", 401);
+  if (!integration)
+    throw new OAuthProtocolError("invalid_client", "unknown client_id", 401, CLIENT_FIX);
   if (integration.clientType === "public") {
     if (creds.clientSecret !== null) {
       throw new OAuthProtocolError(
         "invalid_client",
         "public clients have no secret; authenticate with PKCE only",
         401,
+        CLIENT_FIX,
       );
     }
     return integration;
@@ -133,6 +151,7 @@ export async function authenticateClient(
       "invalid_client",
       "client authentication failed: send client_secret_basic or client_secret_post",
       401,
+      CLIENT_FIX,
     );
   }
   const hash = await sha256Hex(creds.clientSecret);
@@ -146,7 +165,7 @@ export async function authenticateClient(
     secret.integrationId !== integration.id ||
     !timingSafeEqual(secret.secretHash, hash)
   ) {
-    throw new OAuthProtocolError("invalid_client", "client authentication failed", 401);
+    throw new OAuthProtocolError("invalid_client", "client authentication failed", 401, CLIENT_FIX);
   }
   svc.waitUntil(
     svc.store.db
