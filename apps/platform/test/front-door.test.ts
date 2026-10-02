@@ -113,6 +113,39 @@ describe("front door", () => {
     expect(prm.status).toBe(200);
   });
 
+  it("/ shows visitors the landing page and signed-in people the app", async () => {
+    const { app } = makeApp();
+    const visitor = await call(app, "GET", "/", { headers: { accept: "text/html" } });
+    expect(visitor.status).toBe(200);
+    expect(visitor.headers.get("vary")).toContain("Cookie");
+    expect(links(visitor.headers.get("link"))["service-doc"]).toBe(`${ORIGIN}/start`);
+    const landing = await visitor.text();
+    expect(landing).toContain('id="hero-title"');
+    expect(landing).toContain('<link rel="service-doc" type="text/markdown" href="/start">');
+    // Absolute URLs baked into the static page point at this host.
+    expect(landing).toContain(`<link rel="canonical" href="${ORIGIN}/"`);
+    expect(landing).toContain(`content="${ORIGIN}/og.png"`);
+    expect(landing).toContain(`>${ORIGIN}/start</code>`);
+    expect(landing).not.toContain("decroockjovi.workers.dev");
+
+    const human = await signUpHuman(app);
+    const signedIn = await call(app, "GET", "/", {
+      headers: { accept: "text/html", cookie: human.cookie },
+    });
+    expect(signedIn.status).toBe(200);
+    const spa = await signedIn.text();
+    expect(spa).toContain('<div id="app">');
+    expect(spa).not.toContain('id="hero-title"');
+
+    // A stale session cookie is a visitor; ?mock keeps the demo app reachable.
+    const stale = await call(app, "GET", "/", {
+      headers: { accept: "text/html", cookie: "better-auth.session_token=expired.token" },
+    });
+    expect(await stale.text()).toContain('id="hero-title"');
+    const mock = await call(app, "GET", "/?mock", { headers: { accept: "text/html" } });
+    expect(await mock.text()).toContain('<div id="app">');
+  });
+
   it("an agent asking / for JSON or markdown gets the guide itself", async () => {
     const { app } = makeApp();
     const json = await call(app, "GET", "/", { headers: { accept: "application/json" } });

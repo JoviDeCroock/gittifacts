@@ -2,7 +2,8 @@
  * The front door (docs/prompts/02-onboarding.md §2): everything an agent told only "use <host>"
  * needs to work out the rest.
  *
- *   GET /                              the web app, with `Link` headers (and <link> tags) to the rest
+ *   GET /                              the landing page (no session) or the web app, with `Link`
+ *                                      headers (and <link> tags) to the rest
  *   GET /start                         machine guide: markdown, or JSON with `Accept: application/json`
  *   GET /llms.txt                      llmstxt.org index
  *   GET /openapi.json                  alias of /api/v1/openapi.json
@@ -25,6 +26,7 @@ import { defaultPolicy } from "@app/domain";
 import { sha256Hex } from "@app/evidence";
 import type { Context } from "hono";
 import type { AppEnv } from "../app-env.js";
+import { authFor } from "../auth/middleware.js";
 import { quotaHints, unclaimedLimits } from "../limits/config.js";
 import { unclaimedCreationState } from "../limits/kill-switch.js";
 import { urlsFor } from "../oauth/context.js";
@@ -135,6 +137,31 @@ function wantsJson(c: Context<AppEnv>): boolean {
   return accept.includes("application/json") && !accept.includes("text/markdown");
 }
 
+/** The prerendered marketing page (packages/web/landing.html), served at `/` without a session. */
+export const LANDING_ASSET = "/landing";
+/** The origin baked into the static landing HTML; rewritten to the request's origin. */
+const LANDING_ORIGIN = "https://gittifacts.decroockjovi.workers.dev";
+
+/** A signed-in person gets the app at `/`; only a request carrying a session cookie is checked. */
+async function hasSession(c: Context<AppEnv>): Promise<boolean> {
+  if (!(c.req.header("cookie") ?? "").includes("session_token=")) return false;
+  try {
+    return (await authFor(c).api.getSession({ headers: c.req.raw.headers })) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** `/` for a browser: the landing page for visitors, the app for people with a session (or `?mock`). */
+async function homeAsset(c: Context<AppEnv>): Promise<Response> {
+  const url = new URL(c.req.url);
+  if (!url.searchParams.has("mock") && !(await hasSession(c))) {
+    const landing = await c.env.ASSETS.fetch(new Request(new URL(LANDING_ASSET, url), c.req.raw));
+    if (landing.status === 200 || landing.status === 304) return landing;
+  }
+  return c.env.ASSETS.fetch(c.req.raw);
+}
+
 export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): void {
   app.get(FRONT_DOOR_PATHS.start, async (c) => {
     const urls = frontDoorUrls(c);
@@ -184,10 +211,10 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
         ? etagged(c, JSON.stringify(doc.json, null, 2), "application/json; charset=utf-8", links)
         : etagged(c, doc.markdown, "text/markdown; charset=utf-8", links);
     }
-    const asset = await c.env.ASSETS.fetch(c.req.raw);
+    const asset = await homeAsset(c);
     const res = new Response(asset.body, asset);
     res.headers.append("link", frontDoorLinks(urls));
-    res.headers.append("vary", "Accept");
+    res.headers.append("vary", "Accept, Cookie");
     if (!(res.headers.get("content-type") ?? "").includes("text/html")) return res;
     const tags = [
       `<link rel="service-doc" type="text/markdown" href="${FRONT_DOOR_PATHS.start}">`,
@@ -195,12 +222,29 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
       `<link rel="service-desc" type="application/openapi+json" href="${FRONT_DOOR_PATHS.openapi}">`,
       `<link rel="ai-catalog" href="${FRONT_DOOR_PATHS.aiCatalog}">`,
     ].join("");
-    return new HTMLRewriter()
-      .on("head", {
-        element(el) {
-          el.append(tags, { html: true });
-        },
-      })
-      .transform(res);
+    return (
+      new HTMLRewriter()
+        .on("head", {
+          element(el) {
+            el.append(tags, { html: true });
+          },
+        })
+        // The landing page's absolute URLs (canonical, Open Graph, the copyable /start URL).
+        .on("[data-origin]", {
+          element(el) {
+            for (const name of ["href", "content"]) {
+              const v = el.getAttribute(name);
+              if (v?.startsWith(LANDING_ORIGIN))
+                el.setAttribute(name, urls.origin + v.slice(LANDING_ORIGIN.length));
+            }
+          },
+        })
+        .on("[data-origin-text]", {
+          element(el) {
+            el.setInnerContent(`${urls.origin}${el.getAttribute("data-origin-text") ?? ""}`);
+          },
+        })
+        .transform(res)
+    );
   });
 }
