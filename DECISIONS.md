@@ -922,6 +922,17 @@ and a train could never switch it off.
 stageMinutes + watchMinutes` from the deploy-time policy. Before, the window was fixed when the repo's queue first
 started, from whatever policy it had then (60 min with the default policy).
 
+**Live findings (first M4 run, 2026-10-02).**
+- The deployments API rejects the `workers/triggered_by` annotation (400 10210 "Invalid annotations"). Wrangler's
+  types list it, but live it fails. Deployments now carry `workers/message` only, which unblocks every split and
+  rollback; the research note is corrected.
+- A train deploy that fails for good becomes `TrainDeployFailed` (`trainGiveUp`). Before, the dropped command left
+  the train `deploying` and its Worker held forever.
+- A failed train is not re-queued, because an immediate retry loops on a permanent error. The next train deploys
+  main's newer code, which contains those Changes, and their authors are notified.
+- A retried deploy reuses its one upload and the previous version it measured.
+- Train audit subjects are `train:<repoId>/<trainId>`, because train ids count per repo.
+
 **Rollout timing for the e2e.** Policy is read from BASE, so `scripts/e2e/m4.ts` gets short stages the honest way: the
 agent proposes a `.platform/policy.ts` change (`stages [50, 100]`, `stageMinutes 2`, `watchMinutes 3`,
 `minRequests 20`, `maxErrorRateIncrease 0.05`). It is Lane 2, a human approves it, and the merge queue merges it
