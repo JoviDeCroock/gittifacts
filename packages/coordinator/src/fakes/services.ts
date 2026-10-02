@@ -16,6 +16,7 @@ import type {
   Clock,
   Deployer,
   Flags,
+  IssueOccurrence,
   Notifier,
   Onboarding,
   PreviewOutcome,
@@ -251,6 +252,11 @@ export class FakeTelemetry implements Telemetry {
     issues: [],
   };
   readonly calls: Array<Parameters<Telemetry["check"]>[0]> = [];
+  /** Newest occurrence per Workers Issue id (the Issues API). */
+  readonly occurrences = new Map<string, IssueOccurrence>();
+  async issueOccurrence(issueId: string): Promise<IssueOccurrence | null> {
+    return structuredClone(this.occurrences.get(issueId) ?? null);
+  }
   async check(input: Parameters<Telemetry["check"]>[0]): Promise<TelemetryResult> {
     this.calls.push(input);
     const next = this.queue.shift();

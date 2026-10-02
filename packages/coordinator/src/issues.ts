@@ -1,8 +1,15 @@
 /**
- * Workers Issues webhook normalization. The webhook is the generic Notifications envelope and the
- * Issues-specific `data` is undocumented (release-observability.md §2, §9), so this reads the
- * fields leniently from several plausible spellings, and also accepts a bare issue object (as
- * returned by `GET …/observability/issues/{id}`, which the HTTP layer may re-fetch).
+ * Workers Issues webhook normalization. The webhook is the generic Notifications envelope; its
+ * Issues `data` was undocumented, and is as captured live on 2026-10-02:
+ *
+ *   data: { issue: { id, title, fingerprint, count: "1", first_observed, last_observed,
+ *           status: "ISSUE_STATUS_ACTIVE", type: "ISSUE_TYPE_EXCEPTION",
+ *           services: [{ name: "<script>", type: "SERVICE_TYPE_WORKER", … }] },
+ *           state_event: "ALERT_STATE_EVENT_START", state_correlation_id }
+ *
+ * No version id: the coordinator reads it from the issue's newest occurrence
+ * (`Telemetry.issueOccurrence`). Fields are still read leniently from several spellings, and a
+ * bare issue object (as `GET …/observability/issues/{id}` returns it) is accepted too.
  */
 import { LinkedIssue } from "@app/domain";
 import { z } from "zod";
@@ -89,6 +96,7 @@ export function normalizeIssue(payload: unknown, now: Date): NormalizedIssue | n
       "script_name",
       "worker",
       "workerName",
+      "services.0.name",
       "$metadata.service",
     ]) ?? "";
   const title =
@@ -143,8 +151,12 @@ export function normalizeIssue(payload: unknown, now: Date): NormalizedIssue | n
     url,
   });
   if (!parsed.success) return null;
+  const status = String(at(nested, "status") ?? at(data, "status") ?? "").toLowerCase();
   const resolved =
-    payload.alert_event === "ALERT_STATE_EVENT_END" || at(data, "status") === "resolved";
+    payload.alert_event === "ALERT_STATE_EVENT_END" ||
+    status === "resolved" ||
+    status === "issue_status_resolved" ||
+    status === "issue_status_ignored";
   return { issue: parsed.data, scriptName, resolved, raw: payload };
 }
 

@@ -2,10 +2,11 @@
  * `Telemetry` on the Workers Observability telemetry query API (release-observability.md §3a):
  * count invocations grouped by `$workers.scriptVersion.id` × `$workers.outcome`, plus a second
  * count of 5xx responses with outcome `ok`. Error rate = (non-ok + ok-5xx) / all. New Workers
- * Issues come from the Store (webhooks land there first).
+ * Issues come from the Store (webhooks land there first); `issueOccurrence` names the version of
+ * an issue the webhook reported (its payload has the Worker but no version).
  */
 import { z } from "zod";
-import type { Clock, Store, Telemetry } from "../ports.js";
+import type { Clock, IssueOccurrence, Store, Telemetry } from "../ports.js";
 import { type CfApiOptions, cfRequest } from "./cf-api.js";
 
 export interface ObservabilityTelemetryOptions extends CfApiOptions {
@@ -89,6 +90,35 @@ export function telemetryQuery(input: {
   };
 }
 
+/** One occurrence of a Workers Issue (live 2026-10-02: `worker.scriptVersion.id`, `error.stack`). */
+const Occurrence = z
+  .object({
+    timestamp: z.union([z.number(), z.string()]).optional(),
+    error: z.object({ stack: z.string().optional() }).passthrough().optional(),
+    worker: z
+      .object({
+        scriptName: z.string().optional(),
+        scriptVersion: z.object({ id: z.string().optional() }).passthrough().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+const Occurrences = z.union([
+  z.array(Occurrence),
+  z.object({ occurrences: z.array(Occurrence) }).transform((o) => o.occurrences),
+]);
+
+export function occurrenceOf(o: z.infer<typeof Occurrence>): IssueOccurrence {
+  const ts = typeof o.timestamp === "string" ? Number(o.timestamp) : o.timestamp;
+  return {
+    scriptName: o.worker?.scriptName ?? null,
+    versionId: o.worker?.scriptVersion?.id ?? null,
+    stack: o.error?.stack ?? null,
+    at: ts === undefined || !Number.isFinite(ts) ? null : new Date(ts).toISOString(),
+  };
+}
+
 interface Tally {
   total: number;
   errors: number;
@@ -103,6 +133,21 @@ export class ObservabilityTelemetry implements Telemetry {
       { method: "POST", path: "/workers/observability/telemetry/query", json: body },
       Aggregates,
     );
+  }
+
+  /** Occurrences are listed newest first; one is enough to name the version. */
+  async issueOccurrence(issueId: string): Promise<IssueOccurrence | null> {
+    const list = await cfRequest(
+      this.opts,
+      {
+        method: "GET",
+        path: `/workers/observability/issues/${encodeURIComponent(issueId)}/occurrences`,
+        query: { per_page: "5" },
+      },
+      Occurrences,
+    );
+    const newest = list[0];
+    return newest === undefined ? null : occurrenceOf(newest);
   }
 
   async check(input: {

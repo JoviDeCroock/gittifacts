@@ -418,6 +418,45 @@ describe("ObservabilityTelemetry", () => {
   });
 });
 
+describe("ObservabilityTelemetry.issueOccurrence", () => {
+  it("reads the newest occurrence's Worker version (shape captured live 2026-10-02)", async () => {
+    const live = {
+      id: "01M3YMRH910000000000000001",
+      timestamp: 1790956029217,
+      error: {
+        name: "Error",
+        message: "probe boom 3",
+        stack: "    at Object.fetch (index.js:6:13)",
+      },
+      worker: {
+        scriptName: "gf-r1-api",
+        executionModel: "stateless",
+        scriptVersion: { id: "bd81c674-2417-4021-8fb8-c12b513abfb9" },
+      },
+    };
+    const { fetch, calls } = mockFetch([[/occurrences/, () => ok([live])]]);
+    const clock = new FakeClock();
+    const t = new ObservabilityTelemetry({ ...api, fetch, store: new FakeStore(clock), clock });
+    expect(await t.issueOccurrence("iss-1")).toEqual({
+      scriptName: "gf-r1-api",
+      versionId: "bd81c674-2417-4021-8fb8-c12b513abfb9",
+      stack: "    at Object.fetch (index.js:6:13)",
+      at: new Date(1790956029217).toISOString(),
+    });
+    expect(calls[0]?.url).toBe(
+      "https://api.cloudflare.com/client/v4/accounts/acc/workers/observability/issues/iss-1/occurrences?per_page=5",
+    );
+    const none = mockFetch([[/occurrences/, () => ok([])]]);
+    const empty = new ObservabilityTelemetry({
+      ...api,
+      fetch: none.fetch,
+      store: new FakeStore(clock),
+      clock,
+    });
+    expect(await empty.issueOccurrence("iss-2")).toBeNull();
+  });
+});
+
 describe("ContainerSandboxJobs", () => {
   function setup(outcome: (job: Record<string, unknown>) => unknown) {
     const jobs: Array<{ name: string; kind: "run" | "plan"; job: Record<string, unknown> }> = [];

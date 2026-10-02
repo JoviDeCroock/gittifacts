@@ -964,7 +964,17 @@ export function createCoordinator(
     async onIssue(payload) {
       const normalized = normalizeIssue(payload, clock.now());
       if (normalized === null) return;
-      const { issue, scriptName, resolved, raw } = normalized;
+      const { resolved } = normalized;
+      let { issue, scriptName, raw } = normalized;
+      // The Issues webhook names the Worker but not the version: its newest occurrence does.
+      if (issue.versionId === null && !resolved && ports.telemetry.issueOccurrence) {
+        const occurrence = await ports.telemetry.issueOccurrence(issue.id).catch(() => null);
+        if (occurrence?.versionId) {
+          issue = { ...issue, versionId: occurrence.versionId };
+          scriptName = scriptName || (occurrence.scriptName ?? "");
+          raw = { notification: raw, occurrence };
+        }
+      }
       let change: Change | null = null;
       if (issue.versionId !== null) change = await store.getChangeByRolloutVersion(issue.versionId);
       if (change === null && issue.changeId !== null)
@@ -972,6 +982,15 @@ export function createCoordinator(
       const linked = { ...issue, changeId: change?.id ?? issue.changeId };
       await store.putIssue({ ...linked, scriptName, raw });
       if (resolved || change === null) return;
+      // Within the rollout policy's tolerance (`maxNewIssueGroups` issue groups on the version),
+      // an issue is stored, not acted on: health checks count it, as for the RolloutWorkflow.
+      const tolerated = (await store.getRepo(change.repoId))?.policy.rollout.maxNewIssueGroups ?? 0;
+      if (issue.versionId !== null) {
+        const groups = new Set(
+          (await store.listIssues({ versionId: issue.versionId })).map((i) => i.id),
+        );
+        if (groups.size <= tolerated) return;
+      }
       // A version a merge-queue deploy train shipped: the train attributes it (several Changes).
       const queue = bindings.mergeQueue(change.repoId);
       if (issue.versionId !== null && queue.onIssue !== undefined) {

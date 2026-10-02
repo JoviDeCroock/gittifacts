@@ -8,7 +8,10 @@
 | D1 | `gittifacts` | `832e640d-ef87-482c-a20e-b0aa2df1e065`, jurisdiction `eu` |
 | R2 | `gittifacts-blobs` | jurisdiction `eu` (binding needs `"jurisdiction": "eu"`) |
 | AI Gateway | `gittifacts` | logs on, no cache |
-| Flagship app | `gittifacts-changes` | `a829ecb3-7b1d-4640-9117-77d6fff4ca5d` |
+| Flagship app | `gittifacts-changes` | `a829ecb3-7b1d-4640-9117-77d6fff4ca5d`: the platform's own flags only (`unclaimed-creation-enabled`); each project gets its own app `gf-<repoId>` |
+| Notifications webhook destination | `gittifacts-workers-issues` | `87d14c67806141b390b52066e7c4c6aa` → `/webhooks/workers-issues` |
+| Notifications policy | `gittifacts-workers-issues` | `dcc7e86c714040d3a3b04736c128f351` (`workers_observability_real_time_issue`) |
+| Workers Issues automation | `gittifacts-project-workers` | `1b607e94-72cd-4f14-88b0-00aa15768a0a`, account-wide, first occurrence |
 
 Created with the `cf` CLI on 2026-10-01.
 
@@ -23,8 +26,9 @@ Run `wrangler login` again before deploying. The `cf` CLI token has all of these
 Optional: `AI_GATEWAY_TOKEN` (HTTP fallback for the reviewer when the `AI` binding fails).
 `CF_ACCOUNT_ID` is a plain var in `wrangler.jsonc`; don't also put it as a secret.
 
-`CF_API_TOKEN` needs Workers Scripts Edit (versions and deployments for rollouts), Flagship Edit, Workers
-Observability Read (telemetry) and Account Analytics Read (the time-to-first-green dashboard queries the Analytics
+`CF_API_TOKEN` needs Workers Scripts Edit (versions and deployments for rollouts, deleting expired projects'
+Workers), Flagship Edit (one app per project: create, flags, delete), Workers Observability Read (telemetry and
+Workers Issues occurrences) and Account Analytics Read (the time-to-first-green dashboard queries the Analytics
 Engine SQL API; without it `/internal/ttfg` falls back to D1). Artifacts goes through the binding, so the token needs
 no Artifacts permission.
 
@@ -147,9 +151,32 @@ prints the audit timeline with latencies, and deletes the project's Worker (`wra
 **Project Workers.** `PATCH /api/v1/repos/{repoId}/deploy-target { "script": "api" }` (human repo admin,
 claimed projects only) makes rollouts deploy to `gf-<repoId>-api` in the platform's account. The first rollout
 creates the script with workers.dev on (`https://gf-<repoId>-api.<account>.workers.dev`), Workers Logs and
-Workers Issues on. Every version gets the `FLAGS` (Flagship app `FLAGSHIP_APP_ID`) and `VERSION`
-(`version_metadata`) bindings; bundles may declare plain vars only. Delete a project's Worker with
-`pnpm --filter @app/platform exec wrangler delete --name gf-<repoId>-<script> --force`.
+Workers Issues on. Every version gets `FLAGS`, bound to the project's own Flagship app (`gf-<repoId>`, created when
+the deploy target is set or on the first deploy, recorded as `repos.flagship_app_id`; migration 0010), and `VERSION`
+(`version_metadata`); bundles may declare plain vars only. No project Worker binds another project's app or the
+platform's. Delete a project's Worker, then its app (Flagship refuses to delete an app a Worker binds):
+`pnpm --filter @app/platform exec wrangler delete --name gf-<repoId>-<script> --force` and
+`cf flagship apps delete <flagshipAppId> --force`. Project expiry does both.
+
+## Workers Issues → the platform (faster regression detection)
+
+Rollouts poll Workers Logs every 30 s; Workers Issues also pushes new issue groups of project Workers to
+`POST /webhooks/workers-issues`. The wiring is account-level and made once (idempotent, `cf` CLI logged in with
+Notifications and Workers Observability write access):
+
+```sh
+openssl rand -hex 32 > issues-secret.txt && chmod 600 issues-secret.txt
+pnpm --filter @app/platform exec wrangler secret put ISSUES_WEBHOOK_SECRET < issues-secret.txt
+scripts/setup-workers-issues.sh --url https://gittifacts.<subdomain>.workers.dev --secret-file issues-secret.txt
+rm issues-secret.txt
+```
+
+It creates a generic-webhook destination (the secret is echoed in `cf-webhook-auth`), a policy for
+`workers_observability_real_time_issue` and one account-wide Issues automation (first occurrence). Account-wide
+because an account has at most 50 automations; the webhook keeps only `gf-…` Workers and drops everything else (the
+platform's own Worker, the destination's test message). Rotate with `--rotate` after setting the new value on the
+Worker. The payload names the Worker but not the version: the coordinator reads the version from the issue's newest
+occurrence (`GET …/observability/issues/{id}/occurrences`). Polling stays as the fallback.
 
 ## O6: signed eval traffic (`EVAL_TRAFFIC_SECRET`)
 

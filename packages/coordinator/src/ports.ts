@@ -450,6 +450,20 @@ export interface Telemetry {
     newIssueGroups: number;
     issues: LinkedIssue[];
   }>;
+  /**
+   * The newest occurrence of a Workers Issue (`GET …/observability/issues/{id}/occurrences`):
+   * the Issues webhook names the issue and its Worker but not the version, which the occurrence
+   * carries. `null` when the issue has no retained occurrence.
+   */
+  issueOccurrence?(issueId: string): Promise<IssueOccurrence | null>;
+}
+
+export interface IssueOccurrence {
+  scriptName: string | null;
+  versionId: string | null;
+  /** The error's stack, as Workers Issues recorded it (source-mapped when available). */
+  stack: string | null;
+  at: string | null;
 }
 
 // ---------------------------------------------------------------- audit, notify, clock

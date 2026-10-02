@@ -269,7 +269,7 @@ describe("M1 vertical slice (workerd, real platform + coordinator, fake Artifact
         name: "Workers Issues",
         text: "TypeError in fetch",
         ts: 1_790_000_000,
-        data: { issueId: "iss-m1", service: "app", scriptVersion: { id: "v-none" } },
+        data: { issueId: "iss-m1", service: "gf-app", scriptVersion: { id: "v-none" } },
       },
     });
     expect(res.status).toBe(202);

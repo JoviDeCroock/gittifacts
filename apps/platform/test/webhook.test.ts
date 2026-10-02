@@ -18,6 +18,40 @@ const payload = (data: unknown) => ({
   alert_event: "ALERT_STATE_EVENT_START",
 });
 
+/** The Issues webhook as delivered live on 2026-10-02 (no version id in it). */
+const live = (id: string, script: string) => ({
+  name: "gittifacts-workers-issues",
+  text: `Real-Time Issue 'probe boom 3 · at Object.fetch (index.js)' detected in ${script}.`,
+  data: {
+    issue: {
+      count: "1",
+      fingerprint: "8d8ddd5bfb93e8d1a8ab8c2b82a10c57",
+      first_observed: "2026-10-02T15:47:09.217Z",
+      id,
+      last_observed: "2026-10-02T15:47:09.217Z",
+      services: [
+        {
+          first_observed: "2026-10-02T15:47:09.217Z",
+          last_observed: "2026-10-02T15:47:09.217Z",
+          name: script,
+          type: "SERVICE_TYPE_WORKER",
+        },
+      ],
+      status: "ISSUE_STATUS_ACTIVE",
+      title: "probe boom 3 · at Object.fetch (index.js)",
+      type: "ISSUE_TYPE_EXCEPTION",
+    },
+    state_correlation_id: "146512af-bcac-4e54-9afe-e85bdbbfeb68",
+    state_event: "ALERT_STATE_EVENT_START",
+  },
+  ts: 1790956056,
+  policy_id: "dcc7e86c714040d3a3b04736c128f351",
+  policy_name: "gittifacts-workers-issues",
+  alert_type: "workers_observability_real_time_issue",
+  alert_event: "ALERT_STATE_EVENT_START",
+  alert_correlation_id: "146512af-bcac-4e54-9afe-e85bdbbfeb68",
+});
+
 describe("POST /webhooks/workers-issues", () => {
   it("rejects a missing or wrong cf-webhook-auth secret with 401", async () => {
     const onIssue = vi.fn(async () => {});
@@ -58,7 +92,7 @@ describe("POST /webhooks/workers-issues", () => {
     await s.insertChange(change);
     const body = payload({
       issue: { id: "iss-42", title: "TypeError: x is undefined", count: 5 },
-      service: "app",
+      service: "gf-app",
       scriptVersion: { id: "ver-abc" },
       firstObserved: "2026-10-01T10:00:00Z",
       lastObserved: 1790870150,
@@ -96,7 +130,7 @@ describe("POST /webhooks/workers-issues", () => {
       script_name: string;
     }>();
     expect(JSON.parse(raw!.raw)).toEqual(body);
-    expect(raw!.script_name).toBe("app");
+    expect(raw!.script_name).toBe("gf-app");
   });
 
   it("accepts an envelope with unknown data and still stores it when the coordinator is down", async () => {
@@ -115,6 +149,41 @@ describe("POST /webhooks/workers-issues", () => {
       400,
       "invalid-request",
     );
+  });
+
+  it("drops the destination's test message and other Workers' issues; stores project Workers'", async () => {
+    const onIssue = vi.fn(async () => {});
+    const { app } = makeApp({ onIssue });
+    const post = (body: unknown) =>
+      call(app, "POST", "/webhooks/workers-issues", {
+        body,
+        headers: { "cf-webhook-auth": SECRET },
+      });
+    const hello = await post({
+      text: "Hello World! This is a test message sent from https://cloudflare.com.",
+    });
+    expect(hello.status).toBe(202);
+    expect(await json(hello)).toMatchObject({ ignored: "not a Workers Issues alert" });
+    const platform = await post(live("iss-platform", "gittifacts"));
+    expect(await json(platform)).toMatchObject({ ignored: "not a project Worker: gittifacts" });
+    expect(onIssue).not.toHaveBeenCalled();
+
+    const res = await post(live("iss-project", "gf-r1-api"));
+    expect(res.status).toBe(202);
+    expect(await json(res)).toMatchObject({ issueId: "iss-project", forwarded: true });
+    expect(onIssue).toHaveBeenCalledTimes(1);
+    const row = await env.DB.prepare(
+      "SELECT script_name, title, count, first_seen FROM issues WHERE id = 'iss-project'",
+    ).first();
+    expect(row).toEqual({
+      script_name: "gf-r1-api",
+      title: "probe boom 3 · at Object.fetch (index.js)",
+      count: 1,
+      first_seen: "2026-10-02T15:47:09.217Z",
+    });
+    expect(
+      await env.DB.prepare("SELECT id FROM issues WHERE id = 'iss-platform'").first(),
+    ).toBeNull();
   });
 
   it("extracts leniently from several plausible shapes", async () => {

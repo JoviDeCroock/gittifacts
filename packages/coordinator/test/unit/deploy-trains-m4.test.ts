@@ -68,6 +68,32 @@ async function trainEnv() {
   return env;
 }
 
+/** The Workers Issues webhook as delivered live (2026-10-02): no version id in it. */
+function liveIssuePayload(id: string, script: string) {
+  return {
+    name: "gittifacts-workers-issues",
+    text: `Real-Time Issue 'boom' detected in ${script}.`,
+    data: {
+      issue: {
+        count: "1",
+        fingerprint: "8d8ddd5bfb93e8d1a8ab8c2b82a10c57",
+        first_observed: "2026-10-01T12:00:00.000Z",
+        id,
+        last_observed: "2026-10-01T12:00:00.000Z",
+        services: [{ name: script, type: "SERVICE_TYPE_WORKER" }],
+        status: "ISSUE_STATUS_ACTIVE",
+        title: "boom · at Object.fetch (index.js)",
+        type: "ISSUE_TYPE_EXCEPTION",
+      },
+      state_event: "ALERT_STATE_EVENT_START",
+    },
+    ts: 1790956056,
+    alert_type: "workers_observability_real_time_issue",
+    alert_event: "ALERT_STATE_EVENT_START",
+    alert_correlation_id: `corr-${id}`,
+  };
+}
+
 /** Alarm rounds with the clock moving (the DO alarm fires every 30 s while trains are live). */
 async function tick(env: Awaited<ReturnType<typeof trainEnv>>, rounds: number) {
   const svc = env.queue();
@@ -138,6 +164,73 @@ describe("M4 through deploy trains", () => {
     expect(revert).toMatchObject({ revertOf: "c1", authorId: "system" });
     expect(revert?.mergedSha).not.toBeNull();
     expect(deployer.uploads.map((u) => u.changeId)).toEqual(["c1", revertIdFor("c1")]);
+    expect(deployer.rollbacks).toHaveLength(1);
+  });
+
+  it("a live-shaped Workers Issues webhook (no version) kills the train before the next poll", async () => {
+    const env = await trainEnv();
+    const { store, deployer, flags, telemetry, audit } = env.ports;
+    const c1 = await env.change("c1", { "src/app.ts": "throw sometimes\n" }, 1);
+    await store.putDiff(
+      "c1",
+      diffOf(c1.baseSha, c1.headSha ?? "", ['if (await isChangeEnabled(env, "c1")) maybeThrow();']),
+    );
+    await env.admit(c1);
+    await env.drive();
+    const versionId = deployer.uploads[0]?.versionId ?? "";
+    // Issues names the Worker, not the version; the newest occurrence names the version.
+    telemetry.occurrences.set("iss-live", {
+      scriptName: SCRIPT,
+      versionId,
+      stack: "    at Object.fetch (index.js:6:13)",
+      at: env.ports.clock.now().toISOString(),
+    });
+    const polls = telemetry.calls.length;
+    await env.coordinator.onIssue(liveIssuePayload("iss-live", SCRIPT));
+    await env.queue().loop.settle();
+    await env.settle();
+
+    expect(telemetry.calls.length).toBe(polls); // no telemetry poll was needed
+    const appId = (await store.getRepo(env.repo.id))?.flagshipAppId;
+    expect(flags.history).toContainEqual({ appId, key: "change-c1", enabled: false });
+    expect(store.issues.get("iss-live")).toMatchObject({
+      versionId,
+      changeId: "c1",
+      scriptName: SCRIPT,
+    });
+    expect(audit.actions()).toEqual(
+      expect.arrayContaining(["deploy.regression-attributed", "deploy.flag-off"]),
+    );
+  });
+
+  it("an issue within the policy's tolerance is stored, not acted on", async () => {
+    const env = await trainEnv();
+    const { store, deployer, flags, telemetry } = env.ports;
+    const repo = await store.getRepo(env.repo.id);
+    if (repo === null) throw new Error("repo");
+    await store.updateRepo(repo.id, {
+      policy: { ...repo.policy, rollout: { ...fast, maxNewIssueGroups: 1 } },
+    });
+    const c1 = await env.change("c1", { "src/app.ts": "x\n" }, 1);
+    await store.putDiff(
+      "c1",
+      diffOf(c1.baseSha, c1.headSha ?? "", ['if (await isChangeEnabled(env, "c1")) x();']),
+    );
+    await env.admit(c1);
+    await env.drive();
+    const versionId = deployer.uploads[0]?.versionId ?? "";
+    telemetry.occurrences.set("iss-1", { scriptName: SCRIPT, versionId, stack: null, at: null });
+    await env.coordinator.onIssue(liveIssuePayload("iss-1", SCRIPT));
+    await env.settle();
+    expect(store.issues.get("iss-1")?.versionId).toBe(versionId);
+    expect(flags.history.filter((h) => !h.enabled)).toEqual([]);
+    expect(deployer.rollbacks).toEqual([]);
+    // A second new issue group on the version exceeds it: the train is rolled back.
+    telemetry.occurrences.set("iss-2", { scriptName: SCRIPT, versionId, stack: null, at: null });
+    await env.coordinator.onIssue(liveIssuePayload("iss-2", SCRIPT));
+    await env.queue().loop.settle();
+    await env.settle();
+    expect(flags.history.filter((h) => !h.enabled)).toHaveLength(1);
     expect(deployer.rollbacks).toHaveLength(1);
   });
 

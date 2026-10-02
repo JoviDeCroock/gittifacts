@@ -4,16 +4,23 @@
  * Authenticity: Cloudflare echoes the destination's shared secret in `cf-webhook-auth` (no HMAC,
  * no timestamp). Compared in constant time against ISSUES_WEBHOOK_SECRET; fail closed when unset.
  *
- * Payload: the generic Notifications envelope; the Issues-specific `data` shape is undocumented
- * (docs/research/release-observability.md §2, §9). We parse leniently, keep the raw body, and
- * extract what we can (script, version id, issue id/title/count/timestamps). The rollout treats
- * the webhook as a trigger and re-fetches details from the Issues API.
+ * Wiring: one account-wide Issues automation → Notifications policy → generic webhook destination
+ * (scripts/setup-workers-issues.sh), so every project Worker reports here without per-project
+ * setup. Only project Workers (`gf-…`) are stored and forwarded: the platform's own Worker and
+ * anything else in the account are acknowledged and dropped, and so is the destination's test
+ * message.
+ *
+ * Payload: the generic Notifications envelope; `data.issue` carries the issue id, title, count,
+ * timestamps and `services[].name` (the Worker), but no version id (captured live 2026-10-02,
+ * docs/research/release-observability.md §2). We keep the raw body, extract what we can, and the
+ * coordinator reads the version from the issue's newest occurrence (Issues API).
  */
 import type { LinkedIssue } from "@app/domain";
 import type { Context } from "hono";
 import { z } from "zod";
 import type { AppEnv, Services } from "../app-env.js";
 import { ApiError, unauthorized } from "../errors.js";
+import { DEPLOY_SCRIPT_PREFIX } from "../services/repos.js";
 
 export const ISSUES_WEBHOOK_PATH = "/webhooks/workers-issues";
 const MAX_BODY_BYTES = 256 * 1024;
@@ -163,6 +170,7 @@ export async function extractIssue(env: NotificationEnvelope, now: Date): Promis
         "script_name",
         "script",
         "worker",
+        "services.0.name",
         "$metadata.service",
       ]) ?? "unknown",
     versionId: firstString(sources, [
@@ -201,8 +209,14 @@ export async function handleIssuesWebhook(c: Context<AppEnv>): Promise<Response>
   if (!parsed.success)
     throw new ApiError(400, "invalid-request", "webhook body is not a notification envelope");
 
+  // The destination's "Hello World" test message (sent when it is created or tested).
+  if (parsed.data.alert_type === undefined && parsed.data.data === undefined)
+    return c.json({ received: true, ignored: "not a Workers Issues alert" }, 202);
   const svc: Services = c.get("services");
   const issue = await extractIssue(parsed.data, svc.clock.now());
+  // The automation is account-wide: only project Workers concern the platform.
+  if (issue.scriptName !== "unknown" && !issue.scriptName.startsWith(DEPLOY_SCRIPT_PREFIX))
+    return c.json({ received: true, ignored: `not a project Worker: ${issue.scriptName}` }, 202);
   const change = issue.versionId
     ? await svc.store.getChangeByRolloutVersion(issue.versionId)
     : null;
