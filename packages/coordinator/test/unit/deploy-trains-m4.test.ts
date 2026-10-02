@@ -137,6 +137,38 @@ describe("M4 through deploy trains", () => {
     expect(deployer.rollbacks).toHaveLength(1);
   });
 
+  it("a deploy that keeps failing is dropped as a failed train: one upload, the Worker is not held", async () => {
+    const env = await trainEnv();
+    const { store, deployer, notifier, audit } = env.ports;
+    // Live 2026-10-02: every split was refused (10210 "Invalid annotations").
+    const split = deployer.setSplit.bind(deployer);
+    let refuse = true;
+    deployer.setSplit = async (...a: Parameters<typeof split>) => {
+      if (refuse) throw new Error("POST /deployments → 400: 10210: Invalid annotations");
+      return split(...a);
+    };
+    const c1 = await env.change("c1", { "src/b.ts": "export const b = 1;\n" }, 1);
+    await env.admit(c1);
+    await env.drive();
+    // Retried with backoff, then dropped: the train failed, after exactly one upload.
+    expect(deployer.uploads.map((u) => u.changeId)).toEqual(["c1"]);
+    expect(audit.actions()).toEqual(
+      expect.arrayContaining(["merge-queue.command-dropped", "deploy.train-failed"]),
+    );
+    const t1 = Object.values(env.queue().loop.trains.trains)[0];
+    expect(t1?.state).toBe("failed");
+    expect(
+      notifier.sent.some((n) => n.changeId === "c1" && /Deploy of .* failed/.test(n.message)),
+    ).toBe(true);
+    // The Worker is free: the next merge deploys (with c1's code, since main contains it).
+    refuse = false;
+    const c2 = await env.change("c2", { "src/c.ts": "export const c = 1;\n" }, 1);
+    await env.admit(c2);
+    await env.drive();
+    expect(deployer.uploads.map((u) => u.changeId)).toEqual(["c1", "c2"]);
+    expect((await store.getChange("c2"))?.status).toBe("rolling-out");
+  });
+
   it("never reverts a revert: a regressing revert is rolled back and left to a human", async () => {
     const env = await trainEnv();
     const { store, deployer, telemetry, audit, notifier } = env.ports;

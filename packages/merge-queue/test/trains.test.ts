@@ -234,6 +234,27 @@ describe("train watch window", () => {
   });
 });
 
+describe("failed deploys", () => {
+  it("a failed train frees its Worker and is not retried; the next merge deploys", () => {
+    const t = new Trains();
+    t.merged("a", "api", ["src/a.ts"]);
+    const a = t.of("StartDeployTrain")[0]?.trainId ?? "";
+    const cmds = t.send({ type: "TrainDeployFailed", trainId: a, message: "10210" });
+    expect(cmds.filter((c) => c.type === "StartDeployTrain")).toEqual([]);
+    expect(t.state.trains[a]?.state).toBe("failed");
+    expect(t.state.workers.api?.active).toBeNull();
+    expect(cmds.find((c) => c.type === "Audit")).toMatchObject({
+      action: "deploy.train-failed",
+      payload: { message: "10210", changes: ["a"] },
+    });
+    t.merged("b", "api", ["src/b.ts"]);
+    expect(t.of("StartDeployTrain").map((x) => x.changes.map((c) => c.changeId))).toEqual([
+      ["a"],
+      ["b"],
+    ]);
+  });
+});
+
 describe("regressions always end in a revert (platform spec §4F.3, §4.8)", () => {
   const deployFirst = (t: Trains, versionId = "v1") => {
     const train = t.of("StartDeployTrain")[0];

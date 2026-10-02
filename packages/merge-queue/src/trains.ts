@@ -274,9 +274,13 @@ export function trainStep(
     case "TrainDeployFailed": {
       const t = s.trains[event.trainId];
       if (t === undefined || t.state !== "deploying") break;
-      audit("deploy.train-failed", `train:${t.id}`, { message: event.message });
-      const w = worker(t.worker);
-      w.pending = [...t.changes, ...w.pending];
+      // Not re-queued: retrying the same deploy at once would loop on a permanent error. The next
+      // train for this Worker deploys main's newer merged code, which contains these Changes;
+      // the shell tells their authors the deploy failed.
+      audit("deploy.train-failed", `train:${t.id}`, {
+        message: event.message,
+        changes: t.changes.map((c) => c.changeId),
+      });
       finish(t, "failed");
       break;
     }

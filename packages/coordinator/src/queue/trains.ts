@@ -118,18 +118,30 @@ export class CoordinatorTrainShell {
         description: `change ${c.changeId} (train ${cmd.trainId})`,
       });
     }
-    const live = (await deployer.currentVersions(cmd.worker)).filter((v) => v.percentage > 0);
-    const previous = live.sort((a, b) => b.percentage - a.percentage)[0]?.versionId ?? null;
-    const { versionId } = await deployer.uploadVersion({
-      script: cmd.worker,
-      changeId: last.changeId,
-      sha: last.sha,
-      bundleRef,
-      message: `train ${cmd.trainId}: ${cmd.changes.map((c) => c.changeId).join(", ")}`.slice(
-        0,
-        1000,
-      ),
-    });
+    // Upload once per train: a retried command (e.g. the split failed) reuses the version and the
+    // previous version it measured, instead of uploading again and taking its own first upload
+    // (already live after a first deploy) for the previous version.
+    const uploadKey = `train-upload:${cmd.trainId}`;
+    let uploaded = this.ctx.deps.store.getRun<{ versionId: string; previous: string | null }>(
+      uploadKey,
+    );
+    if (uploaded === null) {
+      const live = (await deployer.currentVersions(cmd.worker)).filter((v) => v.percentage > 0);
+      const previous = live.sort((a, b) => b.percentage - a.percentage)[0]?.versionId ?? null;
+      const { versionId } = await deployer.uploadVersion({
+        script: cmd.worker,
+        changeId: last.changeId,
+        sha: last.sha,
+        bundleRef,
+        message: `train ${cmd.trainId}: ${cmd.changes.map((c) => c.changeId).join(", ")}`.slice(
+          0,
+          1000,
+        ),
+      });
+      uploaded = { versionId, previous };
+      this.ctx.deps.store.putRun(uploadKey, uploaded);
+    }
+    const { versionId, previous } = uploaded;
     const policy = await this.policy();
     const stages = previous === null ? [100] : policy.stages;
     await this.split(cmd.worker, versionId, previous, stages[0] ?? 100, cmd.trainId);
@@ -285,6 +297,20 @@ export class CoordinatorTrainShell {
       payload: { ...cmd.payload, repoId: this.ctx.repoId },
     });
     if (trainId === null) return;
+    if (cmd.action === "deploy.train-failed") {
+      const ids = Array.isArray(cmd.payload.changes) ? cmd.payload.changes : [];
+      for (const id of ids) {
+        const change = typeof id === "string" ? await this.ctx.ports.store.getChange(id) : null;
+        if (change === null) continue;
+        await this.ctx.ports.notifier.notify({
+          kind: "rollout-stage",
+          changeId: change.id,
+          repoId: change.repoId,
+          message: `Deploy of ${change.title} failed (${String(cmd.payload.message ?? "unknown error").slice(0, 300)}). It goes out with the next deploy of this Worker.`,
+        });
+      }
+      return;
+    }
     const p = this.progress(trainId);
     if (cmd.action === "deploy.train-released" && p !== null)
       for (const id of p.changeIds) await this.setRollout(id, "released");

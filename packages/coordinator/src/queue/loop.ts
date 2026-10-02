@@ -296,8 +296,11 @@ export class QueueLoop {
   private async giveUp(row: OutboxRow, message: string): Promise<void> {
     const result =
       row.lane === "core" ? this.handlers.giveUp(row.command as Command, message) : null;
+    const trainResult =
+      row.lane === "train" ? trainGiveUp(row.command as TrainCommand, message) : null;
     try {
       if (result !== null) this.dispatch(result, row.id);
+      if (trainResult !== null) this.dispatchTrain(trainResult, row.id);
     } catch {
       // The synthesized result no longer applies (state moved on): drop the command anyway.
     }
@@ -313,4 +316,15 @@ export class QueueLoop {
   get busy(): number {
     return this.running.size;
   }
+}
+
+/**
+ * The result a train command that failed for good stands for: a deploy that never happened is
+ * `TrainDeployFailed` (otherwise the train stays `deploying` and holds its Worker forever). Other
+ * train commands have no protocol result; they are dropped and audited.
+ */
+export function trainGiveUp(cmd: TrainCommand, error: string): TrainEventInput | null {
+  if (cmd.type === "StartDeployTrain")
+    return { type: "TrainDeployFailed", trainId: cmd.trainId, message: error.slice(0, 2000) };
+  return null;
 }
