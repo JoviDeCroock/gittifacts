@@ -398,7 +398,9 @@ class Machine {
       return;
     }
     if (ev.result.status === "conflict") {
-      this.onTextualConflict(b, ev.result.changeId, ev.result.files, ev.result.upstream);
+      if (this.isTwin(b))
+        this.dropTwin(b.id, `${ev.result.changeId} does not apply without the parent`);
+      else this.onTextualConflict(b, ev.result.changeId, ev.result.files, ev.result.upstream);
       return;
     }
     const expected = [...b.carried, ...ownEntries(b)];
@@ -567,7 +569,20 @@ class Machine {
 
   private onVerdict(b: Batch, verdict: TreeVerdict): void {
     b.verdict = verdict;
+    if (this.isTwin(b)) {
+      // A twin only matters if it passes (it replaces its batch); a failure just ends it.
+      if (verdict.passed) {
+        this.cacheResult(b, verdict);
+        b.state = "passed";
+        b.readyAt = this.now;
+      } else {
+        delete this.s.twins[b.id];
+        this.finishBatch(b, "failed");
+      }
+      return;
+    }
     if (verdict.passed) {
+      this.cacheResult(b, verdict);
       b.state = "passed";
       b.readyAt = this.now;
       if (b.kind === "chain") {
@@ -596,6 +611,52 @@ class Machine {
     }
   }
 
+  /**
+   * Remember a passing full run by its tree. Only clean verdicts are kept (no quarantined test):
+   * a reuse must never carry an excused failure to another batch.
+   */
+  private cacheResult(b: Batch, v: TreeVerdict): void {
+    const cap = this.cfg.resultCacheSize;
+    if (!this.cfg.features.resultCache || cap === 0) return;
+    if (v.scope !== "all" || !v.passed || v.failing.length > 0 || v.quarantined.length > 0) return;
+    if (v.treeSha !== b.treeSha) return;
+    if (this.s.results[v.treeSha] === undefined) this.s.resultOrder.push(v.treeSha);
+    this.s.results[v.treeSha] = { verdict: v, batchId: b.id, at: this.now };
+    while (this.s.resultOrder.length > cap) {
+      const old = this.s.resultOrder.shift();
+      if (old !== undefined) delete this.s.results[old];
+    }
+  }
+
+  /**
+   * A built batch whose tree already passed a full run elsewhere takes that result instead of
+   * running (identical tree ⇒ identical checks). Returns true if it did.
+   */
+  private reuseResult(b: Batch): boolean {
+    if (!this.cfg.features.resultCache || b.treeSha === null || b.tipSha === null) return false;
+    if (b.baseSha === null) return false;
+    const hit = this.s.results[b.treeSha];
+    if (hit === undefined || !this.scopeCovers(hit.verdict.scope, b.targets)) return false;
+    const verdict: TreeVerdict = {
+      treeSha: b.treeSha,
+      commitSha: b.tipSha,
+      baseSha: b.baseSha,
+      scope: hit.verdict.scope,
+      runIds: [...hit.verdict.runIds],
+      passed: true,
+      failing: [],
+      quarantined: this.relevantQuarantine(this.landingEntriesOf(b)),
+      flakyRetried: [...hit.verdict.flakyRetried],
+    };
+    this.audit("merge-queue.result-reused", `batch:${b.id}`, {
+      treeSha: b.treeSha,
+      from: hit.batchId,
+      runIds: hit.verdict.runIds,
+    });
+    this.onVerdict(b, verdict);
+    return true;
+  }
+
   private infraRetry(b: Batch, why: string, back: "pending" | "ready"): void {
     b.infraRetries++;
     if (b.infraRetries <= this.cfg.maxInfraRetries) {
@@ -605,6 +666,10 @@ class Machine {
         b.treeSha = null;
         b.commits = [];
       }
+      return;
+    }
+    if (this.isTwin(b)) {
+      this.dropTwin(b.id, why);
       return;
     }
     this.audit("merge-queue.batch-gave-up", `batch:${b.id}`, { why, retries: b.infraRetries });
@@ -743,6 +808,148 @@ class Machine {
     return keep;
   }
 
+  // ---------------------------------------------------------------- both-outcome speculation (§4.3)
+
+  private isTwin(b: Batch): boolean {
+    return this.s.twins[b.id] !== undefined;
+  }
+
+  /** Stop a twin (its run and ref) and forget it. */
+  private dropTwin(id: string, why: string): void {
+    const t = this.batch(id);
+    delete this.s.twins[id];
+    if (t !== undefined && !batchDone(t)) this.cancelBatch(t, why);
+  }
+
+  /** A twin is only worth its run while its batch still sits on the in-flight parent it excludes. */
+  private pruneTwins(): boolean {
+    let changed = false;
+    for (const [id, tw] of Object.entries(this.s.twins)) {
+      const t = this.batch(id);
+      const d = this.batch(tw.of);
+      const p = this.batch(tw.excludes);
+      const live =
+        t !== undefined &&
+        !batchDone(t) &&
+        d !== undefined &&
+        this.isActiveChain(d) &&
+        d.parentId === tw.excludes &&
+        p !== undefined &&
+        this.isActiveChain(p) &&
+        inFlight(p);
+      if (live) continue;
+      this.dropTwin(id, "twin no longer needed");
+      changed = true;
+    }
+    return changed;
+  }
+
+  /**
+   * Speculate on both outcomes of an in-flight parent: a built batch on top of it gets a twin with
+   * the same units on the parent's own base (without the parent's units). The twin never lands by
+   * itself; it only replaces its batch if the parent fails (see `adoptTwins`).
+   */
+  private forkTwins(): boolean {
+    if (!this.cfg.features.twins) return false;
+    const have = new Set(Object.values(this.s.twins).map((t) => t.of));
+    let changed = false;
+    for (const d of this.activeChain()) {
+      if (have.has(d.id) || d.parentId === null || d.carried.length > 0) continue;
+      // Still open for joiners: its units aren't final yet.
+      if (!inFlight(d) || d.state === "pending" || this.holding(d)) continue;
+      const p = this.batch(d.parentId);
+      if (p === undefined || !this.isActiveChain(p) || !inFlight(p)) continue;
+      const pOwn = new Set(ownEntries(p));
+      // A stacked entry never lands before its dependency.
+      const stacked = ownEntries(d).some((id) =>
+        (this.entry(id)?.dependsOn ?? []).some((x) => pOwn.has(x)),
+      );
+      if (stacked) continue;
+      this.createTwin(d, p);
+      changed = true;
+    }
+    return changed;
+  }
+
+  private createTwin(d: Batch, p: Batch): void {
+    const id = this.id("w");
+    const pOwn = new Set(ownEntries(p));
+    this.s.batches[id] = {
+      id,
+      kind: "chain",
+      trackId: null,
+      parentId: p.parentId,
+      mergeParents: p.mergeParents,
+      carried: p.carried,
+      rootBase: p.rootBase,
+      rootSeq: p.rootSeq,
+      baseSha: p.parentId === null ? p.rootBase : null,
+      units: d.units,
+      lineage: [...p.lineage.filter((x) => !pOwn.has(x)), ...ownEntries(d)],
+      state: "pending",
+      tipSha: null,
+      treeSha: null,
+      commits: [],
+      refName: `refs/queue/${id}`,
+      runId: null,
+      runSeq: 0,
+      startedAt: null,
+      targets: "all",
+      verdict: null,
+      recheck: null,
+      bisect: null,
+      probe: null,
+      members: [],
+      fallbackOf: null,
+      noRevalidate: false,
+      createdAt: d.createdAt,
+      readyAt: null,
+      infraRetries: 0,
+    };
+    this.s.twins[id] = { of: d.id, excludes: p.id };
+  }
+
+  /**
+   * The parent failed: every child with a live twin is replaced by it. The twin's tree is exactly
+   * the child's units on the parent's base, which is what the child has to be tested on now; its
+   * run is already under way (or done). The child's own descendants contain the parent and re-form.
+   */
+  private adoptTwins(p: Batch): void {
+    for (const [tid, tw] of Object.entries(this.s.twins)) {
+      if (tw.excludes !== p.id) continue;
+      const t = this.batch(tid);
+      const d = this.batch(tw.of);
+      const track = this.s.tracks[d?.trackId ?? ""];
+      if (
+        t === undefined ||
+        d === undefined ||
+        track === undefined ||
+        batchDone(t) ||
+        !this.isActiveChain(d) ||
+        d.parentId !== p.id ||
+        this.batchInCas(d)
+      )
+        continue;
+      delete this.s.twins[tid];
+      this.cancelTree(d, `parent ${p.id} failed; twin ${tid} replaces ${d.id}`, true);
+      track.chain = track.chain.map((x) => (x === d.id ? tid : x));
+      t.trackId = track.id;
+      for (const id of ownEntries(d)) {
+        const e = this.entry(id);
+        if (e === undefined || e.batchId !== d.id) continue;
+        e.batchId = tid;
+        e.trackId = track.id;
+        e.state = t.state === "passed" ? "passed" : "speculating";
+      }
+      this.cancelBatch(d, `replaced by twin ${tid}`);
+      this.audit("merge-queue.twin-adopted", `batch:${tid}`, {
+        of: d.id,
+        failedParent: p.id,
+        state: t.state,
+      });
+    }
+  }
+
   // ---------------------------------------------------------------- failures and bisection (§4.3)
 
   private onChainFailure(b: Batch): void {
@@ -750,6 +957,7 @@ class Machine {
     // Everything built on b contains the culprit: re-form it right away (it doesn't wait for the
     // bisection). b itself leaves the DAG and is bisected on the side.
     if (this.isActiveChain(b)) {
+      this.adoptTwins(b);
       this.cancelTree(b, `ancestor ${b.id} failed`, true);
       this.removeFromTrack(b);
     }
@@ -2306,6 +2514,8 @@ class Machine {
       if (isFrozen(this.s)) changed = this.ensureExpressRouting() || changed;
       changed = this.advanceLanding() || changed;
       changed = this.formBatches() || changed;
+      changed = this.pruneTwins() || changed;
+      changed = this.forkTwins() || changed;
       changed = this.issueBuilds() || changed;
       changed = this.startRuns() || changed;
       if (!changed) return;
@@ -2319,7 +2529,6 @@ class Machine {
       .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1));
     for (const b of pending) {
       let base: string | null;
-      if (b.kind === "chain" && b.parentId !== null && !this.holdExpired(b)) continue;
       if (b.kind === "chain")
         base = b.parentId === null ? b.rootBase : (this.batch(b.parentId)?.tipSha ?? null);
       else if (b.kind === "landing")
@@ -2345,7 +2554,21 @@ class Machine {
     return changed;
   }
 
-  /** A child batch builds once its hold expired or it is full (see `batchHoldMs`). */
+  /**
+   * A batch built on an in-flight parent stays open for joiners (it is built right away, so a
+   * textual conflict shows up within seconds, and rebuilt when someone joins); it starts running
+   * once its hold expired or it is full. Entries coming back (restarted, resolved) never wait twice.
+   */
+  private holding(b: Batch): boolean {
+    if (b.kind !== "chain" || b.parentId === null || this.isTwin(b)) return false;
+    if (this.holdExpired(b)) return false;
+    return !ownEntries(b).some((id) => {
+      const e = this.entry(id);
+      return e !== undefined && e.firstBatchAt !== null && e.firstBatchAt < b.createdAt;
+    });
+  }
+
+  /** A child batch runs once its hold expired or it is full (see `batchHoldMs`). */
   private holdExpired(b: Batch): boolean {
     const p = this.batch(b.parentId);
     if (p === undefined || !inFlight(p)) return true;
@@ -2364,15 +2587,23 @@ class Machine {
     if (ready.length === 0) return false;
     const kindOrder = { landing: 0, probe: 1, chain: 2 } as const;
     const depth = (b: Batch): number => b.lineage.length - ownEntries(b).length;
+    // Twins go last: they only pay off if a parent fails.
     ready.sort(
       (a, b) =>
         kindOrder[a.kind] - kindOrder[b.kind] ||
+        Number(this.isTwin(a)) - Number(this.isTwin(b)) ||
         depth(a) - depth(b) ||
         a.createdAt - b.createdAt ||
         (a.id < b.id ? -1 : 1),
     );
     let changed = false;
     for (const b of ready) {
+      if (b.state !== "ready") continue; // settled by an earlier reuse in this pass
+      if (this.reuseResult(b)) {
+        changed = true;
+        continue;
+      }
+      if (this.holding(b)) continue;
       if (running >= this.cfg.maxConcurrentRuns) break;
       invariant(
         b.tipSha !== null && b.treeSha !== null && b.baseSha !== null,
@@ -2637,8 +2868,10 @@ class Machine {
       });
       // 1) Join an unbuilt batch whose tree already covers the frontier.
       const capacity = this.batchCapacity();
+      let midBuild = false;
       for (const o of [...active].reverse()) {
-        if (o.state !== "pending" || !this.isActiveChain(o)) continue;
+        const open = o.state === "pending" || (o.state === "ready" && this.holding(o));
+        if ((!open && o.state !== "building") || !this.isActiveChain(o)) continue;
         // A batch something is already built on (its tip, or a merge copying its lineage) can't
         // grow: the descendant's lineage would not list the newcomer.
         const oOwn = ownEntries(o);
@@ -2650,6 +2883,9 @@ class Machine {
         )
           continue;
         if (frozen && this.isExpressBatch(o) !== u.express) continue;
+        // Its tree is rooted where its chain was: a conflicting change that landed since (and so is
+        // no longer in the index) would be missing from it, forcing a full re-run at landing.
+        if (!this.appendable(o, u.affected)) continue;
         const covers =
           frontier.length > 0
             ? frontier.every((f) => f.id === o.id || this.builtOn(o, ownEntries(f)))
@@ -2657,6 +2893,13 @@ class Machine {
         if (!covers) continue;
         const size = ownEntries(o).length;
         if (size > 0 && size + u.changeIds.length > capacity) continue;
+        if (o.state === "building") {
+          // Its tree is being built for the current members: wait for it rather than open a new
+          // batch on top of it (seconds).
+          if (this.holding(o)) midBuild = true;
+          continue;
+        }
+        if (o.state === "ready") this.unbuild(o);
         this.joinBatch(o, u);
         index.add(o.id, u.affected);
         planned.set(u.changeIds[0] ?? "", u);
@@ -2664,6 +2907,7 @@ class Machine {
         for (const [f, n] of u.flows) inFlightPerFlow.set(f, (inFlightPerFlow.get(f) ?? 0) + n);
         return "placed";
       }
+      if (midBuild) return "deferred";
       // 2) A new batch: within the speculation depth and the in-flight cap.
       if (inflightCount >= cfg.maxInFlightBatches) return "blocked";
       // Depth = the longest chain of untested batches the new one would sit on (independent
@@ -2822,6 +3066,16 @@ class Machine {
     track.chain = [...track.chain, id];
     this.joinBatch(b, u);
     return b;
+  }
+
+  /** A built batch that is still holding gets a joiner: its tree is rebuilt with the newcomer. */
+  private unbuild(b: Batch): void {
+    this.out.push({ type: "DeleteQueueRef", refName: b.refName });
+    b.state = "pending";
+    b.tipSha = null;
+    b.treeSha = null;
+    b.commits = [];
+    b.startedAt = null;
   }
 
   private joinBatch(b: Batch, u: PlannedUnit): void {

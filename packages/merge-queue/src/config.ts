@@ -21,6 +21,10 @@ export const QueueFeatures = z.object({
   aging: z.boolean().default(true),
   /** §4.5 weighted fair queuing per principal/session + in-flight cap. */
   fairness: z.boolean().default(true),
+  /** Reuse a passing full run for a batch whose built tree is identical (tree-hash keyed). */
+  resultCache: z.boolean().default(true),
+  /** §4.3 both-outcome speculation: twins of batches built on an in-flight parent. */
+  twins: z.boolean().default(false),
 });
 export type QueueFeatures = z.infer<typeof QueueFeatures>;
 
@@ -92,6 +96,8 @@ export const QueueConfig = z.object({
     .default(10 * 60_000),
   /** Landed main commits remembered for staleness checks. */
   mainLogLimit: z.number().int().min(16).default(2000),
+  /** Passing full runs remembered by tree sha (`features.resultCache`). */
+  resultCacheSize: z.number().int().min(0).default(256),
   /** Terminal entries kept for status queries. */
   retainTerminal: z.number().int().min(0).default(500),
 });
@@ -111,6 +117,8 @@ const ALL_OFF: QueueFeatures = {
   priorities: false,
   aging: false,
   fairness: false,
+  resultCache: false,
+  twins: false,
 };
 
 /**

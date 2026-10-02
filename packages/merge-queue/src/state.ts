@@ -1,5 +1,5 @@
 import { type QueueConfig, queueConfig } from "./config.js";
-import type { AffectedSet, Batch, FreezeReason, QueueEntry, Track } from "./schema.js";
+import type { AffectedSet, Batch, FreezeReason, QueueEntry, Track, TreeVerdict } from "./schema.js";
 
 /** One landed main commit (only the queue lands, so every entry is a CAS the core issued). */
 export interface MainLogEntry {
@@ -38,6 +38,28 @@ export interface QuarantineRecord {
   mainSha: string;
 }
 
+/**
+ * A passing full run, keyed by the tree it ran on. It counts only for exactly that tree (§1): a
+ * batch whose built tree is identical reuses it instead of re-running (checks are a function of the
+ * tree, which is what "passed on exactly that tree" already assumes).
+ */
+export interface CachedResult {
+  verdict: TreeVerdict;
+  /** Batch whose run produced it. */
+  batchId: string;
+  at: number;
+}
+
+/**
+ * Both-outcome speculation (SubmitQueue): a twin runs `of`'s units on the tree without its
+ * in-flight parent `excludes`. If the parent fails, the twin replaces `of` in the DAG (its run is
+ * already under way); if the parent passes, the twin is cancelled. Twins never land by themselves.
+ */
+export interface Twin {
+  of: string;
+  excludes: string;
+}
+
 export interface QueueStats {
   /** EWMA of first-run outcomes of chain batches (real failures only). */
   batchPassRate: number;
@@ -72,6 +94,11 @@ export interface QueueState {
   quarantine: Record<string, QuarantineRecord>;
   fairness: { vtime: number; finish: Record<string, number> };
   stats: QueueStats;
+  /** Tree-keyed passing full runs (bounded; oldest first in `resultOrder`). */
+  results: Record<string, CachedResult>;
+  resultOrder: string[];
+  /** Twin batch id → what it is a twin of. */
+  twins: Record<string, Twin>;
   seq: number;
   /** Terminal entries in the order they ended (GC'd beyond `retainTerminal`). */
   terminal: string[];
@@ -107,6 +134,9 @@ export function initialState(
       merged: 0,
       ejected: 0,
     },
+    results: {},
+    resultOrder: [],
+    twins: {},
     seq: 0,
     terminal: [],
   };
@@ -141,6 +171,10 @@ export function cloneState(s: QueueState): QueueState {
     quarantine: { ...s.quarantine },
     fairness: { vtime: s.fairness.vtime, finish: { ...s.fairness.finish } },
     stats: { ...s.stats, authors, recentMerged: [...s.stats.recentMerged] },
+    // Older persisted states have no cache/twins yet.
+    results: { ...(s.results ?? {}) },
+    resultOrder: [...(s.resultOrder ?? [])],
+    twins: { ...(s.twins ?? {}) },
     terminal: [...s.terminal],
   };
 }

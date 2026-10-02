@@ -53,6 +53,14 @@ export interface ChangeRecord {
   approvals: number;
   landingRuns: number;
   firstLandingAt: number | null;
+  /** Debug timeline (MQ_DEBUG_TAIL): last batch entered, last chain run start, last landing run start. */
+  lastEnteredAt: number | null;
+  lastRunAt: number | null;
+  lastLandingAt: number | null;
+  /** Ancestor entries not yet passed when its last chain run passed. */
+  pendingAncestors: number;
+  /** Debug: why its batches were cancelled (MQ_DEBUG_TAIL). */
+  restartWhy: string[];
 }
 
 export interface RunMetrics {
@@ -180,6 +188,8 @@ class Sim {
   private cancelTally = new Map<string, [number, number, number]>();
   private kinds = new Map<string, number>();
   private dbgN = 0;
+  private reused = 0;
+  private adopted = 0;
   private m = {
     mainRed: 0,
     masked: 0,
@@ -273,6 +283,9 @@ class Sim {
             `t=${(this.now / MINUTE).toFixed(1)}m steps=${this.steps} live=${this.liveEntries()} batches=${Object.keys(this.core.batches).length} heap=${(process.memoryUsage().heapUsed / 1e6).toFixed(0)}MB frozen=${this.core.freeze.reasons.map((r) => r.kind).join(",")} pending=${this.pendingNonTick}\n`,
           );
         this.handle(next.v);
+        const at = Number(process.env.MQ_DEBUG_STUCK_AT ?? "-1");
+        if (at >= 0 && next.v.k === "tick" && Math.round(this.now / MINUTE) === at)
+          this.dumpStuck();
         if (next.v.k === "tick") {
           const idle =
             this.now > this.arrivalEnd && this.pendingNonTick === 0 && this.liveEntries() === 0;
@@ -314,7 +327,7 @@ class Sim {
         b.kind !== "chain" ||
         b.state !== "passed" ||
         b.readyAt === null ||
-        this.now - b.readyAt < 20 * MINUTE
+        this.now - b.readyAt < 8 * MINUTE
       )
         continue;
       const own = new Set(b.units.flatMap((u) => u.changeIds));
@@ -361,11 +374,21 @@ class Sim {
         if (r === undefined || r.done) return; // cancelled
         r.done = true;
         this.charge(r.kind, r.dur);
-        if (r.kind === "chain" && ev.e.type === "BatchResult" && ev.e.outcome === "passed")
+        if (r.kind === "chain" && ev.e.type === "BatchResult" && ev.e.outcome === "passed") {
+          const b = this.core.batches[ev.e.batchId];
+          const own = new Set(r.entries);
+          const pending = (b?.lineage ?? []).filter((x) => {
+            const st = this.core.entries[x]?.state;
+            return !own.has(x) && st !== undefined && st !== "merged" && st !== "passed";
+          }).length;
           for (const id of r.entries) {
             const rec = this.records.get(id);
-            if (rec !== undefined) rec.passedAt = this.now;
+            if (rec !== undefined) {
+              rec.passedAt = this.now;
+              rec.pendingAncestors = pending;
+            }
           }
+        }
         this.sendCore(ev.e);
         return;
       }
@@ -419,8 +442,11 @@ class Sim {
 
   // ------------------------------------------------------------------ core
 
+  private prevCore: QueueState | null = null;
+
   private sendCore(input: CoreEventInput): void {
     const ev = CoreEvent.parse(input);
+    this.prevCore = this.core;
     const r = step(this.core, ev, { now: this.now });
     this.core = r.state;
     this.steps++;
@@ -459,6 +485,11 @@ class Sim {
       approvals: 0,
       landingRuns: 0,
       firstLandingAt: null,
+      lastEnteredAt: null,
+      lastRunAt: null,
+      lastLandingAt: null,
+      pendingAncestors: 0,
+      restartWhy: [],
     });
     const deps = c.dependsOn.filter((d) => this.core.entries[d]?.state !== "merged");
     this.sendCore({
@@ -672,6 +703,31 @@ class Sim {
           (t) => c.targets === "all" || scopeSet.has(t),
         );
         const failing = [...new Set([...real, ...this.flakes(c.runId, scope)])];
+        if (process.env.MQ_DEBUG_LANDFAIL === "1" && c.kind === "landing" && failing.length > 0) {
+          const ids = this.contentOf(c.commitSha);
+          const who = real.map((t) =>
+            [...ids.keys()]
+              .filter((id) => {
+                const ch = this.changes.get(id);
+                return (
+                  ch !== undefined && (ch.badTest === t || ch.affected.testTargets.includes(t))
+                );
+              })
+              .map(
+                (id) =>
+                  `${id}${this.isBad(id, ids.get(id) ?? 1) ? "!bad" : ""}${[
+                    ...(this.changes.get(id)?.semantic ?? []),
+                  ]
+                    .filter((p) => ids.has(p))
+                    .map((p) => `~${p}`)
+                    .join("")}`,
+              )
+              .join(","),
+          );
+          process.stderr.write(
+            `LANDFAIL t=${(this.now / MINUTE).toFixed(1)} ${c.batchId} entries=${c.entries.join(",")} real=${real.join(",")} flaky=${failing.filter((t) => !real.includes(t)).join(",")} who=${who.join(" | ")}\n`,
+          );
+        }
         // Fail fast: a failing run reports when its first failing test finishes, not at suite end.
         const ov = this.sc.ci.overheadFraction * full;
         const took =
@@ -684,12 +740,18 @@ class Sim {
           entries: c.entries,
         });
         if (c.kind === "probe") this.m.probes++;
+        if (c.kind === "chain")
+          for (const id of c.entries) {
+            const r = this.records.get(id);
+            if (r !== undefined) r.lastRunAt = this.now;
+          }
         if (c.kind === "landing") {
           this.m.landings++;
           for (const id of c.entries) {
             const r = this.records.get(id);
             if (r === undefined) continue;
             r.landingRuns++;
+            r.lastLandingAt = this.now;
             if (r.firstLandingAt === null || (r.passedAt !== null && r.firstLandingAt < r.passedAt))
               r.firstLandingAt = this.now;
           }
@@ -736,6 +798,10 @@ class Sim {
           onBatch: onBatch.has(t) ? ("failed" as const) : ("passed" as const),
           onMain: onMain.has(t) ? ("failed" as const) : ("passed" as const),
         }));
+        if (process.env.MQ_DEBUG_LANDFAIL === "1" && c.batchId.startsWith("l"))
+          process.stderr.write(
+            `RECHECK t=${(this.now / MINUTE).toFixed(1)} ${c.batchId} ${JSON.stringify(results)} p=${c.tests.map((t) => this.w.flaky.get(t)).join(",")}\n`,
+          );
         // Batch-tree and main-head re-runs execute in parallel: two containers.
         this.runs.set(c.runId, {
           start: this.now,
@@ -827,6 +893,8 @@ class Sim {
         return;
       case "Audit":
         if (c.action === "merge-queue.test-quarantined") this.m.quarantines++;
+        if (c.action === "merge-queue.result-reused") this.reused++;
+        if (c.action === "merge-queue.twin-adopted") this.adopted++;
         if (
           c.action === "merge-queue.batches-cancelled" &&
           process.env.MQ_DEBUG_PROGRESS === "1" &&
@@ -848,8 +916,29 @@ class Sim {
             `cancel ${String(c.payload.why)} batches=${JSON.stringify(c.payload.batches)} express=${ex.join(" ")} cas=${this.core.cas?.batchId}\n`,
           );
         }
+        if (
+          c.action === "merge-queue.batches-cancelled" &&
+          process.env.MQ_DEBUG_CASCADE === "1" &&
+          Number(c.payload.entries) >= 15
+        ) {
+          const pc = this.prevCore ?? this.core;
+          const lines = (c.payload.batches as string[]).map((bid) => {
+            const b = pc.batches[bid];
+            const units = b?.units.flatMap((u) => u.changeIds) ?? [];
+            const mods = units.map((id) => this.changes.get(id)?.clusters.join("+")).join(",");
+            return `${bid}:${b?.state} p=${b?.parentId} mp=${b?.mergeParents.length} car=${b?.carried.length} own=${units.length} lin=${b?.lineage.length} cl=${mods} unk=${units.some((id) => this.changes.get(id)?.analyzerFails)} age=${((this.now - (b?.createdAt ?? 0)) / MINUTE).toFixed(1)}`;
+          });
+          process.stderr.write(
+            `CASCADE t=${(this.now / MINUTE).toFixed(1)} ${String(c.payload.why)} ${c.subject}\n  ${lines.join("\n  ")}\n`,
+          );
+        }
         if (c.action === "merge-queue.batches-cancelled" && process.env.MQ_DEBUG_TAIL === "1") {
           const why = String(c.payload.why).replace(/[a-z]\w*\d\w*/g, "#");
+          for (const bid of c.payload.batches as string[]) {
+            const pb = this.prevCore?.batches[bid] ?? this.core.batches[bid];
+            for (const u of pb?.units ?? [])
+              for (const id of u.changeIds) this.records.get(id)?.restartWhy.push(why);
+          }
           const t = this.cancelTally.get(why) ?? [0, 0, 0];
           this.cancelTally.set(why, [
             t[0] + 1,
@@ -1061,7 +1150,10 @@ class Sim {
         }
         const r = this.records.get(ev.changeId);
         if (r !== undefined && r.firstBatchAt === null) r.firstBatchAt = ev.at;
-        if (r !== undefined) r.batches++;
+        if (r !== undefined) {
+          r.batches++;
+          r.lastEnteredAt = ev.at;
+        }
         this.batchSizes.set(ev.batchId, ev.batchSize);
         return;
       }
@@ -1225,6 +1317,65 @@ class Sim {
       process.stderr.write(
         `tail n=${tail.length} batches=${avg((r) => r.batches)} resolved=${avg((r) => r.resolved)} approvals=${avg((r) => r.approvals)} revert=${avg((r) => (r.revert ? 1 : 0))} | all batches=${(m.reduce((x, r) => x + r.batches, 0) / m.length).toFixed(2)}\n`,
       );
+      // Where the time goes: enqueue → first batch → last batch → last chain run → passed → merged.
+      const phases = (set: ChangeRecord[], label: string) => {
+        const a = (f: (r: ChangeRecord) => number) =>
+          (set.reduce((x, r) => x + f(r), 0) / Math.max(1, set.length) / MINUTE).toFixed(2);
+        const fb = (r: ChangeRecord) => r.firstBatchAt ?? r.enqueuedAt;
+        const le = (r: ChangeRecord) => r.lastEnteredAt ?? fb(r);
+        const lr = (r: ChangeRecord) => r.lastRunAt ?? le(r);
+        const pa = (r: ChangeRecord) => r.passedAt ?? lr(r);
+        const mg = (r: ChangeRecord) => r.mergedAt ?? pa(r);
+        const lnd = (r: ChangeRecord) =>
+          r.lastLandingAt !== null && r.lastLandingAt >= pa(r) ? r.lastLandingAt : mg(r);
+        process.stderr.write(
+          `${label} n=${set.length} toBatch=${a((r) => fb(r) - r.enqueuedAt)} restarts=${a((r) => le(r) - fb(r))} holdBuild=${a((r) => lr(r) - le(r))} ci=${a((r) => pa(r) - lr(r))} toLandingRun=${a((r) => lnd(r) - pa(r))} landing=${a((r) => mg(r) - lnd(r))} pendingAnc=${(set.reduce((x, r) => x + r.pendingAncestors, 0) / Math.max(1, set.length)).toFixed(2)} restarted=${set.filter((r) => r.batches > 1).length}\n`,
+        );
+      };
+      process.stderr.write(`reused ${this.reused} adopted ${this.adopted}\n`);
+      phases(tail, "phases tail5%");
+      {
+        const over = m.filter((r) => (r.mergedAt ?? 0) - r.enqueuedAt > 20 * MINUTE);
+        const cat = new Map<string, number>();
+        for (const r of over) {
+          const why = r.restartWhy.join("|");
+          const k =
+            r.approvals > 0
+              ? "approval"
+              : r.resolved > 0
+                ? "resolved"
+                : /ancestor|parent/.test(why)
+                  ? "cascade"
+                  : /carried/.test(why)
+                    ? "carried"
+                    : /rebase conflict/.test(why)
+                      ? "batchmate-conflict"
+                      : r.batches > 1
+                        ? "innocent"
+                        : "slow-single";
+          cat.set(k, (cat.get(k) ?? 0) + 1);
+          if (k === "slow-single" && process.env.MQ_DEBUG_SLOW === "1")
+            process.stderr.write(
+              `  slow ${r.id} enq=${(r.enqueuedAt / MINUTE).toFixed(1)} wait=${(((r.mergedAt ?? 0) - r.enqueuedAt) / MINUTE).toFixed(1)} fb=${(((r.firstBatchAt ?? 0) - r.enqueuedAt) / MINUTE).toFixed(1)} run=${(((r.lastRunAt ?? 0) - r.enqueuedAt) / MINUTE).toFixed(1)} pass=${(((r.passedAt ?? 0) - r.enqueuedAt) / MINUTE).toFixed(1)} land=${(((r.lastLandingAt ?? 0) - r.enqueuedAt) / MINUTE).toFixed(1)} pendAnc=${r.pendingAncestors} landingRuns=${r.landingRuns}\n`,
+            );
+        }
+        process.stderr.write(
+          `over20 ${over.length}/${m.length} (${((100 * over.length) / Math.max(1, m.length)).toFixed(1)}%) ${[
+            ...cat,
+          ]
+            .sort((a, b) => b[1] - a[1])
+            .map(([k, v]) => `${k}=${v}`)
+            .join(" ")}\n`,
+        );
+      }
+      for (const r of tail.slice(0, 40)) {
+        const ch = this.changes.get(r.id);
+        process.stderr.write(
+          `  ${r.id} wait=${(((r.mergedAt ?? 0) - r.enqueuedAt) / MINUTE).toFixed(1)} toBatch=${(((r.firstBatchAt ?? 0) - r.enqueuedAt) / MINUTE).toFixed(1)} batches=${r.batches} resolved=${r.resolved} approvals=${r.approvals} unknown=${ch?.analyzerFails} bad=${r.bad} stack=${(ch?.dependsOn.length ?? 0) > 0} group=${ch?.plangroup !== null} landWait=${(((r.mergedAt ?? 0) - (r.passedAt ?? 0)) / MINUTE).toFixed(1)} why=${r.restartWhy.join("|")}\n`,
+        );
+      }
+      phases(m.slice(Math.floor(m.length * 0.05), Math.floor(m.length * 0.15)), "phases p85-95");
+      phases(m.slice(Math.floor(m.length * 0.4), Math.floor(m.length * 0.6)), "phases mid");
     }
     const merged = recs.filter((r) => r.mergedAt !== null);
     const ejected = recs.filter((r) => r.ejectedAt !== null && r.mergedAt === null);
@@ -1251,7 +1402,9 @@ class Sim {
     // A ref is leaked only if its batch is gone or finished (in-flight batches legitimately own refs).
     const runsLeaked = [...this.refs].filter((ref) => {
       const b = this.core.batches[ref.slice("refs/queue/".length)];
-      return b === undefined || b.state === "landed" || b.state === "cancelled" || b.state === "failed";
+      return (
+        b === undefined || b.state === "landed" || b.state === "cancelled" || b.state === "failed"
+      );
     }).length;
     return {
       scenario: this.sc.name,
