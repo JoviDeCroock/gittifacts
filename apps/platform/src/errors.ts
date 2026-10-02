@@ -6,11 +6,13 @@
  * `ERROR_FIXES` is the catalogue: every code has a default fix. Call sites can pass a more
  * specific fix (e.g. the exact `create_plan({...})` call for a missing plan).
  */
+import { fixFor as conventionFix } from "@app/conventions";
 import { CoordinatorError } from "@app/coordinator";
 import type { ApiError as ApiErrorBody, ErrorFix } from "@app/domain";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { ZodError } from "zod";
+import { UnclaimedLimitError } from "./limits/refusals.js";
 import { SigningKeyConfigError } from "./signing.js";
 import { NotFoundInStore } from "./store/d1-store.js";
 import { StoreDataError } from "./store/rows.js";
@@ -203,6 +205,20 @@ export function toErrorResponse(err: unknown): { status: ContentfulStatusCode; b
     const status = err.status as ContentfulStatusCode;
     const code = status === 400 ? "invalid-request" : "http-error";
     return { status, body: envelope(code, err.message, fixFor(code)) };
+  }
+  if (err instanceof UnclaimedLimitError) {
+    return {
+      status: 403,
+      body: envelope(
+        "unclaimed-limit",
+        err.message,
+        conventionFix("unclaimed-limit", { refused: `have ${err.refused}` }),
+        {
+          repoId: err.repoId,
+          refused: err.refused,
+        },
+      ),
+    };
   }
   if (err instanceof NotFoundInStore) {
     return { status: 404, body: envelope("not-found", err.message, fixFor("not-found")) };

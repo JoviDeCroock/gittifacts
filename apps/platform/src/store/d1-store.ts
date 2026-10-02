@@ -41,6 +41,7 @@ import {
   shadowSamples,
   tours,
 } from "../db/schema.js";
+import { guardUnclaimedRepoWrite } from "../limits/refusals.js";
 import {
   changeFromRow,
   changeToRow,
@@ -179,13 +180,19 @@ export class D1Store implements Store {
   }
 
   async insertRepo(repo: Repo, createdBy: string | null = null): Promise<void> {
-    await this.db.insert(repos).values(repoToRow(repo, createdBy));
+    // O3: an unclaimed repo never stores a deploy target, Lane 0 or revert auto-merge.
+    await this.db.insert(repos).values(repoToRow(guardUnclaimedRepoWrite(repo), createdBy));
   }
 
   async updateRepo(id: string, patch: Partial<Omit<Repo, "id" | "createdAt">>): Promise<Repo> {
     const current = await this.getRepo(id);
     if (!current) throw new NotFoundInStore(`repo ${id} not found`);
-    const next: Repo = { ...current, ...patch, id: current.id, createdAt: current.createdAt };
+    const next: Repo = guardUnclaimedRepoWrite({
+      ...current,
+      ...patch,
+      id: current.id,
+      createdAt: current.createdAt,
+    });
     const { createdBy: _c, ...row } = repoToRow(next);
     await this.db.update(repos).set(row).where(eq(repos.id, id));
     return next;
