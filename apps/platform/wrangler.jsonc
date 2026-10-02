@@ -42,6 +42,8 @@
     "TURNSTILE_SITE_KEY": "0x4AAAAAAFLsOe8gJedT53qK",
     // Humans allowed to flip the unclaimed-creation kill-switch override (comma-separated hu_… ids).
     "PLATFORM_ADMINS": "hu_3XXFXEuxAyAwrnKdYWRWYkV1KhFKfy9A",
+    // Read-only auditors (every repo + the full audit log, never writes): the onboarding eval checker.
+    "PLATFORM_AUDITORS": "ag_1770dabb6851453aa53f721a47cfcf25",
     // Merge queue deploy trains (docs/prompts/03-merge-queue.md §4.8): merged Changes deploy in
     // per-Worker trains with flag-first attribution. "off" = one RolloutWorkflow per Change.
     "MERGE_QUEUE_TRAINS": "on"
