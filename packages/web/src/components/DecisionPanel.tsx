@@ -78,6 +78,17 @@ interface DecisionPanelProps {
   onDecided: (change: Change) => void;
 }
 
+/** Why there is nothing to decide, for every status but awaiting-review. */
+const STATUS_NOTE: Partial<Record<Change["status"], string>> = {
+  "awaiting-push": "Nothing to decide until the author pushes and the checks pass.",
+  running: "No decision until checks pass and the tour is written.",
+  failing: "Checks failed. The author has to push a fix before anyone can decide.",
+  approved: "Approved. The merge queue lands it next.",
+  queued: "Approved and waiting in the merge queue.",
+  rejected: "Rejected. Nothing more to decide.",
+  abandoned: "Closed by its author. Nothing to decide.",
+};
+
 export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, layout, onDecided }: DecisionPanelProps) {
   const decision = useSignal<ReviewDecisionKind | null>(null);
   const comment = useSignal("");
@@ -119,7 +130,7 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
     return (
       <div class={`decision decision--${layout} decision--status`}>
         <StatusChip meta={CHANGE_STATUS[change.status]} />
-        <span class="decision__fine">{change.status === "running" || change.status === "failing" ? "No decision until checks pass and the tour is written." : "This change is past review."}</span>
+        <span class="decision__fine">{STATUS_NOTE[change.status] ?? "This change is past review."}</span>
         {rolling ? (
           <LinkButton href={`/changes/${change.id}/rollout`} size="sm" variant="secondary" icon="rocket">
             Rollout
