@@ -95,5 +95,7 @@
   ],
 
   // Nightly full matrix (4 tasks × 2 models × EVAL_RUNS_PER_CELL).
-  "triggers": { "crons": ["0 3 * * *"] }
+  // On demand only (user decision 2026-10-02: a full matrix costs ~$18): no cron. Start a matrix
+  // with `POST /runs` before tagging a release; the evals-gate workflow checks it.
+  "triggers": { "crons": [] }
 }

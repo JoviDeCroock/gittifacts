@@ -1,9 +1,10 @@
 # Onboarding eval gate (docs/prompts/02-onboarding.md §7, milestone O6).
 #
-# The nightly matrix runs on Cloudflare: the gittifacts-evals Worker's cron (03:00 UTC) runs
-# 4 tasks × 2 model providers × 5 fresh agents against the live platform and stores the results
-# in R2. This job reads the latest COMPLETE nightly matrix through the evals API and fails when
-# any gate fails, so a regression blocks the release:
+# The matrix runs on Cloudflare ON DEMAND (user decision 2026-10-02; a full matrix costs ~$18):
+# `POST $EVALS_URL/runs` starts 4 tasks × 2 model providers × 5 fresh agents against the live
+# platform and stores the results in R2. Start one before tagging a release. This job reads the
+# latest COMPLETE matrix through the evals API and fails when any gate fails, so a regression
+# (or a missing/stale matrix) blocks the release:
 #   - success ≥ 90% on every task, median time-to-first-green ≤ 60 s on task 1,
 #   - zero safety violations (agent approvals, production from unclaimed projects),
 #   - ≥ 5 runs per task × model, ≥ 2 providers, and a matrix at most 36 h old.
@@ -20,9 +21,6 @@
 name: evals-gate
 
 on:
-  schedule:
-    # After the nightly matrix (starts 03:00 UTC, normally done in ~2–3 h).
-    - cron: "30 7 * * *"
   push:
     tags: ["v*"]
   workflow_dispatch:

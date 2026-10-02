@@ -2,7 +2,7 @@
 
 Proves onboarding with fresh agents, not a demo (docs/prompts/02-onboarding.md §7). Each run gives a
 new agent **only** the platform's `/start` URL and one task, then deterministic checkers decide from
-platform state whether it worked. The nightly matrix gates releases.
+platform state whether it worked. A matrix run on demand before each release gates it (no schedule: a full matrix costs ~$18).
 
 Code: `apps/evals` (`@app/evals`, Worker `gittifacts-evals`). Results: R2 `gittifacts-blobs` under
 `evals/onboarding/`, plus the Analytics Engine dataset `gittifacts_evals`. Report: `report.md` here
@@ -29,7 +29,7 @@ pushed to main; push errors now carry fix.call = start_change").
 ## How a run works
 
 ```
-cron 03:00 UTC / POST /runs ─▶ EvalMatrixWorkflow ── starts runs, ≤ EVAL_CONCURRENCY at a time
+POST /runs (on demand) ─▶ EvalMatrixWorkflow ── starts runs, ≤ EVAL_CONCURRENCY at a time
                                   │                   (dead/overdue runs → infra-error)
                                   ├─▶ EvalRunWorkflow × (tasks × models × runs)
                                   │     preflight GET /start (credential-less creation on?)
@@ -98,7 +98,7 @@ and `infra-error` all count as failures (an eval that can't run can't vouch for 
 
 ## Running it
 
-- **Nightly**: the Worker's cron (`0 3 * * *`) starts the full matrix (4 tasks × 2 models ×
+- **On demand** (user decision 2026-10-02, no cron): `POST /runs` starts the full matrix (4 tasks × 2 models ×
   `EVAL_RUNS_PER_CELL` = 40 runs, `EVAL_CONCURRENCY` = 4 at a time, ~2–3 h).
 - **Ad hoc**: `curl -X POST $EVALS_URL/runs -H "Authorization: Bearer $EVALS_API_TOKEN" -d
   '{"tasks":["t1"],"models":["kimi"],"runsPerCell":1}'` → `{ matrixId, runIds, statusUrl }`.
@@ -106,7 +106,7 @@ and `infra-error` all count as failures (an eval that can't run can't vouch for 
   `GET /matrices/:id`, `GET /matrices/:id/report` (Bearer `EVALS_READ_TOKEN`).
 - **Report**: `EVALS_URL=… EVALS_READ_TOKEN=… pnpm --filter @app/evals report` writes `report.md` here
   (`--matrix <id>`, `--incomplete`, `--file view.json`, `--stdout`).
-- **CI**: `.github/workflows/evals-gate.yml` runs the gates after the nightly matrix, on `v*` tags,
+- **CI**: `.github/workflows/evals-gate.yml` runs the gates on `v*` tags (start a matrix first),
   on demand and as a reusable workflow (`uses: ./.github/workflows/evals-gate.yml`); make
   "evals-gate / gates" a required check for releases.
 - **Tests**: `pnpm --filter @app/evals test` (scripted model, fake platform, fake container).
@@ -137,7 +137,7 @@ and `infra-error` all count as failures (an eval that can't run can't vouch for 
   token can hold); otherwise every check fails and the sweep is incomplete (gates fail closed).
 - Creation rate limits: credential-less `create_project` allows 3 per IP per hour and 10 per day.
   The eval's agent traffic leaves from Cloudflare's Worker egress (one /64 for the platform), so a
-  40-run matrix exceeds them. Pick one before the first nightly run:
+  40-run matrix exceeds them. Pick one before the first full run:
   (a) **recommended, platform change**: key the creation buckets on `x-gittifacts-eval-run` when
   `x-gittifacts-eval-sig` verifies as HMAC-SHA-256(`EVAL_TRAFFIC_SECRET`, run id), so each run is
   its own "client" while every other limit (quotas, Lane 0 off, egress) stays as for any
@@ -145,7 +145,7 @@ and `infra-error` all count as failures (an eval that can't run can't vouch for 
   raises them for every other Worker-originated caller).
 - Each run leaves an unclaimed project behind; they expire with the unclaimed TTL (7 days).
 
-## Cost of a nightly matrix (estimate, 2026-10-02 prices)
+## Cost of a full matrix (estimate, 2026-10-02 prices)
 
 Workers AI at $0.011 / 1,000 neurons; Kimi K2.7 Code 86,364 neurons per M input tokens (17,273
 cached) and 363,636 per M output; gpt-oss-120b 31,818 / 68,182. Typical run: ~20 turns, ~500 k
