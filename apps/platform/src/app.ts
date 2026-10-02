@@ -16,6 +16,7 @@ import { registerQueueRoutes } from "./queue/routes.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerChangeRoutes } from "./routes/changes.js";
 import { type ApiApp, newApiApp, SECURITY } from "./routes/common.js";
+import { registerDocsRoutes } from "./routes/docs.js";
 import { registerFrontDoorRoutes } from "./routes/front-door.js";
 import { registerIdentityRoutes } from "./routes/identity.js";
 import { registerPlanRoutes } from "./routes/plans.js";
@@ -83,6 +84,8 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   app.on(["GET", "POST"], "/api/auth/*", (c) => authFor(c).handler(c.req.raw));
 
   registerFrontDoorRoutes(app, () => app.getOpenAPI31Document(OPENAPI_CONFIG));
+  // Documentation (packages/docs build in the static assets): HTML, or markdown on request.
+  registerDocsRoutes(app);
   registerWellKnownRoutes(app);
   registerIdentityRoutes(app);
   registerRepoRoutes(app);
