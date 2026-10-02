@@ -24,6 +24,7 @@ export const BINDING_NAMES = {
   pushRouter: "PUSH_ROUTER",
   changeCoordinator: "COORDINATOR",
   mergeQueue: "MERGE_QUEUE",
+  batchRun: "BATCH_RUN_WORKFLOW",
 } as const;
 
 interface WorkflowInstanceLike {
@@ -88,8 +89,7 @@ export function cloudflareBindings(env: CoordinatorEnv): CoordinatorBindings {
     changeWorkflow: workflowHandle(env.CHANGE_WORKFLOW),
     rolloutWorkflow: workflowHandle(env.ROLLOUT_WORKFLOW),
     // The DO classes implement exactly these client interfaces, so their RPC stubs do too.
-    changeCoordinator: (changeId) =>
-      env.COORDINATOR.getByName(changeId) as ChangeCoordinatorClient,
+    changeCoordinator: (changeId) => env.COORDINATOR.getByName(changeId) as ChangeCoordinatorClient,
     mergeQueue: (repoId) => env.MERGE_QUEUE.getByName(repoId) as MergeQueueClient,
   };
 }

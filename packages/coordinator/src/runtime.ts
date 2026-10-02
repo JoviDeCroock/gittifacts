@@ -8,10 +8,31 @@
  *   });
  *   export { ChangeCoordinator, MergeQueue, ChangeWorkflow, RolloutWorkflow, PushRouter } from "@app/coordinator/workers";
  */
-import type { CoordinatorBindings } from "./bindings.js";
+
+import type { QueueConfigInput } from "@app/merge-queue";
+import type { CoordinatorBindings, WorkflowHandle } from "./bindings.js";
 import { type CoordinatorEnv, cloudflareBindings } from "./cloudflare-bindings.js";
 import type { MergeQueueOptions } from "./merge-queue.js";
 import type { Ports, PortsRole } from "./ports.js";
+import type { BatchRunParams } from "./queue/batch-run.js";
+import type { ResolverFactory } from "./queue/context.js";
+import type { QueueJobs } from "./queue/jobs.js";
+
+/** What the agent-native MergeQueue DO needs besides Ports (built per DO from `env`). */
+export interface MergeQueueRuntime {
+  /** Sandbox jobs on the queue's scratch repo (batch trees, affected sets, resolutions). */
+  jobs: QueueJobs;
+  /** The BatchRunWorkflow binding (one instance per speculative batch run). */
+  batchRuns: WorkflowHandle<BatchRunParams>;
+  /** The conflict resolver per model ("auto" → the platform's model); absent: conflicts eject. */
+  resolver?: ResolverFactory;
+  /** The CI engine takes `testTargets` (impacted-target revalidation). */
+  targetsSupported?: boolean;
+  /** Deploy merged Changes in trains (else one RolloutWorkflow per Change). */
+  trains?: boolean;
+  config?: QueueConfigInput;
+}
+
 import type { CoordinatorOptions } from "./service.js";
 
 export interface CoordinatorRuntime<Env = unknown> {
@@ -20,6 +41,8 @@ export interface CoordinatorRuntime<Env = unknown> {
   bindings?(env: Env): CoordinatorBindings;
   coordinatorOptions?: CoordinatorOptions;
   mergeQueueOptions?: Partial<MergeQueueOptions>;
+  /** The agent-native merge queue's dependencies (the MergeQueue DO refuses to run without). */
+  mergeQueue?(env: Env): MergeQueueRuntime;
 }
 
 let current: CoordinatorRuntime<unknown> | null = null;

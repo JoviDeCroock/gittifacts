@@ -67,6 +67,7 @@ export {
   PUSH_EVENT_TYPE,
   parsePushEvent,
 } from "./push-router.js";
+export * from "./queue/index.js";
 export {
   isInverseDiff,
   type OpenRevertResult,
@@ -75,7 +76,12 @@ export {
 } from "./revert.js";
 export { type RolloutOutcome, type RolloutOutput, runRollout } from "./rollout-flow.js";
 export { createRunSink, isTerminalRun } from "./run-sink.js";
-export { type CoordinatorRuntime, configureCoordinatorRuntime, resolveRuntime } from "./runtime.js";
+export {
+  type CoordinatorRuntime,
+  configureCoordinatorRuntime,
+  type MergeQueueRuntime,
+  resolveRuntime,
+} from "./runtime.js";
 export { type CoordinatorOptions, createCoordinator, subscribeToChange } from "./service.js";
 export {
   type Duration,
