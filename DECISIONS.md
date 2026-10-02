@@ -1362,3 +1362,37 @@ so one culprit restarted ≈ 11 Changes and a third of all Changes absorbed a re
      Listed as a known issue in the docs checks.
   4. `/start` says `npx gittifacts login`, but the `gittifacts` package is not on npm yet; the docs mark it coming
      soon and show the build-from-source install.
+
+## 2026-10-02 — Docs follow-ups: Lane 0 toggle reset, tool-call hints, the CLI served as a tarball
+
+Fixes for the four issues the documentation work found (entry above), and the docs status after them.
+
+- **Lane 0 toggle reset.** The generated `.platform/policy.ts` no longer writes `lane0Enabled`. A file that says
+  `lane0Enabled: false` forces Lane 0 off whenever the policy is re-read (every new default-branch head), which
+  undid an owner's `setLane0(true)` at the next merge. Shadow mode is the schema default anyway. The rule is
+  unchanged: a policy file can force Lane 0 off, never on (`withLane0Toggle`). Templates and the Worker's bundled
+  templates are regenerated; `test/unit/lane0-toggle.test.ts` (coordinator) proves an owner's toggle survives
+  later default-branch commits with the generated file, and fails with the old one. Fixtures keep their explicit
+  `lane0Enabled: false` (hand-written; they model shadow-mode routing). Repos created before this keep the line;
+  the policy guide tells their owners to remove it.
+- **MCP examples.** `search_tools`' `create_project` example said `"worker-api"`. Every tool's example now
+  validates against its input schema with mcp-tada-server's own validator (enums included); the test also caught
+  `reprioritize`, whose schema-derived example put a placeholder in an enum (fallback examples now use the first
+  enum value).
+- **Fix hints.** `fixFor` / `nextStepsFor` suggested `capabilities({})`, which is HTTP only; they now say
+  `whoami({})`. `TOOL_NAMES` is exactly the live MCP tool list (tested against `buildTools()`), and every
+  generated `call` is checked against that list. The docs check has no known issues left.
+- **CLI without npm.** `deploy:prepare` runs `packages/cli` `pack:assets`: `node build.mjs`, a staged
+  `package.json` without the workspace devDependencies, `npm pack`, into `packages/web/dist/cli/`
+  (`gittifacts.tgz`, the same bytes as `gittifacts-<version>.tgz`, and `latest.json`). `apps/platform`
+  `routes/cli.ts` serves them as `application/gzip` with a 5-minute cache, a real 404 for anything else (the
+  assets binding's SPA fallback would answer 200 with HTML), and `/cli` redirects to the CLI guide.
+  `/start` (new `cli` block), `/llms.txt`, AGENTS.md, the device-flow hint, the web app and the landing page say
+  `npx -y https://<host>/cli/gittifacts.tgz --host https://<host> …`, with the request's host. The tarball has no
+  host baked in, so commands pass `--host`; `alias gittifacts="npx -y <tarball>"` makes the `gittifacts …`
+  commands the CLI prints runnable. npx caches a tarball by URL (verified), so the stable URL does not update an
+  existing npx cache; the CLI guide says so. `npx gittifacts` works once the package is published to npm.
+- **Docs status.** Credential-less creation and claiming are live on the hosted platform (kill switch on),
+  and so are rollouts (`scripts/e2e/m4.ts` passed live): their "coming soon" markers are gone. Still marked:
+  deploying asset-based projects (`preact-app`, `static-site`), private GitHub imports, the GitHub mirror,
+  third-party deploy connectors, before/after screenshots, other jurisdictions, and npm publishing.
