@@ -49,8 +49,30 @@ Also: `templates/` (4 templates, CI path 5–8 s each) and `fixtures/` (9 change
 - Flagship app `gittifacts-changes`
 - DNS `*.preview.resynapse.dev`, the preview gateway target
 
+## Live, verified on the deployed platform (2026-10-02)
+- **Deploy:** https://gittifacts.decroockjovi.workers.dev with secrets set and D1 migrations applied. Every deploy
+  goes through `scripts/deploy-clean.sh` (origin/main from a clean worktree).
+- **Front door:** `/start`, `/llms.txt`, `/openapi.json`, OAuth/MCP discovery and the server card all serve.
+- **`create_project` (CLI → MCP):** an Artifacts repo with the template commit, a bootstrap change, real container
+  CI and a preview. Time-to-first-green was 48 s, then 36 s with a warm plan cache. The first-ever run took ~6 min
+  because of the container image cold start.
+- **M1 live:** clone fork → push → CI (cached install, lint/typecheck/test/build) → 7 evidence steps → 9-10
+  signed items, verified with the platform key. About 50 s from push to evidence, with test results and logs
+  returned through MCP.
+- **Lane + tour:** the LLM judge and the classifier route the change to Lane 1 (no plan). A 5-stop tour comes from
+  Kimi K2.7 Code (Workers AI via AI Gateway) at $0.015 per change.
+- **Previews:** `p-<change>-pv.resynapse.dev` serves the container preview with valid TLS, the banner and
+  hardened headers. `/cdn-cgi` is blocked, and the zone's other subdomains are untouched.
+- **Fixed by dogfooding:**
+  - container label keys must be ≤ 16 bytes;
+  - previews needed first-level hosts for TLS;
+  - the `test-run` evidence step was missing;
+  - screenshot R2 puts needed a known length;
+  - third-party models fail through the binding without credits, so the reviewer now uses Workers AI;
+  - CI plans are now cached by `ci.ts` content.
+
 ## Mocked / not yet real
-- Nothing is deployed yet. Containers have only run under local Docker; `ctx.container` hasn't run on Cloudflare yet.
+- Merge queue (new) not yet wired live; rollout/revert (M4) needs `CF_API_TOKEN` (Versions/Flagship/Observability REST).
 
 ## Next
 1. Deploy (`pnpm --filter @app/platform deploy`, docs/deploy.md) → seed template caches → `scripts/e2e/m1.ts` → O1 live check (time-to-first-green) → M4 live e2e.
