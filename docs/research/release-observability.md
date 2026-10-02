@@ -141,7 +141,22 @@ POST /accounts/{a}/alerting/v3/policies {"name":"issues→gittifacts","alert_typ
 POST /accounts/{a}/workers/observability/issues/automations {"policyId":"<policy_id>","service":"<script>","afterOccurrences":5,"enabled":true,"name":"canary"}
 # cf: cf alerting destinations webhooks create | cf alerting policies create | cf observability issues automations create
 ```
-**Payload** = the generic Notifications envelope [D:notifications/reference/webhook-payload-schema]. `data` for this alert type is **undocumented** (§9):
+**Payload, captured live 2026-10-02** (account-wide automation, a throwaway `gf-` Worker that throws):
+```json
+{ "name":"gittifacts-workers-issues", "text":"Real-Time Issue '<title>' detected in <script>. …",
+  "data":{ "issue":{ "id":"<uuid>", "title":"probe boom 3 · at Object.fetch (index.js)", "fingerprint":"<hex>",
+      "count":"1", "first_observed":"2026-10-02T15:47:09.217Z", "last_observed":"…", "status":"ISSUE_STATUS_ACTIVE",
+      "type":"ISSUE_TYPE_EXCEPTION", "services":[{ "name":"<script>", "type":"SERVICE_TYPE_WORKER", "first_observed":"…", "last_observed":"…" }] },
+    "state_correlation_id":"<uuid>", "state_event":"ALERT_STATE_EVENT_START" },
+  "ts":1790956056, "policy_id":"…", "policy_name":"…", "alert_type":"workers_observability_real_time_issue",
+  "alert_event":"ALERT_STATE_EVENT_START", "alert_correlation_id":"<uuid>" }
+```
+**No version id**: read it from the newest occurrence, `GET …/issues/{id}/occurrences` → `[{ timestamp, error:{message,stack,…},
+worker:{ scriptName, scriptVersion:{id} }, invocation, request }]`. Each distinct error message is its own issue. Latency
+measured: occurrence → issue created ≈ 21 s → webhook delivered ≈ 31 s. Creating a destination sends a `{"text":"Hello World! …"}`
+test message (no `alert_type`, no `data`). An account-wide automation (`service` omitted) reports `"scope":"account"`.
+
+Before the capture, the envelope was documented [D:notifications/reference/webhook-payload-schema] but `data` was not:
 ```json
 { "name":"<policy name>", "text":"<human summary>", "data":{ /* alert-specific, undocumented for Issues */ },
   "ts":1790870150, "account_id":"…", "policy_id":"…", "policy_name":"…",
@@ -356,7 +371,7 @@ POST   /accounts/{a}/alerting/v3/silences                         (mute)
 
 ## 9. Open questions
 
-1. **Issues webhook `data` shape.** To capture it, create a throwaway Worker that throws, then `POST /issues/{id}/notification-runs {policyId}` to a request bin. Does it include `service`, version id, `firstObserved`, `count`, a stable issue id or a fingerprint? Until confirmed, treat the webhook as a *trigger* and pull details from `GET /issues/{id}` + `/occurrences`.
+1. ~~**Issues webhook `data` shape.**~~ Answered 2026-10-02 (§2): `data.issue` has the id, title, fingerprint, count, timestamps and `services[].name`; no version id (it is on each occurrence).
 2. **Issues API response shapes.** `ListIssuesResponse` and `OccurrencesIssuesResponse` are typed but not documented. Does an occurrence expose `scriptVersion.id` as a field (the docs say version is shown in the UI)? Are issues deduped across versions?
 3. **Flagship PUT concurrency.** No ETag or `If-Match` is documented, so concurrent agent writes can clobber each other. We need serialization on our side, for example a DO per app. The changelog GET can audit after the fact.
 4. **Flagship propagation SLO.** "Up to 30 s" vs "within seconds". Is there an API signal that a flag change has propagated?
