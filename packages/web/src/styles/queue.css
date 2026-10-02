@@ -4,6 +4,10 @@
   gap: var(--s-6);
   min-inline-size: 0;
 }
+.q dl,
+.q dd {
+  margin: 0;
+}
 @media (min-width: 1024px) {
   .q {
     gap: var(--s-7);
@@ -83,6 +87,7 @@
 .q-freeze__facts {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  max-inline-size: 680px;
   gap: var(--s-1) var(--s-5);
   margin-block-start: var(--s-1);
   font-size: var(--text-small);
@@ -240,14 +245,17 @@ a.q-stat__sub {
   font-size: var(--text-body);
   line-height: var(--leading-tight);
 }
+.q-express .icon {
+  margin-block-start: 0.2em;
+}
 .q-lane__meta,
 .q-lane__empty {
   font-size: var(--text-small);
   color: var(--text-3);
 }
 .q-express {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  align-items: flex-start;
   gap: 4px;
   font-size: var(--text-small);
   font-weight: var(--weight-medium);
@@ -446,22 +454,33 @@ a.q-stat__sub {
   color: var(--text-2);
   overflow-wrap: anywhere;
 }
+/* Phones: one wrapped line of label-value pairs. Desktop: a 2x2 block in its own column. */
 .q-facts {
   grid-column: 2;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-2) var(--s-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
   font-size: var(--text-small);
+}
+.q-facts > div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-inline-size: 0;
 }
 @media (min-width: 1024px) {
   .q-facts {
     grid-column: 3;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-2) var(--s-4);
     align-content: start;
     padding-block-start: 2px;
   }
-}
-.q-facts > div {
-  min-inline-size: 0;
+  .q-facts > div {
+    display: grid;
+    gap: 0;
+  }
 }
 .q-facts dt {
   font-size: var(--text-meta);
@@ -619,6 +638,8 @@ a.q-stat__sub {
   gap: var(--s-2) var(--s-3);
 }
 .q-flaky__rate {
+  min-inline-size: 5.5em;
+  text-align: end;
   font-size: var(--text-small);
   font-weight: var(--weight-medium);
   color: var(--text-2);

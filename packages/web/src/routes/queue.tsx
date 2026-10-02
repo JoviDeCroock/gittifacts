@@ -104,11 +104,11 @@ function HaltedBanner({
       <Icon name="pause" size={22} class="q-banner__icon" />
       <div class="q-banner__body">
         <h2 id="q-halted" class="q-banner__title">
-          Queue halted: it needs an operator
+          Queue halted
         </h2>
         <p class="q-banner__lede">
-          An invariant check failed, so the queue stopped instead of guessing. Nothing speculates or
-          lands until someone reconciles it.
+          An invariant check failed, so the queue stopped instead of guessing. It needs an operator:
+          nothing speculates or lands until someone reconciles it.
         </p>
         <p class="q-banner__msg">{halted.message}</p>
         <p class="q-banner__meta">
@@ -182,6 +182,8 @@ function FreezeBanner({ q, now }: { q: QueueOverviewView; now: number }) {
   );
 }
 
+const rate = new Intl.NumberFormat("en", { maximumFractionDigits: 1 });
+
 function Stats({ q }: { q: QueueOverviewView }) {
   const t = q.timeInQueueMs;
   return (
@@ -197,17 +199,16 @@ function Stats({ q }: { q: QueueOverviewView }) {
         </div>
         <div class="q-stat">
           <dt>Landed per hour</dt>
-          <dd class="tnum">{q.throughputPerHour.toFixed(q.throughputPerHour < 10 ? 1 : 0)}</dd>
+          <dd class="tnum">{rate.format(q.throughputPerHour)}</dd>
         </div>
         <div class="q-stat">
-          <dt>Time in queue</dt>
+          <dt>Median time in queue</dt>
           <dd class="tnum">
             <span class={t.p50 === null ? "tone--warn q-stat__nm" : ""}>
               {durationShort(t.p50)}
             </span>
             <span class="q-stat__sub">
-              median · p95{" "}
-              <span class={t.p95 === null ? "tone--warn" : ""}>{durationShort(t.p95)}</span>
+              p95 <span class={t.p95 === null ? "tone--warn" : ""}>{durationShort(t.p95)}</span>
             </span>
           </dd>
         </div>

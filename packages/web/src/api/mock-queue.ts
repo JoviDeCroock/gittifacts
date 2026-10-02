@@ -277,7 +277,7 @@ function billing(variant: { frozen: boolean; halted: boolean }): QueueOverviewVi
     halted: variant.halted
       ? {
           code: "main-moved-outside-queue",
-          message: `main moved to ${sha("billing-main-foreign").slice(0, 12)} without a queue CAS. Only the merge queue writes the default branch, so the queue stopped instead of guessing.`,
+          message: `main moved to ${sha("billing-main-foreign").slice(0, 12)} without a queue compare-and-swap. Only the merge queue may write the default branch.`,
           at: NOW - 2 * MIN,
         }
       : null,

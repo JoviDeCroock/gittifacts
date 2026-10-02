@@ -95,23 +95,25 @@ function Facts({ e, trackName }: { e: QueueEntryView; trackName: string | null }
     <dl class="q-facts">
       <div>
         <dt>Track</dt>
-        <dd>{trackName ?? <span class="q-dim">Not assigned</span>}</dd>
+        <dd>{trackName ?? <span class="q-dim">none yet</span>}</dd>
       </div>
       {!done || e.batch ? (
         <div>
           <dt>Batch</dt>
-          <dd>
+          <dd
+            title={
+              e.batch
+                ? `Step ${e.batch.chainPosition} of its track's chain, ${e.batch.size} ${e.batch.size === 1 ? "change" : "changes"}`
+                : undefined
+            }
+          >
             {e.batch ? (
               <>
                 {e.batch.id}
-                <span class="q-dim tnum">
-                  {" "}
-                  · {BATCH_STATE[e.batch.state].label.toLowerCase()} · step {e.batch.chainPosition},{" "}
-                  {e.batch.size} {e.batch.size === 1 ? "change" : "changes"}
-                </span>
+                <span class="q-dim"> · {BATCH_STATE[e.batch.state].label}</span>
               </>
             ) : (
-              <span class="q-dim">Not in a batch</span>
+              <span class="q-dim">none</span>
             )}
           </dd>
         </div>

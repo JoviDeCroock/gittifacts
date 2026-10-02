@@ -74,7 +74,7 @@ function TrackLane({ track, find }: { track: QueueTrack; find: Find }) {
         {track.express ? (
           <p class="q-express">
             <Icon name="arrow-up-right" size={14} />
-            Reverts and incident fixes go first
+            Reverts and incident fixes first
           </p>
         ) : null}
         <p class="q-lane__meta tnum">
