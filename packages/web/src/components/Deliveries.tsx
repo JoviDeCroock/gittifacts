@@ -91,7 +91,9 @@ export function DeliveryDetailView({
 }) {
   const now = minuteClock.value;
   const payload = prettyJson(d.payload);
-  const signature = d.requestHeaders["X-Gittifacts-Signature-256"];
+  // Header names are case-insensitive (the server sends them lower-case).
+  const isSignature = (k: string) => k.toLowerCase() === "x-gittifacts-signature-256";
+  const signature = Object.entries(d.requestHeaders).find(([k]) => isSignature(k))?.[1];
   return (
     <article class="dlv-detail" aria-labelledby="dlv-title">
       <header class="dlv-detail__head">
@@ -145,7 +147,7 @@ export function DeliveryDetailView({
       <Block title="Request headers" aside={signature ? <CopyButton text={signature} label="Copy signature" /> : null}>
         <dl class="dlv-headers">
           {Object.entries(d.requestHeaders).map(([k, v]) => (
-            <div key={k} class={k === "X-Gittifacts-Signature-256" ? "is-signature" : undefined}>
+            <div key={k} class={isSignature(k) ? "is-signature" : undefined}>
               <dt>{k}</dt>
               <dd>{v}</dd>
             </div>

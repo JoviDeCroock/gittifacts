@@ -61,7 +61,7 @@ const guid = (seed: string) => {
   const h = sha(seed);
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
 };
-const secretValue = (seed: string) => `gtfs_${b64u(seed, 40)}`;
+const secretValue = (seed: string) => `gtis_${b64u(seed, 40)}`;
 const secretView = (seed: string, createdMin: number, usedMin: number | null): SecretView => ({
   id: `sec_${b64u(seed, 8)}`,
   prefix: secretValue(seed).slice(0, 12),
@@ -76,7 +76,7 @@ const DEPLOY: IntegrationScope[] = ["repo:read", "contents:read", "webhooks", "d
 const integrations: IntegrationView[] = [
   {
     id: "int_cfwb",
-    clientId: "gtfi_9c1e4b7a2d",
+    clientId: "gtic_9c1e4b7a2d",
     name: "Cloudflare Workers Builds",
     description: "Builds and deploys Workers from gittifacts: production from main, a preview per Change.",
     logoUrl: null,
@@ -102,7 +102,7 @@ const integrations: IntegrationView[] = [
   },
   {
     id: "int_netlify_stg",
-    clientId: "gtfi_41f07c2be8",
+    clientId: "gtic_41f07c2be8",
     name: "Netlify (staging)",
     description: "Staging app for the Netlify connector. Not for production sites.",
     logoUrl: null,
@@ -145,53 +145,106 @@ interface DeliverySeed {
   error?: string | null;
 }
 
-function payloadFor(s: DeliverySeed, id: string): string {
-  const r = s.repoId ? repo(s.repoId) : null;
-  const repository = r
-    ? {
-        id: r.id,
-        name: r.name,
-        fullName: r.fullName,
-        defaultBranch: "main",
-        cloneUrl: `${ORIGIN}/git/${r.fullName}.git`,
-      }
-    : null;
-  const installation = { id: "inst_cfwb_maya", account: { kind: "human", handle: ME.handle } };
-  const sender = { id: ME.id, kind: "human", name: ME.name };
-  const change = (n: number) => ({
-    id: `chg_${b64u(`${s.id}-chg`, 6)}`,
-    number: n,
-    title: "Retry webhook deliveries with jittered backoff",
+/** Maya's installation of Cloudflare Workers Builds (the deliveries below belong to it). */
+const CFWB_INSTALL = "ins_c7wb2m4y";
+
+const htmlBase = ORIGIN;
+const repoPayload = (r: RepoRef) => ({
+  id: r.id,
+  name: r.name,
+  fullName: r.fullName,
+  owner: r.fullName.split("/")[0] ?? "",
+  defaultBranch: "main",
+  cloneUrl: `${ORIGIN}/git/${r.fullName}.git`,
+  htmlUrl: `${htmlBase}/repos/${r.id}`,
+  apiUrl: `${ORIGIN}/api/v1/repos/${r.id}`,
+});
+
+function changePayload(s: DeliverySeed, r: RepoRef) {
+  const id = `chg_${b64u(`${s.id}-chg`, 8)}`;
+  const merged = s.event === "change.merged" || s.event === "change.reverted";
+  return {
+    id,
+    title: "Cache invoice totals per billing period",
+    status: s.event === "change.merged" ? "merged" : s.event === "change.reverted" ? "reverted" : "awaiting-review",
+    planId: `pln_${b64u(`${s.id}-plan`, 8)}`,
+    baseSha: sha(`${s.id}-base`),
     headSha: sha(`${s.id}-head`),
+    mergedSha: merged ? sha(`${s.id}-merged`) : null,
     lane: 1,
-    url: `${ORIGIN}/changes/chg_${b64u(`${s.id}-chg`, 6)}`,
-  });
-  const body: Record<string, unknown> = { event: s.event, delivery: id };
-  if (s.action) body.action = s.action;
+    revertOf: null,
+    cloneUrl: `${ORIGIN}/git/${r.fullName}/changes/${id}.git`,
+    htmlUrl: `${htmlBase}/changes/${id}`,
+    apiUrl: `${ORIGIN}/api/v1/changes/${id}`,
+  };
+}
+
+/** The envelope the server sends: event, action, deliveryId, createdAt, installation, then per-event fields. */
+function payloadFor(s: DeliverySeed, deliveryId: string, createdAt: string): string {
+  const r = s.repoId ? repo(s.repoId) : null;
+  const body: Record<string, unknown> = {
+    event: s.event,
+    action: s.action ?? null,
+    deliveryId,
+    createdAt,
+    installation: s.event === "ping" ? null : { id: CFWB_INSTALL },
+  };
   switch (s.event) {
-    case "push":
+    case "push": {
+      if (!r) break;
+      const after = sha(`${s.id}-after`);
       Object.assign(body, {
+        repository: repoPayload(r),
+        kind: "default-branch",
         ref: "refs/heads/main",
         before: sha(`${s.id}-before`),
-        after: sha(`${s.id}-after`),
-        headCommit: { sha: sha(`${s.id}-after`), message: "Merge Change #41: cache invoice totals", author: "fleet-coder-07" },
+        after,
+        sha: after,
+        cloneUrl: `${ORIGIN}/git/${r.fullName}.git`,
         change: null,
       });
       break;
+    }
     case "change.created":
     case "change.updated":
     case "change.merged":
-    case "change.reverted":
-      body.change = change(41);
+    case "change.reverted": {
+      if (!r) break;
+      const change = changePayload(s, r);
+      Object.assign(body, {
+        repository: repoPayload(r),
+        change,
+        cloneUrl: change.cloneUrl,
+        sha: change.mergedSha ?? change.headSha,
+        ...(s.event === "change.updated" ? { changedFields: ["headSha", "status"] } : {}),
+      });
       break;
-    case "ping":
-      body.zen = "Humans approve intent. Machines prove conformance.";
-      body.hook = { url: integrations.find((i) => i.id === s.integrationId)?.webhook.url ?? null };
+    }
+    case "installation.created":
+    case "installation.deleted":
+      body.installation = {
+        id: CFWB_INSTALL,
+        account: { id: ME.id, handle: ME.handle },
+        repoSelection: "selected",
+        repositories: ["repo_billing", "repo_edge"].map(repo).map((x) => ({
+          id: x.id,
+          name: x.name,
+          fullName: x.fullName,
+          cloneUrl: `${ORIGIN}/git/${x.fullName}.git`,
+        })),
+        scopes: DEPLOY,
+      };
       break;
-    default:
+    case "ping": {
+      const it = integrations.find((i) => i.id === s.integrationId);
+      Object.assign(body, {
+        zen: "Humans approve intent. Machines prove conformance.",
+        integration: it ? { id: it.id, clientId: it.clientId, name: it.name } : null,
+        hook: it ? { url: it.webhook.url, events: it.webhook.events, active: it.webhook.active } : null,
+      });
       break;
+    }
   }
-  Object.assign(body, { repository, installation, sender });
   return JSON.stringify(body);
 }
 
@@ -202,7 +255,8 @@ const deliveryOwner = (d: DeliveryDetail) => owners.get(d.id);
 function makeDelivery(s: DeliverySeed): DeliveryDetail {
   owners.set(s.id, s.integrationId);
   const g = guid(s.id);
-  const payload = payloadFor(s, g);
+  const createdAt = ago(s.createdMin);
+  const payload = payloadFor(s, g, createdAt);
   const integration = integrations.find((i) => i.id === s.integrationId);
   return {
     id: s.id,
@@ -210,23 +264,24 @@ function makeDelivery(s: DeliverySeed): DeliveryDetail {
     event: s.event,
     action: s.action ?? null,
     repo: s.repoId ? { id: s.repoId, name: repo(s.repoId).name } : null,
-    installationId: s.event === "ping" ? null : "inst_cfwb_maya",
+    installationId: s.event === "ping" ? null : CFWB_INSTALL,
     status: s.status,
     attempts: s.attempts,
     responseStatus: s.responseStatus,
     durationMs: s.durationMs,
-    createdAt: ago(s.createdMin),
+    createdAt,
     lastAttemptAt: s.lastAttemptMin === null ? null : ago(s.lastAttemptMin ?? s.createdMin),
     nextAttemptAt: s.nextAttemptMin == null ? null : ahead(s.nextAttemptMin),
     redeliveryOf: s.redeliveryOf ?? null,
     url: integration?.webhook.url ?? "https://example.invalid/hook",
+    // Lower-case keys, as the server returns them.
     requestHeaders: {
-      "Content-Type": "application/json",
-      "User-Agent": "gittifacts-webhooks/1.0",
-      "X-Gittifacts-Event": s.event,
-      "X-Gittifacts-Delivery": g,
-      "X-Gittifacts-Signature-256": `sha256=${hex64(payload)}`,
-      ...(s.event === "ping" ? {} : { "X-Gittifacts-Installation": "inst_cfwb_maya" }),
+      "content-type": "application/json",
+      "user-agent": "gittifacts-Hookshot/1",
+      "x-gittifacts-event": s.event,
+      "x-gittifacts-delivery": g,
+      "x-gittifacts-signature-256": `sha256=${hex64(payload)}`,
+      ...(s.event === "ping" ? {} : { "x-gittifacts-installation-id": CFWB_INSTALL }),
     },
     payload,
     responseBody: s.responseBody === undefined ? (s.responseStatus === 200 ? '{"ok":true}' : null) : s.responseBody,
@@ -258,7 +313,7 @@ function summary(d: DeliveryDetail): DeliverySummary {
 
 const installations: InstallationView[] = [
   {
-    id: "inst_cfwb_maya",
+    id: CFWB_INSTALL,
     integration: {
       id: "int_cfwb",
       name: "Cloudflare Workers Builds",
@@ -278,7 +333,7 @@ const installations: InstallationView[] = [
     installedBy: { id: ME.id, name: ME.name },
   },
   {
-    id: "inst_render_maya",
+    id: "ins_r3nd8m4y",
     integration: {
       id: "int_render",
       name: "Render",
@@ -303,7 +358,7 @@ const installations: InstallationView[] = [
 
 const VERCEL = {
   id: "int_vercel",
-  clientId: "gtfi_v3rc31a9f0",
+  clientId: "gtic_v3rc31a9f0",
   name: "Vercel",
   description: "Deploys every push to main to production and builds a preview for each Change.",
   logoUrl: null,
@@ -314,7 +369,7 @@ const VERCEL = {
 };
 const CFWB = {
   id: "int_cfwb",
-  clientId: "gtfi_9c1e4b7a2d",
+  clientId: "gtic_9c1e4b7a2d",
   name: "Cloudflare Workers Builds",
   description: integrations[0]?.description ?? null,
   logoUrl: null,
@@ -329,7 +384,7 @@ const decided = new Map<string, "approved" | "denied">();
 function installFor(id: string): InstallView | null {
   if (!["demo", "update", "empty", "expired", "decided"].includes(id)) return null;
   const update = id === "update";
-  const existing = update ? installations.find((i) => i.id === "inst_cfwb_maya" && i.status === "active") : undefined;
+  const existing = update ? installations.find((i) => i.id === CFWB_INSTALL && i.status === "active") : undefined;
   const status = decided.get(id) ?? (id === "expired" ? "expired" : id === "decided" ? "approved" : "pending");
   return {
     id,
@@ -355,7 +410,7 @@ function applyInstall(view: InstallView, repoSelection: "all" | "selected", repo
     return;
   }
   installations.unshift({
-    id: nextId("inst"),
+    id: nextId("ins"),
     integration: {
       id: view.integration.id,
       name: view.integration.name,
@@ -431,7 +486,7 @@ function create(body: unknown): MockResponse {
   const now = new Date().toISOString();
   const integration: IntegrationView = {
     id,
-    clientId: `gtfi_${sha(id).slice(0, 10)}`,
+    clientId: `gtic_${sha(id).slice(0, 10)}`,
     name: i.name.trim(),
     description: i.description ?? null,
     logoUrl: i.logoUrl ?? null,
