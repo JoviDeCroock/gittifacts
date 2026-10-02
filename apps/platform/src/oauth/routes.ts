@@ -48,6 +48,13 @@ import {
   revokeToken,
   type TokenResponse,
 } from "./tokens.js";
+import { isIntegrationClientId } from "../integrations/crypto.js";
+import { authorizeIntegration } from "../integrations/install.js";
+import {
+  integrationRevokeEndpoint,
+  integrationTokenEndpoint,
+  isIntegrationRequest,
+} from "../integrations/tokens.js";
 import { OAUTH_PATHS } from "./urls.js";
 
 const CORS_OPEN: Record<string, string> = {
@@ -351,7 +358,11 @@ export function registerOAuthRoutes(app: ApiApp): void {
   // ---- protocol
   app.get(OAUTH_PATHS.authorize, async (c) => {
     const urls = urlsFor(c);
-    const out = await startAuthorization(c.get("services"), urls, new URL(c.req.url).searchParams);
+    const q = new URL(c.req.url).searchParams;
+    // Integration clients (deploy platforms, `gtic_…`) install on repos instead (src/integrations).
+    const out = isIntegrationClientId(q.get("client_id"))
+      ? await authorizeIntegration(c.get("services"), urls, q)
+      : await startAuthorization(c.get("services"), urls, q);
     if (out.kind !== "error") return c.redirect(out.location, 302);
     if ((c.req.header("accept") ?? "").includes("text/html")) {
       const u = new URL(urls.consent);
@@ -379,6 +390,11 @@ export function registerOAuthRoutes(app: ApiApp): void {
     protocol(c, async () => {
       const svc = c.get("services");
       const p = await readParams(c);
+      const authorization = c.req.header("authorization");
+      if (isIntegrationRequest(authorization, p)) {
+        const out = await integrationTokenEndpoint(svc, urlsFor(c), p, authorization);
+        return jsonResponse(out, 200, NO_STORE);
+      }
       const grant = p.get("grant_type");
       let tokens: TokenResponse;
       if (grant === "authorization_code") tokens = await exchangeAuthorizationCode(svc, p);
@@ -396,7 +412,13 @@ export function registerOAuthRoutes(app: ApiApp): void {
 
   app.post(OAUTH_PATHS.revoke, (c) =>
     protocol(c, async () => {
-      await revokeToken(c.get("services"), await readParams(c));
+      const p = await readParams(c);
+      const authorization = c.req.header("authorization");
+      if (isIntegrationRequest(authorization, p)) {
+        await integrationRevokeEndpoint(c.get("services"), p, authorization);
+      } else {
+        await revokeToken(c.get("services"), p);
+      }
       return jsonResponse({}, 200, NO_STORE);
     }),
   );

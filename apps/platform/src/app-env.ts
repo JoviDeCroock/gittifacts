@@ -21,11 +21,14 @@ export type Bindings = Env & {
   UNCLAIMED_LIMITS?: string;
 };
 
-/** Who is calling: a signed-in human (better-auth session) or an agent (gtf_ bearer token). */
+/**
+ * Who is calling: a signed-in human (better-auth session), an agent (gtf_ bearer token) or an
+ * installed integration (gti_ bearer token, src/integrations).
+ */
 export interface Caller {
   principal: Principal;
   user: SessionUser | null;
-  via: "session" | "agent-token";
+  via: "session" | "agent-token" | "integration-token";
   /** Agent tokens: unix seconds; sessions: undefined. */
   expiresAtSec?: number;
 }

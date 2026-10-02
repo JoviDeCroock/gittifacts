@@ -7,6 +7,7 @@ import { registerClaimRoutes } from "./claim/routes.js";
 import { getCoordinator } from "./coordinator.js";
 import { fixFor, toErrorResponse } from "./errors.js";
 import { registerImportRoutes } from "./import/routes.js";
+import { registerIntegrationRoutes } from "./integrations/routes.js";
 import { RateLimited } from "./limits/creation.js";
 import { registerLimitRoutes } from "./limits/routes.js";
 import { handleMcp, MCP_PATH } from "./mcp/route.js";
@@ -32,7 +33,8 @@ export const OPENAPI_PATH = "/api/v1/openapi.json";
 export const BLOBS_PATH = "/api/v1/blobs";
 
 /** Paths the Worker owns; everything else is the SPA (static assets). */
-const WORKER_PATHS = /^\/(api\/|mcp$|mcp\/|webhooks\/|\.well-known\/|internal\/ttfg$)/;
+const WORKER_PATHS =
+  /^\/(api\/|mcp$|mcp\/|webhooks\/|\.well-known\/|internal\/ttfg$|git\/|docs\/integrations$)/;
 
 const OPENAPI_CONFIG = {
   openapi: "3.1.0",
@@ -94,6 +96,8 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerClaimRoutes(app);
   registerLimitRoutes(app);
   registerAuditRoutes(app);
+  // External integrations: developer portal, installs, deployments, /git/ proxy, /docs/integrations.
+  registerIntegrationRoutes(app);
 
   // R2-backed references (logs, screenshots, spilled diffs). `:ref` may contain slashes.
   app.get(`${BLOBS_PATH}/:ref{.+}`, requirePrincipal(["repo:read"]), (c) =>

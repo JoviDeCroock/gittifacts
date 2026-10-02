@@ -86,10 +86,19 @@ describe("discovery", () => {
       device_authorization_endpoint: `${ORIGIN}/api/auth/device/code`,
       response_types_supported: ["code"],
       code_challenge_methods_supported: ["S256"],
-      token_endpoint_auth_methods_supported: ["none"],
+      // Secrets are for confidential integration clients (src/integrations); agents stay public.
+      token_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post"],
       client_id_metadata_document_supported: true,
       authorization_response_iss_parameter_supported: true,
-      scopes_supported: ["repo:read", "plan:create", "change:create"],
+      scopes_supported: [
+        "repo:read",
+        "plan:create",
+        "change:create",
+        "contents:read",
+        "webhooks",
+        "deployments:write",
+        "checks:write",
+      ],
     });
     expect(md.grant_types_supported).toEqual([
       "authorization_code",

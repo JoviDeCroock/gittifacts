@@ -4,6 +4,11 @@ import { assertRouteAccess } from "../access/route.js";
 import { needForScopes, type RepoNeed } from "../access/roles.js";
 import type { AppEnv, Caller } from "../app-env.js";
 import { ApiError, forbidden, unauthorized } from "../errors.js";
+import {
+  enforceIntegrationRate,
+  isIntegrationBearer,
+  verifyIntegrationToken,
+} from "../integrations/auth.js";
 import { enforceUnclaimedRequestRate } from "../limits/request-limit.js";
 import { urlsFor } from "../oauth/context.js";
 import { audienceAllows } from "../oauth/urls.js";
@@ -25,7 +30,8 @@ function bearerToken(header: string | undefined): string | null {
 }
 
 /**
- * Resolve the caller once per request: a `gtf_` bearer token → agent principal; otherwise a
+ * Resolve the caller once per request: a `gti_` bearer token → integration principal (an
+ * installation; never falls back to a session either); a `gtf_` bearer token → agent principal; otherwise a
  * better-auth session (cookie, or a session token as bearer) → human principal, created with the
  * default human scopes on first sign-in. An agent token that fails verification never falls back
  * to the session. A token bound to another resource (e.g. an MCP-only OAuth token) is refused
@@ -37,7 +43,14 @@ export async function resolveCaller(c: Context<AppEnv>): Promise<Caller | null> 
   const { store, clock } = c.get("services");
   let caller: Caller | null = null;
   const token = bearerToken(c.req.header("authorization"));
-  if (token && isAgentToken(token)) {
+  if (token && isIntegrationBearer(token)) {
+    // An installed integration (deploy platform): audience <origin>/api, repos of its installation.
+    const v = await verifyIntegrationToken(c.get("services"), token);
+    if (v) await enforceIntegrationRate(c.env, v.integration.id);
+    caller = v
+      ? { principal: v.principal, user: null, via: "integration-token", expiresAtSec: v.expiresAtSec }
+      : null;
+  } else if (token && isAgentToken(token)) {
     const v = await verifyAgentToken(store, token, clock.now(), (p) => c.executionCtx.waitUntil(p));
     if (v) {
       const api = urlsFor(c).apiResource;

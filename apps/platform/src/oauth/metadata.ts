@@ -15,6 +15,7 @@ import {
   mcpDiscovery,
   type WellKnownDocument,
 } from "@app/conventions";
+import { IntegrationScope } from "@app/domain";
 import { DELEGABLE_SCOPES } from "./scopes.js";
 import { OAUTH_PATHS, type OAuthUrls } from "./urls.js";
 
@@ -31,9 +32,11 @@ export function authorizationServerMetadata(urls: OAuthUrls): { [key: string]: J
     response_modes_supported: ["query"],
     grant_types_supported: ["authorization_code", "refresh_token", DEVICE_GRANT_TYPE],
     code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["none"],
-    revocation_endpoint_auth_methods_supported: ["none"],
-    scopes_supported: [...DELEGABLE_SCOPES],
+    // "none": public clients (agents, CLI, public integrations); secrets: confidential integrations.
+    token_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post"],
+    revocation_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post"],
+    // Agent scopes, then integration scopes (src/integrations/scopes.ts).
+    scopes_supported: [...new Set<string>([...DELEGABLE_SCOPES, ...IntegrationScope.options])],
     client_id_metadata_document_supported: true,
     authorization_response_iss_parameter_supported: true,
     service_documentation: `${urls.origin}/start`,

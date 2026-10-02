@@ -16,7 +16,7 @@ import type { Services } from "../app-env.js";
 import { integrationAuthorizations } from "../db/schema.js";
 import { type AuthorizeOutcome, errorRedirect, randomId } from "../oauth/authorize.js";
 import { canonicalResource, type OAuthUrls } from "../oauth/urls.js";
-import type { IntegrationRow } from "./registry.js";
+import { getIntegrationByClientId, type IntegrationRow } from "./registry.js";
 import { integrationScopesOf, parseIntegrationScopes } from "./scopes.js";
 
 /** How long the human has to decide on the install screen. */
@@ -133,4 +133,22 @@ export async function bindAuthorization(svc: Services, id: string, humanId: stri
     .update(integrationAuthorizations)
     .set({ ownerId: humanId })
     .where(and(eq(integrationAuthorizations.id, id), isNull(integrationAuthorizations.ownerId)));
+}
+
+/** `/api/oauth/authorize` for an integration `client_id` (gtic_…). */
+export async function authorizeIntegration(
+  svc: Services,
+  urls: OAuthUrls,
+  q: URLSearchParams,
+): Promise<AuthorizeOutcome> {
+  const all = q.getAll("client_id");
+  const integration = all.length === 1 && all[0] ? await getIntegrationByClientId(svc, all[0]) : null;
+  if (!integration) {
+    return {
+      kind: "error",
+      message: "unknown integration client_id",
+      explanation: "Register the integration in the developer portal (Settings → Integrations → Developer) and use its client_id.",
+    };
+  }
+  return startIntegrationAuthorization(svc, urls, q, integration);
 }

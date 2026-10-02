@@ -337,3 +337,30 @@ export async function revokeIntegrationToken(svc: Services, p: URLSearchParams, 
     }
   }
 }
+
+/** POST /api/oauth/token for an integration client: authenticate, then the grant. */
+export async function integrationTokenEndpoint(
+  svc: Services,
+  urls: OAuthUrls,
+  p: URLSearchParams,
+  authorization: string | undefined,
+): Promise<IntegrationTokenResponse> {
+  const integration = await authenticateClient(svc, clientCredentials(authorization, p));
+  const grant = p.get("grant_type");
+  if (grant === "authorization_code") return exchangeIntegrationCode(svc, urls, p, integration);
+  if (grant === "refresh_token") return refreshIntegrationToken(svc, urls, p, integration);
+  throw new OAuthProtocolError(
+    "unsupported_grant_type",
+    `grant_type ${grant ?? "(missing)"} is not supported for integrations (authorization_code, refresh_token)`,
+  );
+}
+
+/** POST /api/oauth/revoke for an integration client (RFC 7009; confidential clients authenticate). */
+export async function integrationRevokeEndpoint(
+  svc: Services,
+  p: URLSearchParams,
+  authorization: string | undefined,
+): Promise<void> {
+  const integration = await authenticateClient(svc, clientCredentials(authorization, p));
+  await revokeIntegrationToken(svc, p, integration);
+}
