@@ -245,7 +245,7 @@ describe("create_project → first green (workerd, fake Artifacts/containers)", 
           const html = await page.text();
           expect(html).toContain(`<${BANNER_TAG}`);
           expect(html).toContain(
-            `Preview of ${name} · change ${bootstrapId} · not production · gittifacts`,
+            `Not production · preview of ${name} · change ${bootstrapId} · gittifacts`,
           );
           expect(html.indexOf(`<${BANNER_TAG}`)).toBeLessThan(html.indexOf("Hello from /"));
           expect(page.headers.get("x-robots-tag")).toContain("noindex");

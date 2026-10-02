@@ -32,7 +32,8 @@ export const UNCLAIMED_BANNER = "Unclaimed project — not verified";
  * verified": nobody has vouched for what an unclaimed project serves.
  */
 export function bannerText(projectName: string, changeId: string, claimed = false): string {
-  const base = `Preview of ${projectName} · change ${changeId} · not production · gittifacts`;
+  // "Not production" leads: on a phone the one-line banner is cut at ~45 characters.
+  const base = `Not production · preview of ${projectName} · change ${changeId} · gittifacts`;
   return claimed ? base : `${UNCLAIMED_BANNER} · ${base}`;
 }
 
@@ -56,7 +57,7 @@ export function bannerHtml(projectName: string, changeId: string, claimed = fals
   ]
     .map((d) => `${d} !important`)
     .join(";");
-  const style = `:host{all:initial}div{box-sizing:border-box;height:${BANNER_HEIGHT_PX}px;padding:0 12px;display:flex;align-items:center;gap:8px;background:#1d1b16;color:#fffbe8;font:600 13px/1 ui-sans-serif,system-ui,sans-serif;border-bottom:2px solid ${edge};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}b{color:${edge}}`;
+  const style = `:host{all:initial}div{box-sizing:border-box;height:${BANNER_HEIGHT_PX}px;padding:0 12px;display:flex;align-items:center;gap:8px;background:#1d1b16;color:#fffbe8;font:600 13px/1 ui-sans-serif,system-ui,sans-serif;border-bottom:2px solid ${edge};white-space:nowrap;overflow:hidden}b{flex:none;color:${edge}}span{min-width:0;overflow:hidden;text-overflow:ellipsis}`;
   const text = escapeHtml(bannerText(projectName, changeId, claimed));
   const badge = claimed ? "PREVIEW" : "UNCLAIMED";
   return (

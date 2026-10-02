@@ -60,7 +60,7 @@ describe("gateway", () => {
     );
     const html = await withBanner(page, "my-app", "c1").text();
     expect(html).toMatch(new RegExp(`<body class=x><${BANNER_TAG}[^>]*>`));
-    expect(html).toContain("Preview of my-app · change c1 · not production · gittifacts");
+    expect(html).toContain("Not production · preview of my-app · change c1 · gittifacts");
     const fragment = await withBanner(
       new Response("<p>hi</p>", { headers: { "content-type": "text/html" } }),
       "a",
