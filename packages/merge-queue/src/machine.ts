@@ -393,9 +393,10 @@ class Machine {
     }
     let failing = [...new Set(ev.failingTests)];
     if (ev.outcome === "failed" && failing.length === 0) failing = [WHOLE_RUN];
-    const quarantinedFailing = failing.filter((t) => this.s.quarantine[t] !== undefined);
-    const candidates = failing.filter((t) => this.s.quarantine[t] === undefined);
-    const verdict = this.newVerdict(b, ev.runId, quarantinedFailing);
+    // Quarantined tests go through the same re-check: the quarantine only excuses failures that
+    // also happen on main's head; a regression of a quarantined test still blocks (never masked).
+    const candidates = failing;
+    const verdict = this.newVerdict(b, ev.runId, []);
     if (candidates.length === 0) {
       this.onVerdict(b, verdict);
       return;
@@ -446,9 +447,9 @@ class Machine {
           this.infraRetry(b, "the whole run fails on main's head too", "ready");
           return;
         }
-        // Fails on main's head too → suspected flaky: quarantine, don't eject (§4.7).
+        // Fails on main's head too → suspected flaky: quarantine (if not yet), don't eject (§4.7).
         stats.flaky++;
-        this.quarantineTest(t, b, b.recheck.mainSha);
+        if (this.s.quarantine[t] === undefined) this.quarantineTest(t, b, b.recheck.mainSha);
         quarantined.push(t);
       } else {
         // Passed when re-run on exactly this tree: a flake; the re-run is the result for the tree.
@@ -595,11 +596,15 @@ class Machine {
     return [...out.values()];
   }
 
-  /** Active chain batches whose tree contains b's own entries. */
+  /** Active chain batches whose tree contains any of b's own entries. */
   private descendantsOf(b: Batch): Batch[] {
-    const first = ownEntries(b)[0];
-    if (first === undefined) return [];
-    return this.activeChain().filter((c) => c.id !== b.id && c.lineage.includes(first));
+    const own = ownEntries(b);
+    if (own.length === 0) return [];
+    return this.activeChain().filter((c) => c.id !== b.id && this.builtOn(c, own));
+  }
+
+  private builtOn(c: Batch, entries: string[]): boolean {
+    return entries.some((id) => c.lineage.includes(id));
   }
 
   private removeFromTrack(b: Batch): void {
@@ -811,11 +816,11 @@ class Machine {
 
   /** A bisection whose base contains a failed/cancelled batch's entries is moot. */
   private abortChildBisections(gone: Batch, why: string): void {
-    const first = ownEntries(gone)[0];
+    const own = ownEntries(gone);
     for (const b of Object.values(this.s.batches)) {
       if (b.state !== "bisecting" || b.id === gone.id) continue;
-      if (b.parentId === gone.id || (first !== undefined && b.lineage.includes(first) && !ownEntries(b).includes(first)))
-        this.abortBisection(b, why);
+      const bOwn = new Set(ownEntries(b));
+      if (b.parentId === gone.id || own.some((id) => !bOwn.has(id) && b.lineage.includes(id))) this.abortBisection(b, why);
     }
   }
 
@@ -1317,6 +1322,18 @@ class Machine {
    * everything that landed since b was rooted (and isn't in b's tree) has a known affected set
    * disjoint from each of b's own entries. Returns the changes the result is carried across, or null.
    */
+  /** The change that prevents carrying b's result over (for audits), or null. */
+  private carryBlocker(b: Batch, ahead: { changeId: string; affected: AffectedSet | null }[]): string | null {
+    const first = this.s.mainLog[0];
+    if (first === undefined || b.rootSeq < first.seq) return "(history forgotten)";
+    const lineage = new Set(b.lineage);
+    const own = ownEntries(b).map((id) => this.entry(id)?.affected ?? null);
+    const check = (c: { changeId: string; affected: AffectedSet | null }) => !lineage.has(c.changeId) && own.some((o) => conflicts(c.affected, o));
+    for (const m of this.s.mainLog) if (m.seq > b.rootSeq) for (const c of m.changes) if (check(c)) return c.changeId;
+    for (const c of ahead) if (check(c)) return c.changeId;
+    return null;
+  }
+
   private carryOver(b: Batch, ahead: { changeId: string; affected: AffectedSet | null }[]): string[] | null {
     const first = this.s.mainLog[0];
     if (first === undefined || b.rootSeq < first.seq) return null; // history forgotten → unknown
@@ -1401,7 +1418,7 @@ class Machine {
       if (!this.landAllowed(own)) continue;
       if (!this.cfg.features.revalidation || b.noRevalidate) {
         if (this.lineageLanded(b)) {
-          this.fallback(b);
+          this.fallback(b, b.noRevalidate ? "revalidation failed" : "revalidation off");
           changed = true;
         }
         continue;
@@ -1418,7 +1435,7 @@ class Machine {
       const carried = this.carryOver(b, ahead);
       if (carried === null) {
         if (this.lineageLanded(b)) {
-          this.fallback(b);
+          this.fallback(b, `not disjoint from ${this.carryBlocker(b, ahead)}`);
           changed = true;
         }
         continue;
@@ -1479,7 +1496,7 @@ class Machine {
   }
 
   /** Replace a stale passed batch (all ancestors landed) by a full run of its units on current main. */
-  private fallback(b: Batch): void {
+  private fallback(b: Batch, reason: string): void {
     invariant(this.isActiveChain(b), "fallback.track", `fallback of ${b.id} outside the DAG`);
     const t = this.s.tracks[b.trackId ?? ""];
     const id = this.id("b");
@@ -1522,7 +1539,16 @@ class Machine {
       }
     }
     this.finishBatch(b, "cancelled");
-    this.audit("merge-queue.full-run-fallback", `batch:${id}`, { of: b.id, entries: ownEntries(b) });
+    this.audit("merge-queue.full-run-fallback", `batch:${id}`, {
+      of: b.id,
+      entries: ownEntries(b),
+      reason,
+      ofRootSeq: b.rootSeq,
+      ofFallbackOf: b.fallbackOf,
+      ofParent: b.parentId,
+      ofCarried: b.carried.length,
+      mainSeq: this.s.main.seq,
+    });
   }
 
   private onLandingFailure(l: Batch): void {
@@ -2157,6 +2183,7 @@ class Machine {
     for (const b of active) for (const id of ownEntries(b)) index.add(b.id, this.entry(id)?.affected ?? null);
     let inflightCount = active.filter(inFlight).length;
     const blocked = new ConflictIndex();
+    const depthMemo = new Map<string, number>();
     const planned = new Map<string, PlannedUnit>();
     const touched = new Set<string>();
 
@@ -2182,21 +2209,22 @@ class Machine {
       if (expressFirst && conflicting.some((b) => !this.isExpressBatch(b))) return "blocked"; // a normal batch with a CAS in flight
       // Frontier: the conflicting batches no other conflicting batch is built on.
       const frontier = conflicting.filter((c) => {
-        const first = ownEntries(c)[0];
-        return !conflicting.some((o) => o.id !== c.id && first !== undefined && o.lineage.includes(first));
+        const cOwn = ownEntries(c);
+        return !conflicting.some((o) => o.id !== c.id && this.builtOn(o, cOwn));
       });
       // 1) Join an unbuilt batch whose tree already covers the frontier.
       const capacity = this.batchCapacity();
       for (const o of [...active].reverse()) {
         if (o.state !== "pending" || !this.isActiveChain(o)) continue;
-        // A batch something is already built on can't grow: the child's tree would contain the
-        // newcomer without listing it in its lineage.
-        if (active.some((c) => c.parentId === o.id && this.isActiveChain(c))) continue;
+        // A batch something is already built on (its tip, or a merge copying its lineage) can't
+        // grow: the descendant's lineage would not list the newcomer.
+        const oOwn = ownEntries(o);
+        if (active.some((c) => c.id !== o.id && this.isActiveChain(c) && this.builtOn(c, oOwn))) continue;
         if (u.isolate || o.units.some((x) => x.changeIds.some((id) => this.entry(id)?.isolate === true))) continue;
         if (frozen && this.isExpressBatch(o) !== u.express) continue;
         const covers =
           frontier.length > 0
-            ? frontier.every((f) => f.id === o.id || o.lineage.includes(ownEntries(f)[0] ?? ""))
+            ? frontier.every((f) => f.id === o.id || this.builtOn(o, ownEntries(f)))
             : cfg.coBatch && o.parentId === null && o.carried.length === 0;
         if (!covers) continue;
         const size = ownEntries(o).length;
@@ -2215,12 +2243,9 @@ class Machine {
       }
       // 2) A new batch: within the speculation depth and the in-flight cap.
       if (inflightCount >= cfg.maxInFlightBatches) return "blocked";
-      const ancestors = new Map<string, Batch>();
-      for (const f of frontier) {
-        ancestors.set(f.id, f);
-        for (const a of this.ancestorsOf(f)) ancestors.set(a.id, a);
-      }
-      const depth = 1 + [...ancestors.values()].filter(inFlight).length;
+      // Depth = the longest chain of untested batches the new one would sit on (independent
+      // chains joined by a merge don't add up).
+      const depth = 1 + Math.max(0, ...frontier.map((f) => this.chainDepth(f, depthMemo)));
       if (depth > cfg.maxSpeculationDepth) return "blocked";
       if (frontier.length === 0 && Object.keys(s.tracks).length >= cfg.maxTracks) return "blocked";
       const b = this.createChainBatch(u, frontier);
@@ -2250,6 +2275,21 @@ class Machine {
       if (b !== undefined) this.finalizeBatch(b, planned);
     }
     return changed;
+  }
+
+  /** Longest path of in-flight (untested) batches ending at b, through its build parents. */
+  private chainDepth(b: Batch, memo: Map<string, number>): number {
+    const hit = memo.get(b.id);
+    if (hit !== undefined) return hit;
+    memo.set(b.id, 0); // cycle guard (cannot happen: parents are older)
+    let up = 0;
+    for (const pid of [...(b.parentId === null ? [] : [b.parentId]), ...b.mergeParents]) {
+      const p = this.batch(pid);
+      if (p !== undefined && this.isActiveChain(p)) up = Math.max(up, this.chainDepth(p, memo));
+    }
+    const d = (inFlight(b) ? 1 : 0) + up;
+    memo.set(b.id, d);
+    return d;
   }
 
   /** Max entries per batch: adaptive to the recent pass rate (prediction on) or fixed. */

@@ -221,7 +221,10 @@ class Sim {
         if (next === undefined) break;
         if (next.v.k !== "tick") this.pendingNonTick--;
         if (next.at > this.endTime) break;
-        if (this.m.backlogAtArrivalEnd < 0 && next.at > this.arrivalEnd) this.m.backlogAtArrivalEnd = this.liveEntries();
+        if (this.m.backlogAtArrivalEnd < 0 && next.at > this.arrivalEnd) {
+          this.m.backlogAtArrivalEnd = this.liveEntries();
+          if (process.env.MQ_DEBUG_STUCK === "1") this.dumpStuck();
+        }
         this.now = next.at;
         this.handle(next.v);
         if (next.v.k === "tick") {
@@ -236,6 +239,22 @@ class Sim {
     if (this.m.backlogAtArrivalEnd < 0) this.m.backlogAtArrivalEnd = this.liveEntries();
     if (this.m.frozenSince !== null) this.m.frozenMs += this.now - this.m.frozenSince;
     return this.metrics(performance.now() - started);
+  }
+
+  /** Debug: passed batches that have waited > 20 min to land, and why. */
+  private dumpStuck(): void {
+    const s = this.core;
+    process.stderr.write(`landing=${JSON.stringify(s.landing.map((id) => [id, s.batches[id]?.state, s.batches[id]?.members]))} cas=${s.cas?.batchId ?? null}\n`);
+    for (const b of Object.values(s.batches)) {
+      if (b.kind !== "chain" || b.state !== "passed" || b.readyAt === null || this.now - b.readyAt < 20 * MINUTE) continue;
+      const own = new Set(b.units.flatMap((u) => u.changeIds));
+      const blockers = b.lineage.filter((id) => !own.has(id) && s.entries[id] !== undefined && s.entries[id]?.state !== "merged").map((id) => `${id}:${s.entries[id]?.state}:${s.entries[id]?.batchId}:${s.batches[s.entries[id]?.batchId ?? ""]?.state}`);
+      for (const bid of new Set(b.lineage.map((id) => s.entries[id]?.batchId ?? "").filter((x) => x !== "" && x !== b.id))) {
+        const x = s.batches[bid];
+        if (x !== undefined && x.state !== "passed") process.stderr.write(`  blocker ${bid}: ${x.state} fallbackOf=${x.fallbackOf} carried=${x.carried.length} runSeq=${x.runSeq} created=${((this.now - x.createdAt) / MINUTE).toFixed(0)}m ago parent=${x.parentId} merges=${x.mergeParents.length} units=${x.units.length}\n`);
+      }
+      process.stderr.write(`stuck ${b.id} waited ${((this.now - b.readyAt) / MINUTE).toFixed(0)}m base=${b.baseSha === this.mainSha} carried=${b.carried.length} noReval=${b.noRevalidate} blockers=${blockers.slice(0, 6).join(" ")}\n`);
+    }
   }
 
   private liveEntries(): number {
@@ -564,7 +583,17 @@ class Sim {
         const visible = red.filter((t) => !quarantined.has(t));
         if (visible.length > 0) {
           this.m.mainRed++;
-          this.m.violations.push(`main red at ${this.now}: ${visible.join(", ")} via ${c.entries.map((e) => e.changeId).join(",")}`);
+          const ids = this.contentOf(c.newSha);
+          const owners = visible.map((t) => {
+            const who = [...ids.keys()].filter((id) => {
+              const ch = this.changes.get(id);
+              return ch !== undefined && (ch.badTest === t || ch.affected.testTargets.includes(t)) && (this.isBad(id, ids.get(id) ?? 1) || ch.semantic.size > 0);
+            });
+            return `${t}<-[${who.join(",")}]`;
+          });
+          this.m.violations.push(
+            `main red at ${this.now}: ${owners.join(" ")} via ${c.entries.map((e) => e.changeId).join(",")} scope=${JSON.stringify(c.evidence.verdict.scope).slice(0, 80)} carried=${c.evidence.carried.map((x) => `${x.batchId}:${x.disjointFrom.length}`).join(",")}`,
+          );
         } else if (red.length > 0) this.m.masked++;
         this.push(this.now + 2000, { k: "core", e: { type: "CasResult", casId: c.casId, result: "ok" } });
         return;
@@ -586,7 +615,19 @@ class Sim {
         return this.onEmit(c.event);
       case "Audit":
         if (c.action === "merge-queue.test-quarantined") this.m.quarantines++;
-        if (c.action === "merge-queue.full-run-fallback") this.m.fallbacks++;
+        if (c.action === "merge-queue.full-run-fallback") {
+          this.m.fallbacks++;
+          if (process.env.MQ_DEBUG_STUCK === "1") {
+            const why = String(c.payload.reason);
+            const who = why.split(" ").pop() ?? "";
+            const ch = this.changes.get(who);
+            const e = this.core.entries[who];
+            const lb = this.core.batches[e?.batchId ?? ""];
+            const seqOf = this.core.mainLog.find((m) => m.changes.some((x) => x.changeId === who))?.seq;
+            process.stderr.write(`  payload ${JSON.stringify({ ...c.payload, blockerSeq: seqOf, blockerAffected: this.changes.get(who)?.affected.modules, ownAffected: (c.payload.entries as string[]).map((id) => this.core.entries[id]?.affected?.modules) })}\n`);
+            process.stderr.write(`fallback ${c.subject} ${why} [${ch ? `analyzerFails=${ch.analyzerFails}` : "?"}] blocker=${e?.state}/${e?.batchId}/${lb?.state} landing=${JSON.stringify(this.core.landing.map((id) => [id, this.core.batches[id]?.state, this.core.batches[id]?.members.map((m) => `${m}:${this.core.batches[m]?.state}`)]))}\n`);
+          }
+        }
         return;
       case "Telemetry":
         if (c.kind === "lane-downgrade-ignored") this.m.laneDowngradesIgnored++;
@@ -696,6 +737,10 @@ class Sim {
   private onEmit(ev: Extract<Command, { type: "Emit" }>["event"]): void {
     switch (ev.type) {
       case "entered_batch": {
+        if (process.env.MQ_TRACE !== undefined && process.env.MQ_TRACE.split(",").includes(ev.changeId)) {
+          const b = this.core.batches[ev.batchId];
+          process.stderr.write(`trace ${ev.changeId} t=${(this.now / MINUTE).toFixed(1)} -> ${ev.batchId} parent=${b?.parentId} merges=${b?.mergeParents.join("+")} lineage=${b?.lineage.join(",")} main=${this.core.main.seq}\n`);
+        }
         const r = this.records.get(ev.changeId);
         if (r !== undefined && r.firstBatchAt === null) r.firstBatchAt = ev.at;
         this.batchSizes.set(ev.batchId, ev.batchSize);
