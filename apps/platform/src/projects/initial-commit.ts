@@ -36,6 +36,8 @@ export interface ProjectUrls {
   /** The platform origin agents use (no trailing slash). */
   host: string;
   mcpUrl: string;
+  /** Unclaimed projects' TTL in days (their AGENTS.md says when they are deleted). */
+  unclaimedTtlDays?: number;
 }
 
 export function unknownTemplate(template: string): CoordinatorError {
@@ -48,7 +50,7 @@ export function unknownTemplate(template: string): CoordinatorError {
 /** The template's own files with placeholders rendered, plus the generated files on top. */
 export function templateFiles(
   id: TemplateId,
-  values: PlaceholderValues & { claimed: boolean },
+  values: PlaceholderValues & { claimed: boolean; unclaimedTtlDays?: number },
 ): Record<string, string> {
   const source = TEMPLATE_FILES[id];
   if (source === undefined) throw unknownTemplate(id);
@@ -59,7 +61,7 @@ export function templateFiles(
 
 /** README, AGENTS.md and default `.platform/*` for a project without a template. */
 export function emptyProjectFiles(
-  values: PlaceholderValues & { claimed: boolean },
+  values: PlaceholderValues & { claimed: boolean; unclaimedTtlDays?: number },
   description: string | null,
 ): Record<string, string> {
   const ci = defaultCiTs({
@@ -89,6 +91,9 @@ export function emptyProjectFiles(
       mcpUrl: values.mcpUrl,
       repoId: values.repoId,
       claimed: values.claimed,
+      ...(values.claimed || values.unclaimedTtlDays === undefined
+        ? {}
+        : { unclaimedTtlDays: values.unclaimedTtlDays }),
     }),
     [ci.path]: ci.text,
     [policy.path]: policy.text,
@@ -103,6 +108,9 @@ export function initialCommitProvider(urls: ProjectUrls): InitialCommitProvider 
       mcpUrl: urls.mcpUrl,
       repoId: input.repoId,
       claimed: input.claimed,
+      ...(input.claimed || urls.unclaimedTtlDays === undefined
+        ? {}
+        : { unclaimedTtlDays: urls.unclaimedTtlDays }),
     };
     if (input.template === null) {
       return {

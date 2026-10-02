@@ -9,12 +9,13 @@
  * and returns at once: CI and the preview finish in the background (`wait_for_change` on
  * `bootstrapChangeId`), and `previewUrl` serves a "building" page until then.
  *
- * Auth: until unclaimed projects exist (O3), callers need repo:read + change:create. The project
- * is owned by the human, or by the agent's owner. O3's seam: a caller without a principal gets an
- * unclaimed project and `token`/`claimUrl` set.
+ * Auth: authenticated callers need repo:read + change:create; the project is owned by the human,
+ * or by the agent's owner. A caller without credentials gets an unclaimed project through
+ * src/claim/create.ts (`token` and `claimUrl` set), which calls `createProjectAs` as the
+ * project's own, ownerless agent principal.
  */
 import { call, isTemplateId, nextStepsFor, projectSlug, TEMPLATES } from "@app/conventions";
-import type { Repo } from "@app/domain";
+import type { Principal, Repo } from "@app/domain";
 import type { ProjectCreated } from "@app/mcp";
 import { z } from "zod";
 import type { Caller, Services } from "../app-env.js";
@@ -99,10 +100,29 @@ export async function createProject(
   raw: unknown,
   idempotencyKey?: string,
 ): Promise<ProjectCreated> {
-  const startedAt = svc.clock.now();
   assertMayCreate(caller);
   const input = CreateProjectInput.parse(raw);
-  const actor = caller.principal;
+  return createProjectAs(svc, caller.principal, input, idempotencyKey);
+}
+
+/**
+ * What an unclaimed project adds once its repo exists (src/claim/create.ts): the project's own
+ * Bearer token and claim link, and when it expires. Runs before the first Change is opened, so
+ * that Change's fork and token are charged to the project's quotas.
+ */
+export interface UnclaimedSetup {
+  afterRepo(repo: Repo): Promise<{ token: string; claimUrl: string; expiresAt: string }>;
+}
+
+/** The project setup proper, as `actor` (a caller's principal, or an unclaimed agent). */
+export async function createProjectAs(
+  svc: Services,
+  actor: Principal,
+  input: CreateProjectInput,
+  idempotencyKey: string | undefined,
+  unclaimed?: UnclaimedSetup,
+): Promise<ProjectCreated> {
+  const startedAt = svc.clock.now();
   const name = await projectName(input, idempotencyKey);
 
   // 1. The repo with its initial commit (template / empty), or an import.
@@ -125,6 +145,8 @@ export async function createProject(
       ...(idempotencyKey === undefined ? {} : { idempotencyKey: `project:${idempotencyKey}` }),
     });
   }
+
+  const extras = unclaimed === undefined ? null : await unclaimed.afterRepo(repo);
 
   // 2 + 3, concurrently: the bootstrap (first CI + preview) and the caller's first Change.
   const runsCi = source !== "empty";
@@ -171,8 +193,9 @@ export async function createProject(
             remote: { url: first.remote.url, branch: first.remote.branch },
           },
     previewUrl,
-    claimUrl: null,
+    claimUrl: extras?.claimUrl ?? null,
     claimed: repo.claim.status === "claimed",
+    expiresAt: extras?.expiresAt ?? repo.claim.expiresAt,
   });
   if (first === null) {
     nextSteps.unshift({
@@ -200,12 +223,12 @@ export async function createProject(
     template,
     defaultBranch: repo.defaultBranch,
     remote,
-    // O3: an unclaimed project's own bearer token. Authenticated callers keep theirs.
-    token: null,
+    // An unclaimed project's own Bearer token (O3). Authenticated callers keep theirs.
+    token: extras?.token ?? null,
     mcpUrl,
     previewUrl,
-    // O3: the link a human opens to claim an unclaimed project.
-    claimUrl: null,
+    // The link a human opens to claim an unclaimed project.
+    claimUrl: extras?.claimUrl ?? null,
     bootstrapChangeId: bootstrap?.id ?? null,
     nextSteps,
   };

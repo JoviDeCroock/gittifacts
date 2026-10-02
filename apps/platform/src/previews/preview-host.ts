@@ -77,6 +77,8 @@ export interface PreviewContainer {
   setInactivityTimeout(durationMs: number): Promise<void>;
   interceptAllOutboundHttp(binding: Fetcher): Promise<void>;
   interceptOutboundHttps(addr: string, binding: Fetcher): Promise<void>;
+  /** Stop the container for good (absent on fakes that never run one). */
+  destroy?(error?: unknown): Promise<void>;
 }
 
 export interface PreviewHostEnv {
@@ -137,6 +139,19 @@ export class PreviewHost extends DurableObject<PreviewHostEnv> {
 
   async status(): Promise<PreviewState> {
     return this.state;
+  }
+
+  /**
+   * Remove this preview for good: stop the container and forget its configuration (an expired
+   * unclaimed project, src/claim/expire.ts). The gateway no longer routes here once the
+   * `previews` rows are gone; this stops what was already running.
+   */
+  async destroy(): Promise<void> {
+    const c = this.container();
+    if (c?.running && c.destroy) await c.destroy().catch(() => undefined);
+    this.state = IDLE;
+    this.booting = null;
+    await this.ctx.storage.deleteAll();
   }
 
   override async fetch(request: Request): Promise<Response> {

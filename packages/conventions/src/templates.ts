@@ -47,6 +47,8 @@ export function projectSlug(name: string): string {
 
 export interface TemplateFileOptions extends PlaceholderValues {
   claimed: boolean;
+  /** Unclaimed projects: days until deletion unless claimed (AGENTS.md says so). */
+  unclaimedTtlDays?: number;
 }
 
 /**
@@ -70,6 +72,7 @@ export function templateGeneratedFiles(
       repoId: opts.repoId,
       claimed: opts.claimed,
       template: id,
+      ...(opts.unclaimedTtlDays === undefined ? {} : { unclaimedTtlDays: opts.unclaimedTtlDays }),
     }),
   };
 }
