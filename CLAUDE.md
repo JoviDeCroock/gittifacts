@@ -35,3 +35,5 @@ Agent-native git platform on Cloudflare. Product rule (drives every judgment cal
 - Several agents share one git index: always commit with an explicit pathspec
   (`git commit -m "..." -- <your paths>`), never a bare `git commit` or `git add -A`.
 - Keep DECISIONS.md (dated ADR entries) and STATUS.md current.
+- The machine is shared by many agents: run targeted tests (`vitest run <files> --maxWorkers=1`); the full suite
+  runs only inside `scripts/deploy-clean.sh`, and only one deploy at a time (check `ps aux | grep deploy-clean`).
