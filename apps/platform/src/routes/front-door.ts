@@ -24,6 +24,7 @@ import {
 } from "@app/conventions";
 import { defaultPolicy } from "@app/domain";
 import { sha256Hex } from "@app/evidence";
+import { getSessionCookie } from "better-auth/cookies";
 import type { Context } from "hono";
 import type { AppEnv } from "../app-env.js";
 import { authFor } from "../auth/middleware.js";
@@ -144,7 +145,7 @@ const LANDING_ORIGIN = "https://gittifacts.decroockjovi.workers.dev";
 
 /** A signed-in person gets the app at `/`; only a request carrying a session cookie is checked. */
 async function hasSession(c: Context<AppEnv>): Promise<boolean> {
-  if (!(c.req.header("cookie") ?? "").includes("session_token=")) return false;
+  if (!getSessionCookie(c.req.raw)) return false;
   try {
     return (await authFor(c).api.getSession({ headers: c.req.raw.headers })) !== null;
   } catch {

@@ -144,6 +144,20 @@ describe("front door", () => {
     expect(await stale.text()).toContain('id="hero-title"');
     const mock = await call(app, "GET", "/?mock", { headers: { accept: "text/html" } });
     expect(await mock.text()).toContain('<div id="app">');
+
+    // Revalidation: the landing's ETag gets a 304 for a visitor, never for a signed-in person.
+    const etag = visitor.headers.get("etag") ?? "";
+    expect(etag).not.toBe("");
+    const again = await call(app, "GET", "/", {
+      headers: { accept: "text/html", "if-none-match": etag },
+    });
+    expect(again.status).toBe(304);
+    expect(again.headers.get("vary")).toContain("Cookie");
+    const switched = await call(app, "GET", "/", {
+      headers: { accept: "text/html", "if-none-match": etag, cookie: human.cookie },
+    });
+    expect(switched.status).toBe(200);
+    expect(await switched.text()).toContain('<div id="app">');
   });
 
   it("an agent asking / for JSON or markdown gets the guide itself", async () => {
