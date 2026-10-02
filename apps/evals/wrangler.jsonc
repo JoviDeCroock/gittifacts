@@ -32,7 +32,7 @@
     // Per-run caps.
     "EVAL_MAX_TOOL_CALLS": "60",
     "EVAL_MAX_WALL_SEC": "900",
-    "EVAL_TOKEN_BUDGET": "1500000",
+    "EVAL_TOKEN_BUDGET": "2500000",
     // Comma-separated model ids; empty = the default two providers (src/models.ts).
     "EVAL_MODELS": ""
   },

@@ -45,10 +45,11 @@ cron 03:00 UTC / POST /runs ─▶ EvalMatrixWorkflow ── starts runs, ≤ EV
   (OpenAI). OpenAI chat-completions tool calling; a model whose tool calling misbehaves can be
   switched to the `json-actions` protocol in `src/models.ts` (the tool list then goes in a second
   system message as plain schemas; a reply that is exactly one JSON action is also accepted from
-  native-tools models).
-- **Caps per run**: 60 tool calls, 15 min wall clock, 1.5 M tokens (vars `EVAL_MAX_TOOL_CALLS`,
+  native-tools models). Verified live on 2026-10-02: both models answer the first turn with an
+  OpenAI-style `tool_calls` entry through the binding and the gateway (~2–3 s per turn).
+- **Caps per run**: 60 tool calls, 15 min wall clock, 2.5 M tokens (vars `EVAL_MAX_TOOL_CALLS`,
   `EVAL_MAX_WALL_SEC`, `EVAL_TOKEN_BUDGET`). Older tool results are elided when the history grows past
-  the model's context budget.
+  ~160 k characters (~40 k tokens), so the token budget rarely binds before the tool-call cap.
 - **Tools** (generic, nothing platform-specific):
   - `http_fetch(url, method?, headers?, body?)`: any URL; status, key headers, body truncated to 12 k chars.
   - `mcp_connect(url, token?)`, `mcp_list_tools()`, `mcp_call(name, arguments)`: a streamable-HTTP MCP
@@ -148,7 +149,7 @@ prompt + ~30 k output tokens.
 |---|---|---|
 | Kimi K2.7 Code | ~54 k neurons ≈ $0.60 (≈ $0.29 if ~80% of the prompt hits the prefix cache) | ~1.08 M ≈ $11.9 |
 | gpt-oss-120b | ~18 k neurons ≈ $0.20 | ~0.36 M ≈ $4.0 |
-| **Matrix** | | **~1.4 M neurons ≈ $16** (worst case, every run at the 1.5 M-token cap: ~4 M ≈ $44) |
+| **Matrix** | | **~1.4 M neurons ≈ $16** (worst case, every run at the 2.5 M-token cap: ~6.5 M ≈ $72) |
 
 Containers: `EvalSandbox` (standard-1, only runs that use `shell`, ~10 min each): ~300
 container-minutes ≈ $0.40/night. Platform side, caused by the eval (bootstrap CI, previews until

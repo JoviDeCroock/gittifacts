@@ -61,7 +61,7 @@ export function configOf(env: EvalEnv): EvalConfig {
     concurrency: int(env.EVAL_CONCURRENCY, 4, 1, 20),
     maxToolCalls: int(env.EVAL_MAX_TOOL_CALLS, 60, 1, 200),
     maxWallMs: int(env.EVAL_MAX_WALL_SEC, 900, 60, 3600) * 1000,
-    tokenBudget: int(env.EVAL_TOKEN_BUDGET, 1_500_000, 10_000, 10_000_000),
+    tokenBudget: int(env.EVAL_TOKEN_BUDGET, 2_500_000, 10_000, 10_000_000),
     checkGraceMs: 120_000,
   };
 }

@@ -36,7 +36,7 @@ export const MODELS: readonly ModelDef[] = [
     provider: "moonshot",
     protocol: "tools",
     maxTokens: 8192,
-    contextChars: 240_000,
+    contextChars: 160_000,
     // $0.95 / M input, $0.19 / M cached input, $4.00 / M output.
     neuronsPerM: { input: 86_364, cachedInput: 17_273, output: 363_636 },
   },
@@ -46,7 +46,7 @@ export const MODELS: readonly ModelDef[] = [
     provider: "openai",
     protocol: "tools",
     maxTokens: 8192,
-    contextChars: 200_000,
+    contextChars: 160_000,
     // $0.35 / M input, $0.75 / M output (no cached-input rate published: charged as input).
     neuronsPerM: { input: 31_818, cachedInput: 31_818, output: 68_182 },
   },
