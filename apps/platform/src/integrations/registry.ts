@@ -8,7 +8,7 @@ import { sha256Hex } from "@app/evidence";
 import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { Caller, Services } from "../app-env.js";
-import { installations, integrationSecrets, integrations } from "../db/schema.js";
+import { installations, integrationSecrets, integrations, principals } from "../db/schema.js";
 import { ApiError, forbidden, notFound } from "../errors.js";
 import { isValidRedirectUri } from "../oauth/clients.js";
 import {
@@ -19,7 +19,13 @@ import {
   randomSecret,
   WEBHOOK_SECRET_PREFIX,
 } from "./crypto.js";
-import { DEFAULT_EVENTS, integrationScopesOf, WebhookEvent } from "./scopes.js";
+import {
+  DEFAULT_EVENTS,
+  explainScopes,
+  integrationScopesOf,
+  ScopeExplainedSchema,
+  WebhookEvent,
+} from "./scopes.js";
 
 export type IntegrationRow = typeof integrations.$inferSelect;
 type SecretRow = typeof integrationSecrets.$inferSelect;
@@ -101,6 +107,10 @@ export const IntegrationViewSchema = z
     redirectUris: z.array(z.string()),
     clientType: z.enum(["confidential", "public"]),
     scopes: z.array(IntegrationScope),
+    /** The same permissions in the install screen's plain words. */
+    scopesExplained: z.array(ScopeExplainedSchema),
+    /** How the install screen names the developer. */
+    developer: z.object({ name: z.string() }),
     webhook: z.object({
       url: z.string().nullable(),
       active: z.boolean(),
@@ -139,13 +149,14 @@ async function secretsOf(svc: Services, integrationId: string): Promise<SecretRo
 }
 
 export async function integrationView(svc: Services, row: IntegrationRow): Promise<IntegrationView> {
-  const [secrets, installs] = await Promise.all([
+  const [secrets, installs, developer] = await Promise.all([
     secretsOf(svc, row.id),
     svc.store.db
       .select({ n: count() })
       .from(installations)
       .where(and(eq(installations.integrationId, row.id), eq(installations.status, "active")))
       .get(),
+    svc.store.db.select({ name: principals.name }).from(principals).where(eq(principals.id, row.ownerId)).get(),
   ]);
   return {
     id: row.id,
@@ -157,6 +168,8 @@ export async function integrationView(svc: Services, row: IntegrationRow): Promi
     redirectUris: [...row.redirectUris],
     clientType: row.clientType,
     scopes: integrationScopesOf(row.scopes),
+    scopesExplained: explainScopes(integrationScopesOf(row.scopes)),
+    developer: { name: developer?.name ?? "unknown developer" },
     webhook: {
       url: row.webhookUrl,
       active: row.webhookActive,
@@ -378,6 +391,12 @@ export async function revokeSecret(
   secretId: string,
 ): Promise<IntegrationView> {
   const row = await ownIntegration(svc, caller, id);
+  const active = await secretsOf(svc, id);
+  if (active.length <= 1 && active.some((s) => s.id === secretId)) {
+    throw new ApiError(409, "last-secret", "this is the integration's only active client secret", undefined, {
+      explanation: "Generate a new secret first (POST /api/v1/integrations/{id}/secrets), switch your platform to it, then revoke this one.",
+    });
+  }
   const updated = await svc.store.db
     .update(integrationSecrets)
     .set({ revokedAt: svc.clock.now().toISOString() })

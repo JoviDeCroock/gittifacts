@@ -11,7 +11,7 @@ import { z } from "zod";
 import type { Caller, Services } from "../app-env.js";
 import { agentTokens, installations, integrations, principals, webhookDeliveries } from "../db/schema.js";
 import { ApiError, forbidden, notFound } from "../errors.js";
-import { canInstallOn, installationRepoIds } from "./access.js";
+import { canInstallOn, installableRepos, installationRepoIds } from "./access.js";
 import { emitInstallationEvent } from "./events.js";
 import { handleFor, repoNames } from "./handles.js";
 import {
@@ -42,6 +42,8 @@ export const InstallationViewSchema = z
     scopes: z.array(ScopeExplainedSchema),
     repoSelection: z.enum(["all", "selected"]),
     repos: z.array(RepoRef),
+    /** Repos you may put this installation on (claimed, you own or maintain): for "Change repositories". */
+    eligibleRepos: z.array(RepoRef),
     status: z.enum(["active", "deleted"]),
     createdAt: z.string(),
     updatedAt: z.string(),
@@ -94,6 +96,9 @@ export async function installationView(svc: Services, inst: InstallationRow): Pr
     scopes: explainScopes(integrationScopesOf(inst.scopes)),
     repoSelection: inst.repoSelection,
     repos: repos.map(({ id, name, fullName }) => ({ id, name, fullName })),
+    eligibleRepos: (await repoRefs(svc, (await installableRepos(svc, { id: inst.accountId, kind: "human" })).map((r) => r.id))).map(
+      ({ id, name, fullName }) => ({ id, name, fullName }),
+    ),
     status: inst.status,
     createdAt: inst.createdAt,
     updatedAt: inst.updatedAt,
