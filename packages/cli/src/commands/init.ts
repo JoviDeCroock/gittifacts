@@ -79,12 +79,10 @@ export function parseProjectResult(doc: Record<string, unknown>): ProjectResult 
   if (typeof doc.remote === "string") remoteUrl = doc.remote;
   else if (isRecord(doc.remote) && typeof doc.remote.url === "string") {
     remoteUrl = doc.remote.url;
-    const user = s(doc.remote.username);
     const tok = s(doc.remote.token);
-    if (tok)
-      remoteAuth = user
-        ? { scheme: "Basic", username: user, password: tok }
-        : { scheme: "Bearer", token: tok };
+    // Artifacts tokens carry an `?expires=` suffix that Basic auth rejects; Bearer takes the
+    // whole token, so always use it (remote.username is only a placeholder).
+    if (tok) remoteAuth = { scheme: "Bearer", token: tok };
   }
   if (remoteUrl) {
     const split = splitRemote(remoteUrl);

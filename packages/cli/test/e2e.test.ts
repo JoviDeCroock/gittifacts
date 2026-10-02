@@ -209,20 +209,17 @@ describe("bundled CLI against the real MCP server", () => {
     });
   });
 
-  it("init explains that this server has no create_project yet", async () => {
+  it("init calls create_project with an idempotency key", async () => {
     const r = await cli(["init", "--template", "workers-api"]);
-    expect(r.code).toBe(1);
-    expect(json(r)).toMatchObject({
-      error: { code: "unknown-tool", fix: { command: "gittifacts tools --remote" } },
-      idempotencyKey: expect.stringMatching(/^cli_/),
-    });
+    expect(r.code, r.stdout + r.stderr).toBe(0);
+    expect(json(r)).toMatchObject({ idempotencyKey: expect.stringMatching(/^cli_/) });
   });
 
   it("asks the server about commands it doesn't know, then gives up with suggestions", async () => {
-    const r = await cli(["open-workspace", "chg_1"]);
+    const r = await cli(["frobnicate-widgets", "chg_1"]);
     expect(r.code).toBe(2);
     expect(json(r)).toMatchObject({
-      error: { code: "usage", message: "unknown command: open-workspace" },
+      error: { code: "usage", message: "unknown command: frobnicate-widgets" },
     });
   });
 

@@ -21,17 +21,26 @@ describe("command table generated from the MCP tool definitions", () => {
   it("has exactly one command per @app/mcp tool, named with dashes", () => {
     const tools = TOOL_DEFINITIONS.map((t) => t.name).sort();
     expect(tools).toEqual([
+      "close_workspace",
       "create_plan",
+      "create_project",
       "get_change_status",
       "get_evidence",
       "get_tour",
       "list_issues_for_change",
       "list_repos",
+      "open_workspace",
+      "propose_platform_config",
       "refresh_push_token",
       "request_review",
       "start_change",
       "wait_for_change",
       "whoami",
+      "ws_commit_push",
+      "ws_diff",
+      "ws_exec",
+      "ws_read",
+      "ws_write",
     ]);
     expect(
       bundledCommands()
@@ -62,6 +71,15 @@ describe("command table generated from the MCP tool definitions", () => {
       list_issues_for_change: true,
       refresh_push_token: true,
       wait_for_change: true,
+      create_project: true,
+      open_workspace: true,
+      ws_exec: true,
+      ws_read: true,
+      ws_write: true,
+      ws_diff: true,
+      ws_commit_push: true,
+      close_workspace: true,
+      propose_platform_config: true,
     };
     expect(new Set(names)).toEqual(new Set(Object.keys(all)));
   });
