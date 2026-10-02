@@ -50,6 +50,12 @@ export interface TemplateSpec {
   manifest: TemplateManifest;
   features: ProjectFeatures;
   previewRoutes: string[];
+  /**
+   * The build output is a modules-only Worker the platform can roll out: the generated
+   * `.platform/ci.ts` uploads it as the build step's `bundle` artifact. Templates on static
+   * assets are not deployable yet (the deployer uploads modules only).
+   */
+  deployable: boolean;
 }
 
 export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
@@ -66,6 +72,7 @@ export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
     },
     features: pnpmFeatures(["src/**", "test/**", ...CONFIG], true),
     previewRoutes: ["/"],
+    deployable: true,
   },
   "preact-app": {
     manifest: {
@@ -80,6 +87,7 @@ export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
     },
     features: pnpmFeatures(["src/**", "test/**", "public/**", "build.mjs", ...CONFIG], true),
     previewRoutes: ["/"],
+    deployable: false,
   },
   "ts-library": {
     manifest: {
@@ -94,6 +102,7 @@ export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
     },
     features: pnpmFeatures(["src/**", "test/**", "tsconfig.build.json", ...CONFIG], false),
     previewRoutes: [],
+    deployable: false,
   },
   "static-site": {
     manifest: {
@@ -108,6 +117,7 @@ export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
     },
     features: pnpmFeatures(["public/**", "test/**", "build.mjs", ...CONFIG], true),
     previewRoutes: ["/", "/about/"],
+    deployable: false,
   },
 };
 

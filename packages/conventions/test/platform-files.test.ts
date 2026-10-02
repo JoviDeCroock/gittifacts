@@ -11,9 +11,13 @@ import {
   defaultPolicyTs,
   defaultPolicyValue,
   detectProject,
+  PLACEHOLDER_SELF,
   TEMPLATE_IDS,
   TEMPLATES,
+  templateGeneratedFiles,
 } from "../src/index.js";
+
+const PLACEHOLDER_SELF_CLAIMED = { ...PLACEHOLDER_SELF, claimed: true };
 
 /** Transpiles a generated `.platform/*.ts` file and imports it (as the sandbox would). */
 async function load(text: string): Promise<unknown> {
@@ -103,6 +107,32 @@ describe("defaultCiTs", () => {
       }
     },
   );
+
+  it("declares the build step's bundle artifact (what rollouts deploy) only when asked", async () => {
+    const file = defaultCiTs(TEMPLATES["workers-api"].features, undefined, { bundle: "dist" });
+    expect(typeErrors(file.text)).toEqual([]);
+    const spec = await recordPipeline((await load(file.text)) as PipelineFunction);
+    expect(spec.steps.find((s) => s.name === "build")?.artifacts).toEqual([
+      { name: "bundle", paths: ["dist"] },
+    ]);
+    expect(spec.steps.filter((s) => (s.artifacts?.length ?? 0) > 0).map((s) => s.name)).toEqual([
+      "build",
+    ]);
+    const plain = await recordPipeline(
+      (await load(defaultCiTs(TEMPLATES["workers-api"].features).text)) as PipelineFunction,
+    );
+    expect(plain.steps.some((s) => (s.artifacts?.length ?? 0) > 0)).toBe(false);
+  });
+
+  it("only deployable templates get the bundle artifact", () => {
+    expect(TEMPLATE_IDS.filter((id) => TEMPLATES[id].deployable)).toEqual(["workers-api"]);
+    expect(
+      templateGeneratedFiles("workers-api", PLACEHOLDER_SELF_CLAIMED)[".platform/ci.ts"],
+    ).toContain('artifacts: [{ name: "bundle", paths: ["dist"] }]');
+    expect(
+      templateGeneratedFiles("preact-app", PLACEHOLDER_SELF_CLAIMED)[".platform/ci.ts"],
+    ).not.toContain("artifacts: [");
+  });
 
   it("carries detection uncertainty and skips caching for imports", async () => {
     const detection = detectProject({

@@ -60,7 +60,11 @@ export function templateGeneratedFiles(
   opts: TemplateFileOptions,
 ): Record<string, string> {
   const spec = TEMPLATES[id];
-  const ci = defaultCiTs(spec.features);
+  const ci = defaultCiTs(
+    spec.features,
+    undefined,
+    spec.deployable ? { bundle: spec.manifest.buildOutput } : {},
+  );
   const policy = defaultPolicyTs({ previewRoutes: spec.previewRoutes });
   return {
     [ci.path]: ci.text,

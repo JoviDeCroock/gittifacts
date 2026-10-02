@@ -7,8 +7,14 @@
 // started without awaiting in between run in parallel. A step is skipped, reusing its last
 // result, when none of its `cache.inputs` files changed.
 // The platform adds its evidence steps (red/green, coverage, public API, ...) after these.
+// The `bundle` artifact of the build step is what a rollout deploys (when a deploy target is set).
 
-type RunnerSpec = { name: string; command: string; cache?: { inputs: string[] } };
+type RunnerSpec = {
+  name: string;
+  command: string;
+  cache?: { inputs: string[] };
+  artifacts?: { name: string; paths: string[] }[];
+};
 type Step = { runner(spec: RunnerSpec): Promise<Step> };
 type Ci = Step;
 
@@ -26,6 +32,11 @@ export default async (ci: Ci) => {
     install.runner({ name: "lint", command: "pnpm run lint", cache: { inputs: INPUTS } }),
     install.runner({ name: "typecheck", command: "pnpm run typecheck", cache: { inputs: INPUTS } }),
     install.runner({ name: "test", command: "pnpm run test", cache: { inputs: INPUTS } }),
-    install.runner({ name: "build", command: "pnpm run build", cache: { inputs: INPUTS } }),
+    install.runner({
+      name: "build",
+      command: "pnpm run build",
+      cache: { inputs: INPUTS },
+      artifacts: [{ name: "bundle", paths: ["dist"] }],
+    }),
   ]);
 };

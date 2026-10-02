@@ -85,6 +85,13 @@ is regenerated for the new head. Evidence details: `get_evidence({ changeId: "<c
 `reason: "timeout"` → call it again with the same arguments until `reached` is true.
 `reason: "unreachable"` → the Change ended; read `get_change_status`.
 
+## After merge: rollout and the kill switch
+With a deploy target, a merged Change rolls out in stages (`rollout` in `.platform/policy.ts`) and is
+watched. Its flag `change-<changeId>` is on meanwhile; a regression switches it off, rolls the Worker
+back and opens a revert Change, with no human involved. Guard a risky new path with the flag so that
+switching it off restores the old one: `if (await isChangeEnabled(env, "<changeId>"))` (`src/flags.ts`
+in Workers templates). `env.FLAGS` exists only in deployed versions; elsewhere the Change counts as on.
+
 ## When CI fails
 1. `get_change_status({ changeId: "<changeId>" })` shows the failing step and its log tail.
 2. Reproduce it locally with the same command (table below), fix it, commit, push again.
