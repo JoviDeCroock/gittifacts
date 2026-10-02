@@ -371,15 +371,16 @@ describe("no API can give an unclaimed project secrets, custom domains or a depl
     } finally {
       await mcp.client.close();
     }
-    // Any route that sets a deploy target refuses an unclaimed project, even for a human admin.
+    // Any route that sets a deploy target refuses an unclaimed project, even for a human admin:
+    // no human is a member of an unclaimed project, so it is not even there for them (404).
     const human = await signUpHuman(app);
     for (const path of new Set(deployPaths)) {
       const res = await request(app, "PATCH", path.replace("{repoId}", p.projectId), {
         cookie: human.cookie,
         body: { script: "prod" },
       });
-      expect(res.status, path).toBe(403);
-      expect(((await res.json()) as Envelope).error.code, path).toBe("unclaimed-limit");
+      expect(res.status, path).toBe(404);
+      expect(((await res.json()) as Envelope).error.code, path).toBe("not-found");
     }
     expect((await store().getRepo(p.projectId))?.deployTarget).toBeNull();
   });

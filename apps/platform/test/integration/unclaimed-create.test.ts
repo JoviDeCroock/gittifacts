@@ -213,7 +213,8 @@ describe("the unclaimed project's token", () => {
         category: "fix",
       });
       expect(denied.isError).toBe(true);
-      expect(JSON.stringify(denied.content)).toContain("repo-not-granted");
+      // Another person's repo is not even there for an unclaimed project's agent.
+      expect(JSON.stringify(denied.content)).toContain("not-found");
       const again = await mcp.tools.create_project({ template: "workers-api" });
       expect(again.isError).toBe(true);
       expect(JSON.stringify(again.content)).toContain("repo-not-granted");
@@ -226,7 +227,7 @@ describe("the unclaimed project's token", () => {
     }
     // HTTP too, and it can never approve anything.
     const http = await request(app, "GET", `/api/v1/repos/${theirs.id}`, { token });
-    expect(http.status).toBe(403);
+    expect(http.status).toBe(404);
     const me = await json<{ principal: { id: string } }>(
       await request(app, "GET", "/api/v1/capabilities", { token }),
     );

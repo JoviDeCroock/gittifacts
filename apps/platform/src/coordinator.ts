@@ -9,6 +9,7 @@ import {
   cloudflareBindings,
   createCoordinator,
 } from "@app/coordinator";
+import { repoAccessPort } from "./access/port.js";
 import type { Bindings } from "./app-env.js";
 import { unclaimedLimits } from "./limits/config.js";
 import { initialCommitProvider } from "./projects/initial-commit.js";
@@ -44,9 +45,10 @@ export function facadeOptions(
   };
 }
 
+/** Request facades check repo membership on every actor-driven call (src/access/). */
 export const getCoordinator: CoordinatorFactory = (env, _ctx, origin) =>
   createCoordinator(
-    buildPorts(env, "default"),
+    buildPorts(env, "default", { overrides: { access: repoAccessPort(env) } }),
     cloudflareBindings(env),
     facadeOptions(origin, env),
   );

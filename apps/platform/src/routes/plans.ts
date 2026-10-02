@@ -68,9 +68,13 @@ const reject = createRoute({
   method: "post",
   path: "/api/v1/plans/{planId}/reject",
   tags: ["plans"],
-  summary: "Reject a draft plan (human, plan:approve; the author may withdraw)",
+  summary: "Reject a draft plan (human maintainer or owner; the author may withdraw)",
   security: SECURITY,
-  middleware: [requirePrincipal(["plan:approve"], { humanOnly: true }), idempotent()] as const,
+  // `read` here: rejectPlan decides (approve, or contribute for the author's own draft).
+  middleware: [
+    requirePrincipal(["plan:approve"], { humanOnly: true, need: "read" }),
+    idempotent(),
+  ] as const,
   request: { headers: IdempotencyHeaders, params: PlanIdParam, body: body(RejectPlanBody) },
   responses: {
     200: json(z.object({ plan: PlanSchema }), "Rejected"),
