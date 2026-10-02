@@ -128,7 +128,13 @@ and `infra-error` all count as failures (an eval that can't run can't vouch for 
 ## Platform prerequisites (otherwise runs fail or are `blocked`)
 
 - Credential-less creation must be on (Flagship `unclaimed-creation-enabled`, or the admin
-  override): with the kill switch on, every run is recorded `blocked` and the gates fail.
+  override): with the kill switch on, every run is recorded `blocked` and the gates fail. Per
+  DECISIONS.md (2026-10-02) it stays off until repo membership ships, so the eval is blocked until then.
+- Checker reads: `EVAL_ADMIN_TOKEN` must be able to read every project (unclaimed ones included),
+  its Changes, evidence and tours, and the global audit log. Today any unrestricted `repo:read`
+  agent token can. Once repo membership ships, that needs an explicit platform-admin read grant for
+  the eval-admin principal (e.g. listing it in `PLATFORM_ADMINS`, or a read-all scope its agent
+  token can hold); otherwise every check fails and the sweep is incomplete (gates fail closed).
 - Creation rate limits: credential-less `create_project` allows 3 per IP per hour and 10 per day.
   The eval's agent traffic leaves from Cloudflare's Worker egress (one /64 for the platform), so a
   40-run matrix exceeds them. Pick one before the first nightly run:
