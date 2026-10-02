@@ -6,12 +6,24 @@ const DEFAULT_ORIGIN = "https://gittifacts.decroockjovi.workers.dev";
 const THEME_KEY = "gf:theme";
 type Theme = "system" | "light" | "dark";
 
+/** Same break points as the prerender (content.ts urlParts): after "//" and host dots, before "/". */
+function urlParts(url: string): string[] {
+  const m = /^([a-z][a-z0-9+.-]*:\/\/)([^/]*)(.*)$/i.exec(url);
+  if (!m) return [url];
+  const [, scheme = "", host = "", path = ""] = m;
+  return [scheme, ...host.split(/(?<=\.)/), ...path.split(/(?=\/)/)].filter(Boolean);
+}
+
 function fixOrigin(): void {
   const origin = window.location.origin;
   if (origin === DEFAULT_ORIGIN || !/^https?:/.test(origin)) return;
   for (const el of document.querySelectorAll<HTMLElement>("[data-origin-text]")) {
-    if (el.textContent?.startsWith(DEFAULT_ORIGIN))
-      el.textContent = `${origin}${el.dataset.originText ?? ""}`;
+    if (!el.textContent?.startsWith(DEFAULT_ORIGIN)) continue;
+    const url = `${origin}${el.dataset.originText ?? ""}`;
+    const parts = urlParts(url);
+    el.replaceChildren(
+      ...parts.flatMap((p, i) => (i > 0 ? [document.createElement("wbr"), p] : [p])),
+    );
   }
 }
 

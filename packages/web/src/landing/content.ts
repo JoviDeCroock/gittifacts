@@ -7,6 +7,17 @@
 /** The deployed origin, used in the static HTML; the Worker rewrites it to the request origin. */
 export const DEFAULT_ORIGIN = "https://gittifacts.decroockjovi.workers.dev";
 
+/**
+ * A URL split where a line may break: after "//" and each "." of the host, and before each "/"
+ * of the path. Rendered with <wbr> between parts so long hosts never break mid-word on phones.
+ */
+export function urlParts(url: string): string[] {
+  const m = /^([a-z][a-z0-9+.-]*:\/\/)([^/]*)(.*)$/i.exec(url);
+  if (!m) return [url];
+  const [, scheme = "", host = "", path = ""] = m;
+  return [scheme, ...host.split(/(?<=\.)/), ...path.split(/(?=\/)/)].filter(Boolean);
+}
+
 /** Measured on the live platform (2026-10-02). Never round these up. */
 export const MEASURED = {
   firstGreen: "36 to 48 seconds",

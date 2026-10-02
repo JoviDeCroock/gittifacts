@@ -48,7 +48,7 @@
 .hero__agent {
   display: grid;
   gap: var(--s-2);
-  inline-size: min(100%, 30rem);
+  inline-size: min(100%, 34rem);
 }
 .hero__agent-label {
   font-weight: var(--weight-medium);
@@ -163,6 +163,10 @@
 }
 /* Commands stay on one line where there is room; they scroll inside their box. */
 @media (min-width: 640px) {
+  /* Chrome honors <wbr> even under nowrap; the break points are for phones only. */
+  .copyline__text wbr {
+    display: none;
+  }
   .copyline__text {
     white-space: nowrap;
     overflow-x: auto;

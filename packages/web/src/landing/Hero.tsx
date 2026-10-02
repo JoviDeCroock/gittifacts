@@ -2,11 +2,11 @@
  * Top bar and first viewport: the rule, one line on what the platform does, the human action
  * (sign in) and the agent action (one URL), beside the case tag.
  */
-import type { ComponentChildren } from "preact";
+import { type ComponentChildren, Fragment } from "preact";
 import { BrandMark } from "../components/BrandMark.js";
 import { Icon } from "../components/Icon.js";
 import { CaseTag } from "./CaseTag.js";
-import { DEFAULT_ORIGIN } from "./content.js";
+import { DEFAULT_ORIGIN, urlParts } from "./content.js";
 
 const NAV = [
   { href: "#loop", label: "How it works" },
@@ -55,6 +55,20 @@ export function TopBar() {
   );
 }
 
+/** A URL with <wbr> break points (the Worker and client.ts rewrite it the same way). */
+export function BreakableUrl({ url }: { url: string }) {
+  return (
+    <>
+      {urlParts(url).map((part, i) => (
+        <Fragment key={`${i}-${part}`}>
+          {i > 0 ? <wbr /> : null}
+          {part}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 /** A small copy button for an inline value; client.ts enables it. */
 export function CopyButton({ target, label }: { target: string; label: string }) {
   return (
@@ -88,7 +102,12 @@ export function CopyLine({
   return (
     <div class={scroll ? "copyline copyline--scroll" : "copyline"}>
       <code class="copyline__text" id={id} data-origin-text={originPath}>
-        {children ?? (originPath === undefined ? text : `${DEFAULT_ORIGIN}${originPath}`)}
+        {children ??
+          (originPath === undefined ? (
+            text
+          ) : (
+            <BreakableUrl url={`${DEFAULT_ORIGIN}${originPath}`} />
+          ))}
       </code>
       <button type="button" class="copyline__btn" data-copy={id} aria-label={label} hidden>
         <Icon name="copy" size={16} />

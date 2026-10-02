@@ -16,7 +16,7 @@
   justify-items: start;
 }
 .agents__head .copyline {
-  inline-size: min(100%, 30rem);
+  inline-size: min(100%, 34rem);
   margin-block-start: var(--s-2);
 }
 .agents__head .l-lede code {

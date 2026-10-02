@@ -207,7 +207,7 @@
   margin-block-start: var(--s-3);
 }
 .close__actions .copyline {
-  inline-size: min(100%, 26rem);
+  inline-size: min(100%, 34rem);
 }
 
 /* ================================================================ footer */
