@@ -152,7 +152,7 @@ prints the audit timeline with latencies, and deletes the project's Worker (`wra
 claimed projects only) makes rollouts deploy to `gf-<repoId>-api` in the platform's account. The first rollout
 creates the script with workers.dev on (`https://gf-<repoId>-api.<account>.workers.dev`), Workers Logs and
 Workers Issues on. Every version gets `FLAGS`, bound to the project's own Flagship app (`gf-<repoId>`, created when
-the deploy target is set or on the first deploy, recorded as `repos.flagship_app_id`; migration 0010), and `VERSION`
+the deploy target is set or on the first deploy, recorded as `repos.flagship_app_id`; migration 0011), and `VERSION`
 (`version_metadata`); bundles may declare plain vars only. No project Worker binds another project's app or the
 platform's. Delete a project's Worker, then its app (Flagship refuses to delete an app a Worker binds):
 `pnpm --filter @app/platform exec wrangler delete --name gf-<repoId>-<script> --force` and
