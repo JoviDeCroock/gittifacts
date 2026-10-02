@@ -194,6 +194,10 @@ a:hover {
   font: var(--text-meta) / 1.6 var(--font-code);
   text-align: center;
 }
+.search input:focus ~ .search__key,
+.search input:not(:placeholder-shown) ~ .search__key {
+  display: none;
+}
 .search__results {
   position: absolute;
   left: 0;

@@ -89,8 +89,10 @@ export function renderMarkdown(body: string, file: string): Rendered {
       code({ text, lang }: Tokens.Code) {
         const language = (lang ?? "").split(/\s+/)[0] ?? "";
         const label = language === "" ? "text" : language;
+        // A one-line tool call wraps instead of scrolling: it is read, not aligned.
+        const wrap = /^[a-z][a-z0-9_]*\(\{.*\}\)$/.test(text.trim()) ? " code--wrap" : "";
         return [
-          `<div class="code" data-lang="${escapeHtml(label)}">`,
+          `<div class="code${wrap}" data-lang="${escapeHtml(label)}">`,
           `<div class="code__head"><span class="code__lang">${escapeHtml(label)}</span>`,
           `<button type="button" class="copy" data-copy hidden>Copy</button></div>`,
           `<pre tabindex="0"><code>${highlight(text, language)}</code></pre></div>\n`,

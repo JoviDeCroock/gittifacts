@@ -52,6 +52,10 @@
   line-height: var(--leading-code);
   tab-size: 2;
 }
+.code--wrap pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .tok-c {
   color: var(--code-comment);
 }

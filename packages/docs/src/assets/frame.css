@@ -76,6 +76,14 @@
 }
 
 /* ------------------------------------------------------------------ breakpoints */
+@media (max-width: 639px) {
+  .search__key {
+    display: none;
+  }
+  .search input {
+    padding-right: var(--s-3);
+  }
+}
 @media (min-width: 640px) {
   .prose h1 {
     font-size: var(--text-display);
