@@ -77,7 +77,11 @@
 
   "workflows": [
     // One per run (instance id = run id): fresh agent loop → checker → safety → record.
-    { "name": "gittifacts-eval-run", "binding": "EVAL_RUN_WORKFLOW", "class_name": "EvalRunWorkflow" },
+    {
+      "name": "gittifacts-eval-run",
+      "binding": "EVAL_RUN_WORKFLOW",
+      "class_name": "EvalRunWorkflow"
+    },
     // One per matrix: starts runs with bounded concurrency, sweeps the audit log, writes summary.
     {
       "name": "gittifacts-eval-matrix",
