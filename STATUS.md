@@ -14,7 +14,7 @@ Specs:
 | M1 Vertical slice | **integrated, passes locally** (workerd vertical slice: MCP start_change → push event → ChangeWorkflow → CI → evidence → lane); `wrangler deploy --dry-run` + sandbox image build pass; deploy pending a `wrangler login` refresh, then `scripts/e2e/m1.ts` |
 | M2 Evidence | **acceptance passes locally**: sandbox e2e, real red/green on a seeded bug fix, attestation verified with the standalone CLI |
 | M3 Classifier + tour | **acceptance passes locally**: all 9 fixtures classify exactly, and the breaking-api tour puts `formatMoney` as its riskiest stop |
-| M4 Merge, rollout, revert | coordinator merge/rollout/revert built (152 tests); live e2e after deploy |
+| M4 Merge, rollout, revert | **acceptance passes live** (`scripts/e2e/m4.ts`, 2026-10-02, deploy trains): a Change that throws for 40% of traffic behind its flag is detected 32.5 s after its first error; flag off + rollback within 0.5 s; verified pure revert opened 4.5 s after detection, auto-merged (Lane 0, judge skipped) 77.5 s later and deployed; no human after the review |
 | M5 Mutation, transforms, screenshots, dogfood | mutation + transforms done in the sandbox; screenshots and dogfood pending |
 | O1 Front door + templates | **acceptance passes locally** (workerd, fakes): front door discovery, `create_project` per template → initial commit → bootstrap CI → preview through the gateway with banner → `evidence_ready`; TTFG metrics + dashboard; live check after deploy (docs/deploy.md) |
 | O2 Ergonomics | errors with `fix`, idempotency, `wait_for_change`, `whoami` done; CLI built, served by the platform as an npm tarball (`npx -y https://<host>/cli/gittifacts.tgz`; not on npm yet) |
@@ -88,7 +88,27 @@ in `docs/screenshots/docs-*`.
   Kimi K2.7 Code (Workers AI via AI Gateway) at $0.015 per change.
 - **Previews:** `p-<change>-pv.resynapse.dev` serves the container preview with valid TLS, the banner and
   hardened headers. `/cdn-cgi` is blocked, and the zone's other subdomains are untouched.
+- **M4 live** (`scripts/e2e/m4.ts`, run 4 on ce82c695, project `j0r358cwx6dehxm2bvw5`, deploy trains).
+  - Setup: a human created a `workers-api` project. The agent's Lane-2 rollout policy change (stages 50/100,
+    2-minute stages, 3-minute watch) was approved by the human and merged by the agent-native queue. The human set
+    the deploy target, and `GET /version` became the first deploy, creating `gf-<repoId>-api` on workers.dev with
+    logs and Issues on.
+  - The bad Change made `/?n=…` throw 2 in 5 times behind `isChangeEnabled`. After human approval it merged and
+    deployed as train t2 at 50/50, once t1's 5-minute window ended.
+  - From there, with no human (t = 0 at the merge): first 5xx +155.9 s; telemetry regression +188.4 s (32.5 s
+    after the first error); flag off +0.0 s, rollback +0.5 s and revert `rv-…` opened +4.5 s after detection.
+  - The revert was verified pure with an identical tree, so the judge was skipped. It merged on its own in Lane 0
+    77.5 s after it opened, then deployed.
+  - After the rollback: 0/177 5xx, and `/version` serves the previous version again. The `regression-detected`
+    and `reverted` notifications were sent, the audit chain verifies, and the test Worker was deleted.
+  - Run 3 (before the judge fix) passed with the same latencies, within ±2 s.
 - **Fixed by dogfooding:**
+  - the deployments API rejects the `workers/triggered_by` annotation (10210), so every split and rollback failed;
+  - a deploy train whose deploy failed held its Worker forever (now `TrainDeployFailed`, not re-queued);
+  - generated `.platform/ci.ts` never uploaded the `bundle` artifact (rollouts were always skipped);
+  - telemetry filtered versions with `in`, whose value must be a scalar (now grouped by version);
+  - the route auto-merged any verified revert, even one the classifier held in Lane 2; the LLM judge flagged a
+    revert's own diff (now skipped only for tree-identical verified reverts);
   - container label keys must be ≤ 16 bytes;
   - previews needed first-level hosts for TLS;
   - the `test-run` evidence step was missing;
@@ -97,7 +117,9 @@ in `docs/screenshots/docs-*`.
   - CI plans are now cached by `ci.ts` content.
 
 ## Mocked / not yet real
-- Merge queue (new) not yet wired live; rollout/revert (M4) needs `CF_API_TOKEN` (Versions/Flagship/Observability REST).
+- Workers Issues webhooks are not wired for project Workers (no Notifications destination, policy or automation per
+  script). Rollout health polls Workers Logs telemetry every 30 s instead.
+- One Flagship app serves every project, so project code can read (not write) other projects' change flags.
 
 ## Next
 1. Deploy (`pnpm --filter @app/platform deploy`, docs/deploy.md) → seed template caches → `scripts/e2e/m1.ts` → O1 live check (time-to-first-green) → M4 live e2e.
