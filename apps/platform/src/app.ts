@@ -10,6 +10,7 @@ import { RateLimited } from "./limits/creation.js";
 import { registerLimitRoutes } from "./limits/routes.js";
 import { handleMcp, MCP_PATH } from "./mcp/route.js";
 import { originOf } from "./oauth/context.js";
+import { registerQueueRoutes } from "./queue/routes.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerChangeRoutes } from "./routes/changes.js";
 import { type ApiApp, newApiApp, SECURITY } from "./routes/common.js";
@@ -84,6 +85,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerIdentityRoutes(app);
   registerRepoRoutes(app);
   registerImportRoutes(app);
+  registerQueueRoutes(app);
   registerPlanRoutes(app);
   registerChangeRoutes(app);
   registerProjectRoutes(app);
@@ -128,7 +130,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
     tags: ["mcp"],
     summary: "MCP server (streamable HTTP, stateless)",
     description:
-      "JSON-RPC MCP endpoint for agents. `Authorization: Bearer gtf_…` (agent token); without one, only initialize, tools/list, create_project (an unclaimed project and its own token) and whoami are served. Tools: create_project, whoami, list_repos, create_plan, start_change, get_change_status, get_evidence, get_tour, request_review, list_issues_for_change, refresh_push_token, wait_for_change.",
+      "JSON-RPC MCP endpoint for agents. `Authorization: Bearer gtf_…` (agent token); without one, only initialize, tools/list, create_project (an unclaimed project and its own token) and whoami are served. Tools include create_project, whoami, list_repos, create_plan, start_change, get_change_status, get_evidence, get_tour, request_review, list_issues_for_change, refresh_push_token, wait_for_change, the workspace tools (open_workspace, ws_*), the merge queue (enqueue, queue_status, wait_for_merge, dequeue, reprioritize, queue_overview) and search_tools (find a tool by what you want to do).",
     security: [{ Bearer: [] }],
     request: { body: { content: { "application/json": { schema: z.unknown() } }, required: true } },
     responses: {

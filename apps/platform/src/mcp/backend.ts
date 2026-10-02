@@ -17,6 +17,7 @@ import { toErrorResponse, unauthorized } from "../errors.js";
 import { runIdempotent } from "../idempotency.js";
 import { createImportMcpBackend } from "../import/mcp.js";
 import type { AnonymousClient } from "../limits/client.js";
+import { createQueueMcpBackend } from "../queue/mcp.js";
 import { capabilities } from "../services/capabilities.js";
 import {
   getChangeDetail,
@@ -82,6 +83,8 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     // Remote workspaces (open_workspace, ws_*) and import detection (propose_platform_config).
     ...createWorkspaceMcpBackend(svc, { scoped, idem }),
     ...createImportMcpBackend(svc, { scoped, idem }),
+    // Merge queue (enqueue, queue_status, wait_for_merge, dequeue, reprioritize, queue_overview).
+    ...createQueueMcpBackend(svc, { scoped, idem }),
     async whoami(mc) {
       if (anonymousFrom(mc) !== null) return anonymousWhoami(svc);
       const caps = await capabilities(svc, callerFrom(mc));
