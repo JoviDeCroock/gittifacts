@@ -2,6 +2,7 @@
  * Top bar and first viewport: the rule, one line on what the platform does, the human action
  * (sign in) and the agent action (one URL), beside the case tag.
  */
+import type { ComponentChildren } from "preact";
 import { BrandMark } from "../components/BrandMark.js";
 import { Icon } from "../components/Icon.js";
 import { CaseTag } from "./CaseTag.js";
@@ -72,16 +73,19 @@ export function CopyLine({
   text,
   originPath,
   label,
+  children,
 }: {
   id: string;
   text?: string;
   originPath?: string;
   label: string;
+  /** Mixed content, e.g. a command with an origin-rewritten URL inside it. */
+  children?: ComponentChildren;
 }) {
   return (
     <div class="copyline">
       <code class="copyline__text" id={id} data-origin-text={originPath}>
-        {originPath === undefined ? text : `${DEFAULT_ORIGIN}${originPath}`}
+        {children ?? (originPath === undefined ? text : `${DEFAULT_ORIGIN}${originPath}`)}
       </code>
       <button type="button" class="copyline__btn" data-copy={id} aria-label={label} hidden>
         <Icon name="copy" size={16} />

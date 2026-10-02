@@ -17,7 +17,8 @@
   inline-size: min(calc(100% - 0.75rem), 28rem);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-7);
+  /* Room for the torn strip's rotation, so it never covers the caption. */
+  gap: 3.75rem;
 }
 .case__tag {
   position: relative;
@@ -203,6 +204,9 @@
   display: none;
 }
 @media (min-width: 640px) {
+  .case {
+    gap: 5.25rem;
+  }
   .case__strip--2 {
     transform: translate(1rem, 2.25rem) rotate(4deg);
   }

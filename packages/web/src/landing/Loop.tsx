@@ -4,9 +4,13 @@
  * rollout in progress. A real sequence, so the stations are numbered.
  */
 import type { ComponentChildren } from "preact";
-import { EXAMPLE, MEASURED } from "./content.js";
+import { DEFAULT_ORIGIN, EXAMPLE, MEASURED } from "./content.js";
+import { CopyLine } from "./Hero.js";
 import { ChangeArtifact, LaneArtifact, PlanArtifact } from "./LoopArtifacts.js";
 import { Shot } from "./Shot.js";
+
+/** Where the platform publishes its signing keys (apps/platform well-known routes). */
+const KEYS_PATH = "/.well-known/gittifacts-keys.json";
 
 interface Station {
   id: string;
@@ -42,11 +46,19 @@ const STATIONS: Station[] = [
     body: "Every push runs in a sandbox with no secrets. A fix needs a test that fails on main and passes on the change. Tests, changed-line coverage, mutation score, public-API and dependency diffs and sensitive paths are measured, signed with Ed25519 and written to git notes, so they travel with the repo and verify without us.",
     measured: { figure: MEASURED.pushToEvidence, text: "from push to signed evidence" },
     art: (
-      <Shot
-        name="evidence-wide"
-        narrow="evidence-narrow"
-        alt={`Evidence for ${EXAMPLE.id}: signed and verified, with the platform key, signing time, head commit 19c18b6, digest, the git note it was written to, and the command to verify it from a clone.`}
-      />
+      <div class="art-evidence">
+        <Shot
+          name="evidence-wide"
+          narrow="evidence-narrow"
+          class="shot--cut"
+          alt={`Evidence for ${EXAMPLE.id}: signed and verified, with the platform key, signing time, head commit 19c18b6, digest and the git note it was written to.`}
+        />
+        <p class="art-evidence__verify">Verify it outside the platform, from a clone:</p>
+        <CopyLine id="verify-cmd" label="Copy the verify command">
+          verify-attestation --repo . --commit 19c18b61ebbd --keys-url{" "}
+          <span data-origin-text={KEYS_PATH}>{`${DEFAULT_ORIGIN}${KEYS_PATH}`}</span>
+        </CopyLine>
+      </div>
     ),
   },
   {

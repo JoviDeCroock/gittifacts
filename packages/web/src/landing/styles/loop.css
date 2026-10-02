@@ -93,9 +93,12 @@
   font-weight: var(--weight-bold);
   font-variant-numeric: tabular-nums;
 }
+/* Phones: artifacts take the full column (the spine passes behind them) so screens stay 1:1. */
 .station__art {
-  grid-column: 2;
+  position: relative;
+  grid-column: 1 / -1;
   min-inline-size: 0;
+  background: var(--canvas);
 }
 /* em, so the stations stay stacked when the reader enlarges text. */
 @media (min-width: 64em) {
@@ -134,26 +137,39 @@
 /* Two phone screens of one tour, side by side; on phones they scroll sideways. */
 .phones {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 78%;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-4);
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  overscroll-behavior-x: contain;
-  scrollbar-width: thin;
-  padding-block-end: var(--s-2);
 }
 .phone {
-  scroll-snap-align: start;
   border-radius: var(--r-sheet);
   border: 1px solid var(--rule-strong);
   overflow: hidden;
 }
+/* On a phone, one screen at full width reads; the riskiest stop is described in its text. */
+@media (max-width: 639px) {
+  .phone + .phone {
+    display: none;
+  }
+}
 @media (min-width: 640px) {
   .phones {
-    grid-auto-columns: minmax(0, 21.25rem);
-    overflow: visible;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+.art-evidence {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-2);
+}
+/* The capture ends above the verify row; the command follows as real, copyable text. */
+.shot--cut img {
+  -webkit-mask-image: linear-gradient(#000 82%, #0000);
+  mask-image: linear-gradient(#000 82%, #0000);
+}
+.art-evidence__verify {
+  margin-block-start: var(--s-1);
+  font-size: var(--text-small);
+  color: var(--text-3);
 }
 
 /* ================================================================ drawn artifacts */

@@ -109,8 +109,9 @@
 .copyline__text {
   flex: 1;
   min-inline-size: 0;
-  display: flex;
-  align-items: center;
+  /* Block, not flex: a flex container would drop the spaces around inline children. */
+  display: block;
+  align-self: center;
   padding: var(--s-2) var(--s-3);
   font-size: var(--l-row);
   color: var(--text);
