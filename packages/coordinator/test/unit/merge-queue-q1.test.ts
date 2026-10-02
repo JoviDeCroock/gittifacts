@@ -127,7 +127,9 @@ describe("merge queue Q1 (shell + core over fakes)", () => {
     // The landing pipeline may land several passed batches in one CAS; what matters is that main
     // advanced only to tested trees (assertMainNeverRed) and ends with all three Changes.
     expect(env.mainHistory.length).toBeGreaterThan(1);
-    const finalFiles = git.filesAt(git.head("app"));
+    const finalHead = git.head("app");
+    expect(finalHead).not.toBeNull();
+    const finalFiles = git.filesAt(finalHead as string);
     for (const id of ["c1", "c2", "c3"]) expect(finalFiles[`src/${id}.ts`]).toBeDefined();
     expect(svc.loop.state.main.sha).toBe(git.head("app"));
     expect(queueRefs(env)).toEqual([]);
