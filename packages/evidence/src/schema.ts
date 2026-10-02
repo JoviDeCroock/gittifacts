@@ -217,11 +217,29 @@ export const SensitivePathHits = z.object({
 });
 export type SensitivePathHits = z.infer<typeof SensitivePathHits>;
 
+/**
+ * Who produced a preview. Absent (older bundles) or `platform`: the platform's own preview
+ * gateway. `integration`: an external deploy platform reported it (the platform still signs the
+ * bundle; the item says whose deployment it is). A preview is informational: it never lowers a lane.
+ */
+export const PreviewSource = z.object({
+  kind: z.enum(["platform", "integration"]),
+  /** Integration id and display name (kind "integration"). */
+  id: z.string().min(1).max(200).optional(),
+  name: z.string().min(1).max(200).optional(),
+  /** The reported deployment this preview came from. */
+  deploymentId: z.string().min(1).max(200).optional(),
+  /** Where the deployment's build log lives, when the integration gave one. */
+  logUrl: z.string().url().max(2048).optional(),
+});
+export type PreviewSource = z.infer<typeof PreviewSource>;
+
 export const PreviewDeploy = z.object({
   ...base,
   kind: z.literal("preview"),
   url: z.string().url().optional(),
   versionId: z.string().optional(),
+  source: PreviewSource.optional(),
 });
 export type PreviewDeploy = z.infer<typeof PreviewDeploy>;
 
