@@ -853,3 +853,24 @@ have MCP/HTTP parity. The author, the human owning the authoring agent, or a rev
 - Scratch-repo refs (`refs/heads/mq/*`) are not GC'd (only main's `refs/queue/*` are); recreate the scratch repo if
   it grows.
 - Per-test failure names need the engine to report them on `status()`; until then failures are whole-run.
+
+## 2026-10-02 — O6 onboarding eval: design and decisions
+
+- **Hosting.** A Worker `gittifacts-evals` with an `EvalMatrixWorkflow` and an `EvalRunWorkflow` per run. An
+  `EvalSandbox` container gives tasks 1–3 a shell; task 4 has none.
+- **Inputs are fixed.** The task texts are verbatim from the spec, and the system prompt is only the `/start` line.
+  We never tune either.
+- **Providers.** Two, both through the AI binding and AI Gateway: Moonshot `@cf/moonshotai/kimi-k2.7-code` and OpenAI
+  `@cf/openai/gpt-oss-120b`. Native tool calling was verified live on both, and a JSON-action fallback is available.
+- **Cadence: on demand only (user decision).** A full matrix (4 tasks × 2 models × 5 runs) costs about $18. There
+  is no cron. Start a matrix with `POST /runs` before tagging a release; the `evals-gate` workflow on `v*` tags fails
+  if the latest complete matrix is missing, more than 36 h old, or misses a gate.
+- **Task 4 (lead decision).** It gates on task 1's checks plus zero `shell` calls. `open_workspace` use is recorded but
+  not required, because the workers-api template already satisfies task 1.
+- **Platform fixes from the eval design review,** tracked as eval-driven fixes:
+  1. Red/green proof counts pre-existing tests that fail on base and pass on head. Without that, a source-only fix of
+     a failing test can never be `proven` (task 2).
+  2. Signed eval traffic (HMAC of the run id) is rate-limited per eval run instead of per IP/ASN. The global creation
+     cap and every other unclaimed limit still apply.
+  3. A read-only `PLATFORM_AUDITORS` grant lets the checker read every project once repo membership ships.
+- **Live runs.** These wait for unclaimed creation to be switched on, which in turn waits for repo membership.
