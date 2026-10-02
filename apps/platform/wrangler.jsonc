@@ -36,6 +36,8 @@
     // and TURNSTILE_SECRET_KEY (secret) for the claim page (unset: Cloudflare's test keys), and
     // PLATFORM_ADMINS (comma-separated principal ids, hu_…) for the kill-switch override endpoint.
     "UNCLAIMED_TTL_DAYS": "7",
+    // Public origin (better-auth callbacks, webhook payloads built outside a request).
+    "BETTER_AUTH_URL": "https://gittifacts.decroockjovi.workers.dev",
     // Public Turnstile site key of the `gittifacts-claim` widget (the secret is a Worker secret).
     "TURNSTILE_SITE_KEY": "0x4AAAAAAFLsOe8gJedT53qK",
     // Humans allowed to flip the unclaimed-creation kill-switch override (comma-separated hu_… ids).
