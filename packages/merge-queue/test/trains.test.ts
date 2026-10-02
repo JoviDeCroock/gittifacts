@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   attributionScore,
@@ -210,5 +211,163 @@ describe("Q5 acceptance shape: one of three Changes in a train throws in product
     expect(q.merged.slice(3)).toEqual(["revert-b", "d"]);
     expect(q.state.freeze.reasons).toEqual([]);
     expect(t.state.trains[train?.trainId ?? ""]?.killed).toEqual(["b"]);
+  });
+});
+
+describe("regressions always end in a revert (platform spec §4F.3, §4.8)", () => {
+  const deployFirst = (t: Trains, versionId = "v1") => {
+    const train = t.of("StartDeployTrain")[0];
+    t.send({ type: "TrainDeployed", trainId: train?.trainId ?? "", versionId });
+    return train?.trainId ?? "";
+  };
+
+  it("a single-change train kills the flag, rolls back and requests the revert at once", () => {
+    const t = new Trains();
+    t.merged("a", "api", ["src/a.ts"]);
+    const trainId = deployFirst(t);
+    const cmds = t.send({
+      type: "IssueReported",
+      worker: "api",
+      versionId: "v1",
+      issueId: "i1",
+      frames: [],
+    });
+    expect(cmds.map((c) => c.type).filter((x) => x !== "Audit" && x !== "Emit")).toEqual([
+      "KillFlag",
+      "RollbackTrain",
+      "RequestRevert",
+    ]);
+    expect(t.of("KillFlag")[0]).toMatchObject({ changeId: "a", flagKey: "change-a" });
+    expect(t.of("RequestRevert")[0]?.changeId).toBe("a");
+    expect(t.state.trains[trainId]?.state).toBe("rolling-back");
+    expect(t.state.trains[trainId]?.attributions[0]).toMatchObject({
+      method: "single-change-train",
+      confirmed: true,
+    });
+    // A late "cleared" signal changes nothing; the rollback completes the train.
+    expect(t.send({ type: "RegressionCleared", trainId, issueId: "i1" })).toEqual([]);
+    t.send({ type: "RollbackDone", trainId });
+    expect(t.state.trains[trainId]?.state).toBe("rolled-back");
+    expect(t.of("RequestRevert")).toHaveLength(1);
+  });
+
+  it("a Change without a flag rolls back and is reverted (nothing to kill)", () => {
+    const t = new Trains();
+    t.merged("u", "api", ["src/u.ts"], false);
+    deployFirst(t);
+    t.send({ type: "IssueReported", worker: "api", versionId: "v1", issueId: "i1", frames: [] });
+    expect(t.of("KillFlag")).toEqual([]);
+    expect(t.of("RollbackTrain")).toHaveLength(1);
+    expect(t.of("RequestRevert").map((r) => r.changeId)).toEqual(["u"]);
+  });
+
+  it("a multi-change train whose kill does not clear rolls back and reverts the attributed Change", () => {
+    const t = new Trains();
+    t.state = {
+      ...t.state,
+      workers: {
+        api: {
+          active: null,
+          history: [],
+          pending: ["b", "c"].map((id) => ({
+            changeId: id,
+            sha: `s${id}`,
+            flagKey: `change-${id}`,
+            files: [`src/${id}.ts`],
+            modules: [],
+            mergedAt: 0,
+          })),
+        },
+      },
+    };
+    t.send({ type: "Tick" });
+    deployFirst(t, "v2");
+    t.send({
+      type: "IssueReported",
+      worker: "api",
+      versionId: "v2",
+      issueId: "i2",
+      frames: [{ file: "src/c.ts" }],
+    });
+    expect(t.of("KillFlag").map((k) => k.changeId)).toEqual(["c"]);
+    expect(t.of("RequestRevert")).toEqual([]);
+    t.now += 10 * 60_000;
+    t.send({ type: "Tick" });
+    expect(t.of("RollbackTrain")).toHaveLength(1);
+    expect(t.of("RequestRevert").map((r) => r.changeId)).toEqual(["c"]);
+  });
+});
+
+describe("train regression properties", () => {
+  const changeArb = fc.record({
+    flag: fc.boolean(),
+    files: fc.subarray(["src/a.ts", "src/b.ts", "src/c.ts", "src/d/x.ts", "src/d/y.ts"], {
+      minLength: 1,
+      maxLength: 2,
+    }),
+  });
+
+  it("every regression ends with a revert request for the attributed Change; single-change trains get all three commands at once", () => {
+    fc.assert(
+      fc.property(
+        fc.array(changeArb, { minLength: 1, maxLength: 4 }),
+        fc.array(fc.constantFrom("src/a.ts", "src/b.ts", "src/c.ts", "src/d/x.ts", "lib.js"), {
+          maxLength: 4,
+        }),
+        fc.boolean(),
+        (changes, frameFiles, clears) => {
+          const t = new Trains();
+          // Merge everything before the first train starts, so trains group what they can.
+          t.state = {
+            ...t.state,
+            workers: {
+              api: {
+                active: null,
+                history: [],
+                pending: changes.map((c, i) => ({
+                  changeId: `c${i}`,
+                  sha: `s${i}`,
+                  flagKey: c.flag ? `change-c${i}` : null,
+                  files: c.files,
+                  modules: [],
+                  mergedAt: i,
+                })),
+              },
+            },
+          };
+          t.send({ type: "Tick" });
+          const start = t.of("StartDeployTrain")[0];
+          if (start === undefined) throw new Error("no train started");
+          t.send({ type: "TrainDeployed", trainId: start.trainId, versionId: "v1" });
+          const cmds = t.send({
+            type: "IssueReported",
+            worker: "api",
+            versionId: "v1",
+            issueId: "i1",
+            frames: frameFiles.map((file) => ({ file })),
+          });
+          const killed = cmds.find((c) => c.type === "KillFlag");
+          if (start.changes.length === 1) {
+            const only = start.changes[0];
+            const types = cmds.map((c) => c.type);
+            expect(types).toContain("RollbackTrain");
+            expect(types.includes("KillFlag")).toBe(only?.flagKey !== null);
+            const reverts = cmds.filter((c) => c.type === "RequestRevert");
+            expect(reverts.map((r) => r.changeId)).toEqual([only?.changeId]);
+            return;
+          }
+          // Multi-change train: the most likely flag is killed first, then either outcome.
+          if (killed === undefined || killed.type !== "KillFlag") throw new Error("no kill");
+          if (clears) t.send({ type: "RegressionCleared", trainId: start.trainId, issueId: "i1" });
+          else {
+            t.now += 10 * 60_000;
+            t.send({ type: "Tick" });
+            expect(t.of("RollbackTrain")).toHaveLength(1);
+          }
+          expect(t.of("RequestRevert").map((r) => r.changeId)).toEqual([killed.changeId]);
+        },
+      ),
+      { numRuns: 300 },
+    );
   });
 });

@@ -6,9 +6,12 @@
  *   points at exactly one of them). A Change that can't be switched off deploys alone.
  * - One train at a time per Worker: the next one waits until the watch window ends or the error
  *   budget clears. Trains for different Workers run in parallel.
- * - A regression (Workers Issues) is attributed to the most likely Change by version, stack frames
- *   and affected files; its flag is killed first. If the regression doesn't clear, the whole train
- *   rolls back. Every step is audited; an automatic revert of the attributed Change is requested.
+ * - A regression in a single-change train: the version identifies the Change exactly, so its flag
+ *   is killed, the train rolls back and a revert is requested, all at once (platform spec §4F.3).
+ * - A regression in a multi-change train (§4.8) is attributed to the most likely Change by stack
+ *   frames and affected files; its flag is killed first. If the regression clears, that Change is
+ *   reverted; if not within `killWatchMs`, the whole train rolls back and the attributed Change is
+ *   still reverted. Every step is audited; every regression path ends with a revert request.
  */
 import { z } from "zod";
 import { ChangeId, QueueEvent } from "./schema.js";
@@ -297,26 +300,25 @@ export function trainStep(
       );
       const suspect = ranked[0];
       if (suspect === undefined) break;
-      if (candidates.length === 1 || suspect.flagKey === null) {
-        // Deployed alone (or not switchable): the version identifies the Change exactly.
+      const reason = `regression ${event.issueId} in ${t.worker} version ${event.versionId}`;
+      if (t.changes.length === 1 || suspect.flagKey === null) {
+        // Deployed alone: the version identifies the Change exactly (platform spec §4F.3), so
+        // switch it off, roll the version back and revert it, all at once. A Change that can't
+        // be switched off always deploys alone, so its train rolls back the same way.
+        const single = t.changes.length === 1;
         t.attributions = [
           ...t.attributions,
           {
             issueId: event.issueId,
             changeId: suspect.changeId,
             scores,
-            method: candidates.length === 1 ? "single-change-train" : "rollback",
-            confirmed: candidates.length === 1 ? true : null,
+            method: single ? "single-change-train" : "rollback",
+            confirmed: single ? true : null,
             at: now,
           },
         ];
-        if (suspect.flagKey !== null && candidates.length === 1) {
-          t.state = "killing";
-          t.regression = {
-            issueId: event.issueId,
-            suspect: suspect.changeId,
-            deadline: now + s.config.killWatchMs,
-          };
+        t.state = "rolling-back";
+        if (suspect.flagKey !== null) {
           out.push({
             type: "KillFlag",
             trainId: t.id,
@@ -337,21 +339,19 @@ export function trainStep(
               issueId: event.issueId,
             },
           });
-        } else {
-          t.state = "rolling-back";
-          out.push({
-            type: "RollbackTrain",
-            trainId: t.id,
-            worker: t.worker,
-            versionId: t.versionId,
-          });
-          out.push({
-            type: "RequestRevert",
-            changeId: suspect.changeId,
-            issueId: event.issueId,
-            reason: `regression ${event.issueId} in ${t.worker} version ${event.versionId}`,
-          });
         }
+        out.push({
+          type: "RollbackTrain",
+          trainId: t.id,
+          worker: t.worker,
+          versionId: t.versionId,
+        });
+        out.push({
+          type: "RequestRevert",
+          changeId: suspect.changeId,
+          issueId: event.issueId,
+          reason,
+        });
         audit("deploy.regression-attributed", `change:${suspect.changeId}`, {
           trainId: t.id,
           issueId: event.issueId,
@@ -451,6 +451,7 @@ export function trainStep(
           // The killed flag didn't clear it: roll the whole train back.
           s.attributionFailures++;
           const issueId = t.regression.issueId;
+          const suspect = t.regression.suspect;
           t.attributions = t.attributions.map((a) =>
             a.issueId === issueId ? { ...a, confirmed: false } : a,
           );
@@ -461,6 +462,13 @@ export function trainStep(
             trainId: t.id,
             worker: t.worker,
             versionId: t.versionId,
+          });
+          // Still the most likely cause (and its flag is already off): revert it too.
+          out.push({
+            type: "RequestRevert",
+            changeId: suspect,
+            issueId,
+            reason: `regression ${issueId} did not clear after killing its flag; train ${t.id} rolled back`,
           });
           audit("deploy.regression-unattributed", `train:${t.id}`, {
             issueId,
