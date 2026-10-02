@@ -101,6 +101,15 @@ export interface ProjectCreated {
   nextSteps: NextStepData[];
 }
 
+export type RepoRoleData = "owner" | "maintainer" | "reviewer" | "reader";
+
+export interface MembersData {
+  repoId: string;
+  members: { principalId: string; name: string; role: RepoRoleData; addedAt: string }[];
+  /** The caller's effective role (an agent: its owner's role, capped by its scopes). */
+  viewerRole: RepoRoleData | null;
+}
+
 /** Every tool family's backend: the core tools below, remote workspaces and import detection. */
 export interface McpBackend extends WorkspaceToolsBackend, ImportToolsBackend, QueueToolsBackend {
   whoami(caller: McpCaller): Promise<WhoamiData>;
@@ -111,6 +120,8 @@ export interface McpBackend extends WorkspaceToolsBackend, ImportToolsBackend, Q
     opts: MutationOptions,
   ): Promise<ProjectCreated>;
   listRepos(caller: McpCaller): Promise<Array<Repo & { counts: LaneCountsData }>>;
+  /** A repo's human members and their roles (read-only; owners manage members on the web). */
+  listMembers(caller: McpCaller, repoId: string): Promise<MembersData>;
   createPlan(
     caller: McpCaller,
     input: z.output<typeof PlanDraftInput>,

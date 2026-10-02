@@ -342,6 +342,32 @@ export const ListReposOutput = {
   required: ["repos"],
 } as const;
 
+export const RepoIdInput = {
+  type: "object",
+  properties: { repoId: id },
+  required: ["repoId"],
+  additionalProperties: false,
+} as const;
+
+const RepoRole = { type: "string", enum: ["owner", "maintainer", "reviewer", "reader"] } as const;
+
+export const ListMembersOutput = {
+  type: "object",
+  properties: {
+    repoId: str,
+    members: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { principalId: str, name: str, role: RepoRole, addedAt: str },
+        required: ["principalId", "name", "role", "addedAt"],
+      },
+    },
+    yourRole: { type: ["string", "null"], enum: ["owner", "maintainer", "reviewer", "reader", null] },
+  },
+  required: ["repoId", "members", "yourRole"],
+} as const;
+
 export const CreatePlanOutput = {
   type: "object",
   properties: {

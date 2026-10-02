@@ -30,9 +30,11 @@ import {
   EmptyInput,
   EvidenceOutput,
   IssuesOutput,
+  ListMembersOutput,
   ListReposOutput,
   RefreshPushTokenInput,
   RefreshPushTokenOutput,
+  RepoIdInput,
   RequestReviewInput,
   RequestReviewOutput,
   StartChangeInput as StartChangeInputSchema,
@@ -309,6 +311,31 @@ export function buildTools(backend: McpBackend) {
             claim: r.claim,
             counts: r.counts,
           })),
+        };
+      },
+    },
+    {
+      name: "list_members",
+      title: "List repo members",
+      description:
+        "A repo's human members and their roles (reader < reviewer < maintainer < owner), and your role (an agent acts with its owner's role: reviewer or above to draft plans and start changes). Ask an owner listed here for access.",
+      inputSchema: RepoIdInput,
+      outputSchema: ListMembersOutput,
+      annotations: READ,
+      handler: async (args, ctx) => {
+        const caller = callerOf(ctx);
+        requireScope(caller, "repo:read");
+        const { repoId } = parse(z.object({ repoId: Id }), args);
+        const m = await run(backend, () => backend.listMembers(caller, repoId));
+        return {
+          repoId: m.repoId,
+          members: m.members.map((x) => ({
+            principalId: x.principalId,
+            name: x.name,
+            role: x.role,
+            addedAt: x.addedAt,
+          })),
+          yourRole: m.viewerRole,
         };
       },
     },

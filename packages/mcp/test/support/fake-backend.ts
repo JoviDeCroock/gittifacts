@@ -189,6 +189,14 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
         },
       ];
     },
+    async listMembers(_caller, repoId) {
+      calls.push(`listMembers:${repoId}`);
+      return {
+        repoId,
+        members: [{ principalId: "hu_1", name: "Ada", role: "owner", addedAt: "2026-10-01T00:00:00.000Z" }],
+        viewerRole: "owner",
+      };
+    },
     async createPlan(caller, input, opts) {
       calls.push(`createPlan:${opts.idempotencyKey ?? "-"}`);
       const plan: Plan = {

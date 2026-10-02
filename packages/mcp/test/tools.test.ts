@@ -38,6 +38,7 @@ describe("gittifacts MCP tools", () => {
       "get_evidence",
       "get_tour",
       "list_issues_for_change",
+      "list_members",
       "list_repos",
       "open_workspace",
       "propose_platform_config",

@@ -1573,6 +1573,89 @@ export type introspection = {
       }
     },
     /**
+     * List repo members
+     * A repo's human members and their roles (reader < reviewer < maintainer < owner), and your role (an agent acts with its owner's role: reviewer or above to draft plans and start changes). Ask an owner listed here for access.
+     */
+    "list_members": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "repoId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "principalId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "maintainer",
+                    "reviewer",
+                    "reader"
+                  ]
+                },
+                "addedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "principalId",
+                "name",
+                "role",
+                "addedAt"
+              ]
+            }
+          },
+          "yourRole": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "owner",
+              "maintainer",
+              "reviewer",
+              "reader",
+              null
+            ]
+          }
+        },
+        "required": [
+          "repoId",
+          "members",
+          "yourRole"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
      * List repos
      * Repos you can read, with open changes per lane and whether Lane 0 (auto-merge) is on.
      */

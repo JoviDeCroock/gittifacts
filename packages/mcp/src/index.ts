@@ -5,9 +5,11 @@ export type {
   LaneCountsData,
   McpBackend,
   McpCaller,
+  MembersData,
   MutationOptions,
   NextStepData,
   ProjectCreated,
+  RepoRoleData,
   WhoamiData,
 } from "./backend.js";
 export { createMcpServer, INSTRUCTIONS, SERVER_INFO } from "./server.js";
