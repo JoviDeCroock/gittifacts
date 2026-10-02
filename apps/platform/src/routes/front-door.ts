@@ -18,14 +18,19 @@ import {
   mcpDiscovery,
   serverCardPath,
   startGuide,
+  type UnclaimedQuotaHints,
   type WellKnownDocument,
 } from "@app/conventions";
+import { defaultPolicy } from "@app/domain";
 import { sha256Hex } from "@app/evidence";
 import type { Context } from "hono";
 import type { AppEnv } from "../app-env.js";
+import { quotaHints, unclaimedLimits } from "../limits/config.js";
+import { unclaimedCreationState } from "../limits/kill-switch.js";
 import { urlsFor } from "../oauth/context.js";
 import { delegatedAuthHints } from "../oauth/metadata.js";
 import { DELEGABLE_SCOPES } from "../oauth/scopes.js";
+import { limitsFor, type WorkspaceConfigVars } from "../workspace/model.js";
 import type { ApiApp } from "./common.js";
 
 export const FRONT_DOOR_PATHS = {
@@ -36,8 +41,23 @@ export const FRONT_DOOR_PATHS = {
   aiCatalog: "/.well-known/ai-catalog.json",
 } as const;
 
-/** Unclaimed projects arrive with O3; until then create_project needs a token. */
-export const UNCLAIMED_TTL_DAYS = 7;
+/** Whether credential-less create_project works right now (kill switch) and its limits. */
+export interface UnclaimedHints {
+  enabled: boolean;
+  quotas: UnclaimedQuotaHints;
+}
+
+export async function unclaimedHints(c: Context<AppEnv>): Promise<UnclaimedHints> {
+  const state = await unclaimedCreationState(c.get("services").store, c.env.FLAGS);
+  const ws = limitsFor(
+    { claim: { status: "unclaimed", ownerId: null, expiresAt: null }, policy: defaultPolicy() },
+    c.env as unknown as WorkspaceConfigVars,
+  );
+  return {
+    enabled: state.enabled,
+    quotas: quotaHints(unclaimedLimits(c.env), Math.round((ws.cpuSecondsPerDay ?? 0) / 60)),
+  };
+}
 
 export interface FrontDoorUrls {
   origin: string;
@@ -56,14 +76,15 @@ export function frontDoorUrls(c: Context<AppEnv>): FrontDoorUrls {
   };
 }
 
-export function startDocument(urls: FrontDoorUrls) {
+export function startDocument(urls: FrontDoorUrls, unclaimed: UnclaimedHints) {
   return startGuide({
     host: urls.origin,
     mcpUrl: urls.mcpUrl,
     openapiUrl: urls.openapiUrl,
     authHints: {
-      unclaimedProjects: false,
-      unclaimedTtlDays: UNCLAIMED_TTL_DAYS,
+      unclaimedProjects: unclaimed.enabled,
+      unclaimedTtlDays: Math.max(1, Math.round(unclaimed.quotas.ttlDays)),
+      unclaimedQuotas: unclaimed.quotas,
       ...delegatedAuthHints(),
     },
   });
@@ -117,7 +138,7 @@ function wantsJson(c: Context<AppEnv>): boolean {
 export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): void {
   app.get(FRONT_DOOR_PATHS.start, async (c) => {
     const urls = frontDoorUrls(c);
-    const doc = startDocument(urls);
+    const doc = startDocument(urls, await unclaimedHints(c));
     const links = { ...CACHE, link: frontDoorLinks(urls) };
     return wantsJson(c)
       ? etagged(c, JSON.stringify(doc.json, null, 2), "application/json; charset=utf-8", links)
@@ -131,6 +152,7 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
       mcpUrl: urls.mcpUrl,
       openapiUrl: urls.openapiUrl,
       oauth: delegatedAuthHints().oauth,
+      unclaimed: await unclaimedHints(c),
     });
     return etagged(c, text, "text/plain; charset=utf-8", { ...CACHE, link: frontDoorLinks(urls) });
   });
@@ -156,7 +178,7 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
     const accept = (c.req.header("accept") ?? "").toLowerCase();
     if (!accept.includes("text/html") && (accept.includes("text/markdown") || wantsJson(c))) {
       // An agent asking for something other than HTML gets the start guide directly.
-      const doc = startDocument(urls);
+      const doc = startDocument(urls, await unclaimedHints(c));
       const links = { ...CACHE, link: frontDoorLinks(urls) };
       return wantsJson(c)
         ? etagged(c, JSON.stringify(doc.json, null, 2), "application/json; charset=utf-8", links)
