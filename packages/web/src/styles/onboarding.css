@@ -1,0 +1,234 @@
+/* Internal: time to first green. Bars are data ink (neutral); colour only for spelled-out state. */
+
+.ttfg-intro {
+  color: var(--text-2);
+  max-inline-size: var(--measure);
+}
+
+.ttfg-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-block-end: var(--s-5);
+}
+
+/* ---------------------------------------------------------------- KPI row */
+.ttfg-kpis {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-4);
+}
+@media (min-width: 640px) {
+  .ttfg-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.ttfg-tile {
+  display: grid;
+  gap: var(--s-2);
+  align-content: start;
+  padding: var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+}
+.ttfg-tile__label {
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--text-2);
+}
+.ttfg-tile__value {
+  font-size: 2.25rem;
+  font-weight: var(--weight-bold);
+  line-height: 1.1;
+  color: var(--text);
+}
+.ttfg-tile__sub {
+  font-size: var(--text-meta);
+  color: var(--text-3);
+}
+
+/* ---------------------------------------------------------------- bars by template */
+.ttfg-bars {
+  margin: 0;
+}
+.ttfg-bars__row {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 11rem) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-3);
+  min-block-size: 40px;
+  border-radius: var(--r-control);
+  outline: none;
+}
+.ttfg-bars__row:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus);
+}
+.ttfg-bars__row--head,
+.ttfg-bars__row--axis {
+  min-block-size: 24px;
+}
+.ttfg-bars__name {
+  display: grid;
+  gap: 2px;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.ttfg-bars__flag {
+  font-size: var(--text-meta);
+  font-weight: var(--weight-regular);
+}
+.ttfg-bars__track {
+  position: relative;
+  block-size: 24px;
+  /* room on the right for the value label */
+  margin-inline-end: 3.5rem;
+}
+.ttfg-bars__bar {
+  position: absolute;
+  inset-block: 4px;
+  inset-inline-start: 0;
+  min-inline-size: 2px;
+  background: var(--text-3);
+  border-radius: 0 4px 4px 0;
+}
+.ttfg-bars__row:hover .ttfg-bars__bar,
+.ttfg-bars__row:focus-visible .ttfg-bars__bar {
+  background: var(--text-2);
+}
+.ttfg-bars__p90 {
+  position: absolute;
+  inset-block: 0;
+  inline-size: 2px;
+  margin-inline-start: -1px;
+  background: var(--text);
+  border-radius: 1px;
+  box-shadow: 0 0 0 2px var(--canvas);
+}
+.ttfg-bars__target {
+  position: absolute;
+  inset-block: -8px;
+  inline-size: 1px;
+  background: var(--text);
+}
+.ttfg-bars__target-label {
+  position: absolute;
+  inset-block-end: 0;
+  transform: translateX(-50%);
+  font-size: var(--text-meta);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+/* The median sits in its own column right of the plot, so the p90 tick never crosses it. */
+.ttfg-bars__value {
+  position: absolute;
+  inset-inline-start: 100%;
+  inset-block-start: 50%;
+  transform: translate(12px, -50%);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--text);
+  white-space: nowrap;
+}
+.ttfg-bars__tip {
+  position: absolute;
+  inset-block-end: calc(100% + 6px);
+  inset-inline-start: 0;
+  z-index: 2;
+  display: none;
+  padding: var(--s-2) var(--s-3);
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-control);
+  box-shadow: var(--shadow-raise);
+  font-size: var(--text-meta);
+  color: var(--text-2);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.ttfg-bars__tip b {
+  color: var(--text);
+  font-size: var(--text-small);
+}
+.ttfg-bars__row:hover .ttfg-bars__tip,
+.ttfg-bars__row:focus-visible .ttfg-bars__tip {
+  display: block;
+}
+.ttfg-bars__row--axis .ttfg-bars__track {
+  border-block-start: 1px solid var(--rule);
+}
+.ttfg-bars__tick {
+  position: absolute;
+  inset-block-start: 4px;
+  transform: translateX(-50%);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+}
+.ttfg-bars__unit {
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  text-align: end;
+}
+.ttfg-bars__legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-block-start: var(--s-3);
+  font-size: var(--text-meta);
+  color: var(--text-2);
+}
+.ttfg-key {
+  display: inline-block;
+  vertical-align: middle;
+}
+.ttfg-key--bar {
+  inline-size: 14px;
+  block-size: 10px;
+  background: var(--text-3);
+  border-radius: 0 3px 3px 0;
+}
+.ttfg-key--tick {
+  inline-size: 2px;
+  block-size: 14px;
+  background: var(--text);
+}
+.ttfg-key--target {
+  inline-size: 1px;
+  block-size: 14px;
+  background: var(--text);
+}
+
+/* ---------------------------------------------------------------- recent projects */
+.ttfg-table-wrap {
+  overflow-x: auto;
+  border-block-start: 1px solid var(--rule);
+}
+.ttfg-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-small);
+}
+.ttfg-table th {
+  padding: var(--s-2) var(--s-3) var(--s-2) 0;
+  font-weight: var(--weight-medium);
+  color: var(--text-3);
+  text-align: start;
+  white-space: nowrap;
+}
+.ttfg-table td {
+  padding: var(--s-3) var(--s-3) var(--s-3) 0;
+  border-block-start: 1px solid var(--rule);
+  color: var(--text);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.ttfg-table .num {
+  text-align: end;
+}
+.ttfg-table__over {
+  margin-inline-start: var(--s-2);
+  font-size: var(--text-meta);
+}

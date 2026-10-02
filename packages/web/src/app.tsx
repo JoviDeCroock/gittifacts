@@ -1,5 +1,5 @@
 import { useEffect } from "preact/hooks";
-import { ErrorBoundary, LocationProvider, Route, Router, lazy, useLocation } from "preact-iso";
+import { ErrorBoundary, LocationProvider, lazy, Route, Router, useLocation } from "preact-iso";
 import { Shell } from "./components/Shell.js";
 import { Loading } from "./components/ui.js";
 import { loadSession, session } from "./state/session.js";
@@ -13,6 +13,7 @@ const EvidenceView = lazy(() => import("./routes/evidence.js").then((m) => m.Evi
 const RolloutView = lazy(() => import("./routes/rollout.js").then((m) => m.RolloutView));
 const AuditView = lazy(() => import("./routes/audit.js").then((m) => m.AuditView));
 const AgentsView = lazy(() => import("./routes/agents.js").then((m) => m.AgentsView));
+const OnboardingView = lazy(() => import("./routes/onboarding.js").then((m) => m.OnboardingView));
 const NotFound = lazy(() => import("./routes/notfound.js").then((m) => m.NotFound));
 const OAuthConsent = lazy(() => import("./routes/oauth-consent.js").then((m) => m.OAuthConsent));
 const DeviceView = lazy(() => import("./routes/device.js").then((m) => m.DeviceView));
@@ -44,6 +45,7 @@ function AuthedApp() {
           <Route path="/changes/:changeId/rollout" component={RolloutView} />
           <Route path="/audit" component={AuditView} />
           <Route path="/agents" component={AgentsView} />
+          <Route path="/internal/onboarding" component={OnboardingView} />
           <Route path="/signin" component={RedirectHome} />
           <Route default component={NotFound} />
         </Router>
@@ -55,7 +57,8 @@ function AuthedApp() {
 function RedirectHome() {
   const { route, query } = useLocation();
   useEffect(() => {
-    const next = query.next && query.next.startsWith("/") && !query.next.startsWith("//") ? query.next : "/";
+    const next =
+      query.next && query.next.startsWith("/") && !query.next.startsWith("//") ? query.next : "/";
     route(next, true);
   }, [route, query.next]);
   return null;
