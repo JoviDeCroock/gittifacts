@@ -257,7 +257,8 @@ export class PreviewHost extends DurableObject<PreviewHostEnv> {
         // Previews have no internet (unclaimed or not, for now): only the gateway reaches in.
         enableInternet: false,
         instance: "standard-1",
-        labels: { "gittifacts-preview": config.previewId.slice(0, 63) },
+        // Container label keys are limited to 16 bytes.
+        labels: { "gf-preview": config.previewId.slice(0, 63) },
       });
     } catch (e) {
       throw new Error(`the ${config.snapshotStep} snapshot could not be restored: ${message(e)}`);
