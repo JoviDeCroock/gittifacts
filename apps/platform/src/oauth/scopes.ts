@@ -3,15 +3,19 @@
  * never offered, never parsed into a grant, and never issued, whatever an OAuth `scope` string,
  * a consent body or a refresh request says.
  */
-import { Scope } from "@app/domain";
+import { INTEGRATION_ONLY_SCOPES, Scope } from "@app/domain";
 import { AGENT_ALLOWED_SCOPES } from "../auth/principals.js";
 
 /** What a delegated session can ever hold (same ceiling as manually created agents). */
 export const DELEGABLE_SCOPES: readonly Scope[] = AGENT_ALLOWED_SCOPES;
 
-/** Never grantable to an agent, by any path. */
+/**
+ * Never grantable to an agent, by any path: the approval/admin class. (Integration-only scopes
+ * are not grantable to agents either, but they are not shown as "never" on the agent consent
+ * screen: they mean nothing to an agent; `parseRequestedScopes` still rejects them.)
+ */
 export const NEVER_DELEGATED: readonly Scope[] = Scope.options.filter(
-  (s) => !AGENT_ALLOWED_SCOPES.includes(s),
+  (s) => !AGENT_ALLOWED_SCOPES.includes(s) && !INTEGRATION_ONLY_SCOPES.includes(s),
 );
 
 /** "Can open Changes on repo X": the default when a client asks for nothing specific. */

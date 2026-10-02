@@ -2,12 +2,15 @@
  * Principals: humans (one per better-auth user, created on first authenticated request),
  * agents (owned by a human, bearer tokens only) and the platform's `system` principal.
  */
-import { type Principal, Scope } from "@app/domain";
+import { INTEGRATION_ONLY_SCOPES, type Principal, Scope } from "@app/domain";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { principals } from "../db/schema.js";
 import type { D1Store } from "../store/d1-store.js";
 
-export const DEFAULT_HUMAN_SCOPES: readonly Scope[] = Scope.options;
+/** Every scope except the integration-only ones (contents:read, webhooks, deployments:write, checks:write). */
+export const DEFAULT_HUMAN_SCOPES: readonly Scope[] = Scope.options.filter(
+  (s) => !INTEGRATION_ONLY_SCOPES.includes(s),
+);
 
 /**
  * What an agent may ever hold. Agents never approve plans, review changes, or administer policy:

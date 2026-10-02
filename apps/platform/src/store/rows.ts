@@ -295,7 +295,7 @@ export function principalFromRows(r: PrincipalRow, keys: PrincipalKeyRow[]): Pri
       name: r.name,
       ownerId: r.ownerId,
       scopes: z.array(Scope).parse(r.scopes),
-      ...(r.kind === "agent" ? { repoIds: r.repoIds ?? null } : {}),
+      ...(r.kind === "agent" || r.kind === "integration" ? { repoIds: r.repoIds ?? null } : {}),
       keys: keys.map((k) =>
         parseRow(
           PrincipalKey,

@@ -57,7 +57,7 @@ export const PrincipalRefSchema = z
   .object({
     id: z.string(),
     name: z.string(),
-    kind: z.enum(["human", "agent", "system"]),
+    kind: z.enum(["human", "agent", "system", "integration"]),
     ownerId: z.string().nullable(),
   })
   .meta({ id: "PrincipalRef" });
@@ -131,7 +131,7 @@ export const RepoSummarySchema = Repo.extend({
 export const ChangeSummarySchema = Change.extend({
   planTitle: z.string().nullable(),
   authorName: z.string(),
-  authorKind: z.enum(["human", "agent", "system"]),
+  authorKind: z.enum(["human", "agent", "system", "integration"]),
 }).meta({ id: "ChangeSummary" });
 
 export const VerificationSchema = z

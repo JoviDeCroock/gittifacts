@@ -16,8 +16,12 @@ import type { Context } from "hono";
 import type { AppEnv, Caller, Services } from "../app-env.js";
 import { ApiError } from "../errors.js";
 
-/** The repo ids an agent is limited to, or null when it is not repo-restricted. */
+/**
+ * The repo ids an agent or integration is limited to, or null when it is not repo-restricted.
+ * Integrations are never unrestricted: no list means no repos (fail closed).
+ */
 export function restrictedRepoIds(p: Principal): readonly string[] | null {
+  if (p.kind === "integration") return p.repoIds ?? [];
   if (p.kind !== "agent") return null;
   return p.repoIds ?? null;
 }
@@ -35,6 +39,18 @@ export function filterRepos<T extends { id: string }>(p: Principal, repos: reado
 export function repoNotGranted(p: Principal, repoId: string | null): ApiError {
   const allowed = restrictedRepoIds(p) ?? [];
   const where = repoId === null ? "this resource" : `repo ${repoId}`;
+  if (p.kind === "integration") {
+    return new ApiError(
+      403,
+      "repo-not-granted",
+      `this installation was not granted ${where}`,
+      { repoId, allowedRepoIds: allowed },
+      {
+        explanation:
+          "The person who installed this integration limited it to the repos listed in GET /api/v1/installation. Ask them to add this repo to the installation (Settings → Integrations), or run the install flow again and pick it.",
+      },
+    );
+  }
   return new ApiError(
     403,
     "repo-not-granted",

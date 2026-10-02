@@ -94,7 +94,7 @@ export interface LaneCounts {
 export interface PrincipalRef {
   id: string;
   name: string;
-  kind: "human" | "agent" | "system";
+  kind: "human" | "agent" | "system" | "integration";
   ownerId: string | null;
 }
 
@@ -111,7 +111,7 @@ export const EMPTY_LANE_COUNTS: LaneCounts = {
 export interface ChangeSummary extends Change {
   planTitle: string | null;
   authorName: string;
-  authorKind: "human" | "agent" | "system";
+  authorKind: "human" | "agent" | "system" | "integration";
 }
 
 export class NotFoundInStore extends Error {

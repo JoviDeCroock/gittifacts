@@ -27,7 +27,7 @@ export const principals = sqliteTable(
   "principals",
   {
     id: text("id").primaryKey(),
-    kind: text("kind", { enum: ["human", "agent", "system"] }).notNull(),
+    kind: text("kind", { enum: ["human", "agent", "system", "integration"] }).notNull(),
     name: text("name").notNull(),
     /** Agents: the human principal accountable for it. */
     ownerId: text("owner_id").references((): AnySQLiteColumn => principals.id),
