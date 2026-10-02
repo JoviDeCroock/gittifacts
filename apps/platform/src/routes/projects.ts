@@ -6,12 +6,14 @@
 import { TEMPLATE_IDS, TemplateId } from "@app/conventions";
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
+import { isPlatformAuditor } from "../access/config.js";
 import { ErrorSchema, IdempotencyHeaders } from "../api/schemas.js";
-import { assertScopes, requirePrincipal, resolveCaller } from "../auth/middleware.js";
+import { assertScopes, callerOf, requirePrincipal, resolveCaller } from "../auth/middleware.js";
 import { assertRouteRepoAccess } from "../auth/repo-scope.js";
 import { createUnclaimedProject } from "../claim/create.js";
 import { unauthorized } from "../errors.js";
 import { anonymousClient } from "../limits/client.js";
+import { assertPlatformAdmin } from "../limits/routes.js";
 import { ttfgFromAnalyticsEngine, ttfgFromD1, ttfgReport } from "../projects/onboarding.js";
 import { engineFor, seedTemplateCaches } from "../projects/seed-cache.js";
 import { buildPorts } from "../runtime/ports.js";
@@ -186,6 +188,9 @@ export function registerProjectRoutes(app: ApiApp): void {
   });
 
   app.openapi(ttfg, async (c) => {
+    // Platform-wide metrics (every project's id and timings): platform admins and auditors only.
+    const caller = callerOf(c);
+    if (!isPlatformAuditor(caller.principal, c.env)) assertPlatformAdmin(caller, c.env);
     const { days } = c.req.valid("query");
     const svc = c.get("services");
     const since = new Date(svc.clock.now().getTime() - days * 86_400_000);
@@ -212,6 +217,7 @@ export function registerProjectRoutes(app: ApiApp): void {
   });
 
   app.openapi(seed, async (c) => {
+    assertPlatformAdmin(callerOf(c), c.env); // a platform-wide action, not a repo's
     const { template } = c.req.valid("query");
     const ports = buildPorts(c.env, "default");
     const seeds = await seedTemplateCaches(

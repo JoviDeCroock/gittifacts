@@ -45,6 +45,7 @@ import { store } from "../fixtures.js";
 import { call, createAgent, json, ORIGIN, signUpHuman, type TestApp } from "../http.js";
 import { type IntegrationFakes, integrationOverrides, resetIntegrationFakes } from "./fakes.js";
 import { resetPreviewFakes } from "./preview-fakes.js";
+import { request } from "./unclaimed-helpers.js";
 
 function fetchVia(app: TestApp) {
   return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -310,15 +311,22 @@ describe("create_project → first green (workerd, fake Artifacts/containers)", 
     },
   );
 
-  it("the dashboard reads time-to-first-green from D1 without an API token", async () => {
+  it("the dashboard reads time-to-first-green from D1 without an API token (platform admins)", async () => {
     const app = platformApp();
     const human = await signUpHuman(app);
-    const res = await call(app, "GET", "/internal/ttfg?days=7", { cookie: human.cookie });
+    // Every project's id and timings: platform admins (and auditors) only.
+    const admins = { PLATFORM_ADMINS: human.principal.id };
+    const res = await request(app, "GET", "/internal/ttfg?days=7", {
+      cookie: human.cookie,
+      env: admins,
+    });
     expect(res.status).toBe(200);
     const report = await json<{ source: string; targetMs: number; note: string }>(res);
     expect(report).toMatchObject({ source: "d1", targetMs: 60_000 });
+    const notAdmin = await call(app, "GET", "/internal/ttfg", { cookie: human.cookie });
+    expect(notAdmin.status).toBe(403);
     const agent = await createAgent(app, human.cookie);
-    const denied = await call(app, "GET", "/internal/ttfg", { token: agent.token });
+    const denied = await request(app, "GET", "/internal/ttfg", { token: agent.token, env: admins });
     expect(denied.status).toBe(403);
   });
 
