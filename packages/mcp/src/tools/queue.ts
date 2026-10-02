@@ -563,8 +563,9 @@ interface ToolSummary {
   example: string;
 }
 
-const EXAMPLES: Record<string, string> = {
-  create_project: 'create_project({ template: "worker-api" })',
+/** Hand-written examples `search_tools` returns (tested against each tool's input schema). */
+export const TOOL_EXAMPLES: Readonly<Record<string, string>> = {
+  create_project: 'create_project({ template: "workers-api" })',
   start_change: 'start_change({ repoId: "<repoId>", title: "<what>", category: "fix" })',
   create_plan:
     'create_plan({ repoId: "<repoId>", title: "<title>", intent: "<why>", acceptanceCriteria: ["<done when>"] })',
@@ -576,13 +577,26 @@ const EXAMPLES: Record<string, string> = {
   search_tools: 'search_tools({ query: "merge my change" })',
 };
 
-/** `name({ required: "<required>" })` from a tool's input schema. */
+/**
+ * `name({ required: "<required>" })` from a tool's input schema; a required enum gets its first
+ * value (a placeholder would not validate).
+ */
 export function exampleCall(name: string, inputSchema: unknown): string {
-  const known = EXAMPLES[name];
+  const known = TOOL_EXAMPLES[name];
   if (known !== undefined) return known;
-  const required = (inputSchema as { required?: readonly string[] } | null)?.required ?? [];
+  const schema = inputSchema as {
+    required?: readonly string[];
+    properties?: Record<string, { enum?: readonly unknown[] }>;
+  } | null;
+  const required = schema?.required ?? [];
   if (required.length === 0) return `${name}({})`;
-  return `${name}({ ${required.map((r) => `${r}: "<${r}>"`).join(", ")} })`;
+  const value = (r: string) => {
+    const options = schema?.properties?.[r]?.enum;
+    return options !== undefined && options.length > 0
+      ? JSON.stringify(options[0])
+      : `"<${r}>"`;
+  };
+  return `${name}({ ${required.map((r) => `${r}: ${value(r)}`).join(", ")} })`;
 }
 
 function words(s: string): string[] {
