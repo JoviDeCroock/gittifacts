@@ -125,7 +125,8 @@ describe("front door", () => {
     // Absolute URLs baked into the static page point at this host.
     expect(landing).toContain(`<link rel="canonical" href="${ORIGIN}/"`);
     expect(landing).toContain(`content="${ORIGIN}/og.png"`);
-    expect(landing).toContain(`>${ORIGIN}/start</code>`);
+    expect(landing.replace(/<wbr>/g, "")).toContain(`>${ORIGIN}/start</code>`);
+    expect(landing).toContain("http://<wbr>localhost<wbr>/start");
     expect(landing).not.toContain("decroockjovi.workers.dev");
 
     const human = await signUpHuman(app);

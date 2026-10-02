@@ -143,6 +143,29 @@ export const LANDING_ASSET = "/landing";
 /** The origin baked into the static landing HTML; rewritten to the request's origin. */
 const LANDING_ORIGIN = "https://gittifacts.decroockjovi.workers.dev";
 
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+/**
+ * A URL as escaped HTML with <wbr> after "//" and each host dot and before each path "/", the
+ * same break points the prerendered landing uses, so long hosts never break mid-word on phones.
+ */
+export function breakableUrlHtml(url: string): string {
+  const m = /^([a-z][a-z0-9+.-]*:\/\/)([^/]*)(.*)$/i.exec(url);
+  const parts = m
+    ? [m[1] ?? "", ...(m[2] ?? "").split(/(?<=\.)/), ...(m[3] ?? "").split(/(?=\/)/)]
+    : [url];
+  return parts
+    .filter(Boolean)
+    .map((p) => p.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c] ?? c))
+    .join("<wbr>");
+}
+
 /** A signed-in person gets the app at `/`; only a request carrying a session cookie is checked. */
 async function hasSession(c: Context<AppEnv>): Promise<boolean> {
   if (!getSessionCookie(c.req.raw)) return false;
@@ -242,7 +265,8 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
         })
         .on("[data-origin-text]", {
           element(el) {
-            el.setInnerContent(`${urls.origin}${el.getAttribute("data-origin-text") ?? ""}`);
+            const url = `${urls.origin}${el.getAttribute("data-origin-text") ?? ""}`;
+            el.setInnerContent(breakableUrlHtml(url), { html: true });
           },
         })
         .transform(res)
