@@ -120,6 +120,13 @@ describe("M4 through deploy trains", () => {
     expect(audit.actions()).toEqual(
       expect.arrayContaining(["deploy.flag-off", "deploy.regression-attributed"]),
     );
+    // Train events are scoped to the repo (train ids count per queue).
+    const trainEvents = audit.events.filter((e) => e.subject.startsWith("train:"));
+    expect(trainEvents.map((e) => e.action)).toEqual(
+      expect.arrayContaining(["deploy.train-deployed", "deploy.train-rolled-back"]),
+    );
+    for (const e of trainEvents)
+      expect(e.subject).toMatch(new RegExp(`^train:${env.repo.id}/t\\d+$`));
 
     // The revert is an automatic, verified pure revert: it lands and deploys like any Change.
     await tick(env, 4);

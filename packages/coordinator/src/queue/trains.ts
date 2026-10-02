@@ -40,6 +40,11 @@ export interface TrainProgress {
 
 const progressKey = (trainId: string) => `train:${trainId}`;
 
+/** Audit subject of a deploy train: `train:<repoId>/<trainId>` (train ids are per repo). */
+export function trainAuditSubject(repoId: string, trainId: string): string {
+  return `train:${repoId}/${trainId}`;
+}
+
 /**
  * How long a train holds its Worker: every traffic stage for `stageMinutes`, then the watch window
  * at 100%, from the policy at deploy time (the queue's default is fixed when the queue starts).
@@ -271,13 +276,14 @@ export class CoordinatorTrainShell {
   }
 
   private async onAudit(cmd: Extract<TrainCommand, { type: "Audit" }>): Promise<void> {
+    const trainId = cmd.subject.startsWith("train:") ? cmd.subject.slice(6) : null;
     await this.ctx.ports.audit.append({
       principalId: cmd.principalId,
       action: cmd.action,
-      subject: cmd.subject,
+      // Train ids count per repo's queue (t1, t2, …): scope the subject so it is unique in the log.
+      subject: trainId === null ? cmd.subject : trainAuditSubject(this.ctx.repoId, trainId),
       payload: { ...cmd.payload, repoId: this.ctx.repoId },
     });
-    const trainId = cmd.subject.startsWith("train:") ? cmd.subject.slice(6) : null;
     if (trainId === null) return;
     const p = this.progress(trainId);
     if (cmd.action === "deploy.train-released" && p !== null)
