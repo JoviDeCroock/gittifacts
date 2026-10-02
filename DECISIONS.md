@@ -765,3 +765,91 @@ fails closed, so credential-less `create_project` stays disabled.
 - **Artifacts repo storage.** There's no repo-size API, so it's bounded by Artifacts' 1 GB per repo × (main + ≤ 5
   forks), the 7-day TTL and the creation rate limits.
 - **Preview container time.** Bounded by ≤ 3 live previews per project, 10-minute idle sleep and internet off.
+
+## 2026-10-02 — Merge queue integration: the MergeQueue DO shell, BatchRunWorkflow, queue API
+
+**Same DO class, new internals.** `MergeQueue` keeps its class name and `MERGE_QUEUE` binding (no wrangler
+migration). Its SQLite keeps the serial queue's `merge_queue` table: items still in it are re-admitted once, on
+first use. The node-safe shell is `packages/coordinator/src/queue/*`; the DO class only wires SQLite, alarm and RPC.
+
+**The loop (shell.ts, exactly).**
+- `dispatch` is synchronous: zod-validate → `step` → one `transactionSync` writes the state, the command outbox
+  and the §5 events (`mq_events`).
+- A command's result deletes the command in the same transaction that applies the result.
+- Handlers are idempotent and retried with backoff (5 s · 2ⁿ, ≤ 5 min, 6 attempts). A command that keeps failing
+  gets the result the protocol allows (an errored `BatchResult`, an unknown affected set, a failed resolution, a
+  rejected CAS) or is dropped (audited), and the core's own timeouts recover.
+- `InvariantViolation` → nothing of the step is persisted, `halted` is recorded, audit + notification, every later
+  event is refused until a human `resume`s.
+- The alarm fires at the next due command and every 30 s while anything is live: `Tick` for both machines, the train
+  monitor, and a main reconciliation (`MainAdvanced` if main moved outside the queue).
+- Persisted states from an older core get new fields' defaults on load (`upgradeState`).
+
+**Where trees are built.** Each repo has a scratch repo `mqs-<repoId>` (fork of main; prefix reserved for projects).
+- `BuildBatchTree` copies the heads into the scratch repo and replays them with `gittifacts-runner merge-attempt`
+  (one container job, one commit per entry), then the DO copies the tip into the main repo's `refs/queue/<batchId>`.
+- Containers only ever get a scratch-repo write token. The DO stays the only writer of `refs/queue/*` and main.
+- Fast path: when each head already sits on the previous tip (a lone Change on an unmoved base, a stack), the heads
+  are the batch commits and no container runs.
+- The shell remembers where every head lives and what it replays from (`mq_heads`): resolved heads live in the
+  scratch repo and replay from the commit their resolution was built on.
+
+**Batch runs.** `BatchRunWorkflow` (one instance per run, `mq-<repoId>-<epoch>-<runId>`) runs the base's pipeline
+with no evidence steps on the `refs/queue` commit in the main repo, through the existing `CiEngine`.
+- It polls the engine (15 s, then 30 s) and fails fast on the first failed user step (cancelling the run).
+- It reports the tested tree from `treeOf(commit)` and whole-run outcomes (`__run__`, which the core re-checks on
+  main before believing), and passes the run's bundle to the DO.
+- Flake re-checks run both sides in parallel, retrying infra errors twice before they count.
+- CI runs are filed under the batch's first Change (`pipeline_runs` references changes).
+- **ci-engine:** `RunRequest.testTargets` → `GITTIFACTS_TEST_TARGETS` in user steps (never evidence steps); a test
+  command that ignores it runs everything, which still covers the targets.
+
+**CAS.** `updateRef(main, expectedOld → newSha)`; Artifacts' stale old-oid answer goes back to the core as
+`CasResult{stale, actualSha}`. A re-run after a crash that finds main already at `newSha` reports ok. After a landed
+CAS each entry's evidence is re-sealed for the merged commit (+ a `quarantine` item when tests are quarantined), a
+signed `merge-queue-verdict` document is audited, notes are written on the entries' commits; failures there are
+audited, never turned into a failed CAS.
+
+**Admission and the ChangeWorkflow.** Only the ChangeWorkflow admits a Change (Lane 0 auto-merge, verified revert,
+or a human review), with `lane` and what the approval covers.
+- MCP/HTTP `enqueue` records options (priority, `dependsOn`, plan group, land mode) that apply at admission. It never
+  bypasses review: unclaimed projects still never auto-enqueue.
+- Merged / ejected go back to the ChangeWorkflow on its one waited event type (`merged`). An ejection is a
+  `QueueEjectedEvent` payload, so the workflow wakes at once with the reason.
+- Train-deployed merges skip the per-Change RolloutWorkflow.
+
+**Approval binding (Q3 rules) and one protocol gap.** Within-hunk resolutions with zero novel lines keep the
+approval. Novel lines on a Lane ≥ 1 Change, outside-hunk edits and semantic fixes need a fresh human approval.
+- The protocol has one "needs approval" flag (`outsideHunks`), so a novel-line resolution reports it too, with the
+  reason `merge-queue.resolution-novel-lines`. This is conservative and only adds a review. A dedicated
+  `invalidatesApproval` field in `ResolutionResult` would be cleaner (protocol change; not made).
+- `RequestApproval` puts the Change back to `awaiting-review` at the raised lane and re-tours the resolved head (its
+  `conflict-resolution` item becomes the resolution stop). `submitReview` delivers approve to the queue (`Approved`;
+  the core refuses authors and resolvers); request-changes / reject dequeue it.
+
+**Resolver.** `@app/resolver` on the platform model client: the base policy's `ai.reviewerModel`, with "auto" →
+Workers AI Kimi (`REVIEWER_MODEL` overrides), inside the Change's AI budget. Then `apply-resolution` in the scratch
+repo, re-evidence, and `reclassifyAfterResolution`. No classification for the head → Lane 2 (unknown escalates).
+
+**Deploy trains.** The train machine runs in the same DO (`MERGE_QUEUE_TRAINS`, default on; "off" = one
+RolloutWorkflow per Change, as before). The shell reuses the rollout pieces rather than a second implementation:
+`Flags`, `Deployer` (upload, `setSplit` stages, rollback), `Telemetry` + `evaluateHealth`, `openRevertChange`.
+- One train per Worker: the repo's `deployTarget`.
+- A Change shares a train only if its own code reads its flag (`change-<id>` or `isChangeEnabled(…, "<id>")`).
+- The alarm advances stages, turns a regression into `IssueReported` (Workers Issues with stack frames go there
+  too), and a cleared killed flag into `RegressionCleared`.
+- Automatic reverts are enqueued as `revert` + `automaticRevert`, which freezes the queue until they land.
+
+**Agent API.** `enqueue`, `queue_status`, `wait_for_merge` (≤ 55 s), `dequeue`, `reprioritize` and `queue_overview`
+have MCP/HTTP parity. The author, the human owning the authoring agent, or a reviewer may act on an entry.
+- SSE `GET /api/v1/repos/{id}/queue/events` (ids = event sequence, resumable).
+- Freeze and thaw are human-only, with the platform signing the document on the human's behalf, as for plan
+  approvals.
+- 27 MCP tools, so `search_tools` was added (fuzzy over names and descriptions, with example calls).
+
+**Not done / known gaps.**
+- No post-merge checks run on main: main only advances to tested trees, so `PostMergeCheckFailed` has no producer
+  yet.
+- Scratch-repo refs (`refs/heads/mq/*`) are not GC'd (only main's `refs/queue/*` are); recreate the scratch repo if
+  it grows.
+- Per-test failure names need the engine to report them on `status()`; until then failures are whole-run.

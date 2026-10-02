@@ -21,7 +21,7 @@ Specs:
 | O4 Delegated auth (MCP OAuth, device flow) | **built and tested locally**: MCP OAuth (code + PKCE S256, CIMD, RFC 8707 audience), device flow, per-session agent principals with repo scoping, consent/device/sessions screens; deploy pending |
 | O5 Import detection + remote workspaces | **built and tested locally**: `gittifacts-runner detect` + `inspectRepo`, `propose_platform_config` (Plan + Lane 2 Change via a system workspace), `open_workspace` + `ws_*` on a Workspace DO (blobless fork checkout, idle sleep, TTL, quotas, registries-only egress); remote-only acceptance test over MCP passes; live: `scripts/e2e/remote-workspace.ts` after deploy |
 | O6 Onboarding eval | planned |
-| Q1–Q6 Merge queue | core + simulator, affected-set analyzer in progress; Q3 resolver built (corpus green with a scripted model; real-model eval pending credentials) |
+| Q1–Q6 Merge queue | **Q1 integrated, passes locally**: the MergeQueue DO is the agent-native queue (SQLite outbox loop around the pure core, InvariantViolation halts), scratch-repo batch trees, BatchRunWorkflow on CiEngine (fail fast), CAS on main (stale old-oid → retry), refs/queue GC; resolver + approval binding; deploy trains in the DO; MCP/HTTP queue API + SSE; web queue view. Tests: Q1 over fakes (speculation, bisection, CAS-stale, resolver through the ChangeWorkflow, re-approval, main never red), workerd (real DO + BatchRunWorkflow, platform HTTP + MCP). Live: `scripts/e2e/merge-queue.ts` after deploy. Simulator p95 gate still being tuned (core) |
 
 ## What works (tested)
 | Package | What it does | Tests |
@@ -34,7 +34,7 @@ Specs:
 | `@app/tour` | reviewer agent; AI binding + gateway clients; budget; risk-ordered, evidence-anchored tours; conflict-resolution stop | 116 |
 | `@app/resolver` | merge-queue conflict resolver (`system:resolver`): verified patches, mechanical scope, ejections with fixes; 14-case conflict corpus | 68 |
 | `@app/conventions` | `AGENTS.md`, `/start`, `/llms.txt`, MCP discovery, fix hints, next steps, `.platform` generators | 226 |
-| `@app/mcp` | 12 tools (incl. `create_project`) on mcp-tada-server, typed client, contract snapshot | 9 |
+| `@app/mcp` | 27 tools (incl. `create_project`, workspaces, merge queue, `search_tools`) on mcp-tada-server, typed client, contract snapshot | 20 |
 | `apps/platform` | the one Worker: Hono API + OpenAPI, better-auth, D1, AuditLog DO, MCP, SSE, Ports per role wiring the coordinator, CI engine (Runner container) and reviewer; front door, `create_project`, preview gateway + PreviewHost container, TTFG metrics; M1 and O1 integration tests | 116 |
 | `apps/sandbox` | `gittifacts-runner` (plan, policy, evidence ×9, diff, preview) and its container image | 57, incl. 9-fixture e2e |
 | `@app/web` | 9 screens, mock backend, 45 screenshots in `docs/screenshots/` | 35 |
