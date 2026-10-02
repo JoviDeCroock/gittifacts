@@ -143,6 +143,7 @@ describe("WorkersDeployer", () => {
   it("uploads a version as multipart with change annotations", async () => {
     const { fetch, calls } = mockFetch([
       [/^POST .*\/workers\/scripts\/api\/versions$/, () => ok({ id: "ver-9" })],
+      [/^PATCH .*\/workers\/scripts\/api\/script-settings$/, () => ok({})],
     ]);
     const deployer = new WorkersDeployer({
       ...api,
@@ -429,13 +430,22 @@ describe("ContainerSandboxJobs", () => {
   it("caches plans by .platform/ci.ts content and skips the plan container on a hit", async () => {
     const store = new Map<string, unknown>();
     let plans = 0;
-    const files: Record<string, string | null> = { a: "export default 1", b: "export default 1", c: null };
+    const files: Record<string, string | null> = {
+      a: "export default 1",
+      b: "export default 1",
+      c: null,
+    };
     const sandbox = new ContainerSandboxJobs({
       runner: () => ({
         run: async () => ({}),
         plan: async () => {
           plans += 1;
-          return { ok: true, stdout: `::plan::${JSON.stringify({ version: 1, n: plans })}`, stderr: "", exitCode: 0 };
+          return {
+            ok: true,
+            stdout: `::plan::${JSON.stringify({ version: 1, n: plans })}`,
+            stderr: "",
+            exitCode: 0,
+          };
         },
       }),
       git: {
@@ -447,7 +457,10 @@ describe("ContainerSandboxJobs", () => {
           return text === null || text === undefined ? null : new TextEncoder().encode(text);
         },
       },
-      planCache: { get: async (k) => store.get(k) ?? null, put: async (k, v) => void store.set(k, v) },
+      planCache: {
+        get: async (k) => store.get(k) ?? null,
+        put: async (k, v) => void store.set(k, v),
+      },
       logKey: (id, step) => `logs/${id}/${step}`,
       newJobId: () => "j1",
     });

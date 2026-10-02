@@ -229,6 +229,8 @@ export function buildPorts(env: PortsEnv, role: PortsRole, opts: BuildPortsOptio
       loadBundle: r2BundleLoader(env.CI_BUCKET, {
         compatibilityDate: DEFAULT_BUNDLE_COMPAT_DATE,
       }),
+      // Every deployed version gets FLAGS (the change kill-switch flags) and VERSION.
+      flagshipAppId: env.FLAGSHIP_APP_ID,
     }),
     flags: new FlagshipFlags({ ...api, appId: env.FLAGSHIP_APP_ID }),
     telemetry: new ObservabilityTelemetry({ ...api, store, clock }),
