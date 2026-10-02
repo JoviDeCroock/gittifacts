@@ -99,7 +99,9 @@ describe("import detection → Plan + Change (O5)", () => {
       const head = (await fakes.git.branchHead(forkName, "main")) ?? "";
       const files = fakes.git.filesAt(head);
       expect(files[".platform/ci.ts"]).toContain('name: "install"');
-      expect(files[".platform/policy.ts"]).toContain("lane0Enabled: false");
+      expect(files[".platform/policy.ts"]).toContain("shadow: {");
+      // Lane 0 belongs to the owner's toggle: the proposed file must not force it off.
+      expect(files[".platform/policy.ts"]).not.toMatch(/^\s*lane0Enabled\s*:/m);
       expect(files["AGENTS.md"]).toContain("pnpm run test");
       expect(await fakes.git.branchHead(repo.artifactsName, "main")).toBe(baseSha);
 

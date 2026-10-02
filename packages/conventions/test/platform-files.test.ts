@@ -184,6 +184,19 @@ describe("defaultPolicyTs", () => {
     for (const line of file.text.split("\n")) expect(line.length).toBeLessThanOrEqual(110);
   });
 
+  it("leaves lane0Enabled out: the owner's toggle owns it, and `false` in the file would force Lane 0 off", async () => {
+    const opts = [{}, { previewRoutes: ["/"] }, { worker: true }];
+    for (const o of opts) {
+      const raw = (await load(defaultPolicyTs(o).text)) as Record<string, unknown>;
+      expect(raw).not.toHaveProperty("lane0Enabled");
+      expect(defaultPolicyTs(o).text).not.toMatch(/^\s*lane0Enabled\s*:/m);
+    }
+    for (const id of TEMPLATE_IDS) {
+      const files = templateGeneratedFiles(id, PLACEHOLDER_SELF_CLAIMED);
+      expect(files[".platform/policy.ts"] ?? "").not.toMatch(/^\s*lane0Enabled\s*:/m);
+    }
+  });
+
   it("defaultPolicyValue is exactly what the generated file exports (cached at create time)", async () => {
     for (const id of TEMPLATE_IDS) {
       const opts = { previewRoutes: TEMPLATES[id].previewRoutes };

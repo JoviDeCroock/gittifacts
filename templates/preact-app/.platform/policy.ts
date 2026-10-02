@@ -7,8 +7,8 @@
 export default {
   version: 1,
   // Shadow mode: Lane 0 (auto-merge) starts off. The classifier still computes it and the platform
-  // records whether humans agree; the owner can enable it once agreement passes `shadow`.
-  lane0Enabled: false,
+  // records whether humans agree; the owner turns Lane 0 on in the repo settings once agreement
+  // passes these numbers. `lane0Enabled: false` here keeps it off whatever the owner sets.
   shadow: { agreementThreshold: 0.95, minSamples: 25 },
   // Changes touching these paths are Lane 2 (full human review).
   sensitivePaths: [
