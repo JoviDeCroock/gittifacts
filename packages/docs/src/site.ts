@@ -147,7 +147,10 @@ export function buildSite(pages: readonly Page[]): Site {
   site.set("404.html", pageHtml(pages, missing, renderMarkdown(missing.body, missing.file)));
   site.set("llms-full.txt", full.join("\n"));
   site.set("llms.txt", `${index.join("\n")}\n`);
-  site.set("index.json", `${JSON.stringify({ version: 1, base: BASE, pages: manifest }, null, 2)}\n`);
+  site.set(
+    "index.json",
+    `${JSON.stringify({ version: 1, base: BASE, pages: manifest }, null, 2)}\n`,
+  );
   site.set("search-index.json", JSON.stringify(search));
   const host = escapeHtml(HOST_PLACEHOLDER);
   site.set(

@@ -54,7 +54,9 @@ export function propertyDocs(file: string): Map<string, string> {
       return;
     }
     if (ts.isVariableStatement(node) || ts.isInterfaceDeclaration(node)) {
-      const decl = ts.isVariableStatement(node) ? node.declarationList.declarations[0]?.name : node.name;
+      const decl = ts.isVariableStatement(node)
+        ? node.declarationList.declarations[0]?.name
+        : node.name;
       owner = decl !== undefined && ts.isIdentifier(decl) ? decl.text : "";
       ts.forEachChild(node, (c) => visit(c, []));
       return;
@@ -70,7 +72,11 @@ export function enumMemberDocs(file: string, exportName: string): Map<string, st
   const sf = sourceOf(file);
   const out = new Map<string, string>();
   const visit = (node: ts.Node) => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === exportName) {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === exportName
+    ) {
       const walk = (n: ts.Node) => {
         if (ts.isArrayLiteralExpression(n)) {
           for (const el of n.elements) {
@@ -94,10 +100,13 @@ export function declarationDoc(file: string, name: string): string {
   const sf = sourceOf(file);
   for (const stmt of sf.statements) {
     const named =
-      (ts.isFunctionDeclaration(stmt) || ts.isInterfaceDeclaration(stmt)) && stmt.name?.text === name;
+      (ts.isFunctionDeclaration(stmt) || ts.isInterfaceDeclaration(stmt)) &&
+      stmt.name?.text === name;
     const isVar =
       ts.isVariableStatement(stmt) &&
-      stmt.declarationList.declarations.some((d) => ts.isIdentifier(d.name) && d.name.text === name);
+      stmt.declarationList.declarations.some(
+        (d) => ts.isIdentifier(d.name) && d.name.text === name,
+      );
     if (named || isVar) return docOf(stmt, sf);
   }
   return "";

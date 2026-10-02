@@ -23,9 +23,18 @@ export interface OpenApiOperation {
   summary?: string;
   description?: string;
   security?: Record<string, string[]>[];
-  parameters?: { name: string; in: string; required?: boolean; description?: string; schema?: unknown }[];
+  parameters?: {
+    name: string;
+    in: string;
+    required?: boolean;
+    description?: string;
+    schema?: unknown;
+  }[];
   requestBody?: { content?: Record<string, { schema?: unknown }> };
-  responses?: Record<string, { description?: string; content?: Record<string, { schema?: unknown }> }>;
+  responses?: Record<
+    string,
+    { description?: string; content?: Record<string, { schema?: unknown }> }
+  >;
 }
 
 export interface OpenApiDocument {
@@ -85,8 +94,14 @@ export function loadPlatform(): Promise<PlatformModule> {
         {
           name: "cloudflare-stubs",
           setup(b) {
-            b.onResolve({ filter: /^cloudflare:/ }, (a) => ({ path: a.path, namespace: "cf-stub" }));
-            b.onLoad({ filter: /.*/, namespace: "cf-stub" }, () => ({ contents: STUB, loader: "js" }));
+            b.onResolve({ filter: /^cloudflare:/ }, (a) => ({
+              path: a.path,
+              namespace: "cf-stub",
+            }));
+            b.onLoad({ filter: /.*/, namespace: "cf-stub" }, () => ({
+              contents: STUB,
+              loader: "js",
+            }));
           },
         },
       ],

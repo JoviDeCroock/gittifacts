@@ -61,8 +61,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const { values } = parseArgs({ options: { check: { type: "boolean", default: false } } });
   if (values.check) {
     const { stale, orphaned } = await staleGenerated();
-    for (const f of stale) console.error(`stale: content/${f} (run pnpm --filter @app/docs generate)`);
-    for (const f of orphaned) console.error(`orphaned: content/${f} (no generator writes it; delete it)`);
+    for (const f of stale)
+      console.error(`stale: content/${f} (run pnpm --filter @app/docs generate)`);
+    for (const f of orphaned)
+      console.error(`orphaned: content/${f} (no generator writes it; delete it)`);
     process.exit(stale.length + orphaned.length > 0 ? 1 : 0);
   }
   const pages = await generateAll();

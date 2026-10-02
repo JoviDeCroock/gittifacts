@@ -13,22 +13,34 @@ const FILES: Record<string, [string, string]> = {
     "application/json",
     JSON.stringify({ version: 1, base: "/docs", pages: [{ slug: "" }, { slug: "guides/git" }] }),
   ],
-  "/docs/": ["text/html", "<!doctype html><h1>gittifacts docs</h1><a href=\"https://&lt;host&gt;/mcp\">mcp</a>"],
+  "/docs/": [
+    "text/html",
+    '<!doctype html><h1>gittifacts docs</h1><a href="https://&lt;host&gt;/mcp">mcp</a>',
+  ],
   "/docs/index.md": ["text/markdown", "# gittifacts docs\n\nMCP: `https://<host>/mcp`\n"],
   "/docs/guides/git": ["text/html", "<!doctype html><h1>Committing and pushing with git</h1>"],
-  "/docs/guides/git.md": ["text/markdown", "# Committing and pushing with git\n\n`git clone https://<host>/git/o/r.git`\n"],
+  "/docs/guides/git.md": [
+    "text/markdown",
+    "# Committing and pushing with git\n\n`git clone https://<host>/git/o/r.git`\n",
+  ],
   "/docs/404": ["text/html", "<!doctype html><h1>Page not found</h1>"],
-  "/docs/llms-full.txt": ["text/plain", "# gittifacts documentation (full text)\n\nURL: https://<host>/docs\n"],
+  "/docs/llms-full.txt": [
+    "text/plain",
+    "# gittifacts documentation (full text)\n\nURL: https://<host>/docs\n",
+  ],
   "/docs/_assets/docs.css": ["text/css", "body{}"],
 };
 
 /** The assets binding as configured (not_found_handling: single-page-application). */
 const assets = {
   async fetch(input: Request | string | URL): Promise<Response> {
-    const path = new URL(typeof input === "string" || input instanceof URL ? input : input.url).pathname;
+    const path = new URL(typeof input === "string" || input instanceof URL ? input : input.url)
+      .pathname;
     const hit = FILES[path];
     if (hit) return new Response(hit[1], { headers: { "content-type": hit[0] } });
-    return new Response("<!doctype html><div id=app></div>", { headers: { "content-type": "text/html" } });
+    return new Response("<!doctype html><div id=app></div>", {
+      headers: { "content-type": "text/html" },
+    });
   },
 };
 

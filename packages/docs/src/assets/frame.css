@@ -120,10 +120,9 @@
   }
   .sidebar {
     position: sticky;
-    top: 56px;
     inset: auto;
+    top: 56px;
     height: calc(100vh - 56px);
-    height: calc(100dvh - 56px);
     visibility: visible;
     transform: none;
     transition: none;
@@ -167,7 +166,7 @@
   .pager,
   .footer,
   .copy {
-    display: none !important;
+    display: none;
   }
   .shell {
     display: block;

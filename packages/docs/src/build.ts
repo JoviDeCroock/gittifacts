@@ -17,7 +17,8 @@ export const DEFAULT_OUT = resolve(import.meta.dirname, "..", "..", "web", "dist
 export function writeSite(outDir: string): number {
   const site = buildSite(loadPages());
   // Only ever delete the docs directory itself, never its parent.
-  if (!/[\\/]docs$/.test(outDir)) throw new Error(`refusing to clean ${outDir}: expected a */docs directory`);
+  if (!/[\\/]docs$/.test(outDir))
+    throw new Error(`refusing to clean ${outDir}: expected a */docs directory`);
   rmSync(outDir, { recursive: true, force: true });
   for (const [path, contents] of site) {
     const file = join(outDir, path);

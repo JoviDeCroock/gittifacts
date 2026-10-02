@@ -76,14 +76,25 @@ function policyPage(): GeneratedPage {
   const rows = flatten(schema).map(({ path, schema: s }) => {
     const def = s.default === undefined || s.properties ? "" : code(JSON.stringify(s.default));
     const range = constraintsOf({ ...s, default: undefined });
-    return [code(path), cell(`${typeOf(s)}${range ? ` (${range})` : ""}`), cell(def), cell(docFor(docs, path))];
+    return [
+      code(path),
+      cell(`${typeOf(s)}${range ? ` (${range})` : ""}`),
+      cell(def),
+      cell(docFor(docs, path)),
+    ];
   });
   const template = read("templates/workers-api/.platform/policy.ts");
   return {
     file: "reference/policy.md",
     content: join(
       header(
-        { title: "Policy schema (.platform/policy.ts)", nav: "Policy schema", description: "Every RepoPolicy field with its type, default and meaning, and the policy file new projects start with.", order: 40 },
+        {
+          title: "Policy schema (.platform/policy.ts)",
+          nav: "Policy schema",
+          description:
+            "Every RepoPolicy field with its type, default and meaning, and the policy file new projects start with.",
+          order: 40,
+        },
         ["packages/domain/src/policy.ts", "templates/workers-api/.platform/policy.ts"],
         `\`${POLICY_PATH}\` default-exports a plain object validated against \`RepoPolicy\`. The platform reads it from the **base** commit of every Change, never from the Change's head, so an edit applies to Changes that start after it merges. A Change that touches \`.platform/**\` is always Lane 2 and needs a human's approval.`,
       ),
@@ -100,25 +111,68 @@ function policyPage(): GeneratedPage {
 function ciPage(): GeneratedPage {
   const docs = propertyDocs(pathJoin(REPO, "packages/ci-engine/src/plan/recorder.ts"));
   const options: [string, string, string][] = [
-    ["name", "string", `Step name: ${code(STEP_NAME_PATTERN.source)}. Not ${RESERVED_STEP_NAMES.map(code).join(", ")}, and no \`:\` (reserved for \`evidence:*\`).`],
+    [
+      "name",
+      "string",
+      `Step name: ${code(STEP_NAME_PATTERN.source)}. Not ${RESERVED_STEP_NAMES.map(code).join(", ")}, and no \`:\` (reserved for \`evidence:*\`).`,
+    ],
     ["command", "string", `Shell command (\`sh -c\`), max ${MAX_COMMAND_LENGTH} characters.`],
     ["cwd", "string", docs.get("cwd") || "Working directory, relative to the repository root."],
-    ["env", "Record<string, string>", `At most ${MAX_ENV_ENTRIES} entries, values up to ${MAX_ENV_VALUE_LENGTH} characters. Keys starting with ${RESERVED_ENV_PREFIXES.map(code).join(", ")} are reserved.`],
-    ["cache", "{ inputs: string[] }", `Up to ${MAX_CACHE_INPUTS} globs. When none of the matching files changed, the step is skipped and its last result and snapshot are reused.`],
+    [
+      "env",
+      "Record<string, string>",
+      `At most ${MAX_ENV_ENTRIES} entries, values up to ${MAX_ENV_VALUE_LENGTH} characters. Keys starting with ${RESERVED_ENV_PREFIXES.map(code).join(", ")} are reserved.`,
+    ],
+    [
+      "cache",
+      "{ inputs: string[] }",
+      `Up to ${MAX_CACHE_INPUTS} globs. When none of the matching files changed, the step is skipped and its last result and snapshot are reused.`,
+    ],
     ["cacheScope", '"global" | "repo"', docs.get("cacheScope") ?? ""],
-    ["artifacts", "{ name, paths, optional? }[]", `${docs.get("artifacts") ?? ""} At most ${MAX_ARTIFACTS_PER_STEP} per step; names are unique across the pipeline. The build step's \`bundle\` is what a rollout deploys.`],
-    ["instance", InstanceType.options.map((o) => JSON.stringify(o)).join(" | "), `${docs.get("instance") ?? ""} Default \`${DEFAULT_INSTANCE}\`.`],
-    ["timeoutMinutes", "number", `1–${MAX_STEP_TIMEOUT_MINUTES}, default ${DEFAULT_STEP_TIMEOUT_MINUTES}.`],
-    ["config", "{ timeout?, commandTimeoutMs?, retries?, snapshotRetentionSeconds? }", docs.get("config") ?? ""],
-    ["secrets, cloudflareCredentials, sourceControlCredentials", "—", docs.get("secrets") ?? "Rejected."],
+    [
+      "artifacts",
+      "{ name, paths, optional? }[]",
+      `${docs.get("artifacts") ?? ""} At most ${MAX_ARTIFACTS_PER_STEP} per step; names are unique across the pipeline. The build step's \`bundle\` is what a rollout deploys.`,
+    ],
+    [
+      "instance",
+      InstanceType.options.map((o) => JSON.stringify(o)).join(" | "),
+      `${docs.get("instance") ?? ""} Default \`${DEFAULT_INSTANCE}\`.`,
+    ],
+    [
+      "timeoutMinutes",
+      "number",
+      `1–${MAX_STEP_TIMEOUT_MINUTES}, default ${DEFAULT_STEP_TIMEOUT_MINUTES}.`,
+    ],
+    [
+      "config",
+      "{ timeout?, commandTimeoutMs?, retries?, snapshotRetentionSeconds? }",
+      docs.get("config") ?? "",
+    ],
+    [
+      "secrets, cloudflareCredentials, sourceControlCredentials",
+      "—",
+      docs.get("secrets") ?? "Rejected.",
+    ],
   ];
   const template = read("templates/workers-api/.platform/ci.ts");
   return {
     file: "reference/ci-dsl.md",
     content: join(
       header(
-        { title: "CI DSL (.platform/ci.ts)", nav: "CI DSL", description: "The pipeline function, runner options, caching, artifacts, limits and the environment every step gets.", order: 41 },
-        ["packages/ci-engine/src/plan/recorder.ts", "packages/ci-engine/src/plan/spec.ts", "packages/ci-engine/RUNNER_CONTRACT.md", "templates/workers-api/.platform/ci.ts"],
+        {
+          title: "CI DSL (.platform/ci.ts)",
+          nav: "CI DSL",
+          description:
+            "The pipeline function, runner options, caching, artifacts, limits and the environment every step gets.",
+          order: 41,
+        },
+        [
+          "packages/ci-engine/src/plan/recorder.ts",
+          "packages/ci-engine/src/plan/spec.ts",
+          "packages/ci-engine/RUNNER_CONTRACT.md",
+          "templates/workers-api/.platform/ci.ts",
+        ],
         [
           `\`${CI_PATH}\` default-exports \`async (ci) => { ... }\`. The platform evaluates it in a sandbox in plan mode (no \`node_modules\`, git host only, 120 s) and records a static graph of steps.`,
           "",
@@ -129,14 +183,20 @@ function ciPage(): GeneratedPage {
         ].join("\n"),
       ),
       "## Runner options",
-      table(["Option", "Type", "Meaning"], options.map(([k, t, m]) => [code(k), cell(code(t)), cell(m)])),
+      table(
+        ["Option", "Type", "Meaning"],
+        options.map(([k, t, m]) => [code(k), cell(code(t)), cell(m)]),
+      ),
       "## Pipeline limits",
       table(
         ["Limit", "Value"],
         [
           ["Steps per pipeline", String(MAX_STEPS)],
           ["Serialized pipeline size", `${MAX_SPEC_BYTES / 1024} KiB`],
-          ["Step timeout", `${DEFAULT_STEP_TIMEOUT_MINUTES} min default, ${MAX_STEP_TIMEOUT_MINUTES} min max`],
+          [
+            "Step timeout",
+            `${DEFAULT_STEP_TIMEOUT_MINUTES} min default, ${MAX_STEP_TIMEOUT_MINUTES} min max`,
+          ],
           ["Command length", `${MAX_COMMAND_LENGTH} characters`],
           ["Cache inputs per step", String(MAX_CACHE_INPUTS)],
           ["Artifacts per step", String(MAX_ARTIFACTS_PER_STEP)],

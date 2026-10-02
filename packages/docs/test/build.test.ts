@@ -63,7 +63,7 @@ describe("docs build", () => {
 
   it("puts code blocks behind copy buttons and wraps tables", () => {
     const html = text("guides/git.html");
-    expect(html).toContain('data-copy hidden>Copy</button>');
+    expect(html).toContain("data-copy hidden>Copy</button>");
     expect(html).toContain('<div class="table-wrap" tabindex="0"><table>');
   });
 });

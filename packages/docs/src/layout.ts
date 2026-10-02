@@ -7,8 +7,8 @@
  */
 import type { Page } from "./content.js";
 import { escapeHtml } from "./highlight.js";
-import { breadcrumbs, prevNext, sidebar, toc } from "./nav.js";
 import type { Heading } from "./markdown.js";
+import { breadcrumbs, prevNext, sidebar, toc } from "./nav.js";
 
 export const HOST_PLACEHOLDER = "https://<host>";
 export const ASSET_VERSION = "1";

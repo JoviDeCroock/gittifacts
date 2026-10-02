@@ -93,7 +93,8 @@
     const visible = new Set();
     const io = new IntersectionObserver(
       (entries) => {
-        for (const e of entries) (e.isIntersecting ? visible.add : visible.delete).call(visible, e.target.id);
+        for (const e of entries)
+          (e.isIntersecting ? visible.add : visible.delete).call(visible, e.target.id);
         const first = $$(".prose h2[id], .prose h3[id]").find((h) => visible.has(h.id));
         if (!first) return;
         for (const a of links) a.removeAttribute("aria-current");

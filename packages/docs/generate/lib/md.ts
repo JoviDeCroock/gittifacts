@@ -46,7 +46,10 @@ export function header(meta: PageMeta, sources: readonly string[], lede?: string
 /** A table cell: pipes escaped (also inside code spans), newlines flattened. */
 export function cell(value: unknown): string {
   const s = value === undefined || value === null ? "" : String(value);
-  return s.replaceAll("|", "\\|").replace(/\s*\n\s*/g, " ").trim();
+  return s
+    .replaceAll("|", "\\|")
+    .replace(/\s*\n\s*/g, " ")
+    .trim();
 }
 
 export function code(value: string): string {

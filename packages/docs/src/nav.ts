@@ -54,10 +54,7 @@ export function breadcrumbs(pages: readonly Page[], page: Page): string {
 
 export function toc(headings: readonly Heading[]): string {
   const items = headings
-    .map(
-      (h) =>
-        `<li class="toc__d${h.depth}"><a href="#${h.id}">${escapeHtml(h.text)}</a></li>`,
-    )
+    .map((h) => `<li class="toc__d${h.depth}"><a href="#${h.id}">${escapeHtml(h.text)}</a></li>`)
     .join("");
   if (headings.length < 2) return "";
   return `<nav class="toc" aria-labelledby="toc-title"><p id="toc-title" class="toc__title">On this page</p><ul>${items}</ul></nav>`;

@@ -41,11 +41,26 @@ export async function runChecks(contentDir: string = CONTENT_DIR): Promise<Check
   const all = checkPages(pages);
   const { stale, orphaned } = await staleGenerated(contentDir);
   for (const file of stale) {
-    all.push({ file, line: 1, rule: "generated", message: "stale: run pnpm --filter @app/docs generate" });
+    all.push({
+      file,
+      line: 1,
+      rule: "generated",
+      message: "stale: run pnpm --filter @app/docs generate",
+    });
   }
   for (const file of orphaned) {
-    all.push({ file, line: 1, rule: "generated", message: "no generator writes this page any more; delete it" });
+    all.push({
+      file,
+      line: 1,
+      rule: "generated",
+      message: "no generator writes this page any more; delete it",
+    });
   }
-  const isKnown = (p: Problem) => KNOWN_ISSUES.some((k) => k.file === p.file && k.message === p.message);
-  return { problems: all.filter((p) => !isKnown(p)), known: all.filter(isKnown), pages: pages.length };
+  const isKnown = (p: Problem) =>
+    KNOWN_ISSUES.some((k) => k.file === p.file && k.message === p.message);
+  return {
+    problems: all.filter((p) => !isKnown(p)),
+    known: all.filter(isKnown),
+    pages: pages.length,
+  };
 }

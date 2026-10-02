@@ -48,7 +48,7 @@ window.gfDocsSearch = () => {
     return { doc, total, heading };
   };
 
-  const escape = (s) =>
+  const esc = (s) =>
     s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
   const close = () => {
@@ -61,7 +61,7 @@ window.gfDocsSearch = () => {
     const items = Array.from(list.querySelectorAll("a"));
     if (items.length === 0) return;
     active = (i + items.length) % items.length;
-    items.forEach((a, j) => a.setAttribute("aria-selected", String(j === active)));
+    for (const [j, a] of items.entries()) a.setAttribute("aria-selected", String(j === active));
     items[active].scrollIntoView({ block: "nearest" });
   };
 
@@ -76,12 +76,12 @@ window.gfDocsSearch = () => {
       .slice(0, 8);
     list.innerHTML =
       hits.length === 0
-        ? `<p class="search__empty">No page matches “${escape(input.value.trim())}”.</p>`
+        ? `<p class="search__empty">No page matches “${esc(input.value.trim())}”.</p>`
         : hits
             .map(({ doc, heading }) => {
               const href = heading ? `${doc.u}#${heading[0]}` : doc.u;
               const where = [doc.s, heading?.[1]].filter(Boolean).join(" · ");
-              return `<a role="option" aria-selected="false" href="${escape(href)}"><span class="search__title">${escape(doc.t)}</span><span class="search__where">${escape(where || doc.d)}</span></a>`;
+              return `<a role="option" aria-selected="false" href="${esc(href)}"><span class="search__title">${esc(doc.t)}</span><span class="search__where">${esc(where || doc.d)}</span></a>`;
             })
             .join("");
     list.hidden = false;

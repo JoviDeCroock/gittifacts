@@ -36,7 +36,12 @@ export function checkStyle(page: Page, x: Extracted): Problem[] {
   for (const p of x.paragraphs) {
     const filler = FILLER.exec(p.text);
     if (filler !== null) {
-      problems.push({ file: page.file, line: p.line, rule: "style", message: `filler word "${filler[1]}"` });
+      problems.push({
+        file: page.file,
+        line: p.line,
+        rule: "style",
+        message: `filler word "${filler[1]}"`,
+      });
     }
     const n = sentences(p.text).length;
     if (n > MAX_SENTENCES) {

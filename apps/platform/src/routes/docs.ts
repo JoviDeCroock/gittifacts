@@ -74,7 +74,13 @@ async function fetchAsset(c: Context<AppEnv>, path: string): Promise<Response | 
   return res.status === 200 ? res : null;
 }
 
-function textResponse(c: Context<AppEnv>, body: string, type: string, status: number, link?: string) {
+function textResponse(
+  c: Context<AppEnv>,
+  body: string,
+  type: string,
+  status: number,
+  link?: string,
+) {
   const headers = new Headers({ "content-type": type, "cache-control": CACHE, vary: "Accept" });
   if (link !== undefined) headers.set("link", link);
   if (type.startsWith("text/markdown") || type.startsWith("text/plain")) {
@@ -88,7 +94,12 @@ async function notFound(c: Context<AppEnv>, markdown: boolean): Promise<Response
   if (!markdown) {
     const page = await fetchAsset(c, `${DOCS_BASE}/404`);
     if (page !== null) {
-      return textResponse(c, withOrigin(await page.text(), origin), "text/html; charset=utf-8", 404);
+      return textResponse(
+        c,
+        withOrigin(await page.text(), origin),
+        "text/html; charset=utf-8",
+        404,
+      );
     }
   }
   const body = `# Page not found\n\nThere is no docs page at ${new URL(c.req.url).pathname}. Every page is listed in ${origin}${DOCS_BASE}/llms.txt.\n`;
@@ -116,19 +127,29 @@ export async function serveDocs(c: Context<AppEnv>): Promise<Response> {
   }
 
   const markdown = path.endsWith(".md") || prefersMarkdown(c.req.header("accept"));
-  const rest = path === DOCS_BASE || path === `${DOCS_BASE}/` ? "" : path.slice(DOCS_BASE.length + 1);
+  const rest =
+    path === DOCS_BASE || path === `${DOCS_BASE}/` ? "" : path.slice(DOCS_BASE.length + 1);
   const name = rest.replace(/\.md$/, "");
   const slug = name === "index" ? "" : name;
   const pages = await docsManifest(c.env.ASSETS, url.origin);
   if (pages === null || !pages.has(slug)) return notFound(c, markdown);
 
   const mdPath = slug === "" ? `${DOCS_BASE}/index.md` : `${DOCS_BASE}/${slug}.md`;
-  const res = await fetchAsset(c, markdown ? mdPath : slug === "" ? `${DOCS_BASE}/` : `${DOCS_BASE}/${slug}`);
+  const res = await fetchAsset(
+    c,
+    markdown ? mdPath : slug === "" ? `${DOCS_BASE}/` : `${DOCS_BASE}/${slug}`,
+  );
   if (res === null) return notFound(c, markdown);
   const body = withOrigin(await res.text(), url.origin);
   return markdown
     ? textResponse(c, body, "text/markdown; charset=utf-8", 200)
-    : textResponse(c, body, "text/html; charset=utf-8", 200, `<${mdPath}>; rel="alternate"; type="text/markdown"`);
+    : textResponse(
+        c,
+        body,
+        "text/html; charset=utf-8",
+        200,
+        `<${mdPath}>; rel="alternate"; type="text/markdown"`,
+      );
 }
 
 export function registerDocsRoutes(app: ApiApp): void {

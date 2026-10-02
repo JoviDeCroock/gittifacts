@@ -54,12 +54,19 @@ export function checkLinks(
     }
     const [path = "", hash] = url.split("#");
     if (path === "") {
-      if (hash !== undefined && !own.has(hash)) problems.push({ ...where, message: `no heading #${hash} on this page` });
+      if (hash !== undefined && !own.has(hash))
+        problems.push({ ...where, message: `no heading #${hash} on this page` });
       continue;
     }
     if (path === BASE || path.startsWith(`${BASE}/`)) {
       if (/\/docs\/(llms-full\.txt|llms\.txt|index\.json|sitemap\.xml)$/.test(path)) continue;
-      const slug = path === BASE ? "" : path.slice(BASE.length + 1).replace(/\.md$/, "").replace(/^index$/, "");
+      const slug =
+        path === BASE
+          ? ""
+          : path
+              .slice(BASE.length + 1)
+              .replace(/\.md$/, "")
+              .replace(/^index$/, "");
       const target = anchors.get(slug);
       if (target === undefined) {
         problems.push({ ...where, message: `no docs page at ${path} (from ${href})` });
@@ -69,7 +76,10 @@ export function checkLinks(
       continue;
     }
     if (!PLATFORM_PATHS.some((re) => re.test(path))) {
-      problems.push({ ...where, message: `unknown site path ${path} (not a docs page or a platform route)` });
+      problems.push({
+        ...where,
+        message: `unknown site path ${path} (not a docs page or a platform route)`,
+      });
     }
   }
   return problems;

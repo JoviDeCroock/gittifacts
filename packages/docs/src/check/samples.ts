@@ -57,7 +57,10 @@ export function checkToolCalls(page: Page, text: string, line: number): Problem[
     }
     const parsed = args === null ? null : parseCall(`${name}${args}`);
     if (parsed === null) {
-      problems.push({ ...where, message: `${name}${args ?? "(…"} does not parse (keys bare, values JSON)` });
+      problems.push({
+        ...where,
+        message: `${name}${args ?? "(…"} does not parse (keys bare, values JSON)`,
+      });
       continue;
     }
     const tool = tools.find((t) => t.name === name);
@@ -121,7 +124,8 @@ export function cliProblem(argv: readonly string[], strict = true): string | nul
       return `gittifacts ${spec.command}: unexpected argument ${parsed.positionals.at(-1)}`;
     }
     for (const f of spec.flags) {
-      const given = f.property in parsed.values || (f === positional && parsed.positionals.length > 0);
+      const given =
+        f.property in parsed.values || (f === positional && parsed.positionals.length > 0);
       if (f.required && !given) return `gittifacts ${spec.command}: missing required ${f.flag}`;
     }
     return null;
@@ -138,7 +142,8 @@ export function checkCommands(page: Page, text: string, line: number, strict = t
     const cmd = raw.replace(/^\s*\$\s+/, "").replace(/(^|\s)#.*$/, "");
     for (const segment of cmd.split(/&&|\|\||;|\|/)) {
       const words = shellWords(segment.trim());
-      const start = words[0] === "npx" && words[1] === "gittifacts" ? 2 : words[0] === "gittifacts" ? 1 : -1;
+      const start =
+        words[0] === "npx" && words[1] === "gittifacts" ? 2 : words[0] === "gittifacts" ? 1 : -1;
       if (start < 0) continue;
       const problem = cliProblem(words.slice(start), strict);
       if (problem !== null) problems.push({ file: page.file, line, rule: "cli", message: problem });
@@ -162,13 +167,23 @@ function jsonSchemaFor(name: string): object | ZodType | null {
   return (m?.[2] === "input" ? tool.inputSchema : tool.outputSchema) as object;
 }
 
-export function checkJson(page: Page, text: string, info: readonly string[], line: number): Problem[] {
+export function checkJson(
+  page: Page,
+  text: string,
+  info: readonly string[],
+  line: number,
+): Problem[] {
   const where = { file: page.file, line, rule: "json" as const };
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch (e) {
-    return [{ ...where, message: `invalid JSON (use \`jsonc\` or \`text\` for illustrations): ${e instanceof Error ? e.message : e}` }];
+    return [
+      {
+        ...where,
+        message: `invalid JSON (use \`jsonc\` or \`text\` for illustrations): ${e instanceof Error ? e.message : e}`,
+      },
+    ];
   }
   const name = info.find((i) => i.startsWith("schema="))?.slice("schema=".length);
   if (name === undefined) return [];
@@ -176,9 +191,17 @@ export function checkJson(page: Page, text: string, info: readonly string[], lin
   if (schema === null) return [{ ...where, message: `unknown schema "${name}"` }];
   if ("safeParse" in schema && typeof schema.safeParse === "function") {
     const r = (schema as ZodType).safeParse(value);
-    return r.success ? [] : r.error.issues.map((i) => ({ ...where, message: `${name}: ${i.path.join(".") || "(root)"} ${i.message}` }));
+    return r.success
+      ? []
+      : r.error.issues.map((i) => ({
+          ...where,
+          message: `${name}: ${i.path.join(".") || "(root)"} ${i.message}`,
+        }));
   }
-  return validateSample(schema, value).map((e) => ({ ...where, message: `${name}: ${e.path} ${e.message}` }));
+  return validateSample(schema, value).map((e) => ({
+    ...where,
+    message: `${name}: ${e.path} ${e.message}`,
+  }));
 }
 
 function jsonStrings(text: string): string[] {

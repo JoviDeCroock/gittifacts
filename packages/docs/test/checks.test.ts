@@ -38,8 +38,12 @@ describe("docs content", () => {
 
 describe("tool-call samples", () => {
   it("accept real tools with schema-valid arguments and placeholders", () => {
-    expect(messages('```text\nws_exec({ workspaceId: "<workspaceId>", command: "ls" })\n```\n')).toEqual([]);
-    expect(messages('Call `wait_for_change({ changeId: "ch_1", until: "merged", timeoutSec: 50 })`.\n')).toEqual([]);
+    expect(
+      messages('```text\nws_exec({ workspaceId: "<workspaceId>", command: "ls" })\n```\n'),
+    ).toEqual([]);
+    expect(
+      messages('Call `wait_for_change({ changeId: "ch_1", until: "merged", timeoutSec: 50 })`.\n'),
+    ).toEqual([]);
   });
 
   it("catch unknown tools, malformed calls and invalid arguments", () => {
@@ -47,49 +51,64 @@ describe("tool-call samples", () => {
       "[tool-call] start_chnage(…) is not an MCP tool",
     ]);
     expect(messages("Use `create_project({ template })`.\n")[0]).toContain("does not parse");
-    expect(messages('```text\nwait_for_change({ changeId: "ch_1", until: "done" })\n```\n')[0]).toContain(
-      "until must be equal to one of the allowed values",
-    );
+    expect(
+      messages('```text\nwait_for_change({ changeId: "ch_1", until: "done" })\n```\n')[0],
+    ).toContain("until must be equal to one of the allowed values");
     expect(messages('```text\nstart_change({ repoId: "rp_1", title: "x" })\n```\n')[0]).toContain(
       "must have required property 'category'",
     );
   });
 
   it("check calls inside JSON strings and skip verbatim quotes", () => {
-    expect(messages('```json\n{ "call": "get_tour({ changeId: 1 })" }\n```\n')[0]).toContain("must be string");
+    expect(messages('```json\n{ "call": "get_tour({ changeId: 1 })" }\n```\n')[0]).toContain(
+      "must be string",
+    );
     expect(messages("```text verbatim\ncreate_project({ template })\n```\n")).toEqual([]);
   });
 });
 
 describe("CLI samples", () => {
   it("accept real commands, flags and positionals", () => {
-    const ok = "```sh\ngittifacts wait ch_1 --until merged\nnpx gittifacts --host https://<host> login --no-wait\n```\n";
+    const ok =
+      "```sh\ngittifacts wait ch_1 --until merged\nnpx gittifacts --host https://<host> login --no-wait\n```\n";
     expect(messages(ok)).toEqual([]);
   });
 
   it("catch unknown commands, unknown flags, bad values and missing arguments", () => {
-    expect(messages("```sh\ngittifacts deploy ch_1\n```\n")).toEqual(["[cli] unknown command: gittifacts deploy"]);
-    expect(messages("```sh\ngittifacts start-change --repo rp_1\n```\n")[0]).toContain("unknown flag for start-change: --repo");
-    expect(messages("```sh\ngittifacts wait ch_1 --until done\n```\n")[0]).toContain("--until expects one of");
-    expect(messages("```sh\ngittifacts get-change-status\n```\n")[0]).toContain("missing required --change-id");
+    expect(messages("```sh\ngittifacts deploy ch_1\n```\n")).toEqual([
+      "[cli] unknown command: gittifacts deploy",
+    ]);
+    expect(messages("```sh\ngittifacts start-change --repo rp_1\n```\n")[0]).toContain(
+      "unknown flag for start-change: --repo",
+    );
+    expect(messages("```sh\ngittifacts wait ch_1 --until done\n```\n")[0]).toContain(
+      "--until expects one of",
+    );
+    expect(messages("```sh\ngittifacts get-change-status\n```\n")[0]).toContain(
+      "missing required --change-id",
+    );
   });
 });
 
 describe("JSON samples", () => {
   it("must parse, and validate when they name a schema", () => {
-    expect(messages("```json\n{ \"a\": 1, }\n```\n")[0]).toContain("invalid JSON");
-    expect(messages('```json schema=policy\n{ "thresholds": { "mutationScore": 2 } }\n```\n')[0]).toContain(
-      "policy: thresholds.mutationScore",
-    );
+    expect(messages('```json\n{ "a": 1, }\n```\n')[0]).toContain("invalid JSON");
+    expect(
+      messages('```json schema=policy\n{ "thresholds": { "mutationScore": 2 } }\n```\n')[0],
+    ).toContain("policy: thresholds.mutationScore");
     expect(messages('```json schema=policy\n{ "lane0Enabled": false }\n```\n')).toEqual([]);
-    expect(messages('```json schema=nope\n{}\n```\n')).toEqual(['[json] unknown schema "nope"']);
+    expect(messages("```json schema=nope\n{}\n```\n")).toEqual(['[json] unknown schema "nope"']);
   });
 });
 
 describe("links", () => {
   it("resolve to pages and headings", () => {
-    expect(messages("[ok](/docs/concepts/target#real-heading) [rel](../concepts/target.md)\n")).toEqual([]);
-    expect(messages("[gone](/docs/concepts/missing)\n")[0]).toContain("no docs page at /docs/concepts/missing");
+    expect(
+      messages("[ok](/docs/concepts/target#real-heading) [rel](../concepts/target.md)\n"),
+    ).toEqual([]);
+    expect(messages("[gone](/docs/concepts/missing)\n")[0]).toContain(
+      "no docs page at /docs/concepts/missing",
+    );
     expect(messages("[anchor](/docs/concepts/target#nope)\n")[0]).toContain("no heading #nope");
     expect(messages("[site](/not-a-route)\n")[0]).toContain("unknown site path /not-a-route");
   });

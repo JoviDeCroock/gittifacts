@@ -84,7 +84,8 @@ export function extract(page: Page): Extracted {
           break;
         case "table": {
           const table = t as Tokens.Table;
-          for (const cell of [...table.header, ...table.rows.flat()]) visitInline(cell.tokens, line);
+          for (const cell of [...table.header, ...table.rows.flat()])
+            visitInline(cell.tokens, line);
           break;
         }
         case "list":

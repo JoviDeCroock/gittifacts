@@ -87,7 +87,8 @@ export function fieldRows(s: JsonSchema, prefix = "", depth = 0): FieldRow[] {
       constraints: constraintsOf(prop),
     });
     if (depth < 1 && prop.properties) rows.push(...fieldRows(prop, path, depth + 1));
-    if (depth < 1 && prop.items?.properties) rows.push(...fieldRows(prop.items, `${path}[]`, depth + 1));
+    if (depth < 1 && prop.items?.properties)
+      rows.push(...fieldRows(prop.items, `${path}[]`, depth + 1));
   }
   return rows;
 }
