@@ -317,6 +317,10 @@ describe("merge queue Q1 (shell + core over fakes)", () => {
     expect(held.laneReasons.map((r) => r.code)).toContain("merge-queue.resolution-novel-lines");
     expect(env.queue().loop.state.entries[b.id]?.hold).toBe("approval");
     expect(s.ports.notifier.kinds(b.id)).toContain("review-requested");
+    // The reviewer re-toured the resolved head (its evidence carries the conflict resolution).
+    const resolvedHead = env.queue().loop.state.entries[b.id]?.headSha;
+    expect(s.ports.reviewer.tourCalls.at(-1)?.change.headSha).toBe(resolvedHead);
+    expect(held.tourId).not.toBeNull();
     // The author can never approve; another human can.
     await expect(
       s.coordinator.submitReview(s.agent, b.id, { decision: "approve" }),

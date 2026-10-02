@@ -119,14 +119,18 @@ export function overviewView(input: {
 }): QueueOverviewView {
   const { state: s, now } = input;
   const o = overview(s, now);
-  const active = Object.values(s.entries)
-    .filter((e) => !TERMINAL_STATES.has(e.state))
-    .sort((a, b) => a.seq - b.seq)
-    .map((e) => e.changeId);
-  const recent = [...s.terminal].reverse().slice(0, 30);
-  const entries = [...active, ...recent]
-    .map((id) => entryView(s, id, now, input.intentOf))
-    .filter((v): v is QueueEntryView => v !== null);
+  const views = (ids: string[]) =>
+    ids
+      .map((id) => entryView(s, id, now, input.intentOf))
+      .filter((v): v is QueueEntryView => v !== null);
+  // Active first: in-flight (by batch, then arrival), then waiting in scheduling order.
+  const active = views(
+    Object.values(s.entries)
+      .filter((e) => !TERMINAL_STATES.has(e.state))
+      .sort((a, b) => a.seq - b.seq)
+      .map((e) => e.changeId),
+  ).sort((a, b) => (a.position ?? -1) - (b.position ?? -1));
+  const entries = [...active, ...views([...s.terminal].reverse().slice(0, 30))];
   return {
     repoId: input.repoId,
     mainSha: o.mainSha,

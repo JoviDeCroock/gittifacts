@@ -40,11 +40,59 @@ export async function requestApproval(
     message:
       `${change.title} needs a fresh Lane ${lane} approval in the merge queue. ${why}`.trim(),
   });
+  const tourId = await resolutionTour(ctx, change.id).catch(() => null);
   await ctx.audit(changeSubject(change.id), "merge-queue.approval-requested", {
     lane,
     reasons: cmd.reasons.map((r) => r.code),
     excludePrincipals: cmd.excludePrincipals,
+    tourId,
   });
+}
+
+/**
+ * A fresh tour for the head the queue resolved (when there is one): the reviewer agent sees the
+ * resolved head's evidence, so its `conflict-resolution` item becomes the platform's "Conflict
+ * resolution" stop (@app/tour). Best effort, within the Change's AI budget; the review binds to
+ * the Change as before.
+ */
+async function resolutionTour(ctx: QueueContext, changeId: string): Promise<string | null> {
+  const { store, reviewer } = ctx.ports;
+  const entry = ctx.deps.state().entries[changeId];
+  const change = await store.getChange(changeId);
+  if (entry === undefined || change === null || entry.resolverIds.length === 0) return null;
+  const head = entry.headSha;
+  const [evidence, classification, diff, plan, repo] = await Promise.all([
+    store.getEvidence(changeId, head),
+    store.getClassification(changeId, head),
+    change.headSha === null ? null : store.getDiff(changeId, change.headSha),
+    change.planId === null ? null : store.getPlan(change.planId),
+    ctx.repo(),
+  ]);
+  if (evidence === null || classification === null || diff === null) return null;
+  const coordinator = ctx.deps.bindings.changeCoordinator(changeId);
+  const limitUsd = repo.policy.ai.budgetUsdPerChange;
+  const spentUsd = await coordinator.spent(changeId);
+  if (spentUsd >= limitUsd) return null;
+  const replay = ctx.deps.store.getHead(changeId, head);
+  const out = await reviewer.tour({
+    change: {
+      id: change.id,
+      title: change.title,
+      headSha: head,
+      baseSha: replay?.replayBase ?? change.baseSha,
+    },
+    plan,
+    diff,
+    evidence,
+    classification,
+    budget: { changeId, limitUsd, spentUsd },
+    model: repo.policy.ai.reviewerModel,
+  });
+  await coordinator.recordSpend({ changeId, usd: out.costUsd });
+  if (out.status !== "ok") return null;
+  await store.putTour(out.tour);
+  await store.updateChange(changeId, { tourId: out.tour.id });
+  return out.tour.id;
 }
 
 function planIdFor(repoId: string, test: string): string {
