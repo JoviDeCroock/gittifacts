@@ -56,6 +56,12 @@ people, the machine guide to agents); `packages/web/landing.html` + `src/landing
 screenshots in `docs/screenshots/landing-*`, tests in `packages/web/test/landing.test.ts` and
 `apps/platform/test/front-door.test.ts`.
 
+Docs: `/docs` serves task-first documentation built by `packages/docs` (get started, concepts, 18 guides plus the
+integrations guide, 21 generated reference pages, security model) as HTML in the product's design system, markdown
+twins (`.md` or `Accept: text/markdown`) and `/docs/llms-full.txt`. Linked from `/start`, `/llms.txt`, the landing
+footer and the app shell. `pnpm --filter @app/docs check` gates links, samples, generated pages and style; screenshots
+in `docs/screenshots/docs-*`.
+
 ## Live infrastructure (see docs/deploy.md)
 - Artifacts namespace `gittifacts-eu` (EU)
 - D1 `gittifacts` (EU)

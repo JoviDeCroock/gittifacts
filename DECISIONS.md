@@ -1258,3 +1258,43 @@ mutation (its role is `reader` everywhere, even on repos it is a member of). Use
 integrations are not member rows (their access always derives from a human's row). Integration-only scopes count as
 `read` for the repos of an installation (the route's own scope list still applies). The O3 note "any signed-in
 human can review an unclaimed project's Changes" is closed by this entry.
+
+## 2026-10-02 — Documentation: `packages/docs`, generated references, `/docs` served by the platform (docs/prompts/05-docs.md)
+
+- **Content** lives in `packages/docs/content/**.md` with front matter (`title`, `description`, `order`, `audience`,
+  optional `nav`, `generated`). Information architecture as in the spec: get started, concepts, guides (integrations
+  under `guides/integrations/`, contributed by the integrations work), generated reference, security model.
+- **Generated references** (`packages/docs/generate/*`, `pnpm --filter @app/docs generate`), one source per fact:
+  - MCP tools from `buildTools()` with an inert backend; required scopes read from the handlers' `requireScope` calls.
+  - CLI from its own table (`BUILTINS`, `bundledCommands()`, `GLOBAL_FLAGS`, `EXIT_CODES`, `ENV_VARS`).
+  - HTTP API from `createApp()`'s OpenAPI document, evaluated in Node: esbuild bundles the platform with
+    `cloudflare:*` modules stubbed (only module evaluation happens).
+  - Policy schema from `RepoPolicy` (`z.toJSONSchema` for types/defaults, doc comments via the TypeScript compiler
+    API); ci.ts DSL from `RunnerOptions` and the `PipelineSpec` limits; errors from `ERROR_CODES` + `fixFor` and the
+    merge queue's `EjectCode` + `ejectReason`; evidence kinds from the `EvidenceItem` schemas; lane reasons from
+    `REASON_CODES`; limits from `limits/config.ts`, the workspace model, `QueueConfig` and the OAuth constants;
+    events from `WebhookEvent` and `QueueEvent`; discovery from the front door and `mcpDiscovery`.
+- **Build** (`pnpm --filter @app/docs build`): static HTML in the product's tokens (`packages/web/src/styles/tokens.css`
+  is prepended, fonts copied from `@fontsource-variable`), a `.md` twin per page, `llms.txt`, `llms-full.txt`,
+  `index.json`, `search-index.json`, `sitemap.xml`, `404.html`. Output `packages/web/dist/docs`, i.e. inside the
+  Worker's assets; it must run after the web build (vite empties `dist/`), so `deploy:prepare` runs it right after.
+- **Serving** (`apps/platform/src/routes/docs.ts`): pages are looked up in the build's `index.json`, because the assets
+  binding's `single-page-application` fallback would answer unknown paths with 200. `Accept: text/markdown` (without
+  `text/html`) or a `.md` suffix gets the twin. The build writes `https://<host>` in samples; the route replaces it
+  with the request origin, so copied commands work on any deployment.
+- **Quality gates** (`pnpm --filter @app/docs check`, also the vitest suite): links and anchors resolve; every
+  `tool_name({...})` parses, names a real tool and validates against its input schema (placeholders like `"<id>"`
+  satisfy string patterns, not enums); every `gittifacts …` sample goes through the CLI's own parser; ```` ```json ````
+  blocks parse and validate when they name `schema=`; generated pages match the code; pages ≤ 300 lines; no filler
+  words; paragraphs ≤ 4 sentences. A source change to a documented schema makes the generated pages stale until
+  someone runs `generate` (by design).
+- **Found while documenting (owners elsewhere, not changed):**
+  1. The generated `.platform/policy.ts` says `lane0Enabled: false`, and `withLane0Toggle` treats that as "the file
+     forces Lane 0 off": the owner's toggle only lasts until the next default-branch commit re-reads the policy.
+     The docs tell owners to remove that line (a Lane 2 Change) before turning Lane 0 on.
+  2. `@app/mcp` `EXAMPLES.create_project` uses template `"worker-api"` (should be `workers-api`), which
+     `search_tools` returns to agents. The MCP reference falls back to a schema-derived example.
+  3. `fixFor("insufficient-scope")` (and others) suggest `capabilities({})`, which is not an MCP tool (`whoami` is).
+     Listed as a known issue in the docs checks.
+  4. `/start` says `npx gittifacts login`, but the `gittifacts` package is not on npm yet; the docs mark it coming
+     soon and show the build-from-source install.
