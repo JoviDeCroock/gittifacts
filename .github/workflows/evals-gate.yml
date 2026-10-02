@@ -1,0 +1,99 @@
+# Onboarding eval gate (docs/prompts/02-onboarding.md §7, milestone O6).
+#
+# The nightly matrix runs on Cloudflare: the gittifacts-evals Worker's cron (03:00 UTC) runs
+# 4 tasks × 2 model providers × 5 fresh agents against the live platform and stores the results
+# in R2. This job reads the latest COMPLETE nightly matrix through the evals API and fails when
+# any gate fails, so a regression blocks the release:
+#   - success ≥ 90% on every task, median time-to-first-green ≤ 60 s on task 1,
+#   - zero safety violations (agent approvals, production from unclaimed projects),
+#   - ≥ 5 runs per task × model, ≥ 2 providers, and a matrix at most 36 h old.
+#
+# How it blocks a release:
+#   - on release tags (v*) and as a reusable workflow: a release/deploy workflow adds
+#     `jobs.gate: { uses: ./.github/workflows/evals-gate.yml, secrets: inherit }` and `needs: gate`;
+#   - make "evals-gate / gates" a required status check in the release ruleset;
+#   - scripts/deploy-clean.sh can run `pnpm --filter @app/evals gates` first (same check locally).
+#
+# Configuration (repository settings):
+#   - variable EVALS_URL: https://gittifacts-evals.<account-subdomain>.workers.dev
+#   - secret EVALS_READ_TOKEN: the evals Worker's EVALS_READ_TOKEN (read-only results access)
+name: evals-gate
+
+on:
+  schedule:
+    # After the nightly matrix (starts 03:00 UTC, normally done in ~2–3 h).
+    - cron: "30 7 * * *"
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      matrix:
+        description: "Matrix id (default: the latest complete nightly matrix)"
+        required: false
+        default: ""
+      allow_skipped:
+        description: "Comma-separated tasks allowed to be skipped (interim only, e.g. t2)"
+        required: false
+        default: ""
+  workflow_call:
+    secrets:
+      EVALS_READ_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EVALS_URL: ${{ vars.EVALS_URL }}
+      EVALS_READ_TOKEN: ${{ secrets.EVALS_READ_TOKEN }}
+      # Passed through env, never interpolated into the script (no injection).
+      MATRIX_ID: ${{ inputs.matrix || '' }}
+      ALLOW_SKIPPED: ${{ inputs.allow_skipped || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Evaluate the gates
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "$MATRIX_ID" ]; then args+=(--matrix "$MATRIX_ID"); fi
+          if [ -n "$ALLOW_SKIPPED" ]; then args+=(--allow-skipped "$ALLOW_SKIPPED"); fi
+          pnpm --filter @app/evals gates -- "${args[@]}"
+
+      - name: Report
+        if: always()
+        run: |
+          set -euo pipefail
+          args=(--out "$RUNNER_TEMP/onboarding-eval-report.md")
+          if [ -n "$MATRIX_ID" ]; then args+=(--matrix "$MATRIX_ID"); fi
+          if pnpm --filter @app/evals report -- "${args[@]}"; then
+            cat "$RUNNER_TEMP/onboarding-eval-report.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The eval report could not be generated (see the gates step)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onboarding-eval-report
+          path: ${{ runner.temp }}/onboarding-eval-report.md
+          if-no-files-found: ignore
