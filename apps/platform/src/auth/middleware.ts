@@ -2,6 +2,7 @@ import type { Scope } from "@app/domain";
 import type { Context, MiddlewareHandler } from "hono";
 import type { AppEnv, Caller } from "../app-env.js";
 import { ApiError, forbidden, unauthorized } from "../errors.js";
+import { enforceUnclaimedRequestRate } from "../limits/request-limit.js";
 import { urlsFor } from "../oauth/context.js";
 import { audienceAllows } from "../oauth/urls.js";
 import { isAgentToken, verifyAgentToken } from "./agent-tokens.js";
@@ -52,6 +53,8 @@ export async function resolveCaller(c: Context<AppEnv>): Promise<Caller | null> 
         );
       }
     }
+    // O3: an unclaimed project's token is limited to so many requests per minute.
+    if (v) await enforceUnclaimedRequestRate(c.env, v.principal);
     caller = v
       ? { principal: v.principal, user: null, via: "agent-token", expiresAtSec: v.expiresAtSec }
       : null;

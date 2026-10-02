@@ -6,8 +6,12 @@
 import { TEMPLATE_IDS, TemplateId } from "@app/conventions";
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
-import { IdempotencyHeaders } from "../api/schemas.js";
-import { callerOf, requirePrincipal } from "../auth/middleware.js";
+import { ErrorSchema, IdempotencyHeaders } from "../api/schemas.js";
+import { assertScopes, requirePrincipal, resolveCaller } from "../auth/middleware.js";
+import { assertRouteRepoAccess } from "../auth/repo-scope.js";
+import { createUnclaimedProject } from "../claim/create.js";
+import { unauthorized } from "../errors.js";
+import { anonymousClient } from "../limits/client.js";
 import { ttfgFromAnalyticsEngine, ttfgFromD1, ttfgReport } from "../projects/onboarding.js";
 import { engineFor, seedTemplateCaches } from "../projects/seed-cache.js";
 import { buildPorts } from "../runtime/ports.js";
@@ -62,9 +66,9 @@ const create = createRoute({
   tags: ["projects"],
   summary:
     "Create a project in one call: repo + .platform/* + AGENTS.md + first CI + first preview",
-  description: `Template (${TEMPLATE_IDS.join(", ")}), import (\`from\`: a public https git URL) or empty. Returns at once; CI and the preview finish in the background (wait on \`bootstrapChangeId\`). Not stored by the idempotency middleware (the response holds a push grant): the key is forwarded, so a retry with the same Idempotency-Key returns the same project with a fresh grant.`,
-  security: SECURITY,
-  middleware: [requirePrincipal(["repo:read", "change:create"])] as const,
+  description: `Template (${TEMPLATE_IDS.join(", ")}), import (\`from\`: a public https git URL) or empty. Returns at once; CI and the preview finish in the background (wait on \`bootstrapChangeId\`). Not stored by the idempotency middleware (the response holds a push grant): the key is forwarded, so a retry with the same Idempotency-Key returns the same project with a fresh grant.\n\n**No credentials needed**: without an Authorization header (and while the kill switch allows it) you get an *unclaimed* project, \`token\` (a Bearer token for that project only, valid until it expires) and \`claimUrl\` for a human. Unclaimed projects expire unless claimed and have hard limits (see /start). 429 \`rate-limited\` per IP, network or platform-wide; 503 \`creation-disabled\` when switched off. Without credentials an Idempotency-Key must be at least 16 characters.`,
+  // Credentials are optional: none → an unclaimed project.
+  security: [{}, ...SECURITY],
   request: {
     headers: IdempotencyHeaders,
     body: body(
@@ -79,6 +83,8 @@ const create = createRoute({
   responses: {
     201: json(ProjectCreatedSchema, "Created"),
     ...errors(400, 401, 403, 409, 502),
+    429: json(ErrorSchema, "Rate limited (unclaimed creation) or quota exceeded"),
+    503: json(ErrorSchema, "Unclaimed creation is switched off (kill switch)"),
   },
 });
 
@@ -158,12 +164,24 @@ const seed = createRoute({
 export function registerProjectRoutes(app: ApiApp): void {
   app.openapi(create, async (c) => {
     const input = CreateProjectInput.parse(c.req.valid("json"));
-    const out = await createProject(
-      c.get("services"),
-      callerOf(c),
-      input,
-      c.req.valid("header")["idempotency-key"],
-    );
+    const key = c.req.valid("header")["idempotency-key"];
+    const caller = await resolveCaller(c);
+    if (caller === null) {
+      // Credentials that don't verify never fall back to an unclaimed project: say so.
+      if (c.req.header("authorization") || c.req.header("cookie")?.includes("session_token")) {
+        throw unauthorized("invalid, expired or revoked credentials");
+      }
+      const out = await createUnclaimedProject(
+        c.get("services"),
+        await anonymousClient(c.req.raw, c.env),
+        input,
+        key,
+      );
+      return c.json(out, 201);
+    }
+    assertScopes(caller, ["repo:read", "change:create"]);
+    await assertRouteRepoAccess(c, caller);
+    const out = await createProject(c.get("services"), caller, input, key);
     return c.json(out, 201);
   });
 

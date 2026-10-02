@@ -2,9 +2,12 @@ import { z } from "zod";
 import { ErrorSchema } from "./api/schemas.js";
 import { type AppOptions, createServices } from "./app-env.js";
 import { authFor, callerOf, requirePrincipal } from "./auth/middleware.js";
+import { registerClaimRoutes } from "./claim/routes.js";
 import { getCoordinator } from "./coordinator.js";
 import { fixFor, toErrorResponse } from "./errors.js";
 import { registerImportRoutes } from "./import/routes.js";
+import { RateLimited } from "./limits/creation.js";
+import { registerLimitRoutes } from "./limits/routes.js";
 import { handleMcp, MCP_PATH } from "./mcp/route.js";
 import { originOf } from "./oauth/context.js";
 import { registerAuditRoutes } from "./routes/audit.js";
@@ -53,6 +56,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
 
   app.onError((err, c) => {
     const r = toErrorResponse(err);
+    if (err instanceof RateLimited) c.header("retry-after", String(err.retryAfterSec));
     return c.json(r.body, r.status);
   });
 
@@ -83,6 +87,8 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerPlanRoutes(app);
   registerChangeRoutes(app);
   registerProjectRoutes(app);
+  registerClaimRoutes(app);
+  registerLimitRoutes(app);
   registerAuditRoutes(app);
 
   // R2-backed references (logs, screenshots, spilled diffs). `:ref` may contain slashes.
@@ -122,7 +128,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
     tags: ["mcp"],
     summary: "MCP server (streamable HTTP, stateless)",
     description:
-      "JSON-RPC MCP endpoint for agents. `Authorization: Bearer gtf_…` (agent token). Tools: create_project, whoami, list_repos, create_plan, start_change, get_change_status, get_evidence, get_tour, request_review, list_issues_for_change, refresh_push_token, wait_for_change.",
+      "JSON-RPC MCP endpoint for agents. `Authorization: Bearer gtf_…` (agent token); without one, only initialize, tools/list, create_project (an unclaimed project and its own token) and whoami are served. Tools: create_project, whoami, list_repos, create_plan, start_change, get_change_status, get_evidence, get_tour, request_review, list_issues_for_change, refresh_push_token, wait_for_change.",
     security: [{ Bearer: [] }],
     request: { body: { content: { "application/json": { schema: z.unknown() } }, required: true } },
     responses: {

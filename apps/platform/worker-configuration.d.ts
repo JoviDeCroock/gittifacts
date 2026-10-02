@@ -19,6 +19,8 @@ interface __BaseEnv_Env {
 	CF_ACCOUNT_ID: string;
 	PREVIEW_HOST_SUFFIX: string;
 	METRICS_DATASET: string;
+	UNCLAIMED_TTL_DAYS: string;
+	UNCLAIMED_TOKEN_LIMITER: RateLimit;
 	PLATFORM_SIGNING_KEY: string;
 	BETTER_AUTH_SECRET: string;
 	GITHUB_CLIENT_ID: string;
@@ -32,6 +34,7 @@ interface __BaseEnv_Env {
 	PREVIEW_HOST: DurableObjectNamespace<import("./src/index").PreviewHost>;
 	WORKSPACE: DurableObjectNamespace<import("./src/index").Workspace>;
 	PROJECT_LEDGER: DurableObjectNamespace<import("./src/index").ProjectLedger>;
+	ABUSE_LIMITER: DurableObjectNamespace<import("./src/index").AbuseLimiter>;
 	CHANGE_WORKFLOW: Workflow<Parameters<import("./src/index").ChangeWorkflow['run']>[0]['payload']>;
 	ROLLOUT_WORKFLOW: Workflow<Parameters<import("./src/index").RolloutWorkflow['run']>[0]['payload']>;
 	PUSH_ROUTER: Workflow<Parameters<import("./src/index").PushRouter['run']>[0]['payload']>;
@@ -41,7 +44,7 @@ interface __BaseEnv_Env {
 declare namespace Cloudflare {
 	interface GlobalProps {
 		mainModule: typeof import("./src/index");
-		durableNamespaces: "AuditLog" | "ChangeCoordinator" | "MergeQueue" | "Runner" | "PreviewHost" | "Workspace" | "ProjectLedger";
+		durableNamespaces: "AuditLog" | "ChangeCoordinator" | "MergeQueue" | "Runner" | "PreviewHost" | "Workspace" | "ProjectLedger" | "AbuseLimiter";
 	}
 	interface Env extends __BaseEnv_Env {}
 }
@@ -50,5 +53,5 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "CI_ENGINE" | "CI_CACHE_NAMESPACE" | "ARTIFACTS_NAMESPACE" | "AI_GATEWAY_ID" | "FLAGSHIP_APP_ID" | "CF_ACCOUNT_ID" | "PREVIEW_HOST_SUFFIX" | "METRICS_DATASET" | "PLATFORM_SIGNING_KEY" | "BETTER_AUTH_SECRET" | "GITHUB_CLIENT_ID" | "GITHUB_CLIENT_SECRET" | "ISSUES_WEBHOOK_SECRET" | "CF_API_TOKEN">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "CI_ENGINE" | "CI_CACHE_NAMESPACE" | "ARTIFACTS_NAMESPACE" | "AI_GATEWAY_ID" | "FLAGSHIP_APP_ID" | "CF_ACCOUNT_ID" | "PREVIEW_HOST_SUFFIX" | "METRICS_DATASET" | "UNCLAIMED_TTL_DAYS" | "PLATFORM_SIGNING_KEY" | "BETTER_AUTH_SECRET" | "GITHUB_CLIENT_ID" | "GITHUB_CLIENT_SECRET" | "ISSUES_WEBHOOK_SECRET" | "CF_API_TOKEN">> {}
 }

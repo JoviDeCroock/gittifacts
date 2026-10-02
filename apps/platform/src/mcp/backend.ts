@@ -8,11 +8,15 @@
  */
 import { Principal } from "@app/domain";
 import type { McpBackend, McpCaller } from "@app/mcp";
+import { z } from "zod";
 import type { Caller, Services } from "../app-env.js";
 import { assertTargetAllowed, filterRepos, type RepoTarget } from "../auth/repo-scope.js";
+import { anonymousWhoami } from "../claim/anonymous.js";
+import { createUnclaimedProject } from "../claim/create.js";
 import { toErrorResponse, unauthorized } from "../errors.js";
 import { runIdempotent } from "../idempotency.js";
 import { createImportMcpBackend } from "../import/mcp.js";
+import type { AnonymousClient } from "../limits/client.js";
 import { capabilities } from "../services/capabilities.js";
 import {
   getChangeDetail,
@@ -28,6 +32,22 @@ import { createPlan } from "../services/plans.js";
 import { createProject } from "../services/projects.js";
 import { listRepoSummaries } from "../services/repos.js";
 import { createWorkspaceMcpBackend } from "../workspace/mcp.js";
+
+/** `authInfo.clientId` of a caller without credentials (src/mcp/route.ts). */
+export const ANONYMOUS_CLIENT_ID = "anonymous";
+
+const AnonymousExtra = z.object({
+  ipHash: z.string().min(1),
+  asn: z.number().int().nullable(),
+  country: z.string().nullable(),
+});
+
+/** A caller without credentials (only create_project and whoami reach here). */
+function anonymousFrom(c: McpCaller): AnonymousClient | null {
+  if (c.principalId !== ANONYMOUS_CLIENT_ID) return null;
+  const parsed = AnonymousExtra.safeParse(c.authInfo.extra?.anonymous);
+  return parsed.success ? parsed.data : null;
+}
 
 /** The bearer verifier puts the verified Principal in `authInfo.extra.principal`. */
 function callerFrom(c: McpCaller): Caller {
@@ -63,6 +83,7 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     ...createWorkspaceMcpBackend(svc, { scoped, idem }),
     ...createImportMcpBackend(svc, { scoped, idem }),
     async whoami(mc) {
+      if (anonymousFrom(mc) !== null) return anonymousWhoami(svc);
       const caps = await capabilities(svc, callerFrom(mc));
       return {
         principal: caps.principal,
@@ -83,6 +104,11 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     },
 
     async createProject(mc, input, opts) {
+      // No credentials: an unclaimed project with its own token and claim link (O3).
+      const anonymous = anonymousFrom(mc);
+      if (anonymous !== null) {
+        return createUnclaimedProject(svc, anonymous, input, opts.idempotencyKey);
+      }
       // Not stored by the idempotency table (the result holds a push grant): the coordinator
       // derives the repo and first-change ids from (caller, key), so a retry finds them.
       return createProject(svc, callerFrom(mc), input, opts.idempotencyKey);

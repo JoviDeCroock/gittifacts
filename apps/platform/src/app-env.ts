@@ -8,7 +8,16 @@ import { type PlatformSigner, platformSigner } from "./signing.js";
 import { D1Store } from "./store/d1-store.js";
 
 /** Worker bindings (generated `Env`) plus optional, untyped-by-wrangler vars. */
-export type Bindings = Env & { BETTER_AUTH_URL?: string };
+export type Bindings = Env & {
+  BETTER_AUTH_URL?: string;
+  /** O3 claim page (unset: Cloudflare's always-pass test keys; src/claim/turnstile.ts). */
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  /** Comma-separated e-mails of platform admins (kill-switch override). */
+  PLATFORM_ADMINS?: string;
+  /** JSON override of unclaimed-project limits (src/limits/config.ts). */
+  UNCLAIMED_LIMITS?: string;
+};
 
 /** Who is calling: a signed-in human (better-auth session) or an agent (gtf_ bearer token). */
 export interface Caller {

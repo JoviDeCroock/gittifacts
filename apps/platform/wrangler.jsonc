@@ -29,7 +29,13 @@
     // this Worker (src/previews/gateway.ts) from a PreviewHost container. See `routes` below.
     "PREVIEW_HOST_SUFFIX": "-pv.resynapse.dev",
     // Analytics Engine dataset METRICS writes to (the time-to-first-green dashboard queries it).
-    "METRICS_DATASET": "gittifacts_metrics"
+    "METRICS_DATASET": "gittifacts_metrics",
+    // Unclaimed projects (O3): deleted this many days after creation unless a human claims them.
+    // Every other unclaimed limit has a default in src/limits/config.ts; override any subset with
+    // an `UNCLAIMED_LIMITS` JSON var. Optional, set outside this file: TURNSTILE_SITE_KEY (var)
+    // and TURNSTILE_SECRET_KEY (secret) for the claim page (unset: Cloudflare's test keys), and
+    // PLATFORM_ADMINS (comma-separated e-mails) for the kill-switch override endpoint.
+    "UNCLAIMED_TTL_DAYS": "7"
   },
 
   // The preview gateway: every *-pv.resynapse.dev request reaches this Worker. Previews are
@@ -106,10 +112,20 @@
       // out, for agents without a shell (open_workspace / ws_*). Its own container app.
       { "name": "WORKSPACE", "class_name": "Workspace" },
       // One per project (repo id): workspace quota (vCPU-seconds/day), open workspaces, and the
-      // latest .platform proposal of an import.
-      { "name": "PROJECT_LEDGER", "class_name": "ProjectLedger" }
+      // latest .platform proposal of an import. Also the unclaimed-project quotas (CI minutes,
+      // storage, Artifacts operations), and their per-IP aggregates under `ip:<hash>`.
+      { "name": "PROJECT_LEDGER", "class_name": "ProjectLedger" },
+      // Token buckets for credential-less create_project: one per `ip:<hash>`, `asn:<n>` and
+      // `global` (long windows and one global counter, which the rate-limit binding can't do).
+      { "name": "ABUSE_LIMITER", "class_name": "AbuseLimiter" }
     ]
   },
+
+  // Per-token request limit for unclaimed projects' tokens (src/limits/request-limit.ts). The
+  // namespace id is ours to choose (no resource to create); keep it unique within the account.
+  "ratelimits": [
+    { "name": "UNCLAIMED_TOKEN_LIMITER", "namespace_id": "4301", "simple": { "limit": 120, "period": 60 } }
+  ],
 
   // Declarative exports (SQLite DOs). Mutually exclusive with `migrations`. CiEgressGateway is the
   // WorkerEntrypoint the Runner reaches through ctx.exports for `network: "registries-only"`.
@@ -122,6 +138,7 @@
     "CiEgressGateway": { "type": "worker" },
     "Workspace": { "type": "durable-object", "storage": "sqlite", "container": "workspace" },
     "ProjectLedger": { "type": "durable-object", "storage": "sqlite" },
+    "AbuseLimiter": { "type": "durable-object", "storage": "sqlite" },
     // registries-only egress for workspaces: the CI policy plus `git push` to the own fork.
     "WorkspaceEgressGateway": { "type": "worker" }
   },
@@ -187,6 +204,8 @@
   // Every push in the namespace starts one PushRouter instance (artifacts.md §1, §6). The target
   // Workflow must be defined by this Worker.
   "triggers": {
+    // Expire unclaimed projects whose TTL ran out (src/claim/expire.ts).
+    "crons": ["*/10 * * * *"],
     "events": [
       {
         "type": "cf.artifacts.repo.pushed",
