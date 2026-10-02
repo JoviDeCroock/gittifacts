@@ -1,5 +1,6 @@
 import type { Principal, Scope } from "@app/domain";
 import type { z } from "zod";
+import { canSeePrincipal } from "../access/access.js";
 import type { CreateAgentBody } from "../api/schemas.js";
 import type { Caller, Services } from "../app-env.js";
 import { issueAgentToken, revokeAgentTokens } from "../auth/agent-tokens.js";
@@ -10,13 +11,19 @@ import {
 } from "../auth/principals.js";
 import { ApiError, forbidden, notFound } from "../errors.js";
 
-/** A principal by id, with its owner's name (for agents). */
+/**
+ * A principal by id, with its owner's name (for agents). Only principals the caller shares a repo
+ * with (or its own, src/access/canSeePrincipal); anyone else is 404 like an unknown id.
+ */
 export async function getPrincipalDetail(
   svc: Services,
+  caller: Caller,
   id: string,
 ): Promise<{ principal: Principal & { ownerName?: string } }> {
   const principal = await svc.store.getPrincipal(id);
-  if (!principal) throw notFound(`principal ${id}`, { explanation: "No principal with that id." });
+  if (!principal || !(await canSeePrincipal(svc, caller.principal, principal))) {
+    throw notFound(`principal ${id}`, { explanation: "No principal with that id." });
+  }
   if (!principal.ownerId) return { principal };
   const owner = (await svc.store.principalRefs([principal.ownerId]))[principal.ownerId];
   return { principal: owner ? { ...principal, ownerName: owner.name } : principal };

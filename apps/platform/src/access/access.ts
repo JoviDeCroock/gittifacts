@@ -249,3 +249,28 @@ export async function filterAccessible<T extends { id: string }>(
   const ids = await accessibleRepoIds(deps, p);
   return ids === "all" ? [...repos] : repos.filter((r) => ids.has(r.id));
 }
+
+/**
+ * May `viewer` look `target` up (GET /api/v1/principals/{id})? Itself, the human who owns it, its
+ * own agents, the platform, and anyone who shares a readable repo with it (an agent or
+ * integration through its owner); system and auditors see everyone. Others are 404.
+ */
+export async function canSeePrincipal(
+  deps: AccessDeps,
+  viewer: Principal,
+  target: Principal,
+): Promise<boolean> {
+  if (isSystem(viewer) || isPlatformAuditor(viewer, deps.env) || target.kind === "system") {
+    return true;
+  }
+  if (target.id === viewer.id || target.ownerId === viewer.id || viewer.ownerId === target.id) {
+    return true;
+  }
+  const person = target.kind === "human" ? target.id : target.ownerId;
+  if (person === null) return false;
+  const mine = await accessibleRepoIds(deps, viewer);
+  const theirs = await membershipsOf(deps.store, person);
+  if (mine === "all") return theirs.size > 0;
+  for (const id of theirs.keys()) if (mine.has(id)) return true;
+  return false;
+}

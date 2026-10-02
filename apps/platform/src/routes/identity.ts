@@ -148,7 +148,7 @@ export function registerIdentityRoutes(app: ApiApp): void {
     return c.json({ principals: await listPrincipals(c.get("services"), callerOf(c)) }, 200);
   });
   app.openapi(principalById, async (c) =>
-    c.json(await getPrincipalDetail(c.get("services"), c.req.valid("param").id), 200),
+    c.json(await getPrincipalDetail(c.get("services"), callerOf(c), c.req.valid("param").id), 200),
   );
   app.openapi(createAgentRoute, async (c) => {
     const out = await createAgent(c.get("services"), callerOf(c), c.req.valid("json"));

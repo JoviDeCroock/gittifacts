@@ -6,6 +6,7 @@
 import type { Change, Repo } from "@app/domain";
 import { describe, expect, it, vi } from "vitest";
 import { readPaths, status, world } from "./access-helpers.js";
+import { addMember } from "./fixtures.js";
 import { call, expectError, json } from "./http.js";
 
 describe("a second human sees nothing of the first human's repo", () => {
@@ -93,5 +94,24 @@ describe("a second human sees nothing of the first human's repo", () => {
     expect(kill).not.toHaveBeenCalled();
     expect(startChange).not.toHaveBeenCalled();
     expect((await w.s.getPlan(w.plan.id))?.status).toBe("draft");
+  });
+});
+
+describe("principal lookups", () => {
+  it("show only principals you share a repo with (or your own); everyone else is 404", async () => {
+    const w = await world();
+    const look = (id: string, auth: { cookie?: string; token?: string }) =>
+      call(w.app, "GET", `/api/v1/principals/${id}`, auth);
+    expect((await look(w.aliceAgent.principal.id, { cookie: w.alice.cookie })).status).toBe(200);
+    expect((await look(w.alice.principal.id, { token: w.aliceAgent.token })).status).toBe(200);
+    for (const id of [w.alice.principal.id, w.aliceAgent.principal.id]) {
+      await expectError(await look(id, { cookie: w.bob.cookie }), 404, "not-found");
+      await expectError(await look(id, { token: w.bobAgent.token }), 404, "not-found");
+    }
+    await addMember(w.s, w.repo.id, w.bob.principal.id, "reader");
+    const agent = await json<{ principal: { ownerName?: string } }>(
+      await look(w.aliceAgent.principal.id, { cookie: w.bob.cookie }),
+    );
+    expect(agent.principal.ownerName).toBe("Alice");
   });
 });
