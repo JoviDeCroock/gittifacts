@@ -30,6 +30,7 @@ describe("command table generated from the MCP tool definitions", () => {
       "get_evidence",
       "get_tour",
       "list_issues_for_change",
+      "list_members",
       "list_repos",
       "open_workspace",
       "propose_platform_config",
@@ -94,6 +95,7 @@ describe("command table generated from the MCP tool definitions", () => {
       reprioritize: true,
       queue_overview: true,
       search_tools: true,
+      list_members: true,
     };
     expect(new Set(names)).toEqual(new Set(Object.keys(all)));
   });
