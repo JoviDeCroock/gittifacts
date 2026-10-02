@@ -12,6 +12,7 @@ import type { Caller, Services } from "../app-env.js";
 import { assertTargetAllowed, filterRepos, type RepoTarget } from "../auth/repo-scope.js";
 import { toErrorResponse, unauthorized } from "../errors.js";
 import { runIdempotent } from "../idempotency.js";
+import { createImportMcpBackend } from "../import/mcp.js";
 import { capabilities } from "../services/capabilities.js";
 import {
   getChangeDetail,
@@ -26,6 +27,7 @@ import {
 import { createPlan } from "../services/plans.js";
 import { createProject } from "../services/projects.js";
 import { listRepoSummaries } from "../services/repos.js";
+import { createWorkspaceMcpBackend } from "../workspace/mcp.js";
 
 /** The bearer verifier puts the verified Principal in `authInfo.extra.principal`. */
 function callerFrom(c: McpCaller): Caller {
@@ -57,6 +59,9 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
   };
 
   return {
+    // Remote workspaces (open_workspace, ws_*) and import detection (propose_platform_config).
+    ...createWorkspaceMcpBackend(svc, { scoped, idem }),
+    ...createImportMcpBackend(svc, { scoped, idem }),
     async whoami(mc) {
       const caps = await capabilities(svc, callerFrom(mc));
       return {
