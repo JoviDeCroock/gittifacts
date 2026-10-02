@@ -1,7 +1,9 @@
 /**
  * Outcome prediction (§4.6). A transparent heuristic: a product of named factors, each logged with
  * the prediction (`Telemetry{kind:"prediction"}`) and later with the outcome, so a learned model can
- * replace it. A prediction only sizes and orders batches: it never skips a required check.
+ * replace it. Predictions never skip a required check. Prediction-driven batch sizing and ordering
+ * (likely failures last) lost to a fixed batch size in the simulator and were removed; the
+ * prediction is returned to agents (`enqueue`, `queue_status`) and logged against outcomes.
  */
 import { ALL_TESTS, type Prediction, type QueueEntry } from "./schema.js";
 import type { QueueState } from "./state.js";

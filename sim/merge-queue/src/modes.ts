@@ -10,7 +10,6 @@ export const MODES: Record<string, { label: string; config: () => QueueConfig }>
   "batch-all": { label: "baseline: batch everything, no conflict graph", config: batchAllConfig },
   "no-speculation": { label: "no speculation (1 batch in flight per track)", config: () => queueConfig({ maxSpeculationDepth: 1 }) },
   "no-bisection": { label: "no bisection (re-test each unit alone)", config: () => queueConfig({ features: { bisection: false } }) },
-  "no-prediction": { label: "no prediction (fixed batch size 4, priority order)", config: () => queueConfig({ features: { prediction: false } }) },
   "no-flake-recheck": { label: "no flake re-check", config: () => queueConfig({ features: { flakeRecheck: false } }) },
   "no-resolver": { label: "no conflict resolver (eject conflicts)", config: () => queueConfig({ features: { resolver: false } }) },
   "no-revalidation": { label: "no impacted-target revalidation (stale tracks re-run in full)", config: () => queueConfig({ features: { revalidation: false } }) },

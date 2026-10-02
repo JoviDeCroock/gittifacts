@@ -9,8 +9,6 @@ export const QueueFeatures = z.object({
   conflictGraph: z.boolean().default(true),
   /** §4.3 bisection of failed batches (parallel prefix probes). Off: re-test each unit alone. */
   bisection: z.boolean().default(true),
-  /** §4.6 prediction: adaptive batch size + likely failures last. Off: fixed size, priority order. */
-  prediction: z.boolean().default(true),
   /** §4.7 re-run failing tests on the batch tree and on main before believing a failure. */
   flakeRecheck: z.boolean().default(true),
   /** §4.4 agent conflict resolution. Off: conflicts are ejected. */
@@ -28,12 +26,11 @@ export type QueueFeatures = z.infer<typeof QueueFeatures>;
 
 export const QueueConfig = z.object({
   features: QueueFeatures.default(QueueFeatures.parse({})),
-  /** Upper bound on entries in one batch (a land-together unit may exceed it). */
-  maxBatchSize: z.number().int().min(1).max(64).default(8),
-  /** Batch size when prediction is off. */
-  fixedBatchSize: z.number().int().min(1).max(64).default(4),
-  /** Stop adding entries once the predicted batch pass probability falls below this. */
-  targetBatchPassProbability: z.number().min(0).max(1).default(0.85),
+  /**
+   * Entries per batch (a land-together unit may exceed it). Fixed: prediction-driven sizing and
+   * ordering lost to it in the simulator (see sim/merge-queue/report.md) and was removed.
+   */
+  maxBatchSize: z.number().int().min(1).max(64).default(4),
   /** In-flight (untested) batches a new batch may speculate on, itself included (1 = no speculation). */
   maxSpeculationDepth: z.number().int().min(1).max(32).default(8),
   /**
@@ -88,7 +85,6 @@ export function queueConfig(input: QueueConfigInput = {}): QueueConfig {
 const ALL_OFF: QueueFeatures = {
   conflictGraph: false,
   bisection: false,
-  prediction: false,
   flakeRecheck: false,
   resolver: false,
   revalidation: false,
@@ -106,7 +102,6 @@ export function serialConfig(): QueueConfig {
   return queueConfig({
     features: ALL_OFF,
     maxBatchSize: 1,
-    fixedBatchSize: 1,
     maxSpeculationDepth: 1,
     maxInFlightBatches: 1,
     coBatch: false,

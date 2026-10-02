@@ -163,6 +163,8 @@ class Sim {
   private batchSizes = new Map<string, number>();
   private laneSeen = new Map<string, number>();
   private cancelTally = new Map<string, [number, number, number]>();
+  private kinds = new Map<string, number>();
+  private dbgN = 0;
   private m = {
     mainRed: 0,
     masked: 0,
@@ -232,6 +234,16 @@ class Sim {
           if (process.env.MQ_DEBUG_STUCK === "1") this.dumpStuck();
         }
         this.now = next.at;
+        if (process.env.MQ_DEBUG_PROGRESS === "1") {
+          const k = next.v.k === "core" || next.v.k === "train" || next.v.k === "run-done" || next.v.k === "issue" ? `${next.v.k}:${next.v.e.type}` : next.v.k;
+          this.kinds.set(k, (this.kinds.get(k) ?? 0) + 1);
+          if (this.steps % 2000 === 1999) {
+            process.stderr.write(`kinds ${JSON.stringify([...this.kinds].sort((a, b) => b[1] - a[1]).slice(0, 6))}\n`);
+            this.kinds.clear();
+          }
+        }
+        if (process.env.MQ_DEBUG_PROGRESS === "1" && this.steps % 2000 === 0 && this.steps > 0)
+          process.stderr.write(`t=${(this.now / MINUTE).toFixed(1)}m steps=${this.steps} live=${this.liveEntries()} batches=${Object.keys(this.core.batches).length} heap=${(process.memoryUsage().heapUsed / 1e6).toFixed(0)}MB frozen=${this.core.freeze.reasons.map((r) => r.kind).join(",")} pending=${this.pendingNonTick}\n`);
         this.handle(next.v);
         if (next.v.k === "tick") {
           const idle = this.now > this.arrivalEnd && this.pendingNonTick === 0 && this.liveEntries() === 0;
@@ -250,6 +262,12 @@ class Sim {
   /** Debug: passed batches that have waited > 20 min to land, and why. */
   private dumpStuck(): void {
     const s = this.core;
+    process.stderr.write(`freeze=${JSON.stringify(s.freeze.reasons.map((r) => [r.kind, r.changeId]))}\n`);
+    for (const e of Object.values(s.entries)) {
+      if (e.priority !== "revert" || e.state === "merged") continue;
+      const b = s.batches[e.batchId ?? ""];
+      process.stderr.write(`revert ${e.changeId} ${e.state} hold=${e.hold} batch=${b?.id}:${b?.state} parent=${b?.parentId} carried=${b?.carried.length} lineage=${b?.lineage.filter((x) => s.entries[x]?.state !== "merged").map((x) => `${x}:${s.entries[x]?.priority}:${s.entries[x]?.state}`).join(",")} base==main=${b?.baseSha === s.main.sha} verdict=${b?.verdict?.passed} landing=${s.landing.length} cas=${s.cas?.batchId}\n`);
+    }
     process.stderr.write(`landing=${JSON.stringify(s.landing.map((id) => [id, s.batches[id]?.state, s.batches[id]?.members]))} cas=${s.cas?.batchId ?? null}\n`);
     for (const b of Object.values(s.batches)) {
       if (b.kind !== "chain" || b.state !== "passed" || b.readyAt === null || this.now - b.readyAt < 20 * MINUTE) continue;
@@ -311,7 +329,7 @@ class Sim {
         this.m.maxQueue = Math.max(this.m.maxQueue, this.liveEntries());
         return;
       case "pmf": {
-        const last = [...this.records.values()].filter((r) => r.mergedAt !== null && !r.revert).sort((a, b) => (b.mergedAt ?? 0) - (a.mergedAt ?? 0))[0];
+        const last = [...this.records.values()].filter((r) => r.mergedAt !== null && !r.revert && !this.reverted.has(r.id)).sort((a, b) => (b.mergedAt ?? 0) - (a.mergedAt ?? 0))[0];
         if (last === undefined) return;
         this.sendCore({ type: "PostMergeCheckFailed", sha: this.mainSha, checks: ["deploy-smoke"] });
         this.requestRevert(last.id);
@@ -639,6 +657,10 @@ class Sim {
         return this.onEmit(c.event);
       case "Audit":
         if (c.action === "merge-queue.test-quarantined") this.m.quarantines++;
+        if (c.action === "merge-queue.batches-cancelled" && process.env.MQ_DEBUG_PROGRESS === "1" && this.now > 44 * MINUTE && this.dbgN++ < 10) {
+          const ex = Object.values(this.core.entries).filter((e) => (e.priority === "revert" || e.priority === "incident") && e.state !== "merged" && e.state !== "ejected").map((e) => `${e.changeId}:${e.priority}:${e.state}:${e.hold}:${e.batchId}:deps=${e.dependsOn.join("+")}:wf=${e.waitFor.join("+")}:grp=${e.plangroup}`);
+          process.stderr.write(`cancel ${String(c.payload.why)} batches=${JSON.stringify(c.payload.batches)} express=${ex.join(" ")} cas=${this.core.cas?.batchId}\n`);
+        }
         if (c.action === "merge-queue.batches-cancelled" && process.env.MQ_DEBUG_TAIL === "1") {
           const why = String(c.payload.why).replace(/[a-z]\w*\d\w*/g, "#");
           const t = this.cancelTally.get(why) ?? [0, 0, 0];
@@ -684,6 +706,10 @@ class Sim {
       const ch = this.changes.get(e.changeId);
       if (h === undefined || ch === undefined) throw new Error(`unknown head for ${e.changeId}`);
       const blocker = [...ch.textual].find((p) => ids.has(p) && !gone.has(p) && this.interacts(e.changeId, p) && !this.resolved(e.changeId, h.v, p, ids.get(p)));
+      if (blocker !== undefined && process.env.MQ_DEBUG_PROGRESS === "1" && this.now > 44 * MINUTE && this.dbgN++ < 12) {
+        const b = this.core.batches[c.batchId];
+        process.stderr.write(`conflict build ${c.batchId} entry=${e.changeId} blocker=${blocker} own=${b?.units.flatMap((u) => u.changeIds).join(",")} carried=${b?.carried.length} parent=${b?.parentId} express=${this.core.entries[e.changeId]?.priority} t=${(this.now / MINUTE).toFixed(2)}\n`);
+      }
       if (blocker !== undefined) {
         const files = ch.affected.files.filter((f) => this.changes.get(blocker)?.affected.files.includes(f));
         this.push(this.now + delay, { k: "core", e: { type: "RebaseResult", batchId: c.batchId, result: { status: "conflict", changeId: e.changeId, files, upstream: [blocker] } } });

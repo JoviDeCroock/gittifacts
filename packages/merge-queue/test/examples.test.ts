@@ -21,7 +21,7 @@ const human = { principalId: "human-1", kind: "human" as const, signature: "sig"
 
 describe("bisection (§4.3)", () => {
   it("finds the culprit with parallel prefix probes, ejects only it, and re-forms the rest", () => {
-    const config = queueConfig({ features: { prediction: false }, fixedBatchSize: 4, bisectProbes: 3, maxSpeculationDepth: 1 });
+    const config = queueConfig({ maxBatchSize: 4, bisectProbes: 3, maxSpeculationDepth: 1 });
     const w = new World({ config, precompute: true });
     // z occupies the track; a..d queue up behind it and form one batch.
     w.enqueue({ id: "z", affected: affected({ files: ["x.ts"], tests: ["tx"] }) });
@@ -41,7 +41,7 @@ describe("bisection (§4.3)", () => {
   });
 
   it("re-roots descendants immediately when an ancestor batch fails", () => {
-    const config = queueConfig({ features: { prediction: false }, fixedBatchSize: 1, maxSpeculationDepth: 3 });
+    const config = queueConfig({ maxBatchSize: 1, maxSpeculationDepth: 3 });
     const w = new World({ config, precompute: true });
     for (const id of ["a", "b", "c"]) w.enqueue({ id, affected: affected({ files: ["x.ts"] }), bad: id === "a" });
     // Three batches speculated on top of each other.

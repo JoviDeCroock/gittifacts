@@ -90,7 +90,6 @@ interface PlannedUnit {
   seq: number;
   express: boolean;
   isolate: boolean;
-  p: number;
   /** Incremental dependencies outside the unit. */
   deps: string[];
   flows: Map<string, number>;
@@ -1783,6 +1782,17 @@ class Machine {
     this.emit({ type: "thawed", at: this.now, by: ev.signer.principalId, invalidatedBatches: 0 });
   }
 
+  /** A revert/incident fix not stacked on ordinary work (only those can land while frozen). */
+  private landsWhileFrozen(e: QueueEntry): boolean {
+    return (
+      isExpress(e) &&
+      e.dependsOn.every((d) => {
+        const de = this.entry(d);
+        return de === undefined || de.state === "merged" || isExpress(de);
+      })
+    );
+  }
+
   private isExpressBatch(b: Batch): boolean {
     return ownEntries(b).every((id) => {
       const e = this.entry(id);
@@ -1796,12 +1806,21 @@ class Machine {
    */
   private ensureExpressRouting(): boolean {
     let changed = false;
+    // A landing batch that can't land while frozen must not hold up the reverts stacked behind it.
+    const stuck = this.s.landing.findIndex((lid) => {
+      const l = this.batch(lid);
+      return l !== undefined && !this.landAllowed(this.landingEntriesOf(l)) && !this.batchInCas(l);
+    });
+    if (stuck >= 0) {
+      this.invalidateLanding(stuck, "frozen: only reverts/incident fixes land");
+      changed = true;
+    }
     for (const b of this.activeChain()) {
       if (!this.isActiveChain(b) || this.batchInCas(b)) continue;
       const ids = ownEntries(b);
       const hasExpress = ids.some((id) => {
         const e = this.entry(id);
-        return e !== undefined && isExpress(e);
+        return e !== undefined && this.landsWhileFrozen(e);
       });
       if (!hasExpress) continue;
       const stuck =
@@ -2143,11 +2162,9 @@ class Machine {
       const ids = new Set(ordered.map((e) => e.changeId));
       const flows = new Map<string, number>();
       for (const e of ordered) flows.set(flowKey(e), (flows.get(flowKey(e)) ?? 0) + 1);
-      let p = 1;
-      for (const e of ordered) {
-        e.prediction = this.predictionOf(e);
-        p *= e.prediction.p;
-      }
+      // Predictions are logged with outcomes (a learned model can replace the heuristic) and
+      // returned to agents; they don't steer scheduling (that lost in the simulator).
+      for (const e of ordered) e.prediction = this.predictionOf(e);
       units.push({
         changeIds: ordered.map((e) => e.changeId),
         entries: ordered,
@@ -2155,9 +2172,16 @@ class Machine {
         rank: Math.min(...ordered.map((e) => effectiveRank(e, this.now, cfg))),
         tag: Math.min(...ordered.map((e) => e.wfqTag)),
         seq: Math.min(...ordered.map((e) => e.seq)),
-        express: ordered.every((e) => isExpress(e)),
+        // Express only if it can actually land while frozen: stacked on express (or merged) work.
+        express:
+          ordered.every((e) => isExpress(e)) &&
+          ordered.every((e) =>
+            e.dependsOn.every((d) => {
+              const de = this.entry(d);
+              return de === undefined || de.state === "merged" || isExpress(de);
+            }),
+          ),
         isolate: ordered.some((e) => e.isolate),
-        p,
         deps: [...new Set(ordered.flatMap((e) => e.dependsOn).filter((d) => !ids.has(d)))],
         flows,
       });
@@ -2202,7 +2226,8 @@ class Machine {
         if (this.inChain(de) && de.batchId !== null) depBatches.add(de.batchId);
         else if (de.state !== "merged") return "dep";
       }
-      if (cfg.features.fairness) {
+      // Reverts and incident fixes are never throttled by fair share.
+      if (cfg.features.fairness && !u.express) {
         for (const [f, n] of u.flows) {
           const cur = inFlightPerFlow.get(f) ?? 0;
           if (cur > 0 && cur + n > cfg.maxInFlightPerSession) return "deferred";
@@ -2236,11 +2261,6 @@ class Machine {
         if (!covers) continue;
         const size = ownEntries(o).length;
         if (size > 0 && size + u.changeIds.length > capacity) continue;
-        if (cfg.features.prediction) {
-          let p = u.p;
-          for (const id of ownEntries(o)) p *= this.entry(id)?.prediction?.p ?? 1;
-          if (p < cfg.targetBatchPassProbability) continue;
-        }
         this.joinBatch(o, u);
         index.add(o.id, u.affected);
         planned.set(u.changeIds[0] ?? "", u);
@@ -2273,7 +2293,9 @@ class Machine {
       for (const u of queue) {
         const r = place(u);
         if (r === "placed") changed = true;
-        else if (r === "blocked") blocked.add(`u:${u.changeIds[0]}`, u.affected);
+        // While frozen an express unit that couldn't be placed still goes first: nothing that
+        // conflicts with it may be placed in front of it (else the re-rooting above never ends).
+        else if (r === "blocked" || (r === "deferred" && frozen && u.express)) blocked.add(`u:${u.changeIds[0]}`, u.affected);
         else if (r === "dep") retry.push(u);
       }
       if (retry.length === queue.length) break;
@@ -2301,15 +2323,9 @@ class Machine {
     return d;
   }
 
-  /** Max entries per batch: adaptive to the recent pass rate (prediction on) or fixed. */
+  /** Max entries per batch. */
   private batchCapacity(): number {
-    const cfg = this.cfg;
-    if (!cfg.features.prediction) return cfg.fixedBatchSize;
-    const r = this.s.stats.batchPassRate;
-    if (r < 0.5) return 1;
-    if (r < 0.7) return Math.max(1, Math.floor(cfg.maxBatchSize / 4));
-    if (r < 0.85) return Math.max(1, Math.floor(cfg.maxBatchSize / 2));
-    return cfg.maxBatchSize;
+    return this.cfg.maxBatchSize;
   }
 
   private batchConflicts(b: Batch, a: AffectedSet): boolean {
@@ -2422,32 +2438,8 @@ class Machine {
     }
   }
 
-  /** Likely failures last (prediction), stack order kept; then announce the batch. */
+  /** Announce the batch to the entries that just entered it (and log their predictions). */
   private finalizeBatch(b: Batch, planned: Map<string, PlannedUnit>): void {
-    if (this.cfg.features.prediction && b.units.length > 1) {
-      const pOf = (ids: string[]) => planned.get(ids[0] ?? "")?.p ?? 1;
-      const inBatch = new Set(ownEntries(b));
-      const left = [...b.units];
-      const out: typeof b.units = [];
-      const placed = new Set<string>();
-      while (left.length > 0) {
-        let best = -1;
-        for (let i = 0; i < left.length; i++) {
-          const u = left[i];
-          if (u === undefined) continue;
-          const deps = u.changeIds.flatMap((id) => this.entry(id)?.dependsOn ?? []);
-          if (deps.some((d) => inBatch.has(d) && !placed.has(d) && !u.changeIds.includes(d))) continue;
-          const cur = best < 0 ? undefined : left[best];
-          if (cur === undefined || pOf(u.changeIds) > pOf(cur.changeIds)) best = i;
-        }
-        const [u] = left.splice(best < 0 ? 0 : best, 1);
-        if (u === undefined) break;
-        out.push(u);
-        for (const id of u.changeIds) placed.add(id);
-      }
-      b.units = out;
-      b.lineage = [...b.lineage.filter((x) => !inBatch.has(x)), ...out.flatMap((u) => u.changeIds)];
-    }
     const own = ownEntries(b);
     const fresh = new Set([...planned.values()].flatMap((u) => u.changeIds));
     own.forEach((cid, position) => {
