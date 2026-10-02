@@ -115,6 +115,27 @@
   display: grid;
   justify-items: end;
 }
+/* Phones: the label sits above its value so values keep one line. */
+@media (max-width: 479px) {
+  .case__body {
+    padding-inline: var(--s-4);
+  }
+  .case__row {
+    grid-template-columns: minmax(0, 1fr) 2rem;
+    row-gap: 1px;
+    padding-block: 0.4375rem;
+  }
+  .case__row dt {
+    grid-area: 1 / 1;
+    font-size: var(--text-meta);
+  }
+  .case__row dd {
+    grid-area: 2 / 1;
+  }
+  .case__mark {
+    grid-area: 1 / 2 / 3 / 3;
+  }
+}
 .case__sig {
   margin-block-start: var(--s-4);
   font-size: var(--text-meta);
@@ -224,14 +245,14 @@
 /* ---------------------------------------------------------------- night */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .case {
-    --tag-ground: var(--panel);
+    --tag-ground: var(--panel-strong);
   }
   :root:not([data-theme="light"]) .case__tag {
     filter: drop-shadow(0 12px 28px oklch(0% 0 0 / 0.45));
   }
 }
 :root[data-theme="dark"] .case {
-  --tag-ground: var(--panel);
+  --tag-ground: var(--panel-strong);
 }
 :root[data-theme="dark"] .case__tag {
   filter: drop-shadow(0 12px 28px oklch(0% 0 0 / 0.45));

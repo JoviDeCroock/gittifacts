@@ -102,7 +102,7 @@
 }
 .phone {
   inline-size: min(100%, 18rem);
-  border-radius: 22px;
+  border-radius: var(--r-sheet);
   border: 1px solid var(--rule-strong);
   overflow: hidden;
   box-shadow: var(--shadow-raise);

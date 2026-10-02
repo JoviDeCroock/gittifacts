@@ -224,7 +224,7 @@
   margin: 0;
   padding: 3px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-panel);
   background: var(--panel-strong);
   justify-self: start;
   align-self: start;
