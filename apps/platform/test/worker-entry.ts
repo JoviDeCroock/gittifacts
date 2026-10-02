@@ -8,7 +8,9 @@ import { configureCoordinatorRuntime } from "@app/coordinator/workers";
 import type { Bindings } from "../src/app-env.js";
 import { COORDINATOR_OPTIONS } from "../src/coordinator.js";
 import { buildPorts } from "../src/runtime/ports.js";
+import { configureWorkspaceRuntime } from "../src/workspace/runtime.js";
 import { integrationOverrides } from "./integration/fakes.js";
+import { fakeMachineFor } from "./integration/workspace-fakes.js";
 
 export * from "../src/index.js";
 export { default } from "../src/index.js";
@@ -19,3 +21,6 @@ configureCoordinatorRuntime<Bindings>({
   ports: (env, role) => buildPorts(env, role, { overrides: integrationOverrides(role, env) }),
   coordinatorOptions: COORDINATOR_OPTIONS,
 });
+
+// Workspaces: the real Workspace DO over an in-memory machine (no containers in workerd).
+configureWorkspaceRuntime({ machine: (_ctx, name) => fakeMachineFor(name) });
