@@ -54,7 +54,8 @@
 }
 .ttfg-bars__row {
   display: grid;
-  grid-template-columns: minmax(5.5rem, 11rem) minmax(0, 1fr);
+  /* Phones: a narrow name column, so the plot keeps most of the 358px. */
+  grid-template-columns: 6.5rem minmax(0, 1fr);
   align-items: center;
   gap: var(--s-3);
   min-block-size: 40px;
@@ -231,4 +232,10 @@
 .ttfg-table__over {
   margin-inline-start: var(--s-2);
   font-size: var(--text-meta);
+}
+
+@media (min-width: 640px) {
+  .ttfg-bars__row {
+    grid-template-columns: minmax(5.5rem, 11rem) minmax(0, 1fr);
+  }
 }
