@@ -20,6 +20,8 @@
     "@app/domain": "workspace:*",
     "@app/evidence": "workspace:*",
     "@app/gitwire": "workspace:*",
+    "@app/merge-queue": "workspace:*",
+    "@app/resolver": "workspace:*",
     "zod": "^4.6.5"
   },
   "devDependencies": {}

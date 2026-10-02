@@ -230,6 +230,12 @@ importers:
       '@app/gitwire':
         specifier: workspace:*
         version: link:../gitwire
+      '@app/merge-queue':
+        specifier: workspace:*
+        version: link:../merge-queue
+      '@app/resolver':
+        specifier: workspace:*
+        version: link:../resolver
       zod:
         specifier: ^4.6.5
         version: 4.6.5
