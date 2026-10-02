@@ -19,6 +19,7 @@ import {
   isForkName,
   PUSHABLE_STATUSES,
   resolveRuntime,
+  SYSTEM_PRINCIPAL_ID,
 } from "@app/coordinator";
 import type { Change, Principal, Repo } from "@app/domain";
 import type {
@@ -249,10 +250,15 @@ export async function openWorkspace(
   const workspaceId = workspaceIdFor(change.id);
   const ledger = bindings(svc).PROJECT_LEDGER.getByName(repo.id);
   const usage = await ledger.usage({ cpuSecondsPerDay: limits.cpuSecondsPerDay, atMs: now });
-  if (usage.cpuSecondsRemaining !== null && usage.cpuSecondsRemaining <= 0) {
+  // The platform's own workspaces (import proposals) are short and don't count against the
+  // project's open-workspace limit or block on its quota; their time is still recorded.
+  const platform = caller.principal.id === SYSTEM_PRINCIPAL_ID;
+  if (!platform && usage.cpuSecondsRemaining !== null && usage.cpuSecondsRemaining <= 0) {
     throw quotaExceeded(repo, limits, usage);
   }
-  const reserved = await ledger.reserve({ workspaceId, maxOpen: limits.maxOpen });
+  const reserved = platform
+    ? ({ ok: true } as const)
+    : await ledger.reserve({ workspaceId, maxOpen: limits.maxOpen });
   if (!reserved.ok) {
     const other = reserved.open[0] ?? "<workspaceId>";
     throw new ApiError(

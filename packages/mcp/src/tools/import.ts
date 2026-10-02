@@ -13,7 +13,8 @@ import { z } from "zod";
 import type { McpBackend, McpCaller, MutationOptions } from "../backend.js";
 import type { ToolKit } from "./workspace.js";
 
-export type ProposalStatus = "running" | "proposed" | "failed";
+/** `not-needed`: the repo already has every file the platform would propose. */
+export type ProposalStatus = "running" | "proposed" | "not-needed" | "failed";
 
 export interface ProposalView {
   proposalId: string;
@@ -88,7 +89,7 @@ export const ProposePlatformConfigOutput = {
   properties: {
     proposalId: str,
     repoId: str,
-    status: { enum: ["running", "proposed", "failed"] },
+    status: { enum: ["running", "proposed", "not-needed", "failed"] },
     baseSha: nullableStr,
     planId: nullableStr,
     changeId: nullableStr,
@@ -144,6 +145,14 @@ export function proposalNextSteps(p: ProposalView) {
         title: "Detection is still running: call again to wait for it",
         call: `propose_platform_config({ repoId: ${q(p.repoId)} })`,
         why: "It runs in a sandbox; the same call returns the finished proposal.",
+      },
+    ];
+  }
+  if (p.status === "not-needed") {
+    return [
+      {
+        title: "Nothing to propose: .platform/* and AGENTS.md are already there",
+        call: `start_change({ repoId: ${q(p.repoId)}, title: "<what>", category: "fix" })`,
       },
     ];
   }

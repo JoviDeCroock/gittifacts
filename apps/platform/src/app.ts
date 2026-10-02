@@ -4,6 +4,7 @@ import { type AppOptions, createServices } from "./app-env.js";
 import { authFor, callerOf, requirePrincipal } from "./auth/middleware.js";
 import { getCoordinator } from "./coordinator.js";
 import { fixFor, toErrorResponse } from "./errors.js";
+import { registerImportRoutes } from "./import/routes.js";
 import { handleMcp, MCP_PATH } from "./mcp/route.js";
 import { originOf } from "./oauth/context.js";
 import { registerAuditRoutes } from "./routes/audit.js";
@@ -78,6 +79,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerWellKnownRoutes(app);
   registerIdentityRoutes(app);
   registerRepoRoutes(app);
+  registerImportRoutes(app);
   registerPlanRoutes(app);
   registerChangeRoutes(app);
   registerProjectRoutes(app);

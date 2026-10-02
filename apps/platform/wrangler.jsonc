@@ -173,7 +173,14 @@
     // One per Artifacts push in the namespace (triggers.events below).
     { "name": "push-router", "binding": "PUSH_ROUTER", "class_name": "PushRouter" },
     // One per CI run (instance id = runId = PipelineRun.id).
-    { "name": "ci-run-workflow", "binding": "CI_RUN_WORKFLOW", "class_name": "CiRunWorkflow" }
+    { "name": "ci-run-workflow", "binding": "CI_RUN_WORKFLOW", "class_name": "CiRunWorkflow" },
+    // One per import proposal (pcfg-<repoId>-<sha12>-<n>): detect → draft Plan → Change with the
+    // proposed .platform/* + AGENTS.md pushed to its fork (a human approves; Lane 2).
+    {
+      "name": "platform-config-workflow",
+      "binding": "PLATFORM_CONFIG_WORKFLOW",
+      "class_name": "PlatformConfigWorkflow"
+    }
   ],
 
   // Every push in the namespace starts one PushRouter instance (artifacts.md §1, §6). The target

@@ -36,6 +36,7 @@ interface __BaseEnv_Env {
 	ROLLOUT_WORKFLOW: Workflow<Parameters<import("./src/index").RolloutWorkflow['run']>[0]['payload']>;
 	PUSH_ROUTER: Workflow<Parameters<import("./src/index").PushRouter['run']>[0]['payload']>;
 	CI_RUN_WORKFLOW: Workflow<Parameters<import("./src/index").CiRunWorkflow['run']>[0]['payload']>;
+	PLATFORM_CONFIG_WORKFLOW: Workflow<Parameters<import("./src/index").PlatformConfigWorkflow['run']>[0]['payload']>;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

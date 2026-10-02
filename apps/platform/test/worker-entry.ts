@@ -4,12 +4,15 @@
  * fakes.ts says why each one). Re-configuring after `src/index.ts` ran its own
  * `configureCoordinatorRuntime` makes the Durable Objects and Workflows use these.
  */
+
+import { inspectRepo } from "@app/conventions";
 import { configureCoordinatorRuntime } from "@app/coordinator/workers";
 import type { Bindings } from "../src/app-env.js";
 import { COORDINATOR_OPTIONS } from "../src/coordinator.js";
+import { configureImportRuntime } from "../src/import/detect-job.js";
 import { buildPorts } from "../src/runtime/ports.js";
 import { configureWorkspaceRuntime } from "../src/workspace/runtime.js";
-import { integrationOverrides } from "./integration/fakes.js";
+import { integrationFakes, integrationOverrides } from "./integration/fakes.js";
 import { fakeMachineFor } from "./integration/workspace-fakes.js";
 
 export * from "../src/index.js";
@@ -24,3 +27,14 @@ configureCoordinatorRuntime<Bindings>({
 
 // Workspaces: the real Workspace DO over an in-memory machine (no containers in workerd).
 configureWorkspaceRuntime({ machine: (_ctx, name) => fakeMachineFor(name) });
+
+// Import detection: the real inspection (@app/conventions inspectRepo) over FakeGitHost files,
+// instead of a Runner container job.
+configureImportRuntime({
+  sandbox: () => ({
+    detect: async ({ sha }) => {
+      const files = integrationFakes().git.filesAt(sha);
+      return inspectRepo({ files: Object.keys(files), read: (p) => files[p] ?? null }, { sha });
+    },
+  }),
+});

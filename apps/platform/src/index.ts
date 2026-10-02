@@ -27,6 +27,7 @@ export {
   RolloutWorkflow,
 } from "@app/coordinator/workers";
 export { AuditLog } from "./audit/audit-log-do.js";
+export { PlatformConfigWorkflow } from "./import/workflow.js";
 export { PreviewHost } from "./previews/preview-host.js";
 export { WorkspaceEgressGateway } from "./workspace/egress.js";
 export { ProjectLedger } from "./workspace/ledger-do.js";

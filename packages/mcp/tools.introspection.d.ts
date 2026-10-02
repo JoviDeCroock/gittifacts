@@ -1499,6 +1499,7 @@ export type introspection = {
             "enum": [
               "running",
               "proposed",
+              "not-needed",
               "failed"
             ]
           },
