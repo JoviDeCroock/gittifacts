@@ -17,9 +17,13 @@ const OnboardingView = lazy(() => import("./routes/onboarding.js").then((m) => m
 const NotFound = lazy(() => import("./routes/notfound.js").then((m) => m.NotFound));
 const OAuthConsent = lazy(() => import("./routes/oauth-consent.js").then((m) => m.OAuthConsent));
 const DeviceView = lazy(() => import("./routes/device.js").then((m) => m.DeviceView));
+const ClaimPage = lazy(() => import("./routes/claim.js").then((m) => m.ClaimPage));
 
 /** Agent consent screens: one decision, no navigation to wander off to. */
 const FOCUSED = /^\/(oauth\/consent|device)\/?$/;
+
+/** Claim links: public (an agent hands one to a person who may not be signed in yet) and focused. */
+const PUBLIC = /^\/claim\/[^/]+\/?$/;
 
 function AuthedApp() {
   const { path } = useLocation();
@@ -65,7 +69,18 @@ function RedirectHome() {
 }
 
 function Gate() {
+  const { path } = useLocation();
   const s = session.value;
+  if (PUBLIC.test(path)) {
+    return (
+      <ErrorBoundary>
+        <Router>
+          <Route path="/claim/:token" component={ClaimPage} />
+          <Route default component={NotFound} />
+        </Router>
+      </ErrorBoundary>
+    );
+  }
   if (s.status === "loading") {
     return (
       <div class="splash">

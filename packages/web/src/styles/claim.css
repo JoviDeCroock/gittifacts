@@ -1,0 +1,237 @@
+/*
+ * Claim link (/claim/:token): the consent screens' focused frame and decision bar
+ * (consent.css), with one decision. "What claiming does" carries the teal tick of what you take
+ * on; "Until it's claimed" sits on a neutral panel with a 3px ink rule. Only an expiry under a
+ * day is coloured (carmine, with the words), because that is a state that needs action.
+ */
+
+.claim {
+  display: grid;
+  gap: var(--s-5);
+}
+@media (min-width: 640px) {
+  .claim {
+    padding: var(--s-5);
+    border-radius: var(--r-panel);
+    background: var(--surface);
+    border: 2px solid var(--text);
+    box-shadow: var(--shadow-raise);
+  }
+}
+
+.claim__who {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: center;
+}
+.claim__agent {
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+}
+.claim__noacct {
+  font-size: var(--text-small);
+  color: var(--text-3);
+}
+
+.claim__ask {
+  display: grid;
+  gap: var(--s-2);
+  justify-items: start;
+}
+.claim__title {
+  font-size: var(--text-heading);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.012em;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 1024px) {
+  .claim__title {
+    font-size: var(--text-display);
+  }
+}
+.claim__meta {
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.claim__expiry {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  color: var(--text-2);
+}
+.claim__expiry .icon {
+  flex: none;
+  margin-block-start: 3px;
+  color: var(--text-3);
+}
+.claim__expiry b {
+  font-weight: var(--weight-bold);
+  color: var(--text);
+}
+.claim__when {
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.claim__expiry--urgent {
+  justify-self: stretch;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--danger-tint);
+  border: 1px solid var(--danger-line);
+  color: var(--text);
+}
+.claim__expiry--urgent .icon,
+.claim__expiry--urgent b {
+  color: var(--danger);
+}
+.claim__preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-block-size: 32px;
+  font-weight: var(--weight-medium);
+}
+
+.claim__h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0;
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+}
+
+.claim__does {
+  display: grid;
+  gap: var(--s-2);
+}
+.claim__can {
+  list-style: none;
+  display: grid;
+  gap: var(--s-2);
+}
+.claim__can li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-2);
+  align-items: start;
+  max-inline-size: var(--measure);
+}
+.claim__can .icon {
+  margin-block-start: 4px;
+  color: var(--action-ink);
+}
+
+.claim__limits {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-control);
+  background: var(--panel);
+  border-block-start: 3px solid var(--text);
+}
+.claim__limits ul {
+  display: grid;
+  gap: 2px;
+  padding-inline-start: var(--s-5);
+  font-size: var(--text-small);
+  color: var(--text);
+}
+
+.claim__owner {
+  font-size: var(--text-small);
+  color: var(--text-2);
+  max-inline-size: var(--measure);
+}
+.claim__owner b {
+  color: var(--text);
+}
+
+.claim__check {
+  display: grid;
+  gap: var(--s-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+.claim__check legend {
+  margin-block-end: var(--s-3);
+}
+
+.claim__failure {
+  display: grid;
+  gap: var(--s-1);
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--danger-tint);
+  border: 1px solid var(--danger-line);
+  font-size: var(--text-small);
+}
+.claim__failure-title {
+  font-weight: var(--weight-bold);
+  color: var(--danger);
+}
+
+.claim__audit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-small);
+  color: var(--text-3);
+}
+
+/* ---------------------------------------------------------------- the bar: one action */
+.claim-bar__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 640px) {
+  .claim-bar__actions {
+    grid-template-columns: auto;
+  }
+}
+
+/* ---------------------------------------------------------------- Turnstile */
+.turnstile__host {
+  min-block-size: 65px;
+}
+.turnstile--mock {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  max-inline-size: 360px;
+  min-block-size: 65px;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+}
+.turnstile__mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--control-border);
+  color: var(--text-3);
+}
+.turnstile--ok .turnstile__mark {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--surface);
+}
+.turnstile__text {
+  display: grid;
+  gap: 2px;
+}
+.turnstile__state {
+  font-weight: var(--weight-medium);
+}
+.turnstile__note {
+  font-size: var(--text-meta);
+  color: var(--text-3);
+}

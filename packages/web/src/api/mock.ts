@@ -9,6 +9,7 @@ import invoiceBefore from "./mock-assets/invoice-before.png";
 import { b64u, ago, sha } from "./fixture-kit.js";
 import { type MockDb, chainEvents, createDb, principalRef } from "./fixtures.js";
 import type { RawResponse } from "./client.js";
+import { createClaimMock } from "./mock-claim.js";
 import type { Scenario } from "./scenario-kit.js";
 import type {
   AuditPage,
@@ -439,8 +440,14 @@ function withScenario(id: string | undefined, fn: (s: Scenario) => RawResponse):
   return s ? fn(s) : fail(404, "not_found", "No such change.");
 }
 
+// Claim links are readable signed out, so they are answered before the session check in route().
+const claims = createClaimMock({
+  viewer: () => (signedIn() ? { signedIn: true, principalId: db.me, name: me().name } : { signedIn: false, principalId: null, name: null }),
+});
+
 export async function handle(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<RawResponse> {
   await wait(latency(method));
+  if (path.startsWith("/api/v1/claims/")) return claims.handle(method, path, body);
   const replayKey = method !== "GET" && idempotencyKey ? `${method} ${path} ${idempotencyKey}` : null;
   const replay = replayKey ? idempotent.get(replayKey) : undefined;
   if (replay) return structuredClone(replay);

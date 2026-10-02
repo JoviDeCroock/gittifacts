@@ -73,7 +73,9 @@ export async function signUpWithEmail(name: string, email: string, password: str
 export async function signInWithGitHub(): Promise<AuthResult> {
   if (isMockMode()) return signInWithEmail("maya@acme.dev", "demo");
   const client = await authClient();
-  const { error } = await client.signIn.social({ provider: "github", callbackURL: window.location.pathname || "/" });
+  // Keep `?next=` (e.g. a claim link) so GitHub's round trip lands where the person started.
+  const callbackURL = `${window.location.pathname}${window.location.search}` || "/";
+  const { error } = await client.signIn.social({ provider: "github", callbackURL });
   if (error) return { ok: false, message: error.message ?? "GitHub sign-in did not start." };
   return { ok: true };
 }

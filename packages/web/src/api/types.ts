@@ -186,3 +186,45 @@ export interface AuditPage {
   /** GAP: names and kinds for the principals referenced by `events`. */
   principals?: Record<string, PrincipalRef>;
 }
+
+// ---------------------------------------------------------------- claimable projects (onboarding O3)
+
+export type ClaimStatus = "unclaimed" | "claimed" | "expired";
+
+/** `GET /api/v1/claims/{token}`: what a claim link points at. No auth needed to read it. */
+export interface ClaimView {
+  status: ClaimStatus;
+  project: {
+    id: string;
+    name: string;
+    template: string | null;
+    createdAt: string;
+    expiresAt: string | null;
+    previewUrl: string | null;
+  };
+  createdBy: { kind: "agent"; principalId: string; name: string };
+  claimedBy: { principalId: string; name: string } | null;
+  claimedAt: string | null;
+  /** Plain words, server-provided: what claiming does. */
+  claiming: string[];
+  /** Plain words, server-provided: what an unclaimed project can't do. */
+  limits: string[];
+  turnstile: { siteKey: string };
+  /** Filled from the session cookie when there is one. */
+  viewer: { signedIn: boolean; principalId: string | null; isClaimer: boolean };
+}
+
+/** `POST /api/v1/claims/{token}` body. */
+export interface ClaimInput {
+  turnstileToken: string;
+}
+
+/** `POST /api/v1/claims/{token}` 200. `alreadyClaimed`: this same human had claimed it before. */
+export interface ClaimResult {
+  status: "claimed";
+  project: { id: string; name: string };
+  ownerId: string;
+  claimedAt: string;
+  alreadyClaimed: boolean;
+  next: { repoPath: string };
+}

@@ -16,6 +16,8 @@ import type {
   ChangeDetail,
   ChangeDiff,
   ChangeSummary,
+  ClaimResult,
+  ClaimView,
   CreateAgentInput,
   CreateAgentResponse,
   EvidenceResponse,
@@ -198,6 +200,11 @@ export const api = {
   kill: (changeId: string, reason: string, key?: string) =>
     request<{ change: Change }>("POST", `/api/v1/changes/${enc(changeId)}/kill`, { reason }, key),
   issues: (changeId: string) => request<{ issues: LinkedIssue[] }>("GET", `/api/v1/changes/${enc(changeId)}/issues`),
+
+  // claimable projects (onboarding O3): reading a claim link needs no session; claiming does.
+  claim: (token: string) => request<ClaimView>("GET", `/api/v1/claims/${enc(token)}`),
+  claimProject: (token: string, turnstileToken: string, key?: string) =>
+    request<ClaimResult>("POST", `/api/v1/claims/${enc(token)}`, { turnstileToken }, key),
 
   // audit
   audit: (q: AuditQuery = {}) =>
