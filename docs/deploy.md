@@ -100,3 +100,24 @@ in `apps/platform/src/limits/config.ts`).
 Kill switch, fastest first: set the flag to false in Flagship; or, if Flagship is unreachable,
 `curl -X PUT -H 'content-type: application/json' --cookie '<admin session>' <host>/api/v1/admin/unclaimed-creation -d '{"mode":"off"}'`
 (`"flag"` clears the override; `"on"` only bridges a Flagship that can't be evaluated).
+
+## M4 live check (rollout, regression, automatic revert)
+
+```sh
+pnpm tsx scripts/e2e/m4.ts --url https://gittifacts.<subdomain>.workers.dev \
+  --agent-file agent.json --cookie-jar cookies.txt [--keep]
+```
+
+`agent.json` holds `{ "token": "gtf_…" }` (an agent owned by the human); `cookies.txt` is a human session
+(`curl -c cookies.txt …/api/auth/sign-in/email`). The script creates a `workers-api` project, merges a faster
+rollout policy (human-approved), sets the deploy target, ships `GET /version` (first deploy) and then a Change
+that throws for 40% of `/?n=…` requests behind its flag, with a traffic generator running. It asserts that the
+platform switches the flag off, rolls back, opens a verified pure revert and that no human acted after the review,
+prints the audit timeline with latencies, and deletes the project's Worker (`wrangler delete`) unless `--keep`.
+
+**Project Workers.** `PATCH /api/v1/repos/{repoId}/deploy-target { "script": "api" }` (human repo admin,
+claimed projects only) makes rollouts deploy to `gf-<repoId>-api` in the platform's account. The first rollout
+creates the script with workers.dev on (`https://gf-<repoId>-api.<account>.workers.dev`), Workers Logs and
+Workers Issues on. Every version gets the `FLAGS` (Flagship app `FLAGSHIP_APP_ID`) and `VERSION`
+(`version_metadata`) bindings; bundles may declare plain vars only. Delete a project's Worker with
+`pnpm --filter @app/platform exec wrangler delete --name gf-<repoId>-<script> --force`.

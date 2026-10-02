@@ -874,3 +874,55 @@ have MCP/HTTP parity. The author, the human owning the authoring agent, or a rev
      cap and every other unclaimed limit still apply.
   3. A read-only `PLATFORM_AUDITORS` grant lets the checker read every project once repo membership ships.
 - **Live runs.** These wait for unclaimed creation to be switched on, which in turn waits for repo membership.
+
+## 2026-10-02 — M4 live: project Workers, flags in user code, regressions always end in a revert
+
+**Deploy target** (`PATCH /api/v1/repos/{repoId}/deploy-target { script }`, human with repo:admin, audited
+`repo.deploy-target-set|cleared`). Claimed projects only: unclaimed ones get 403 `unclaimed-limit` (the store guard
+stays the last line of defence). Project Workers run in the platform's own account, so the Worker is always
+`gf-<repoId>-<script>` (`script` = `^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$`). A project can never name the platform's
+Worker (`gittifacts`) or another project's, and `gf-` is reserved for project Workers. No MCP tool: MCP callers are
+agents, and agents can't hold repo:admin.
+
+**First deploy and script settings** (`WorkersDeployer`). A missing script is created with `PUT
+/workers/scripts/{s}` (the bundle at 100%; the response's `deployment_id` is the version), and workers.dev is turned
+on. Later versions are `POST …/versions` + percentage deployments, as before. Every upload `PATCH`es
+`script-settings` with `observability: { enabled, head_sampling_rate: 1, logs: { enabled, invocation_logs },
+issues: { enabled } }`, because rollout health reads Workers Logs per version and a script without them could never
+regress. `currentVersions` of a missing script is `[]`.
+
+**Bindings in user Workers.** Every version gets `FLAGS` (Flagship app `FLAGSHIP_APP_ID`) and `VERSION`
+(`version_metadata`). A bundle may declare plain vars only (`plain_text`, `json`): any resource binding could reach
+the platform's own D1/R2/Workers in this account, so it is refused (`BundleBindingError`) before any API call. The
+names `FLAGS` and `VERSION` are reserved. The contract for user code is `isChangeEnabled(env, "<changeId>")`
+(templates/workers-api `src/flags.ts`, same semantics as `@app/coordinator/flags`). Without a `FLAGS` binding (tests,
+previews, `wrangler dev`), or when the flag is missing or fails to evaluate, the Change counts as on. Known leak:
+one Flagship app serves every project, so user code can *read* other projects' change flags (booleans). A Flagship
+app per project would close it (10k apps per account).
+
+**A bundle to deploy.** The generated `.platform/ci.ts` never declared the build step's `bundle` artifact, so every
+template project's rollout was "skipped: no bundle". It now does for templates whose build output is a modules-only
+Worker (`TemplateSpec.deployable`: workers-api only; asset-based templates aren't deployable yet).
+
+**Switchable Changes.** `switchableFlag` also accepts added code that calls `isChangeEnabled` and quotes the Change's
+own id, not only `change-<id>` literally. Otherwise a template project's guarded Change would deploy without a flag,
+and a train could never switch it off.
+
+**Regressions always end in a revert** (lead decision, platform §4F.3 and merge-queue §4.8):
+- *Single-change train.* The version identifies the Change exactly, so `KillFlag + RollbackTrain + RequestRevert`
+  happen at once. Before, it only killed the flag and kept the bad version live.
+- *Multi-change train.* Kill the most likely flag and watch. If the regression clears, revert that Change. If it
+  hasn't cleared after `killWatchMs`, roll the whole train back **and** revert the attributed Change (before: no
+  revert).
+- *Never revert a revert automatically.* A revert that regresses (more likely an environmental problem) is rolled
+  back and left to a human (`deploy.revert-skipped` / `rollout.revert-skipped` + a `regression-detected`
+  notification). Reverting it would re-apply the Change that just regressed, and over fakes it ping-ponged.
+
+**Train watch window.** `TrainDeployed` carries an optional `watchMs` (additive). The shell sends `stages ×
+stageMinutes + watchMinutes` from the deploy-time policy. Before, the window was fixed when the repo's queue first
+started, from whatever policy it had then (60 min with the default policy).
+
+**Rollout timing for the e2e.** Policy is read from BASE, so `scripts/e2e/m4.ts` gets short stages the honest way: the
+agent proposes a `.platform/policy.ts` change (`stages [50, 100]`, `stageMinutes 2`, `watchMinutes 3`,
+`minRequests 20`, `maxErrorRateIncrease 0.05`). It is Lane 2, a human approves it, and the merge queue merges it
+before the deploy target is set. There is no create-time policy override and no agent bypass.
