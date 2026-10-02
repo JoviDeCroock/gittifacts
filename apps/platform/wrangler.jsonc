@@ -35,7 +35,10 @@
     // an `UNCLAIMED_LIMITS` JSON var. Optional, set outside this file: TURNSTILE_SITE_KEY (var)
     // and TURNSTILE_SECRET_KEY (secret) for the claim page (unset: Cloudflare's test keys), and
     // PLATFORM_ADMINS (comma-separated e-mails) for the kill-switch override endpoint.
-    "UNCLAIMED_TTL_DAYS": "7"
+    "UNCLAIMED_TTL_DAYS": "7",
+    // Merge queue deploy trains (docs/prompts/03-merge-queue.md §4.8): merged Changes deploy in
+    // per-Worker trains with flag-first attribution. "off" = one RolloutWorkflow per Change.
+    "MERGE_QUEUE_TRAINS": "on"
   },
 
   // The preview gateway: every *-pv.resynapse.dev request reaches this Worker. Previews are
@@ -192,6 +195,9 @@
     { "name": "push-router", "binding": "PUSH_ROUTER", "class_name": "PushRouter" },
     // One per CI run (instance id = runId = PipelineRun.id).
     { "name": "ci-run-workflow", "binding": "CI_RUN_WORKFLOW", "class_name": "CiRunWorkflow" },
+    // One per merge-queue batch run / flake re-check (mq-<repoId>-<epoch>-<runId>): CI on the
+    // batch's refs/queue/<batchId> commit in the main repo, fail fast, result to the MergeQueue DO.
+    { "name": "batch-run-workflow", "binding": "BATCH_RUN_WORKFLOW", "class_name": "BatchRunWorkflow" },
     // One per import proposal (pcfg-<repoId>-<sha12>-<n>): detect → draft Plan → Change with the
     // proposed .platform/* + AGENTS.md pushed to its fork (a human approves; Lane 2).
     {
