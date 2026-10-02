@@ -244,7 +244,7 @@ export function describeError(err: unknown, what = "this"): ErrorCopy {
       case err.status === 404:
         return {
           title: `We couldn't find ${what}`,
-          detail: "It may have been removed, the link may be wrong, or it belongs to a repository you are not a member of. Its owner can add you under Members.",
+          detail: "It may have been removed, or the link may be wrong. Anything in a repository you are not a member of also looks missing; its owner can add you.",
           retry: false,
         };
       case err.status === 409:

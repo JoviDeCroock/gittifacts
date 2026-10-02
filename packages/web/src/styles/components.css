@@ -654,3 +654,8 @@ a.btn:hover {
     margin-block: -11px;
   }
 }
+
+/* Code that wraps at "/" before it ever breaks inside a word. */
+.breakable {
+  overflow-wrap: break-word;
+}

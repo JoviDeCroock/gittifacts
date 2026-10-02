@@ -2,7 +2,7 @@
  * Shared primitives. Every control ships default, hover, focus, active, disabled and loading.
  */
 import type { Lane, TourVerdict } from "@app/domain";
-import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ComponentChildren } from "preact";
+import { type AnchorHTMLAttributes, type ButtonHTMLAttributes, type ComponentChildren, Fragment } from "preact";
 import { useRef } from "preact/hooks";
 import { describeError } from "../api/client.js";
 import type { PrincipalKind } from "../api/types.js";
@@ -349,5 +349,30 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
         {label}
       </span>
     </button>
+  );
+}
+
+/** Code that may wrap: breaks after "/" (inside URLs) before it ever breaks mid-word. */
+export function BreakableCode({ text }: { text: string }) {
+  const parts = text.split(/(?<=\/)/);
+  return (
+    <code class="breakable">
+      {parts.map((p, i) => (
+        <Fragment key={i}>
+          {p}
+          {i < parts.length - 1 ? <wbr /> : null}
+        </Fragment>
+      ))}
+    </code>
+  );
+}
+
+/** A command a person will paste: selectable text first, a copy button beside it. */
+export function Command({ text }: { text: string }) {
+  return (
+    <span class="cmd">
+      <BreakableCode text={text} />
+      <CopyButton text={text} />
+    </span>
   );
 }

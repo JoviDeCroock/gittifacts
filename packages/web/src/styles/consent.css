@@ -350,9 +350,15 @@
   font-size: var(--text-small);
   color: var(--text-2);
 }
+.device-entry__how .cmd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-2);
+}
 .device-entry__how code {
   font-family: var(--font-code);
   font-size: var(--text-code);
   color: var(--text);
-  overflow-wrap: anywhere;
 }
