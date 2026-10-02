@@ -1160,3 +1160,90 @@ anyway because the hotfix only removes a P0 and changes nothing else. The access
 **Prevention.** `scripts/deploy-clean.sh` now gates every deploy on `pnpm -r typecheck` plus the full platform test suite at
 the exact commit. `--skip-tests` is for emergencies only and needs a recorded reason. Store changes need workerd tests
 against real D1.
+
+## 2026-10-02 — Repo membership: basic access control (one chokepoint, `apps/platform/src/access/`)
+
+**Why.** Until now repo access was decided by global scopes only, and every signed-up human holds all of them: anyone
+could list every repo, read every change, evidence package, tour and audit event, and approve plans and review changes
+on repos they have nothing to do with, unclaimed projects included. That broke least privilege and "humans approve
+intent" (the human must be one the repo trusts).
+
+**Model.** `repo_members(repo_id, principal_id, role, added_by, added_at)`; roles `reader < reviewer < maintainer <
+owner`. Only humans are members. Needs and the least role that meets them:
+
+| need | role | what |
+|---|---|---|
+| `read` | reader | repo, plans, changes, diff, evidence, tour, rollout, issues, reviews, queue, members, blobs, SSE, its audit events |
+| `contribute` | reviewer | create_plan, start_change, push tokens, request_review, workspaces, enqueue/dequeue/reprioritize, propose_platform_config, withdraw own plan |
+| `review` | reviewer | submit a review on a change |
+| `approve` | maintainer | approve/reject a plan, kill switch on a rollout |
+| `admin` | owner | members, deploy target, Lane 0, merge-queue freeze/thaw/resume |
+
+`contribute` sits at `reviewer`, not `reader`: on this platform humans don't write code, their agents do, so the
+person whose agents open Changes is a reviewer of the repo; a reader is an observer (stakeholder, auditor) whose
+agents can read and nothing else. Separation of duties stays where it was: no principal approves its own Plan or
+Change; an owner approving its own agent's Change is allowed and recorded (`approverOwnsAuthor`, `viaOwner`).
+
+**Effective role** (`effectiveRole`/`repoAccess`): system → owner everywhere. Human → its membership row; none on an
+unclaimed project (nobody is a member until someone claims it, so **no human can review or approve anything in an
+unclaimed project**). Owned agent → its owner's role, only within `repoIds` when set (outside: 403
+`repo-not-granted`, as in O4); global scopes stay a second ceiling (`NEED_SCOPES`), and review/approve/admin are
+humans-only, so an agent tops out at read + contribute. Ownerless agent (O3) → `reviewer` on its own unclaimed project
+only (enough to contribute; it still can never approve). Integration → `reader` on its installation's repos while the
+installing human is still a member (`restrictedRepoIds`, fail closed). Platform auditors (below) → `reader`
+everywhere.
+
+**Errors.** A repo the caller cannot read answers exactly like a missing one: 404 `not-found` with the same message
+and fix for repos, plans and changes (a 403 would confirm the id exists). A visible repo without the role is 403
+`insufficient-role` (`details: { repoId, role, needed }`, fix: `list_members`); the agent/human and scope ceilings
+keep `forbidden` / `insufficient-scope`.
+
+**One chokepoint, applied in layers.**
+- `requirePrincipal(scopes, { need? })` → `assertRouteAccess`: the repo of every `{repoId}`/`{planId}`/`{changeId}`
+  path param, JSON body `repoId`/`planId`/`changeId`, and audit `subject` must allow the route's need (derived from
+  its scopes: repo:admin/policy:admin → admin, plan:approve → approve, change:review → review, plan:create/
+  change:create → contribute, else read; the kill switch passes `need: "approve"`). This covers every route,
+  including those of other modules (queue, import, workspaces, integrations) without editing them.
+- Services re-check on what they load (`assertRepoAccess` / `assertChangeAccess` / `assertPlanAccess`): every
+  read in services/changes.ts, plans.ts, repos.ts take the caller now. Checks are memoized per request.
+- Listings filter: `GET /repos`, `list_repos`, capabilities/whoami (with the caller's `role` per repo and actions
+  from role × scopes), the OAuth consent repo picker (it listed every claimed repo to anyone), blobs
+  (404), audit (one SQL condition: events on repos you can read and their plans/changes, events about yourself and
+  your agents; platform-wide subjects only for `PLATFORM_ADMINS`; auditors and the system see everything).
+- MCP: `scoped()` checks every tool's target (default `read`), and every mutation goes through `idem`, which demands
+  `contribute` on the target its `scoped()` named; create_plan/start_change/refresh_push_token pass `contribute`
+  explicitly.
+- Coordinator: an optional `RepoAccess` port (`Ports.access`) that the facade asks on startChange,
+  refreshPushGrant, abandon (own: contribute, others': review), submitReview (review), kill (approve), setLane0
+  (admin), startBootstrapChange (contribute), waitFor/watchChange (read); `hidden` answers like a missing
+  repo/change. The platform wires it in `getCoordinator`; the system principal is never asked.
+
+**Other platform-wide surfaces closed on the way.** The OAuth consent repo picker listed every claimed repo to any
+signed-in human (now: claimed repos the human is a member of). `GET /principals/{id}` showed any principal's
+scopes and repo grants (now: principals you share a readable repo with, your own, your owner; else 404).
+`/internal/ttfg` (every project's id and timings) is for `PLATFORM_ADMINS` and auditors, and
+`POST /admin/seed-cache` for admins: both were open to every human, who all hold `repo:admin`.
+
+**Membership API.** `GET /api/v1/repos/{repoId}/members` (anyone who can read; e-mails only for owners),
+`POST …/members { email | principalId, role }` (human owner; adds an existing user, or changes a role; 201/200),
+`DELETE …/members/{principalId}` (owner, or a member leaving). The last owner can never be removed or demoted: the
+guard is inside the DELETE/UPDATE statement, so two owners removing each other at once cannot both win (409).
+Audited as `repo.member-added`, `repo.member-role-changed`, `repo.member-removed` on `repo:<id>`. MCP parity is
+read-only (`list_members`); managing members is a human act. Web: repo → Members.
+
+**Owners.** `D1Store.insertRepo` makes a claimed repo's `claim.ownerId` (the creator, or an agent's owner) an `owner`
+member in the same D1 batch; `updateRepo` does the same when the claim owner changes (claiming). The owner must be a
+human principal (checked first, so the FK can never sink the repo write). `claim.ownerId` stays the record of who
+created/claimed it; access is `repo_members`. Migration 0009 creates the table and backfills an owner for every
+claimed repo (claim owner, else the human creator, else the creating agent's owner); repos with none of those stay
+reachable only by the system and auditors.
+
+**Platform auditors (`PLATFORM_AUDITORS`, comma-separated principal ids, humans or agents).** Read-only access to
+every repo, unclaimed projects included, and the whole audit log — for the onboarding eval's checker. An auditor is
+refused on every mutation: any non-GET route through `requirePrincipal`, create_project/POST /repos, and every MCP
+mutation (its role is `reader` everywhere, even on repos it is a member of). Use a dedicated principal.
+
+**Deviations.** `DELETE` names the member in the path (`/members/{principalId}`) rather than the body. Agents and
+integrations are not member rows (their access always derives from a human's row). Integration-only scopes count as
+`read` for the repos of an installation (the route's own scope list still applies). The O3 note "any signed-in
+human can review an unclaimed project's Changes" is closed by this entry.

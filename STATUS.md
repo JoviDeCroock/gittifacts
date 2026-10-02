@@ -41,6 +41,14 @@ Specs:
 | `apps/sandbox` | `gittifacts-runner` (plan, policy, evidence ×9, diff, preview) and its container image | 57, incl. 9-fixture e2e |
 | `@app/web` | 9 screens, mock backend, 45 screenshots in `docs/screenshots/` | 35 |
 
+Repo access (membership): `repo_members` with reader < reviewer < maintainer < owner, one chokepoint in
+`apps/platform/src/access/` used by `requirePrincipal` (every route's repo/plan/change param, body and audit subject),
+the services, listings (repos, capabilities, audit, consent picker, principals), blobs, SSE, the MCP backend and the
+coordinator facade (`RepoAccess` port). Non-members get 404; unclaimed projects have no members (nobody reviews or
+approves them until claimed); claiming makes the claimer owner; `PLATFORM_AUDITORS` read everything, write nothing.
+Membership API + `list_members` + web repo → Members. Deploy needs migration 0009 (backfills owners).
+Tests: `apps/platform/test/access*.test.ts`, `test/integration/access-claim.test.ts`, coordinator `repo-access`.
+
 Also: `templates/` (4 templates, CI path 5–8 s each) and `fixtures/` (9 change fixtures, verified end to end).
 
 Landing page: `/` serves a prerendered marketing page to visitors without a session (the app to signed-in
