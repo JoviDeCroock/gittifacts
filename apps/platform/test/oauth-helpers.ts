@@ -216,11 +216,19 @@ export function mcpClient(app: TestApp, token: string) {
   return createPlatformClient(`${ORIGIN}/mcp`, token, { fetch: fetchVia(app) });
 }
 
-/** POST /mcp with a raw JSON-RPC body (for status/header assertions). */
+/**
+ * POST /mcp with a raw JSON-RPC body (for status/header assertions). A tool that needs a token:
+ * since O3, initialize, tools/list, create_project and whoami are also served without one.
+ */
 export async function rawMcp(app: TestApp, token?: string): Promise<Response> {
   return call(app, "POST", "/mcp", {
     ...(token ? { token } : {}),
     headers: { accept: "application/json, text/event-stream" },
-    body: { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+    body: {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: "list_repos", arguments: {} },
+    },
   });
 }

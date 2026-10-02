@@ -153,7 +153,13 @@ describe("POST /mcp", () => {
 
   it("rejects missing/human/invalid bearer tokens and foreign origins", async () => {
     const { app, human, agent } = await setup();
-    const rpc = { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} };
+    // A tool that needs a token (O3: tools/list, create_project and whoami work without one).
+    const rpc = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: "list_repos", arguments: {} },
+    };
     const headers = {
       accept: "application/json, text/event-stream",
       "mcp-protocol-version": "2025-11-25",

@@ -10,6 +10,7 @@ import { configureCoordinatorRuntime } from "@app/coordinator/workers";
 import type { Bindings } from "../src/app-env.js";
 import { COORDINATOR_OPTIONS } from "../src/coordinator.js";
 import { configureImportRuntime } from "../src/import/detect-job.js";
+import { withUnclaimedLimits } from "../src/limits/ci-quota.js";
 import { buildPorts } from "../src/runtime/ports.js";
 import { configureWorkspaceRuntime } from "../src/workspace/runtime.js";
 import { integrationFakes, integrationOverrides } from "./integration/fakes.js";
@@ -21,7 +22,9 @@ export { default } from "../src/index.js";
 export { TestPreviewHost as PreviewHost } from "./integration/preview-fakes.js";
 
 configureCoordinatorRuntime<Bindings>({
-  ports: (env, role) => buildPorts(env, role, { overrides: integrationOverrides(role, env) }),
+  // Like src/index.ts: every role's CI port goes through the unclaimed-project gate.
+  ports: (env, role) =>
+    withUnclaimedLimits(buildPorts(env, role, { overrides: integrationOverrides(role, env) }), env),
   coordinatorOptions: COORDINATOR_OPTIONS,
 });
 

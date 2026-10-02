@@ -76,6 +76,11 @@ export class AbuseLimiter extends DurableObject<unknown> {
     }
   }
 
+  /** Forget every bucket of this key (an operator clearing a key after an incident; tests). */
+  async reset(): Promise<void> {
+    await this.ctx.storage.deleteAll();
+  }
+
   /** Current levels (tests and the admin view). */
   async levels(input: { buckets: BucketSpec[]; atMs: number }): Promise<Record<string, number>> {
     const out: Record<string, number> = {};
