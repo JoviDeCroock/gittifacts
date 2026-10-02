@@ -301,6 +301,7 @@ export function RepoChanges({ repoId }: { repoId: string }) {
             {pl.status === "loading" ? <Loading label="Loading plans" lines={3} /> : null}
             {pl.status === "error" ? <ErrorState error={pl.error} what="plans" onRetry={plans.reload} /> : null}
             {pl.status === "ok" && others.length === 0 && drafts.length === 0 ? <p class="side-block__empty">No plans yet. Agents and people draft them through the API.</p> : null}
+            {pl.status === "ok" && others.length === 0 && drafts.length > 0 ? <p class="side-block__empty">No approved plans yet. {drafts.length === 1 ? "The plan" : "The plans"} waiting for approval {drafts.length === 1 ? "is" : "are"} listed above the changes.</p> : null}
             {others.length > 0 ? (
               <ul class="plan-mini">
                 {others.map((p) => (

@@ -45,9 +45,19 @@
   font-size: var(--text-small);
 }
 .plan-doc__intent {
+  display: grid;
+  gap: var(--s-3);
   max-inline-size: var(--measure);
   font-size: 1.0625rem;
   line-height: 1.65;
+}
+.plan-doc__intent ul {
+  display: grid;
+  gap: var(--s-1);
+  padding-inline-start: var(--s-5);
+}
+.plan-doc__intent li::marker {
+  color: var(--text-3);
 }
 .criteria {
   list-style: none;

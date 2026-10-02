@@ -4,6 +4,7 @@ import { useRef } from "preact/hooks";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { PrincipalRef, RepoDetail } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
+import { Prose, ProseBlocks } from "../components/Prose.js";
 import { Page } from "../components/Shell.js";
 import { Button, ErrorState, Hash, LaneTag, Loading, StatusChip, Who } from "../components/ui.js";
 import { formatDateTime, relative } from "../lib/time.js";
@@ -188,7 +189,7 @@ function PlanDoc({ data }: { data: PlanData }) {
     <article class="plan-doc">
       <section class="plan-sec" aria-labelledby="intent">
         <h2 id="intent">Intent</h2>
-        <p class="plan-doc__intent">{plan.intent}</p>
+        <ProseBlocks text={plan.intent} class="plan-doc__intent" />
       </section>
 
       <section class="plan-sec" aria-labelledby="criteria">
@@ -201,7 +202,9 @@ function PlanDoc({ data }: { data: PlanData }) {
               <span class="criteria__n tnum" aria-hidden="true">
                 {i + 1}
               </span>
-              <span>{c}</span>
+              <span>
+                <Prose text={c} />
+              </span>
             </li>
           ))}
         </ol>
@@ -216,7 +219,9 @@ function PlanDoc({ data }: { data: PlanData }) {
             {plan.outOfScope.map((o, i) => (
               <li key={i}>
                 <Icon name="minus" size={16} />
-                <span>{o}</span>
+                <span>
+                  <Prose text={o} />
+                </span>
               </li>
             ))}
           </ul>
@@ -235,7 +240,9 @@ function PlanDoc({ data }: { data: PlanData }) {
                   <Icon name="triangle-alert" size={16} />
                   {r.area}
                 </dt>
-                <dd>{r.description}</dd>
+                <dd>
+                  <Prose text={r.description} />
+                </dd>
               </div>
             ))}
           </dl>
