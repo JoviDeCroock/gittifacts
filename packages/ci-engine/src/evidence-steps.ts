@@ -15,6 +15,7 @@ import {
 import { shellQuote } from "./runner/shell.js";
 
 export const EVIDENCE_KINDS = [
+  "test-run",
   "red-green",
   "coverage",
   "mutation",
@@ -26,6 +27,7 @@ export const EVIDENCE_KINDS = [
 export type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
 
 export const EvidenceStepName = z.enum([
+  "evidence:test-run",
   "evidence:red-green",
   "evidence:coverage",
   "evidence:mutation",
@@ -136,6 +138,14 @@ export function defaultEvidenceSteps(opts: EvidenceOptions): EvidenceStepSpec[] 
     },
   ];
   if (testCommand !== null) {
+    // The whole suite at head as a signed `test-run` item: the classifier requires one, and the
+    // user's own `test` step only reports an exit code.
+    steps.push({
+      name: "evidence:test-run",
+      command: evidenceCommand("test-run", { ...common, testCommand }),
+      parent: installStep,
+      requiresGreen: false,
+    });
     steps.push({
       name: "evidence:coverage",
       command: evidenceCommand("coverage", { ...common, testCommand }),

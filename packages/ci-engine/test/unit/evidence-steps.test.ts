@@ -31,6 +31,7 @@ describe("defaultEvidenceSteps", () => {
       ["evidence:dependencies", null, false],
       ["evidence:policy", null, false],
       ["evidence:red-green", "install", false],
+      ["evidence:test-run", "install", false],
       ["evidence:coverage", "install", true],
       ["evidence:mutation", "install", true],
       ["evidence:public-api", "install", false],

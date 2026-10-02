@@ -302,6 +302,7 @@ describe("CiRunWorkflow", () => {
       "evidence:dependencies",
       "evidence:policy",
       "evidence:red-green",
+      "evidence:test-run",
       "evidence:coverage",
       "evidence:mutation",
     ]);
