@@ -198,7 +198,8 @@ export class PlatformPreviews implements Previews {
           continue;
         }
         const key = `screenshots/${input.changeId}/${input.headSha.slice(0, 12)}/${viewport}${routeKey(route)}.png`;
-        await this.env.BLOBS.put(key, res.body, {
+        // R2 needs a known length; Browser Run streams the PNG, so buffer it (screenshots are small).
+        await this.env.BLOBS.put(key, await res.arrayBuffer(), {
           httpMetadata: { contentType: "image/png" },
           customMetadata: { changeId: input.changeId },
         });
