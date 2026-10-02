@@ -1,7 +1,7 @@
 import type { Repo } from "@app/domain";
 import { describe, expect, it } from "vitest";
 import { deployScriptName } from "../src/services/repos.js";
-import { repoFixture, store } from "./fixtures.js";
+import { addMember, repoFixture, store } from "./fixtures.js";
 import { call, createAgent, expectError, json, makeApp, signUpHuman } from "./http.js";
 
 async function world(over: Partial<Repo> = {}) {
@@ -9,7 +9,11 @@ async function world(over: Partial<Repo> = {}) {
   const human = await signUpHuman(app);
   const agent = await createAgent(app, human.cookie);
   const s = store();
-  const repo = repoFixture(over);
+  // The human creates (owns) the repo: D1Store.insertRepo makes it an owner member.
+  const repo = repoFixture({
+    claim: { status: "claimed", ownerId: human.principal.id, expiresAt: null },
+    ...over,
+  });
   await s.insertRepo(repo);
   return { app, human, agent, s, repo };
 }
@@ -48,16 +52,27 @@ describe("PATCH /api/v1/repos/{repoId}/deploy-target", () => {
     expect(deployScriptName("r1", "api")).not.toBe(deployScriptName("r2", "api"));
   });
 
-  it("refuses unclaimed projects with a fix", async () => {
+  it("refuses unclaimed projects: no human is a member of one, so it is not even there", async () => {
     const { app, human, repo } = await world({
       claim: { status: "unclaimed", ownerId: null, expiresAt: "2099-01-01T00:00:00.000Z" },
     });
-    const body = await expectError(
+    await expectError(
       await call(app, "PATCH", path(repo.id), { cookie: human.cookie, body: { script: "api" } }),
-      403,
-      "unclaimed-limit",
+      404,
+      "not-found",
     );
-    expect(body.error.message).toContain("deploy target");
+  });
+
+  it("is for the repo's owners: a maintainer is refused with insufficient-role", async () => {
+    const { app, s, repo } = await world();
+    const maintainer = await signUpHuman(app, "Max");
+    await addMember(s, repo.id, maintainer.principal.id, "maintainer");
+    const body = await expectError(
+      await call(app, "PATCH", path(repo.id), { cookie: maintainer.cookie, body: { script: "api" } }),
+      403,
+      "insufficient-role",
+    );
+    expect(body.error.details).toMatchObject({ role: "maintainer", needed: "owner" });
   });
 
   it("is for humans only and validates the name", async () => {

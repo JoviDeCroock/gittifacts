@@ -114,7 +114,7 @@ describe("authorization code + PKCE → MCP", () => {
     const { app } = makeApp();
     const { seen } = mockCimd();
     const human = await signUpHuman(app, "Maya");
-    const [repoX, repoY] = await seedRepos(2);
+    const [repoX, repoY] = await seedRepos(2, human.principal.id);
     const s = store();
     const changeX = changeFixture(repoX!.id, human.principal.id);
     const changeY = changeFixture(repoY!.id, human.principal.id);
@@ -221,7 +221,7 @@ describe("authorization code + PKCE → MCP", () => {
     const { app } = makeApp();
     mockCimd();
     const human = await signUpHuman(app);
-    const [repo] = await seedRepos(1);
+    const [repo] = await seedRepos(1, human.principal.id);
     const a = await connectClient(app, human.cookie, { repoIds: [repo!.id] });
     const b = await connectClient(app, human.cookie, { repoIds: null });
     const sessions = await json<{ sessions: { principalId: string; repoIds: string[] | null }[] }>(
@@ -239,7 +239,7 @@ describe("authorization code + PKCE → MCP", () => {
     const { app } = makeApp();
     mockCimd();
     const human = await signUpHuman(app);
-    const [repo] = await seedRepos(1);
+    const [repo] = await seedRepos(1, human.principal.id);
     const first = await connectClient(app, human.cookie, { repoIds: [repo!.id] });
 
     const refreshed = await postForm(app, "/api/oauth/token", {
@@ -301,7 +301,7 @@ describe("authorization code + PKCE → MCP", () => {
     const { app } = makeApp();
     mockCimd();
     const human = await signUpHuman(app);
-    const [repo] = await seedRepos(1);
+    const [repo] = await seedRepos(1, human.principal.id);
     const { verifier, challenge } = await pkce();
     const id = await startAuthorize(app, { challenge });
     const { code } = await approveRequest(app, human.cookie, id, { repoIds: [repo!.id] });
@@ -356,7 +356,7 @@ describe("rejections", () => {
     const { app } = makeApp();
     mockCimd();
     const human = await signUpHuman(app);
-    const [repo] = await seedRepos(1);
+    const [repo] = await seedRepos(1, human.principal.id);
     const { challenge } = await pkce();
     const id = await startAuthorize(app, { challenge });
     const { code } = await approveRequest(app, human.cookie, id, { repoIds: [repo!.id] });
@@ -387,7 +387,7 @@ describe("rejections", () => {
     expect(loc.searchParams.get("error")).toBe("invalid_target");
 
     const human = await signUpHuman(app);
-    const [repo] = await seedRepos(1);
+    const [repo] = await seedRepos(1, human.principal.id);
     const { verifier, challenge } = await pkce();
     const id = await startAuthorize(app, { challenge });
     const { code } = await approveRequest(app, human.cookie, id, { repoIds: [repo!.id] });
@@ -409,7 +409,7 @@ describe("rejections", () => {
     const { app } = makeApp();
     mockCimd();
     const human = await signUpHuman(app);
-    const [repo] = await seedRepos(1);
+    const [repo] = await seedRepos(1, human.principal.id);
     const mcpOnly = await connectClient(app, human.cookie, { repoIds: [repo!.id] });
     const body = await expectError(
       await call(app, "GET", "/api/v1/me", { token: mcpOnly.access_token }),
@@ -475,7 +475,7 @@ describe("rejections", () => {
     mockCimd();
     const maya = await signUpHuman(app, "Maya");
     const eve = await signUpHuman(app, "Eve");
-    const [repo] = await seedRepos(1);
+    const [repo] = await seedRepos(1, maya.principal.id);
     const id = await startAuthorize(app, { challenge: "a".repeat(43) });
     const view = await call(app, "GET", `/api/v1/oauth/requests/${id}`, { cookie: maya.cookie });
     expect(view.status).toBe(200);

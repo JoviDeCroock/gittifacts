@@ -103,11 +103,12 @@ export async function expectOAuthError(
   return body;
 }
 
-export async function seedRepos(n: number): Promise<Repo[]> {
+/** `n` claimed repos; `ownerId` (a human) owns them, so it can see them and delegate them. */
+export async function seedRepos(n: number, ownerId: string | null = null): Promise<Repo[]> {
   const s = store();
   const out: Repo[] = [];
   for (let i = 0; i < n; i++) {
-    const r = repoFixture();
+    const r = repoFixture({ claim: { status: "claimed", ownerId, expiresAt: null } });
     await s.insertRepo(r);
     out.push(r);
   }

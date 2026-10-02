@@ -31,7 +31,7 @@ afterEach(() => {
 async function world(app: TestApp) {
   mockCimd();
   const human = await signUpHuman(app, "Maya");
-  const [repoX, repoY] = await seedRepos(2);
+  const [repoX, repoY] = await seedRepos(2, human.principal.id);
   const s = store();
   const planX = planFixture(repoX!.id, human.principal.id);
   const planY = planFixture(repoY!.id, human.principal.id);
@@ -160,7 +160,7 @@ describe("repo scoping", () => {
     const { app } = makeApp();
     mockCimd();
     const human = await signUpHuman(app);
-    const repos = await seedRepos(2);
+    const repos = await seedRepos(2, human.principal.id);
     const all = await connectClient(app, human.cookie, { repoIds: null, resource: API_RESOURCE });
     const list = await json<{ repos: { id: string }[] }>(
       await call(app, "GET", "/api/v1/repos", { token: all.access_token }),
@@ -201,7 +201,7 @@ describe("agents can never approve (every path)", () => {
       expect((await json<{ error: string }>(dc)).error).toBe("invalid_scope");
     }
     const human = await signUpHuman(app);
-    const [repo] = await seedRepos(1);
+    const [repo] = await seedRepos(1, human.principal.id);
     const t = await connectClient(app, human.cookie, { repoIds: [repo!.id] });
     await expectOAuthError(
       await postForm(app, "/api/oauth/token", {
@@ -219,7 +219,7 @@ describe("agents can never approve (every path)", () => {
     const { app } = makeApp();
     mockCimd();
     const human = await signUpHuman(app);
-    const [repo] = await seedRepos(1);
+    const [repo] = await seedRepos(1, human.principal.id);
     const id = await startAuthorize(app, { challenge: "a".repeat(43) });
     const dc = await json<{ user_code: string }>(
       await postForm(app, "/api/auth/device/code", { client_id: "gittifacts-cli" }),

@@ -62,7 +62,7 @@ describe("device flow (RFC 8628)", () => {
   it("code → human approves on /device → agent token for a new principal, scoped to the repo", async () => {
     const { app } = makeApp();
     const human = await signUpHuman(app, "Maya");
-    const [repoX, repoY] = await seedRepos(2);
+    const [repoX, repoY] = await seedRepos(2, human.principal.id);
 
     const dc = await requestCode(app);
     expect(dc.verification_uri).toBe(`${ORIGIN}/device`);
@@ -210,7 +210,7 @@ describe("device flow (RFC 8628)", () => {
   it("a device token requested for the HTTP API only is refused by /mcp", async () => {
     const { app } = makeApp();
     const human = await signUpHuman(app);
-    const [repo] = await seedRepos(1);
+    const [repo] = await seedRepos(1, human.principal.id);
     const dc = await requestCode(app, { resource: API_RESOURCE });
     await call(app, "GET", `/api/v1/oauth/device/${dc.user_code}`, { cookie: human.cookie }).then(
       (r) => r.text(),

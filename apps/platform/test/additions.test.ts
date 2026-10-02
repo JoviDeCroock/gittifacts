@@ -2,7 +2,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { summarizeAudit } from "../src/audit/summary.js";
-import { HEAD_SHA, runFixture, seedWorld, store, uid } from "./fixtures.js";
+import { addMember, HEAD_SHA, runFixture, seedWorld, store, uid } from "./fixtures.js";
 import { call, createAgent, expectError, json, makeApp, signUpHuman } from "./http.js";
 
 async function world() {
@@ -11,6 +11,7 @@ async function world() {
   const agent = await createAgent(app, human.cookie);
   const s = store();
   const seeded = await seedWorld(s);
+  await addMember(s, seeded.repo.id, human.principal.id, "owner");
   return {
     app,
     human,

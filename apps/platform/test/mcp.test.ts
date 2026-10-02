@@ -20,7 +20,10 @@ async function setup() {
   const human = await signUpHuman(app);
   const agent = await createAgent(app, human.cookie);
   const s = store();
-  const repo = repoFixture();
+  // The human owns the repo (an owner member via insertRepo); its agent acts with that role.
+  const repo = repoFixture({
+    claim: { status: "claimed", ownerId: human.principal.id, expiresAt: null },
+  });
   await s.insertRepo(repo);
   const change = changeFixture(repo.id, agent.principal.id);
   await s.insertChange(change);
