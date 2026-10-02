@@ -1,10 +1,10 @@
 import { type ShadowSample, shadowAgreement } from "@app/classifier";
 import type { Repo } from "@app/domain";
 import type { z } from "zod";
-import type { CreateRepoBody, ShadowStatsSchema } from "../api/schemas.js";
 import { assertRepoAccess, filterAccessible } from "../access/access.js";
-import { auditorReadOnly } from "../access/route.js";
 import { isPlatformAuditor } from "../access/config.js";
+import { auditorReadOnly } from "../access/route.js";
+import type { CreateRepoBody, ShadowStatsSchema } from "../api/schemas.js";
 import type { Caller, Services } from "../app-env.js";
 import { badRequest } from "../errors.js";
 import { assertClaimedFor } from "../limits/refusals.js";

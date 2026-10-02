@@ -259,7 +259,10 @@ export function createCoordinator(
   const noRepo = (id: string) => (): never =>
     fail("not-found", `repo ${id} not found`, "Check the repo id; list your repos to find it.");
   const noChange = (id: string) => (): never =>
-    fail("not-found", `change ${id} not found`, { explanation: "Check the change id.", call: status(id) });
+    fail("not-found", `change ${id} not found`, {
+      explanation: "Check the change id.",
+      call: status(id),
+    });
 
   function canActOnChange(actor: Principal, change: Change, author: Principal | null): boolean {
     if (actor.id === change.authorId) return true;
@@ -656,7 +659,8 @@ export function createCoordinator(
       const review = parse(ReviewInput, input, "review");
       const change = await requireChange(changeId);
       // Members (reviewer or above) only; nobody reviews an unclaimed project before its claim.
-      if (actor.kind === "human") await assertAccess(actor, change.repoId, "review", noChange(changeId));
+      if (actor.kind === "human")
+        await assertAccess(actor, change.repoId, "review", noChange(changeId));
       if (actor.kind !== "human") {
         fail("forbidden", "only humans review changes; agents prove conformance", {
           explanation:

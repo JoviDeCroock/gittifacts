@@ -363,7 +363,10 @@ export const ListMembersOutput = {
         required: ["principalId", "name", "role", "addedAt"],
       },
     },
-    yourRole: { type: ["string", "null"], enum: ["owner", "maintainer", "reviewer", "reader", null] },
+    yourRole: {
+      type: ["string", "null"],
+      enum: ["owner", "maintainer", "reviewer", "reader", null],
+    },
   },
   required: ["repoId", "members", "yourRole"],
 } as const;

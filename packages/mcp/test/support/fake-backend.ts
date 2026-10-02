@@ -193,7 +193,9 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
       calls.push(`listMembers:${repoId}`);
       return {
         repoId,
-        members: [{ principalId: "hu_1", name: "Ada", role: "owner", addedAt: "2026-10-01T00:00:00.000Z" }],
+        members: [
+          { principalId: "hu_1", name: "Ada", role: "owner", addedAt: "2026-10-01T00:00:00.000Z" },
+        ],
         viewerRole: "owner",
       };
     },

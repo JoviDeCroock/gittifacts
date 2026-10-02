@@ -3,87 +3,10 @@
  * integration may do. Lifecycle calls go to a mocked CoordinatorApi (the facade's own access port
  * is covered in packages/coordinator and test/integration/access-claim.test.ts).
  */
-import { env } from "cloudflare:workers";
 import type { Change, Repo } from "@app/domain";
 import { describe, expect, it, vi } from "vitest";
-import { DoAudit } from "../src/audit/audit.js";
-import {
-  addMember,
-  changeFixture,
-  classificationFixture,
-  diffFixture,
-  evidenceFixture,
-  planFixture,
-  repoFixture,
-  runFixture,
-  store,
-  tourFixture,
-} from "./fixtures.js";
-import { call, createAgent, expectError, json, makeApp, signUpHuman, type TestApp } from "./http.js";
-
-export async function world(coordinator: Parameters<typeof makeApp>[0] = {}) {
-  const { app, coordinator: mock } = makeApp(coordinator);
-  const alice = await signUpHuman(app, "Alice");
-  const aliceAgent = await createAgent(app, alice.cookie);
-  const bob = await signUpHuman(app, "Bob");
-  const bobAgent = await createAgent(app, bob.cookie);
-  const s = store();
-  // Alice creates the repo: insertRepo makes her its owner member.
-  const repo = repoFixture({
-    claim: { status: "claimed", ownerId: alice.principal.id, expiresAt: null },
-  });
-  await s.insertRepo(repo);
-  const plan = planFixture(repo.id, aliceAgent.principal.id);
-  await s.insertPlan(plan);
-  const change = changeFixture(repo.id, aliceAgent.principal.id, { planId: plan.id });
-  await s.insertChange(change);
-  await s.putDiff(change.id, diffFixture());
-  await s.putEvidence(await evidenceFixture(change.id));
-  await s.putTour(tourFixture(change.id));
-  await s.putClassification(change.id, change.headSha ?? "", classificationFixture());
-  const run = runFixture(change.id);
-  await s.upsertRun(run);
-  const blob = `ci-logs/${run.id}/test.log`;
-  await env.BLOBS.put(blob, "ok\n");
-  await new DoAudit(env).append({
-    principalId: alice.principal.id,
-    action: "test.secret-event",
-    subject: `change:${change.id}`,
-    payload: {},
-  });
-  return { app, mock, s, alice, aliceAgent, bob, bobAgent, repo, plan, change, blob };
-}
-
-type World = Awaited<ReturnType<typeof world>>;
-
-/** Every read route of the repo, its plan and its change. */
-export function readPaths(w: Pick<World, "repo" | "plan" | "change" | "blob">): string[] {
-  const c = `/api/v1/changes/${w.change.id}`;
-  return [
-    `/api/v1/repos/${w.repo.id}`,
-    `/api/v1/repos/${w.repo.id}/plans`,
-    `/api/v1/repos/${w.repo.id}/changes`,
-    `/api/v1/repos/${w.repo.id}/members`,
-    `/api/v1/repos/${w.repo.id}/queue`,
-    `/api/v1/plans/${w.plan.id}`,
-    c,
-    `${c}/diff`,
-    `${c}/evidence`,
-    `${c}/tour`,
-    `${c}/reviews`,
-    `${c}/rollout`,
-    `${c}/issues`,
-    `${c}/events`,
-    `/api/v1/audit?subject=change:${w.change.id}`,
-    `/api/v1/blobs/${encodeURIComponent(w.blob)}`,
-  ];
-}
-
-async function status(app: TestApp, path: string, auth: { cookie?: string; token?: string }) {
-  const res = await call(app, "GET", path, auth);
-  const body = await res.text();
-  return { path, status: res.status, code: res.status >= 400 ? JSON.parse(body).error?.code : null };
-}
+import { readPaths, status, world } from "./access-helpers.js";
+import { call, expectError, json } from "./http.js";
 
 describe("a second human sees nothing of the first human's repo", () => {
   it("every read route is 404 (as if it did not exist), for Bob and Bob's agent; Alice reads them all", async () => {
@@ -144,13 +67,20 @@ describe("a second human sees nothing of the first human's repo", () => {
       ["POST", `/api/v1/changes/${w.change.id}/review`, { decision: "approve" }],
       ["POST", `/api/v1/changes/${w.change.id}/kill`, { reason: "mine now" }],
       ["PATCH", `/api/v1/repos/${w.repo.id}/lane0`, { enabled: true }],
-      ["POST", `/api/v1/repos/${w.repo.id}/members`, { principalId: w.bob.principal.id, role: "owner" }],
+      [
+        "POST",
+        `/api/v1/repos/${w.repo.id}/members`,
+        { principalId: w.bob.principal.id, role: "owner" },
+      ],
     ];
     for (const [method, path, body] of writes) {
       await expectError(await call(w.app, method, path, { ...bob, body }), 404, "not-found");
     }
     for (const [path, body] of [
-      ["/api/v1/plans", { repoId: w.repo.id, title: "Mine now", intent: "x", acceptanceCriteria: ["y"] }],
+      [
+        "/api/v1/plans",
+        { repoId: w.repo.id, title: "Mine now", intent: "x", acceptanceCriteria: ["y"] },
+      ],
       ["/api/v1/changes", { repoId: w.repo.id, title: "Mine now", category: "fix" }],
     ] as const) {
       await expectError(

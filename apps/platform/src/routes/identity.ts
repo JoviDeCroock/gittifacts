@@ -1,5 +1,6 @@
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
+import { REPO_ROLES } from "../access/roles.js";
 import {
   CreateAgentBody,
   IdempotencyHeaders,
@@ -9,7 +10,6 @@ import {
   RepoSchema,
   SessionUserSchema,
 } from "../api/schemas.js";
-import { REPO_ROLES } from "../access/roles.js";
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
 import { registerOAuthRoutes } from "../oauth/routes.js";

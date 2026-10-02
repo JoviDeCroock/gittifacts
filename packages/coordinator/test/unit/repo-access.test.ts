@@ -99,9 +99,9 @@ describe("coordinator access port", () => {
     const { access, asked } = fakeAccess(() => "hidden");
     const c = guarded(s, access);
     expect(await code(c.waitFor(stranger, change.id, "merged", 0))).toBe("not-found");
-    expect(
-      await code(c.watchChange(stranger, change.id, { since: null, timeoutMs: 0 })),
-    ).toBe("not-found");
+    expect(await code(c.watchChange(stranger, change.id, { since: null, timeoutMs: 0 }))).toBe(
+      "not-found",
+    );
     const system = principal({ kind: "system", id: SYSTEM_PRINCIPAL_ID });
     await c.watchChange(system, change.id, { since: null, timeoutMs: 0 });
     expect(asked.every((a) => !a.startsWith(`${SYSTEM_PRINCIPAL_ID}:`))).toBe(true);

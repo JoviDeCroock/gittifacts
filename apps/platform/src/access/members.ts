@@ -14,7 +14,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { Caller, Services } from "../app-env.js";
 import { ensureHumanPrincipal } from "../auth/principals.js";
 import { principals, user } from "../db/schema.js";
-import { ApiError, conflict, notFound } from "../errors.js";
+import { type ApiError, conflict, notFound } from "../errors.js";
 import { assertRepoAccess, repoAccess } from "./access.js";
 import {
   changeRoleRow,

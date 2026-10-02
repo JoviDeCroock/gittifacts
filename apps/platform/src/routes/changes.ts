@@ -1,5 +1,6 @@
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
+import { assertChangeAccess } from "../access/access.js";
 import {
   AuditEventSchema,
   ChangeDiffSchema,
@@ -23,7 +24,6 @@ import {
   TourSchema,
   VerificationSchema,
 } from "../api/schemas.js";
-import { assertChangeAccess } from "../access/access.js";
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
 import {
@@ -293,7 +293,10 @@ export function registerChangeRoutes(app: ApiApp): void {
     return c.json(out, 201);
   });
   app.openapi(detail, async (c) =>
-    c.json(await getChangeDetail(c.get("services"), callerOf(c), c.req.valid("param").changeId), 200),
+    c.json(
+      await getChangeDetail(c.get("services"), callerOf(c), c.req.valid("param").changeId),
+      200,
+    ),
   );
   app.openapi(token, async (c) => {
     const remote = await refreshPushGrant(
@@ -304,16 +307,25 @@ export function registerChangeRoutes(app: ApiApp): void {
     return c.json({ remote }, 200);
   });
   app.openapi(diff, async (c) =>
-    c.json({ diff: await getChangeDiff(c.get("services"), callerOf(c), c.req.valid("param").changeId) }, 200),
+    c.json(
+      { diff: await getChangeDiff(c.get("services"), callerOf(c), c.req.valid("param").changeId) },
+      200,
+    ),
   );
   app.openapi(evidence, async (c) =>
-    c.json(await getChangeEvidence(c.get("services"), callerOf(c), c.req.valid("param").changeId), 200),
+    c.json(
+      await getChangeEvidence(c.get("services"), callerOf(c), c.req.valid("param").changeId),
+      200,
+    ),
   );
   app.openapi(tour, async (c) =>
     c.json(await getChangeTour(c.get("services"), callerOf(c), c.req.valid("param").changeId), 200),
   );
   app.openapi(reviews, async (c) =>
-    c.json(await listChangeReviews(c.get("services"), callerOf(c), c.req.valid("param").changeId), 200),
+    c.json(
+      await listChangeReviews(c.get("services"), callerOf(c), c.req.valid("param").changeId),
+      200,
+    ),
   );
   app.openapi(review, async (c) => {
     const change = await submitReview(
@@ -335,7 +347,10 @@ export function registerChangeRoutes(app: ApiApp): void {
     return c.json(out, 200);
   });
   app.openapi(rollout, async (c) =>
-    c.json(await getChangeRollout(c.get("services"), callerOf(c), c.req.valid("param").changeId), 200),
+    c.json(
+      await getChangeRollout(c.get("services"), callerOf(c), c.req.valid("param").changeId),
+      200,
+    ),
   );
   app.openapi(kill, async (c) => {
     const change = await killChange(
@@ -348,7 +363,13 @@ export function registerChangeRoutes(app: ApiApp): void {
   });
   app.openapi(issues, async (c) =>
     c.json(
-      { issues: await listChangeIssues(c.get("services"), callerOf(c), c.req.valid("param").changeId) },
+      {
+        issues: await listChangeIssues(
+          c.get("services"),
+          callerOf(c),
+          c.req.valid("param").changeId,
+        ),
+      },
       200,
     ),
   );

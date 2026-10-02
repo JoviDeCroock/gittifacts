@@ -46,7 +46,10 @@ export function refused(
       "forbidden",
       `platform auditors are read-only (${NEED_TEXT[need]} on repo ${repoId} refused)`,
       { repoId, need },
-      { explanation: "This principal is a platform auditor (PLATFORM_AUDITORS): it can read every repo and the audit log, and never write, review or approve." },
+      {
+        explanation:
+          "This principal is a platform auditor (PLATFORM_AUDITORS): it can read every repo and the audit log, and never write, review or approve.",
+      },
     );
   }
   if (why === "human-only") {
@@ -55,7 +58,11 @@ export function refused(
       "forbidden",
       `only a human may do this (${NEED_TEXT[need]})`,
       { repoId, need, kind: p.kind },
-      { explanation: "Humans approve intent: agents and integrations never review, approve or administer a repo. Ask a human member of the repo.", call: `list_members({ repoId: "${repoId}" })` },
+      {
+        explanation:
+          "Humans approve intent: agents and integrations never review, approve or administer a repo. Ask a human member of the repo.",
+        call: `list_members({ repoId: "${repoId}" })`,
+      },
     );
   }
   if (why === "scope") {

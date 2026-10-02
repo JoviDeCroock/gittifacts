@@ -8,7 +8,9 @@ import { ApiError } from "../errors.js";
 import { D1Store } from "../store/d1-store.js";
 import { type AccessDeps, assertRepoAccess } from "./access.js";
 
-export function repoAccessPort(env: Pick<Bindings, "DB" | "BLOBS" | "PLATFORM_ADMINS" | "PLATFORM_AUDITORS">): RepoAccess {
+export function repoAccessPort(
+  env: Pick<Bindings, "DB" | "BLOBS" | "PLATFORM_ADMINS" | "PLATFORM_AUDITORS">,
+): RepoAccess {
   // One deps object per facade (= per request), so its checks share the access memo.
   const deps: AccessDeps = { store: new D1Store(env.DB, env.BLOBS), env };
   return {

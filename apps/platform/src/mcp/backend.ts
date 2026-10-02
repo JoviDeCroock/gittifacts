@@ -11,10 +11,10 @@
 import { Principal } from "@app/domain";
 import type { McpBackend, McpCaller } from "@app/mcp";
 import { z } from "zod";
-import type { Caller, Services } from "../app-env.js";
 import { type AccessTarget, assertTargetAccess } from "../access/access.js";
 import { listMembers } from "../access/members.js";
 import type { RepoNeed } from "../access/roles.js";
+import type { Caller, Services } from "../app-env.js";
 import { anonymousWhoami } from "../claim/anonymous.js";
 import { createUnclaimedProject } from "../claim/create.js";
 import { toErrorResponse, unauthorized } from "../errors.js";

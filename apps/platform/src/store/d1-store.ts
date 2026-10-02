@@ -23,6 +23,7 @@ import {
 import { and, asc, desc, eq, gte, inArray, lt, type SQL, sql } from "drizzle-orm";
 import { type DrizzleD1Database, drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
+import { isHumanPrincipal, ownerMembershipInsert } from "../access/members-store.js";
 import * as schema from "../db/schema.js";
 import {
   auditEvents,
@@ -41,7 +42,6 @@ import {
   shadowSamples,
   tours,
 } from "../db/schema.js";
-import { isHumanPrincipal, ownerMembershipInsert } from "../access/members-store.js";
 import { guardUnclaimedRepoWrite } from "../limits/refusals.js";
 import {
   changeFromRow,
@@ -182,7 +182,9 @@ export class D1Store implements Store {
 
   async insertRepo(repo: Repo, createdBy: string | null = null): Promise<void> {
     // O3: an unclaimed repo never stores a deploy target, Lane 0 or revert auto-merge.
-    const insert = this.db.insert(repos).values(repoToRow(guardUnclaimedRepoWrite(repo), createdBy));
+    const insert = this.db
+      .insert(repos)
+      .values(repoToRow(guardUnclaimedRepoWrite(repo), createdBy));
     // A claimed repo's owner is its first `owner` member, in the same batch (src/access/).
     const owner = repo.claim.status === "claimed" ? repo.claim.ownerId : null;
     if (owner === null || !(await isHumanPrincipal(this, owner))) await insert;
@@ -203,8 +205,7 @@ export class D1Store implements Store {
     // Claiming (or any new claim owner) makes that human an `owner` member (src/access/).
     const owner = next.claim.status === "claimed" ? next.claim.ownerId : null;
     const newOwner =
-      owner !== null &&
-      (current.claim.status !== "claimed" || current.claim.ownerId !== owner);
+      owner !== null && (current.claim.status !== "claimed" || current.claim.ownerId !== owner);
     if (!newOwner || !(await isHumanPrincipal(this, owner))) await update;
     else await this.db.batch([update, ownerMembershipInsert(this, id, owner, this.iso())]);
     return next;

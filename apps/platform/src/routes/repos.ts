@@ -176,10 +176,15 @@ export function registerRepoRoutes(app: ApiApp): void {
   );
   app.openapi(changes, async (c) => {
     const q = c.req.valid("query");
-    const list = await listChangeSummaries(c.get("services"), callerOf(c), c.req.valid("param").repoId, {
-      statuses: parseStatusList(q.status),
-      lane: q.lane === undefined ? undefined : (Number(q.lane) as 0 | 1 | 2),
-    });
+    const list = await listChangeSummaries(
+      c.get("services"),
+      callerOf(c),
+      c.req.valid("param").repoId,
+      {
+        statuses: parseStatusList(q.status),
+        lane: q.lane === undefined ? undefined : (Number(q.lane) as 0 | 1 | 2),
+      },
+    );
     return c.json(list, 200);
   });
 }

@@ -25,14 +25,21 @@ export async function auditVisibility(deps: AccessDeps, p: Principal): Promise<S
   if (isPlatformAuditor(p, deps.env) && (await accessibleRepoIds(deps, p)) === "all") return null;
 
   let repoIds: SQL;
-  const restricted = p.kind === "integration" || (p.kind === "agent" && (p.repoIds ?? null) !== null);
+  const restricted =
+    p.kind === "integration" || (p.kind === "agent" && (p.repoIds ?? null) !== null);
   if (p.kind === "human" || (p.kind === "agent" && p.ownerId !== null && !restricted)) {
     const member = p.kind === "human" ? p.id : (p.ownerId as string);
     repoIds = sql`(SELECT ${repoMembers.repoId} FROM ${repoMembers} WHERE ${repoMembers.principalId} = ${member})`;
   } else {
     const ids = await accessibleRepoIds(deps, p);
     const list = ids === "all" ? [] : [...ids];
-    repoIds = list.length === 0 ? sql`(SELECT NULL WHERE 0)` : sql`(${sql.join(list.map((id) => sql`${id}`), sql`, `)})`;
+    repoIds =
+      list.length === 0
+        ? sql`(SELECT NULL WHERE 0)`
+        : sql`(${sql.join(
+            list.map((id) => sql`${id}`),
+            sql`, `,
+          )})`;
   }
 
   const ownPrincipals =
