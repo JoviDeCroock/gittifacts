@@ -1141,3 +1141,22 @@ an unclaimed project or any other:
 - Repo-selection changes don't send an `installation_repositories`-style event.
 - The handle is derived from the claimer, not from the current owner: ownership transfer keeps the URL.
 - Delivery rows and expired `gti_` token rows need a periodic purge.
+
+## 2026-10-02 — Incident: claimed-repo inserts returned 500 in production (hotfix deployed)
+
+**What happened.** Commit 37de9a5 put a raw drizzle `db.run(...)` inside a D1 `db.batch([...])`. `run` executes immediately and
+returns a promise, not a batch item, so every claimed-repo insert and every claim failed with
+`Cannot read properties of undefined (reading 'bind')`. That took down human and agent `create_project`. It shipped because
+deploys gated only on typecheck.
+
+**Fix.** f72cec8 batches a drizzle insert builder, and 816dac7 adds a regression test against real D1. They were deployed as a
+**hotfix branch** (`hotfix/insert-repo-membership` = live 9719c49 + those two commits), not from main. Main also carried
+in-progress access-control work whose own tests were red. The hotfix was verified live with a `create_project`.
+
+**Gate exception.** The hotfix gate showed 185/187 platform tests passing. The two failures are pre-existing on the live
+commit, sit in `unclaimed-claim.test.ts`, and cover a feature switched off in production (unclaimed creation). We deployed
+anyway because the hotfix only removes a P0 and changes nothing else. The access-control agent owns fixing those two tests.
+
+**Prevention.** `scripts/deploy-clean.sh` now gates every deploy on `pnpm -r typecheck` plus the full platform test suite at
+the exact commit. `--skip-tests` is for emergencies only and needs a recorded reason. Store changes need workerd tests
+against real D1.
