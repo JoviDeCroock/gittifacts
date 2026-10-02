@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { call, isToolName, parseCall, TOOL_NAMES } from "../src/index.js";
-import { LIVE_TOOL_NAMES } from "./helpers.js";
+import { ANONYMOUS_RECONNECT, call, isToolName, parseCall, TOOL_NAMES } from "../src/index.js";
+import { LIVE_TOOL_DESCRIPTIONS, LIVE_TOOL_NAMES } from "./helpers.js";
 
 describe("call()", () => {
   it("formats bare keys and JSON values", () => {
@@ -78,5 +78,9 @@ describe("TOOL_NAMES", () => {
 
   it("are exactly the tools the MCP server registers", () => {
     expect([...TOOL_NAMES].sort()).toEqual([...LIVE_TOOL_NAMES].sort());
+  });
+
+  it("create_project's description says to reconnect with the token, as its nextSteps do", () => {
+    expect(LIVE_TOOL_DESCRIPTIONS.get("create_project")).toContain(ANONYMOUS_RECONNECT);
   });
 });

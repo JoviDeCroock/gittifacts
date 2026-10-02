@@ -2,6 +2,7 @@ import { NextStep } from "@app/domain";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  ANONYMOUS_RECONNECT_BEFORE,
   claimingLines,
   cliCommand,
   PLATFORM_SUMMARY,
@@ -116,6 +117,15 @@ describe("startGuide JSON", () => {
       "merged",
       "reverted",
     ]);
+  });
+});
+
+describe("startGuide no-account path", () => {
+  it("says to reconnect with the token right after create_project, in one line", () => {
+    const { json, markdown } = startGuide(opts);
+    expect(json.auth.anonymous.how).toContain(ANONYMOUS_RECONNECT_BEFORE);
+    const line = markdown.split("\n").find((l) => l.startsWith("- **No account:**")) ?? "";
+    expect(line).toContain(ANONYMOUS_RECONNECT_BEFORE);
   });
 });
 

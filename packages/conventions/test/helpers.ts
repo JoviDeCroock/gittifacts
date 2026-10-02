@@ -22,9 +22,14 @@ const inert = new Proxy(
   { get: () => () => Promise.reject(new Error("handlers are never called here")) },
 ) as McpBackend;
 
+const liveTools = Object.values(buildTools(inert));
+
 /** The tools the MCP server registers (`tools/list`), read from `buildTools()`. */
-export const LIVE_TOOL_NAMES: ReadonlySet<string> = new Set(
-  Object.values(buildTools(inert)).map((t) => t.name),
+export const LIVE_TOOL_NAMES: ReadonlySet<string> = new Set(liveTools.map((t) => t.name));
+
+/** Each live tool's description, by name. */
+export const LIVE_TOOL_DESCRIPTIONS: ReadonlyMap<string, string> = new Map(
+  liveTools.map((t) => [t.name, t.description ?? ""]),
 );
 
 /** Asserts a call string parses and names a tool the MCP server really registers. */

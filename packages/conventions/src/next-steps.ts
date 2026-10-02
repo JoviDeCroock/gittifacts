@@ -5,6 +5,18 @@
 import type { Lane, NextStep } from "@app/domain";
 import { call } from "./calls.js";
 
+/**
+ * The first thing an agent must do after `create_project` without credentials: its MCP session is
+ * still anonymous, so every later call fails with 401 until it reconnects with the project token
+ * (onboarding eval m-20261002-073146-qzvw). Also in the tool's description (@app/mcp).
+ */
+export const ANONYMOUS_RECONNECT =
+  "Reconnect with `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this project's tools are unavailable without it.";
+
+/** The same rule, said before the call (/start, /llms.txt). */
+export const ANONYMOUS_RECONNECT_BEFORE =
+  "After create_project without credentials, reconnect with `Authorization: Bearer <token>` (the `token` field in its response): every other tool needs it, and the project's tools are unavailable without it.";
+
 const PUSH = (remote: { url: string; branch: string }) =>
   `git -c http.extraHeader="Authorization: Bearer <remote.token>" push ${remote.url} HEAD:${remote.branch}`;
 
@@ -21,6 +33,11 @@ export interface NextStepContexts {
     claimed: boolean;
     /** Unclaimed projects: when the platform deletes it unless a human claims it (ISO). */
     expiresAt?: string | null | undefined;
+    /**
+     * Set when create_project ran without credentials: the response carries the project's token
+     * and the caller's session is still anonymous. The first step is to reconnect with it.
+     */
+    anonymous?: { mcpUrl: string } | undefined;
   };
   change_started: { changeId: string; remote: { url: string; branch: string } };
   push_received: { changeId: string; headSha?: string | undefined };
@@ -188,6 +205,16 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
     case "project_created": {
       const c = ctx as NextStepContexts["project_created"];
       const steps: NextStep[] = [];
+      if (c.anonymous !== undefined) {
+        steps.push({
+          title: clip(`Reconnect to ${c.anonymous.mcpUrl} with Authorization: Bearer <token>`, 200),
+          why: clip(
+            `${ANONYMOUS_RECONNECT} MCP server: ${c.anonymous.mcpUrl}. Then call whoami: it lists this project.`,
+            600,
+          ),
+          call: call("whoami", {}),
+        });
+      }
       if (c.changeId !== undefined) {
         steps.push({
           title: "Wait for the first CI run and preview",

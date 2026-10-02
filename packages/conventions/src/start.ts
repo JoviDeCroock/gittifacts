@@ -8,6 +8,7 @@ import { z } from "zod";
 import { call } from "./calls.js";
 import { DEFAULT_TEMPLATE, TEMPLATE_IDS, TEMPLATES, TemplateId } from "./catalog.js";
 import { CLI_NPM_NOTE, cliAlias, cliCommand, cliTarballUrl } from "./cli.js";
+import { ANONYMOUS_RECONNECT_BEFORE } from "./next-steps.js";
 import { join, normalizeOrigin, pathOf } from "./urls.js";
 import { CONVENTIONS_VERSION } from "./version.js";
 
@@ -170,7 +171,7 @@ const CH = "<changeId>";
 export const ANONYMOUS_HOW =
   "Call create_project with NO Authorization header (MCP initialize, tools/list, create_project and whoami work without credentials; so does POST /api/v1/projects). " +
   "You get an unclaimed project, token (a Bearer token limited to that one project, valid until the project expires) and claimUrl: give claimUrl to a human, who logs in to claim it. " +
-  "Send Authorization: Bearer <token> on every later call.";
+  ANONYMOUS_RECONNECT_BEFORE;
 
 /** /start "No account" when the kill switch is off. */
 export const ANONYMOUS_OFF =

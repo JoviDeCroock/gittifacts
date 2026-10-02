@@ -361,7 +361,7 @@ export type introspection = {
     },
     /**
      * Create a project
-     * One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork. Returns at once; wait_for_change on bootstrapChangeId for the first green.
+     * One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). Without credentials it creates an unclaimed project and returns its token. Reconnect with `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this project's tools are unavailable without it.
      * @param args.name Project (and repo) name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>.
      * @param args.template Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty project.
      * @param args.from Import a public https git repository (e.g. GitHub) instead of a template.
@@ -471,7 +471,7 @@ export type introspection = {
               "string",
               "null"
             ],
-            "description": "Bearer token for this project when you called without credentials (unclaimed projects); null when you are already authenticated."
+            "description": "Bearer token for this project when you called without credentials (unclaimed projects); null when you are already authenticated. Reconnect with Authorization: Bearer <token> before any other call."
           },
           "mcpUrl": {
             "type": "string"

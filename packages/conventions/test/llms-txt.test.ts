@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { llmsTxt } from "../src/index.js";
+import { ANONYMOUS_RECONNECT_BEFORE, llmsTxt } from "../src/index.js";
 import { HOST, MCP_URL } from "./helpers.js";
 
 describe("llmsTxt", () => {
@@ -43,6 +43,17 @@ describe("llmsTxt", () => {
       expect(text).toContain(`](${url})`);
     }
     expect(text).toContain(`npx -y ${HOST}/cli/gittifacts.tgz --host ${HOST} --help`);
+  });
+
+  it("says to reconnect with the token after an anonymous create_project, in one line", () => {
+    expect(lines).toContain(ANONYMOUS_RECONNECT_BEFORE);
+    const off = llmsTxt({
+      host: HOST,
+      mcpUrl: MCP_URL,
+      openapiUrl: `${HOST}/openapi.json`,
+      unclaimed: { enabled: false },
+    });
+    expect(off).not.toContain(ANONYMOUS_RECONNECT_BEFORE);
   });
 
   it("leaves OAuth out when it isn't offered", () => {

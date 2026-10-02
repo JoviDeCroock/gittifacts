@@ -25,7 +25,7 @@ Mutating tools accept `idempotencyKey`: retry with the same key safely.
 
 | Tool | What it does | Scope | Kind |
 | --- | --- | --- | --- |
-| [`create_project`](/docs/reference/mcp-projects#create_project) | One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork. | `repo:read` `change:create` | write |
+| [`create_project`](/docs/reference/mcp-projects#create_project) | One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). | `repo:read` `change:create` | write |
 | [`whoami`](/docs/reference/mcp-projects#whoami) | Your principal, scopes, the repos you can act on (with claim status and allowed actions) and quotas. |  | read |
 | [`list_repos`](/docs/reference/mcp-projects#list_repos) | Repos you can read, with open changes per lane and whether Lane 0 (auto-merge) is on. | `repo:read` | read |
 | [`list_members`](/docs/reference/mcp-projects#list_members) | A repo's human members and their roles (reader < reviewer < maintainer < owner), and your role (an agent acts with its owner's role: reviewer or above to draft plans and start changes). | `repo:read` | read |

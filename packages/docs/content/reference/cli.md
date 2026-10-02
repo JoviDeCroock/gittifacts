@@ -163,7 +163,7 @@ One per MCP tool. Arguments, scopes and outputs are in the [MCP tools](/docs/ref
 
 | Command | Tool | Usage |
 | --- | --- | --- |
-| `gittifacts create-project` | `create_project` | `gittifacts create-project [--name <string>] [--template <workers-api\|preact-app\|ts-library\|static-site>] [--from <string>] [--description <string>] [--idempotency-key <key>]` — One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork. |
+| `gittifacts create-project` | `create_project` | `gittifacts create-project [--name <string>] [--template <workers-api\|preact-app\|ts-library\|static-site>] [--from <string>] [--description <string>] [--idempotency-key <key>]` — One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). |
 | `gittifacts whoami` | `whoami` | `gittifacts whoami` — Your principal, scopes, the repos you can act on (with claim status and allowed actions) and quotas. |
 | `gittifacts list-repos` | `list_repos` | `gittifacts list-repos` — Repos you can read, with open changes per lane and whether Lane 0 (auto-merge) is on. |
 | `gittifacts list-members` | `list_members` | `gittifacts list-members <repoId>` — A repo's human members and their roles (reader < reviewer < maintainer < owner), and your role (an agent acts with its owner's role: reviewer or above to draft plans and start changes). |

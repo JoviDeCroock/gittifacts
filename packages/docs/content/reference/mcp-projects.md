@@ -13,7 +13,7 @@ generated: true
 
 ## `create_project`
 
-One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork. Returns at once; wait_for_change on bootstrapChangeId for the first green.
+One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). Without credentials it creates an unclaimed project and returns its token. Reconnect with `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this project's tools are unavailable without it.
 
 **Scope:** `repo:read` + `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts create-project`
 

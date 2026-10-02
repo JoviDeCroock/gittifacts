@@ -4,6 +4,7 @@
  * D1, the AbuseLimiter / ProjectLedger DOs and the coordinator facade over fake Artifacts.
  */
 import { env } from "cloudflare:workers";
+import { ANONYMOUS_RECONNECT } from "@app/conventions";
 import { createPlatformClient } from "@app/mcp/client";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -92,6 +93,19 @@ describe("credential-less create_project", () => {
       claimUrl: expect.stringMatching(new RegExp(`^${ORIGIN}/claim/gtc_[A-Za-z0-9_-]{43}$`)),
       remote: expect.objectContaining({ url: expect.stringContaining("task-") }),
     });
+    // The first next step: reconnect with the token (onboarding eval m-20261002-073146-qzvw: an
+    // agent kept its anonymous session and its next call got a 401).
+    const steps = (created.value as { nextSteps: { title: string; why?: string; call?: string }[] })
+      .nextSteps;
+    expect(steps[0]).toMatchObject({
+      title: `Reconnect to ${ORIGIN}/mcp with Authorization: Bearer <token>`,
+      why: expect.stringContaining(ANONYMOUS_RECONNECT),
+      call: "whoami({})",
+    });
+    const listedCreate = (listed.tools ?? []) as Array<{ name: string; description?: string }>;
+    expect(listedCreate.find((t) => t.name === "create_project")?.description).toContain(
+      ANONYMOUS_RECONNECT,
+    );
 
     // Every other tool still needs a bearer: the OAuth challenge, not an anonymous answer.
     const other = await rpc(

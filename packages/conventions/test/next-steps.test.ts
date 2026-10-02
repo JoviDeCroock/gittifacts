@@ -1,6 +1,7 @@
 import { type Lane, NextStep } from "@app/domain";
 import { describe, expect, it } from "vitest";
 import {
+  ANONYMOUS_RECONNECT,
   NEXT_STEP_EVENTS,
   type NextStepContexts,
   type NextStepEvent,
@@ -18,6 +19,16 @@ const lanes: [Lane, boolean][] = [
 ];
 
 const cases: Case[] = [
+  [
+    "project_created",
+    {
+      projectId: "rep_1",
+      changeId: "chg_1",
+      claimUrl: "https://h/claim/x",
+      claimed: false,
+      anonymous: { mcpUrl: "https://h/mcp" },
+    },
+  ],
   [
     "project_created",
     {
@@ -139,6 +150,24 @@ describe("nextStepsFor", () => {
     const claim = steps.at(-1)?.why ?? "";
     expect(claim).toContain("deleted at 2026-10-09T00:00:00.000Z");
     expect(claim).toContain("Bearer token for this project only");
+  });
+
+  it("tells an anonymous caller to reconnect with the token first (eval m-20261002-073146-qzvw)", () => {
+    const ctx = {
+      projectId: "rep_1",
+      changeId: "bs-rep_1",
+      claimUrl: "https://h/claim/x",
+      claimed: false,
+      anonymous: { mcpUrl: "https://h/mcp" },
+    };
+    const [first] = nextStepsFor("project_created", ctx);
+    expect(first?.title).toBe("Reconnect to https://h/mcp with Authorization: Bearer <token>");
+    expect(first?.why).toContain(ANONYMOUS_RECONNECT);
+    expect(first?.why).toContain("MCP server: https://h/mcp");
+    expect(first?.call).toBe("whoami({})");
+    // An authenticated caller has nothing to reconnect.
+    const { anonymous: _a, ...authed } = ctx;
+    expect(nextStepsFor("project_created", authed)[0]?.title).not.toMatch(/Reconnect/);
   });
 
   it("tells every wait step to call again while reason is timeout", () => {

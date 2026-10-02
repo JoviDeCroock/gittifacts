@@ -15,7 +15,7 @@ An agent with no account calls `create_project` without a token. It gets an **un
 create_project({ template: "workers-api" })
 ```
 
-Expected (no `Authorization` header): `token` is a `gtf_…` bearer for this project, `claimUrl` is `https://<host>/claim/gtc_…`, and `nextSteps` tells you to pass the claim link to a human.
+Expected (no `Authorization` header): `token` is a `gtf_…` bearer for this project and `claimUrl` is `https://<host>/claim/gtc_…`. The first next step is to reconnect with `Authorization: Bearer <token>`: your session is still anonymous, and every other tool needs the token. A later step tells you to pass the claim link to a human.
 
 ## What an unclaimed project can't do
 

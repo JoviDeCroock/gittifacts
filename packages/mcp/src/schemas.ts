@@ -431,7 +431,7 @@ export const CreateProjectOutput = {
     token: {
       ...nullableStr,
       description:
-        "Bearer token for this project when you called without credentials (unclaimed projects); null when you are already authenticated.",
+        "Bearer token for this project when you called without credentials (unclaimed projects); null when you are already authenticated. Reconnect with Authorization: Bearer <token> before any other call.",
     },
     mcpUrl: str,
     previewUrl: {

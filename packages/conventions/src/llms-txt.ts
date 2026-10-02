@@ -5,6 +5,7 @@
  */
 import { TEMPLATE_IDS } from "./catalog.js";
 import { cliCommand, cliTarballUrl } from "./cli.js";
+import { ANONYMOUS_RECONNECT_BEFORE } from "./next-steps.js";
 import { MCP_PROTOCOL_VERSION, PLATFORM_SUMMARY, type UnclaimedQuotaHints } from "./start.js";
 import { join, normalizeOrigin, pathOf } from "./urls.js";
 
@@ -35,7 +36,7 @@ export function noAccountText(unclaimed: LlmsTxtOptions["unclaimed"]): string {
     q === undefined
       ? "Until then: previews only, no secrets, custom domains or production deploys, no Lane 0, registries-only egress, tight quotas."
       : `Until then: previews only, no secrets, custom domains or production deploys, no Lane 0, registries-only egress, ${q.ciMinutesPerDay} CI minutes/day, ${q.storageMb} MB storage.`;
-  return `No account is needed: call create_project without credentials to get an unclaimed project, a Bearer token for it and a claimUrl for a human. ${expiry} ${limits}`;
+  return `No account is needed: call create_project without credentials to get an unclaimed project, a Bearer token for it and a claimUrl for a human. ${expiry} ${limits}\n${ANONYMOUS_RECONNECT_BEFORE}`;
 }
 
 export function llmsTxt(opts: LlmsTxtOptions): string {

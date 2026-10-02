@@ -203,9 +203,12 @@ export async function createProjectAs(
     claimUrl: extras?.claimUrl ?? null,
     claimed: repo.claim.status === "claimed",
     expiresAt: extras?.expiresAt ?? repo.claim.expiresAt,
+    // Created without credentials: the caller must reconnect with the token before anything else.
+    anonymous: extras?.token ? { mcpUrl } : undefined,
   });
   if (first === null) {
-    nextSteps.unshift({
+    // After the reconnect step, which stays first for an anonymous caller.
+    nextSteps.splice(extras?.token ? 1 : 0, 0, {
       title: "Open your first Change (the fork could not be made just now)",
       call: call("start_change", { repoId: repo.id, title: "<what>", category: "feature" }),
     });
