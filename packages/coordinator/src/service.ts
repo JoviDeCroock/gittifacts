@@ -25,7 +25,7 @@ import {
   type GitRemoteGrant,
   type InitialCommitProvider,
 } from "./api.js";
-import { type CoordinatorBindings, terminateQuietly } from "./bindings.js";
+import { type CoordinatorBindings, type MergeQueueClient, terminateQuietly } from "./bindings.js";
 import { EVENT_ISSUE, EVENT_REVIEW, type ReviewEvent } from "./events.js";
 import {
   bootstrapChangeIdFor,
@@ -710,16 +710,17 @@ export function createCoordinator(
         // review then (it waits for the merge), so the queue gets the decision directly.
         const queue = bindings.mergeQueue(change.repoId);
         if (queue.approved !== undefined) {
+          // Call as a member: on a Durable Object stub every method is remote (no `.bind`).
+          const q = queue as Required<Pick<MergeQueueClient, "approved">> & MergeQueueClient;
           if (decision.decision === "approve") {
-            const approved = queue.approved.bind(queue);
             await upstream("tell the merge queue", () =>
-              approved({
+              q.approved({
                 changeId,
                 lane: Math.max(change.lane ?? 0, classification.lane) as Lane,
                 approver: { principalId: actor.id, kind: "human" },
               }),
             );
-          } else if (await queue.remove({ repoId: change.repoId, changeId }).catch(() => false)) {
+          } else if (await q.remove({ repoId: change.repoId, changeId }).catch(() => false)) {
             await store.updateChange(changeId, {
               status: decision.decision === "reject" ? "rejected" : "awaiting-push",
             });
@@ -898,14 +899,15 @@ export function createCoordinator(
       // A version a merge-queue deploy train shipped: the train attributes it (several Changes).
       const queue = bindings.mergeQueue(change.repoId);
       if (issue.versionId !== null && queue.onIssue !== undefined) {
-        const onIssue = queue.onIssue.bind(queue);
-        const versionId = issue.versionId;
-        const took = await onIssue({
-          worker: scriptName,
-          versionId,
-          issueId: issue.id,
-          frames: framesOf(raw),
-        }).catch(() => false);
+        const q = queue as Required<Pick<MergeQueueClient, "onIssue">>;
+        const took = await q
+          .onIssue({
+            worker: scriptName,
+            versionId: issue.versionId,
+            issueId: issue.id,
+            frames: framesOf(raw),
+          })
+          .catch(() => false);
         if (took) return;
       }
       if (change.status !== "rolling-out") return;

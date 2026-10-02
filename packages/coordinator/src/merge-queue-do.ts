@@ -93,6 +93,8 @@ export class MergeQueue extends DurableObject<unknown> implements MergeQueueClie
     lane: 0 | 1 | 2;
     approver: { principalId: string; kind: "human" | "agent" | "system" };
   }): Promise<void> {
+    // A queue that never admitted anything holds nothing to approve.
+    if ((await this.ctx.storage.get<string>("repoId")) === undefined) return;
     return (await this.service()).approved(input);
   }
 
@@ -102,6 +104,7 @@ export class MergeQueue extends DurableObject<unknown> implements MergeQueueClie
     issueId: string;
     frames: { file: string; fn?: string }[];
   }): Promise<boolean> {
+    if ((await this.ctx.storage.get<string>("repoId")) === undefined) return false;
     return (await this.service()).onIssue(input);
   }
 

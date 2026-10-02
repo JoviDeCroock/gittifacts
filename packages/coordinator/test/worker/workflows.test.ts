@@ -6,7 +6,7 @@
 import { introspectWorkflow, introspectWorkflowInstance } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import type { Change, Repo } from "@app/domain";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChangeWorkflowOutput } from "../../src/change-flow.js";
 import { type CoordinatorEnv, cloudflareBindings } from "../../src/cloudflare-bindings.js";
 import type { ChangeWorkflowParams, RolloutParams } from "../../src/events.js";
@@ -25,6 +25,7 @@ import { createCoordinator } from "../../src/service.js";
 import { resetFakePorts } from "./fixture.js";
 
 type TestEnv = CoordinatorEnv & {
+  BATCH_RUN_WORKFLOW: Workflow<unknown>;
   CHANGE_WORKFLOW: Workflow<ChangeWorkflowParams>;
   ROLLOUT_WORKFLOW: Workflow<RolloutParams>;
   PUSH_ROUTER: Workflow<unknown>;
@@ -101,8 +102,23 @@ describe("ChangeWorkflow (workerd)", () => {
     const waiting: Change | null = await ports.store.getChange(change.id);
     expect(waiting).toMatchObject({ status: "awaiting-review", lane: 1, computedLane: 0 });
 
-    // A human approves the current head → "review" event → merge queue → "merged" event.
+    // A human approves the current head → "review" event → merge queue (the agent-native DO:
+    // batch tree on main, a BatchRunWorkflow runs CI on it, CAS) → "merged" event.
+    await using batchRuns = await introspectWorkflow(testEnv.BATCH_RUN_WORKFLOW);
+    await batchRuns.modifyAll(async (m) => {
+      await m.disableSleeps();
+      await m.disableRetryDelays();
+    });
     await coordinator.submitReview(reviewer, change.id, { decision: "approve" });
+    const queueRuns = () => [...ports.ci.runs.keys()].filter((id) => id.startsWith("mq-"));
+    await vi.waitFor(() => expect(queueRuns().length).toBeGreaterThan(0), { timeout: 20_000 });
+    const queued = ports.ci.runs.get(queueRuns()[0] ?? "");
+    expect(queued?.request).toMatchObject({
+      artifactsRepo: "app",
+      headSha: head,
+      evidenceSteps: [],
+    });
+    for (const id of queueRuns()) await ports.ci.finish(id);
     await instance.waitForStatus("complete");
     const output = (await instance.getOutput()) as ChangeWorkflowOutput;
     expect(output).toMatchObject({ outcome: "merged", lane: 1, detail: head, rollout: "none" });

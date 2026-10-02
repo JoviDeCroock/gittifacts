@@ -14,6 +14,7 @@
   "workflows": [
     { "name": "change", "binding": "CHANGE_WORKFLOW", "class_name": "ChangeWorkflow" },
     { "name": "rollout", "binding": "ROLLOUT_WORKFLOW", "class_name": "RolloutWorkflow" },
-    { "name": "push-router", "binding": "PUSH_ROUTER", "class_name": "PushRouter" }
+    { "name": "push-router", "binding": "PUSH_ROUTER", "class_name": "PushRouter" },
+    { "name": "batch-run", "binding": "BATCH_RUN_WORKFLOW", "class_name": "BatchRunWorkflow" }
   ]
 }
