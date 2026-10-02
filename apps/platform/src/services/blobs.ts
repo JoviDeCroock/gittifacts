@@ -9,9 +9,8 @@
  * otherwise the object's customMetadata `repoId` / `changeId`. Unattributable refs are 404.
  * Content is served inert (allowlisted types, nosniff, sandboxed CSP) because it is repo-controlled.
  */
-import type { Repo } from "@app/domain";
+import { canAccess } from "../access/access.js";
 import type { Caller, Services } from "../app-env.js";
-import { repoAllowed } from "../auth/repo-scope.js";
 import { ApiError, notFound } from "../errors.js";
 
 const REF_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._\-/]{0,511}$/;
@@ -63,11 +62,6 @@ async function owningRepoId(
   return null;
 }
 
-/** Single place to tighten per-repo read access (claims, org membership) later. */
-function canRead(caller: Caller, repo: Repo): boolean {
-  return caller.principal.scopes.includes("repo:read") && repoAllowed(caller.principal, repo.id);
-}
-
 function contentTypeOf(ref: string, stored: string | undefined): { type: string; inline: boolean } {
   const base = stored?.split(";")[0]?.trim().toLowerCase();
   if (base && SAFE_TYPES.has(base)) return { type: stored ?? base, inline: true };
@@ -86,7 +80,8 @@ export async function readBlob(svc: Services, caller: Caller, ref: string): Prom
   if (!head) throw blobNotFound(ref);
   const repoId = await owningRepoId(svc, ref, head.customMetadata);
   const repo = repoId ? await svc.store.getRepo(repoId) : null;
-  if (!repo || !canRead(caller, repo)) throw blobNotFound(ref);
+  // Repo access (src/access/): a blob of a repo the caller cannot read is just not there.
+  if (!repo || !(await canAccess(svc, caller.principal, repo, "read"))) throw blobNotFound(ref);
 
   const obj = await svc.env.BLOBS.get(ref);
   if (!obj) throw blobNotFound(ref);

@@ -18,6 +18,8 @@ import { call, isTemplateId, nextStepsFor, projectSlug, TEMPLATES } from "@app/c
 import type { Principal, Repo } from "@app/domain";
 import type { ProjectCreated } from "@app/mcp";
 import { z } from "zod";
+import { isPlatformAuditor } from "../access/config.js";
+import { auditorReadOnly } from "../access/route.js";
 import type { Caller, Services } from "../app-env.js";
 import { restrictedRepoIds } from "../auth/repo-scope.js";
 import { ApiError } from "../errors.js";
@@ -100,6 +102,7 @@ export async function createProject(
   raw: unknown,
   idempotencyKey?: string,
 ): Promise<ProjectCreated> {
+  if (isPlatformAuditor(caller.principal, svc.env)) throw auditorReadOnly();
   assertMayCreate(caller);
   const input = CreateProjectInput.parse(raw);
   return createProjectAs(svc, caller.principal, input, idempotencyKey);

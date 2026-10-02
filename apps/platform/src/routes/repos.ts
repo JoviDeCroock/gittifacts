@@ -17,7 +17,6 @@ import {
   ShadowStatsSchema,
 } from "../api/schemas.js";
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
-import { filterRepos } from "../auth/repo-scope.js";
 import { idempotent } from "../idempotency.js";
 import { listChangeSummaries } from "../services/changes.js";
 import { listPlans } from "../services/plans.js";
@@ -145,17 +144,14 @@ const changes = createRoute({
 
 export function registerRepoRoutes(app: ApiApp): void {
   app.openapi(list, async (c) =>
-    c.json(
-      { repos: filterRepos(callerOf(c).principal, await listRepoSummaries(c.get("services"))) },
-      200,
-    ),
+    c.json({ repos: await listRepoSummaries(c.get("services"), callerOf(c)) }, 200),
   );
   app.openapi(create, async (c) => {
     const repo = await createRepo(c.get("services"), callerOf(c), c.req.valid("json"));
     return c.json({ repo }, 201);
   });
   app.openapi(detail, async (c) =>
-    c.json(await getRepoDetail(c.get("services"), c.req.valid("param").repoId), 200),
+    c.json(await getRepoDetail(c.get("services"), callerOf(c), c.req.valid("param").repoId), 200),
   );
   app.openapi(lane0, async (c) => {
     const repo = await setLane0(
@@ -176,11 +172,11 @@ export function registerRepoRoutes(app: ApiApp): void {
     return c.json(result, 200);
   });
   app.openapi(plans, async (c) =>
-    c.json(await listPlans(c.get("services"), c.req.valid("param").repoId), 200),
+    c.json(await listPlans(c.get("services"), callerOf(c), c.req.valid("param").repoId), 200),
   );
   app.openapi(changes, async (c) => {
     const q = c.req.valid("query");
-    const list = await listChangeSummaries(c.get("services"), c.req.valid("param").repoId, {
+    const list = await listChangeSummaries(c.get("services"), callerOf(c), c.req.valid("param").repoId, {
       statuses: parseStatusList(q.status),
       lane: q.lane === undefined ? undefined : (Number(q.lane) as 0 | 1 | 2),
     });

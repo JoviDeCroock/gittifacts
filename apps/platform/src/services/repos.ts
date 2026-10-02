@@ -2,8 +2,11 @@ import { type ShadowSample, shadowAgreement } from "@app/classifier";
 import type { Repo } from "@app/domain";
 import type { z } from "zod";
 import type { CreateRepoBody, ShadowStatsSchema } from "../api/schemas.js";
+import { assertRepoAccess, filterAccessible } from "../access/access.js";
+import { auditorReadOnly } from "../access/route.js";
+import { isPlatformAuditor } from "../access/config.js";
 import type { Caller, Services } from "../app-env.js";
-import { badRequest, notFound } from "../errors.js";
+import { badRequest } from "../errors.js";
 import { assertClaimedFor } from "../limits/refusals.js";
 import { EMPTY_LANE_COUNTS, type LaneCounts } from "../store/d1-store.js";
 
@@ -22,9 +25,10 @@ export function shadowStats(repo: Repo, samples: readonly ShadowSample[]): Shado
   };
 }
 
-export async function listRepoSummaries(svc: Services): Promise<RepoSummary[]> {
+/** The repos the caller can read (members; agents via their owner, within their grant). */
+export async function listRepoSummaries(svc: Services, caller: Caller): Promise<RepoSummary[]> {
   const [repos, counts, drafts, samples] = await Promise.all([
-    svc.store.listRepos(),
+    svc.store.listRepos().then((all) => filterAccessible(svc, caller.principal, all)),
     svc.store.laneCounts(),
     svc.store.countDraftPlans(),
     svc.store.listShadowSamplesByRepo(),
@@ -41,14 +45,10 @@ export async function listRepoSummaries(svc: Services): Promise<RepoSummary[]> {
 
 export async function getRepoDetail(
   svc: Services,
+  caller: Caller,
   repoId: string,
 ): Promise<{ repo: Repo; shadow: ShadowStats; counts: LaneCounts }> {
-  const repo = await svc.store.getRepo(repoId);
-  if (!repo)
-    throw notFound(`repo ${repoId}`, {
-      explanation: "No repo with that id.",
-      call: "list_repos({})",
-    });
+  const repo = await assertRepoAccess(svc, caller.principal, repoId, "read");
   const [counts, drafts, samples] = await Promise.all([
     svc.store.laneCounts(repoId),
     svc.store.countDraftPlans(repoId),
@@ -69,6 +69,7 @@ export async function createRepo(
   caller: Caller,
   body: z.infer<typeof CreateRepoBody>,
 ): Promise<Repo> {
+  if (isPlatformAuditor(caller.principal, svc.env)) throw auditorReadOnly();
   if (body.importFrom) {
     return svc.coordinator.importRepo(caller.principal, {
       name: body.name,
@@ -89,7 +90,8 @@ export async function setLane0(
   repoId: string,
   enabled: boolean,
 ): Promise<Repo> {
-  if (!(await svc.store.getRepo(repoId))) throw notFound(`repo ${repoId}`);
+  // Owners only (Lane 0 lets the classifier merge without a human).
+  await assertRepoAccess(svc, caller.principal, repoId, "admin");
   return svc.coordinator.setLane0(caller.principal, repoId, enabled);
 }
 
@@ -121,8 +123,8 @@ export async function setDeployTarget(
   repoId: string,
   script: string | null,
 ): Promise<{ repo: Repo; script: string | null }> {
-  const repo = await svc.store.getRepo(repoId);
-  if (!repo) throw notFound(`repo ${repoId}`);
+  // Owners only: where merged Changes run in production.
+  const repo = await assertRepoAccess(svc, caller.principal, repoId, "admin");
   if (script !== null) assertClaimedFor(repo, "a deploy target");
   const target = script === null ? null : deployScriptName(repo.id, script);
   if (target !== null && target.length > MAX_SCRIPT_NAME) {

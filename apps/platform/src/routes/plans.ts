@@ -84,7 +84,7 @@ export function registerPlanRoutes(app: ApiApp): void {
     return c.json({ plan }, 201);
   });
   app.openapi(detail, async (c) =>
-    c.json(await getPlanDetail(c.get("services"), c.req.valid("param").planId), 200),
+    c.json(await getPlanDetail(c.get("services"), callerOf(c), c.req.valid("param").planId), 200),
   );
   app.openapi(approve, async (c) => {
     const plan = await approvePlan(

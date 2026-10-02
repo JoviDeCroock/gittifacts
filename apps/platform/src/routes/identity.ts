@@ -9,6 +9,7 @@ import {
   RepoSchema,
   SessionUserSchema,
 } from "../api/schemas.js";
+import { REPO_ROLES } from "../access/roles.js";
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
 import { registerOAuthRoutes } from "../oauth/routes.js";
@@ -50,6 +51,10 @@ const CapabilitiesSchema = z
         defaultBranch: z.string(),
         claim: RepoSchema.shape.claim,
         template: z.string().nullable(),
+        role: z
+          .enum(REPO_ROLES)
+          .nullable()
+          .describe("Your repo role (an agent: its owner's); actions also respect your scopes"),
         actions: z.array(z.enum(REPO_ACTIONS)),
         aiBudgetUsdPerChange: z.number(),
       }),

@@ -15,6 +15,7 @@ import {
 } from "@app/domain";
 import type { z } from "zod";
 import type { ReviewBody } from "../api/schemas.js";
+import { assertChangeAccess, assertPlanAccess, assertRepoAccess } from "../access/access.js";
 import type { Caller, Services } from "../app-env.js";
 import { conflict, forbidden, notFound } from "../errors.js";
 import { admitUnclaimedWork } from "../limits/gates.js";
@@ -48,10 +49,11 @@ export async function requireChange(svc: Services, changeId: string): Promise<Ch
 
 export async function listChangeSummaries(
   svc: Services,
+  caller: Caller,
   repoId: string,
   filter: { statuses?: Change["status"][] | undefined; lane?: Lane | undefined },
 ): Promise<{ changes: ChangeSummary[]; principals: Record<string, PrincipalRef> }> {
-  await requireRepo(svc, repoId);
+  await assertRepoAccess(svc, caller.principal, repoId, "read");
   const changes = await svc.store.listChangeSummaries(repoId, {
     ...(filter.statuses ? { statuses: filter.statuses } : {}),
     ...(filter.lane !== undefined ? { lane: filter.lane } : {}),
@@ -67,8 +69,12 @@ export interface ChangeDetail {
   principals: Record<string, PrincipalRef>;
 }
 
-export async function getChangeDetail(svc: Services, changeId: string): Promise<ChangeDetail> {
-  const change = await requireChange(svc, changeId);
+export async function getChangeDetail(
+  svc: Services,
+  caller: Caller,
+  changeId: string,
+): Promise<ChangeDetail> {
+  const change = await assertChangeAccess(svc, caller.principal, changeId, "read");
   const [plan, runs, classification] = await Promise.all([
     change.planId ? svc.store.getPlanView(change.planId) : Promise.resolve(null),
     svc.store.listRuns(change.id),
@@ -83,9 +89,10 @@ export async function getChangeDetail(svc: Services, changeId: string): Promise<
 
 export async function listChangeReviews(
   svc: Services,
+  caller: Caller,
   changeId: string,
 ): Promise<{ reviews: ReviewDecision[]; principals: Record<string, PrincipalRef> }> {
-  const change = await requireChange(svc, changeId);
+  const change = await assertChangeAccess(svc, caller.principal, changeId, "read");
   const reviews = await svc.store.listReviews(change.id);
   return { reviews, principals: await svc.store.principalRefs(reviews.map((r) => r.reviewerId)) };
 }
@@ -118,8 +125,12 @@ function notReady(change: Change, what: string, head: string) {
   });
 }
 
-export async function getChangeDiff(svc: Services, changeId: string): Promise<ChangeDiff> {
-  const change = await requireChange(svc, changeId);
+export async function getChangeDiff(
+  svc: Services,
+  caller: Caller,
+  changeId: string,
+): Promise<ChangeDiff> {
+  const change = await assertChangeAccess(svc, caller.principal, changeId, "read");
   const diff = await svc.store.getDiff(change.id, requireHead(change));
   if (!diff) throw notReady(change, "The diff", change.headSha ?? "");
   return diff;
@@ -133,9 +144,10 @@ export interface EvidenceWithVerification {
 /** Evidence for the current head, with the attestation re-verified against the platform keys. */
 export async function getChangeEvidence(
   svc: Services,
+  caller: Caller,
   changeId: string,
 ): Promise<EvidenceWithVerification> {
-  const change = await requireChange(svc, changeId);
+  const change = await assertChangeAccess(svc, caller.principal, changeId, "read");
   const head = requireHead(change);
   const [evidence, raw] = await Promise.all([
     svc.store.getEvidence(change.id, head),
@@ -160,9 +172,10 @@ export async function getChangeEvidence(
  */
 export async function getChangeTour(
   svc: Services,
+  caller: Caller,
   changeId: string,
 ): Promise<{ tour: Tour; stale: boolean }> {
-  const change = await requireChange(svc, changeId);
+  const change = await assertChangeAccess(svc, caller.principal, changeId, "read");
   const head = requireHead(change);
   const tour =
     (await svc.store.getTour(change.id, head)) ??
@@ -182,8 +195,12 @@ export interface RolloutView {
   principals: Record<string, PrincipalRef>;
 }
 
-export async function getChangeRollout(svc: Services, changeId: string): Promise<RolloutView> {
-  const change = await requireChange(svc, changeId);
+export async function getChangeRollout(
+  svc: Services,
+  caller: Caller,
+  changeId: string,
+): Promise<RolloutView> {
+  const change = await assertChangeAccess(svc, caller.principal, changeId, "read");
   const [events, repo, basePolicy] = await Promise.all([
     svc.store.auditTimeline(svc.auditLog, `change:${change.id}`),
     requireRepo(svc, change.repoId),
@@ -199,8 +216,12 @@ export async function getChangeRollout(svc: Services, changeId: string): Promise
   };
 }
 
-export async function listChangeIssues(svc: Services, changeId: string): Promise<LinkedIssue[]> {
-  const change = await requireChange(svc, changeId);
+export async function listChangeIssues(
+  svc: Services,
+  caller: Caller,
+  changeId: string,
+): Promise<LinkedIssue[]> {
+  const change = await assertChangeAccess(svc, caller.principal, changeId, "read");
   const versionId = change.rolloutState?.versionId ?? null;
   const [byChange, byVersion] = await Promise.all([
     svc.store.listIssues({ changeId: change.id }),
@@ -220,7 +241,8 @@ export async function startChange(
   idempotencyKey?: string,
 ): Promise<{ change: Change; remote: GitRemoteGrant }> {
   const v = StartChangeInput.parse(input);
-  const repo = await requireRepo(svc, v.repoId);
+  // Repo access: the caller (an agent: its owning human) must be at least a reviewer.
+  const repo = await assertRepoAccess(svc, caller.principal, v.repoId, "contribute");
   // O3: an unclaimed project pays a fork and a push token from its quotas.
   await admitUnclaimedWork(svc, repo, { ops: 2, what: "start_change" });
   if (v.planId !== undefined && !(await svc.store.getPlan(v.planId))) {
@@ -230,6 +252,8 @@ export async function startChange(
       call: `create_plan({ repoId: "${v.repoId}", title: "<title>", intent: "<why>", acceptanceCriteria: ["<observable result>"] })`,
     });
   }
+  // The plan must be one the caller can read (a plan of another repo is the coordinator's 400).
+  if (v.planId !== undefined) await assertPlanAccess(svc, caller.principal, v.planId, "read");
   return svc.coordinator.startChange(caller.principal, {
     ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
     repoId: v.repoId,
@@ -246,7 +270,7 @@ export async function refreshPushGrant(
   caller: Caller,
   changeId: string,
 ): Promise<GitRemoteGrant> {
-  const change = await requireChange(svc, changeId);
+  const change = await assertChangeAccess(svc, caller.principal, changeId, "contribute");
   await admitUnclaimedWork(svc, await requireRepo(svc, change.repoId), {
     ops: 1,
     what: "refresh_push_token",
@@ -262,7 +286,8 @@ export async function submitReview(
   idempotencyKey?: string,
 ): Promise<Change> {
   if (caller.principal.kind !== "human") throw forbidden("only a human may review a change");
-  await requireChange(svc, changeId);
+  // Members with reviewer or above only; nobody reviews an unclaimed project until it is claimed.
+  await assertChangeAccess(svc, caller.principal, changeId, "review");
   return svc.coordinator.submitReview(caller.principal, changeId, {
     ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
     decision: body.decision,
@@ -279,7 +304,7 @@ export async function killChange(
   reason: string,
 ): Promise<Change> {
   if (caller.principal.kind !== "human") throw forbidden("only a human may pull the kill switch");
-  await requireChange(svc, changeId);
+  await assertChangeAccess(svc, caller.principal, changeId, "approve");
   return svc.coordinator.kill(caller.principal, changeId, reason);
 }
 
@@ -293,7 +318,7 @@ export async function requestReview(
   changeId: string,
   message: string | undefined,
 ): Promise<{ change: Change; notified: boolean }> {
-  const change = await requireChange(svc, changeId);
+  const change = await assertChangeAccess(svc, caller.principal, changeId, "contribute");
   const author = await svc.store.getPrincipal(change.authorId);
   const mayAsk = change.authorId === caller.principal.id || author?.ownerId === caller.principal.id;
   if (!mayAsk) {

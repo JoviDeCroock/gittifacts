@@ -6,7 +6,7 @@ import {
   ChainStatusSchema,
   PrincipalsMapSchema,
 } from "../api/schemas.js";
-import { requirePrincipal } from "../auth/middleware.js";
+import { callerOf, requirePrincipal } from "../auth/middleware.js";
 import { listAudit } from "../services/audit.js";
 import { type ApiApp, errors, json, SECURITY } from "./common.js";
 
@@ -34,6 +34,6 @@ const list = createRoute({
 
 export function registerAuditRoutes(app: ApiApp): void {
   app.openapi(list, async (c) =>
-    c.json(await listAudit(c.get("services"), c.req.valid("query")), 200),
+    c.json(await listAudit(c.get("services"), callerOf(c), c.req.valid("query")), 200),
   );
 }

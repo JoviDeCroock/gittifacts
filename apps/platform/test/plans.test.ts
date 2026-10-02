@@ -4,7 +4,7 @@ import { documentSigningBytes, parseKeySet, sha256Base64url, verifyDocument } fr
 import { describe, expect, it } from "vitest";
 import { planApprovalDocument, verifyPlanApproval } from "../src/services/plans.js";
 import { Purpose, platformSigner } from "../src/signing.js";
-import { repoFixture, store } from "./fixtures.js";
+import { addMember, repoFixture, store } from "./fixtures.js";
 import { call, createAgent, expectError, json, makeApp, signUpHuman } from "./http.js";
 
 const draft = (repoId: string, extra: Record<string, unknown> = {}) => ({
@@ -23,6 +23,9 @@ async function setup() {
   const alice = await signUpHuman(app, "Alice");
   const bob = await signUpHuman(app, "Bob");
   const agent = await createAgent(app, alice.cookie);
+  // Alice owns the repo (her agent drafts), Bob is a maintainer (approves plans).
+  await addMember(store(), repo.id, alice.principal.id, "owner");
+  await addMember(store(), repo.id, bob.principal.id, "maintainer");
   return { app, repo, alice, bob, agent };
 }
 

@@ -8,8 +8,8 @@
  */
 import { type Change, type Plan, PlanDraftInput, type Principal } from "@app/domain";
 import { canonicalBytes, sha256Base64url } from "@app/evidence";
+import { assertPlanAccess, assertRepoAccess } from "../access/access.js";
 import type { Caller, Services } from "../app-env.js";
-import { assertRepoAllowed } from "../auth/repo-scope.js";
 import { ApiError, conflict, forbidden, notFound } from "../errors.js";
 import { type PlatformSigner, Purpose, type VerifyOutcome } from "../signing.js";
 import type { PrincipalRef } from "../store/d1-store.js";
@@ -98,26 +98,22 @@ function noSuchPlan(planId: string, repoId = "<repoId>") {
   });
 }
 
-function noSuchRepo(repoId: string) {
-  return notFound(`repo ${repoId}`, {
-    explanation: "No repo with that id. List the repos you can act on.",
-    call: "list_repos({})",
-  });
-}
-
 export async function listPlans(
   svc: Services,
+  caller: Caller,
   repoId: string,
 ): Promise<{ plans: PlanView[]; principals: Record<string, PrincipalRef> }> {
-  if (!(await svc.store.getRepo(repoId))) throw noSuchRepo(repoId);
+  await assertRepoAccess(svc, caller.principal, repoId, "read");
   const plans = await svc.store.listPlanViews(repoId);
   return { plans, principals: await svc.store.principalRefs(planPrincipalIds(plans)) };
 }
 
 export async function getPlanDetail(
   svc: Services,
+  caller: Caller,
   planId: string,
 ): Promise<{ plan: PlanView; changes: Change[]; principals: Record<string, PrincipalRef> }> {
+  await assertPlanAccess(svc, caller.principal, planId, "read");
   const plan = await svc.store.getPlanView(planId);
   if (!plan) throw noSuchPlan(planId);
   const changes = await svc.store.listChangesForPlan(planId);
@@ -132,9 +128,8 @@ export async function getPlanDetail(
 
 export async function createPlan(svc: Services, caller: Caller, input: unknown): Promise<PlanView> {
   const draft = PlanDraftInput.parse(input);
-  assertRepoAllowed(caller.principal, draft.repoId);
-  const repo = await svc.store.getRepo(draft.repoId);
-  if (!repo) throw noSuchRepo(draft.repoId);
+  // Repo access: the caller (an agent: its owning human) must be at least a reviewer.
+  await assertRepoAccess(svc, caller.principal, draft.repoId, "contribute");
   if (draft.supersedes) {
     const prev = await svc.store.getPlan(draft.supersedes);
     if (!prev) throw noSuchPlan(draft.supersedes, draft.repoId);
@@ -204,8 +199,9 @@ export async function approvePlan(
   input: { comment?: string | undefined },
 ): Promise<PlanView> {
   assertHumanApprover(caller);
-  const plan = await svc.store.getPlan(planId);
-  if (!plan) throw noSuchPlan(planId);
+  // Maintainers and owners of the plan's repo only (404 for anyone who cannot see it); nobody
+  // approves anything in an unclaimed project until it is claimed.
+  const plan = await assertPlanAccess(svc, caller.principal, planId, "approve");
   if (plan.authorId === caller.principal.id) {
     throw new ApiError(403, "self-approval", "a principal cannot approve its own plan", undefined, {
       explanation: `You wrote plan ${plan.id}, so someone else must approve it. Ask another human with plan:approve to review it.`,
@@ -287,8 +283,14 @@ export async function rejectPlan(
   input: { comment: string },
 ): Promise<PlanView> {
   assertHumanApprover(caller);
-  const plan = await svc.store.getPlan(planId);
-  if (!plan) throw noSuchPlan(planId);
+  // Maintainers reject; the author withdraws its own draft with contributor access.
+  const visible = await assertPlanAccess(svc, caller.principal, planId, "read");
+  const plan = await assertPlanAccess(
+    svc,
+    caller.principal,
+    planId,
+    visible.authorId === caller.principal.id ? "contribute" : "approve",
+  );
   if (plan.status !== "draft") {
     throw conflict(`plan is ${plan.status}, only a draft can be rejected`, "invalid-state", {
       explanation: `Plan ${plan.id} is already ${plan.status}; only drafts can be rejected.`,

@@ -1,5 +1,7 @@
 import type { Scope } from "@app/domain";
 import type { Context, MiddlewareHandler } from "hono";
+import { assertRouteAccess } from "../access/route.js";
+import { needForScopes, type RepoNeed } from "../access/roles.js";
 import type { AppEnv, Caller } from "../app-env.js";
 import { ApiError, forbidden, unauthorized } from "../errors.js";
 import { enforceUnclaimedRequestRate } from "../limits/request-limit.js";
@@ -8,7 +10,6 @@ import { audienceAllows } from "../oauth/urls.js";
 import { isAgentToken, verifyAgentToken } from "./agent-tokens.js";
 import { createAuth } from "./better-auth.js";
 import { ensureHumanPrincipal } from "./principals.js";
-import { assertRouteRepoAccess } from "./repo-scope.js";
 
 export function authFor(c: Context<AppEnv>) {
   return createAuth(c.env, {
@@ -94,11 +95,13 @@ export function assertScopes(caller: Caller, scopes: readonly Scope[]): void {
 /**
  * Route guard: 401 without a principal, 403 when a scope is missing (code `insufficient-scope`),
  * when `humanOnly` and the caller is an agent, or when a repo-restricted agent names a repo,
- * plan or change outside its grant (code `repo-not-granted`).
+ * plan or change outside its grant (code `repo-not-granted`). Then repo access (src/access/):
+ * the repo a route names must allow `need` (default: implied by `scopes`), else 404 for a
+ * repo the caller cannot see and 403 `insufficient-role` for one it can.
  */
 export function requirePrincipal(
   scopes: readonly Scope[] = [],
-  opts: { humanOnly?: boolean } = {},
+  opts: { humanOnly?: boolean; need?: RepoNeed } = {},
 ): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const caller = await resolveCaller(c);
@@ -107,7 +110,7 @@ export function requirePrincipal(
       throw forbidden("only a human may do this", { kind: caller.principal.kind });
     }
     assertScopes(caller, scopes);
-    await assertRouteRepoAccess(c, caller);
+    await assertRouteAccess(c, caller, opts.need ?? needForScopes(scopes));
     await next();
   };
 }

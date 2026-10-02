@@ -23,6 +23,7 @@ import {
   TourSchema,
   VerificationSchema,
 } from "../api/schemas.js";
+import { assertChangeAccess } from "../access/access.js";
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
 import {
@@ -36,7 +37,6 @@ import {
   listChangeReviews,
   refreshPushGrant,
   requestReview,
-  requireChange,
   startChange,
   submitReview,
 } from "../services/changes.js";
@@ -221,9 +221,12 @@ const kill = createRoute({
   method: "post",
   path: "/api/v1/changes/{changeId}/kill",
   tags: ["changes"],
-  summary: "Kill switch: flag off, roll back, open a revert change (human)",
+  summary: "Kill switch: flag off, roll back, open a revert change (human maintainer or owner)",
   security: SECURITY,
-  middleware: [requirePrincipal(["change:review"], { humanOnly: true }), idempotent()] as const,
+  middleware: [
+    requirePrincipal(["change:review"], { humanOnly: true, need: "approve" }),
+    idempotent(),
+  ] as const,
   request: { headers: IdempotencyHeaders, params: ChangeIdParam, body: body(KillBody) },
   responses: {
     200: json(z.object({ change: ChangeSchema }), "Killed"),
@@ -253,7 +256,7 @@ export function registerChangeRoutes(app: ApiApp): void {
     const svc = c.get("services");
     const caller = callerOf(c);
     const changeId = c.req.param("changeId");
-    await requireChange(svc, changeId);
+    await assertChangeAccess(svc, caller.principal, changeId, "read");
     return changeEventStream(svc, caller, changeId, {
       since: c.req.header("last-event-id") ?? c.req.query("since") ?? null,
       signal: c.req.raw.signal,
@@ -290,7 +293,7 @@ export function registerChangeRoutes(app: ApiApp): void {
     return c.json(out, 201);
   });
   app.openapi(detail, async (c) =>
-    c.json(await getChangeDetail(c.get("services"), c.req.valid("param").changeId), 200),
+    c.json(await getChangeDetail(c.get("services"), callerOf(c), c.req.valid("param").changeId), 200),
   );
   app.openapi(token, async (c) => {
     const remote = await refreshPushGrant(
@@ -301,16 +304,16 @@ export function registerChangeRoutes(app: ApiApp): void {
     return c.json({ remote }, 200);
   });
   app.openapi(diff, async (c) =>
-    c.json({ diff: await getChangeDiff(c.get("services"), c.req.valid("param").changeId) }, 200),
+    c.json({ diff: await getChangeDiff(c.get("services"), callerOf(c), c.req.valid("param").changeId) }, 200),
   );
   app.openapi(evidence, async (c) =>
-    c.json(await getChangeEvidence(c.get("services"), c.req.valid("param").changeId), 200),
+    c.json(await getChangeEvidence(c.get("services"), callerOf(c), c.req.valid("param").changeId), 200),
   );
   app.openapi(tour, async (c) =>
-    c.json(await getChangeTour(c.get("services"), c.req.valid("param").changeId), 200),
+    c.json(await getChangeTour(c.get("services"), callerOf(c), c.req.valid("param").changeId), 200),
   );
   app.openapi(reviews, async (c) =>
-    c.json(await listChangeReviews(c.get("services"), c.req.valid("param").changeId), 200),
+    c.json(await listChangeReviews(c.get("services"), callerOf(c), c.req.valid("param").changeId), 200),
   );
   app.openapi(review, async (c) => {
     const change = await submitReview(
@@ -332,7 +335,7 @@ export function registerChangeRoutes(app: ApiApp): void {
     return c.json(out, 200);
   });
   app.openapi(rollout, async (c) =>
-    c.json(await getChangeRollout(c.get("services"), c.req.valid("param").changeId), 200),
+    c.json(await getChangeRollout(c.get("services"), callerOf(c), c.req.valid("param").changeId), 200),
   );
   app.openapi(kill, async (c) => {
     const change = await killChange(
@@ -345,7 +348,7 @@ export function registerChangeRoutes(app: ApiApp): void {
   });
   app.openapi(issues, async (c) =>
     c.json(
-      { issues: await listChangeIssues(c.get("services"), c.req.valid("param").changeId) },
+      { issues: await listChangeIssues(c.get("services"), callerOf(c), c.req.valid("param").changeId) },
       200,
     ),
   );

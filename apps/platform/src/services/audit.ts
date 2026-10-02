@@ -1,5 +1,6 @@
 import type { AuditEvent } from "@app/domain";
-import type { Services } from "../app-env.js";
+import { auditVisibility } from "../access/audit.js";
+import type { Caller, Services } from "../app-env.js";
 import { auditLogStub } from "../audit/audit.js";
 import { verifyEntries } from "../audit/chain.js";
 import { summarizeAudit } from "../audit/summary.js";
@@ -32,13 +33,19 @@ export interface AuditPage {
  *    which catches tampering with the mirror;
  * 2. the full chain in the AuditLog DO (the source of truth).
  * `brokenAt` is the lowest failing seq.
+ *
+ * Only events the caller may read (src/access/audit.ts): its repos' events, its own principals',
+ * and platform-wide ones for platform admins; auditors read everything.
  */
 export async function listAudit(
   svc: Services,
+  caller: Caller,
   q: { subject?: string | undefined; cursor?: string | undefined; limit: number },
 ): Promise<AuditPage> {
+  const visible = await auditVisibility(svc, caller.principal);
   const events = await svc.store.listAuditEvents({
     log: svc.auditLog,
+    ...(visible !== null ? { visible } : {}),
     ...(q.subject !== undefined ? { subject: q.subject } : {}),
     ...(q.cursor !== undefined ? { beforeSeq: Number(q.cursor) } : {}),
     limit: q.limit + 1,

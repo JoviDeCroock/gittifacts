@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ErrorSchema } from "./api/schemas.js";
+import { registerMemberRoutes } from "./access/routes.js";
 import { type AppOptions, createServices } from "./app-env.js";
 import { authFor, callerOf, requirePrincipal } from "./auth/middleware.js";
 import { registerClaimRoutes } from "./claim/routes.js";
@@ -84,6 +85,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerWellKnownRoutes(app);
   registerIdentityRoutes(app);
   registerRepoRoutes(app);
+  registerMemberRoutes(app);
   registerImportRoutes(app);
   registerQueueRoutes(app);
   registerPlanRoutes(app);

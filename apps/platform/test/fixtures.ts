@@ -10,6 +10,8 @@ import {
   type Repo,
   type Tour,
 } from "@app/domain";
+import { putMember } from "../src/access/members-store.js";
+import type { RepoRole } from "../src/access/roles.js";
 import { principals } from "../src/db/schema.js";
 import { platformSigner } from "../src/signing.js";
 import { D1Store } from "../src/store/d1-store.js";
@@ -48,6 +50,22 @@ export async function seedPrincipal(
     createdAt: new Date().toISOString(),
   });
   return id;
+}
+
+/** Make a human principal a member of a repo (repo access, src/access/). */
+export async function addMember(
+  s: D1Store,
+  repoId: string,
+  principalId: string,
+  role: RepoRole = "owner",
+): Promise<void> {
+  await putMember(s, {
+    repoId,
+    principalId,
+    role,
+    addedBy: "system",
+    addedAt: new Date().toISOString(),
+  });
 }
 
 export function repoFixture(over: Partial<Repo> = {}): Repo {

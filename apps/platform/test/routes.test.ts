@@ -4,6 +4,7 @@ import type { Change, Repo } from "@app/domain";
 import { describe, expect, it, vi } from "vitest";
 import { DoAudit } from "../src/audit/audit.js";
 import {
+  addMember,
   changeFixture,
   classificationFixture,
   diffFixture,
@@ -23,6 +24,7 @@ async function world(coordinator = {}) {
   const agent = await createAgent(app, human.cookie);
   const s = store();
   const seeded = await seedWorld(s);
+  await addMember(s, seeded.repo.id, human.principal.id, "owner");
   return {
     app,
     mock,
@@ -326,7 +328,7 @@ describe("lifecycle routes call the CoordinatorApi", () => {
       .first();
     expect(n).toEqual({ kind: "review-requested", message: "stuck on flaky test" });
 
-    // The owning human may ask too; a stranger may not.
+    // The owning human may ask too; another member may not; a stranger does not see it.
     expect(
       (
         await call(app, "POST", `/api/v1/changes/${mine.id}/request-review`, {
@@ -335,23 +337,33 @@ describe("lifecycle routes call the CoordinatorApi", () => {
         })
       ).status,
     ).toBe(200);
+    const colleague = await signUpHuman(app, "Grace");
+    await addMember(s, repo.id, colleague.principal.id, "reviewer");
+    await expectError(
+      await call(app, "POST", `/api/v1/changes/${mine.id}/request-review`, {
+        cookie: colleague.cookie,
+        body: {},
+      }),
+      403,
+      "forbidden",
+    );
     const stranger = await signUpHuman(app, "Mallory");
     await expectError(
       await call(app, "POST", `/api/v1/changes/${mine.id}/request-review`, {
         cookie: stranger.cookie,
         body: {},
       }),
-      403,
-      "forbidden",
+      404,
+      "not-found",
     );
   });
 });
 
 describe("audit route", () => {
   it("pages newest first with a cursor and reports a tampered mirror", async () => {
-    const { app, human } = await world();
+    const { app, human, repo } = await world();
     const audit = new DoAudit(env);
-    const subject = `repo:${uid("audit")}`;
+    const subject = `repo:${repo.id}`;
     for (let i = 0; i < 5; i++)
       await audit.append({ principalId: "system", action: "t", subject, payload: { i } });
     const p1 = await json<{

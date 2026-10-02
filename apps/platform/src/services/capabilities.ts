@@ -3,9 +3,11 @@
  * Quotas: an unclaimed project's agent gets its project's hard limits and today's use (O3).
  */
 import type { Principal, Repo, Scope } from "@app/domain";
+import { type AccessDeps, filterAccessible, repoAccess } from "../access/access.js";
+import { isPlatformAuditor } from "../access/config.js";
+import { allows, type RepoRole } from "../access/roles.js";
 import type { Caller, Services } from "../app-env.js";
 import type { SessionUser } from "../auth/principals.js";
-import { filterRepos } from "../auth/repo-scope.js";
 import { unclaimedLimits } from "../limits/config.js";
 import { usageOf } from "../limits/quotas.js";
 import { isUnclaimedAgent } from "../limits/request-limit.js";
@@ -27,6 +29,8 @@ export interface RepoCapability {
   defaultBranch: string;
   claim: Repo["claim"];
   template: string | null;
+  /** The caller's effective role (an agent: its owner's; src/access/). */
+  role: RepoRole | null;
   actions: RepoAction[];
   aiBudgetUsdPerChange: number;
 }
@@ -51,41 +55,57 @@ export interface Capabilities {
   quotas: Quotas;
 }
 
-export function repoActions(principal: Principal, repo: Repo): RepoAction[] {
+/** What `principal` may do on `repo` with effective role `role` (scopes and role both apply). */
+export function repoActions(
+  principal: Principal,
+  repo: Repo,
+  role: RepoRole | null,
+  readOnly = false,
+): RepoAction[] {
   const has = (s: Scope) => principal.scopes.includes(s);
-  const human = principal.kind === "human";
+  const may = (need: Parameters<typeof allows>[2]) => allows(principal, role, need);
   const claimed = repo.claim.status === "claimed";
   const actions: RepoAction[] = [];
-  if (has("repo:read")) actions.push("read");
-  if (has("plan:create")) actions.push("create-plan");
-  if (has("change:create")) actions.push("start-change");
-  if (human && has("plan:approve")) actions.push("approve-plan");
-  if (human && has("change:review")) actions.push("review-change");
-  if (human && claimed && has("repo:admin")) actions.push("admin");
+  if (may("read")) actions.push("read");
+  if (readOnly) return actions; // platform auditors
+  if (may("contribute") && has("plan:create")) actions.push("create-plan");
+  if (may("contribute") && has("change:create")) actions.push("start-change");
+  if (may("approve") && has("plan:approve")) actions.push("approve-plan");
+  if (may("review")) actions.push("review-change");
+  if (claimed && may("admin") && has("repo:admin")) actions.push("admin");
   // Unclaimed projects never get Lane 0 / auto-merge (onboarding §4).
-  if (human && claimed && has("repo:admin") && !repo.policy.lane0Enabled)
+  if (claimed && may("admin") && has("policy:admin") && !repo.policy.lane0Enabled)
     actions.push("enable-lane0");
   return actions;
 }
 
+async function roleOn(deps: AccessDeps, p: Principal, repo: Repo): Promise<RepoRole | null> {
+  return (await repoAccess(deps, p, repo)).role;
+}
+
 export async function capabilities(svc: Services, caller: Caller): Promise<Capabilities> {
-  // Repo-restricted agents (delegated sessions) only see the repos they were granted.
+  // Only repos the caller can read: members' repos; agents via their owner, within their grant.
   const repos = caller.principal.scopes.includes("repo:read")
-    ? filterRepos(caller.principal, await svc.store.listRepos())
+    ? await filterAccessible(svc, caller.principal, await svc.store.listRepos())
     : [];
+  const roles = await Promise.all(repos.map((repo) => roleOn(svc, caller.principal, repo)));
+  const readOnly = isPlatformAuditor(caller.principal, svc.env);
   return {
     principal: caller.principal,
     user: caller.user,
     scopes: caller.principal.scopes,
     canApprove:
-      caller.principal.kind === "human" && caller.principal.scopes.includes("plan:approve"),
-    repos: repos.map((repo) => ({
+      caller.principal.kind === "human" &&
+      !readOnly &&
+      caller.principal.scopes.includes("plan:approve"),
+    repos: repos.map((repo, i) => ({
       id: repo.id,
       name: repo.name,
       defaultBranch: repo.defaultBranch,
       claim: repo.claim,
       template: repo.template,
-      actions: repoActions(caller.principal, repo),
+      role: roles[i] ?? null,
+      actions: repoActions(caller.principal, repo, roles[i] ?? null, readOnly),
       aiBudgetUsdPerChange: repo.policy.ai.budgetUsdPerChange,
     })),
     quotas: await quotasFor(svc, caller.principal, repos),
