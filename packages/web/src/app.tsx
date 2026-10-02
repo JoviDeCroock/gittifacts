@@ -8,6 +8,7 @@ const SignIn = lazy(() => import("./routes/signin.js").then((m) => m.SignIn));
 const Repos = lazy(() => import("./routes/repos.js").then((m) => m.Repos));
 const RepoChanges = lazy(() => import("./routes/repo.js").then((m) => m.RepoChanges));
 const QueueView = lazy(() => import("./routes/queue.js").then((m) => m.QueueView));
+const MembersPage = lazy(() => import("./routes/members.js").then((m) => m.MembersPage));
 const PlanView = lazy(() => import("./routes/plan.js").then((m) => m.PlanView));
 const TourView = lazy(() => import("./routes/tour.js").then((m) => m.TourView));
 const EvidenceView = lazy(() => import("./routes/evidence.js").then((m) => m.EvidenceView));
@@ -51,6 +52,7 @@ function AuthedApp() {
           <Route path="/" component={Repos} />
           <Route path="/repos/:repoId" component={RepoChanges} />
           <Route path="/repos/:repoId/queue" component={QueueView} />
+          <Route path="/repos/:repoId/members" component={MembersPage} />
           <Route path="/plans/:planId" component={PlanView} />
           <Route path="/changes/:changeId" component={TourView} />
           <Route path="/changes/:changeId/evidence" component={EvidenceView} />

@@ -1,0 +1,134 @@
+/* Repo members: hairline rows (person, role, action), an add form for owners, the role guide. */
+.members {
+  max-inline-size: 760px;
+}
+.member {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "avatar who act"
+    "avatar role role"
+    "error error error";
+  gap: var(--s-2) var(--s-3);
+  align-items: center;
+  padding-block: var(--s-4);
+}
+.member > .avatar {
+  grid-area: avatar;
+  align-self: start;
+}
+.member__who {
+  grid-area: who;
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+.member__name {
+  font-weight: var(--weight-bold);
+  overflow-wrap: anywhere;
+}
+.member__you {
+  font-weight: var(--weight-regular);
+  color: var(--text-3);
+}
+.member__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--s-3);
+  font-size: var(--text-small);
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+.member__role {
+  grid-area: role;
+}
+.member__select {
+  inline-size: auto;
+  min-inline-size: 11rem;
+}
+.member__role-label {
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--text-2);
+}
+.member__act {
+  grid-area: act;
+  justify-self: end;
+}
+.add-member__fields .input {
+  block-size: 46px;
+}
+.member__error {
+  grid-area: error;
+}
+@media (min-width: 640px) {
+  /* Fixed role and action columns, so the selects line up from row to row. */
+  .member {
+    grid-template-columns: auto minmax(0, 1fr) 11rem 6.5rem;
+    grid-template-areas:
+      "avatar who role act"
+      "error error error error";
+  }
+  .member__select {
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+}
+.members__note,
+.add-member__lede,
+.role-guide__note {
+  margin-block-start: var(--s-3);
+  font-size: var(--text-small);
+  color: var(--text-3);
+  max-inline-size: 68ch;
+}
+.add-member__title,
+.role-guide__title {
+  font-size: var(--text-title);
+}
+.add-member__lede {
+  margin-block: var(--s-2) var(--s-4);
+}
+.add-member__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: end;
+}
+@media (min-width: 640px) {
+  .add-member__fields {
+    grid-template-columns: minmax(0, 1fr) 12rem auto;
+  }
+}
+.add-member .field__error,
+.add-member__done {
+  margin-block-start: var(--s-3);
+}
+.add-member__done {
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.role-guide__list {
+  margin-block-start: var(--s-3);
+  border-block-start: 1px solid var(--rule);
+}
+.role-guide__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px var(--s-4);
+  padding-block: var(--s-3);
+  border-block-end: 1px solid var(--rule);
+}
+@media (min-width: 640px) {
+  .role-guide__row {
+    grid-template-columns: 9rem minmax(0, 1fr);
+  }
+}
+.role-guide__row dt {
+  font-weight: var(--weight-medium);
+}
+.role-guide__row dd {
+  margin: 0;
+  color: var(--text-2);
+  max-inline-size: 68ch;
+}

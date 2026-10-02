@@ -209,9 +209,14 @@ export function RepoChanges({ repoId }: { repoId: string }) {
       title={repo.name}
       wide
       actions={
-        <LinkButton href={`/repos/${repoId}/queue`} size="sm" icon="list-ordered">
-          Merge queue
-        </LinkButton>
+        <>
+          <LinkButton href={`/repos/${repoId}/queue`} size="sm" icon="list-ordered">
+            Merge queue
+          </LinkButton>
+          <LinkButton href={`/repos/${repoId}/members`} size="sm" icon="user">
+            Members
+          </LinkButton>
+        </>
       }
       crumbs={[{ href: "/", label: "Repositories" }]}
       meta={
