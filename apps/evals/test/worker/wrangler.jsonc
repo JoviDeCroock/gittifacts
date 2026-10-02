@@ -1,0 +1,32 @@
+// Test-only Worker config. Mirrors the production bindings (RESULTS, EVAL_SANDBOX, the two
+// Workflows) without containers[], AI or Analytics Engine: the Workers test runtime has none of
+// them, so the test entry swaps in a fake container, a scripted model and a fake platform.
+{
+  "$schema": "../../../../node_modules/wrangler/config-schema.json",
+  "name": "evals-test",
+  "main": "./entry.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "PLATFORM_HOST": "https://platform.test",
+    "PREVIEW_HOST_SUFFIX": "-pv.resynapse.dev",
+    "AI_GATEWAY_ID": "gittifacts",
+    "EVAL_IMPORT_REPO_URL": "https://github.com/JoviDeCroock/gittifacts-fixture-clock-api",
+    "EVAL_RUNS_PER_CELL": "1",
+    "EVAL_CONCURRENCY": "2",
+    "EVAL_ADMIN_TOKEN": "gtf_eval_admin",
+    "EVALS_API_TOKEN": "api-token",
+    "EVALS_READ_TOKEN": "read-token"
+  },
+  "durable_objects": { "bindings": [{ "name": "EVAL_SANDBOX", "class_name": "TestEvalSandbox" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TestEvalSandbox"] }],
+  "workflows": [
+    { "name": "eval-run", "binding": "EVAL_RUN_WORKFLOW", "class_name": "TestEvalRunWorkflow" },
+    {
+      "name": "eval-matrix",
+      "binding": "EVAL_MATRIX_WORKFLOW",
+      "class_name": "TestEvalMatrixWorkflow"
+    }
+  ],
+  "r2_buckets": [{ "binding": "RESULTS", "bucket_name": "evals-test" }]
+}

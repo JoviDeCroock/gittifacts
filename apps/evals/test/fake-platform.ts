@@ -3,6 +3,7 @@
  * credential-less POST /api/v1/projects, and preview hosts. Shapes follow apps/platform's
  * OpenAPI schemas (only the fields the eval reads, plus a few extras to prove passthrough).
  */
+import { fakeMcpServer } from "./fake-mcp.js";
 
 export const ADMIN_TOKEN = "gtf_eval_admin";
 export const HOST = "https://platform.test";
@@ -58,6 +59,8 @@ export class FakePlatform {
   anonymousAvailable = true;
   /** Previews of new projects go green at once (CI and preview "finish" instantly). */
   autoGreen = false;
+  /** The platform's MCP endpoint (credential-less here). */
+  mcp: ReturnType<typeof fakeMcpServer> | null = null;
   /** Called after a credential-less project is created. */
   onCreate: ((repoId: string) => void) | null = null;
   requests: { method: string; url: string; auth: string | null; evalRun: string | null }[] = [];
@@ -184,6 +187,18 @@ export function fakePlatformFetch(p: FakePlatform) {
       return new Response("Starting preview…", { status: 503, headers: { "retry-after": "5" } });
     }
     if (url.origin !== HOST) return new Response("no route", { status: 502 });
+    if (url.pathname === "/mcp") {
+      p.mcp ??= fakeMcpServer({
+        tools: {
+          create_project: (args) => p.createProject(args as { name?: string; template?: string }),
+          open_workspace: (args) => ({
+            workspaceId: `ws-${String(args.changeId ?? "x")}`,
+            status: "ready",
+          }),
+        },
+      });
+      return p.mcp.handler(req);
+    }
     if (url.pathname === "/start") {
       return json({
         kind: "gittifacts.start",

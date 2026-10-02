@@ -4,7 +4,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "ESNext.Disposable"],
     "declaration": false
   },
   "include": ["src", "test"]
