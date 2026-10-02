@@ -5,9 +5,12 @@
  * day is coloured (carmine, with the words), because that is a state that needs action.
  */
 
-.claim {
+.claim,
+.claim__body,
+.claim__decide {
   display: grid;
   gap: var(--s-5);
+  min-inline-size: 0;
 }
 @media (min-width: 640px) {
   .claim {
@@ -19,11 +22,58 @@
   }
 }
 
+/*
+ * Desktop: the project on the left as a reading column, the decision in a sticky rail on the
+ * right (the panel with the 2px ink edge, where the claim happens).
+ */
+@media (min-width: 1024px) {
+  .consent-frame__main.claim-frame {
+    max-inline-size: 1040px;
+  }
+  .claim {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    align-items: start;
+    gap: var(--s-7);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+  .claim__decide {
+    position: sticky;
+    inset-block-start: var(--s-5);
+    gap: var(--s-4);
+    padding: var(--s-5);
+    border-radius: var(--r-panel);
+    background: var(--surface);
+    border: 2px solid var(--text);
+    box-shadow: var(--shadow-raise);
+  }
+  .claim__decide .claim-bar {
+    position: static;
+    grid-template-columns: minmax(0, 1fr);
+    margin: 0;
+    padding: var(--s-4) 0 0;
+    border-radius: 0;
+    background: none;
+  }
+  .claim__decide .claim-bar__actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .claim__who {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--s-3);
   align-items: center;
+  justify-self: stretch;
+  padding-block: var(--s-2);
+}
+.claim__who-text {
+  display: grid;
+  gap: 2px;
 }
 .claim__agent {
   font-weight: var(--weight-medium);
@@ -140,6 +190,10 @@
   color: var(--text);
 }
 
+.claim__decide-title {
+  font-size: var(--text-title);
+  line-height: var(--leading-tight);
+}
 .claim__owner {
   font-size: var(--text-small);
   color: var(--text-2);

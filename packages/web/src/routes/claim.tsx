@@ -43,7 +43,7 @@ export function ClaimPage({ token }: { token: string }) {
   const st = res.state.value;
   const s = session.value;
   return (
-    <ConsentFrame>
+    <ConsentFrame class="claim-frame">
       {st.status === "loading" || s.status === "loading" ? (
         <Loading label="Loading the project" lines={8} />
       ) : null}
@@ -216,128 +216,135 @@ function ClaimForm({
 
   return (
     <form class="claim" onSubmit={claim} aria-labelledby="claim-title" noValidate>
-      <section class="claim__who">
-        <Avatar kind="agent" name={view.createdBy.name} size={44} />
-        <div class="claim__who-text">
-          <p class="claim__agent">Made by an agent: {view.createdBy.name}</p>
-          <p class="claim__noacct">
-            No person's account behind it yet · {relative(p.createdAt, now)}
+      <div class="claim__body">
+        <section class="claim__ask">
+          <h1 id="claim-title" class="claim__title">
+            Claim {p.name}
+          </h1>
+          <p class="claim__meta">
+            {p.template ? `${p.template} template` : "Empty project"} · made{" "}
+            {relative(p.createdAt, now)}
           </p>
-        </div>
-      </section>
+          <div class="claim__who">
+            <Avatar kind="agent" name={view.createdBy.name} size={32} />
+            <p class="claim__who-text">
+              <span class="claim__agent">{view.createdBy.name}</span>
+              <span class="claim__noacct">
+                The agent that made it. No person's account is behind it yet.
+              </span>
+            </p>
+          </div>
+          {expiry ? (
+            <p class={`claim__expiry ${expiry.urgent ? "claim__expiry--urgent" : ""}`}>
+              <Icon name="timer" size={16} />
+              <span>
+                Deleted <b>{expiry.relative}</b>{" "}
+                <span class="claim__when">({expiry.absolute})</span> unless someone claims it.
+              </span>
+            </p>
+          ) : null}
+          {p.previewUrl ? (
+            <a class="claim__preview" href={p.previewUrl} target="_blank" rel="noopener noreferrer">
+              See its preview <Icon name="external-link" size={14} />
+            </a>
+          ) : null}
+        </section>
 
-      <section class="claim__ask">
-        <h1 id="claim-title" class="claim__title">
-          Claim {p.name}
-        </h1>
-        <p class="claim__meta">
-          {p.template ? `From the ${p.template} template` : "An empty project"}
-        </p>
-        {expiry ? (
-          <p class={`claim__expiry ${expiry.urgent ? "claim__expiry--urgent" : ""}`}>
-            <Icon name="timer" size={16} />
-            <span>
-              Deleted <b>{expiry.relative}</b> <span class="claim__when">({expiry.absolute})</span>{" "}
-              unless someone claims it.
-            </span>
-          </p>
-        ) : null}
-        {p.previewUrl ? (
-          <a class="claim__preview" href={p.previewUrl} target="_blank" rel="noopener noreferrer">
-            See its preview <Icon name="external-link" size={14} />
-          </a>
-        ) : null}
-      </section>
+        <section class="claim__does" aria-labelledby="claim-does">
+          <h2 id="claim-does" class="claim__h2">
+            What claiming does
+          </h2>
+          <ul class="claim__can">
+            {view.claiming.map((line) => (
+              <li key={line}>
+                <Icon name="check" size={16} />
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-      <section class="claim__does" aria-labelledby="claim-does">
-        <h2 id="claim-does" class="claim__h2">
-          What claiming does
-        </h2>
-        <ul class="claim__can">
-          {view.claiming.map((line) => (
-            <li key={line}>
-              <Icon name="check" size={16} />
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section class="claim__limits" aria-labelledby="claim-limits">
-        <h2 id="claim-limits" class="claim__h2">
-          <Icon name="shield-alert" size={16} /> Until it's claimed
-        </h2>
-        <ul>
-          {view.limits.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-      </section>
-
-      <p class="claim__owner">
-        Claiming makes <b>you</b> the owner: you become accountable for this project and the agent
-        working on it. The claim is recorded in the audit log.
-      </p>
-
-      {signedIn ? (
-        <fieldset class="claim__check">
-          <legend class="claim__h2">Confirm you're a person</legend>
-          <Turnstile
-            siteKey={view.turnstile.siteKey}
-            resetKey={resetKey.value}
-            onToken={(t) => {
-              check.value = t;
-              if (t !== null && failure.value?.kind === "turnstile") failure.value = null;
-            }}
-          />
-        </fieldset>
-      ) : null}
-
-      {failure.value ? (
-        <div class="claim__failure" role="alert">
-          <p class="claim__failure-title">{failure.value.title}</p>
-          <p>{failure.value.detail}</p>
-          {failure.value.kind === "signin" ? <a href={signInHref(token)}>Sign in again</a> : null}
-        </div>
-      ) : null}
-
-      <div class="consent-bar claim-bar">
-        <p class="consent-bar__time">
-          {signedIn ? (
-            <>
-              <Icon name="user" size={14} /> Claiming as {userName.value}
-            </>
-          ) : (
-            <>
-              <Icon name="info" size={14} /> You'll come straight back here after signing in.
-            </>
-          )}
-        </p>
-        <div class="claim-bar__actions">
-          {signedIn ? (
-            <Button
-              type="submit"
-              variant="primary"
-              icon="check"
-              busy={busy.value}
-              busyLabel="Claiming…"
-              disabled={check.value === null}
-              aria-describedby={check.value === null ? "claim-missing" : undefined}
-            >
-              Claim this project
-            </Button>
-          ) : (
-            <LinkButton href={signInHref(token)} variant="primary" icon="user">
-              Sign in to claim
-            </LinkButton>
-          )}
-        </div>
-        {signedIn && check.value === null && !busy.value ? (
-          <p class="consent-bar__missing" id="claim-missing">
-            Finish the check above to claim.
-          </p>
-        ) : null}
+        <section class="claim__limits" aria-labelledby="claim-limits">
+          <h2 id="claim-limits" class="claim__h2">
+            <Icon name="shield-alert" size={16} /> Until it's claimed
+          </h2>
+          <ul>
+            {view.limits.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </section>
       </div>
+
+      <aside class="claim__decide" aria-labelledby="claim-decide">
+        <h2 id="claim-decide" class="claim__decide-title">
+          Become the owner
+        </h2>
+        <p class="claim__owner">
+          Claiming makes <b>you</b> the owner: you become accountable for this project and the agent
+          working on it. The claim is recorded in the audit log.
+        </p>
+
+        {signedIn ? (
+          <fieldset class="claim__check">
+            <legend class="claim__h2">Confirm you're a person</legend>
+            <Turnstile
+              siteKey={view.turnstile.siteKey}
+              resetKey={resetKey.value}
+              onToken={(t) => {
+                // The failure stays until the next attempt, so a quick re-check can't hide it.
+                check.value = t;
+              }}
+            />
+          </fieldset>
+        ) : null}
+
+        {failure.value ? (
+          <div class="claim__failure" role="alert">
+            <p class="claim__failure-title">{failure.value.title}</p>
+            <p>{failure.value.detail}</p>
+            {failure.value.kind === "signin" ? <a href={signInHref(token)}>Sign in again</a> : null}
+          </div>
+        ) : null}
+
+        <div class="consent-bar claim-bar">
+          <p class="consent-bar__time">
+            {signedIn ? (
+              <>
+                <Icon name="user" size={14} /> Claiming as {userName.value}
+              </>
+            ) : (
+              <>
+                <Icon name="info" size={14} /> You'll come straight back here after signing in.
+              </>
+            )}
+          </p>
+          <div class="claim-bar__actions">
+            {signedIn ? (
+              <Button
+                type="submit"
+                variant="primary"
+                icon="check"
+                busy={busy.value}
+                busyLabel="Claiming…"
+                disabled={check.value === null}
+                aria-describedby={check.value === null ? "claim-missing" : undefined}
+              >
+                Claim this project
+              </Button>
+            ) : (
+              <LinkButton href={signInHref(token)} variant="primary" icon="user">
+                Sign in to claim
+              </LinkButton>
+            )}
+          </div>
+          {signedIn && check.value === null && !busy.value ? (
+            <p class="consent-bar__missing" id="claim-missing">
+              Finish the check above to claim.
+            </p>
+          ) : null}
+        </div>
+      </aside>
     </form>
   );
 }

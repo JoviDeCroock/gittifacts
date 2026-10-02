@@ -37,7 +37,15 @@ const SCOPE_TEXT: Record<string, { label: string; hint: string }> = {
 const SCOPE_ORDER: Scope[] = ["change:create", "plan:create", "repo:read"];
 
 /** The focused frame both screens share: brand, one column, no navigation to wander off to. */
-export function ConsentFrame({ children, wide }: { children: ComponentChildren; wide?: boolean }) {
+export function ConsentFrame({
+  children,
+  wide,
+  class: cls,
+}: {
+  children: ComponentChildren;
+  wide?: boolean;
+  class?: string;
+}) {
   return (
     <div class="consent-frame">
       <header class="consent-frame__brand">
@@ -46,7 +54,10 @@ export function ConsentFrame({ children, wide }: { children: ComponentChildren; 
           <span class="brand__word">gittifacts</span>
         </a>
       </header>
-      <main id="main" class={`consent-frame__main ${wide ? "consent-frame__main--wide" : ""}`}>
+      <main
+        id="main"
+        class={`consent-frame__main ${wide ? "consent-frame__main--wide" : ""} ${cls ?? ""}`}
+      >
         {children}
       </main>
     </div>
