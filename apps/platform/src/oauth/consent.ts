@@ -12,6 +12,7 @@ import { Id, type Repo, Scope } from "@app/domain";
 import { sha256Hex } from "@app/evidence";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { filterAccessible } from "../access/access.js";
 import type { Caller, Services } from "../app-env.js";
 import type { Auth } from "../auth/better-auth.js";
 import { deviceCode, oauthRequests } from "../db/schema.js";
@@ -83,9 +84,13 @@ function audienceLabels(urls: OAuthUrls, audience: readonly string[]) {
   }));
 }
 
-/** Repos a human may delegate: every claimed repo (unclaimed projects belong to no one yet). */
-export async function delegableRepos(svc: Services): Promise<Repo[]> {
-  return (await svc.store.listRepos()).filter((r) => r.claim.status === "claimed");
+/**
+ * Repos a human may delegate: the claimed repos they are a member of (src/access/); the agent
+ * then acts with their role there. Never anyone else's repos, never unclaimed projects.
+ */
+export async function delegableRepos(svc: Services, caller: Caller): Promise<Repo[]> {
+  const claimed = (await svc.store.listRepos()).filter((r) => r.claim.status === "claimed");
+  return filterAccessible(svc, caller.principal, claimed);
 }
 
 function requireHuman(caller: Caller, urls: OAuthUrls): void {
@@ -168,7 +173,7 @@ async function validateDecision(
   }
   let repoIds: string[] | null = null;
   if (body.repoIds !== null) {
-    const allowed = new Set((await delegableRepos(svc)).map((r) => r.id));
+    const allowed = new Set((await delegableRepos(svc, caller)).map((r) => r.id));
     const unique = [...new Set(body.repoIds)];
     const unknown = unique.filter((id) => !allowed.has(id));
     if (unknown.length > 0) {
@@ -260,7 +265,7 @@ export async function getAuthorizationConsent(
   id: string,
 ): Promise<ConsentView> {
   const row = await loadRequest(svc, urls, caller, id);
-  const repos = await delegableRepos(svc);
+  const repos = await delegableRepos(svc, caller);
   return {
     flow: "authorization_code",
     id: row.id,
@@ -504,7 +509,7 @@ export async function getDeviceConsent(
   const clientId = row.clientId ?? "";
   const expired = row.expiresAt.getTime() <= now.getTime();
   const decided = status === "approved" || status === "denied";
-  const repos = await delegableRepos(svc);
+  const repos = await delegableRepos(svc, caller);
   return {
     flow: "device_code",
     id: row.userCode,

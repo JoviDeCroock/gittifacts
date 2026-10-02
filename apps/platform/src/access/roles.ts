@@ -32,7 +32,9 @@ export const MIN_ROLE: Record<RepoNeed, RepoRole> = {
 
 /** Global-scope ceiling: the principal must hold at least one of these. */
 export const NEED_SCOPES: Record<RepoNeed, readonly Scope[]> = {
-  read: ["repo:read"],
+  // Integrations may hold only their own scopes (e.g. deployments:write): each implies seeing
+  // the repos of their installation. The route's own scope list still applies on top.
+  read: ["repo:read", "contents:read", "webhooks", "deployments:write", "checks:write"],
   contribute: ["plan:create", "change:create"],
   review: ["change:review"],
   approve: ["plan:approve", "change:review"],
