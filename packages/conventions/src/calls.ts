@@ -1,25 +1,33 @@
 /**
  * MCP tool names the conventions refer to, and the `tool_name({ ... })` call notation used in
- * `NextStep.call` / `ErrorFix.call`. `@app/mcp` should register exactly these names; the tests
- * here fail if any generated text calls a tool that isn't listed.
+ * `NextStep.call` / `ErrorFix.call`. Exactly the tools `@app/mcp` registers (tested against its
+ * `buildTools()`), so a generated `call` can only name a tool an agent can actually call.
  */
 
 export const TOOL_NAMES = [
   // onboarding
   "create_project",
   "whoami",
-  "capabilities",
   "search_tools",
-  // plans and changes
   "list_repos",
+  "list_members",
+  // plans and changes
   "create_plan",
   "start_change",
+  "refresh_push_token",
   "wait_for_change",
   "get_change_status",
   "get_evidence",
   "get_tour",
   "request_review",
   "list_issues_for_change",
+  // merge queue
+  "enqueue",
+  "queue_status",
+  "wait_for_merge",
+  "dequeue",
+  "reprioritize",
+  "queue_overview",
   // remote workspaces (agents without a shell)
   "open_workspace",
   "ws_exec",

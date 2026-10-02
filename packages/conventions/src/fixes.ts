@@ -168,8 +168,8 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
       return {
         explanation:
           `Your token lacks ${c.requiredScopes === undefined ? "a scope this call needs" : list(c.requiredScopes)}. ` +
-          "Agents can hold only repo:read, plan:create and change:create; ask the human who owns the agent to grant it, or hand the step to a human. capabilities lists what you have.",
-        call: call("capabilities", {}),
+          "Agents can hold only repo:read, plan:create and change:create; ask the human who owns the agent to grant it, or hand the step to a human. whoami lists the scopes you have.",
+        call: call("whoami", {}),
       };
     case "scope-not-allowed":
       return {
@@ -235,7 +235,7 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
       return {
         explanation:
           "Lane 0 unlocks only after enough human reviews agree with the classifier's Lane 0 calls (shadow mode). Keep shipping reviewed Changes; the repo shows how many are still needed.",
-        call: call("capabilities", {}),
+        call: call("whoami", {}),
       };
     case "quota-exceeded": {
       const q = c.quota;
@@ -244,11 +244,11 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
       return {
         explanation:
           `You hit ${what}${q?.resetsAt === undefined ? "" : `; it resets at ${q.resetsAt}`}. ` +
-          "capabilities shows every quota and what is left. " +
+          "whoami shows your quotas and what is left. " +
           (c.claimUrl === undefined
             ? "Unclaimed projects have tight quotas: a human claiming the project (its claimUrl from create_project) raises them."
             : `A human can claim the project at ${c.claimUrl} to lift unclaimed limits.`),
-        call: call("capabilities", {}),
+        call: call("whoami", {}),
       };
     }
     case "unclaimed-limit":
@@ -256,7 +256,7 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
         explanation:
           `Unclaimed projects can't ${c.refused ?? "do this"} (no secrets, custom domains, production deploys or Lane 0). ` +
           `A human must claim the project first${c.claimUrl === undefined ? " with the claimUrl from create_project" : `: ${c.claimUrl}`}.`,
-        call: call("capabilities", {}),
+        call: call("whoami", {}),
       };
     case "creation-disabled":
       return {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { call, isToolName, parseCall, TOOL_NAMES } from "../src/index.js";
+import { LIVE_TOOL_NAMES } from "./helpers.js";
 
 describe("call()", () => {
   it("formats bare keys and JSON values", () => {
@@ -67,10 +68,15 @@ describe("TOOL_NAMES", () => {
       "list_issues_for_change",
       "wait_for_change",
       "whoami",
-      "capabilities",
     ]) {
       expect(isToolName(name)).toBe(true);
     }
     expect(isToolName("approve_change")).toBe(false);
+    // GET /api/v1/capabilities is HTTP only; the MCP tool is whoami.
+    expect(isToolName("capabilities")).toBe(false);
+  });
+
+  it("are exactly the tools the MCP server registers", () => {
+    expect([...TOOL_NAMES].sort()).toEqual([...LIVE_TOOL_NAMES].sort());
   });
 });

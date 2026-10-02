@@ -253,7 +253,7 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
               "The response's token is your Bearer token for this project only: send it as Authorization on every call. whoami shows the expiry and quotas.",
             600,
           ),
-          call: call("capabilities", {}),
+          call: call("whoami", {}),
         });
       }
       return steps;
