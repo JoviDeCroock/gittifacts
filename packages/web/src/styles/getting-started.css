@@ -117,6 +117,8 @@
 }
 .gs-step__cmd code {
   min-inline-size: 0;
+  /* The host is one long word: on phones it may break inside, never overflow the panel. */
+  overflow-wrap: anywhere;
   font-family: var(--font-code);
   font-size: var(--text-code);
   color: var(--text);
