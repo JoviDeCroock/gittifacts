@@ -16,6 +16,7 @@ import { runWebhookQueue, runWebhookSweep } from "./integrations/worker.js";
 import { withUnclaimedLimits } from "./limits/ci-quota.js";
 import { handlePreviewRequest } from "./previews/gateway.js";
 import { isPreviewHost, previewZone } from "./previews/ids.js";
+import { runRetention } from "./retention.js";
 import { buildPorts } from "./runtime/ports.js";
 import { buildQueueRuntime } from "./runtime/queue.js";
 
@@ -64,13 +65,15 @@ export default {
       : app.fetch(request, env, ctx),
   // Cron (wrangler.jsonc triggers.crons): delete unclaimed projects whose TTL ran out; re-queue
   // integration webhook deliveries a lost queue send left pending; close import-by-push grants
-  // past their TTL (and finish unconfirmed revocations).
+  // past their TTL (and finish unconfirmed revocations); purge agent tokens and finished webhook
+  // deliveries 30 days after they ended (src/retention.ts).
   scheduled: (_controller, env, ctx) => {
     ctx.waitUntil(runExpiry(env).then(() => undefined));
     ctx.waitUntil(runWebhookSweep(env).then(() => undefined));
     ctx.waitUntil(runImportGrantSweep(env).then(() => undefined));
     ctx.waitUntil(runGithubSweep(env));
     ctx.waitUntil(runGithubRedeliveries(env).then(() => undefined).catch(() => undefined));
+    ctx.waitUntil(runRetention(env).then(() => undefined));
   },
   // WEBHOOK_QUEUE consumer: signed integration webhook deliveries (src/integrations/delivery.ts);
   // GITHUB_EVENTS consumer: verified GitHub App deliveries (src/github/consumer.ts).
