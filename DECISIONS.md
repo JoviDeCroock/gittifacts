@@ -2327,3 +2327,29 @@ ReSynapse, `fixture-lib` only (`GITHUB_REPO_ALLOWLIST`). Test PRs were opened as
   inverse of `completedCheckRun`; checked on #4's real output), for runs without an agent token or D1 access.
   The judge's `llm-judgment` items are left out of the evidence comparison, as in the recorded suite. All six
   grade scenarios need an approved Plan, so the live run needs a human for those Plans first.
+
+## 2026-10-03 — GitHub mode live, part 2: fixture lockfile, M3 on real GitHub, where time-to-grade goes
+
+Follows "GitHub mode live on ReSynapse/fixture-lib". The user linked installation 167500140 (15:08Z) and allowed
+pushes to fixture-lib's main.
+
+- **Fixtures carry a lockfile** (coordinator decision). `fixtures/_base/pnpm-lock.yaml` (pnpm 11.27.0, the
+  sandbox's) so the fixture CI's `pnpm install --frozen-lockfile` passes on a real host; new-dependency's head
+  adds nanoid's entry (`lockfileChanged: true` in fixture.json and the classifier scenario; lockfiles don't count
+  toward size and the Plan's scopePaths already listed it, so no lane moves). fixture-lib's main is the base
+  with the lockfile (1ad9efb). With it, red-green on a PR is `proven` (2 tests fail on base, pass on head): the
+  npm crash came only from a base without a lockfile under a head that adds one.
+- **M3 verified on GitHub (PR #2):** one COMMENT review by the App with 7 inline stops plus least-confident /
+  not-done; one summary comment edited in place on the next head (same id); after a push the old review's body
+  and every stop say "Stale" and the review is minimized (OUTDATED), with a fresh review on the new head. GitHub
+  itself refuses the author's own approval. Not verified yet: the check-run buttons (GitHub's GET omits
+  `actions`; a human has to press them) and a counted approval from a second writer.
+- **Wording fix:** the shadow check run said it "posts no comments or reviews", false once PR writes are on.
+- **Time-to-grade by stage** (D1 audit + deliveries + pipeline_runs, s): GitHub delivery 2–5; queue, mirror
+  fetch and sync ~10; to CI start 7–9 (30 cold); CI + evidence 59–75 (install 12–15, lint/typecheck/test 8–13
+  in parallel, build 7, the seven evidence steps in parallel 5–15 each); seal 2; judge 9–18; classify 2; tour
+  56–87; publish 4. Total 158–193 against a 120 s target. The tour is the largest stage. Publishing the lane
+  after classify (before the tour) would bring time-to-lane to ~95–110 s; it is not built: whether a lane may
+  be shown before its tour (it can only rise afterwards, so never as `success`) is the user's call.
+- **The live contract run** needs an agent token of the human who linked the installation, to draft the six
+  Plans; the CLI credentials on this machine belong to an unclaimed docs-audit agent scoped to another project.
