@@ -8,6 +8,9 @@
  *                           never the App's)
  *   GITTIFACTS_URL          the platform (default https://gittifacts.decroockjovi.workers.dev)
  *   GITTIFACTS_AGENT_TOKEN  an agent token of a human who linked the installation (reads results)
+ *   GITTIFACTS_READ=d1      instead of the agent token: read verdicts and evidence straight from the
+ *                           platform's D1 with wrangler (operators only; scenarios that need a Plan
+ *                           report "needs-plan-approval", since creating one needs a human's agent)
  *   CONTRACT_SCENARIOS      optional comma list (default: every "grade" scenario)
  *
  * Per scenario: materialize the fixture, make the repo's main its base (a dedicated test repo),
@@ -25,9 +28,10 @@ const REPO = env.GITHUB_TEST_REPO ?? "";
 const TOKEN = env.GITHUB_TEST_TOKEN ?? "";
 const PLATFORM = (env.GITTIFACTS_URL ?? "https://gittifacts.decroockjovi.workers.dev").replace(/\/$/, "");
 const AGENT = env.GITTIFACTS_AGENT_TOKEN ?? "";
+const READ_D1 = env.GITTIFACTS_READ === "d1";
 const API = "https://api.github.com";
 
-if (!/^[\w.-]+\/[\w.-]+$/.test(REPO) || TOKEN === "" || AGENT === "") {
+if (!/^[\w.-]+\/[\w.-]+$/.test(REPO) || TOKEN === "" || (AGENT === "" && !READ_D1)) {
   console.log("skipped: set GITHUB_TEST_REPO, GITHUB_TEST_TOKEN and GITTIFACTS_AGENT_TOKEN (see the header)");
   process.exit(0);
 }
@@ -87,6 +91,11 @@ async function api<T = unknown>(method: string, path: string, body?: unknown): P
 async function planFor(s: ContractScenario, repoId: string): Promise<{ id: string; approved: boolean } | null> {
   if (s.plan === null) return null;
   const known = PLANS[s.name];
+  if (READ_D1) {
+    if (known === undefined) return { id: "(none: create and approve one on gittifacts)", approved: false };
+    const [p] = d1<{ status: string }>(`select status from plans where id = '${known.replace(/[^\w-]/g, "")}'`);
+    return { id: known, approved: p?.status === "approved" };
+  }
   if (known !== undefined) {
     const { plan } = await api<{ plan: { status: string } }>("GET", `/api/v1/plans/${known}`);
     return { id: known, approved: plan.status === "approved" };
@@ -96,6 +105,45 @@ async function planFor(s: ContractScenario, repoId: string): Promise<{ id: strin
     outOfScope: s.plan.outOfScope, scopePaths: s.plan.scopePaths,
   });
   return { id: String((created.plan as { id: string }).id), approved: false };
+}
+
+/** One read-only D1 query on the deployed platform (GITTIFACTS_READ=d1). */
+function d1<T>(sql: string): T[] {
+  const out = execFileSync("pnpm", ["exec", "wrangler", "d1", "execute", "DB", "--remote", "--json", "--command", sql], {
+    cwd: new URL("../apps/platform/", import.meta.url).pathname,
+    env: { ...env, CI: "1" },
+    stdio: ["ignore", "pipe", "pipe"],
+  }).toString();
+  return (JSON.parse(out) as { results: T[] }[])[0]?.results ?? [];
+}
+
+type Verdict = { lane: number; computedLane: number; shadow: boolean; blocked: boolean; requiresHumanApproval: boolean; reasons: { code: string }[] };
+
+/** The verdict and evidence kinds for a PR: over MCP (agent token) or from D1. */
+async function readResult(ref: string, changeId: string, head: string): Promise<{ c: Verdict | undefined; kinds: string[] }> {
+  if (!READ_D1) {
+    const status = (await mcp("get_change_status", { github: ref })) as { classification?: Verdict };
+    const evidence = (await mcp("get_evidence", { github: ref })) as { items?: { kind: string }[] };
+    return { c: status.classification, kinds: [...new Set(evidence.items?.map((i) => i.kind) ?? [])].sort() };
+  }
+  if (!/^[\w-]+$/.test(changeId) || !/^[0-9a-f]{40}$/.test(head)) throw new Error("bad change id or head");
+  const [row] = d1<{ lane: number; computed_lane: number; shadow: number; blocked: number; requires_human_approval: number; json: string }>(
+    `select lane, computed_lane, shadow, blocked, requires_human_approval, json from classifications where change_id = '${changeId}' and head_sha = '${head}'`,
+  );
+  const [ev] = d1<{ json: string | null }>(`select json from evidence where change_id = '${changeId}' and head_sha = '${head}'`);
+  const items = ev?.json ? ((JSON.parse(ev.json) as { items?: { kind: string }[] }).items ?? []) : [];
+  const c: Verdict | undefined =
+    row === undefined
+      ? undefined
+      : {
+          lane: row.lane,
+          computedLane: row.computed_lane,
+          shadow: row.shadow === 1,
+          blocked: row.blocked === 1,
+          requiresHumanApproval: row.requires_human_approval === 1,
+          reasons: (JSON.parse(row.json) as { reasons?: { code: string }[] }).reasons ?? [],
+        };
+  return { c, kinds: [...new Set(items.map((i) => i.kind))].sort() };
 }
 
 interface Result {
@@ -135,9 +183,7 @@ async function runScenario(s: ContractScenario, runId: string, repoId: string): 
     if (!run?.completed_at) return { ...out, status: "error", detail: ["no completed gittifacts/lane run within 10 minutes"] };
     out.timeToGradeSec = Math.round((Date.parse(run.completed_at) - started) / 1000);
     const ref = `${REPO}#${pr.number}`;
-    const status = (await mcp("get_change_status", { github: ref })) as { classification?: { lane: number; computedLane: number; shadow: boolean; blocked: boolean; requiresHumanApproval: boolean; reasons: { code: string }[] } };
-    const evidence = (await mcp("get_evidence", { github: ref })) as { items?: { kind: string }[]; verification?: { ok?: boolean } };
-    const c = status.classification;
+    const { c, kinds } = await readResult(ref, `gh-${repoId.replace(/^gh-/, "")}-${pr.number}`, fx.headSha);
     const e = s.expected;
     const want = { lane: e.lane, computedLane: e.computedLane, shadow: e.shadow, blocked: e.blocked, requiresHumanApproval: e.requiresHumanApproval };
     const got = c === undefined ? null : { lane: c.lane, computedLane: c.computedLane, shadow: c.shadow, blocked: c.blocked, requiresHumanApproval: c.requiresHumanApproval };
@@ -145,7 +191,6 @@ async function runScenario(s: ContractScenario, runId: string, repoId: string): 
     const codes = new Set(c?.reasons.map((r) => r.code) ?? []);
     for (const code of e.includes) if (!codes.has(code)) out.detail.push(`missing reason ${code}`);
     for (const code of e.excludes) if (codes.has(code)) out.detail.push(`unexpected reason ${code}`);
-    const kinds = [...new Set(evidence.items?.map((i) => i.kind) ?? [])].sort();
     if (JSON.stringify(kinds) !== JSON.stringify(e.evidenceKinds)) out.detail.push(`evidence kinds ${kinds.join(",")} ≠ ${e.evidenceKinds.join(",")}`);
     if (out.detail.length > 0) out.status = "mismatch";
     return out;
