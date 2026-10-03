@@ -541,6 +541,10 @@ export const PipelineRun = z.object({
       status: z.enum(["pending", "running", "passed", "failed", "skipped", "cancelled", "cached"]),
       durationMs: z.number().nonnegative().nullable(),
       logRef: z.string().nullable(),
+      /** When the step started (null: not yet). */
+      startedAt: IsoDate.nullable().optional(),
+      /** Wall time so far: a running step's elapsed time, else its duration. */
+      elapsedMs: z.number().nonnegative().optional(),
     }),
   ),
 });

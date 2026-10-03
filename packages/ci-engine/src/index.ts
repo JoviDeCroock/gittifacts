@@ -17,6 +17,7 @@ export {
   buildRunStatus,
   CancelRecord,
   type InstanceStatusLike,
+  loadRunSnapshot,
   PipelineRecord,
   RunKeys,
   RunOutput,

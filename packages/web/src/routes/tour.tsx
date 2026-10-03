@@ -21,7 +21,7 @@ import { TriageChart } from "../components/TriageChart.js";
 import { ErrorState, LaneTag, Loading, StatusChip, VerdictBadge, VerdictMark, Who } from "../components/ui.js";
 import { findItem } from "../lib/evidence.js";
 import { LANES, noTourCopy, triageChart, unroutedCopy } from "../lib/lanes.js";
-import { durationLabel, relative, shortAge } from "../lib/time.js";
+import { relative, shortAge, stepTime } from "../lib/time.js";
 import { CATEGORY_LABEL, CHANGE_STATUS, ROLLOUT_STATUS, STOP_KIND, VERDICT, plural, shortSha } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
 import { prefersReducedMotion, useMedia } from "../state/media.js";
@@ -447,7 +447,7 @@ function PipelineSteps({ run }: { run: PipelineRun }) {
               class={s.status === "running" ? "spin" : ""}
             />
             <span class="pstep__name">{s.name}</span>
-            <span class="pstep__dur tnum">{s.durationMs !== null && s.status === "passed" ? durationLabel(s.durationMs) : s.status}</span>
+            <span class="pstep__dur tnum">{stepTime(s)}</span>
           </li>
         ))}
       </ol>

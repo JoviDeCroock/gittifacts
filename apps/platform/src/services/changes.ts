@@ -22,6 +22,7 @@ import { admitUnclaimedWork } from "../limits/gates.js";
 import type { ChangeSummary, PrincipalRef } from "../store/d1-store.js";
 import type { PlanView } from "../store/rows.js";
 import { type AuditEventView, withSummaries } from "./audit.js";
+import { withLiveSteps } from "./live-runs.js";
 import { planPrincipalIds } from "./plans.js";
 import { type ResolutionView, resolutionOf } from "./resolution.js";
 
@@ -78,7 +79,10 @@ export async function getChangeDetail(
   const change = await assertChangeAccess(svc, caller.principal, changeId, "read");
   const [plan, runs, classification] = await Promise.all([
     change.planId ? svc.store.getPlanView(change.planId) : Promise.resolve(null),
-    svc.store.listRuns(change.id),
+    // Runs in flight get their steps live from the engine's records (D1 has them at the end).
+    svc.store
+      .listRuns(change.id)
+      .then((stored) => withLiveSteps(svc.env.CI_BUCKET, stored, svc.clock.now().getTime())),
     change.headSha ? svc.store.getClassification(change.id, change.headSha) : Promise.resolve(null),
   ]);
   const principals = await svc.store.principalRefs([

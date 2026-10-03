@@ -122,3 +122,14 @@ export function formatWhen(iso: string, now: number): string {
   const sameDay = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
   return sameDay ? formatTime(iso) : formatDateTime(iso);
 }
+
+/** A pipeline step's time column: a passed step's duration, a running step's elapsed time, else its status. */
+export function stepTime(s: {
+  status: string;
+  durationMs: number | null;
+  elapsedMs?: number | undefined;
+}): string {
+  if (s.durationMs !== null && s.status === "passed") return durationLabel(s.durationMs);
+  if (s.status === "running" && s.elapsedMs !== undefined) return `running ${durationLabel(s.elapsedMs)}`;
+  return s.status === "pending" ? "queued" : s.status;
+}
