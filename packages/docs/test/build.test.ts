@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { loadPages } from "../src/content.js";
+import { SHELL_MARKERS } from "../src/layout.js";
 import { buildSite, htmlFileOf, mdFileOf } from "../src/site.js";
 
 const pages = loadPages();
@@ -52,6 +53,18 @@ describe("docs build", () => {
     expect(text("_assets/docs.js")).toContain("gfDocsSearch");
     expect(site.get("_assets/fonts/next-latin.woff2")).toBeInstanceOf(Uint8Array);
     expect(text("404.html")).toContain("Page not found");
+  });
+
+  it("ships the shell the Worker fills for /start and /llms.txt (one column, every marker once)", () => {
+    const shell = text("_assets/shell.html");
+    for (const marker of Object.values(SHELL_MARKERS)) {
+      expect(shell.split(marker).length - 1, marker).toBe(1);
+    }
+    expect(shell).toContain('name="viewport"');
+    expect(shell).toContain('class="shell shell--single"');
+    expect(shell).not.toContain('id="sidebar"');
+    expect(shell).not.toContain("data-menu");
+    expect(shell).toContain("/docs/_assets/docs.css");
   });
 
   it("is deterministic", () => {

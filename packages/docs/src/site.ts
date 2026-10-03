@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { BASE, type Page, sectionTitle } from "./content.js";
 import { escapeHtml } from "./highlight.js";
-import { HOST_PLACEHOLDER, pageHtml } from "./layout.js";
+import { HOST_PLACEHOLDER, pageHtml, shellHtml } from "./layout.js";
 import { plainText, renderMarkdown, resolveHref } from "./markdown.js";
 import { pagesList } from "./nav.js";
 
@@ -160,6 +160,8 @@ export function buildSite(pages: readonly Page[]): Site {
       .join("\n")}\n</urlset>\n`,
   );
   site.set("_assets/docs.css", css());
+  // The frame of pages the Worker renders per request (/start, /llms.txt for browsers).
+  site.set("_assets/shell.html", shellHtml());
   site.set(
     "_assets/docs.js",
     ["search.js", "docs.js"]

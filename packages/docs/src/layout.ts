@@ -47,11 +47,13 @@ function head(page: Page): string {
 </head>`;
 }
 
-function topbar(): string {
+function topbar(menu = true): string {
+  const button = menu
+    ? `<button type="button" class="icon-btn topbar__menu" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false" data-menu><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>\n`
+    : "";
   return `<header class="topbar">
 <div class="topbar__inner">
-<button type="button" class="icon-btn topbar__menu" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false" data-menu><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-<a href="/docs" class="brand" aria-label="gittifacts docs home">${BRAND_MARK}<span class="brand__word">gittifacts</span><span class="brand__docs">docs</span></a>
+${button}<a href="/docs" class="brand" aria-label="gittifacts docs home">${BRAND_MARK}<span class="brand__word">gittifacts</span><span class="brand__docs">docs</span></a>
 <form class="search" role="search" data-search hidden>
 <label for="q" class="sr-only">Search the docs</label>
 <input id="q" name="q" type="search" placeholder="Search docs" autocomplete="off" spellcheck="false" aria-controls="search-results" aria-expanded="false">
@@ -122,6 +124,60 @@ ${withMeta(body.html, `<div class="article__meta">${meta}</div>`)}
 ${prevNext(pages, page)}
 </article>
 ${toc(body.headings)}
+</main>
+</div>
+${footer()}
+<p id="copy-status" class="sr-only" aria-live="polite"></p>
+</body>
+</html>
+`;
+}
+
+/**
+ * The docs look for a page the Worker renders at request time (`/start` and `/llms.txt` for a
+ * browser, apps/platform/src/routes/front-page.ts): the same head, top bar and footer, one
+ * column, no sidebar. Built to `_assets/shell.html`; the Worker reads it from the static assets
+ * (the docs route never serves HTML from `_assets/`) and replaces these markers.
+ */
+export const SHELL_MARKERS = {
+  title: "<!--gf:title-->",
+  description: "<!--gf:description-->",
+  canonical: "<!--gf:canonical-->",
+  alternate: "<!--gf:alternate-->",
+  content: "<!--gf:content-->",
+} as const;
+
+export function shellHtml(): string {
+  const m = SHELL_MARKERS;
+  const a = (p: string) => `/docs/_assets/${p}?v=${ASSET_VERSION}`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>${m.title}</title>
+<meta name="description" content="${m.description}">
+<link rel="canonical" href="${m.canonical}">
+<link rel="alternate" type="text/markdown" href="${m.alternate}">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f7fafc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c1118" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/docs/_assets/fonts/next-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="${a("docs.css")}">
+<script>${THEME_INIT}</script>
+<script src="${a("docs.js")}" defer></script>
+</head>
+<body>
+<a href="#main" class="skip-link">Skip to content</a>
+${topbar(false)}
+<div class="shell shell--single">
+<main id="main" class="main">
+<article class="article">
+<div class="prose">
+${m.content}
+</div>
+</article>
 </main>
 </div>
 ${footer()}

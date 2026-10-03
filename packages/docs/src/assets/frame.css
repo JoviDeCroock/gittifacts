@@ -172,3 +172,13 @@
     display: block;
   }
 }
+/* A page without the sidebar (/start and /llms.txt for browsers): one centered column. */
+@media (min-width: 1024px) {
+  .shell--single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shell--single .main {
+    grid-template-columns: minmax(0, 48rem);
+    justify-content: center;
+  }
+}
