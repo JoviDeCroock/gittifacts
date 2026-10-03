@@ -213,9 +213,12 @@ export function RepoChanges({ repoId }: { repoId: string }) {
       wide
       actions={
         <>
-          <LinkButton href={`/repos/${repoId}/queue`} size="sm" icon="list-ordered">
-            Merge queue
-          </LinkButton>
+          {/* GitHub mode: GitHub merges; the platform's queue is native only. */}
+          {repo.host ? null : (
+            <LinkButton href={`/repos/${repoId}/queue`} size="sm" icon="list-ordered">
+              Merge queue
+            </LinkButton>
+          )}
           <LinkButton href={`/repos/${repoId}/members`} size="sm" icon="user">
             Members
           </LinkButton>

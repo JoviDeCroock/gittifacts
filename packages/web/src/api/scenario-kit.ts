@@ -69,6 +69,8 @@ export interface ScenarioInput {
   runs?: PipelineRun[];
   issues?: LinkedIssue[];
   noHead?: boolean;
+  /** GitHub mode: the pull request this change grades. */
+  host?: Change["host"];
 }
 
 export function scenario(s: ScenarioInput): Scenario {
@@ -98,6 +100,7 @@ export function scenario(s: ScenarioInput): Scenario {
     revertOf: s.revertOf ?? null,
     revertedBy: s.revertedBy ?? null,
     agentTraceId: s.agentTrace === false ? null : `trace_${s.id.slice(4)}`,
+    ...(s.host ? { host: s.host } : {}),
     createdAt: ago(s.createdMin),
     updatedAt: ago(s.updatedMin),
   };

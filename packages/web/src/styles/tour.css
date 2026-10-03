@@ -62,6 +62,20 @@
 .tour__github a {
   overflow-wrap: anywhere;
 }
+.tour__github-decide {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--panel);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.tour__github-decide .icon {
+  flex: none;
+  margin-block-start: 2px;
+}
 .tour__dot {
   display: none;
 }

@@ -1286,7 +1286,48 @@ const darkMode = scenario({
   items: [redGreen("chg_dk6m2", [{ file: "test/theme.test.ts", name: "uses the dark palette when the OS prefers dark" }], "proven"), testRun("chg_dk6m2", 121), apiNone(), depsNone(), sensitive([])],
 });
 
+// ================================================================ acme/widgets (GitHub mode, shadow)
+
+const ghTotal = scenario({
+  id: "gh-31337-7",
+  repoId: "gh-31337",
+  planId: null,
+  title: "fix: total() drops the last cent",
+  category: "fix",
+  summary: "Fixes the rounding in total().",
+  authorId: "prn_coder12",
+  status: "awaiting-review",
+  computedLane: 1,
+  lane: 1,
+  createdMin: 14,
+  updatedMin: 12,
+  agentTrace: false,
+  host: {
+    kind: "github",
+    number: 7,
+    headBranch: "gittifacts/pr/7",
+    fork: false,
+    headRepo: "acme/widgets",
+    baseRef: "main",
+    author: { login: "octo-dev", id: 5150, kind: "human" },
+    url: "https://github.com/acme/widgets/pull/7",
+  },
+  reasons: [
+    reason("proof.red-green", 0, "1 new test fails on main and passes on this change.", "red-green"),
+    reason("plan.missing", 1, "No approved Plan is linked, so Lane 0 is not available."),
+  ],
+  files: [file("src/total.ts", "modified", [hunk(1, 1, `
+-export const total = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
++export const total = (xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0));`)])],
+  tour: {
+    stops: [stop("intent", "proven", "total() rounds the sum once", "The sum is rounded at the end, not per item.", [{ file: "src/total.ts", startLine: 1, endLine: 1 }], ["red-green"])],
+    leastConfident: ["Negative totals were not covered by the new test."],
+    notDone: ["No change to the currency formatting."],
+  },
+  items: [redGreen("gh-31337-7", [{ file: "test/total.test.ts", name: "keeps the last cent" }], "proven"), testRun("gh-31337-7", 34), apiNone(), depsNone(), sensitive([])],
+});
+
 export const SCENARIOS: Scenario[] = [
   tz, locale, paginate, breaking, pdf, session, codemod, policy, drift, fx, ledger, ledgerRevert, numbering, wrangler,
-  undici, cors, laneTags, darkMode,
+  undici, cors, laneTags, darkMode, ghTotal,
 ];

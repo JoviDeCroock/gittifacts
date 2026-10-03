@@ -121,6 +121,15 @@ export function repos(): RepoRecord[] {
       shadow: { samples: 0, agreed: 0, ratio: null, needed: 25, threshold: 0.95, eligibleToEnableLane0: false },
     },
     {
+      // GitHub mode: a repository graded on GitHub, mirrored for evidence (shadow mode).
+      repo: {
+        ...repo("gh-31337", "acme/widgets", { jurisdiction: "eu", lane0: false, deployTarget: null, importedFrom: "https://github.com/acme/widgets", createdMin: 600 }),
+        artifactsName: "ghm-31337",
+        host: { kind: "github", owner: "acme", repo: "widgets", githubRepoId: 31337, installationId: 51234567, appId: 1180001, private: true },
+      },
+      shadow: { samples: 3, agreed: 3, ratio: null, needed: 22, threshold: 0.95, eligibleToEnableLane0: false },
+    },
+    {
       repo: repo("repo_widget", "invoice-widget", {
         jurisdiction: "unrestricted",
         lane0: false,

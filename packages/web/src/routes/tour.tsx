@@ -358,7 +358,7 @@ function StopView({
   );
 }
 
-function TourEnd({ tour, desktop }: { tour: Tour; desktop: boolean }) {
+function TourEnd({ tour, desktop, onGithub = false }: { tour: Tour; desktop: boolean; onGithub?: boolean }) {
   const tally = { proven: 0, unproven: 0, risk: 0 };
   for (const s of tour.stops) tally[s.verdict]++;
   return (
@@ -373,7 +373,7 @@ function TourEnd({ tour, desktop }: { tour: Tour; desktop: boolean }) {
             </span>
           ))}
       </p>
-      <p class="tour-end__hint">{desktop ? "Decide in the panel on the right." : "Decide with the bar below."} Unproven stops are yours to judge: no evidence covers them.</p>
+      <p class="tour-end__hint">{onGithub ? "Decide on the pull request on GitHub." : desktop ? "Decide in the panel on the right." : "Decide with the bar below."} Unproven stops are yours to judge: no evidence covers them.</p>
     </section>
   );
 }
@@ -551,7 +551,16 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
   const authorName = author?.name ?? "the author";
   const testsAt = tour ? testsStopIndex(tour) : -1;
 
-  const decision = (
+  // GitHub mode (shadow, M2): the decision is made on GitHub; approvals bind here from M3.
+  const decision = change.host ? (
+    <p class="tour__github-decide">
+      <Icon name="info" size={16} />
+      <span>
+        Review and merge this pull request on GitHub. gittifacts grades it in shadow mode and never
+        blocks it; approving tours here comes with the next GitHub milestone.
+      </span>
+    </p>
+  ) : (
     <DecisionPanel
       change={change}
       me={me}
@@ -626,7 +635,7 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
                   <StopView key={i} stop={s} index={i} total={tour.stops.length} data={data} items={items} current={i === current.value} tests={i === testsAt} />
                 ))}
               </ol>
-              <TourEnd tour={tour} desktop={desktop} />
+              <TourEnd tour={tour} desktop={desktop} onGithub={!!change.host} />
             </>
           ) : (
             <NotReady data={data} />
