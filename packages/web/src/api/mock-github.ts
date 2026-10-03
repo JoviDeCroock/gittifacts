@@ -57,6 +57,29 @@ function overview(): GithubOverview {
   };
 }
 
+function mockBacktest() {
+  return {
+    id: "bt-31337-mock",
+    status: "done",
+    maxPrs: 24,
+    error: null,
+    createdAt: ago(40),
+    finishedAt: ago(26),
+    report: {
+      window: { since: ago(90 * 24 * 60), until: ago(40), days: 90 },
+      listed: 61,
+      graded: 24,
+      wouldAutoMerge: { count: 9, percent: 37.5 },
+      afterwards: { reverted: [], patched: [{ number: 412, by: 419 }], unknown: 0 },
+      fastFullReviews: [
+        { number: 433, title: "Swap the session store for Durable Objects", hoursToMerge: 0.8, reasons: ["sensitive.auth"] },
+        { number: 401, title: "Drop the v1 export endpoint", hoursToMerge: 2.5, reasons: ["api.breaking"] },
+      ],
+      calibration: { samples: 24, candidates: 9, bad: 1, eligible: false, reason: "only 24 graded PRs with a known outcome (needs 25)" },
+    },
+  };
+}
+
 export async function handle(method: string, path: string, body?: unknown): Promise<MockResponse> {
   if (method === "GET" && path === "/api/v1/github") return { status: 200, body: overview() };
   if (method === "POST" && path === "/api/v1/github/manifests") {
@@ -72,6 +95,8 @@ export async function handle(method: string, path: string, body?: unknown): Prom
     };
     return { status: 200, body: out };
   }
+  if (method === "GET" && /\/backtests\/latest$/.test(path)) return { status: 200, body: { backtest: mockBacktest() } };
+  if (method === "POST" && /\/backtests$/.test(path)) return { status: 202, body: { id: "bt-mock", started: true } };
   const m = /^\/api\/v1\/github\/repos\/([^/]+)\/pr-writes$/.exec(path);
   if (method === "PUT" && m) return { status: 200, body: { repoId: decodeURIComponent(m[1] ?? ""), prWrites: (body as { value: string }).value } };
   return { status: 404, body: { error: { code: "not-found", message: "no such route", fix: { explanation: "" } } } };

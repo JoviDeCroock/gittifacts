@@ -21,6 +21,7 @@ import { finishManifest, finishSetup } from "./callbacks.js";
 import { ManifestRequest } from "./manifest.js";
 import { assertTargetAccess } from "../access/access.js";
 import { GithubOverview, githubOverview } from "./overview.js";
+import { latestBacktest, startBacktest } from "./backtests.js";
 import { setPrWrites } from "./pr-index.js";
 import { beginSetup, FlowError, settingsUrl, startManifest } from "./setup.js";
 import { GITHUB_WEBHOOK_PATH, handleGithubWebhook } from "./webhook.js";
@@ -76,6 +77,45 @@ const prWrites = createRoute({
   responses: { 200: json(z.object({ repoId: z.string(), prWrites: z.enum(["on", "off"]) }), "Saved"), ...errors(400, 401, 403, 404) },
 });
 
+const BacktestView = z.object({
+  id: z.string(),
+  status: z.enum(["running", "done", "failed"]),
+  since: z.string(),
+  until: z.string(),
+  maxPrs: z.number().int(),
+  report: z.unknown().nullable().describe("BacktestReport (packages/host-github/src/backtest/report.ts) once done"),
+  eligible: z.boolean().nullable(),
+  error: z.string().nullable(),
+  createdAt: z.string(),
+  finishedAt: z.string().nullable(),
+}).meta({ id: "GithubBacktest" });
+
+const startBacktestRoute = createRoute({
+  method: "post",
+  path: "/api/v1/github/repos/{repoId}/backtests",
+  tags: TAG,
+  security: SECURITY,
+  summary: "Repo owners: backtest the repository's merged PRs (lanes, later reverts and patches, calibration)",
+  description: "Grades the newest settled merged PRs of the window with the live pipeline (no tours, nothing written to GitHub). One at a time per repo.",
+  middleware: [human] as const,
+  request: {
+    params: z.object({ repoId: z.string().min(1).max(64) }),
+    body: body(z.object({ days: z.number().int().min(14).max(365).default(90), maxPrs: z.number().int().min(1).max(100).default(24) })),
+  },
+  responses: { 202: json(z.object({ id: z.string(), started: z.boolean() }), "Started (or already running)"), ...errors(400, 401, 403, 404) },
+});
+
+const latestBacktestRoute = createRoute({
+  method: "get",
+  path: "/api/v1/github/repos/{repoId}/backtests/latest",
+  tags: TAG,
+  security: SECURITY,
+  summary: "The repository's latest backtest and its report",
+  middleware: [human] as const,
+  request: { params: z.object({ repoId: z.string().min(1).max(64) }) },
+  responses: { 200: json(z.object({ backtest: BacktestView.nullable() }), "Latest"), ...errors(401, 403, 404) },
+});
+
 type Flow = (svc: Services, caller: Caller, query: Record<string, string>) => Promise<string>;
 
 /** A browser leg: signed-in human or off to sign in; any failure lands on the settings page. */
@@ -126,6 +166,33 @@ export function registerGithubRoutes(app: ApiApp): void {
     await setPrWrites(svc.store.db, { repoId, value, by: caller.principal.id, at: svc.clock.now().toISOString() });
     await svc.audit.append({ principalId: caller.principal.id, action: "github.pr-writes", subject: `repo:${repoId}`, payload: { value } });
     return c.json({ repoId, prWrites: value }, 200);
+  });
+
+  app.openapi(startBacktestRoute, async (c) => {
+    const svc = c.get("services");
+    const caller = callerOf(c);
+    const { repoId } = c.req.valid("param");
+    await assertTargetAccess(svc, caller.principal, { repoId }, "admin");
+    const repo = await svc.store.getRepo(repoId);
+    if (repo?.host == null) throw new ApiError(404, "not-found", "not a GitHub repository graded here");
+    const { days, maxPrs } = c.req.valid("json");
+    const out = await startBacktest(svc.env, {
+      installationId: repo.host.installationId, appId: repo.host.appId, githubRepoId: repo.host.githubRepoId,
+      fullName: `${repo.host.owner}/${repo.host.repo}`, by: caller.principal.id, days, maxPrs,
+    });
+    return c.json(out, 202);
+  });
+  app.openapi(latestBacktestRoute, async (c) => {
+    const svc = c.get("services");
+    const { repoId } = c.req.valid("param");
+    await assertTargetAccess(svc, callerOf(c).principal, { repoId }, "read");
+    const b = await latestBacktest(svc.store.db, repoId);
+    return c.json({
+      backtest: b === null ? null : {
+        id: b.id, status: b.status, since: b.since, until: b.until, maxPrs: b.maxPrs, report: b.report ?? null,
+        eligible: b.eligible ?? null, error: b.error, createdAt: b.createdAt, finishedAt: b.finishedAt,
+      },
+    }, 200);
   });
 
   app.get("/github/manifest/callback", browser(finishManifest));

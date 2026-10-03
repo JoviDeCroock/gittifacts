@@ -252,6 +252,12 @@
       "name": "platform-config-workflow",
       "binding": "PLATFORM_CONFIG_WORKFLOW",
       "class_name": "PlatformConfigWorkflow"
+    },
+    // GitHub mode M4: backtests of a repo's merged PRs (src/github/backtest.ts).
+    {
+      "name": "github-backtest-workflow",
+      "binding": "GITHUB_BACKTEST_WORKFLOW",
+      "class_name": "GithubBacktestWorkflow"
     }
   ],
 

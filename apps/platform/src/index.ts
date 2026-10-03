@@ -45,6 +45,7 @@ export {
   RolloutWorkflow,
 } from "@app/coordinator/workers";
 export { AuditLog } from "./audit/audit-log-do.js";
+export { GithubBacktestWorkflow } from "./github/backtest.js";
 export { GithubWriteGate } from "./github/write-gate-do.js";
 export { PlatformConfigWorkflow } from "./import/workflow.js";
 // The coordinator's ChangeCoordinator + settling unclaimed projects' CI usage on run finish.

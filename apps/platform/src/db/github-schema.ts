@@ -181,3 +181,29 @@ export const githubRepoSettings = sqliteTable("github_repo_settings", {
   updatedBy: text("updated_by").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+/**
+ * M4: backtests of a GitHub repo's merged PRs (spec §3.7) and the per-repo calibration they
+ * yield. The latest finished one decides whether Lane 0 may be turned on for the repo.
+ */
+export const githubBacktests = sqliteTable(
+  "github_backtests",
+  {
+    id: text("id").primaryKey(),
+    /** The platform repo (`gh-<id>`); may be created by the backtest itself. */
+    repoId: text("repo_id").notNull(),
+    githubRepoId: integer("github_repo_id").notNull(),
+    installationId: integer("installation_id").notNull(),
+    status: text("status", { enum: ["running", "done", "failed"] }).notNull(),
+    since: text("since").notNull(),
+    until: text("until").notNull(),
+    maxPrs: integer("max_prs").notNull(),
+    report: text("report", { mode: "json" }).$type<unknown>(),
+    eligible: integer("eligible", { mode: "boolean" }),
+    error: text("error"),
+    startedBy: text("started_by").notNull(),
+    createdAt: text("created_at").notNull(),
+    finishedAt: text("finished_at"),
+  },
+  (t) => [index("github_backtests_repo_idx").on(t.repoId, t.createdAt)],
+);

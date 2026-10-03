@@ -412,7 +412,8 @@ export class D1Store implements Store {
     repoId: string,
     filter: { statuses?: Change["status"][]; lane?: Lane; limit?: number } = {},
   ): Promise<ChangeSummary[]> {
-    const where: SQL[] = [eq(changes.repoId, repoId)];
+    // GitHub mode's backtest grades history as `ghb-*` Changes: never in the review lists.
+    const where: SQL[] = [eq(changes.repoId, repoId), sql`${changes.id} NOT LIKE 'ghb-%'`];
     if (filter.statuses && filter.statuses.length > 0)
       where.push(inArray(changes.status, filter.statuses));
     if (filter.lane !== undefined) where.push(eq(changes.lane, filter.lane));
@@ -455,7 +456,8 @@ export class D1Store implements Store {
         failing: sql<number>`sum(case when ${changes.status} = 'failing' then 1 else 0 end)`,
       })
       .from(changes);
-    const rows = await (repoId ? q.where(eq(changes.repoId, repoId)) : q)
+    const notBacktest = sql`${changes.id} NOT LIKE 'ghb-%'`;
+    const rows = await (repoId ? q.where(and(eq(changes.repoId, repoId), notBacktest)) : q.where(notBacktest))
       .groupBy(changes.repoId)
       .all();
     const out = new Map<string, LaneCounts>();

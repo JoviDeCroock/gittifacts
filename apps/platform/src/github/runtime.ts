@@ -97,7 +97,7 @@ export function githubHostFor(
   env: Bindings,
   ports: Pick<Ports, "store" | "git" | "clock">,
   repo: GithubRepoHost,
-): { host: GitHubHost; release(): Promise<void> } {
+): { host: GitHubHost; api: GithubApi; release(): Promise<void> } {
   const db = new D1Store(env.DB, env.BLOBS, () => new Date()).db;
   let job: JobToken | null = null;
   const token = async () => {
@@ -129,7 +129,7 @@ export function githubHostFor(
     prs: d1PrIndex(db),
     prWrites: () => prWritesEnabled(db, repoIdFor(repo.githubRepoId), repo.installationId),
   });
-  return { host, release };
+  return { host, api, release };
 }
 
 /** A GitHub remote readable for one fetch: a contents-read token for this one repo, revoked after. */

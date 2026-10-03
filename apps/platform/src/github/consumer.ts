@@ -8,9 +8,12 @@ import type { Bindings } from "../app-env.js";
 import { D1Store, type Db } from "../store/d1-store.js";
 import { GithubRateLimited } from "@app/host-github";
 import { InstallationInfo, RepoInfo } from "./api.js";
+import { repoIdFor } from "@app/host-github";
+import { AUTO_REPOS, latestBacktest, startBacktest } from "./backtests.js";
 import { onChangeDelivery } from "./grading.js";
 import {
   addRepos,
+  getApp,
   getInstallation,
   patchInstallation,
   removeRepos,
@@ -70,6 +73,24 @@ async function onInstallation(deps: GithubEventDeps, msg: GithubEventMessage, pa
     now,
   );
   if (ev.data.repositories) await addRepos(deps.db, i.id, repoRows(ev.data.repositories), now);
+  // The "aha" report (spec §3.7): a backtest of a few of the new installation's repos.
+  if (ev.data.action === "created" && deps.env !== undefined) {
+    await autoBacktest(deps.env, msg, i.id, ev.data.repositories ?? []);
+  }
+}
+
+/** Backtest up to AUTO_REPOS repos of a new installation of the Reader App (never twice). */
+async function autoBacktest(env: Bindings, msg: GithubEventMessage, installationId: number, repos: z.infer<typeof RepoInfo>[]) {
+  const store = new D1Store(env.DB, env.BLOBS);
+  if ((await getApp(store.db, msg.appId))?.kind !== "reader") return;
+  for (const r of repos.slice(0, AUTO_REPOS)) {
+    if ((await latestBacktest(store.db, repoIdFor(r.id))) !== null) continue;
+    try {
+      await startBacktest(env, { installationId, appId: msg.appId, githubRepoId: r.id, fullName: r.full_name, by: "system" });
+    } catch (e) {
+      console.error("auto backtest failed to start", r.full_name, (e as Error).message);
+    }
+  }
 }
 
 async function onInstallationRepos(deps: GithubEventDeps, msg: GithubEventMessage, payload: unknown) {

@@ -144,6 +144,13 @@ export class JobToken {
   ) {}
 
   async value(): Promise<string> {
+    // A long job (a backtest runs up to an hour) outlives a token: mint again shortly before it
+    // expires, revoking the old one.
+    const current = this.token === null ? null : await this.token.catch(() => null);
+    if (current !== null && Date.parse(current.expiresAt) - Date.now() < 5 * 60_000) {
+      this.token = null;
+      await this.tokens.revoke(current);
+    }
     this.token ??= this.tokens.mint(this.installationId, this.scope);
     return (await this.token).value();
   }

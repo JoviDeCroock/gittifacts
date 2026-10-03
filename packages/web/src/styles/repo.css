@@ -327,3 +327,40 @@
   color: var(--text-3);
   font-weight: var(--weight-medium);
 }
+
+/* GitHub repos: the history check (backtest). */
+.bt {
+  display: grid;
+  gap: var(--s-2);
+  justify-items: start;
+}
+.bt__headline {
+  font-size: var(--text-body);
+}
+.bt__line,
+.bt__fast {
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.bt__fast {
+  display: grid;
+  gap: var(--s-1);
+  padding-inline-start: var(--s-4);
+}
+.bt__dim {
+  color: var(--text-3);
+}
+.bt__cal {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.bt__cal .icon {
+  flex: none;
+  margin-block-start: 2px;
+}
+.bt__cal--ok .icon {
+  color: var(--ok);
+}

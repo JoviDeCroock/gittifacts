@@ -63,7 +63,32 @@ async function call<T>(method: Method, path: string, body?: unknown): Promise<T>
   throw new ApiError(res.status, `http_${res.status}`, `The server answered ${res.status}.`);
 }
 
+/** The parts of a backtest report the UI shows (packages/host-github/src/backtest/report.ts). */
+export interface BacktestReportView {
+  window: { since: string; until: string; days: number };
+  listed: number;
+  graded: number;
+  wouldAutoMerge: { count: number; percent: number };
+  afterwards: { reverted: { number: number; by: number }[]; patched: { number: number; by: number }[]; unknown: number };
+  fastFullReviews: { number: number; title: string; hoursToMerge: number; reasons: string[] }[];
+  calibration: { samples: number; candidates: number; bad: number; eligible: boolean; reason: string };
+}
+
+export interface BacktestView {
+  id: string;
+  status: "running" | "done" | "failed";
+  maxPrs: number;
+  report: BacktestReportView | null;
+  error: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
 export const githubApi = {
+  latestBacktest: (repoId: string) =>
+    call<{ backtest: BacktestView | null }>("GET", `/api/v1/github/repos/${encodeURIComponent(repoId)}/backtests/latest`),
+  startBacktest: (repoId: string) =>
+    call<{ id: string; started: boolean }>("POST", `/api/v1/github/repos/${encodeURIComponent(repoId)}/backtests`, {}),
   overview: () => call<GithubOverview>("GET", "/api/v1/github"),
   setPrWrites: (repoId: string, value: "on" | "off") =>
     call<{ repoId: string; prWrites: "on" | "off" }>("PUT", `/api/v1/github/repos/${encodeURIComponent(repoId)}/pr-writes`, { value }),

@@ -1,3 +1,5 @@
+import { calibrated } from "../github/backtests.js";
+import { conflict } from "../errors.js";
 import { type ShadowSample, shadowAgreement } from "@app/classifier";
 import type { Repo } from "@app/domain";
 import type { z } from "zod";
@@ -92,6 +94,18 @@ export async function setLane0(
 ): Promise<Repo> {
   // Owners only (Lane 0 lets the classifier merge without a human).
   await assertRepoAccess(svc, caller.principal, repoId, "admin");
+  // GitHub mode: only once a backtest found the repo calibrated (spec §3.7).
+  if (enabled) {
+    const repo = await svc.store.getRepo(repoId);
+    if (repo?.host != null) {
+      const cal = await calibrated(svc.store.db, repoId);
+      if (!cal.eligible) {
+        throw conflict(`Lane 0 needs a calibrated backtest first: ${cal.reason}`, "not-calibrated", {
+          explanation: "Run the backtest for this repository (POST /api/v1/github/repos/{repoId}/backtests) and turn Lane 0 on once its calibration says eligible.",
+        });
+      }
+    }
+  }
   return svc.coordinator.setLane0(caller.principal, repoId, enabled);
 }
 

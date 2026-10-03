@@ -2,6 +2,7 @@ import { useSignal } from "@preact/signals";
 import { useLocation } from "preact-iso";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { ChangeSummary, Plan, RepoDetail } from "../api/types.js";
+import { BacktestCard } from "../components/BacktestCard.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
 import { Button, EmptyState, ErrorState, LaneTag, LinkButton, Loading, Segmented, StatusChip, Who } from "../components/ui.js";
@@ -300,6 +301,7 @@ export function RepoChanges({ repoId }: { repoId: string }) {
 
         <aside class="repo-layout__side">
           <Lane0Control detail={detail} onChange={(d) => res.set({ detail: d, changes })} />
+          {repo.host ? <BacktestCard repoId={repo.id} repoUrl={`https://github.com/${repo.host.owner}/${repo.host.repo}`} /> : null}
           <section class="side-block" aria-labelledby="all-plans">
             <h2 id="all-plans" class="side-block__title">
               Plans
