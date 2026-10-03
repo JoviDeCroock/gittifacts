@@ -12,7 +12,7 @@
 import type { Context } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app-env.js";
-import { ApiError, unauthorized } from "../errors.js";
+import { ApiError } from "../errors.js";
 import { githubKeys, openCredential, verifyGithubSignature } from "./crypto.js";
 import { forgetDelivery, getApp, recordDelivery } from "./store.js";
 
@@ -51,6 +51,13 @@ const Envelope = z.object({
   action: z.string().optional(),
   installation: z.object({ id: z.number().int() }).nullable().optional(),
 });
+
+/** 401 with a hint that fits a webhook sender, not an API client. */
+const unauthorized = (message: string) =>
+  new ApiError(401, "unauthorized", message, undefined, {
+    explanation:
+      "GitHub App deliveries name the App in X-GitHub-Hook-Installation-Target-ID and are signed with that App's webhook secret (X-Hub-Signature-256 over the raw body). Only Apps created through /settings/github are accepted.",
+  });
 
 const DELIVERY_ID = /^[A-Za-z0-9-]{8,64}$/;
 const EVENT_NAME = /^[a-z_]{1,64}$/;

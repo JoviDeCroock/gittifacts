@@ -72,3 +72,20 @@
 .gh-notice--error .icon {
   color: var(--danger);
 }
+/* No logo column: main + actions (stacked on phones, side by side from 640px). */
+.inst.gh-inst {
+  grid-template-columns: minmax(0, 1fr);
+}
+.inst.gh-inst .inst__actions {
+  grid-column: 1;
+}
+@media (min-width: 640px) {
+  .inst.gh-inst {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .inst.gh-inst .inst__actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+}

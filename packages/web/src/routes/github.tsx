@@ -136,7 +136,7 @@ function AppRow({ app }: { app: GithubApp }) {
 function InstallationItem({ inst }: { inst: GithubInstallation }) {
   const now = minuteClock.value;
   return (
-    <li class="inst">
+    <li class="inst gh-inst">
       <div class="inst__main">
         <h3 class="inst__name">{inst.account.login}</h3>
         <p class="inst__by">
