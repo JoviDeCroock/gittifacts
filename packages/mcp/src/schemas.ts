@@ -154,6 +154,21 @@ export const ChangeIdInput = {
   additionalProperties: false,
 } as const;
 
+/** GitHub mode: a pull request as `owner/repo#123`, in place of `changeId`. */
+export const GITHUB_REF_PATTERN = "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}#[0-9]{1,9}$";
+const githubRef = {
+  type: "string",
+  pattern: GITHUB_REF_PATTERN,
+  description: "GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).",
+} as const;
+
+/** A change by id, or (GitHub mode) by pull request. */
+export const ChangeRefInput = {
+  type: "object",
+  properties: { changeId: id, github: githubRef },
+  additionalProperties: false,
+} as const;
+
 export const CreatePlanInput = {
   type: "object",
   properties: {
@@ -279,6 +294,7 @@ export const WaitForChangeInput = {
   type: "object",
   properties: {
     changeId: id,
+    github: githubRef,
     until: { enum: WAIT_UNTIL },
     timeoutSec: {
       type: "integer",
@@ -288,7 +304,7 @@ export const WaitForChangeInput = {
         "Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached.",
     },
   },
-  required: ["changeId", "until"],
+  required: ["until"],
   additionalProperties: false,
 } as const;
 

@@ -22,6 +22,8 @@ import { z } from "zod";
 import type { McpBackend, McpCaller } from "./backend.js";
 import {
   ChangeIdInput,
+  ChangeRefInput,
+  GITHUB_REF_PATTERN,
   ChangeStatusOutput,
   CreatePlanInput,
   CreatePlanOutput,
@@ -215,6 +217,30 @@ const READ = { readOnlyHint: true, destructiveHint: false, openWorldHint: false 
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
 const ChangeIdArgs = z.object({ changeId: Id });
+
+/** `changeId`, or (GitHub mode) `github: "owner/repo#123"`: exactly one. */
+const ChangeRefArgs = z
+  .object({ changeId: Id.optional(), github: z.string().regex(new RegExp(GITHUB_REF_PATTERN)).optional() })
+  .refine((a) => (a.changeId === undefined) !== (a.github === undefined), {
+    message: "pass exactly one of changeId or github",
+  });
+
+/** The change id a tool call names (a GitHub PR is resolved by the backend). */
+async function changeIdOf(
+  backend: McpBackend,
+  caller: McpCaller,
+  args: { changeId?: string | undefined; github?: string | undefined },
+): Promise<string> {
+  if (args.changeId !== undefined) return args.changeId;
+  const resolve = backend.resolveGithubChange;
+  if (resolve === undefined || args.github === undefined) {
+    throw failure("not-found", "this platform does not grade GitHub pull requests", {
+      explanation: "Pass changeId instead.",
+    });
+  }
+  const ref = args.github;
+  return run(backend, () => resolve.call(backend, caller, ref));
+}
 
 // ---------------------------------------------------------------- tools
 
@@ -424,13 +450,13 @@ export function buildTools(backend: McpBackend) {
       title: "Get change status",
       description:
         "A change's status, lane (and why), pipeline runs for each head, and what to do next.",
-      inputSchema: ChangeIdInput,
+      inputSchema: ChangeRefInput,
       outputSchema: ChangeStatusOutput,
       annotations: READ,
       handler: async (args, ctx) => {
         const caller = callerOf(ctx);
         requireScope(caller, "repo:read");
-        const { changeId } = parse(ChangeIdArgs, args);
+        const changeId = await changeIdOf(backend, caller, parse(ChangeRefArgs, args));
         const s = await run(backend, () => backend.getChangeStatus(caller, changeId));
         return {
           change: changeBrief(s.change),
@@ -468,13 +494,13 @@ export function buildTools(backend: McpBackend) {
       title: "Get evidence",
       description:
         "The signed evidence for the change's current head (tests, red/green proof, coverage, API diff, ...) and whether the signature verifies.",
-      inputSchema: ChangeIdInput,
+      inputSchema: ChangeRefInput,
       outputSchema: EvidenceOutput,
       annotations: READ,
       handler: async (args, ctx) => {
         const caller = callerOf(ctx);
         requireScope(caller, "repo:read");
-        const { changeId } = parse(ChangeIdArgs, args);
+        const changeId = await changeIdOf(backend, caller, parse(ChangeRefArgs, args));
         const { evidence, verification } = await run(backend, () =>
           backend.getEvidence(caller, changeId),
         );
@@ -493,13 +519,13 @@ export function buildTools(backend: McpBackend) {
       title: "Get the review tour",
       description:
         "The reviewer agent's guided tour of the change (what a human will read): stops with verdicts, least-confident points and what was not done.",
-      inputSchema: ChangeIdInput,
+      inputSchema: ChangeRefInput,
       outputSchema: TourOutput,
       annotations: READ,
       handler: async (args, ctx) => {
         const caller = callerOf(ctx);
         requireScope(caller, "repo:read");
-        const { changeId } = parse(ChangeIdArgs, args);
+        const changeId = await changeIdOf(backend, caller, parse(ChangeRefArgs, args));
         const { tour, stale } = await run(backend, () => backend.getTour(caller, changeId));
         return {
           tour: {
@@ -610,14 +636,21 @@ export function buildTools(backend: McpBackend) {
         const caller = callerOf(ctx);
         requireScope(caller, "repo:read");
         const v = parse(
-          ChangeIdArgs.extend({
-            until: WaitUntil,
-            timeoutSec: z.number().int().min(1).max(600).default(50),
-          }),
+          z
+            .object({
+              changeId: Id.optional(),
+              github: z.string().regex(new RegExp(GITHUB_REF_PATTERN)).optional(),
+              until: WaitUntil,
+              timeoutSec: z.number().int().min(1).max(600).default(50),
+            })
+            .refine((a) => (a.changeId === undefined) !== (a.github === undefined), {
+              message: "pass exactly one of changeId or github",
+            }),
           args,
         );
+        const changeId = await changeIdOf(backend, caller, v);
         const r = await run(backend, () =>
-          backend.waitForChange(caller, v.changeId, v.until, v.timeoutSec * 1000),
+          backend.waitForChange(caller, changeId, v.until, v.timeoutSec * 1000),
         );
         return {
           reached: r.reached,

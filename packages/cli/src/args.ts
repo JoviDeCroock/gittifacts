@@ -318,10 +318,16 @@ export function buildToolArgs(
   const missing = (spec.inputSchema.required ?? []).filter(
     (p) => p !== IDEMPOTENCY_PROPERTY && args[p] === undefined,
   );
+  // A change by id or (GitHub mode) by pull request: one of the two is required.
+  const byRef = spec.positional === "changeId" && !(spec.inputSchema.required ?? []).includes("changeId");
+  if (byRef && args.changeId === undefined && args.github === undefined) missing.unshift("changeId");
   if (missing.length > 0) {
     const flags = missing.map((p) => {
       const flag = spec.flags.find((f) => f.property === p)?.flag ?? `--${kebab(p)}`;
-      return p === spec.positional ? `<${p}> (or ${flag})` : flag;
+      if (p !== spec.positional) return flag;
+      return byRef && "github" in (spec.inputSchema.properties ?? {})
+        ? `<${p}> (or ${flag}, or --github owner/repo#123)`
+        : `<${p}> (or ${flag})`;
     });
     throw usageError(`missing required ${flags.join(", ")}`, helpFix(spec), { missing });
   }

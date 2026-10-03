@@ -161,6 +161,11 @@ export interface McpBackend extends WorkspaceToolsBackend, ImportToolsBackend, Q
   }>;
   /** The change's latest tour; `stale` when it was generated for an older head. */
   getTour(caller: McpCaller, changeId: string): Promise<{ tour: Tour; stale: boolean }>;
+  /**
+   * GitHub mode: the Change that grades pull request `owner/repo#123` (not-found when the
+   * platform doesn't grade that repository). Optional: hosts without GitHub mode omit it.
+   */
+  resolveGithubChange?(caller: McpCaller, ref: string): Promise<string>;
   /** Ask a human to look at the change (notify + audit). Never approves anything. */
   requestReview(
     caller: McpCaller,

@@ -82,7 +82,8 @@ Long-poll until the change reaches a milestone (evidence_ready, lane_assigned, t
 
 | Argument | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `changeId` | string | yes | max 64 chars |
+| `changeId` | string |  | max 64 chars |
+| `github` | string |  | GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one). |
 | `until` | "evidence_ready" \| "lane_assigned" \| "tour_ready" \| "merged" \| "reverted" | yes |  |
 | `timeoutSec` | integer |  | Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached. 1–600 |
 
@@ -100,10 +101,11 @@ A change's status, lane (and why), pipeline runs for each head, and what to do n
 
 | Argument | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `changeId` | string | yes | max 64 chars |
+| `changeId` | string |  | max 64 chars |
+| `github` | string |  | GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one). |
 
 ```text
-get_change_status({ changeId: "<changeId>" })
+get_change_status({})
 ```
 
 **Returns:** `change` (object), `runs` (object[]), `classification` (null | object), `nextSteps` (object[]).
@@ -116,10 +118,11 @@ The signed evidence for the change's current head (tests, red/green proof, cover
 
 | Argument | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `changeId` | string | yes | max 64 chars |
+| `changeId` | string |  | max 64 chars |
+| `github` | string |  | GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one). |
 
 ```text
-get_evidence({ changeId: "<changeId>" })
+get_evidence({})
 ```
 
 **Returns:** `changeId` (string), `headSha` (string), `verification` ({ ok, keyId, reason }), `signedAt` (string), `keyId` (string), `items` (object[]).
@@ -132,10 +135,11 @@ The reviewer agent's guided tour of the change (what a human will read): stops w
 
 | Argument | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `changeId` | string | yes | max 64 chars |
+| `changeId` | string |  | max 64 chars |
+| `github` | string |  | GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one). |
 
 ```text
-get_tour({ changeId: "<changeId>" })
+get_tour({})
 ```
 
 **Returns:** `tour` (object), `stale` (boolean).

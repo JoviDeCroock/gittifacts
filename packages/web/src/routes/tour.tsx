@@ -594,6 +594,18 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
             ) : null}
             {change.status !== "awaiting-review" ? <StatusChip meta={CHANGE_STATUS[change.status]} /> : null}
           </div>
+          {change.host ? (
+            <p class="tour__github">
+              <Icon name="git-branch" size={16} />
+              <span>
+                <a href={change.host.url} target="_blank" rel="noopener noreferrer">
+                  {data.repo.repo.name}#{change.host.number}
+                </a>{" "}
+                on GitHub by {change.host.author.login}
+                {change.host.fork ? " (from a fork)" : ""}. Shadow mode: graded here, merged on GitHub.
+              </span>
+            </p>
+          ) : null}
 
           {!desktop ? <LaneBlock change={change} open={false} /> : null}
 

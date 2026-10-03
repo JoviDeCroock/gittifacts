@@ -138,10 +138,16 @@ export function deriveCommand(tool: WireTool, source: "bundled" | "server"): Com
   // One required string argument reads naturally as a positional: `get-change-status chg_1`.
   const requiredStrings = flags.filter((f) => f.required && f.kind === "string" && !f.list);
   const requiredAll = flags.filter((f) => f.required);
+  // A change named either by id or (GitHub mode) by `--github owner/repo#123`: neither is
+  // required, and the id stays positional (`get-change-status chg_1`).
+  const changeIdFallback =
+    requiredStrings.length === 0 && flags.some((f) => f.property === "changeId" && f.kind === "string")
+      ? "changeId"
+      : null;
   const positional =
     requiredStrings.length === 1 && requiredAll.length >= 1
       ? (requiredStrings[0]?.property ?? null)
-      : null;
+      : changeIdFallback;
   return {
     command: commandName(tool.name),
     tool: tool.name,

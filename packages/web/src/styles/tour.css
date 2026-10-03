@@ -45,6 +45,23 @@
   font-size: var(--text-small);
   color: var(--text-2);
 }
+/* GitHub mode: the pull request this change grades (shadow mode). */
+.tour__github {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  margin-block: calc(-1 * var(--s-3)) var(--s-5);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.tour__github .icon {
+  flex: none;
+  margin-block-start: 2px;
+  color: var(--text-3);
+}
+.tour__github a {
+  overflow-wrap: anywhere;
+}
 .tour__dot {
   display: none;
 }

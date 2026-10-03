@@ -142,7 +142,7 @@ describe("command flags", () => {
     expect(err.body.message).toBe("missing required --title, --category");
     expect(err.body.fix.command).toBe("gittifacts start-change --help");
     const pos = usageErrorOf(() => parse("get-change-status", []));
-    expect(pos.body.message).toMatch(/<changeId> \(or --change-id\)/);
+    expect(pos.body.message).toMatch(/<changeId> \(or --change-id, or --github owner\/repo#123\)/);
   });
 
   it("suggest the closest flag for a typo", () => {

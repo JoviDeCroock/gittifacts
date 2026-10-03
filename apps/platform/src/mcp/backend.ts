@@ -19,6 +19,7 @@ import { anonymousWhoami } from "../claim/anonymous.js";
 import { createUnclaimedProject } from "../claim/create.js";
 import { toErrorResponse, unauthorized } from "../errors.js";
 import { runIdempotent } from "../idempotency.js";
+import { resolveGithubChangeId } from "../github/refs.js";
 import { createImportMcpBackend } from "../import/mcp.js";
 import type { AnonymousClient } from "../limits/client.js";
 import { createQueueMcpBackend } from "../queue/mcp.js";
@@ -155,6 +156,13 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
         "contribute",
       );
       return startChange(svc, caller, input, opts.idempotencyKey);
+    },
+
+    async resolveGithubChange(mc, ref) {
+      const { changeId, repoId } = await resolveGithubChangeId(svc.store.db, ref);
+      // Same answer as an unknown repo for someone who can't read this one.
+      await scoped(mc, { repoId });
+      return changeId;
     },
 
     async getChangeStatus(mc, changeId) {

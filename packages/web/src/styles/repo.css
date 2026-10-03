@@ -321,3 +321,9 @@
     text-align: end;
   }
 }
+
+/* GitHub mode: the pull request number before the title. */
+.change-row__pr {
+  color: var(--text-3);
+  font-weight: var(--weight-medium);
+}

@@ -20,7 +20,10 @@ function ChangeRow({ change, now, showStatus }: { change: ChangeSummary; now: nu
   return (
     <li>
       <a class="change-row" href={`/changes/${change.id}`}>
-        <span class="change-row__title">{change.title}</span>
+        <span class="change-row__title">
+          {change.host ? <span class="change-row__pr tnum">#{change.host.number} </span> : null}
+          {change.title}
+        </span>
         <span class="change-row__status">
           {showStatus || !why ? <StatusChip meta={status} /> : null}
           {why ? (

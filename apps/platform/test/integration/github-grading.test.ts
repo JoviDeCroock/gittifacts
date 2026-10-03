@@ -14,8 +14,12 @@ import { handleGithubEvent } from "../../src/github/consumer.js";
 import { githubKeys, sealCredential } from "../../src/github/crypto.js";
 import { insertApp, upsertInstallation } from "../../src/github/store.js";
 import type { GithubEventMessage } from "../../src/github/webhook.js";
+import { createPlatformClient } from "@app/mcp/client";
+import { githubInstallationLinks } from "../../src/db/github-schema.js";
 import { store } from "../fixtures.js";
 import { jsonRes, stubGithub } from "../github-helpers.js";
+import { createAgent, ORIGIN, signUpHuman } from "../http.js";
+import { fetchVia, platformApp } from "./harness.js";
 import { type IntegrationFakes, resetIntegrationFakes } from "./fakes.js";
 
 const API = "https://api.github.com";
@@ -78,6 +82,12 @@ describe("GitHub mode in workerd", () => {
 
   it("a pull request is mirrored, graded by the ChangeWorkflow and its verdict lands on gittifacts/lane", async () => {
     await seedReaderApp();
+    // The human who linked the installation owns its graded repos (and their agents can read them).
+    const app = platformApp();
+    const human = await signUpHuman(app, "Ines");
+    await store().db.insert(githubInstallationLinks).values({
+      installationId: INSTALLATION, principalId: human.principal.id, githubLogin: "ines", linkedAt: new Date().toISOString(),
+    });
     const gh = `github.com/${REPO.owner}/${REPO.name}`;
     const base = fakes.git.seed(gh, { "src/total.ts": "export const total = (xs: number[]) => xs.reduce((a, b) => a + b, 0);\n", "README.md": "# widgets\n" });
     fakes.git.repo(gh).refs.set("refs/heads/fix-total", base);
@@ -120,5 +130,18 @@ describe("GitHub mode in workerd", () => {
     // Every token minted for a job was revoked.
     expect(tokens.minted).toBeGreaterThan(0);
     expect(tokens.revoked).toBe(tokens.minted);
+
+    // MCP in GitHub mode: get_change_status({ github: "owner/repo#123" }).
+    const agent = await createAgent(app, human.cookie);
+    const mcp = await createPlatformClient(`${ORIGIN}/mcp`, agent.token, { fetch: fetchVia(app) });
+    try {
+      const status = await mcp.tools.get_change_status({ github: "acme/widgets#7" });
+      if (status.isError) throw new Error(JSON.stringify(status.content));
+      expect(status.structuredContent.change).toMatchObject({ id: changeId, headSha: head, status: "awaiting-review" });
+      const unknown = await mcp.tools.get_change_status({ github: "acme/other#1" });
+      expect(unknown.isError).toBe(true);
+    } finally {
+      await mcp.client.close();
+    }
   });
 });

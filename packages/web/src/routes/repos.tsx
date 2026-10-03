@@ -69,8 +69,8 @@ function RepoRow({ repo }: { repo: RepoSummary }) {
         <div class="repo-row__id">
           <span class="repo-row__name">{repo.name}</span>
           <span class="repo-row__sub">
-            {repo.namespace} · {repo.defaultBranch}
-            {repo.deployTarget ? ` · deploys ${repo.deployTarget}` : " · no deploy target"}
+            {repo.host ? `on GitHub (mirrored) · ${repo.defaultBranch}` : `${repo.namespace} · ${repo.defaultBranch}`}
+            {repo.host ? "" : repo.deployTarget ? ` · deploys ${repo.deployTarget}` : " · no deploy target"}
             <span class="repo-row__juris" title="Data jurisdiction">
               {repo.jurisdiction === "unrestricted" ? "any region" : repo.jurisdiction.toUpperCase()}
             </span>

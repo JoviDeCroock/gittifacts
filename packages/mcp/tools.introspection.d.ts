@@ -958,6 +958,7 @@ export type introspection = {
     /**
      * Get change status
      * A change's status, lane (and why), pipeline runs for each head, and what to do next.
+     * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      */
     "get_change_status": {
       "inputSchema": {
@@ -967,11 +968,13 @@ export type introspection = {
             "type": "string",
             "minLength": 1,
             "maxLength": 64
+          },
+          "github": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}#[0-9]{1,9}$",
+            "description": "GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one)."
           }
         },
-        "required": [
-          "changeId"
-        ],
         "additionalProperties": false
       },
       "outputSchema": {
@@ -1273,6 +1276,7 @@ export type introspection = {
     /**
      * Get evidence
      * The signed evidence for the change's current head (tests, red/green proof, coverage, API diff, ...) and whether the signature verifies.
+     * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      */
     "get_evidence": {
       "inputSchema": {
@@ -1282,11 +1286,13 @@ export type introspection = {
             "type": "string",
             "minLength": 1,
             "maxLength": 64
+          },
+          "github": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}#[0-9]{1,9}$",
+            "description": "GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one)."
           }
         },
-        "required": [
-          "changeId"
-        ],
         "additionalProperties": false
       },
       "outputSchema": {
@@ -1370,6 +1376,7 @@ export type introspection = {
     /**
      * Get the review tour
      * The reviewer agent's guided tour of the change (what a human will read): stops with verdicts, least-confident points and what was not done.
+     * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      */
     "get_tour": {
       "inputSchema": {
@@ -1379,11 +1386,13 @@ export type introspection = {
             "type": "string",
             "minLength": 1,
             "maxLength": 64
+          },
+          "github": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}#[0-9]{1,9}$",
+            "description": "GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one)."
           }
         },
-        "required": [
-          "changeId"
-        ],
         "additionalProperties": false
       },
       "outputSchema": {
@@ -3563,6 +3572,7 @@ export type introspection = {
     /**
      * Wait for a change
      * Long-poll until the change reaches a milestone (evidence_ready, lane_assigned, tour_ready, merged, reverted), can no longer reach it, or the timeout passes. Prefer this to polling.
+     * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      * @param args.timeoutSec Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached.
      */
     "wait_for_change": {
@@ -3573,6 +3583,11 @@ export type introspection = {
             "type": "string",
             "minLength": 1,
             "maxLength": 64
+          },
+          "github": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}#[0-9]{1,9}$",
+            "description": "GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one)."
           },
           "until": {
             "enum": [
@@ -3591,7 +3606,6 @@ export type introspection = {
           }
         },
         "required": [
-          "changeId",
           "until"
         ],
         "additionalProperties": false
