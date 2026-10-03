@@ -23,6 +23,8 @@ export interface Link extends Located {
 export interface Paragraph extends Located {
   /** Plain text with code spans and link URLs removed. */
   text: string;
+  /** Inside a `<details>` fold (not counted against the page's word budget). */
+  folded: boolean;
 }
 
 export interface Extracted {
@@ -66,6 +68,8 @@ export function extract(page: Page): Extracted {
       if ("tokens" in t && Array.isArray(t.tokens)) visitInline(t.tokens as Token[], line);
     }
   };
+  // `<details>` folds open and close in html tokens; the markdown between them is ordinary tokens.
+  let folds = 0;
   const visit = (list: readonly Token[]) => {
     for (const t of list) {
       const line = at(t.raw.split("\n")[0] ?? t.raw);
@@ -76,7 +80,11 @@ export function extract(page: Page): Extracted {
           break;
         }
         case "paragraph":
-          out.paragraphs.push({ line, text: inlineText((t as Tokens.Paragraph).tokens) });
+          out.paragraphs.push({
+            line,
+            text: inlineText((t as Tokens.Paragraph).tokens),
+            folded: folds > 0,
+          });
           visitInline((t as Tokens.Paragraph).tokens, line);
           break;
         case "heading":
@@ -96,10 +104,16 @@ export function extract(page: Page): Extracted {
           break;
         case "text":
           if ("tokens" in t && Array.isArray(t.tokens)) {
-            out.paragraphs.push({ line, text: inlineText(t.tokens as Token[]) });
+            out.paragraphs.push({ line, text: inlineText(t.tokens as Token[]), folded: folds > 0 });
             visitInline(t.tokens as Token[], line);
           }
           break;
+        case "html": {
+          const raw = (t as Tokens.HTML).raw;
+          folds += (raw.match(/<details[\s>]/g) ?? []).length;
+          folds = Math.max(0, folds - (raw.match(/<\/details>/g) ?? []).length);
+          break;
+        }
         default:
           break;
       }

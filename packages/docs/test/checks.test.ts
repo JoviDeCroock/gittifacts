@@ -95,8 +95,9 @@ describe("CLI samples", () => {
     expect(messages("```sh\ngittifacts wait ch_1 --until done\n```\n")[0]).toContain(
       "--until expects one of",
     );
-    expect(messages("```sh\ngittifacts get-change-status\n```\n")[0]).toContain(
-      "missing required --change-id",
+    // get-change-status takes a change id or --github, so neither is required on its own.
+    expect(messages("```sh\ngittifacts start-change --title x --category feature\n```\n")[0]).toContain(
+      "missing required --repo-id",
     );
   });
 });
@@ -131,5 +132,16 @@ describe("style", () => {
     expect(messages("One. Two. Three. Four. Five.\n")[0]).toContain("paragraph of 5 sentences");
     expect(messages("Use e.g. version 1.2 here. Then stop.\n")).toEqual([]);
     expect(messages("line\n\n".repeat(160))[0]).toContain("split the page");
+  });
+
+  it("keeps guides to 700 visible words; code, tables and <details> folds don't count", () => {
+    const para = `${"word ".repeat(70).trim()}.\n\n`;
+    expect(messages(para.repeat(10))).toEqual([]);
+    expect(messages(para.repeat(11))[0]).toContain("770 words of visible prose (max 700)");
+    const folded = `<details>\n<summary>Edge cases</summary>\n\n${para.repeat(5)}</details>\n\n`;
+    expect(messages(para.repeat(9) + folded)).toEqual([]);
+    expect(messages(`${para.repeat(10)}Run \`a b c d e f\` now.\n\n| a b c | d |\n|---|---|\n| e f | g |\n`)).toEqual([
+      "[length] 702 words of visible prose (max 700): fold edge cases into <details> or move them to a concept or reference page",
+    ]);
   });
 });
