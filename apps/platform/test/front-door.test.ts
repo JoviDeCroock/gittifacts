@@ -172,4 +172,104 @@ describe("front door", () => {
     const md = await call(app, "GET", "/", { headers: { accept: "text/markdown" } });
     expect(await md.text()).toMatch(/^# gittifacts: start here/);
   });
+
+  it("/start and /llms.txt: markdown for agents, the same content as a page for a browser", async () => {
+    const { app } = makeApp();
+    const get = (path: string, accept?: string) =>
+      call(app, "GET", path, accept === undefined ? {} : { headers: { accept } });
+    const BROWSER = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+
+    const md = await (await get("/start", "text/markdown")).text();
+    // curl and most HTTP clients send */*: markdown, like no Accept at all.
+    for (const accept of ["*/*", "text/plain", "text/markdown, text/html", undefined]) {
+      const res = await get("/start", accept);
+      expect(res.headers.get("content-type"), String(accept)).toContain("text/markdown");
+      expect(await res.text()).toBe(md);
+    }
+    const page = await get("/start", BROWSER);
+    expect(page.status).toBe(200);
+    expect(page.headers.get("content-type")).toContain("text/html");
+    expect(page.headers.get("vary")).toContain("Accept");
+    expect(page.headers.get("etag")).toMatch(/^"[0-9a-f]{32}"$/);
+    expect(page.headers.get("etag")).not.toBe((await get("/start")).headers.get("etag"));
+    const html = await page.text();
+    expect(html).toContain('name="viewport"');
+    expect(html).toContain('<link rel="alternate" type="text/markdown" href="/start.md">');
+    expect(html).toContain('<a class="meta__md" href="/start.md">View as Markdown</a>');
+    // Every heading of the guide, as a heading with an anchor.
+    for (const [, level, text] of md.matchAll(/^(#{1,3}) (.+)$/gm)) {
+      const plain = (text ?? "").replace(/[`*]/g, "");
+      expect(html).toMatch(new RegExp(`<h${level?.length} id="[^"]+">.*${escapeRe(plain.replace(/'/g, "&#39;"))}`));
+    }
+    // URLs are links; placeholders and other angle brackets are text, never markup.
+    expect(html).toContain(`<a href="${ORIGIN}/mcp">${ORIGIN}/mcp</a>`);
+    expect(html).toContain(`<a href="${ORIGIN}/llms.txt">`);
+    expect(html).toContain("Bearer &lt;token&gt;");
+    expect(html).not.toMatch(/<token>|<changeId>/);
+    expect(html).toContain('id="templates"');
+    // Revalidation and HEAD work on the page too.
+    const again = await call(app, "GET", "/start", {
+      headers: { accept: BROWSER, "if-none-match": page.headers.get("etag") ?? "" },
+    });
+    expect(again.status).toBe(304);
+    const head = await call(app, "HEAD", "/start", { headers: { accept: BROWSER } });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toContain("text/html");
+    expect(await head.text()).toBe("");
+
+    // /start.md is markdown whatever the browser asks for; ?format= links the representations.
+    const twin = await get("/start.md", BROWSER);
+    expect(twin.headers.get("content-type")).toContain("text/markdown");
+    expect(await twin.text()).toBe(md);
+    const asJson = await get("/start?format=json", BROWSER);
+    expect(StartDoc.safeParse(await asJson.json()).success).toBe(true);
+    expect((await get("/start", "application/json")).headers.get("content-type")).toContain(
+      "application/json",
+    );
+
+    // llms.txt: plain text for agents, a page for a browser.
+    const text = await get("/llms.txt", "*/*");
+    expect(text.headers.get("content-type")).toContain("text/plain");
+    const llms = await text.text();
+    const llmsPage = await get("/llms.txt", BROWSER);
+    expect(llmsPage.headers.get("content-type")).toContain("text/html");
+    const llmsHtml = await llmsPage.text();
+    expect(llmsHtml).toContain("<title>llms.txt · gittifacts</title>");
+    expect(llmsHtml).toContain(`<a href="${ORIGIN}/start">Start guide</a>`);
+    expect(llmsHtml).toContain('href="/llms.txt?format=text"');
+    expect(await (await get("/llms.txt?format=text", BROWSER)).text()).toBe(llms);
+  });
 });
+
+describe("front door pages", () => {
+  it("are framed by the docs build's shell when the static assets have it", async () => {
+    const shell =
+      '<!doctype html><title><!--gf:title--></title><link rel="canonical" href="<!--gf:canonical-->"><link rel="alternate" type="text/markdown" href="<!--gf:alternate-->"><meta name="description" content="<!--gf:description-->"><div class="shell shell--single"><!--gf:content--></div>';
+    const assets = {
+      async fetch(input: Request | string | URL): Promise<Response> {
+        const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+        if (url.pathname === "/docs/_assets/shell") {
+          return new Response(shell, { headers: { "content-type": "text/html" } });
+        }
+        return new Response("not found", { status: 404 });
+      },
+    };
+    const { app } = makeApp();
+    const ctx = createExecutionContext();
+    const res = await app.fetch(
+      new Request(`${ORIGIN}/start`, { headers: { accept: "text/html" } }),
+      { ...env, ASSETS: assets as unknown as Fetcher },
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    const html = await res.text();
+    expect(html).toContain('<div class="shell shell--single"><h1 id="gittifacts-start-here">');
+    expect(html).toContain("<title>Start here · gittifacts</title>");
+    expect(html).toContain(`<link rel="canonical" href="${ORIGIN}/start">`);
+    expect(html).not.toContain("<!--gf:");
+  });
+});
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
