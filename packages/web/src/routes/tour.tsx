@@ -18,7 +18,7 @@ import { Page } from "../components/Shell.js";
 import { TriageChart } from "../components/TriageChart.js";
 import { ErrorState, LaneTag, Loading, StatusChip, VerdictBadge, VerdictMark, Who } from "../components/ui.js";
 import { findItem } from "../lib/evidence.js";
-import { LANES, triageChart } from "../lib/lanes.js";
+import { LANES, triageChart, unroutedCopy } from "../lib/lanes.js";
 import { durationLabel, relative, shortAge } from "../lib/time.js";
 import { CATEGORY_LABEL, CHANGE_STATUS, ROLLOUT_STATUS, STOP_KIND, VERDICT, plural, shortSha } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
@@ -107,19 +107,13 @@ function StationStrip({ tour, current, onJump, resumeAt, onResume }: { tour: Tou
 function LaneBlock({ change, open, rail = false }: { change: Change; open: boolean; rail?: boolean }) {
   const chart = triageChart(change.laneReasons, change.computedLane, change.lane);
   if (change.lane === null) {
-    const pending = change.status === "awaiting-push" || change.status === "running" || change.status === "awaiting-review";
+    const copy = unroutedCopy(change.status, change.id);
     return (
       <section class="lane-block lane-block--none">
         <LaneTag lane={null} size="lg" />
         <div>
-          <h2 class="lane-block__title">{pending ? "Not routed yet" : "Not routed"}</h2>
-          <p class="lane-block__line">
-            {pending
-              ? "The lane is computed once checks pass and evidence is signed."
-              : change.id.startsWith("bs-")
-                ? "The platform's bootstrap change merges without review, so it has no lane."
-                : "This change closed before a lane was computed."}
-          </p>
+          <h2 class="lane-block__title">{copy.title}</h2>
+          <p class="lane-block__line">{copy.line}</p>
         </div>
       </section>
     );

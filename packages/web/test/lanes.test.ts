@@ -1,6 +1,6 @@
 import type { Change, LaneReason } from "@app/domain";
 import { describe, expect, it } from "vitest";
-import { familyLabel, groupByLane, matchesFilter, pct, reasonFamily, shadowProgress, triageChart } from "../src/lib/lanes.js";
+import { familyLabel, groupByLane, matchesFilter, pct, reasonFamily, shadowProgress, triageChart, unroutedCopy } from "../src/lib/lanes.js";
 
 type C = Pick<Change, "lane" | "computedLane" | "status" | "updatedAt"> & { id: string };
 const c = (id: string, lane: C["lane"], computedLane: C["computedLane"], status: C["status"] = "awaiting-review", updatedAt = "2026-10-01T10:00:00Z"): C => ({
@@ -138,5 +138,20 @@ describe("shadowProgress", () => {
     expect(pct(0.95)).toBe("95%");
     expect(pct(0.9318, 1)).toBe("93.2%");
     expect(pct(1, 1)).toBe("100%");
+  });
+});
+
+describe("unroutedCopy", () => {
+  it("never calls an open change closed", () => {
+    for (const status of ["awaiting-push", "running", "failing", "awaiting-review"] as const) {
+      const copy = unroutedCopy(status, "chg_1");
+      expect(copy.title).toBe("Not routed yet");
+      expect(copy.line).not.toMatch(/closed/);
+    }
+    expect(unroutedCopy("failing", "chg_1").line).toMatch(/pushes a fix/);
+  });
+  it("closed changes and the bootstrap are not routed, each with its own reason", () => {
+    expect(unroutedCopy("abandoned", "chg_1")).toEqual({ title: "Not routed", line: "This change closed before a lane was computed." });
+    expect(unroutedCopy("merged", "bs-abc").line).toMatch(/bootstrap/);
   });
 });

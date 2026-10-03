@@ -94,6 +94,20 @@ export function matchesFilter(status: ChangeStatus, filter: ChangeFilter): boole
   }
 }
 
+/**
+ * What the lane block says for a change without a lane. An open change (waiting for a push,
+ * checks running or failing) is routed once its checks pass; only a closed one never will be.
+ */
+export function unroutedCopy(status: ChangeStatus, id: string): { title: string; line: string } {
+  if (id.startsWith("bs-"))
+    return { title: "Not routed", line: "The platform's bootstrap change merges without review, so it has no lane." };
+  if (status === "failing")
+    return { title: "Not routed yet", line: "The lane is computed once the author pushes a fix and checks pass." };
+  if (status === "awaiting-push" || status === "running" || status === "awaiting-review")
+    return { title: "Not routed yet", line: "The lane is computed once checks pass and evidence is signed." };
+  return { title: "Not routed", line: "This change closed before a lane was computed." };
+}
+
 // ---------------------------------------------------------------- observation chart
 
 export type ReasonFamily =
