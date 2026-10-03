@@ -205,7 +205,11 @@ async function runScenario(s: ContractScenario, runId: string, repoId: string): 
     const codes = new Set(c?.reasons.map((r) => r.code) ?? []);
     for (const code of e.includes) if (!codes.has(code)) out.detail.push(`missing reason ${code}`);
     for (const code of e.excludes) if (codes.has(code)) out.detail.push(`unexpected reason ${code}`);
-    if (JSON.stringify(kinds) !== JSON.stringify(e.evidenceKinds)) out.detail.push(`evidence kinds ${kinds.join(",")} ≠ ${e.evidenceKinds.join(",")}`);
+    // The judge's items are the AI Gateway's, not the evidence engine's: the recorded-fixture suite
+    // (scenarios.ts, fromClassifier) leaves them out, so the live comparison does too. Its lane can
+    // only rise, and a raised lane still shows up above as a verdict mismatch.
+    const measured = kinds.filter((k) => k !== "llm-judgment");
+    if (JSON.stringify(measured) !== JSON.stringify(e.evidenceKinds)) out.detail.push(`evidence kinds ${measured.join(",")} ≠ ${e.evidenceKinds.join(",")}`);
     if (out.detail.length > 0) out.status = "mismatch";
     return out;
   } finally {
