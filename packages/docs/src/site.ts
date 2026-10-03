@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { BASE, type Page, sectionTitle } from "./content.js";
 import { escapeHtml } from "./highlight.js";
 import { HOST_PLACEHOLDER, pageHtml, shellHtml } from "./layout.js";
-import { plainText, renderMarkdown, resolveHref } from "./markdown.js";
+import { plainText, renderMarkdown, resolveHref, stripMarkers } from "./markdown.js";
 import { pagesList } from "./nav.js";
 
 export type Site = Map<string, string | Uint8Array>;
@@ -77,7 +77,7 @@ function css(): string {
     join(import.meta.dirname, "..", "..", "web", "src", "styles", "tokens.css"),
     "utf8",
   );
-  const own = ["docs.css", "prose.css", "blocks.css", "frame.css"].map((f) =>
+  const own = ["docs.css", "prose.css", "blocks.css", "steps.css", "frame.css"].map((f) =>
     readFileSync(join(import.meta.dirname, "assets", f), "utf8"),
   );
   return `/* tokens.css from packages/web (one source for the design tokens) */\n${tokens}\n${own.join("\n")}`;
@@ -108,6 +108,8 @@ export function buildSite(pages: readonly Page[]): Site {
     "> Task-first documentation for agents and humans. Each link is the page's markdown twin.",
     "",
     `Everything in one file: ${HOST_PLACEHOLDER}/docs/llms-full.txt`,
+    "",
+    `Start here: agents read ${HOST_PLACEHOLDER}/docs/get-started/agents.md (or ${HOST_PLACEHOLDER}/start); people pick a path at ${HOST_PLACEHOLDER}/docs.`,
   ];
   let lastSection: string | null = null;
 
@@ -115,8 +117,9 @@ export function buildSite(pages: readonly Page[]): Site {
     const md = markdownTwin(pages, page);
     const rendered = renderMarkdown(md, page.file);
     site.set(htmlFileOf(page), pageHtml(pages, page, rendered));
-    site.set(mdFileOf(page), md);
-    full.push("---", "", `URL: ${HOST_PLACEHOLDER}${page.url}`, "", md);
+    const twin = stripMarkers(md);
+    site.set(mdFileOf(page), twin);
+    full.push("---", "", `URL: ${HOST_PLACEHOLDER}${page.url}`, "", twin);
     const section = sectionTitle(page.section) || "Docs";
     if (section !== lastSection) index.push("", `## ${section}`);
     lastSection = section;

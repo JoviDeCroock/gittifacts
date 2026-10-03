@@ -11,7 +11,7 @@ import type { Heading } from "./markdown.js";
 import { breadcrumbs, prevNext, sidebar, toc } from "./nav.js";
 
 export const HOST_PLACEHOLDER = "https://<host>";
-export const ASSET_VERSION = "1";
+export const ASSET_VERSION = "2";
 
 const AUDIENCE: Record<Page["fm"]["audience"], string | null> = {
   agents: "For agents",

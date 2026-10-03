@@ -2,7 +2,7 @@
  * Navigation pieces of a page: the sidebar (sections and their pages), breadcrumbs, the on-page
  * table of contents and previous/next links. All derived from the ordered page list.
  */
-import { type Page, SECTIONS, sectionTitle } from "./content.js";
+import { GROUPS, type Page, SECTIONS, sectionTitle } from "./content.js";
 import { escapeHtml } from "./highlight.js";
 import type { Heading } from "./markdown.js";
 
@@ -11,6 +11,18 @@ const navTitle = (p: Page) => p.fm.nav ?? p.fm.title;
 function link(p: Page, current: Page): string {
   const here = p.slug === current.slug ? ' aria-current="page"' : "";
   return `<li><a href="${p.url}"${here}>${escapeHtml(navTitle(p))}</a></li>`;
+}
+
+/** Pages by their front-matter group, in GROUPS order; ungrouped pages first, under no label. */
+function byGroup(pages: readonly Page[]): [string | null, Page[]][] {
+  const out: [string | null, Page[]][] = [];
+  const loose = pages.filter((p) => p.fm.group === undefined);
+  if (loose.length > 0) out.push([null, loose]);
+  for (const g of GROUPS) {
+    const ps = pages.filter((p) => p.fm.group === g);
+    if (ps.length > 0) out.push([g, ps]);
+  }
+  return out;
 }
 
 /** Sidebar: top-level pages, then one group per section (its index page first). */
@@ -27,11 +39,13 @@ export function sidebar(pages: readonly Page[], current: Page): string {
       : escapeHtml(s.title);
     const rest = inSection.filter((p) => p !== index);
     const nested = s.dir.includes("/") ? " nav__group--nested" : "";
-    groups.push(
-      `<div class="nav__group${nested}"><p class="nav__title">${head}</p><ul class="nav__list">${rest
-        .map((p) => link(p, current))
-        .join("")}</ul></div>`,
-    );
+    const lists = byGroup(rest)
+      .map(([g, ps]) => {
+        const label = g === null ? "" : `<p class="nav__sub">${escapeHtml(g)}</p>`;
+        return `${label}<ul class="nav__list">${ps.map((p) => link(p, current)).join("")}</ul>`;
+      })
+      .join("");
+    groups.push(`<div class="nav__group${nested}"><p class="nav__title">${head}</p>${lists}</div>`);
   }
   const security = pages.find((p) => p.slug === "security");
   if (security) groups.push(`<ul class="nav__list">${link(security, current)}</ul>`);
@@ -79,5 +93,8 @@ export function pagesList(pages: readonly Page[], page: Page): string {
     p.section.startsWith(`${section}/`) &&
     !p.section.slice(section.length + 1).includes("/");
   const children = pages.filter((p) => p !== page && (p.section === section || nestedIndex(p)));
-  return children.map((p) => `- [${p.fm.title}](${p.url}): ${p.fm.description}`).join("\n");
+  const item = (p: Page) => `- [${p.fm.title}](${p.url}): ${p.fm.description}`;
+  return byGroup(children)
+    .map(([g, ps]) => `${g === null ? "" : `## ${g}\n\n`}${ps.map(item).join("\n")}`)
+    .join("\n\n");
 }

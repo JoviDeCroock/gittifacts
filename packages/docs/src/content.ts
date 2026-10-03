@@ -15,6 +15,9 @@ export const BASE = "/docs";
 export const Audience = z.enum(["agents", "humans", "both", "integrators"]);
 export type Audience = z.infer<typeof Audience>;
 
+/** Sidebar groups inside a section, in order (guides use them). */
+export const GROUPS = ["Daily work", "Review", "Set up a repo", "GitHub", "Help"] as const;
+
 export const FrontMatter = z
   .object({
     title: z.string().min(1).max(80),
@@ -24,6 +27,8 @@ export const FrontMatter = z
     audience: Audience.default("both"),
     /** Shorter title for the sidebar. */
     nav: z.string().min(1).max(40).optional(),
+    /** The sidebar group within its section (see GROUPS). */
+    group: z.enum(GROUPS).optional(),
     /** Written by `generate/` from the code: never edit by hand. */
     generated: z.boolean().default(false),
   })

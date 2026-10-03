@@ -1,0 +1,148 @@
+/* ------------------------------------------------------------------ progressive disclosure
+ * Steps, the outcome line, folded details and the docs home's path cards
+ * (docs/ux-review/docs-audit-2026-10-03.md). One look with the rest of the docs: hairlines,
+ * panels, the action ink for links; no colored stripes, no icon tiles.
+ */
+
+/* A numbered step: the number is a badge, and steps don't carry the section rule. */
+.prose h2.step {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  margin-top: var(--s-6);
+  padding-top: 0;
+  border-top: 0;
+}
+.step__n {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--canvas);
+  font-size: var(--text-small);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transform: translateY(-0.12em);
+}
+/* "You'll have: …" under the title. */
+.prose .outcome {
+  margin: 0 0 var(--s-5);
+  padding: var(--s-3) var(--s-4);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  font-size: 1.0625rem;
+}
+
+/* Folded detail: closed by default, one line to open it. */
+.prose details.more {
+  margin: 0 0 var(--s-4);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+}
+.prose details.more > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-4);
+  color: var(--text-2);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  list-style: none;
+}
+.prose details.more > summary::-webkit-details-marker {
+  display: none;
+}
+.prose details.more > summary::before {
+  content: "";
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-state) var(--ease-out);
+}
+.prose details.more[open] > summary::before {
+  transform: rotate(45deg);
+}
+.prose details.more > summary:hover {
+  color: var(--text);
+}
+.prose details.more[open] > summary {
+  border-bottom: var(--hairline) solid var(--rule);
+}
+.prose details.more > :not(summary) {
+  margin-left: var(--s-4);
+  margin-right: var(--s-4);
+}
+.prose details.more > :nth-child(2) {
+  margin-top: var(--s-4);
+}
+.prose details.more > :last-child {
+  margin-bottom: var(--s-4);
+}
+
+/* The docs home's "pick your path": a 2 × 2 grid of whole-card links. */
+.prose ul.cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+  margin: 0 0 var(--s-6);
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 640px) {
+  .prose ul.cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.prose ul.cards > li {
+  position: relative;
+  margin: 0;
+  padding: var(--s-4);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 0.9375rem;
+}
+.prose ul.cards > li:hover {
+  border-color: var(--control-border);
+}
+.prose ul.cards > li > a:first-child,
+.prose ul.cards > li > strong:first-child > a {
+  display: block;
+  margin-bottom: var(--s-1);
+  color: var(--text);
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+  text-decoration: none;
+}
+/* The whole card is the link's hit area. */
+.prose ul.cards > li > a:first-child::after,
+.prose ul.cards > li > strong:first-child > a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.prose ul.cards > li a:focus-visible::after {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Sidebar: a group label inside a section (guides). */
+.nav__sub {
+  margin: var(--s-3) 0 var(--s-1);
+  padding: 0 var(--s-3);
+  color: var(--text-3);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+}

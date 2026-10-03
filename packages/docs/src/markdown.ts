@@ -79,12 +79,16 @@ export function renderMarkdown(body: string, file: string): Rendered {
     },
     renderer: {
       heading({ tokens, depth, text }: Tokens.Heading) {
-        const inner = this.parser.parseInline(tokens);
+        let inner = this.parser.parseInline(tokens);
         const plain = plainText(text);
         const id = uniqueId(plain);
         if (depth === 2 || depth === 3) headings.push({ depth, id, text: plain });
         if (depth === 1) return `<h1 id="${id}">${inner}</h1>\n`;
-        return `<h${depth} id="${id}"><a class="anchor" href="#${id}" aria-hidden="true" tabindex="-1">#</a>${inner}</h${depth}>\n`;
+        // "## 2. Wait for the first green" is a step: its number becomes a badge.
+        const step = depth === 2 ? STEP.exec(inner) : null;
+        const cls = step ? ' class="step"' : "";
+        if (step) inner = `<span class="step__n" aria-hidden="true">${step[1]}</span><span class="sr-only">Step ${step[1]}: </span>${inner.slice(step[0].length)}`;
+        return `<h${depth} id="${id}"${cls}><a class="anchor" href="#${id}" aria-hidden="true" tabindex="-1">#</a>${inner}</h${depth}>\n`;
       },
       code({ text, lang }: Tokens.Code) {
         const language = (lang ?? "").split(/\s+/)[0] ?? "";
@@ -108,6 +112,19 @@ export function renderMarkdown(body: string, file: string): Rendered {
   html = html
     .replace(/<table>/g, '<div class="table-wrap" tabindex="0"><table>')
     .replace(/<\/table>/g, "</table></div>")
-    .replace(/<strong>Coming soon([.:]?)<\/strong>/g, '<span class="soon">Coming soon</span>');
+    .replace(/<strong>Coming soon([.:]?)<\/strong>/g, '<span class="soon">Coming soon</span>')
+    // The page's promise ("**You'll have:** …") opens the page as its outcome line.
+    .replace(/<p><strong>You(?:'|&#39;|’)ll have:<\/strong>/g, `<p class="outcome"><strong>You'll have:</strong>`)
+    // A list right after `<!-- cards -->` renders as cards (the docs home's paths).
+    .replace(/<!-- cards -->\s*<ul>/g, '<ul class="cards">')
+    .replace(/<details>/g, '<details class="more">');
   return { html, headings };
 }
+
+/** Markers that only steer the HTML; the markdown twin and llms-full.txt leave them out. */
+export function stripMarkers(md: string): string {
+  return md.replace(/^<!-- cards -->\n/gm, "");
+}
+
+/** A step heading's leading number, as rendered inline HTML (`2. Wait…`). */
+const STEP = /^(\d{1,2})\.\s+/;
