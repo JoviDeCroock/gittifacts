@@ -350,7 +350,8 @@ describe("per-token request limits (UNCLAIMED_TOKEN_LIMITER)", () => {
     const app = platformApp();
     const p = await createUnclaimed(app);
     let status = 200;
-    for (let i = 0; i < 130 && status === 200; i++) {
+    // Fixed one-minute window: a boundary mid-loop resets the count, so allow two windows' worth.
+    for (let i = 0; i < 250 && status === 200; i++) {
       const res = await request(app, "GET", "/api/v1/me", { token: p.token as string });
       status = res.status;
       await res.body?.cancel();
