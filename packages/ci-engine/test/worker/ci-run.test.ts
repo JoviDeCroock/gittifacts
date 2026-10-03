@@ -289,6 +289,24 @@ describe("CiRunWorkflow", () => {
     expect(await text(RunKeys.log(req.runId, "plan"))).toContain("planning .platform/ci.ts");
   });
 
+  it("from base, a Change that adds the repo's first .platform/ci.ts is judged by it (adoption)", async () => {
+    // Base: detected defaults only (no .platform/ci.ts). Head adds one: it judges the Change.
+    const req = request("adopt", { baseSha: SHAS.base, headSha: SHAS.withCiFile });
+    expect(req.pipelineFrom).toBeUndefined(); // the default, "base"
+    expect(await runToCompletion(req)).toMatchObject({ status: "passed" });
+    const status = await engine.status(req.runId);
+    expect(status.pipelineSource).toBe("file");
+    expect(status.steps.map((s) => s.name)).toEqual(["deps", "unit"]);
+    const plan = await events(req.runId, "plan");
+    expect(plan.find((x) => x.kind === "exec")?.command as string).toContain(
+      `--sha ${SHAS.withCiFile}`,
+    );
+    // Once the base has one, the base's judges, whatever the head says.
+    const kept = request("adopted", { baseSha: SHAS.withCiFile, headSha: SHAS.badCiFile });
+    expect(await runToCompletion(kept)).toMatchObject({ status: "passed" });
+    expect((await engine.status(kept.runId)).steps.map((s) => s.name)).toEqual(["deps", "unit"]);
+  });
+
   it("uses the default pipeline and default evidence steps without a pipeline file", async () => {
     const req = request("defaults", { headSha: SHAS.defaults, pipelineFrom: "head" });
     delete req.evidenceSteps;

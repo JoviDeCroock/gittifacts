@@ -706,31 +706,28 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
   /** `plan` step body: decide the pipeline and evidence steps for this run. */
   protected async resolvePipeline(req: CiRunParams): Promise<ResolvedPipeline> {
     const t0 = Date.now();
-    const sha = req.pipelineFrom === "head" ? req.headSha : req.baseSha;
-    const facts = await this.withRepo(req.artifactsRepo, async (repo) => {
-      const root = await listRoot(repo, sha);
-      const text = await readRootFile(repo, root, "package.json");
-      let packageJson: unknown = null;
-      try {
-        packageJson = text === null ? null : (JSON.parse(text) as unknown);
-      } catch {
-        packageJson = null;
+    let sha = req.pipelineFrom === "head" ? req.headSha : req.baseSha;
+    let facts = await this.repoFacts(req.artifactsRepo, sha);
+    let features = detectRepoFeatures(facts);
+    // Adoption. "From base" means the CI the default branch adopted. While it has adopted none
+    // (no .platform/ci.ts: detected defaults only), a change that adds one is judged by it. Nothing
+    // adopted can be weakened that way, and every .platform/ change is Lane 2 with a human approval
+    // that is not the author's (classifier `policy.changed`). Without it, a repo whose detected
+    // defaults are red could never adopt a pipeline (M5 dogfood; DECISIONS 2026-10-03).
+    if (
+      req.pipeline === undefined &&
+      req.pipelineFrom !== "head" &&
+      !features.hasPipelineFile &&
+      req.headSha !== sha
+    ) {
+      const headFacts = await this.repoFacts(req.artifactsRepo, req.headSha);
+      const headFeatures = detectRepoFeatures(headFacts);
+      if (headFeatures.hasPipelineFile) {
+        sha = req.headSha;
+        facts = headFacts;
+        features = headFeatures;
       }
-      const templateText = await readRootFile(repo, root, "template.json", 64 * 1024);
-      let templateJson: unknown = null;
-      try {
-        templateJson = templateText === null ? null : (JSON.parse(templateText) as unknown);
-      } catch {
-        templateJson = null;
-      }
-      return {
-        rootEntries: root.entries.map((e) => e.name),
-        packageJson,
-        templateJson,
-        platformEntries: await listDirectory(repo, root, ".platform"),
-      };
-    });
-    const features = detectRepoFeatures(facts);
+    }
 
     let pipeline: PipelineSpec;
     let source: PipelineSource;
@@ -762,6 +759,33 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       resolvedAt: new Date().toISOString(),
     });
     return { ok: true, source, pipeline, evidenceSteps, durationMs: Date.now() - t0 };
+  }
+
+  /** Root facts for plan mode (root entries, package.json, template.json, .platform/) at `sha`. */
+  private async repoFacts(artifactsRepo: string, sha: string) {
+    return this.withRepo(artifactsRepo, async (repo) => {
+      const root = await listRoot(repo, sha);
+      const text = await readRootFile(repo, root, "package.json");
+      let packageJson: unknown = null;
+      try {
+        packageJson = text === null ? null : (JSON.parse(text) as unknown);
+      } catch {
+        packageJson = null;
+      }
+      const templateText = await readRootFile(repo, root, "template.json", 64 * 1024);
+      let templateJson: unknown = null;
+      try {
+        templateJson = templateText === null ? null : (JSON.parse(templateText) as unknown);
+      } catch {
+        templateJson = null;
+      }
+      return {
+        rootEntries: root.entries.map((e) => e.name),
+        packageJson,
+        templateJson,
+        platformEntries: await listDirectory(repo, root, ".platform"),
+      };
+    });
   }
 
   private async planFromFile(

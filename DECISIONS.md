@@ -1666,3 +1666,22 @@ the in-memory coordinator. The host reports what it published.
 test org nightly). The ChangeWorkflow takes the host adapter through `FlowDeps` (built per host by apps/platform)
 for `getChange`/`diff`/`materialize`/publishing; until then it calls the native helpers directly. A GitHub
 `EvidenceRunner` runs the same CI engine on the Artifacts mirror.
+
+## 2026-10-03 — Pipeline adoption: a Change that adds a repo's first `.platform/ci.ts` is judged by it
+
+**Found in M5 dogfood.** "The pipeline comes from BASE" made the platform unable to onboard this repo. Its
+detected default pipeline (root `lint`, `typecheck`, `test`, `build`) is red on main: `biome check .` reports 215
+pre-existing errors, `pnpm -r test` stops at the first package with an unhandled rejection. The import's own
+`.platform/*` proposal, and any hand-written replacement, was judged by those red defaults, a failing Change can't
+be reviewed (`invalid-state`), and the merge queue's runs (also from base) would have failed the same way. No
+pipeline could ever be adopted.
+
+- **Rule.** CI comes from the base, except while the base has **no** `.platform/ci.ts` (detected defaults: nobody
+  adopted a pipeline) and the Change adds one: then the head's file judges it. Implemented twice with one meaning:
+  `pipelineShaFor` (coordinator, the ChangeWorkflow's `plan-ci`) and `resolvePipeline` (CI engine, for runs that
+  don't pass a pipeline: the queue's cheap re-check and batch runs).
+- **Why it is safe.** Nothing adopted exists to weaken. Every `.platform/` change is Lane 2 and needs a human who is
+  not the author (`policy.changed` is hard-coded in the classifier, not a policy path). Once a pipeline is
+  adopted, every later Change (including ones editing `ci.ts`) is judged by the base's again.
+- **Not done.** A red *adopted* pipeline still blocks everything; "only new failures block" (compare with main's
+  last run) would be the general fix.

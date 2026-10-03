@@ -41,6 +41,7 @@ import { durableStages, persistClassification, persistTour, storeGradeData } fro
 import { changeSubject, ciRunIdFor, isBootstrapChange, rolloutWorkflowId } from "./ids.js";
 import { PUSHABLE_STATUSES, toCiStatus } from "./lifecycle.js";
 import { withChangeNotifications } from "./milestones.js";
+import { pipelineShaFor } from "./pipeline-adoption.js";
 import { errorMessage, type ResolvedPolicy, resolvePolicy, unavailablePolicy } from "./policy.js";
 import {
   type CiRunRequest,
@@ -226,13 +227,15 @@ export async function runChangeWorkflow(
   const policy: RepoPolicy = resolved.policy;
 
   // ------------------------------------------------------------ 3. plan-ci (sandbox, plan mode, at BASE)
+  // At BASE, except a Change that adopts the repo's first .platform/ci.ts (pipeline-adoption.ts).
   let pipeline: unknown = null;
   let planWarning: string | null = null;
   try {
     pipeline = (
-      await step.do("plan-ci", RETRY.sandbox, async () => ({
-        spec: (await ports.sandbox.planPipeline({ repo: forkName, sha: baseSha })) ?? null,
-      }))
+      await step.do("plan-ci", RETRY.sandbox, async () => {
+        const sha = await pipelineShaFor(git, forkName, baseSha, headSha);
+        return { spec: (await ports.sandbox.planPipeline({ repo: forkName, sha })) ?? null };
+      })
     ).spec;
   } catch (e) {
     // The engine falls back to detected defaults; missing evidence escalates on its own.
