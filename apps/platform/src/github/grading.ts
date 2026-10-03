@@ -11,7 +11,7 @@
 import { resolveRuntime } from "@app/coordinator";
 import type { GithubRepoHost, Repo } from "@app/domain";
 import type { Identity } from "@app/host";
-import { GithubRepo, GithubSync, principalIdFor, repoIdFor } from "@app/host-github";
+import { GithubRepo, GithubSync, InstallationTokens, principalIdFor, repoIdFor } from "@app/host-github";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { putMember } from "../access/members-store.js";
@@ -23,7 +23,8 @@ import { githubActorPrincipal, upsertGithubPlan } from "./plans.js";
 import { githubHostFor, githubReadSource } from "./runtime.js";
 import { repoAllowed } from "./allowlist.js";
 import { githubApp } from "./app-config.js";
-import { getInstallation } from "./store.js";
+import { appInstallation } from "./api.js";
+import { addRepos, getInstallation, upsertInstallation } from "./store.js";
 import type { GithubEventMessage } from "./webhook.js";
 
 /** The principal a GitHub account authors as: created once, disabled (it never authenticates). */
@@ -111,6 +112,48 @@ export async function grantLinkedRepos(
   }
 }
 
+/**
+ * A change event for an installation we never recorded (its `installation.created` delivery
+ * failed, or is still waiting for a redelivery): ask GitHub with the App's JWT and record it,
+ * with only this (already allowed) repo, instead of dropping the event for good. Only the Reader
+ * App's installations. GitHub doesn't know it (deleted): null, nothing recorded. Any other GitHub
+ * error throws, so the queue retries the delivery.
+ */
+export async function adoptInstallation(
+  env: Bindings,
+  store: D1Store,
+  installationId: number,
+  appId: number,
+  repo: GithubRepo,
+) {
+  const app = githubApp(env as unknown as Record<string, unknown>);
+  if (app === null || app.appId !== appId) return null;
+  const jwt = await new InstallationTokens({
+    appId: app.appId,
+    clientId: app.clientId,
+    privateKey: app.privateKey,
+  }).appJwt();
+  const i = await appInstallation(jwt, installationId);
+  if (i === null || i.app_id !== appId || i.account === null) return null;
+  const now = new Date();
+  await upsertInstallation(
+    store.db,
+    {
+      id: i.id,
+      appId: i.app_id,
+      account: i.account,
+      repositorySelection: i.repository_selection,
+      permissions: i.permissions,
+      events: i.events,
+      suspendedAt: i.suspended_at ?? null,
+    },
+    now,
+  );
+  await addRepos(store.db, i.id, [{ id: repo.id, fullName: repo.full_name, private: repo.private }], now);
+  console.log(JSON.stringify({ github: "installation.adopted", installationId: i.id, repo: repo.full_name }));
+  return getInstallation(store.db, i.id);
+}
+
 const WithRepo = z.object({ repository: GithubRepo });
 
 /** pull_request, pull_request_review, push, merge_group → GithubSync. */
@@ -125,7 +168,9 @@ export async function onChangeDelivery(
   if (!repoAllowed(env as unknown as Record<string, unknown>, parsed.data.repository.full_name))
     return;
   const store = new D1Store(env.DB, env.BLOBS, () => new Date());
-  const inst = await getInstallation(store.db, msg.installationId);
+  const inst =
+    (await getInstallation(store.db, msg.installationId)) ??
+    (await adoptInstallation(env, store, msg.installationId, msg.appId, parsed.data.repository));
   if (
     inst === null ||
     inst.deletedAt !== null ||

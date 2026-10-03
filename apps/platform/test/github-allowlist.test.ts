@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Bindings } from "../src/app-env.js";
 import { repoAllowed } from "../src/github/allowlist.js";
 import { handleGithubEvent } from "../src/github/consumer.js";
+import { adoptInstallation } from "../src/github/grading.js";
 import { runGithubRedeliveries } from "../src/github/redeliver.js";
 import { getInstallation, reposOf } from "../src/github/store.js";
 import type { GithubEventMessage } from "../src/github/webhook.js";
+import { D1Store } from "../src/store/d1-store.js";
 import { store } from "./fixtures.js";
 import { APP_ID, jsonRes, stubGithub } from "./github-helpers.js";
 
@@ -146,5 +148,48 @@ describe("GITHUB_REPO_ALLOWLIST", () => {
     expect(await runGithubRedeliveries({ ...(env as Bindings), ...ALLOW }, now)).toBe(2);
     // Oldest first: the installation event, then the allowed repo's push.
     expect(asked).toEqual([1, 2]);
+  });
+});
+
+describe("a change event for an installation we never recorded", () => {
+  const repo = {
+    id: 1403085431,
+    name: "fixture-lib",
+    full_name: "ReSynapse/fixture-lib",
+    private: true,
+    default_branch: "main",
+    owner: { login: "ReSynapse", id: 4242, type: "Organization" },
+  };
+  const s = () => new D1Store(env.DB, env.BLOBS, () => new Date());
+  const cfg = { ...(env as Bindings), ...ALLOW };
+
+  it("is recorded from GitHub (App JWT) with only the event's repo, not dropped", async () => {
+    const id = nextInst++;
+    const seen = stubGithub({
+      [`GET https://api.github.com/app/installations/${id}`]: (req) =>
+        req.headers.get("authorization")?.startsWith("Bearer ey") ? jsonRes(installation(id)) : jsonRes({}, 401),
+    });
+    const row = await adoptInstallation(cfg, s(), id, APP_ID, repo);
+    expect(row).toMatchObject({ id, appId: APP_ID, accountLogin: "ReSynapse", deletedAt: null });
+    expect((await reposOf(store().db, id)).map((r) => r.fullName)).toEqual(["ReSynapse/fixture-lib"]);
+    expect(seen.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("GitHub doesn't know it: nothing recorded; another App's: not even asked", async () => {
+    const id = nextInst++;
+    const seen = stubGithub({
+      [`GET https://api.github.com/app/installations/${id}`]: () => jsonRes({ message: "Not Found" }, 404),
+    });
+    expect(await adoptInstallation(cfg, s(), id, APP_ID, repo)).toBeNull();
+    expect(await getInstallation(store().db, id)).toBeNull();
+    expect(await adoptInstallation(cfg, s(), id, APP_ID + 1, repo)).toBeNull();
+    expect(seen).toHaveLength(1);
+  });
+
+  it("a GitHub error throws, so the queue retries the delivery", async () => {
+    const id = nextInst++;
+    stubGithub({ [`GET https://api.github.com/app/installations/${id}`]: () => jsonRes({}, 502) });
+    await expect(adoptInstallation(cfg, s(), id, APP_ID, repo)).rejects.toThrow(/502/);
+    expect(await getInstallation(store().db, id)).toBeNull();
   });
 });

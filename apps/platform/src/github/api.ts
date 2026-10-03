@@ -127,6 +127,21 @@ export const InstallationInfo = z.object({
 });
 export type InstallationInfo = z.infer<typeof InstallationInfo>;
 
+/**
+ * `GET /app/installations/{id}` with the App's JWT: one installation of our App, or null when
+ * GitHub doesn't know it (deleted). Used when a delivery names an installation we never recorded.
+ */
+export async function appInstallation(appJwt: string, id: number): Promise<InstallationInfo | null> {
+  const res = await fetch(`${GITHUB_API}/app/installations/${id}`, {
+    headers: headers({ authorization: `Bearer ${appJwt}` }),
+  });
+  if (res.status === 404) {
+    await res.body?.cancel();
+    return null;
+  }
+  return readJson(res, InstallationInfo, "app installation");
+}
+
 const MAX_PAGES = 10;
 
 /** `GET /user/installations`: the App's installations this user can access (≤ 1,000). */
