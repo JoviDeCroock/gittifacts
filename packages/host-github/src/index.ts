@@ -5,6 +5,7 @@
  */
 export * from "./adapter.js";
 export * from "./api.js";
+export * from "./backtest/index.js";
 export * from "./capabilities.js";
 export * from "./check-run.js";
 export * from "./governor.js";

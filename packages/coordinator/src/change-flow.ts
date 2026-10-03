@@ -235,6 +235,8 @@ export async function runChangeWorkflow(
     return done("skipped", null, "GitHub change, but no GitHub host is configured");
   }
   const capabilities = host?.capabilities() ?? NATIVE_CAPABILITIES;
+  /** A merged PR graded by the backtest: no GitHub writes, no tour, never up for review. */
+  const backtest = ctx.host?.change.backtest === true;
 
   // ------------------------------------------------------------ 1. diff
   await step.do("diff", RETRY.remote, async () => {
@@ -375,7 +377,8 @@ export async function runChangeWorkflow(
 
     await step.do("ci-outcome", RETRY.quick, async () => {
       await store.upsertRun(report.run);
-      if (ciStatus === "failed") {
+      // A backtest's red CI is history, not news: nobody is notified.
+      if (ciStatus === "failed" && ctx.host?.change.backtest !== true) {
         await store.updateChange(changeId, { status: "failing" });
         await notifier.notify({
           kind: "failing",
@@ -620,6 +623,8 @@ export async function runChangeWorkflow(
       // Unclaimed projects never auto-merge (their policy already has Lane 0 off; belt and braces).
       autoMergeAllowed: ctx.claimed,
       capabilities,
+      // A backtest grades history: the lane is the point, not the tour.
+      ...(backtest ? { skipTour: true } : {}),
     },
     {
       stage: durableStages(step),
@@ -664,7 +669,7 @@ export async function runChangeWorkflow(
   // ------------------------------------------------------------ 8b. publish on the host (GitHub)
   // Its own durable step after grading: a GitHub outage retries the publish, never the grading.
   // Shadow mode writes nothing to the pull request but this one check run.
-  if (host !== null && ctx.host != null) {
+  if (host !== null && ctx.host != null && !backtest) {
     const ref = {
       host: "github" as const,
       owner: ctx.host.repo.owner,
@@ -723,7 +728,7 @@ export async function runChangeWorkflow(
   }
 
   // ------------------------------------------------------------ 9. route
-  if (cls.blocked) {
+  if (cls.blocked && !backtest) {
     await step.do("blocked", RETRY.quick, async () => {
       await store.updateChange(changeId, { status: "failing" });
       if (ciStatus !== "failed") {
@@ -738,6 +743,15 @@ export async function runChangeWorkflow(
       return true;
     });
     return done("blocked", cls.lane, ciStatus === "failed" ? "ci failed" : "evidence unverified");
+  }
+
+  if (backtest) {
+    await step.do("backtest-graded", RETRY.quick, async () => {
+      await store.updateChange(changeId, { status: "merged", mergedSha: headSha });
+      await log("change.backtest-graded", { lane: cls.lane, computedLane: cls.computedLane, blocked: cls.blocked });
+      return true;
+    });
+    return done("graded", cls.lane, "backtest");
   }
 
   // GitHub mode, shadow: the verdict is the whole outcome. Nothing merges here; GitHub's own

@@ -223,7 +223,7 @@ export async function gradeChange<R extends EvidenceReport>(
       };
     });
   const needsTour = (c: Pick<Classified, "blocked" | "lane" | "shadow">) =>
-    !c.blocked && (c.lane >= 1 || c.shadow);
+    input.skipTour !== true && !c.blocked && (c.lane >= 1 || c.shadow);
   let cls = await classifyStage("classify", "not-generated", budgetExceeded, sealed, needsTour);
 
   // ------------------------------------------------------------ tour (lane ≥ 1, and shadowed lane 0)

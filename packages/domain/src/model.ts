@@ -117,6 +117,12 @@ export const GithubChangeHost = z.object({
   url: z.string().url(),
   /** Issues the PR closes (`Closes #N`): a labelled one is its Plan (spec §3.5 a). */
   issueRefs: z.array(z.number().int().positive()).max(50).optional(),
+  /**
+   * A merged PR graded by the backtest (spec §3.7): its head is the merge commit, nothing is
+   * written to GitHub, no tour is generated, and it never shows up for review.
+   */
+  backtest: z.boolean().optional(),
+  mergedSha: Sha.nullable().optional(),
 });
 export type GithubChangeHost = z.infer<typeof GithubChangeHost>;
 

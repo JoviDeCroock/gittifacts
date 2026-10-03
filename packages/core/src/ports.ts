@@ -39,6 +39,11 @@ export interface GradeInput {
   /** May this change merge without a human at all (native: the project is claimed)? */
   autoMergeAllowed: boolean;
   capabilities: HostCapabilities;
+  /**
+   * Grade without a tour (backtests): the first classification is the verdict, as if the tour
+   * succeeded ("not generated" never raises). Live grading always writes the tour.
+   */
+  skipTour?: boolean;
 }
 
 /** What the CI/sandbox evidence run reports (hosts may return more; grading reads these). */

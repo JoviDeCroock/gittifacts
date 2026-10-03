@@ -55,6 +55,19 @@ export class GithubApi {
     return (await this.call("GET", path)) as T;
   }
 
+  /**
+   * A GraphQL query (a read: GitHub's GraphQL budget is points, not content writes, so it isn't
+   * governed). Errors in the body throw. Mutations go through `write("POST", "/graphql", …)`.
+   */
+  async graphql<T = unknown>(query: string, variables: Record<string, unknown>): Promise<T> {
+    const out = (await this.call("POST", "/graphql", { query, variables })) as { data?: T; errors?: { message?: string }[] };
+    if (out.errors !== undefined && out.errors.length > 0) {
+      throw new GithubHttpError(502, "/graphql", `GitHub GraphQL: ${String(out.errors[0]?.message ?? "error").slice(0, 200)}`);
+    }
+    if (out.data === undefined) throw new GithubHttpError(502, "/graphql", "GitHub GraphQL: no data");
+    return out.data;
+  }
+
   /** A content-creating or updating request (POST/PATCH/PUT/DELETE), governed. */
   async write<T = unknown>(method: Exclude<Method, "GET">, path: string, body?: unknown): Promise<T> {
     return (await this.governor.run(() => this.call(method, path, body))) as T;
