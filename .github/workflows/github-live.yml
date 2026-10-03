@@ -1,0 +1,62 @@
+# The host contract suite against GitHub, live (docs/prompts/06-two-modes.md §2): the test org's
+# repo, the real Reader App and the deployed platform, nightly. Skips cleanly (a green "skipped")
+# until the repository secrets exist:
+#   - GH_TEST_REPO            owner/repo in the test org (seeded from fixtures/_base)
+#   - GH_TEST_TOKEN           may push branches and open/close PRs there (the PR author, not the App)
+#   - GITTIFACTS_AGENT_TOKEN  agent token of a human who linked the installation
+#   - CONTRACT_PLANS          optional JSON {scenario: planId} of Plans a human approved once
+# Lane or evidence mismatches fail the run: a §9 stop-and-ask, never papered over.
+name: github-live
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      scenarios:
+        description: "Comma-separated scenarios (default: every grade scenario)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GITHUB_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
+      GITHUB_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+      GITTIFACTS_AGENT_TOKEN: ${{ secrets.GITTIFACTS_AGENT_TOKEN }}
+      CONTRACT_PLANS: ${{ secrets.CONTRACT_PLANS }}
+      # Passed through env, never interpolated into the script (no injection).
+      CONTRACT_SCENARIOS: ${{ inputs.scenarios }}
+    steps:
+      - name: Configured?
+        id: cfg
+        run: |
+          if [ -z "$GITHUB_TEST_REPO" ] || [ -z "$GITHUB_TEST_TOKEN" ] || [ -z "$GITTIFACTS_AGENT_TOKEN" ]; then
+            echo "skipped: the test org secrets are not set yet"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.run == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.run == 'true'
+        with:
+          node-version: 22
+      - name: Install
+        if: steps.cfg.outputs.run == 'true'
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Live contract run
+        if: steps.cfg.outputs.run == 'true'
+        run: |
+          [ -z "$CONTRACT_SCENARIOS" ] && unset CONTRACT_SCENARIOS
+          pnpm exec tsx scripts/github-live-contract.ts

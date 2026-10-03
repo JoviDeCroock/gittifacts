@@ -62,7 +62,8 @@ export interface GitHubHostDeps {
 const CATEGORIES: readonly ClaimedCategory[] = ["fix", "feature", "refactor", "dependency", "transform", "revert", "docs", "chore"];
 const PREFIXES: Record<string, ClaimedCategory> = {
   fix: "fix", feat: "feature", feature: "feature", refactor: "refactor", deps: "dependency",
-  build: "dependency", revert: "revert", docs: "docs", chore: "chore", test: "chore", ci: "chore",
+  dependency: "dependency", build: "dependency", transform: "transform", codemod: "transform",
+  revert: "revert", docs: "docs", chore: "chore", test: "chore", ci: "chore",
 };
 
 /** The author's claim: a `gittifacts:<category>` label, else a conventional-commit title prefix. */
