@@ -172,7 +172,8 @@ describe("a change event for an installation we never recorded", () => {
     const row = await adoptInstallation(cfg, s(), id, APP_ID, repo);
     expect(row).toMatchObject({ id, appId: APP_ID, accountLogin: "ReSynapse", deletedAt: null });
     expect((await reposOf(store().db, id)).map((r) => r.fullName)).toEqual(["ReSynapse/fixture-lib"]);
-    expect(seen.map((c) => c.method)).toEqual(["GET"]);
+    // Only this test's call: another test's background work can reach the same fetch spy.
+    expect(seen.filter((c) => c.url.includes(`/app/installations/${id}`)).map((c) => c.method)).toEqual(["GET"]);
   });
 
   it("GitHub doesn't know it: nothing recorded; another App's: not even asked", async () => {
@@ -183,7 +184,7 @@ describe("a change event for an installation we never recorded", () => {
     expect(await adoptInstallation(cfg, s(), id, APP_ID, repo)).toBeNull();
     expect(await getInstallation(store().db, id)).toBeNull();
     expect(await adoptInstallation(cfg, s(), id, APP_ID + 1, repo)).toBeNull();
-    expect(seen).toHaveLength(1);
+    expect(seen.filter((c) => c.url.includes(`/app/installations/${id}`))).toHaveLength(1);
   });
 
   it("a GitHub error throws, so the queue retries the delivery", async () => {
