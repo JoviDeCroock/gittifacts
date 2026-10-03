@@ -8,7 +8,7 @@
  * treats it as the success it was. Anything after the ref update is best effort (audited), so a
  * landed CAS is always reported as landed.
  */
-import type { Change } from "@app/domain";
+import type { Change, Evidence } from "@app/domain";
 import {
   EVIDENCE_NOTES_REF,
   type EvidenceItem,
@@ -80,8 +80,7 @@ function bundleOf(ctx: QueueContext, runIds: string[]): string | null {
 }
 
 async function landEvidence(ctx: QueueContext, cmd: CommandOf<"Cas">): Promise<void> {
-  const { store, git, signer } = ctx.ports;
-  const repo = await ctx.repo();
+  const { store, signer } = ctx.ports;
   const state = ctx.deps.state();
   const batch = state.cas?.casId === cmd.casId ? state.batches[state.cas.batchId] : undefined;
   const commitOf = new Map((batch?.commits ?? []).map((c) => [c.changeId, c.commitSha]));
@@ -145,15 +144,34 @@ async function landEvidence(ctx: QueueContext, cmd: CommandOf<"Cas">): Promise<v
     });
     const evidence = await store.getEvidence(change.id, cmd.newSha);
     const target = commitOf.get(change.id) ?? cmd.newSha;
-    if (evidence !== null)
-      await git
-        .writeNote(repo.artifactsName, target, encodeNote(evidence), {
-          notesRef: EVIDENCE_NOTES_REF,
-          mode: "replace",
-        })
-        .catch(() => undefined);
+    if (evidence !== null) await writeMergedNote(ctx, evidence, target);
     await recordLaneRaise(ctx, change, cmd);
   }
+}
+
+/**
+ * The evidence for what landed, as a git note on main (`refs/notes/evidence` on `target`, the
+ * entry's commit). The stored row records that it was written (`notesWritten`): sealing for the
+ * merged sha starts it at false, and on the fast path (the head IS the merged commit) that row is
+ * the one the Change's evidence page shows, so a note left unrecorded read "Not written" there.
+ * A failed write is audited, never swallowed; the landing itself stands either way.
+ */
+async function writeMergedNote(ctx: QueueContext, evidence: Evidence, target: string) {
+  const repo = await ctx.repo();
+  try {
+    await ctx.ports.git.writeNote(repo.artifactsName, target, encodeNote(evidence), {
+      notesRef: EVIDENCE_NOTES_REF,
+      mode: "replace",
+    });
+  } catch (e) {
+    await ctx.audit(changeSubject(evidence.changeId), "merge-queue.evidence-note-failed", {
+      sha: target,
+      evidenceId: evidence.id,
+      error: errorMessage(e).slice(0, 2000),
+    });
+    return;
+  }
+  await ctx.ports.store.putEvidence({ ...evidence, notesWritten: true });
 }
 
 /** The queue raised the lane (resolution, quarantine): record it on the Change (lanes only rise). */

@@ -10,6 +10,7 @@ import { Page } from "../components/Shell.js";
 import { Command, CopyButton, ErrorState, Hash, Loading, Meter } from "../components/ui.js";
 import { compressLines } from "../lib/diff.js";
 import { itemAnchor, itemTitle, summarize, unmeasuredEffect, verifyCommand } from "../lib/evidence.js";
+import { gitNoteLine } from "../lib/evidence-note.js";
 import { pct } from "../lib/lanes.js";
 import { durationLabel, formatDateTime } from "../lib/time.js";
 import { num, plural, shortSha } from "../lib/vocab.js";
@@ -24,6 +25,7 @@ function Attestation({ ev, change }: { ev: EvidenceResponse; change: Change }) {
   const ok = ev.verification.ok;
   const payload = JSON.stringify({ changeId: ev.evidence.changeId, headSha: ev.evidence.headSha, items: ev.evidence.items }, null, 2);
   const headMatches = ev.evidence.headSha === change.headSha;
+  const note = gitNoteLine(ev.evidence, change);
   return (
     <section class={`attest ${ok ? "attest--ok" : "attest--bad"}`} aria-labelledby="attest-title">
       <div class="attest__head">
@@ -56,7 +58,15 @@ function Attestation({ ev, change }: { ev: EvidenceResponse; change: Change }) {
           <Hash value={a.payloadDigest} head={14} tail={6} />
         </dd>
         <dt>Git note</dt>
-        <dd>{ev.evidence.notesWritten ? "Written to refs/notes/evidence" : "Not written"}</dd>
+        <dd class={note.tone === "warn" ? "tone--warn" : undefined}>
+          {note.text}
+          {note.tone === "warn" ? (
+            <>
+              {" "}
+              <a href={`/audit?subject=${encodeURIComponent(`change:${change.id}`)}`}>Audit log</a>
+            </>
+          ) : null}
+        </dd>
       </dl>
       <div class="attest__actions">
         <button type="button" class="btn btn--quiet btn--sm" aria-expanded={raw.value} onClick={() => (raw.value = !raw.value)}>

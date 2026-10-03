@@ -409,6 +409,9 @@ export class MergeQueueCore implements MergeQueueClient {
           mode: "replace",
         }),
       );
+      // The row for the merged sha is the one the evidence page shows when the head landed as is.
+      if (noteCopied && !evidence.notesWritten)
+        await this.quietly(() => store.putEvidence({ ...evidence, notesWritten: true }));
     }
     const stagingDeleted = await this.quietly(async () => {
       const r = await git.updateRef(repo.artifactsName, stagingRefFor(change.id), sha, ZERO_SHA);
