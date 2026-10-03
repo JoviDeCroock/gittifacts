@@ -129,7 +129,7 @@ export const REASON_CODES = {
     "pass",
     ["tests"],
     "{passed} test(s) passed across {runs} test run(s).",
-    'At least one test-run item has status "ok" and none reports failures.',
+    "At least one test-run item has status \"ok\" and none reports failures new against the Change's base.",
   ),
   "tests.failing": spec(
     2,

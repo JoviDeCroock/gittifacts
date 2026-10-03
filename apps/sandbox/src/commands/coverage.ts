@@ -170,11 +170,13 @@ export async function coverage(ctx: Context): Promise<CoverageDelta> {
   if (selection.mode === "affected" && selection.files.length === 0) {
     // No test reaches the changed files: every changed line is uncovered. Measured without a
     // run, and never read as "not executable" (that would raise coverage, not lower it).
-    const { note: _empty, ...none } = changedLineCoverage(new Map(), changed, {
-      treatMissingAsUncovered: () => true,
-    });
+    const none: CoverageDelta = {
+      ...changedLineCoverage(new Map(), changed, { treatMissingAsUncovered: () => true }),
+      status: "ok",
+    };
+    delete none.note; // the producer's "report contains no files": there was no run to report
     return {
-      ...withNote({ ...none, status: "ok" as const }, `no test ran: ${selection.reason}`, wd.note),
+      ...withNote(none, `no test ran: ${selection.reason}`, wd.note),
       selection: recorded,
     };
   }

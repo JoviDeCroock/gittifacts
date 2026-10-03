@@ -4,8 +4,9 @@
  *
  * The producer of the listed tests decides which tests are under scrutiny (the CI sandbox lists
  * the change's new/changed tests, plus pre-existing tests that fail on base as committed: those
- * that pass on head, and those that still fail there, so a fix that doesn't work is never
- * proven). The verdict only looks at what is listed:
+ * that pass on head, and those that fail differently there, so a fix that doesn't work is never
+ * proven; a failure identical on base and head is reported apart as `preExisting`). The verdict
+ * only looks at what is listed:
  *
  * - "proven": ≥1 listed test is red on base (fail / error / missing) AND every listed
  *   test is green on head.

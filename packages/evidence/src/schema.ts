@@ -77,7 +77,7 @@ export const RedGreenProof = z.object({
   }),
   /**
    * `tests`: the change's new/changed tests, plus pre-existing tests that fail on base (as
-   * committed) and pass, or still fail, on head.
+   * committed) and pass, or fail differently, on head (identical failures: `preExisting`).
    * proven: >=1 listed test fails (or is missing) on base and every one passes on head.
    * not-proven: tests are listed but the fail-then-pass pattern does not hold.
    * no-tests: nothing is listed (no new or changed test, and no test fails on base).
