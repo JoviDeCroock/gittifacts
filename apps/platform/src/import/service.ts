@@ -3,8 +3,9 @@
  * run by `PlatformConfigWorkflow`.
  *
  * - `startPlatformConfigProposal(svc, input)`: start (or find) the proposal for the repo's current
- *   default-branch commit and return at once. `create_project({ from })` calls this right after
- *   the import.
+ *   default-branch commit and return at once. Import by push calls this once the history arrives;
+ *   `create_project({ from })` does not start one: its `nextSteps` point the agent at
+ *   `propose_platform_config`, so the caller decides when to spend the detection run.
  * - `proposePlatformConfig(svc, caller, input)`: the MCP tool / HTTP route; also waits up to
  *   `waitSec` for the proposal to finish.
  *

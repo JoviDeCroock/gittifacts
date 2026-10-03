@@ -55,6 +55,7 @@ const cases: Case[] = [
     },
   ],
   ["project_created", { projectId: "rep_1", claimed: false, claimUrl: null, previewUrl: null }],
+  ["project_created", { projectId: "rep_1", changeId: "bs-rep_1", claimed: true, imported: true }],
   [
     "change_started",
     { changeId: "chg_1", remote: { url: "https://git.example/task-chg_1.git", branch: "main" } },
@@ -182,6 +183,22 @@ describe("nextStepsFor", () => {
       }
     }
     expect(waits).toBeGreaterThan(5);
+  });
+
+  it("points an imported repo at propose_platform_config right after the first CI", () => {
+    const steps = nextStepsFor("project_created", {
+      projectId: "rep_1",
+      changeId: "bs-rep_1",
+      claimed: true,
+      imported: true,
+    });
+    expect(steps.map((s) => s.call ?? s.command).slice(0, 2)).toEqual([
+      'wait_for_change({ changeId: "bs-rep_1", until: "evidence_ready", timeoutSec: 50 })',
+      'propose_platform_config({ repoId: "rep_1", waitSec: 45 })',
+    ]);
+    expect(steps[1]?.why).toMatch(/Plan \+ Change a human approves/);
+    const template = nextStepsFor("project_created", { projectId: "rep_1", claimed: true });
+    expect(template.some((s) => s.call?.startsWith("propose_platform_config("))).toBe(false);
   });
 
   it("hands a new project's first Change fork to the agent", () => {

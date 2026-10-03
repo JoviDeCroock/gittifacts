@@ -215,6 +215,7 @@ export async function createProjectAs(
     expiresAt: extras?.expiresAt ?? repo.claim.expiresAt,
     // Created without credentials: the caller must reconnect with the token before anything else.
     anonymous: extras?.token ? { mcpUrl } : undefined,
+    imported: source === "import",
   });
   if (first === null) {
     // After the reconnect step, which stays first for an anonymous caller.

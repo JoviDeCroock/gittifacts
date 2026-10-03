@@ -38,6 +38,11 @@ export interface NextStepContexts {
      * and the caller's session is still anonymous. The first step is to reconnect with it.
      */
     anonymous?: { mcpUrl: string } | undefined;
+    /**
+     * Imported from a git URL: the repo has no `.platform/*` of its own, so the next move is to
+     * let detection propose one (a Plan + Change a human approves).
+     */
+    imported?: boolean | undefined;
   };
   change_started: { changeId: string; remote: { url: string; branch: string } };
   push_received: { changeId: string; headSha?: string | undefined };
@@ -224,6 +229,13 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
             until: "evidence_ready",
             timeoutSec: 50,
           }),
+        });
+      }
+      if (c.imported === true) {
+        steps.push({
+          title: "Let detection propose this repo's .platform/ci.ts, policy.ts and AGENTS.md",
+          why: "Detection reads the repo in a sandbox and proposes them as a Plan + Change a human approves (Lane 2: it changes .platform/**). Until it merges, CI runs the detected defaults. Returns within waitSec; call it again to follow the same proposal.",
+          call: call("propose_platform_config", { repoId: c.projectId, waitSec: 45 }),
         });
       }
       if (c.previewUrl)
