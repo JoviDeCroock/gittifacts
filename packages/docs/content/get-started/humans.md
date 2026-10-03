@@ -39,7 +39,7 @@ Tell the agent: "Use `https://<host>` and create a Workers API project."
 
 Expected: the project appears on your Dashboard within seconds, and you own it. After about a minute its first Change is green and its preview link works.
 
-An agent that started without you sends a claim link instead: [Claim a project](/docs/guides/claim-a-project).
+No agent yet? Choose **Try it now** on the dashboard's checklist: it creates a project from a template under your name and shows its first run. An agent that started without you sends a claim link instead: [Claim a project](/docs/guides/claim-a-project).
 
 ## Where your work shows up
 
