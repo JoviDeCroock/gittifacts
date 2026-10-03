@@ -127,3 +127,25 @@ export function stubGithub(routes: Record<string, (req: Request) => Response | P
 
 export const jsonRes = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+/** A real RSA private key (PKCS#8 PEM), generated per run: App JWTs must sign. */
+export async function rsaPem(): Promise<string> {
+  const pair = (await crypto.subtle.generateKey(
+    { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+    true,
+    ["sign", "verify"],
+  )) as CryptoKeyPair;
+  const der = new Uint8Array((await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer);
+  const b64 = btoa(String.fromCharCode(...der)).replace(/(.{64})/g, "$1\n");
+  return `-----BEGIN PRIVATE KEY-----\n${b64}\n-----END PRIVATE KEY-----\n`;
+}
+
+/** An App row whose PEM can really sign (for code paths that mint JWTs). */
+export async function seedSigningApp(id = newAppId()): Promise<number> {
+  await seedApp(id);
+  const keys = await githubKeys((env as Bindings).GITHUB_APP_KEK);
+  const { githubApps } = await import("../src/db/github-schema.js");
+  const { eq } = await import("drizzle-orm");
+  await store().db.update(githubApps).set({ pemEnc: await sealCredential(keys, id, "pem", await rsaPem()) }).where(eq(githubApps.id, id));
+  return id;
+}

@@ -9,6 +9,7 @@ import type { Bindings } from "./app-env.js";
 import { runExpiry } from "./claim/expire-runtime.js";
 import { COORDINATOR_OPTIONS } from "./coordinator.js";
 import { GITHUB_EVENTS_QUEUE, runGithubEventQueue, runGithubSweep } from "./github/consumer.js";
+import { runGithubRedeliveries } from "./github/redeliver.js";
 import { githubHostFor } from "./github/runtime.js";
 import { platformPushObserver, runImportGrantSweep } from "./import/push-grant-runtime.js";
 import { runWebhookQueue, runWebhookSweep } from "./integrations/worker.js";
@@ -69,6 +70,7 @@ export default {
     ctx.waitUntil(runWebhookSweep(env).then(() => undefined));
     ctx.waitUntil(runImportGrantSweep(env).then(() => undefined));
     ctx.waitUntil(runGithubSweep(env));
+    ctx.waitUntil(runGithubRedeliveries(env).then(() => undefined).catch(() => undefined));
   },
   // WEBHOOK_QUEUE consumer: signed integration webhook deliveries (src/integrations/delivery.ts);
   // GITHUB_EVENTS consumer: verified GitHub App deliveries (src/github/consumer.ts).

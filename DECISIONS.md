@@ -1808,3 +1808,10 @@ Code: `packages/host-github` (`@app/host-github`), `apps/platform/src/github/`, 
   `--change-id` instead of the positional.
 - **Visibility.** The humans who linked an installation see its graded repos: the first becomes the repo's
   claim owner (an `owner` member), the others `maintainer`; linking later grants the repos already graded.
+- **Failed deliveries are asked for again.** GitHub never redelivers on its own, so the 10-minute cron lists
+  each App's recent deliveries (`GET /app/hook/deliveries`, App JWT) and redelivers, once per GUID and at most
+  10 a run, those from the last 3 days that failed on our side (5xx, 429 or no answer) and that we never
+  recorded. Pings and 4xx (a bad signature stays bad) are left alone.
+- **UI.** A GitHub PR's change page links the PR and says where the decision is made; the platform's
+  approve/reject bar is hidden for GitHub Changes until approvals bind in M3, and mirrored repos have no
+  merge-queue link.
