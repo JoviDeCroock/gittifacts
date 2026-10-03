@@ -15,6 +15,7 @@
  * project's own, ownerless agent principal.
  */
 import { call, isTemplateId, nextStepsFor, projectSlug, TEMPLATES } from "@app/conventions";
+import { PLACEHOLDER_CHANGE_TITLE } from "@app/coordinator";
 import type { Principal, Repo } from "@app/domain";
 import type { ProjectCreated } from "@app/mcp";
 import { z } from "zod";
@@ -47,7 +48,8 @@ export const CreateProjectInput = z
   });
 export type CreateProjectInput = z.infer<typeof CreateProjectInput>;
 
-const FIRST_CHANGE_TITLE = "First change";
+/** Renamed by the Change's first push (its Plan's title, else the commit subject). */
+const FIRST_CHANGE_TITLE = PLACEHOLDER_CHANGE_TITLE;
 
 /** Stable short suffix: from the idempotency key when there is one (a retry names the same repo). */
 async function suffix(key: string | undefined): Promise<string> {

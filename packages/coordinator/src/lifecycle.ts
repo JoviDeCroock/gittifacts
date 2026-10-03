@@ -13,6 +13,23 @@ export const PUSHABLE_STATUSES: readonly ChangeStatus[] = [
   "queued",
 ];
 
+/**
+ * The title `create_project` gives the Change it opens for the caller before anything is pushed.
+ * While a Change still has it, its first push renames it (the Plan's title, else the pushed
+ * commit's subject), so the list doesn't fill up with "First change".
+ */
+export const PLACEHOLDER_CHANGE_TITLE = "First change";
+
+/** A commit message's subject as a Change title: its first non-empty line, at most 200 chars. */
+export function titleFromCommitMessage(message: string | null | undefined): string | null {
+  const subject = (message ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l !== "");
+  if (subject === undefined) return null;
+  return subject.length <= 200 ? subject : `${subject.slice(0, 199)}…`;
+}
+
 /** Statuses in which CI may be re-run on the same head (`rerun_ci`). */
 export const RERUNNABLE_STATUSES: readonly ChangeStatus[] = ["running", "failing", "awaiting-review"];
 

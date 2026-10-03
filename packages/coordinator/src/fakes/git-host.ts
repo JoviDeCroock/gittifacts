@@ -299,6 +299,11 @@ export class FakeGitHost implements GitHost {
     return [...(this.commits.get(sha)?.parents ?? [])];
   }
 
+  async commitMessage(repo: string, sha: string): Promise<string | null> {
+    if (!this.repo(repo).objects.has(sha)) return null;
+    return this.commits.get(sha)?.message ?? null;
+  }
+
   async treeOf(repo: string, sha: string): Promise<string | null> {
     if (!this.repo(repo).objects.has(sha)) return null;
     return this.commits.get(sha)?.tree ?? null;

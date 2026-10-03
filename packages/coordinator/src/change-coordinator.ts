@@ -22,7 +22,11 @@ import {
   isForkName,
   ZERO_SHA,
 } from "./ids.js";
-import { PUSHABLE_STATUSES } from "./lifecycle.js";
+import {
+  PLACEHOLDER_CHANGE_TITLE,
+  PUSHABLE_STATUSES,
+  titleFromCommitMessage,
+} from "./lifecycle.js";
 import { changeVersion, clampWait, type MilestoneState, milestoneState } from "./milestones.js";
 import { errorMessage } from "./policy.js";
 import { type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
@@ -140,7 +144,10 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     }
 
     const instanceId = changeWorkflowId(change.id, tip);
+    const title =
+      change.title === PLACEHOLDER_CHANGE_TITLE ? await this.titleFor(change, tip) : null;
     await store.updateChange(change.id, {
+      ...(title === null ? {} : { title }),
       headSha: tip,
       status: "running",
       computedLane: null,
@@ -156,6 +163,7 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
       payload: {
         headSha: tip,
         previousHead: state.headSha,
+        ...(title === null ? {} : { title }),
         eventAfter: input.after,
         supersededInstance: superseded,
         at: clock.now().toISOString(),
@@ -170,6 +178,22 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     await this.save({ ...state, headSha: tip, instanceId, runId: null, regrades: 0 });
     await this.changed(change.id);
     return { action: "started", headSha: tip, instanceId, superseded };
+  }
+
+  /** A placeholder-titled Change's real title: its Plan's, else the pushed commit's subject. */
+  private async titleFor(change: Change, headSha: string): Promise<string | null> {
+    const { store, git } = this.deps.ports;
+    try {
+      if (change.planId !== null) {
+        const plan = await store.getPlan(change.planId);
+        if (plan !== null) return plan.title;
+      }
+      const message = (await git.commitMessage?.(change.forkName, headSha)) ?? null;
+      const subject = titleFromCommitMessage(message);
+      return subject === PLACEHOLDER_CHANGE_TITLE ? null : subject;
+    } catch {
+      return null; // keep the placeholder; the push itself must not fail over a title
+    }
   }
 
   startBootstrap(input: {

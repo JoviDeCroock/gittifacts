@@ -103,7 +103,9 @@ export interface ArtifactsRepoLike {
     hash: string;
     type: "tree" | "blob" | "symlink" | "gitlink" | "exec";
   }> | null>;
-  readCommit(hash: string): Promise<{ hash: string; treeHash: string; parents: string[] } | null>;
+  readCommit(
+    hash: string,
+  ): Promise<{ hash: string; treeHash: string; parents: string[]; message?: string } | null>;
   readFile(args: { ref: string; path: string }): Promise<Blob | null>;
   log(opts?: { ref?: string; limit?: number; offset?: number }): Promise<Array<{ hash: string }>>;
   fork(
@@ -483,6 +485,10 @@ export class ArtifactsGitHost implements GitHost {
 
   async commitParents(repo: string, sha: string): Promise<string[] | null> {
     return this.withRepo(repo, async (r) => (await r.readCommit(sha))?.parents ?? null);
+  }
+
+  async commitMessage(repo: string, sha: string): Promise<string | null> {
+    return this.withRepo(repo, async (r) => (await r.readCommit(sha))?.message ?? null);
   }
 
   async treeOf(repo: string, sha: string): Promise<string | null> {

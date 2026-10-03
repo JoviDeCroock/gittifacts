@@ -149,6 +149,8 @@ export interface GitHost {
   branchHead(repo: string, branch: string): Promise<string | null>;
   /** Parent shas of a commit (null if the commit is unknown in this repo). */
   commitParents(repo: string, sha: string): Promise<string[] | null>;
+  /** A commit's message (null if unknown). Optional: hosts without it keep placeholder titles. */
+  commitMessage?(repo: string, sha: string): Promise<string | null>;
   treeOf(repo: string, sha: string): Promise<string | null>;
   readFile(repo: string, ref: string, path: string): Promise<Uint8Array | null>;
   /** Unified diff between two commits that both exist in `repo`. */
