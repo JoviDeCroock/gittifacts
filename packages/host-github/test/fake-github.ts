@@ -71,6 +71,11 @@ export class FakeGithub {
   readonly reviews = new Map<number, FakeReview>();
   readonly comments = new Map<number, { id: number; body: string; edits: number }>();
   readonly issues = new Map<number, FakeIssue>();
+  /** Merged PRs (what GraphQL `pullRequests(states: MERGED)` answers; the backtest's listing). */
+  readonly merged: {
+    number: number; title: string; body: string | null; createdAt: string; mergedAt: string; headRefName: string;
+    author: { login: string; id: number; type: string }; mergeSha: string; files: string[]; labels: string[];
+  }[] = [];
   /** login → GitHub permission ("admin" | "write" | "read" | "none"). */
   readonly permissions = new Map<string, string>();
   readonly tokens = { minted: 0, revoked: 0, scopes: [] as unknown[] };
@@ -219,6 +224,22 @@ export class FakeGithub {
         if (c !== undefined) c.body = String((body as { body: string }).body);
       }
       return Response.json({ id: Number(m[1]) });
+    }
+    if (method === "POST" && path === "/graphql" && String((body as { query: string }).query).includes("pullRequests(states: MERGED")) {
+      // One page, newest update first, in GitHub's response shape.
+      const nodes = [...this.merged].reverse().map((m) => ({
+        number: m.number, title: m.title, body: m.body, createdAt: m.createdAt, mergedAt: m.mergedAt, updatedAt: m.mergedAt,
+        headRefName: m.headRefName, baseRefName: this.repo.defaultBranch,
+        author: { __typename: m.author.type === "Bot" ? "Bot" : "User", login: m.author.login, databaseId: m.author.id },
+        mergeCommit: { oid: m.mergeSha },
+        files: { nodes: m.files.map((path) => ({ path, additions: 1, deletions: 1 })) },
+        labels: { nodes: m.labels.map((name) => ({ name })) },
+        closingIssuesReferences: { nodes: [] },
+      }));
+      return Response.json({ data: { repository: { pullRequests: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } }, rateLimit: { cost: 1, remaining: 4999 } } });
+    }
+    if (method === "POST" && path === "/graphql" && String((body as { query: string }).query).includes("defaultBranchRef")) {
+      return Response.json({ data: { repository: { defaultBranchRef: { target: { oid: this.git.head(gitName(this.repo)) } } } } });
     }
     if (method === "POST" && path === "/graphql") {
       this.writes.push("POST graphql");

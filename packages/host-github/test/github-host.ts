@@ -33,6 +33,8 @@ export class GithubContractHost implements ContractHost {
   prLabels: string[] | null = null;
   /** Tests: extra files on the base (plan files). */
   baseExtra: Record<string, string> = {};
+  /** The installation's REST/GraphQL client (backtests list through it). */
+  readonly api: GithubApi;
   /** The job token the adapter's API calls share (released after each delivery, like a queue job). */
   readonly job: JobToken;
 
@@ -51,6 +53,7 @@ export class GithubContractHost implements ContractHost {
     this.job = new JobToken(tokens, this.gh.installationId, scope);
     const job = this.job;
     const api = new GithubApi({ token: () => job.value(), fetch: this.gh.fetch });
+    this.api = api;
     const githubPorts = portsForRole(ports, "github");
     const repoHost = { kind: "github" as const, owner: REPO.owner, repo: REPO.name, githubRepoId: REPO.id, installationId: this.gh.installationId, appId: APP_ID, private: true };
     this.adapter = new GitHubHost({
