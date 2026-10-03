@@ -58,7 +58,7 @@ export function checkSummary(v: LaneVerdict, ctx: CheckRunContext): string {
   const lines: string[] = [];
   if (ctx.shadow) {
     lines.push(
-      "**Shadow mode.** gittifacts graded this head. It changes nothing here, never blocks a merge, and posts no comments or reviews.",
+      "**Shadow mode.** gittifacts graded this head. It never blocks, approves or merges anything here; any tour is a comment-only review.",
       "",
     );
   }
