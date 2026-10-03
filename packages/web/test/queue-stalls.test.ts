@@ -12,7 +12,7 @@ import { QueueStalls } from "../src/components/QueueStalls.js";
 import { attemptsLabel, inLabel, stallNextLabel, stallTone } from "../src/lib/queue.js";
 
 /** Rendered HTML without preact-iso's empty hydration script. */
-async function html(vnode: ReturnType<typeof h>): Promise<string> {
+async function html(vnode: Parameters<typeof prerender>[0]): Promise<string> {
   return (await prerender(vnode)).html.replace('<script type="isodata"></script>', "");
 }
 
