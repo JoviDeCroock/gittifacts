@@ -7,6 +7,7 @@
  * never talk to a main repo or a Change's fork. Documents larger than the 16 KiB output tail are
  * read back from the job's R2 log (`readLog`).
  */
+import { runOnRunner } from "@app/ci-engine/runner-client";
 import { z } from "zod";
 import { newId } from "../ids.js";
 import type { GitHost } from "../ports.js";
@@ -141,7 +142,7 @@ export class ContainerQueueJobs implements QueueJobs {
   private async exec(kind: string, scratch: string, headSha: string, plan: unknown) {
     const jobId = `job-mq-${kind}-${(this.opts.newJobId ?? newId)()}`;
     const { token } = await this.opts.git.mintToken(scratch, "write", 600);
-    const raw = await this.opts.runner(`${jobId}:${kind}`).run({
+    const raw = await runOnRunner(this.opts.runner(`${jobId}:${kind}`), "main", {
       runId: jobId,
       step: kind,
       kind: "user",
@@ -210,7 +211,7 @@ export class ContainerQueueJobs implements QueueJobs {
   async affected(input: { repo: string; baseSha: string; headSha: string }) {
     // `affected` only reads git objects: run it directly (no program, no push token needed).
     const jobId = `job-mq-affected-${(this.opts.newJobId ?? newId)()}`;
-    const raw = await this.opts.runner(`${jobId}:affected`).run({
+    const raw = await runOnRunner(this.opts.runner(`${jobId}:affected`), "main", {
       runId: jobId,
       step: "affected",
       kind: "user",

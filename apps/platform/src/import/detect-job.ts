@@ -7,6 +7,7 @@
  * Tests replace the job through `configureImportRuntime` (workerd can't run containers).
  */
 import { RunKeys } from "@app/ci-engine";
+import { type RunnerStubLike, runOnRunner } from "@app/ci-engine/runner-client";
 import { type DetectReport, parseDetectOutput } from "@app/conventions";
 import { newId } from "@app/coordinator";
 import { z } from "zod";
@@ -34,9 +35,7 @@ const RunOutcome = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(false), code: z.string(), message: z.string() }).passthrough(),
 ]);
 
-interface RunnerStub {
-  run(job: Record<string, unknown>): Promise<unknown>;
-}
+type RunnerStub = RunnerStubLike;
 
 /** The production job, on `env.RUNNER`. */
 export function runnerImportSandbox(env: {
@@ -46,7 +45,7 @@ export function runnerImportSandbox(env: {
     async detect(input) {
       const runId = `job-detect-${newId()}`;
       const stub = env.RUNNER.getByName(`${runId}:detect`) as RunnerStub;
-      const raw = await stub.run({
+      const raw = await runOnRunner(stub, "main", {
         runId,
         step: "detect",
         kind: "user",

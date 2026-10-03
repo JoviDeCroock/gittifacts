@@ -75,6 +75,7 @@ import {
   writeStepRecord,
   writeUsage,
 } from "../run-store.js";
+import { type RunDurablyOptions, runDurably } from "../runner/client.js";
 import { errorMessage } from "../runner/container.js";
 import {
   type EvidenceCapture,
@@ -186,6 +187,9 @@ export type Prepared = {
   warnings: string[];
   durationMs: number;
 };
+
+/** Runner job ids within one step's Runner: the command, a lineage replay, the full checkout. */
+type JobPurpose = "main" | "replay" | "full";
 
 /** A pipeline or evidence step, normalized for execution. */
 type ExecSpec = {
@@ -308,6 +312,11 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
 
   protected runner(runId: string, step: string): RunnerRpc {
     return this.env.RUNNER.getByName(runnerName(runId, step));
+  }
+
+  /** How step bodies poll their Runner job (tests shorten the retries). */
+  protected pollOptions(): RunDurablyOptions {
+    return {};
   }
 
   /** Where the finished run is reported. Default: `env.COORDINATOR.getByName(changeId)`. */
@@ -576,13 +585,17 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       ...(keys?.hermeticInputs != null ? { hermeticInputs: keys.hermeticInputs } : {}),
     };
     const runner = this.runner(req.runId, spec.name);
-    let calls = 0;
     let computeMs = 0;
-    const call = async (j: RunnerJobInput): Promise<RunnerOutcome> => {
-      const outcome = parseOutcome(await runner.run(j));
-      calls += 1;
+    const reattached: string[] = [];
+    // Each call is a durable job on the step's Runner: started, then long-polled with short RPCs.
+    // A retry after a dropped connection re-attaches to the same job id instead of starting over.
+    const call = async (j: RunnerJobInput, purpose: JobPurpose): Promise<RunnerOutcome> => {
+      const result = await runDurably(runner, purpose, j, this.pollOptions());
+      const outcome = parseOutcome(result.outcome);
+      if (result.attached) reattached.push(purpose);
       computeMs += outcome.computeMs;
-      await writeUsage(store, req.runId, `${attempt}-${calls}`, {
+      // Keyed by job and launch: a re-attached job is counted once.
+      await writeUsage(store, req.runId, `${purpose}-${result.launch}`, {
         step: spec.name,
         instance: spec.instance,
         computeMs: outcome.computeMs,
@@ -593,7 +606,7 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       });
       return outcome;
     };
-    let outcome = await call(job);
+    let outcome = await call(job, "main");
 
     if (!outcome.ok && outcome.code === "snapshot-unavailable" && chain.length > 0) {
       // The parent's snapshot is gone (expired or evicted). Forget cache pointers that led to
@@ -607,7 +620,7 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
         ...(c.cwd === undefined ? {} : { cwd: c.cwd }),
         ...(c.env === undefined ? {} : { env: c.env }),
       }));
-      outcome = await call({ ...job, from: { kind: "image" }, replay });
+      outcome = await call({ ...job, from: { kind: "image" }, replay }, "replay");
     }
 
     let write =
@@ -619,7 +632,7 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       // files: run it again on the full checkout and cache it for this repository only.
       note = `cached per repository: "${spec.name}" needs files outside its cache inputs (add them to cache.inputs to share it across repositories)`;
       const { hermeticInputs: _hermetic, ...full } = job;
-      outcome = await call(full);
+      outcome = await call(full, "full");
       write = { key: keys.fallback.write, scope: keys.fallback.writeScope };
       scope = "repo";
     }
@@ -658,6 +671,9 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
     const reasons = [
       outcome.timedOut ? `timed out after ${timeoutSeconds}s` : null,
       note,
+      reattached.length === 0
+        ? null
+        : `attempt ${attempt} re-attached to the running job (${reattached.join(", ")}) instead of starting it again`,
       ...artifactProblems,
     ].filter((r): r is string => r !== null);
     return done({

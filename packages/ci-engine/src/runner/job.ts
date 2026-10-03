@@ -231,6 +231,9 @@ export type PlanOutcome = z.infer<typeof PlanOutcome>;
 /** What the Workflow needs from a Runner stub. Results are `unknown` and validated on arrival. */
 export interface RunnerRpc {
   run(job: RunnerJobInput): Promise<unknown>;
+  /** Durable jobs (runner/client.ts): `RunnerJobState`, validated by the caller. */
+  start(input: { jobId: string; job: RunnerJobInput }): Promise<unknown>;
+  poll(jobId: string, waitMs?: number): Promise<unknown>;
   plan(job: PlanJobInput): Promise<unknown>;
   abort(reason: string): Promise<unknown>;
   clearAbort(): Promise<unknown>;

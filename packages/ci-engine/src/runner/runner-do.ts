@@ -19,6 +19,7 @@ import { z } from "zod";
 import type { ArtifactRef } from "../engine.js";
 import { formatIssues, type InstanceType } from "../plan/spec.js";
 import { type ObjectStore, writeJson } from "../storage.js";
+import { RunnerJobId, type RunnerJobState } from "./client.js";
 import {
   type ContainerLike,
   DeadlineError,
@@ -43,7 +44,7 @@ import {
   type PlanOutcome,
   type RunnerErrorCode,
   RunnerJob,
-  type RunnerOutcome,
+  RunnerOutcome,
   type RunnerTimings,
   type StartFrom,
 } from "./job.js";
@@ -91,6 +92,29 @@ const MAX_INACTIVITY_MS = 6 * 60 * 60 * 1000;
 const MAX_LOGGED_DENIALS = 50;
 
 const AbortRecord = z.object({ reason: z.string(), at: z.string() });
+
+/** Longest a `poll()` RPC is held open. */
+export const MAX_POLL_WAIT_MS = 30_000;
+/** While a job runs, an alarm this often keeps the object (and its container) in memory. */
+export const HEARTBEAT_MS = 30_000;
+const JOB_RECORD_PREFIX = "jobrec:";
+
+/** A durable job as stored: `running` until its outcome is written. */
+const JobRecord = z.object({
+  state: z.enum(["running", "done"]),
+  launch: z.number().int().min(1),
+  startedAt: z.string(),
+  finishedAt: z.string().optional(),
+  outcome: RunnerOutcome.optional(),
+});
+type JobRecord = z.infer<typeof JobRecord>;
+
+interface LiveJob {
+  jobId: string;
+  launch: number;
+  startedAt: number;
+  done: Promise<RunnerOutcome>;
+}
 
 class RunnerError extends Error {
   constructor(
@@ -220,6 +244,8 @@ type Lockdown = { network: "open" } | { network: "locked"; props: EgressProps };
 export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
   private active: { controller: AbortController; done: Promise<void> } | null = null;
   private session: Session | null = null;
+  /** Jobs this instance is running, by job id (gone after a restart: their records say lost). */
+  private readonly jobs = new Map<string, LiveJob>();
 
   // ------------------------------------------------------------------ seams (overridden in tests)
 
@@ -265,19 +291,107 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
 
   // ------------------------------------------------------------------ RPC
 
-  /** Runs one step. Never throws: failures come back as `{ ok: false, code }`. */
+  /**
+   * Runs one step and waits for it (one long RPC). Never throws: failures come back as
+   * `{ ok: false, code }`. Long jobs should use `start` + `poll` instead.
+   */
   async run(input: unknown): Promise<RunnerOutcome> {
     const started = Date.now();
     const parsed = RunnerJob.safeParse(input);
     if (!parsed.success) {
       return failure("invalid-job", `invalid runner job\n${formatIssues(parsed.error)}`, started);
     }
-    const job = parsed.data;
     const aborted = await this.abortRecord();
     if (aborted !== null) {
       return failure("aborted", `the run was cancelled: ${aborted.reason}`, started);
     }
-    return this.exclusive((signal) => this.execute(job, signal, started));
+    return this.launch(`run-${crypto.randomUUID()}`, parsed.data, 1).done;
+  }
+
+  /**
+   * Starts a job and returns at once (`running`), or re-attaches: a job with this id that is
+   * still running here is not started again, and a finished one whose outcome is usable (`ok`)
+   * is returned as it is. A failed outcome, or a job this object no longer runs (it restarted),
+   * starts a fresh launch. Never throws.
+   */
+  async start(input: unknown): Promise<RunnerJobState> {
+    const started = Date.now();
+    const envelope = z.object({ jobId: RunnerJobId, job: z.unknown() }).strict().safeParse(input);
+    const jobId = envelope.success ? envelope.data.jobId : "invalid";
+    const done = (outcome: RunnerOutcome): RunnerJobState => ({
+      state: "done",
+      jobId,
+      launch: 1,
+      outcome,
+    });
+    if (!envelope.success)
+      return done(
+        failure("invalid-job", `invalid start request\n${formatIssues(envelope.error)}`, started),
+      );
+    const parsed = RunnerJob.safeParse(envelope.data.job);
+    if (!parsed.success)
+      return done(
+        failure("invalid-job", `invalid runner job\n${formatIssues(parsed.error)}`, started),
+      );
+    const aborted = await this.abortRecord();
+    if (aborted !== null)
+      return done(failure("aborted", `the run was cancelled: ${aborted.reason}`, started));
+    const live = this.jobs.get(jobId);
+    if (live !== undefined) return { ...runningState(live), attached: true };
+    const record = await this.jobRecord(jobId);
+    if (record?.state === "done" && record.outcome?.ok === true) {
+      return {
+        state: "done",
+        jobId,
+        launch: record.launch,
+        attached: true,
+        outcome: record.outcome,
+      };
+    }
+    // Checked again after the storage read, before anything else can interleave.
+    const raced = this.jobs.get(jobId);
+    if (raced !== undefined) return { ...runningState(raced), attached: true };
+    return runningState(this.launch(jobId, parsed.data, (record?.launch ?? 0) + 1));
+  }
+
+  /**
+   * The state of a job: answers as soon as it finishes, or after `waitMs` (≤ 30 s) while it is
+   * still running. `lost`: the record says running but this object no longer runs it.
+   */
+  async poll(jobId: string, waitMs = 0): Promise<RunnerJobState> {
+    const live = this.jobs.get(jobId);
+    if (live !== undefined && waitMs > 0) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const wait = Math.min(Math.max(0, waitMs), MAX_POLL_WAIT_MS);
+      await Promise.race([
+        live.done.then(() => undefined),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, wait);
+        }),
+      ]);
+      if (timer !== undefined) clearTimeout(timer);
+    }
+    const still = this.jobs.get(jobId);
+    if (still !== undefined) return runningState(still);
+    const record = await this.jobRecord(jobId);
+    if (record === null) return { state: "unknown", jobId };
+    if (record.state === "done" && record.outcome !== undefined)
+      return { state: "done", jobId, launch: record.launch, outcome: record.outcome };
+    return {
+      state: "lost",
+      jobId,
+      reason: "the runner restarted while the job was running (its process is gone)",
+    };
+  }
+
+  /** Heartbeat while a job runs; stops a container whose job this object no longer runs. */
+  override async alarm(): Promise<void> {
+    if (this.jobs.size > 0) {
+      await this.ctx.storage.setAlarm(Date.now() + HEARTBEAT_MS);
+      return;
+    }
+    const c = this.containerOrNull();
+    if (c?.running && this.active === null) await destroyQuietly(c);
   }
 
   /** Evaluates a pipeline file in plan mode (`gittifacts-runner plan`). Never throws. */
@@ -316,9 +430,17 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     if (c?.running) await destroyQuietly(c);
   }
 
-  /** Clears a previous `abort()` so the step can run again (used by `restartFrom`). */
+  /**
+   * Clears a previous `abort()` and the finished job records, so the step runs again instead of
+   * re-attaching to its old outcome (used by `restartFrom`).
+   */
   async clearAbort(): Promise<void> {
     await this.ctx.storage.delete("aborted");
+    const records = await this.ctx.storage.list({ prefix: JOB_RECORD_PREFIX });
+    const finished = [...records.entries()]
+      .filter(([, v]) => JobRecord.safeParse(v).data?.state === "done")
+      .map(([k]) => k);
+    if (finished.length > 0) await this.ctx.storage.delete(finished);
   }
 
   /** The image a container would start from. Starts nothing. */
@@ -354,6 +476,47 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
   private async abortRecord(): Promise<z.infer<typeof AbortRecord> | null> {
     const parsed = AbortRecord.safeParse(await this.ctx.storage.get("aborted"));
     return parsed.success ? parsed.data : null;
+  }
+
+  private async jobRecord(jobId: string): Promise<JobRecord | null> {
+    const parsed = JobRecord.safeParse(await this.ctx.storage.get(JOB_RECORD_PREFIX + jobId));
+    return parsed.success ? parsed.data : null;
+  }
+
+  /**
+   * Runs `job` in the background (registered synchronously, so a poll right after `start` sees
+   * it) and records its outcome. The record is written before the job leaves `jobs`, so a poll
+   * never finds neither.
+   */
+  private launch(jobId: string, job: RunnerJob, launch: number): LiveJob {
+    const startedAt = Date.now();
+    const key = JOB_RECORD_PREFIX + jobId;
+    let entry: LiveJob | null = null;
+    const done = (async (): Promise<RunnerOutcome> => {
+      const startedIso = new Date(startedAt).toISOString();
+      await this.ctx.storage.put(key, { state: "running", launch, startedAt: startedIso });
+      await this.ctx.storage.setAlarm(Date.now() + HEARTBEAT_MS).catch(() => {});
+      let outcome: RunnerOutcome;
+      try {
+        outcome = await this.exclusive((signal) => this.execute(job, signal, startedAt));
+      } catch (error) {
+        outcome = failure("internal", errorMessage(error), startedAt);
+      }
+      const record: JobRecord = {
+        state: "done",
+        launch,
+        startedAt: startedIso,
+        finishedAt: new Date().toISOString(),
+        outcome,
+      };
+      await this.ctx.storage.put(key, record).catch(() => {});
+      return outcome;
+    })().finally(() => {
+      if (entry !== null && this.jobs.get(jobId) === entry) this.jobs.delete(jobId);
+    });
+    entry = { jobId, launch, startedAt, done };
+    this.jobs.set(jobId, entry);
+    return entry;
   }
 
   /** One job at a time per Durable Object: a new attempt first stops a stale one. */
@@ -1113,6 +1276,15 @@ function isFetcher(value: unknown): value is Fetcher {
     value !== null &&
     typeof Reflect.get(value, "fetch") === "function"
   );
+}
+
+function runningState(job: LiveJob): Extract<RunnerJobState, { state: "running" }> {
+  return {
+    state: "running",
+    jobId: job.jobId,
+    startedAt: new Date(job.startedAt).toISOString(),
+    elapsedMs: Math.max(0, Date.now() - job.startedAt),
+  };
 }
 
 function coreFailure(code: RunnerErrorCode, message: string, started: number): OutcomeCore {

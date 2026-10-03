@@ -10,13 +10,17 @@
  * fork ONLY, passed through git's env-config (never argv). Main's objects are first copied into
  * the fork (`transferObjects`), so the sandbox never needs a token for the main repo.
  */
+import { type RunnerStubLike, runOnRunner } from "@app/ci-engine/runner-client";
 import { z } from "zod";
 import { newId } from "../ids.js";
 import type { GitHost, SandboxJobs } from "../ports.js";
 
-/** Structural slice of the Runner DO stub (`RunnerRpc`). Results are validated here. */
-export interface RunnerLike {
-  run(job: Record<string, unknown>): Promise<unknown>;
+/**
+ * Structural slice of the Runner DO stub (`RunnerRpc`). Results are validated here. Jobs run as
+ * durable jobs (`start` + long `poll`, `@app/ci-engine/runner-client`) when the stub has them, so
+ * no RPC stays open for a whole job; fakes with only `run` still work.
+ */
+export interface RunnerLike extends RunnerStubLike {
   plan(job: Record<string, unknown>): Promise<unknown>;
 }
 
@@ -160,7 +164,7 @@ export class ContainerSandboxJobs implements SandboxJobs {
     timeoutSeconds: number;
   }): Promise<string> {
     const runId = this.jobId(input.kind);
-    const raw = await this.opts.runner(`${runId}:${input.kind}`).run({
+    const raw = await runOnRunner(this.opts.runner(`${runId}:${input.kind}`), "main", {
       runId,
       step: input.kind,
       kind: "user",

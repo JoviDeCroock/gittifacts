@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./cloudflare": "./src/cloudflare/index.ts",
-    "./plan": "./src/plan/index.ts"
+    "./plan": "./src/plan/index.ts",
+    "./runner-client": "./src/runner/client.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.cloudflare.json",

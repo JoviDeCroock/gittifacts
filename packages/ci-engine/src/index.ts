@@ -25,6 +25,15 @@ export {
   summarizeUsage,
   UsageRecord,
 } from "./run-store.js";
+export {
+  type DurableResult,
+  type DurableRunnerStub,
+  RunnerJobId,
+  RunnerJobLostError,
+  RunnerJobState,
+  runDurably,
+  runOnRunner,
+} from "./runner/client.js";
 export type { ContainerLike, ExecProcessLike } from "./runner/container.js";
 export { pumpText } from "./runner/container.js";
 export {
