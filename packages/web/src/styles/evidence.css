@@ -185,15 +185,25 @@
 .attest__verify {
   min-inline-size: 0;
 }
-.attest__verify pre {
+/* The command wraps at "/" (BreakableCode) and keeps its copy button beside it, like the device page. */
+.attest__verify .cmd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-2);
   max-inline-size: 100%;
-  overflow-x: auto;
   margin: 4px 0 0;
   padding: 8px 10px;
   border-radius: var(--r-control);
   background: var(--surface);
   border: 1px solid var(--rule);
   color: var(--text-2);
+}
+.attest__verify code {
+  min-inline-size: 0;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
 }
 
 /* items */

@@ -1,6 +1,6 @@
 import type { LaneReason } from "@app/domain";
 import { describe, expect, it } from "vitest";
-import { unmeasuredEffect } from "../src/lib/evidence.js";
+import { unmeasuredEffect, verifyCommand } from "../src/lib/evidence.js";
 
 const r = (code: string, lane: LaneReason["lane"], evidenceRef?: string): LaneReason => ({ code, lane, message: code, evidenceRef });
 
@@ -15,5 +15,13 @@ describe("unmeasuredEffect", () => {
   });
   it("before classification it can only say the gap can raise the lane", () => {
     expect(unmeasuredEffect("coverage", [])).toBe("Unknown counts as risk, so it can raise the lane.");
+  });
+});
+
+describe("verifyCommand", () => {
+  it("is one pasteable line: the evidence head (12 chars) and this platform's keys", () => {
+    expect(verifyCommand("19c18b61ebbd4f0e9d7c2a1b3c4d5e6f7a8b9c0d", "https://gf.example/")).toBe(
+      "verify-attestation --repo . --commit 19c18b61ebbd --keys-url https://gf.example/.well-known/gittifacts-keys.json",
+    );
   });
 });

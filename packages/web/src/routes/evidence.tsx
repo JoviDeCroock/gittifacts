@@ -7,9 +7,9 @@ import type { Change, EvidenceResponse, RepoDetail } from "../api/types.js";
 import { RedGreenList, ShotPair, kindIcon } from "../components/EvidenceBits.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
-import { CopyButton, ErrorState, Hash, Loading, Meter } from "../components/ui.js";
+import { Command, CopyButton, ErrorState, Hash, Loading, Meter } from "../components/ui.js";
 import { compressLines } from "../lib/diff.js";
-import { itemAnchor, itemTitle, summarize, unmeasuredEffect } from "../lib/evidence.js";
+import { itemAnchor, itemTitle, summarize, unmeasuredEffect, verifyCommand } from "../lib/evidence.js";
 import { pct } from "../lib/lanes.js";
 import { durationLabel, formatDateTime } from "../lib/time.js";
 import { num, plural, shortSha } from "../lib/vocab.js";
@@ -72,9 +72,7 @@ function Attestation({ ev, change }: { ev: EvidenceResponse; change: Change }) {
       ) : null}
       <div class="attest__verify">
         <p>Verify it outside the platform, from a clone of the repository:</p>
-        <pre class="scroll-x" tabIndex={0}>
-          verify-attestation --repo . --commit {shortSha(ev.evidence.headSha, 12)} --keys-url {window.location.origin}/.well-known/gittifacts-keys.json
-        </pre>
+        <Command text={verifyCommand(ev.evidence.headSha, window.location.origin)} />
       </div>
     </section>
   );

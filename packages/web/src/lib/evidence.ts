@@ -140,3 +140,12 @@ export function unmeasuredEffect(itemId: string, reasons: readonly LaneReason[])
     return "The repository's policy accepts this skip, so it does not raise the lane.";
   return "It did not raise this change's lane.";
 }
+
+/**
+ * The command that checks an attestation outside the platform (`@app/evidence`'s standalone
+ * `verify-attestation`), as one pasteable line: the commit is the evidence's head, the keys are
+ * this platform's published Ed25519 keys.
+ */
+export function verifyCommand(headSha: string, origin: string): string {
+  return `verify-attestation --repo . --commit ${headSha.slice(0, 12)} --keys-url ${origin.replace(/\/+$/, "")}/.well-known/gittifacts-keys.json`;
+}
