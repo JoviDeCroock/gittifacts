@@ -18,7 +18,7 @@ You need Node 22 or later, git, and a public GitHub repo. The commands use our s
 npx -y https://<host>/cli/gittifacts.tgz --host https://<host> init --from https://github.com/JoviDeCroock/gittifacts-fixture-clock-api --name clock-api --clone
 ```
 
-Expected, after about 20 seconds: `projectId`, `bootstrapChangeId` and `clonedTo`. The clone has the same history as GitHub: `git -C clock-api log --oneline -1` shows GitHub's latest commit.
+Expected, after about 30 seconds: `projectId`, `bootstrapChangeId` and `clonedTo`. The clone has the same history as GitHub: `git -C clock-api log --oneline -1` shows GitHub's latest commit.
 
 <details>
 <summary>Private repos, MCP, and where the copy lives</summary>
@@ -39,7 +39,7 @@ gittifacts wait bs-8t4xc6kq2w9m0d7z3r1b --until evidence_ready
 
 Use your own `bootstrapChangeId`. Until the repo has its own config, CI runs a default pipeline detected from `package.json`.
 
-Expected, within about a minute: `"reached": true`. The sample repo has a test that fails on GitHub too, so its run is red: that's what your repo looks like if it was red before.
+Expected, within about a minute: `"reached": true`. The sample repo has a test that fails on GitHub too, so its `test` step fails and the Change's status is `failing`. That's what an imported repo looks like when it was red before: the next step says so.
 
 ## 3. Get the setup proposal
 
@@ -49,7 +49,7 @@ gittifacts propose-platform-config 8t4xc6kq2w9m0d7z3r1b --wait-sec 45
 
 Use your `projectId`. Detection reads the repo in a sandbox, without installing or running anything: package manager, test runner, build command, TypeScript config, wrangler configs, workspaces.
 
-Expected: `"status": "proposed"` with a `planId` and a `changeId`. The Plan lists every guess detection is unsure of as a risk, and names steps that were already red. The Change adds `.platform/ci.ts`, `.platform/policy.ts` and an `AGENTS.md` section.
+Expected, in about 30 seconds: `"status": "proposed"` with a `planId`, a `changeId` and what detection found (`packageManager`, `testRunner`, and the guesses it's unsure of under `uncertain`). For the sample repo the Plan says `test` already fails on the default branch: pre-existing, not caused by the Change. The Change adds `.platform/ci.ts`, `.platform/policy.ts` and an `AGENTS.md` section.
 
 <details>
 <summary>"not-needed", push imports, and the MCP call</summary>
