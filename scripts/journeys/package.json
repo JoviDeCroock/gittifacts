@@ -1,0 +1,9 @@
+{
+  "name": "gittifacts-journeys",
+  "private": true,
+  "type": "module",
+  "description": "Recording scripts for the user-journey videos (not part of the pnpm workspace). See README.md.",
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

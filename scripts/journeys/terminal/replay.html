@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>terminal replay</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+<style>
+  html,body{margin:0;height:100%;background:#16161a;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+  .win{position:absolute;inset:18px 18px 18px 18px;border-radius:12px;overflow:hidden;background:#0d0d10;box-shadow:0 10px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;border:1px solid #2a2a30}
+  .bar{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#1d1d22;border-bottom:1px solid #2a2a30;color:#bdb8ae;font-size:13px}
+  .dot{width:12px;height:12px;border-radius:50%;background:#3a3a40}
+  .dot.r{background:#ff5f57}.dot.y{background:#febc2e}.dot.g{background:#28c840}
+  .bar .t{margin-left:10px;font-weight:600;color:#e9e4da}
+  .bar .chap{margin-left:auto;padding:4px 10px;border-radius:999px;background:#2b2620;color:#ffb26b;font-weight:600;transition:opacity .2s}
+  #term{flex:1;padding:10px 12px 6px}
+  .clock{position:absolute;right:30px;bottom:28px;padding:5px 11px;border-radius:999px;background:rgba(40,40,46,.92);color:#fff;font-size:13px;font-variant-numeric:tabular-nums;border:1px solid #3a3a40}
+  .clock b{color:#ffb26b}
+  .ff{position:absolute;left:50%;top:56px;transform:translateX(-50%);padding:7px 15px;border-radius:999px;background:#ff8a3d;color:#111;font-weight:700;font-size:15px;opacity:0;transition:opacity .2s}
+  .ff.on{opacity:1}
+  .metric{position:absolute;left:30px;bottom:28px;padding:5px 11px;border-radius:8px;background:#123222;color:#8fe0ae;font-size:14px;font-weight:600;opacity:0;transition:opacity .3s;border:1px solid #2f7d4f}
+  .metric.on{opacity:1}
+  #card{position:absolute;inset:0;z-index:5}
+  #card iframe{border:0;width:100%;height:100%}
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t" id="wt"></span><span class="chap" id="chap"></span></div>
+  <div id="term"></div>
+</div>
+<div class="clock" id="clock">real time <b>0:00</b></div>
+<div class="ff" id="ff"></div>
+<div class="metric" id="metric"></div>
+<div id="card"></div>
+<script>
+const CAST = window.__CAST;
+const CARD = window.__CARD_HTML;
+const GAP_MAX = 2000, GAP_SHOWN = 1000;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const fmt = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+let realMs = 0;
+const clock = document.getElementById("clock");
+const setClock = (ms) => { realMs = ms; clock.innerHTML = "real time <b>" + fmt(ms) + "</b>"; };
+document.getElementById("wt").textContent = CAST.title;
+const term = new Terminal({ cols: CAST.cols || 132, rows: CAST.rows || 38, fontSize: CAST.fontSize || 14, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', convertEol: true, scrollback: 5000, theme: { background: "#0d0d10", foreground: "#e6e1d7", cursor: "#ffb26b" } });
+term.open(document.getElementById("term"));
+const write = (s) => new Promise((r) => term.write(s, r));
+const DIM = "\x1b[2m", OFF = "\x1b[0m", GREEN = "\x1b[32m", CYAN = "\x1b[36m";
+// Real time advances in step with the replay between events (gaps ≤ 2 s play at real speed).
+async function advanceTo(t) {
+  const gap = t - realMs;
+  if (gap <= 0) return;
+  if (gap > GAP_MAX) {
+    const ff = document.getElementById("ff");
+    ff.textContent = "⏩ " + Math.round(gap / 1000) + " s";
+    ff.classList.add("on");
+    const steps = 20;
+    const from = realMs;
+    for (let i = 1; i <= steps; i++) { setClock(from + (gap * i) / steps); await sleep(GAP_SHOWN / steps); }
+    setClock(t);
+    setTimeout(() => ff.classList.remove("on"), 250);
+    return;
+  }
+  const start = performance.now(), from = realMs;
+  while (performance.now() - start < gap) { setClock(from + (performance.now() - start)); await sleep(40); }
+  setClock(t);
+}
+window.__chapters = [];
+let T_START = 0;
+async function play() {
+  T_START = performance.now();
+  if (CARD) {
+    const card = document.getElementById("card");
+    card.innerHTML = '<iframe></iframe>';
+    card.firstChild.srcdoc = CARD;
+    await sleep(2300);
+    card.remove();
+  }
+  await sleep(400);
+  for (const ev of CAST.events) {
+    await advanceTo(ev.t);
+    if (ev.k === "chapter") { document.getElementById("chap").textContent = ev.d; window.__chapters.push({ at: performance.now() - T_START, label: ev.d }); continue; }
+    if (ev.k === "metric") { const m = document.getElementById("metric"); m.textContent = ev.label || ev.d; if (ev.label) { m.classList.add("on"); } continue; }
+    if (ev.k === "cmd") {
+      await write(GREEN + (CAST.prompt || "$ ") + OFF);
+      const s = ev.d; const per = Math.max(4, Math.min(28, 1100 / s.length));
+      for (let i = 0; i < s.length; i += 2) { await write(s.slice(i, i + 2)); await sleep(per * 2); }
+      await write("\r\n");
+      await sleep(250);
+      continue;
+    }
+    if (ev.k === "note") { await write(CYAN + ev.d.replace(/\n$/, "") + OFF + "\r\n"); await sleep(600); continue; }
+    const text = ev.k === "err" ? DIM + ev.d + OFF : ev.d;
+    await write(text);
+    const n = (ev.d.match(/\n/g) || []).length;
+    if (n > 14) await sleep(Math.min(4200, 800 + n * 32));
+  }
+  await sleep(2200);
+  window.__done = true;
+}
+window.__start = play;
+</script>
+</body>
+</html>
