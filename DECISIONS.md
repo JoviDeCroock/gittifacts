@@ -2013,3 +2013,136 @@ instead of a fast-forward.
   result" for a rollout that health monitoring rolled back.
 - **A review for another head names both shas.** The full shas are shown when the 12-character forms collide,
   and the message says which one is current.
+
+## 2026-10-03 — `wait_for_change`: `reached` means the milestone holds now; long-polls end on time across deploys
+
+**Context.** Journey 10: `gittifacts wait <bootstrap> --until evidence_ready` answered `reached: true` with
+`change.status: "running"` and a next step to wait for `evidence_ready` again; `get-change-status` a moment later
+still said `running`. The bootstrap's evidence is sealed before its screenshots, and its status only became
+`released` after them (~10 s). Journey 11 saw the same for `tour_ready` (the tour row is written a step before
+the change is routed). And during a platform deploy, `wait_for_change(timeoutSec: 50)` didn't answer within the
+CLI's 80 s request budget: the long-poll is held by the change's Durable Object, which a deploy resets.
+
+**Decision.**
+- `reached: true` means the milestone holds for the change's current head at the moment of the answer, so the
+  snapshot returned with it never contradicts it. `evidence_ready`: CI finished (passed or failed) and its signed
+  evidence is sealed; for a bootstrap Change also its final status (`released` when green, `failing` when not).
+  `lane_assigned`: the lane is set (the status stays `running` while the tour is written). `tour_ready`: the tour
+  is written and the change routed (no longer `running`). Defined in `milestoneState`, the tool description and
+  the docs.
+- The bootstrap is released right after its evidence is sealed, before its screenshots, so the stricter
+  `evidence_ready` costs nothing (screenshots still run and reseal the evidence).
+- `nextSteps` follow the milestones the head already passed (evidence → wait for the lane → wait for the tour; a
+  released bootstrap → start your first Change), never "wait for what you just reached".
+- The coordinator races the DO's long-poll against its own deadline (`timeoutSec + 5 s`). A DO that never answers
+  or whose RPC fails (reset by a deploy) gets an answer from the store: `reached`/`unreachable` if it already is,
+  else `reason: "timeout"` with `retryAfterSec: 2`. `retryAfterSec` is a new optional output field (older clients
+  ignore it). The CLI's `wait` pauses `retryAfterSec`, and treats a long-poll still silent 15 s past its window as
+  lost and re-issues it (was 30 s).
+
+**Consequences.** A waiter on a bootstrap's `evidence_ready` returns ~0.3 s after the evidence is sealed, with the
+status final. An agent can trust `reached` without a second status call. A deploy costs a waiting agent at most
+`timeoutSec + 5 s` and one retry.
+
+## 2026-10-03 — `rerun_ci` and `close_change`
+
+**Context.** M5 dogfood friction 12 and 17: a flaky step (the classifier property test under load) cost a
+re-dated push and a full run; a failing system proposal could never be closed and stayed open.
+
+**Decision.** Two MCP tools, CLI commands (generated: `rerun-ci`, `close-change`) and HTTP routes
+(`POST /api/v1/changes/{id}/rerun`, `POST /api/v1/changes/{id}/close`), backed by `CoordinatorApi.rerun` (new;
+the existing `regrade`: a fresh workflow instance `<instance>-r<n>` and CI run on the same head) and
+`CoordinatorApi.abandon(actor, id, reason?)` (now takes a reason). Who: the Change's author or the agent's owning
+human (`contribute`), or a human maintainer (`approve`); a bootstrap Change counts as every contributor's own.
+Close was "author or reviewer" before; nothing exposed it, and it is now "author or maintainer" like re-run.
+Re-run only while `running`, `failing` or `awaiting-review` (an approved or queued Change is re-run by the merge
+queue on the merged result; a new push changes it). Both are idempotent (`Idempotency-Key` / `idempotencyKey`)
+and audited as the caller (`change.rerun-requested`, `change.abandoned` with `reason`). An unclaimed project's
+re-run is admitted against its CI quota like a push. `close_change` is annotated destructive.
+
+**Consequences.** `search_tools` ranks a term found inside a word ("run" in `rerun_ci`) lower than a word or a word
+start, so "run a shell command" still finds `ws_exec` first. AGENTS.md (every template) names both tools under
+"When CI fails".
+
+## 2026-10-03 — The first Change is titled by its first push
+
+**Context.** `create_project` opens the caller's first Change as "First change" before anything is pushed, and the
+title never changed, so every project's list said "First change".
+
+**Decision.** While a Change still has that placeholder title (`PLACEHOLDER_CHANGE_TITLE`), its first push renames
+it: the Plan's title when it has one, else the pushed head commit's subject (first non-empty line, ≤ 200 chars).
+Only the placeholder is ever replaced; the new title is in the `change.pushed` audit payload. `GitHost` gains an
+optional `commitMessage` (Artifacts `readCommit().message`); a host without it keeps the placeholder.
+
+## 2026-10-03 — Front door for browsers; an honest time to first green
+
+**Context.** Journey 01: `/start` (offered to people on the landing page) was raw markdown in a browser, unreadable
+on a phone. The landing claimed "first green in 36 to 48 seconds"; the live 30-day numbers were p50 56.6 s, p90
+79.8 s, and the CLI path took 73 s end to end.
+
+**Decision.**
+- `/start` and `/llms.txt` negotiate: HTML only when `Accept` names `text/html` and not `text/markdown`; agents,
+  curl and `*/*` keep markdown (`/llms.txt`: text/plain), JSON as before. `/start.md` and `?format=` give each
+  representation. The page is rendered per request with `marked` inside a shell the docs build emits
+  (`/docs/_assets/shell.html`), so the content stays live (quotas, kill switch) and the look stays the docs'.
+  Raw HTML in the markdown is shown as text.
+- Time to first green is public as aggregates only: `GET /api/v1/stats/first-green` (counts and percentiles, no
+  project ids; D1, memoized 5 min). Per-project data stays behind `/internal/ttfg`.
+- The landing says "about a minute" with the measured median and p90, and links the live numbers. The Worker
+  fills in the live median/p90 when at least 5 projects reached first green in the window (250 ms limit, fail
+  soft; the numbers are folded into the landing's ETag).
+
+## 2026-10-03 — Re-seed the templates' CI cache once per deploy
+
+**Context.** Journey 10's bootstrap took 49.5 s to CI green; one at 05:47 the same day took 20.7 s. The difference
+is the install: a global cache hit (0 s, and the parallel steps start from the cached snapshot) against a cold
+`pnpm install` (20 s). The global cache key includes the runner image, and the image bundles the platform's
+packages, so almost every deploy changes it and every template's entry goes cold until someone pays a cold
+install. Re-running the seed endpoint didn't help: the engine keys seed runs by (template, sha) and the seed
+repo's sha never changed.
+
+**Decision.** The cron seeds every template once per worker version (`VERSION.id`, marker in BLOBS): a new seed
+commit (same tree, message naming the version) on each `seed-*` repo, then `seedCache`. The admin endpoint does
+the same. A dedicated GitHost may write `seed-*` repos only. A failed template leaves the marker unset; the retry
+reuses that version's seed commit.
+
+**Consequences.** Four seed installs per deploy (about a container-minute each). Projects created in the ≤ 10 min
+between a deploy and the next cron still pay a cold install. The engine-side alternative (seed run ids that
+include the image) belongs to the CI engine.
+
+## 2026-10-03 — Import detection: fsevents is not an install script on Linux; pnpm 11 builds are skipped, never approved
+
+**Context.** Journey 12's detection Change arrived red and blamed `fsevents`' install script. Verified from the
+live logs: the install passed (pnpm 11.27.0, the fixture approves `esbuild`), `fsevents` (`os: [darwin]`) never
+installs on the Linux runners, and the red step was the fixture's deliberately failing test
+(`gittifacts-fixture-clock-api` is the "fix the failing test" eval fixture), while the Plan promised "The
+proposal's own CI run passes".
+
+**Decision.**
+- A package whose lockfile entry restricts `os`/`cpu`/`libc` so no version installs on linux/x64/glibc is never
+  flagged for build approval (one informational note instead).
+- When pnpm 11 (or an unpinned pnpm) would fail on unapproved build scripts, the proposal lists them as
+  `allowBuilds: <pkg>: false` in `pnpm-workspace.yaml` (skip, never approve; never `true`). Verified on pnpm
+  11.27.0: `--config.strict-dep-builds=false` installs but writes placeholders, and the next `pnpm run`
+  reinstalls and fails; `false` entries install and run cleanly.
+- One "install scripts" risk instead of a second "Detection is unsure" copy. The CI acceptance criterion follows
+  main's bootstrap run at the base (never waits for it): it promises green only when main is green, and names
+  steps that already fail on main as pre-existing.
+- `create_project({ from })` does not start detection; its `nextSteps` now name `propose_platform_config` right
+  after the first CI wait. Only an import by push starts it by itself.
+
+**Consequences.** Re-importing the clock fixture still ends red on `test`, now as the Plan says. Detection runs in
+the sandbox image (`gittifacts-runner detect`), so the fsevents fix is live once the image is rebuilt.
+
+## 2026-10-03 — The CLI owns the reconnect; `get-change-status --human` is a summary
+
+**Context.** Journey 10: anonymous `init` printed "Reconnect … whoami" as `nextSteps[0]`, although `/start` and the
+README say `nextSteps[0]` is the bootstrap wait; `get-change-status --human` printed the raw document (a STEPS
+column of JSON, no preview URL).
+
+**Decision.** The platform keeps the reconnect step first for anonymous MCP callers (their session must reconnect
+before anything else works). The CLI stores the token and sends it on every later command, so `init` drops that
+step: the bootstrap wait is `nextSteps[0]` there. `/start` now points at `bootstrapChangeId` instead of a
+position. `get_change_status` returns `previewUrl` (the head's sealed `preview` evidence when it answered), and
+`--human` renders a view: status with its meaning, lane or why there is none, preview, head, the latest run's
+steps as a table, what raised the lane, next steps. The JSON output is unchanged apart from the new field.
