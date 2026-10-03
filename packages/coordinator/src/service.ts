@@ -70,6 +70,8 @@ export interface CoordinatorOptions {
    * what the host shows (the PR's summary comment). Best effort; never fails the review.
    */
   onHostReview?: (change: Change, review: ReviewDecision) => Promise<void>;
+  /** GitHub mode: is this principal the PR's author on the host (a linked GitHub login)? */
+  isHostAuthor?: (change: Change, principalId: string) => Promise<boolean>;
 }
 
 const MAX_PUSH_TTL = 3600;
@@ -706,6 +708,12 @@ export function createCoordinator(
         // GitHub mode: GitHub merges, so a review here is recorded (the same record a GitHub
         // approval makes) and shown on the PR; there is no workflow waiting and no queue.
         if (change.host != null) {
+          if (await options.isHostAuthor?.(change, actor.id)) {
+            fail("self-approval", "no principal reviews its own change", {
+              explanation: "You opened this pull request on GitHub. Ask another human with change:review to review it.",
+              call: status(changeId),
+            });
+          }
           const out = await recordHostReview(ports, {
             changeId,
             headSha: review.headSha ?? change.headSha ?? "",

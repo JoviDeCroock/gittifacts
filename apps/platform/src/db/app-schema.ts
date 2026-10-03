@@ -344,6 +344,8 @@ export const reviews = sqliteTable(
     humanLane: integer("human_lane"),
     computedLane: integer("computed_lane").notNull(),
     comment: text("comment"),
+    /** Where it was made (GitHub mode): platform (null), github-review, github-check. */
+    source: text("source", { enum: ["platform", "github-review", "github-check"] }),
     createdAt: text("created_at").notNull(),
   },
   (t) => [

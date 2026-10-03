@@ -93,6 +93,7 @@ describe("GitHub mode in workerd", () => {
     fakes.git.repo(gh).refs.set("refs/heads/fix-total", base);
     const head = fakes.git.commit(gh, "fix-total", { "src/total.ts": "export const total = (xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0));\n" });
     const checks: { method: string; body: Record<string, unknown> }[] = [];
+    const prWrites: { what: string; body: Record<string, unknown> }[] = [];
     const tokens = { minted: 0, revoked: 0 };
     stubGithub({
       [`POST ${API}/app/installations/${INSTALLATION}/access_tokens`]: () => (tokens.minted++, jsonRes({ token: `ghs_integration_token_${tokens.minted}`, expires_at: "2030-01-01T00:00:00Z" }, 201)),
@@ -100,6 +101,10 @@ describe("GitHub mode in workerd", () => {
       [`GET ${API}/repos/acme/widgets/compare/${base}...${head}`]: () => jsonRes({ merge_base_commit: { sha: base } }),
       [`POST ${API}/repos/acme/widgets/check-runs`]: async (req) => (checks.push({ method: "POST", body: await req.json() }), jsonRes({ id: 9911 }, 201)),
       [`PATCH ${API}/repos/acme/widgets/check-runs/9911`]: async (req) => (checks.push({ method: "PATCH", body: await req.json() }), jsonRes({ id: 9911 })),
+      // M3 (the installation is linked, so PR writes are on): the tour review and the summary.
+      [`POST ${API}/repos/acme/widgets/pulls/7/reviews`]: async (req) => (prWrites.push({ what: "review", body: await req.json() }), jsonRes({ id: 5501, node_id: "PRR_5501" })),
+      [`GET ${API}/repos/acme/widgets/pulls/7/reviews/5501/comments`]: () => jsonRes([{ id: 77001 }]),
+      [`POST ${API}/repos/acme/widgets/issues/7/comments`]: async (req) => (prWrites.push({ what: "summary", body: await req.json() }), jsonRes({ id: 88001 }, 201)),
     });
     const changeId = `gh-${REPO.id}-7`;
     const instanceId = changeWorkflowId(changeId, head);
@@ -119,6 +124,7 @@ describe("GitHub mode in workerd", () => {
     expect(fakes.ci.runs.get(ciRunIdFor(instanceId))?.request).toMatchObject({ artifactsRepo: `ghm-${REPO.id}`, headSha: head, baseSha: base });
     await fakes.ci.finish(env, ciRunIdFor(instanceId));
     await workflow.waitForStepResult({ name: "graded-on-host" });
+    await workflow.waitForStepResult({ name: "publish-summary" });
 
     const patch = checks.find((c) => c.method === "PATCH");
     expect(patch?.body).toMatchObject({ status: "completed", details_url: `http://localhost/changes/${changeId}` });
@@ -127,6 +133,11 @@ describe("GitHub mode in workerd", () => {
     const change = await store().getChange(changeId);
     expect(change).toMatchObject({ status: "awaiting-review", forkName: `ghm-${REPO.id}`, host: { kind: "github", number: 7, fork: false } });
     expect(change?.lane).not.toBeNull();
+    // The tour as one COMMENT review on the graded head, and the summary comment (lane ≥ 1).
+    // Lane 0 is in shadow mode by default, so this PR is Lane 1 and gets a tour.
+    expect(change?.lane).toBe(1);
+    expect(prWrites.find((w) => w.what === "review")?.body).toMatchObject({ commit_id: head, event: "COMMENT" });
+    expect(String(prWrites.find((w) => w.what === "summary")?.body.body)).toContain("gittifacts:summary");
     // Every token minted for a job was revoked.
     expect(tokens.minted).toBeGreaterThan(0);
     expect(tokens.revoked).toBe(tokens.minted);

@@ -19,6 +19,7 @@ import type { Bindings } from "../app-env.js";
 import { principals } from "../db/app-schema.js";
 import { githubInstallationLinks, githubInstallationRepos } from "../db/github-schema.js";
 import { D1Store } from "../store/d1-store.js";
+import { githubActorPrincipal, upsertGithubPlan } from "./plans.js";
 import { githubHostFor, githubReadSource } from "./runtime.js";
 import { getApp, getInstallation } from "./store.js";
 import type { GithubEventMessage } from "./webhook.js";
@@ -111,7 +112,10 @@ export async function onChangeDelivery(env: Bindings, msg: GithubEventMessage, p
     installationId: msg.installationId,
     appId: msg.appId,
     source: () => githubReadSource(env, repoHost),
-    authorPrincipal: (who) => ensureGithubPrincipal(store, who),
+    // One person, one principal: a linked GitHub login acts as the human who linked it.
+    authorPrincipal: (who) => githubActorPrincipal(store, who),
+    reviewerPrincipal: (who) => githubActorPrincipal(store, who),
+    plans: { upsert: (plan) => upsertGithubPlan(env, store, plan) },
     onRepoCreated: (repo) => grantInstallationMembers(store, repo, repoHost.installationId),
   });
   try {
@@ -120,29 +124,4 @@ export async function onChangeDelivery(env: Bindings, msg: GithubEventMessage, p
   } finally {
     await release();
   }
-}
-
-const CheckRunAction = z.object({
-  action: z.literal("requested_action"),
-  check_run: z.object({ head_sha: z.string(), name: z.string(), external_id: z.string().nullable().optional(), app: z.object({ id: z.number() }).passthrough() }).passthrough(),
-  requested_action: z.object({ identifier: z.string().max(20) }),
-  sender: z.object({ login: z.string(), id: z.number() }).passthrough(),
-});
-
-/** A button on our check run: recorded as intent (approvals from GitHub bind in M3). */
-export async function onCheckRunAction(env: Bindings, msg: GithubEventMessage, payload: unknown): Promise<void> {
-  const p = CheckRunAction.safeParse(payload);
-  if (!p.success || p.data.check_run.app.id !== msg.appId || p.data.check_run.name !== "gittifacts/lane") return;
-  const { ports } = resolveRuntime(env, "github");
-  await ports.audit.append({
-    principalId: "system",
-    action: "github.check-action",
-    subject: `change:${p.data.check_run.external_id ?? "unknown"}`,
-    payload: {
-      identifier: p.data.requested_action.identifier,
-      headSha: p.data.check_run.head_sha,
-      sender: { login: p.data.sender.login, id: p.data.sender.id },
-      note: "intent only: approvals from GitHub bind in M3",
-    },
-  });
 }

@@ -14,6 +14,7 @@ import type { Bindings } from "./app-env.js";
 import { guardImportGrants } from "./import/push-grant-runtime.js";
 import { unclaimedLimits } from "./limits/config.js";
 import { initialCommitProvider } from "./projects/initial-commit.js";
+import { githubReviewOptions } from "./github/review-hooks.js";
 import { buildPorts } from "./runtime/ports.js";
 
 /** `origin`: the platform origin agents see (written into new repos' AGENTS.md). */
@@ -55,7 +56,8 @@ export const getCoordinator: CoordinatorFactory = (env, ctx, origin) =>
     createCoordinator(
       buildPorts(env, "default", { overrides: { access: repoAccessPort(env) } }),
       cloudflareBindings(env),
-      facadeOptions(origin, env),
+      // GitHub mode: reviews here refresh the PR's summary; the PR's author can't review it.
+      { ...facadeOptions(origin, env), ...githubReviewOptions(env) },
     ),
     env,
     ctx,

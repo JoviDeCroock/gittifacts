@@ -89,3 +89,32 @@
     justify-self: end;
   }
 }
+
+/* An installation's repos: name, and the PR-writes switch once graded. */
+.gh-repo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-3);
+  padding-block: var(--s-1);
+}
+.gh-repo__name {
+  display: inline-flex;
+  gap: var(--s-2);
+  align-items: center;
+  min-inline-size: 0;
+}
+.gh-repo__switch {
+  display: inline-flex;
+  gap: var(--s-2);
+  align-items: center;
+  min-block-size: var(--tap);
+  color: var(--text-2);
+}
+.gh-repo__wait {
+  color: var(--text-3);
+}
+.gh-repo .field__error {
+  flex-basis: 100%;
+}

@@ -25,7 +25,7 @@ export interface GithubInstallation {
   account: { login: string; type: string };
   repositorySelection: string;
   suspended: boolean;
-  repos: { id: number; fullName: string; private: boolean }[];
+  repos: { id: number; fullName: string; private: boolean; repoId: string | null; prWrites: "on" | "off" }[];
   linkedAs: string;
   linkedAt: string;
   manageUrl: string;
@@ -65,6 +65,8 @@ async function call<T>(method: Method, path: string, body?: unknown): Promise<T>
 
 export const githubApi = {
   overview: () => call<GithubOverview>("GET", "/api/v1/github"),
+  setPrWrites: (repoId: string, value: "on" | "off") =>
+    call<{ repoId: string; prWrites: "on" | "off" }>("PUT", `/api/v1/github/repos/${encodeURIComponent(repoId)}/pr-writes`, { value }),
   startManifest: (input: ManifestInput) => call<ManifestStart>("POST", "/api/v1/github/manifests", input),
 };
 

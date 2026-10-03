@@ -138,3 +138,46 @@ export const githubCheckRuns = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.changeId, t.headSha] })],
 );
+
+/** M3: the tour review gittifacts posted for each (Change, head), and its inline comment ids. */
+export const githubPrReviews = sqliteTable(
+  "github_pr_reviews",
+  {
+    changeId: text("change_id").notNull(),
+    headSha: text("head_sha").notNull(),
+    reviewId: integer("review_id").notNull(),
+    nodeId: text("node_id").notNull(),
+    commentIds: text("comment_ids", { mode: "json" }).$type<number[]>().notNull(),
+    staleAt: text("stale_at"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.changeId, t.headSha] })],
+);
+
+/** M3: the one summary comment per PR (edited only when its text hash changes). */
+export const githubPrSummaries = sqliteTable("github_pr_summaries", {
+  changeId: text("change_id").primaryKey(),
+  commentId: integer("comment_id").notNull(),
+  bodyHash: text("body_hash").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+/** M3: "Request full review" presses on a head's check run. */
+export const githubFullReviews = sqliteTable(
+  "github_full_reviews",
+  {
+    changeId: text("change_id").notNull(),
+    headSha: text("head_sha").notNull(),
+    login: text("login").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.changeId, t.headSha, t.login] })],
+);
+
+/** M3: per-repo switch for PR writes beyond the check run (on unless an owner turned it off). */
+export const githubRepoSettings = sqliteTable("github_repo_settings", {
+  repoId: text("repo_id").primaryKey(),
+  prWrites: text("pr_writes", { enum: ["on", "off"] }).notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

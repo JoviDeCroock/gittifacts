@@ -12,6 +12,7 @@ import { assertPlanAccess, assertRepoAccess } from "../access/access.js";
 import type { Caller, Services } from "../app-env.js";
 import { ApiError, conflict, forbidden, notFound } from "../errors.js";
 import { type PlatformSigner, Purpose, type VerifyOutcome } from "../signing.js";
+import { cloudflareBindings, PUSHABLE_STATUSES } from "@app/coordinator";
 import type { PrincipalRef } from "../store/d1-store.js";
 import type { PlanView } from "../store/rows.js";
 
@@ -273,7 +274,18 @@ export async function approvePlan(
       payload: { by: plan.id },
     });
   }
+  // GitHub mode: open pull requests already linked to this Plan (a plan file, an issue) are graded
+  // again; natively a Change starts from its Plan, so nothing waits on the approval.
+  svc.waitUntil(regradeGithubChanges(svc, plan.id).catch(() => undefined));
   return view(approved);
+}
+
+async function regradeGithubChanges(svc: Services, planId: string): Promise<void> {
+  const bindings = cloudflareBindings(svc.env);
+  for (const c of await svc.store.listChangesForPlan(planId)) {
+    if (c.host == null || !PUSHABLE_STATUSES.includes(c.status)) continue;
+    await bindings.changeCoordinator(c.id).regrade({ changeId: c.id, reason: `plan ${planId} was approved` });
+  }
 }
 
 export async function rejectPlan(

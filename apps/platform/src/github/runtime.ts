@@ -30,10 +30,18 @@ import { platformOrigin } from "../integrations/runtime.js";
 import { D1Store, type Db } from "../store/d1-store.js";
 import { githubKeys, openCredential } from "./crypto.js";
 import { getApp } from "./store.js";
+import { d1PrIndex, prWritesEnabled } from "./pr-index.js";
 import { durableWriteGate, type GithubWriteGate } from "./write-gate-do.js";
 
 /** What a grading job may do on GitHub: read the PR and code, write its own check run. */
-export const HOST_PERMISSIONS: Permissions = { checks: "write", contents: "read", pull_requests: "read", metadata: "read" };
+export const HOST_PERMISSIONS: Permissions = {
+  checks: "write",
+  contents: "read",
+  // M3: the tour review and the summary comment (when PR writes are on for the repo).
+  pull_requests: "write",
+  issues: "read",
+  metadata: "read",
+};
 /** What a mirror fetch may do: read code. */
 export const FETCH_PERMISSIONS: Permissions = { contents: "read", metadata: "read" };
 
@@ -118,6 +126,8 @@ export function githubHostFor(
     checks: d1CheckRunIndex(db),
     origin: platformOrigin(env),
     onJobEnd: release,
+    prs: d1PrIndex(db),
+    prWrites: () => prWritesEnabled(db, repoIdFor(repo.githubRepoId), repo.installationId),
   });
   return { host, release };
 }

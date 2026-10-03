@@ -8,7 +8,7 @@ import type { Bindings } from "../app-env.js";
 import { D1Store, type Db } from "../store/d1-store.js";
 import { GithubRateLimited } from "@app/host-github";
 import { InstallationInfo, RepoInfo } from "./api.js";
-import { onChangeDelivery, onCheckRunAction } from "./grading.js";
+import { onChangeDelivery } from "./grading.js";
 import {
   addRepos,
   getInstallation,
@@ -118,7 +118,9 @@ export const GITHUB_EVENT_HANDLERS: Record<string, GithubEventHandler> = {
   pull_request_review: withEnv(onChangeDelivery),
   push: withEnv(onChangeDelivery),
   merge_group: withEnv(onChangeDelivery),
-  check_run: withEnv(onCheckRunAction),
+  // M3: the check run's buttons, and plan labels on issues.
+  check_run: withEnv(onChangeDelivery),
+  issues: withEnv(onChangeDelivery),
 };
 
 async function payloadOf(deps: GithubEventDeps, msg: GithubEventMessage): Promise<unknown> {

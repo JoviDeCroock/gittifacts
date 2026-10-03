@@ -32,6 +32,18 @@ The browser form-POSTs `manifest` to `action`. kind=actor (per-customer Actor Ap
 - **200:** `GithubManifestStart { kind, name, org, action, manifest, state, expiresAt }`
 - **Errors:** 400, 401, 403
 
+### `PUT /api/v1/github/repos/{repoId}/pr-writes`
+
+Repo owners: turn the tour review and summary comment on GitHub PRs on or off
+
+The gittifacts/lane check run is always posted. Off: nothing else is written to the repo's pull requests.
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `repoId` (path, required)
+- **Body:** `{ value }`
+- **200:** `{ repoId, prWrites }`
+- **Errors:** 400, 401, 403, 404
+
 ### `GET /github/manifest/callback`
 
 GitHub redirect after creating an App (code + state); browser only

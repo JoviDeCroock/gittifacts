@@ -7,7 +7,7 @@ audience: humans
 
 # Grade pull requests on GitHub
 
-GitHub mode keeps your code on GitHub. The gittifacts App reads each pull request, runs the same evidence as native mode on a disposable mirror, and posts **one** check run, `gittifacts/lane`, on the pull request's head commit. Shadow mode is the default: no comments, no reviews, no merges, and the check never blocks.
+GitHub mode keeps your code on GitHub. The gittifacts App reads each pull request, runs the same evidence as native mode on a disposable mirror, and posts **one** check run, `gittifacts/lane`, on the pull request's head commit. Once someone links the installation, a pull request that needs a human also gets the tour as **one review** (one comment per stop) and **one summary comment** that is edited in place. Shadow mode never approves, blocks or merges.
 
 ## 1. Create the App (platform admins, once)
 
@@ -46,9 +46,18 @@ What is graded: open pull requests against the default branch, not drafts (they'
 | You add | Effect |
 |---|---|
 | A label `gittifacts:fix` (or `feature`, `refactor`, `dependency`, `transform`, `revert`, `docs`, `chore`) | The claimed category. A conventional title (`fix: …`, `feat: …`) works too; without either it's graded as a feature |
-| A line `gittifacts-plan: <plan id>` in the description | Links a Plan approved on gittifacts for this repository. Without an approved Plan there is no Lane 0 |
+| A line `gittifacts-plan: <plan id>` in the description | Links a Plan approved on gittifacts, or a plan file `.platform/plans/<id>.md` on the default branch (approve it on gittifacts) |
+| `Closes #12`, where issue #12 has the label `gittifacts:plan` | The issue is the Plan. The label counts as approval only from someone with write access who wrote neither the issue nor the pull request |
 
-## 5. From an agent
+Without an approved Plan there is no Lane 0. Changing the labels, the title, the description or the issue's label grades the same head again.
+
+## 5. Review
+
+Approve the tour on gittifacts, approve the pull request on GitHub, or press **Approve tour** on the check run: it is the same approval. It counts from a human with write access who isn't the author, for the current head. **Request full review** on the check run shows on the summary. GitHub still merges.
+
+Repo owners can turn the review and summary comment off for one repository on `/settings/github`; the check run stays.
+
+## 6. From an agent
 
 ```text
 get_change_status({ github: "acme/widgets#7" })

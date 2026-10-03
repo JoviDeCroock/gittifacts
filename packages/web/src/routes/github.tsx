@@ -121,8 +121,9 @@ function AppRow({ app }: { app: GithubApp }) {
         <p class="gh-shadow">
           <Icon name="eye" size={16} />
           <span>
-            Shadow mode: one <code>gittifacts/lane</code> check run per pull request head. It never
-            blocks, merges, comments or reviews.
+            Shadow mode: one <code>gittifacts/lane</code> check run per pull request head, and for a
+            linked installation the tour as one review plus a summary comment. It never blocks,
+            approves or merges.
           </span>
         </p>
       </div>
@@ -130,6 +131,56 @@ function AppRow({ app }: { app: GithubApp }) {
         Install on GitHub
       </LinkButton>
     </div>
+  );
+}
+
+/** A repo of an installation; once graded, its PR-writes switch (owners). */
+function RepoLine({ repo }: { repo: GithubInstallation["repos"][number] }) {
+  const on = useSignal(repo.prWrites === "on");
+  const busy = useSignal(false);
+  const error = useSignal<string | null>(null);
+  const repoId = repo.repoId;
+  async function toggle() {
+    if (repoId === null || busy.value) return;
+    busy.value = true;
+    error.value = null;
+    try {
+      const out = await githubApi.setPrWrites(repoId, on.value ? "off" : "on");
+      on.value = out.prWrites === "on";
+    } catch (err) {
+      error.value = inlineError(err);
+    } finally {
+      busy.value = false;
+    }
+  }
+  return (
+    <li class="gh-repo">
+      <span class="gh-repo__name">
+        <Icon name={repo.private ? "lock" : "git-branch"} size={14} />
+        {repoId !== null ? (
+          <a href={`/repos/${repoId}`} class="mono">
+            {repo.fullName}
+          </a>
+        ) : (
+          <a href={`https://github.com/${repo.fullName}`} target="_blank" rel="noopener noreferrer" class="mono">
+            {repo.fullName}
+          </a>
+        )}
+      </span>
+      {repoId !== null ? (
+        <label class="gh-repo__switch">
+          <input type="checkbox" role="switch" checked={on.value} disabled={busy.value} onChange={toggle} />
+          <span>Tour review and summary on PRs</span>
+        </label>
+      ) : (
+        <span class="gh-repo__wait">graded from its next pull request</span>
+      )}
+      {error.value ? (
+        <p class="field__error" role="alert">
+          {error.value}
+        </p>
+      ) : null}
+    </li>
   );
 }
 
@@ -154,12 +205,7 @@ function InstallationItem({ inst }: { inst: GithubInstallation }) {
         {inst.repos.length > 0 ? (
           <ul class="gh-repos">
             {inst.repos.map((r) => (
-              <li key={r.id}>
-                <Icon name={r.private ? "lock" : "git-branch"} size={14} />
-                <a href={`https://github.com/${r.fullName}`} target="_blank" rel="noopener noreferrer" class="mono">
-                  {r.fullName}
-                </a>
-              </li>
+              <RepoLine key={r.id} repo={r} />
             ))}
           </ul>
         ) : null}
@@ -203,7 +249,7 @@ export function GithubSettings() {
   return (
     <Page
       title="GitHub"
-      meta={<span>Grade pull requests where your code already lives. Nothing moves; shadow mode changes nothing on GitHub but one check run.</span>}
+      meta={<span>Grade pull requests where your code already lives. Nothing moves; shadow mode never blocks, approves or merges.</span>}
     >
       <Notice />
       {st.status === "loading" ? <Loading label="Loading GitHub setup" lines={6} /> : null}

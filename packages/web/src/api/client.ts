@@ -32,7 +32,7 @@ import type {
   RolloutResponse,
 } from "./types.js";
 
-export type Method = "GET" | "POST" | "PATCH" | "DELETE";
+export type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 export interface ErrorFix {
   explanation: string;

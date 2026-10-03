@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 103 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 104 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -54,6 +54,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `POST` | [`/api/v1/deployments/{deploymentId}/statuses`](/docs/reference/http-integrations) | Integrations: report a deployment's state (queued, in_progress, success, failure, error) with its URL and log |
 | `GET` | [`/api/v1/github`](/docs/reference/http-github) | GitHub mode: our GitHub Apps and the installations you linked (with their repos) |
 | `POST` | [`/api/v1/github/manifests`](/docs/reference/http-github) | Platform admins: a GitHub App manifest and a signed one-hour state to create the App |
+| `PUT` | [`/api/v1/github/repos/{repoId}/pr-writes`](/docs/reference/http-github) | Repo owners: turn the tour review and summary comment on GitHub PRs on or off |
 | `GET` | [`/api/v1/installation`](/docs/reference/http-integrations) | Integration tokens: this installation, its account and its repositories (with clone URLs) |
 | `GET` | [`/api/v1/installations`](/docs/reference/http-integrations) | Integrations installed on your account: what each may do and on which repos |
 | `PATCH` | [`/api/v1/installations/{installationId}`](/docs/reference/http-integrations) | Change which repos an installed integration reaches |

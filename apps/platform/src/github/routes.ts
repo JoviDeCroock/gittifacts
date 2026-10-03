@@ -19,7 +19,9 @@ import { ApiError } from "../errors.js";
 import { type ApiApp, body, errors, json, SECURITY } from "../routes/common.js";
 import { finishManifest, finishSetup } from "./callbacks.js";
 import { ManifestRequest } from "./manifest.js";
+import { assertTargetAccess } from "../access/access.js";
 import { GithubOverview, githubOverview } from "./overview.js";
+import { setPrWrites } from "./pr-index.js";
 import { beginSetup, FlowError, settingsUrl, startManifest } from "./setup.js";
 import { GITHUB_WEBHOOK_PATH, handleGithubWebhook } from "./webhook.js";
 
@@ -61,6 +63,19 @@ const manifest = createRoute({
   responses: { 200: json(ManifestStartSchema, "Form data"), ...errors(400, 401, 403) },
 });
 
+const prWrites = createRoute({
+  method: "put",
+  path: "/api/v1/github/repos/{repoId}/pr-writes",
+  tags: TAG,
+  security: SECURITY,
+  summary: "Repo owners: turn the tour review and summary comment on GitHub PRs on or off",
+  description:
+    "The gittifacts/lane check run is always posted. Off: nothing else is written to the repo's pull requests.",
+  middleware: [human] as const,
+  request: { params: z.object({ repoId: z.string().min(1).max(64) }), body: body(z.object({ value: z.enum(["on", "off"]) })) },
+  responses: { 200: json(z.object({ repoId: z.string(), prWrites: z.enum(["on", "off"]) }), "Saved"), ...errors(400, 401, 403, 404) },
+});
+
 type Flow = (svc: Services, caller: Caller, query: Record<string, string>) => Promise<string>;
 
 /** A browser leg: signed-in human or off to sign in; any failure lands on the settings page. */
@@ -98,6 +113,19 @@ export function registerGithubRoutes(app: ApiApp): void {
       }
       throw err;
     }
+  });
+
+  app.openapi(prWrites, async (c) => {
+    const svc = c.get("services");
+    const caller = callerOf(c);
+    const { repoId } = c.req.valid("param");
+    await assertTargetAccess(svc, caller.principal, { repoId }, "admin");
+    const repo = await svc.store.getRepo(repoId);
+    if (repo?.host == null) throw new ApiError(404, "not-found", "not a GitHub repository graded here");
+    const { value } = c.req.valid("json");
+    await setPrWrites(svc.store.db, { repoId, value, by: caller.principal.id, at: svc.clock.now().toISOString() });
+    await svc.audit.append({ principalId: caller.principal.id, action: "github.pr-writes", subject: `repo:${repoId}`, payload: { value } });
+    return c.json({ repoId, prWrites: value }, 200);
   });
 
   app.get("/github/manifest/callback", browser(finishManifest));

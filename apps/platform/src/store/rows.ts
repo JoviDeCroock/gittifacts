@@ -267,6 +267,7 @@ export function reviewFromRow(r: ReviewRow): ReviewDecision {
       humanLane: r.humanLane,
       computedLane: r.computedLane,
       comment: r.comment,
+      ...(r.source == null ? {} : { source: r.source }),
       createdAt: r.createdAt,
     },
     `review ${r.id}`,

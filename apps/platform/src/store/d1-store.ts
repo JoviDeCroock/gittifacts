@@ -682,6 +682,7 @@ export class D1Store implements Store {
       humanLane: v.humanLane,
       computedLane: v.computedLane,
       comment: v.comment,
+      source: v.source ?? null,
       createdAt: v.createdAt,
     });
   }

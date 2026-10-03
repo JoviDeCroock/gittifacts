@@ -4,6 +4,8 @@ import type { Caller, Services } from "../app-env.js";
 import { isPlatformAdmin } from "../access/config.js";
 import { GITHUB_WEB } from "./api.js";
 import type { GithubFlowEnv } from "./setup.js";
+import { repoIdFor } from "@app/host-github";
+import { prWritesSetting } from "./pr-index.js";
 import { linkedInstallations, listApps, reposOf } from "./store.js";
 
 export const GithubAppView = z
@@ -28,7 +30,17 @@ export const GithubInstallationView = z
     account: z.object({ login: z.string(), type: z.string() }),
     repositorySelection: z.string(),
     suspended: z.boolean(),
-    repos: z.array(z.object({ id: z.number().int(), fullName: z.string(), private: z.boolean() })),
+    repos: z.array(
+      z.object({
+        id: z.number().int(),
+        fullName: z.string(),
+        private: z.boolean(),
+        /** The platform repo once a PR was graded (null before). */
+        repoId: z.string().nullable(),
+        /** Tour reviews and the summary comment on its PRs (M3); "on" unless an owner turned them off. */
+        prWrites: z.enum(["on", "off"]),
+      }),
+    ),
     linkedAs: z.string().describe("The GitHub login that proved access"),
     linkedAt: z.string(),
     manageUrl: z.string(),
@@ -57,11 +69,18 @@ export async function githubOverview(svc: Services, caller: Caller): Promise<Git
       account: { login: inst.accountLogin, type: inst.accountType },
       repositorySelection: inst.repositorySelection,
       suspended: inst.suspendedAt !== null,
-      repos: (await reposOf(svc.store.db, inst.id)).map((r) => ({
-        id: r.repoId,
-        fullName: r.fullName,
-        private: r.private,
-      })),
+      repos: await Promise.all(
+        (await reposOf(svc.store.db, inst.id)).map(async (r) => {
+          const graded = await svc.store.getRepo(repoIdFor(r.repoId));
+          return {
+            id: r.repoId,
+            fullName: r.fullName,
+            private: r.private,
+            repoId: graded?.id ?? null,
+            prWrites: graded === null ? ("on" as const) : await prWritesSetting(svc.store.db, graded.id),
+          };
+        }),
+      ),
       linkedAs: link.githubLogin,
       linkedAt: link.linkedAt,
       manageUrl:

@@ -1816,3 +1816,48 @@ Code: `packages/host-github` (`@app/host-github`), `apps/platform/src/github/`, 
 - **UI.** A GitHub PR's change page links the PR and says where the decision is made; the platform's
   approve/reject bar is hidden for GitHub Changes until approvals bind in M3, and mirrored repos have no
   merge-queue link.
+
+## 2026-10-03 — Two modes M3: tours in GitHub, Plans, one approval record
+
+Spec: docs/prompts/06-two-modes.md §3.4, §3.5, §7 (M3); docs/research/github-app.md §1.1, §9.7–9.8, decision 8–9.
+Code: `packages/host-github` (`pr-writes`, `pr-publisher`, `plans`, `sync-plans`, `sync-reviews`),
+`packages/coordinator/src/host-review.ts`, `apps/platform/src/github/` (pr-index, plans, review-hooks).
+
+- **PR writes default: on once the installation is linked, with a per-repo off switch.** Writes beyond the
+  check run (the tour review, the summary comment) start when a human on the platform has linked the repo's
+  installation (someone answers for them) and stop when a repo owner turns them off
+  (`PUT /api/v1/github/repos/{repoId}/pr-writes`, the switch on `/settings/github`). An installation nobody
+  linked gets the check run only. No per-repo opt-in step: the switch is there for teams who want only the
+  check run.
+- **The tour is one COMMENT review per head**, pinned to the graded commit: one inline comment per stop (≤ 20;
+  tours have ≤ 15), anchored to the stop's first hunk (multi-line when the hunk spans lines), least-confident
+  and not-done in the body. Lane 0 gets no review. If GitHub refuses an anchor (422), the review is posted with
+  every stop in its body rather than not at all. A newer head (or a re-grade of the same head) stales the older
+  review: its body and every stop say "stale", and the review is minimized (`minimizeComment`, OUTDATED).
+  Reviews can't be deleted or moved (research §9.8).
+- **One summary comment per PR**, created when something needs a human (not for Lane 0) and edited only when
+  its text changes (SHA-256 of the body): lane, head, tour, Plan, approvals with where they came from,
+  changes requested, full-review requests.
+- **One approval record.** A GitHub review (APPROVED / CHANGES_REQUESTED), the check run's `approve_tour`
+  button and the platform's decision bar all become the same `ReviewDecision` (`source`: github-review,
+  github-check, platform) through `recordHostReview`. It counts only from a human (agents and bots never
+  approve, so an agent never approves an agent's PR) with write access on GitHub (checked with GitHub every
+  time; a button can be pressed by anyone who sees the run) who isn't the author, for the current head. One
+  person is one principal: a GitHub login a human linked acts as that human, so the author can't approve
+  their PR on the platform either. Approving never merges in shadow mode; GitHub merges.
+- **`full_review`** records a full-review request for the head (summary comment, audit); it doesn't change the
+  lane.
+- **Plans on GitHub.** (a) An issue the PR closes, labelled `gittifacts:plan` by a writer who wrote neither the
+  issue nor the PR: an approved Plan (`ghi-<repo>-<n>`), signed with the platform key like any approval.
+  Anyone else's label leaves a draft, graded "not approved". (b) A plan file `.platform/plans/<id>.md` on the
+  default branch, referenced as `gittifacts-plan: <id>`: imported as a draft (`ghp-<repo>-<id>`), approved on
+  gittifacts. (c) A platform Plan referenced the same way. Plan content never comes from the PR's head.
+- **Re-grading the same head.** Label, title or description edits that change the claim or the Plan, a plan
+  label on a closing issue, and a Plan approved on gittifacts grade the head again: a fresh check run and a
+  fresh workflow instance (`<change>-<head>-r<n>`, so a fresh CI run id; the run sink forwards those).
+- **Writes stay inside the budget.** Every write (reviews, stale edits, the minimize mutation, the summary) goes
+  through the installation's `GithubWriteGate`. A new head costs at most: 2 check-run writes, 1 review, 1 stale
+  body + ≤ 15 stop edits + 1 mutation, ≤ 1 summary edit.
+- **Contract suite.** A tenth scenario, `approval-binds-to-head` (the author's, an agent's and an old head's
+  approvals don't count; a maintainer's for the head does), runs on both hosts; GitHub also reports the tour as
+  published (the review) and it must match the platform's tour. Native 16/16, GitHub 11/11 + M3 tests.

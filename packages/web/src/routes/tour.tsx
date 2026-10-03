@@ -373,7 +373,7 @@ function TourEnd({ tour, desktop, onGithub = false }: { tour: Tour; desktop: boo
             </span>
           ))}
       </p>
-      <p class="tour-end__hint">{onGithub ? "Decide on the pull request on GitHub." : desktop ? "Decide in the panel on the right." : "Decide with the bar below."} Unproven stops are yours to judge: no evidence covers them.</p>
+      <p class="tour-end__hint">{onGithub ? (desktop ? "Decide in the panel on the right, or on the pull request." : "Decide with the bar below, or on the pull request.") : desktop ? "Decide in the panel on the right." : "Decide with the bar below."} Unproven stops are yours to judge: no evidence covers them.</p>
     </section>
   );
 }
@@ -551,16 +551,8 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
   const authorName = author?.name ?? "the author";
   const testsAt = tour ? testsStopIndex(tour) : -1;
 
-  // GitHub mode (shadow, M2): the decision is made on GitHub; approvals bind here from M3.
-  const decision = change.host ? (
-    <p class="tour__github-decide">
-      <Icon name="info" size={16} />
-      <span>
-        Review and merge this pull request on GitHub. gittifacts grades it in shadow mode and never
-        blocks it; approving tours here comes with the next GitHub milestone.
-      </span>
-    </p>
-  ) : (
+  // GitHub PRs: the same decision as an approval on GitHub (one record); GitHub still merges.
+  const decision = (
     <DecisionPanel
       change={change}
       me={me}
@@ -611,7 +603,8 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
                   {data.repo.repo.name}#{change.host.number}
                 </a>{" "}
                 on GitHub by {change.host.author.login}
-                {change.host.fork ? " (from a fork)" : ""}. Shadow mode: graded here, merged on GitHub.
+                {change.host.fork ? " (from a fork)" : ""}. Approve here or on GitHub: it's the same
+                approval. GitHub merges it.
               </span>
             </p>
           ) : null}

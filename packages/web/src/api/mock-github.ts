@@ -46,8 +46,8 @@ function overview(): GithubOverview {
         repositorySelection: "selected",
         suspended: false,
         repos: [
-          { id: 9001, fullName: "gittifacts-test/pure-bugfix", private: true },
-          { id: 9002, fullName: "gittifacts-test/clock-api", private: false },
+          { id: 9001, fullName: "gittifacts-test/pure-bugfix", private: true, repoId: "gh-9001", prWrites: "on" },
+          { id: 9002, fullName: "gittifacts-test/clock-api", private: false, repoId: null, prWrites: "on" },
         ],
         linkedAs: "maya-okafor",
         linkedAt: ago(120),
@@ -72,5 +72,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
     };
     return { status: 200, body: out };
   }
+  const m = /^\/api\/v1\/github\/repos\/([^/]+)\/pr-writes$/.exec(path);
+  if (method === "PUT" && m) return { status: 200, body: { repoId: decodeURIComponent(m[1] ?? ""), prWrites: (body as { value: string }).value } };
   return { status: 404, body: { error: { code: "not-found", message: "no such route", fix: { explanation: "" } } } };
 }
