@@ -1,6 +1,6 @@
 {
   "name": "new-dependency",
-  "description": "Adds nanoid (^5.1.5) to package.json `dependencies` and changes nothing else. Deliberately manifest-only: no source file imports nanoid, because fixtures are never `pnpm install`ed (tests reuse the monorepo's node_modules, where nanoid is not resolvable), and even a type-only import would fail `tsc` with TS2307. The dependency diff only needs the manifest. There is no lockfile in the fixtures, so lockfileChanged is false.",
+  "description": "Adds nanoid (^5.1.5) to package.json `dependencies` and the matching pnpm-lock.yaml entry, and changes nothing else. No source file imports nanoid: the local fixture checks reuse the monorepo's node_modules, where nanoid is not resolvable, and even a type-only import would fail `tsc` with TS2307. The lockfile changes with the manifest (real CI installs with --frozen-lockfile), so lockfileChanged is true.",
   "claim": {
     "category": "dependency",
     "title": "Add nanoid as a runtime dependency"
@@ -37,14 +37,15 @@
     ],
     "evidence": {
       "changedFiles": [
-        "package.json"
+        "package.json",
+        "pnpm-lock.yaml"
       ],
       "redGreen": "no-tests",
       "publicApi": "none",
       "dependenciesAdded": [
         "nanoid"
       ],
-      "lockfileChanged": false,
+      "lockfileChanged": true,
       "sensitiveHits": [],
       "scopeDrift": [],
       "policyChanged": false

@@ -305,18 +305,18 @@ export function breakingApi(opts: ScenarioOptions = {}): Scenario {
   };
 }
 
-/** fixtures/new-dependency — adds nanoid to package.json only (no lockfile): → 2. */
+/** fixtures/new-dependency — adds nanoid to package.json and pnpm-lock.yaml: → 2. */
 export function newDependency(opts: ScenarioOptions = {}): Scenario {
   return {
     fixture: "new-dependency",
-    description: "Adds nanoid ^5.1.5 to package.json dependencies; nothing else changes.",
+    description: "Adds nanoid ^5.1.5 to package.json dependencies and the lockfile; nothing else changes.",
     input: {
       evidence: {
         items: replacing(
           common(),
           dependencies({
             added: [{ name: "nanoid", version: "^5.1.5", dev: false, manifest: "package.json" }],
-            lockfileChanged: false,
+            lockfileChanged: true,
           }),
           redGreen("no-tests"),
           // No executable lines changed: full coverage of zero lines, zero mutants.
@@ -330,7 +330,7 @@ export function newDependency(opts: ScenarioOptions = {}): Scenario {
         outOfScope: ["Generating idempotency keys (follow-up change)"],
         scopePaths: ["package.json", "pnpm-lock.yaml"],
       }),
-      diffStats: diff([file("package.json", 3, 0)]),
+      diffStats: diff([file("package.json", 3, 0), file("pnpm-lock.yaml", 11, 0)]),
       change: { category: "dependency" },
       context: greenContext(),
     },
