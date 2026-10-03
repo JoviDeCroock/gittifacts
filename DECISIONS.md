@@ -1560,3 +1560,27 @@ Source: docs/research/github-app.md (GitHub's current docs, verified 2026-10-03)
 
 **Setup (user decision).** The platform offers the one-click App manifest flow. The user clicks through on GitHub to
 create the Reader and Actor Apps and a test org, and the credentials land directly in the platform's secrets.
+
+## 2026-10-03 — Every fork gets its own copy of its history (Artifacts forks of large repos can't serve clones)
+
+**Found in M5 dogfood.** Importing this monorepo worked, but every clone of a fork of it failed: Artifacts'
+upload-pack answers HTTP 500 for any bulk fetch from a fork of a large repo (full, `--depth=1`, blobless), while
+`ls-refs` and incremental fetches work and the main repo serves the same history fine (docs/research/artifacts.md
+§12.2). CI checkouts, workspaces and agents all clone forks, so the O5 proposal died as "the workspace is still
+starting" and the bootstrap CI hung with no steps. The same history pushed into a fork of a small repo clones
+fine: a fork can't serve the objects it **inherited**.
+
+- **Fix (`ArtifactsGitHost.forkRepo`).** After the fork is ready, the host pushes the fork's default-branch history
+  into it as its own objects: `transferObjects(main → fork, { haves: [], oldSha: ZERO })` under
+  `refs/gittifacts/fork-objects` (not a branch, so the PushRouter ignores it; it keeps the objects reachable).
+  Idempotent: a fork that already has the ref costs one `ls-refs` (the queue's `ensureScratch` calls `forkRepo`
+  for every batch). Every fork site gets it: `start_change`, reverts, the queue's scratch repo.
+- **Always, not above a size.** No cheap signal says when a parent is "large" (template forks never failed), and
+  a template's full pack is a few KB, so the copy is unconditional. Cost: one full fetch + push per fork, about
+  18 MB and ~10 s for this repo. A failed copy fails the fork (`start_change` answers the upstream error) rather
+  than hand out a fork nobody can clone. The pack is buffered in memory, so a repo near the Worker's 128 MB would
+  need a streaming copy; none exists yet.
+- **Chunked pushes.** Artifacts' receive-pack also refuses chunked request bodies (HTTP 400, "the remote end hung
+  up unexpectedly"), which git uses for any push over `http.postBuffer` (1 MiB by default). The import grant's
+  `command` and the migrate guide now pass `-c http.postBuffer=524288000`. Change pushes are usually small; the
+  same flag in the per-Change push instructions is an M5 dogfood change.

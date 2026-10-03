@@ -356,3 +356,16 @@ Verified with gitwire:
 - ref deletion
 
 **Token scoping verified:** a write token for repo A gets HTTP 403 on repo B, so an agent's fork token cannot touch main.
+
+### 12.2 Large repos: forks and chunked pushes (2026-10-03, M5 dogfood on this repo)
+
+Found while importing this monorepo (479 commits, 6,927 objects, an 18 MB pack). Both are still open on Artifacts.
+
+| Probe | Result |
+|---|---|
+| Full or `--depth=1` fetch from the **main** repo | Works (full history in about 7 s). |
+| Any bulk fetch from a **fork** of it (full, `--depth=1`, `--filter=blob:none`, even of a ref pushed to the fork) | **HTTP 500** in about 0.3 s (`fatal: expected 'packfile'`). `ls-refs` works, and so does an incremental fetch by a client that already has the base. Forks of small template repos never showed it. |
+| The same 18 MB history pushed into a fork of a *small* repo, then cloned from that fork | Works (2.7 s): the content is fine; the fork cannot serve objects it **inherited**. |
+| A raw receive-pack of the full history (`haves: []`) into the failing fork under a non-branch ref, then clone | Works, and every later fetch from that fork works. This is what `ArtifactsGitHost.forkRepo` now does for every fork (`refs/gittifacts/fork-objects`). |
+| `git push` of more than 1 MiB with git's default `http.postBuffer` | **HTTP 400**, `the remote end hung up unexpectedly`: receive-pack refuses chunked request bodies, and git switches to chunked above the buffer size. `-c http.postBuffer=524288000` fixes it. |
+| REST/CLI fork (`cf artifacts namespaces repos fork`) | Still `10101 Invalid repo name` for a `name` body field (2026-10-03). |

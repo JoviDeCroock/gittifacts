@@ -44,6 +44,8 @@ describe("import by push", () => {
     expect(p.importGrant).toMatchObject({ url: fakes.git.remoteOf(p.name), branch: "main" });
     expect(p.importGrant.command).toContain('http.extraHeader="Authorization: Bearer $');
     expect(p.importGrant.command).not.toContain(p.importGrant.token);
+    // Artifacts refuses chunked uploads (any push over git's default 1 MiB buffer): HTTP 400.
+    expect(p.importGrant.command).toContain("-c http.postBuffer=524288000 push ");
     const minted = fakes.git.tokens.filter((t) => t.repo === p.name && t.id !== undefined);
     expect(minted).toEqual([expect.objectContaining({ ttlSeconds: 1800, revoked: false })]);
     expect(await grantStatus(app, human.cookie, p.projectId)).toMatchObject({

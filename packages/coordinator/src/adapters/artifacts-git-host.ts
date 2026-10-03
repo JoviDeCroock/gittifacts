@@ -59,7 +59,7 @@ export interface GitWire {
   transferObjects(
     from: WireRemote,
     to: WireRemote,
-    opts: { sha: string; toRef: string },
+    opts: { sha: string; toRef: string; oldSha?: string; haves?: string[] },
   ): Promise<WireRefResult>;
   fastForward(
     remote: WireRemote,
@@ -156,6 +156,8 @@ export class GitWriteForbiddenError extends Error {
 
 const ZERO = "0".repeat(40);
 const encoder = new TextEncoder();
+/** Where `forkRepo` keeps a fork's own copy of its inherited history (see `hydrateFork`). */
+export const FORK_OBJECTS_REF = "refs/gittifacts/fork-objects";
 
 /** A safe repository path: relative, no `.`/`..`/empty segments, never inside `.git`. */
 export function assertRepoPath(path: string): string[] {
@@ -363,7 +365,34 @@ export class ArtifactsGitHost implements GitHost {
       if (code !== "ALREADY_EXISTS" && code !== "FORK_IN_PROGRESS") throw e;
     }
     const info = await this.waitReady(target);
+    await this.hydrateFork(source, target, info.defaultBranch);
     return { remote: info.remote };
+  }
+
+  /**
+   * Gives a fresh fork its own copy of the objects it inherited. An Artifacts fork shares its
+   * parent's objects, and a fork of a large repo cannot serve them: every fetch that needs them in
+   * bulk (a clone, even `--depth=1 --filter=blob:none`) answers HTTP 500, while `ls-refs` and
+   * incremental fetches work (verified 2026-10-03 on this platform's own 18 MB history; small
+   * template repos never showed it). CI checkouts, workspaces and agents all clone forks, so every
+   * fork gets the default branch's full history pushed into it once, under `FORK_OBJECTS_REF`
+   * (not a branch: the PushRouter ignores it). Idempotent: a fork that has the ref is skipped.
+   */
+  private async hydrateFork(source: string, target: string, branch: string): Promise<void> {
+    const to = await this.remote(target, "write");
+    const refs = await this.opts.wire.listRefs(to);
+    if (refs.has(FORK_OBJECTS_REF)) return;
+    const head = refs.get(`refs/heads/${branch}`);
+    if (head === undefined) return; // nothing inherited
+    const from = await this.remote(source, "read");
+    // haves: [] — the fork advertises the head already; only a full pack makes the objects its own.
+    const r = await this.opts.wire.transferObjects(from, to, {
+      sha: head,
+      toRef: FORK_OBJECTS_REF,
+      oldSha: ZERO,
+      haves: [],
+    });
+    if (!r.ok) throw new Error(`hydrating fork ${target} failed: ${r.reason ?? "unknown"}`);
   }
 
   async deleteRepo(name: string): Promise<void> {

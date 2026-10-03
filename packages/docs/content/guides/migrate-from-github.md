@@ -34,9 +34,11 @@ Expected: `projectId` and an `importGrant` with `url`, `token`, `expiresAt` and 
 
 ```sh
 export GITTIFACTS_IMPORT_TOKEN='<importGrant.token>'
-git -c http.extraHeader="Authorization: Bearer $GITTIFACTS_IMPORT_TOKEN" \
+git -c http.extraHeader="Authorization: Bearer $GITTIFACTS_IMPORT_TOKEN" -c http.postBuffer=524288000 \
   push "<importGrant.url>" main:refs/heads/main --follow-tags
 ```
+
+`http.postBuffer` matters: Artifacts refuses chunked uploads, and git sends any push over 1 MiB chunked unless the buffer is larger. Without it a real history fails with `the remote end hung up unexpectedly` (HTTP 400), and the grant stays open, so you can retry.
 
 The grant closes at the first of: the first push to the repo, the first Change, or 30 minutes. Closing revokes the token. From then on only the merge queue writes the default branch. This is the one exception to that rule: an empty repo, its human owner, before any Change, and both the opening and the closing are in the audit log (`project.import-push-opened`, `project.import-push-closed`).
 

@@ -5,6 +5,7 @@ import {
   type ArtifactsBindingLike,
   ArtifactsGitHost,
   type ArtifactsRepoLike,
+  FORK_OBJECTS_REF,
   type GitWire,
   GitWriteForbiddenError,
 } from "../../src/adapters/artifacts-git-host.js";
@@ -673,6 +674,8 @@ describe("ArtifactsGitHost", () => {
     const revoked: string[] = [];
     let revokeMisses = 0;
     let forkError: Error | null = null;
+    const transfers: Array<{ sha: string; toRef: string; oldSha?: string; haves?: string[] }> = [];
+    let transferOk = true;
     const repo = (name: string): ArtifactsRepoLike => ({
       createToken: async (scope, ttl) => {
         tokens.push([name, scope, ttl]);
@@ -722,7 +725,8 @@ describe("ArtifactsGitHost", () => {
       writeNote: async () => void wireCalls.push("writeNote"),
       transferObjects: async (_f, _t, o) => {
         wireCalls.push(`transfer:${o.toRef}`);
-        return { ref: o.toRef, ok: true };
+        transfers.push(o);
+        return { ref: o.toRef, ok: transferOk };
       },
       fastForward: async (_r, ref, old) => {
         wireCalls.push(`ff:${ref}`);
@@ -762,6 +766,8 @@ describe("ArtifactsGitHost", () => {
       revoked,
       missRevokes: (n: number) => (revokeMisses = n),
       setForkError: (e: Error) => (forkError = e),
+      transfers,
+      failTransfers: () => (transferOk = false),
     };
   }
 
@@ -905,12 +911,26 @@ describe("ArtifactsGitHost", () => {
   });
 
   it("forks idempotently and reads heads, parents and trees through the binding", async () => {
-    const { h, setForkError } = host();
+    const { h, setForkError, advertised, transfers, failTransfers } = host();
     expect(await h.forkRepo("main", "task-1")).toEqual({
       remote: "https://acc.artifacts.cloudflare.net/git/ns/task-1.git",
     });
+    expect(transfers).toEqual([]); // an empty fork inherited nothing
+    // A fork gets its own full copy of the inherited history (haves: [], create-only ref): a fork
+    // of a large repo cannot serve its parent's objects to a clone (Artifacts answers 500).
+    advertised.set("refs/heads/main", "c".repeat(40));
+    await h.forkRepo("main", "task-1");
+    expect(transfers).toEqual([
+      { sha: "c".repeat(40), toRef: FORK_OBJECTS_REF, oldSha: "0".repeat(40), haves: [] },
+    ]);
+    advertised.set(FORK_OBJECTS_REF, "c".repeat(40));
     setForkError(Object.assign(new Error("exists"), { code: "ALREADY_EXISTS" }));
     await expect(h.forkRepo("main", "task-1")).resolves.toBeDefined();
+    expect(transfers).toHaveLength(1); // already hydrated: a reused fork costs one ls-refs
+    advertised.delete(FORK_OBJECTS_REF);
+    failTransfers();
+    await expect(h.forkRepo("main", "task-1")).rejects.toThrow("hydrating fork task-1 failed");
+    advertised.delete("refs/heads/main");
     setForkError(Object.assign(new Error("bad"), { code: "INVALID_REPO_NAME" }));
     await expect(h.forkRepo("main", "task-1")).rejects.toThrow("bad");
     expect(await h.branchHead("main", "main")).toBe("c2");

@@ -167,7 +167,7 @@ export async function openImportGrant(
       branch,
       token: minted.token,
       expiresAt: minted.expiresAt,
-      command: `git -c http.extraHeader="Authorization: Bearer $${TOKEN_ENV}" push ${url} <your-branch>:refs/heads/${branch} --follow-tags`,
+      command: `git -c http.extraHeader="Authorization: Bearer $${TOKEN_ENV}" -c http.postBuffer=524288000 push ${url} <your-branch>:refs/heads/${branch} --follow-tags`,
       closesWhen: `Put the token in $${TOKEN_ENV} (never in the remote URL or git config) and push the whole history in ONE git push: the first push to this repo closes the grant, as do the first Change and ${IMPORT_GRANT_TTL_SECONDS / 60} minutes. The platform then proposes .platform/* as a Plan + Change for you to approve.`,
     },
     view: grantView({
