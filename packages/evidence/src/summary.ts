@@ -7,10 +7,16 @@ const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" 
 
 function body(item: EvidenceItem): string {
   switch (item.kind) {
-    case "red-green":
-      return `${item.verdict} (${plural(item.tests.length, "test")})`;
-    case "test-run":
-      return `${item.passed} passed, ${item.failed} failed, ${item.skipped} skipped (${item.runner})`;
+    case "red-green": {
+      const pre = item.preExisting?.length ?? 0;
+      return `${item.verdict} (${plural(item.tests.length, "test")}${pre > 0 ? `; ${pre} pre-existing failure${pre === 1 ? "" : "s"} not counted` : ""})`;
+    }
+    case "test-run": {
+      const pre = item.preExisting?.length ?? 0;
+      const failed =
+        pre > 0 ? `${item.failed} failed (${pre} pre-existing)` : `${item.failed} failed`;
+      return `${item.passed} passed, ${failed}, ${item.skipped} skipped (${item.runner})`;
+    }
     case "coverage": {
       const base = `${pct(item.ratio)} of ${plural(item.changedLines, "changed executable line")} covered`;
       const n = item.unmeasuredFiles?.length ?? 0;

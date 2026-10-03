@@ -37,6 +37,32 @@ export type TestRef = z.infer<typeof TestRef>;
 export const TestOutcome = z.enum(["pass", "fail", "error", "missing"]);
 export type TestOutcome = z.infer<typeof TestOutcome>;
 
+/**
+ * Which tests a measurement ran. `all`: the whole suite (also whenever the Change's test impact
+ * is unknown: unknown escalates). `affected`: only the test files whose import closure reaches
+ * the Change (`@app/affected` test targets); `files` counts them, `tests` lists some.
+ */
+export const TestSelection = z.object({
+  mode: z.enum(["all", "affected"]),
+  reason: z.string().max(1000),
+  files: z.number().int().nonnegative().optional(),
+  tests: z.array(z.string()).max(200).optional(),
+});
+export type TestSelection = z.infer<typeof TestSelection>;
+
+/**
+ * Where the base-commit results a measurement compared against came from. `ok`: results for the
+ * tests in question exist (`cache`: an earlier run on the same base commit; `run`: measured now).
+ * `unavailable`: no baseline could be had, so nothing counts as pre-existing.
+ */
+export const BaselineInfo = z.object({
+  sha: Sha,
+  status: z.enum(["ok", "unavailable"]),
+  source: z.enum(["cache", "run", "mixed"]).optional(),
+  note: z.string().max(1000).optional(),
+});
+export type BaselineInfo = z.infer<typeof BaselineInfo>;
+
 export const RedGreenProof = z.object({
   ...base,
   kind: z.literal("red-green"),
@@ -57,6 +83,16 @@ export const RedGreenProof = z.object({
    * no-tests: nothing is listed (no new or changed test, and no test fails on base).
    */
   verdict: z.enum(["proven", "not-proven", "no-tests"]),
+  /**
+   * Pre-existing failures: tests (not new or changed by the Change) that fail on base and fail
+   * identically on head (same first line of the failure). Not listed in `tests`, so an
+   * unrelated failure on the default branch neither proves nor blocks the proof.
+   */
+  preExisting: z
+    .array(TestRef.extend({ message: z.string().max(500).optional() }))
+    .max(200)
+    .optional(),
+  selection: TestSelection.optional(),
 });
 export type RedGreenProof = z.infer<typeof RedGreenProof>;
 
@@ -71,8 +107,29 @@ export const TestRun = z.object({
   skipped: z.number().int().nonnegative(),
   durationMs: z.number().nonnegative(),
   failures: z.array(z.object({ name: z.string(), message: z.string().max(4000) })).max(200),
+  /**
+   * Names (from `failures`) that fail identically on the base commit (`baseline`): pre-existing,
+   * so they do not count against the Change. `failed` still counts every failure.
+   */
+  preExisting: z.array(z.string()).max(200).optional(),
+  baseline: BaselineInfo.optional(),
+  selection: TestSelection.optional(),
 });
 export type TestRun = z.infer<typeof TestRun>;
+
+/**
+ * Failures of a test run that count against the Change: all of them, minus the ones proven
+ * pre-existing against a usable baseline of `baseSha` (when given, the baseline must be of that
+ * commit). Unknown baseline → every failure counts.
+ */
+export function newFailureCount(run: TestRun, baseSha?: string): number {
+  const b = run.baseline;
+  if (b === undefined || b.status !== "ok" || (baseSha !== undefined && b.sha !== baseSha))
+    return run.failed;
+  const listed = new Set(run.failures.map((f) => f.name));
+  const pre = new Set((run.preExisting ?? []).filter((n) => listed.has(n)));
+  return Math.max(0, run.failed - pre.size);
+}
 
 export const CoverageDelta = z.object({
   ...base,
@@ -96,6 +153,7 @@ export const CoverageDelta = z.object({
    * consumer can escalate instead of reading silence as safety.
    */
   unmeasuredFiles: z.array(z.string()).max(2000).optional(),
+  selection: TestSelection.optional(),
 });
 export type CoverageDelta = z.infer<typeof CoverageDelta>;
 
