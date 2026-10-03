@@ -401,6 +401,14 @@ class Machine {
       this.onTextualConflict(b, ev.result.changeId, ev.result.files, ev.result.upstream);
       return;
     }
+    if (ev.result.status === "errored") {
+      this.audit("merge-queue.build-errored", `batch:${b.id}`, {
+        message: ev.result.message,
+        retries: b.infraRetries,
+      });
+      this.infraRetry(b, `the batch tree could not be built: ${ev.result.message}`, "pending");
+      return;
+    }
     const expected = [...b.carried, ...ownEntries(b)];
     const got = ev.result.commits.map((c) => c.changeId);
     const last = ev.result.commits[ev.result.commits.length - 1];
@@ -2398,6 +2406,13 @@ class Machine {
       ) {
         const limit = b.state === "building" ? this.cfg.buildTimeoutMs : this.cfg.runTimeoutMs;
         if (this.now - b.startedAt < limit) continue;
+        // A stall past the timeout: the shell notifies a human on this audit (no silent waits).
+        this.audit("merge-queue.batch-timed-out", `batch:${b.id}`, {
+          state: b.state,
+          startedAt: b.startedAt,
+          limitMs: limit,
+          changeIds: [...b.carried, ...ownEntries(b)],
+        });
         if (b.runId !== null && b.state !== "building")
           this.out.push({
             type: "CancelBatchRun",

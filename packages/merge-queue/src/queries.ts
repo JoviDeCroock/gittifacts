@@ -137,7 +137,11 @@ export function entryStatus(s: QueueState, changeId: string, now: number): Entry
   let reason = "waiting for the next batch";
   let blocking: string[] = [];
   if (e.hold === "affected") reason = "waiting for the affected-set analysis";
-  else if (e.hold === "approval") reason = `lane rose to ${e.lane}: waiting for a human approval`;
+  else if (e.hold === "approval")
+    reason =
+      e.resolverIds.length > 0
+        ? `the resolver rewrote it to land on main (lane ${e.lane}): waiting for a human to approve the resolution`
+        : `lane rose to ${e.lane}: waiting for a human approval`;
   else if (e.hold === "dependency") {
     blocking = e.dependsOn;
     reason = `waiting on stacked dependency ${e.dependsOn.join(", ")}`;
@@ -161,7 +165,9 @@ export function entryStatus(s: QueueState, changeId: string, now: number): Entry
     ...base,
     batch: null,
     position,
-    etaSeconds: Math.round((s.stats.ciDurationMs * (rounds + 0.2)) / 1000),
+    // Waiting on a person: no ETA (the queue cannot estimate how long a review takes).
+    etaSeconds:
+      e.hold === "approval" ? null : Math.round((s.stats.ciDurationMs * (rounds + 0.2)) / 1000),
     blocking,
     reason,
   };

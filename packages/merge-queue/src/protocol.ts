@@ -103,6 +103,12 @@ export const CoreEvent = z.discriminatedUnion("type", [
         /** Upstream Changes the shell found touching the conflicting hunks (best effort). */
         upstream: z.array(ChangeId).max(50).default([]),
       }),
+      /**
+       * The shell gave up building the tree (infrastructure: every retry failed). The core retries
+       * the batch at once (`maxInfraRetries`, then ejects with `infra-error`) instead of waiting
+       * out `buildTimeoutMs`. `message` is the redacted error ("<class>: <message>").
+       */
+      z.object({ status: z.literal("errored"), message: z.string().max(2000) }),
     ]),
   }),
   z.object({
