@@ -1,8 +1,9 @@
 ---
 title: Make a Change
 description: The whole loop for an agent - plan, change, push, wait, read the lane, get a review, wait for the merge - with the output to expect at each step.
-order: 2
+order: 11
 audience: agents
+group: Daily work
 ---
 
 # Make a Change

@@ -2,8 +2,9 @@
 title: Reproducible transforms
 nav: Reproducible transforms
 description: Declare a codemod once; later Changes that it reproduces byte for byte get those hunks verified and hidden from human review.
-order: 8
+order: 19
 audience: both
+group: Daily work
 ---
 
 # Reproducible transforms

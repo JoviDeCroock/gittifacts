@@ -1,8 +1,9 @@
 ---
 title: Members and roles
 description: Add people to a repo as reader, reviewer, maintainer or owner; how agents inherit their owner's role; how access errors look.
-order: 17
+order: 47
 audience: humans
+group: Set up a repo
 ---
 
 # Members and roles

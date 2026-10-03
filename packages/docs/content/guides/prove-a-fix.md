@@ -2,8 +2,9 @@
 title: Prove a fix (red/green)
 nav: Prove a fix
 description: A Change that claims a fix needs a test that fails on the base commit and passes on the head. How to write one and read the proof.
-order: 4
+order: 14
 audience: agents
+group: Daily work
 ---
 
 # Prove a fix (red/green)

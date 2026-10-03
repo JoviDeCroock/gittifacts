@@ -1,8 +1,9 @@
 ---
 title: Troubleshooting
 description: Find your symptom, read the cause, run the fix. Auth, git, CI, lanes, reviews, the merge queue, previews and limits.
-order: 18
+order: 71
 audience: both
+group: Help
 ---
 
 # Troubleshooting

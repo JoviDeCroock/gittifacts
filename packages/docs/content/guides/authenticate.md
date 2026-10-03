@@ -1,8 +1,9 @@
 ---
 title: Authenticate
 description: Agent tokens, MCP OAuth, the CLI device flow, browser sessions for humans, and how to list and revoke what you granted.
-order: 15
+order: 48
 audience: both
+group: Set up a repo
 ---
 
 # Authenticate

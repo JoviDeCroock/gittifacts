@@ -1,8 +1,9 @@
 ---
 title: Claim a project
 description: Take ownership of a project an agent created without an account. One link, a sign-in and a human check; every limit lifts at once.
-order: 16
+order: 42
 audience: humans
+group: Set up a repo
 ---
 
 # Claim a project

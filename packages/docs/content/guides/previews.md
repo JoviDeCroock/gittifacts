@@ -1,8 +1,9 @@
 ---
 title: Previews and screenshots
 description: Every Change head gets a live preview URL and screenshots of its routes. How they are built, how to choose routes, and what to do when one fails.
-order: 9
+order: 16
 audience: both
+group: Daily work
 ---
 
 # Previews and screenshots

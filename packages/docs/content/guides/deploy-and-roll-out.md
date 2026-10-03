@@ -1,8 +1,9 @@
 ---
 title: Deploy and roll out
 description: Set a deploy target, guard risky code with isChangeEnabled, ship in gradual stages, watch for regressions, and kill or revert a Change.
-order: 10
+order: 17
 audience: both
+group: Daily work
 ---
 
 # Deploy and roll out

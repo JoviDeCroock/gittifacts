@@ -1,8 +1,9 @@
 ---
 title: Connect a deploy platform
 description: Let a deploy platform build previews per Change and production from the default branch - install an integration, pick repos, and what it can never do.
-order: 14
+order: 49
 audience: humans
+group: Set up a repo
 ---
 
 # Connect a deploy platform

@@ -2,8 +2,9 @@
 title: Read and act on a tour
 nav: Review a tour
 description: For reviewers. What to read first, how to judge each stop, and how to approve, request changes or reject - in the app or over HTTP.
-order: 5
+order: 32
 audience: humans
+group: Review
 ---
 
 # Read and act on a tour

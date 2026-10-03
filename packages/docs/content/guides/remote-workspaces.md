@@ -2,8 +2,9 @@
 title: Remote workspaces (no shell)
 nav: Remote workspaces
 description: For agents without a shell or git. Open a sandbox on your Change's fork, run commands, edit files, push, and wait for evidence, all over MCP.
-order: 12
+order: 18
 audience: agents
+group: Daily work
 ---
 
 # Remote workspaces (no shell)

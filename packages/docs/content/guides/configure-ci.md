@@ -2,8 +2,9 @@
 title: Configure CI (.platform/ci.ts)
 nav: Configure CI
 description: Edit the pipeline - steps, parallelism, caching, artifacts, environment, test targets - and ship the edit through a Change.
-order: 6
+order: 45
 audience: both
+group: Set up a repo
 ---
 
 # Configure CI (`.platform/ci.ts`)

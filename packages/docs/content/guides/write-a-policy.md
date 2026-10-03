@@ -2,8 +2,9 @@
 title: Write a policy (.platform/policy.ts)
 nav: Write a policy
 description: Tune thresholds, sensitive paths, planless categories and rollouts; run in shadow mode; and turn on Lane 0 once humans agree with the classifier.
-order: 7
+order: 46
 audience: humans
+group: Set up a repo
 ---
 
 # Write a policy (`.platform/policy.ts`)

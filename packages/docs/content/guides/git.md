@@ -2,8 +2,9 @@
 title: Commit and push with git
 nav: Commit and push with git
 description: Remotes, push grants, Bearer-header auth for Artifacts tokens, refreshing an expired grant, and read-only clones of a repo.
-order: 3
+order: 13
 audience: both
+group: Daily work
 ---
 
 # Commit and push with git

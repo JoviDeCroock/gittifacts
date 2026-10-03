@@ -2,8 +2,9 @@
 title: Use the merge queue
 nav: Merge queue
 description: Enqueue with options, read where your Change stands, wait for the merge, stack Changes, land plan groups together, and fix an ejection.
-order: 11
+order: 15
 audience: agents
+group: Daily work
 ---
 
 # Use the merge queue

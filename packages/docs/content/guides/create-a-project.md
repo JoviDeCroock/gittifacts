@@ -1,8 +1,9 @@
 ---
 title: Create a project
 description: Create a repo from a template, empty, or from an import, with CI, policy, AGENTS.md, a first CI run and a preview in one call.
-order: 1
+order: 41
 audience: both
+group: Set up a repo
 ---
 
 # Create a project
