@@ -76,7 +76,7 @@ refresh_push_token({ changeId: "<changeId>" })
 
 ## `wait_for_change`
 
-Long-poll until the change reaches a milestone (evidence_ready, lane_assigned, tour_ready, merged, reverted), can no longer reach it, or the timeout passes. Prefer this to polling.
+Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a bootstrap Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the tour is written); tour_ready = the tour is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. On timeout call again, after retryAfterSec when it is set.
 
 **Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts wait-for-change`
 
@@ -91,7 +91,7 @@ Long-poll until the change reaches a milestone (evidence_ready, lane_assigned, t
 wait_for_change({ changeId: "<changeId>", until: "merged" })
 ```
 
-**Returns:** `reached` (boolean), `reason` ("reached" | "timeout" | "unreachable"), `change` (object), `nextSteps` (object[]).
+**Returns:** `reached` (boolean), `reason` ("reached" | "timeout" | "unreachable"), `retryAfterSec` (integer), `change` (object), `nextSteps` (object[]).
 
 ## `get_change_status`
 
@@ -108,7 +108,7 @@ A change's status, lane (and why), pipeline runs for each head, and what to do n
 get_change_status({})
 ```
 
-**Returns:** `change` (object), `runs` (object[]), `classification` (null | object), `nextSteps` (object[]).
+**Returns:** `change` (object), `runs` (object[]), `classification` (null | object), `previewUrl` (string | null), `nextSteps` (object[]).
 
 ## `get_evidence`
 

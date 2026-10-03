@@ -17,8 +17,9 @@ An agent told only `https://<host>` finds everything else from these. `GET /` al
 
 | Path | Document |
 | --- | --- |
-| `/start` | Machine guide: what the platform is, auth, the three calls to ship (markdown, or JSON with `Accept: application/json`) |
-| `/llms.txt` | llmstxt.org index |
+| `/start` | Machine guide: what the platform is, auth, the three calls to ship (markdown; JSON with `Accept: application/json`; a readable page when a browser asks for `text/html`) |
+| `/start.md` | The machine guide as markdown, whatever the `Accept` header says |
+| `/llms.txt` | llmstxt.org index (a readable page when a browser asks for `text/html`) |
 | `/openapi.json` | OpenAPI 3.1 of the HTTP API (alias of `/api/v1/openapi.json`) |
 | `/mcp/server-card` | MCP server card (draft SEP-2127) |
 | `/.well-known/ai-catalog.json` | AI catalog pointing at the server card (draft) |

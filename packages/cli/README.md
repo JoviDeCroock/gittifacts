@@ -20,11 +20,11 @@ alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz"
 #    and a claimUrl for a human. Writes .gittifacts.json, so later commands in ./my-api need no --host.
 gittifacts --host https://<host> init --template workers-api --name my-api --clone && cd my-api
 
-# 2. Wait for the first green build. The changeId is in nextSteps[0] of step 1.
+# 2. Wait for the first green build. The changeId is bootstrapChangeId of step 1 (its wait is nextSteps[0]).
 gittifacts wait <changeId> --until evidence_ready
 
-# 3. Read the result: CI steps, the lane and why, and the preview URL.
-gittifacts get-change-status <changeId>
+# 3. Read the result: CI steps, the lane and why, and the preview URL (--human for a summary).
+gittifacts get-change-status <changeId> --human
 
 # 4. For the next change, draft a plan (a human approves it), then open the change. That gives you a fork remote.
 gittifacts create-plan --repo-id <projectId> --title "Add /time" --intent "Clients need server time." --acceptance-criteria "GET /time returns ISO 8601"
@@ -72,7 +72,18 @@ gittifacts <command> --help          # flags, from the tool's input schema
 The local commands are `init` (calls `create_project`), `login`, `logout`, `wait`, `tools`, `search-tools` and `help`.
 `wait <changeId> --until <milestone> [--timeout 600]` re-issues the `wait_for_change` long-poll until the change
 reaches the milestone or the timeout runs out. The milestones are `evidence_ready`, `lane_assigned`, `tour_ready`,
-`merged` and `reverted`.
+`merged` and `reverted`. `reached: true` means the milestone holds for the change's current head right now:
+`evidence_ready` is CI finished and its evidence sealed (a bootstrap Change is `released` or `failing` by then), and
+`tour_ready` is the tour written and the change routed. A long-poll the platform could not hold (a deploy) answers
+`timeout` with `retryAfterSec`; `wait` pauses that long and asks again, and re-issues a request that stays silent
+15 s past its window.
+
+A red run you believe is flaky doesn't need a new push: `gittifacts rerun-ci <changeId> --reason "<why>"` runs CI,
+evidence, the lane and the tour again on the same head. `gittifacts close-change <changeId> --reason "<why>"` closes
+a Change that won't merge. Both work for the Change's author (or the human who owns that agent) and maintainers.
+
+`init` stores the project token and sends it on every later command, so it leaves out the platform's "reconnect
+with the token" step (an MCP session needs it; the CLI doesn't).
 
 ## Auth and configuration
 

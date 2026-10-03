@@ -78,3 +78,15 @@ Time-to-first-green per project and template (Analytics Engine, else D1)
 - **Parameters:** `days` (query)
 - **200:** `{ source, sinceDays, targetMs, overall, byTemplate, recent, note }`
 - **Errors:** 401, 403
+
+## Other
+
+### `GET /api/v1/stats/first-green`
+
+Live time-to-first-green: aggregates only (no project ids), no auth
+
+From create_project to a green first CI run and a serving preview, over the last `days` days. Percentiles count green projects only; `finished - green` failed CI or the preview. The landing page quotes these numbers.
+
+- **Auth:** none
+- **Parameters:** `days` (query)
+- **200:** `{ projects, finished, green, withinTarget, p50Ms, p90Ms, sinceDays, targetMs, byTemplate, source, generatedAt }`

@@ -32,6 +32,19 @@ A change with its plan, pipeline runs and classification for the current head
 - **200:** `{ change: Change, plan, runs, classification: ClassifyResult, principals: PrincipalsMap }`
 - **Errors:** 401, 403, 404
 
+### `POST /api/v1/changes/{changeId}/close`
+
+Close (abandon) a change that won't merge (author or maintainer)
+
+Stops its CI, takes it out of the merge queue and deletes its fork later. `reason` is audited (`change.abandoned`). Closing a closed change returns it unchanged; a merged change can't be closed (kill it instead).
+
+- **Auth:** session cookie or bearer token
+- **Idempotency-Key:** accepted
+- **Parameters:** `changeId` (path, required)
+- **Body:** `{ reason? }`
+- **200:** `{ change: Change }`
+- **Errors:** 400, 401, 403, 404, 409, 502
+
 ### `GET /api/v1/changes/{changeId}/diff`
 
 Diff of the current head against the base
@@ -91,6 +104,19 @@ Ask for human attention on a change (author or its owner); notifies, never appro
 - **Body:** `{ message? }`
 - **200:** `{ change: Change, notified }`
 - **Errors:** 400, 401, 403, 404, 409
+
+### `POST /api/v1/changes/{changeId}/rerun`
+
+Re-run CI, evidence, lane and tour on the current head (author or maintainer)
+
+No push needed: a fresh workflow instance and CI run for the same head (a flaky step). Only while the change is running, failing or awaiting review; audited as `change.rerun-requested`.
+
+- **Auth:** session cookie or bearer token
+- **Idempotency-Key:** accepted
+- **Parameters:** `changeId` (path, required)
+- **Body:** `{ reason? }`
+- **202:** `{ change: Change, headSha, instanceId, superseded }`
+- **Errors:** 400, 401, 403, 404, 409, 502
 
 ### `POST /api/v1/changes/{changeId}/review`
 

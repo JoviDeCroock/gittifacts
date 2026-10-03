@@ -65,7 +65,7 @@ Expected: the same commit count and head as on GitHub (`git ls-remote https://gi
 propose_platform_config({ repoId: "8t4xc6kq2w9m0d7z3r1b", waitSec: 45 })
 ```
 
-After an import by push the platform has already started it; the same call returns that proposal. After `create_project({ from })` (or `gittifacts init --from`) nothing starts by itself: the response's `nextSteps` list this call right after the wait for the first CI run.
+After an import by push the platform has already started it; the same call returns that proposal. After an import with `from` (`create_project` with a GitHub URL, or `gittifacts init --from <url>`) nothing starts by itself: the response's `nextSteps` list this call right after the wait for the first CI run.
 
 Detection reads the repo in a sandbox (nothing is installed or run): package manager, test runner, build command, TypeScript config, wrangler configs, workspaces. Expected: `status: "proposed"` with a `planId` and a `changeId`:
 

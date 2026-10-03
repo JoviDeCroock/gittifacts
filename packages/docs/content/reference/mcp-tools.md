@@ -1,6 +1,6 @@
 ---
 title: "MCP tools"
-description: "All 28 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
+description: "All 30 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
 order: 10
 audience: agents
 generated: true
@@ -35,9 +35,11 @@ Mutating tools accept `idempotencyKey`: retry with the same key safely.
 | [`get_evidence`](/docs/reference/mcp-changes#get_evidence) | The signed evidence for the change's current head (tests, red/green proof, coverage, API diff, ...) and whether the signature verifies. | `repo:read` | read |
 | [`get_tour`](/docs/reference/mcp-changes#get_tour) | The reviewer agent's guided tour of the change (what a human will read): stops with verdicts, least-confident points and what was not done. | `repo:read` | read |
 | [`request_review`](/docs/reference/mcp-changes#request_review) | Ask a human to look at your change (notifies them). | `change:create` | write |
+| [`rerun_ci`](#rerun_ci) | Repeats CI, evidence, the lane and the tour on the change's current head, without a push (a flaky step). | `change:create` | write |
+| [`close_change`](#close_change) | Close (abandon) a change that won't merge: stops its CI, takes it out of the merge queue and deletes its fork later. | `change:create` | write |
 | [`list_issues_for_change`](/docs/reference/mcp-changes#list_issues_for_change) | Workers Issues attributed to the change or the version it rolled out (errors seen in production). | `repo:read` | read |
 | [`refresh_push_token`](/docs/reference/mcp-changes#refresh_push_token) | A fresh short-lived push grant for your change's fork (author only). | `change:create` | write |
-| [`wait_for_change`](/docs/reference/mcp-changes#wait_for_change) | Long-poll until the change reaches a milestone (evidence_ready, lane_assigned, tour_ready, merged, reverted), can no longer reach it, or the timeout passes. | `repo:read` | read |
+| [`wait_for_change`](/docs/reference/mcp-changes#wait_for_change) | Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. | `repo:read` | read |
 | [`open_workspace`](/docs/reference/mcp-workspaces#open_workspace) | A sandbox with your Change's fork checked out at its head, for agents without a local shell or git. | `change:create` | write |
 | [`ws_exec`](/docs/reference/mcp-workspaces#ws_exec) | Runs `sh -c <command>` in the workspace checkout as the unprivileged runner user, with a hard timeout. | `change:create` | write |
 | [`ws_read`](/docs/reference/mcp-workspaces#ws_read) | Reads a file from the workspace checkout, optionally a 1-based inclusive line range. | `repo:read` | read |
@@ -53,3 +55,37 @@ Mutating tools accept `idempotencyKey`: retry with the same key safely.
 | [`reprioritize`](/docs/reference/mcp-merge-queue#reprioritize) | Sets the priority class (normal, security, incident). | `change:create` | write |
 | [`queue_overview`](/docs/reference/mcp-merge-queue#queue_overview) | Tracks (independent parallel queues) with their speculative batches, the landing pipeline, freeze state, throughput, p50/p95 time in queue, quarantined tests and every entry with its reason and ETA. | `repo:read` | read |
 | [`search_tools`](/docs/reference/mcp-projects#search_tools) | Fuzzy search over every gittifacts tool's name and description. |  | read |
+
+## `rerun_ci`
+
+Repeats CI, evidence, the lane and the tour on the change's current head, without a push (a flaky step). Author, its owner or a maintainer; only while the change is running, failing or awaiting review.
+
+**Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts rerun-ci`
+
+| Argument | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `changeId` | string | yes | max 64 chars |
+| `reason` | string |  | Why (recorded in the change's audit log). max 2000 chars |
+
+```text
+rerun_ci({ changeId: "<changeId>" })
+```
+
+**Returns:** `change` (object), `headSha` (string), `nextSteps` (object[]).
+
+## `close_change`
+
+Close (abandon) a change that won't merge: stops its CI, takes it out of the merge queue and deletes its fork later. Author, its owner or a maintainer; the reason is audited. A merged change can't be closed.
+
+**Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts close-change`
+
+| Argument | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `changeId` | string | yes | max 64 chars |
+| `reason` | string |  | Why (recorded in the change's audit log). max 2000 chars |
+
+```text
+close_change({ changeId: "<changeId>" })
+```
+
+**Returns:** `change` (object), `nextSteps` (object[]).

@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 104 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 107 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -32,6 +32,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `GET` | [`/api/v1/capabilities`](/docs/reference/http-identity) | Who am I, what may I do, on which repos (with claim status), and my quotas |
 | `POST` | [`/api/v1/changes`](/docs/reference/http-changes) | Start a change: fork the repo and get a push grant for the fork only |
 | `GET` | [`/api/v1/changes/{changeId}`](/docs/reference/http-changes) | A change with its plan, pipeline runs and classification for the current head |
+| `POST` | [`/api/v1/changes/{changeId}/close`](/docs/reference/http-changes) | Close (abandon) a change that won't merge (author or maintainer) |
 | `GET` | [`/api/v1/changes/{changeId}/diff`](/docs/reference/http-changes) | Diff of the current head against the base |
 | `GET` | [`/api/v1/changes/{changeId}/events`](/docs/reference/http-changes) | The change as Server-Sent Events, one `change` event per update |
 | `GET` | [`/api/v1/changes/{changeId}/evidence`](/docs/reference/http-changes) | Signed evidence for the current head, re-verified against the platform keys |
@@ -43,6 +44,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `DELETE` | [`/api/v1/changes/{changeId}/queue`](/docs/reference/http-merge-queue) | Take a Change out of the merge queue (its stack dependents leave too) |
 | `GET` | [`/api/v1/changes/{changeId}/queue/wait`](/docs/reference/http-merge-queue) | Long-poll until the Change merges, is ejected or dequeued, or the queue freezes |
 | `POST` | [`/api/v1/changes/{changeId}/request-review`](/docs/reference/http-changes) | Ask for human attention on a change (author or its owner); notifies, never approves |
+| `POST` | [`/api/v1/changes/{changeId}/rerun`](/docs/reference/http-changes) | Re-run CI, evidence, lane and tour on the current head (author or maintainer) |
 | `POST` | [`/api/v1/changes/{changeId}/review`](/docs/reference/http-changes) | Review a change (human, change:review, not the author); binds to a head |
 | `GET` | [`/api/v1/changes/{changeId}/reviews`](/docs/reference/http-changes) | Human reviews of a change, oldest first (each bound to a head) |
 | `GET` | [`/api/v1/changes/{changeId}/rollout`](/docs/reference/http-changes) | Rollout state and the change's audit timeline |
@@ -113,6 +115,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `POST` | [`/api/v1/repos/{repoId}/queue/freeze`](/docs/reference/http-merge-queue) | Freeze the queue: only reverts and incident fixes land (human-signed audit event) |
 | `POST` | [`/api/v1/repos/{repoId}/queue/resume`](/docs/reference/http-merge-queue) | Resume a queue that halted on an invariant violation (after an operator checked it) |
 | `POST` | [`/api/v1/repos/{repoId}/queue/thaw`](/docs/reference/http-merge-queue) | Thaw the queue; batches built on the bad main are invalidated (human-signed audit event) |
+| `GET` | [`/api/v1/stats/first-green`](/docs/reference/http-platform) | Live time-to-first-green: aggregates only (no project ids), no auth |
 | `POST` | [`/git/{owner}/{repo}.git/git-receive-pack`](/docs/reference/http-integrations) | Always 403: nothing pushes through the integration git endpoint |
 | `POST` | [`/git/{owner}/{repo}.git/git-upload-pack`](/docs/reference/http-integrations) | Git smart HTTP upload-pack (clone/fetch), streamed from the Artifacts remote |
 | `GET` | [`/git/{owner}/{repo}.git/info/refs`](/docs/reference/http-integrations) | Git smart HTTP ref advertisement (service=git-upload-pack only; read-only) |

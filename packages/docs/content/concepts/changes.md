@@ -25,7 +25,7 @@ The author declares a `category`: `fix`, `feature`, `refactor`, `dependency`, `t
 |---|---|---|
 | `awaiting-push` | Fork created, nothing pushed yet | Push to the fork |
 | `running` | Pipeline in flight for the head | `wait_for_change` until `evidence_ready` |
-| `failing` | Pipeline red | Fix the failing step and push again |
+| `failing` | Pipeline red | Fix the failing step and push again; a flaky step: `rerun_ci` (same head, no push) |
 | `awaiting-review` | Lane 1 or 2, tour ready | `request_review`; a human decides |
 | `approved` | A human approved the tour (or Lane 0 is on) | Wait for `merged` |
 | `queued` | In the merge queue | `queue_status` explains any wait |
@@ -33,7 +33,7 @@ The author declares a `category`: `fix`, `feature`, `refactor`, `dependency`, `t
 | `rolling-out` | Gradual deploy in progress | `list_issues_for_change` |
 | `released` | Watch window closed clean | Done |
 | `reverted` | Rolled back after a regression | Read the issues, start a follow-up |
-| `rejected`, `abandoned` | Closed | Start a new Change to try again |
+| `rejected`, `abandoned` | Closed (`close_change` abandons one that won't merge) | Start a new Change to try again |
 
 Reviews bind to a specific head. A push after an approval needs a fresh approval.
 

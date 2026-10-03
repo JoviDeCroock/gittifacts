@@ -34,13 +34,13 @@ Every platform error carries `{ code, message, fix }`, and `fix.call` or `fix.co
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `wait_for_change` returns `timeout` again and again | Normal: each call waits up to 50 s | Keep calling while `reason` is `"timeout"`. A template's very first run on a cold platform can take minutes |
+| `wait_for_change` returns `timeout` again and again | Normal: each call waits up to 50 s | Keep calling while `reason` is `"timeout"`. With `retryAfterSec` (the platform was interrupted, e.g. by a deploy), wait that long first. A template's very first run on a cold platform can take minutes |
 | Your MCP client errors at 60 s | `timeoutSec` above the client's limit | Use `timeoutSec: 50` or less |
 | `install` fails: lockfile out of date | The lockfile doesn't match `package.json` | Install without `--frozen-lockfile` locally, commit the lockfile |
-| `install` fails: `ERR_PNPM_IGNORED_BUILDS` | pnpm 11 refuses unapproved install scripts | Approve them under `allowBuilds` in `pnpm-workspace.yaml` |
+| `install` fails: `ERR_PNPM_IGNORED_BUILDS` | pnpm 11 refuses install scripts that `allowBuilds` in `pnpm-workspace.yaml` neither allows nor denies | `true` runs a package's script, `false` skips it (an import's platform-config proposal writes `false`, never `true`). Set `true` only for a package that must build (a native module) |
 | `install` can't reach a host | Unclaimed projects reach package registries only | Use the registry, or claim the project |
 | A step named `unclaimed-limits` failed | Out of CI minutes for the day | Wait for the reset, or claim the project |
-| An `evidence:*` step errored | A platform evidence tool failed, not your code | It raises the lane; push again if it looks transient |
+| An `evidence:*` step errored | A platform evidence tool failed, not your code | It raises the lane; `rerun_ci({ changeId: "<changeId>" })` if it looks transient (no push needed) |
 
 ## Lanes and reviews
 

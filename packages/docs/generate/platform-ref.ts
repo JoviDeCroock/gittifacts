@@ -29,8 +29,9 @@ const LIMIT_WORDS: Record<string, string> = {
 
 const FRONT_DOOR_WORDS: Record<string, string> = {
   start:
-    "Machine guide: what the platform is, auth, the three calls to ship (markdown, or JSON with `Accept: application/json`)",
-  llmsTxt: "llmstxt.org index",
+    "Machine guide: what the platform is, auth, the three calls to ship (markdown; JSON with `Accept: application/json`; a readable page when a browser asks for `text/html`)",
+  startMarkdown: "The machine guide as markdown, whatever the `Accept` header says",
+  llmsTxt: "llmstxt.org index (a readable page when a browser asks for `text/html`)",
   openapi: "OpenAPI 3.1 of the HTTP API (alias of `/api/v1/openapi.json`)",
   serverCard: "MCP server card (draft SEP-2127)",
   aiCatalog: "AI catalog pointing at the server card (draft)",

@@ -45,7 +45,7 @@ git push "$PUSH_URL" HEAD:refs/heads/main
 wait_for_change({ changeId: "7h2kd9x0qw3m5z8r1vtc", until: "evidence_ready", timeoutSec: 50 })
 ```
 
-Expected after about 50 s of CI: `reached: true` (call again while `reason` is `"timeout"`). On `"unreachable"`, CI failed: go to step 5.
+Expected after about 50 s of CI: `reached: true` (call again while `reason` is `"timeout"`, after `retryAfterSec` when it is set). `reached` means CI finished and its signed evidence is sealed, green or not: `change.status: "failing"` means a step failed (step 5). `"unreachable"` means the Change was closed.
 
 ## 5. Read the status
 
@@ -55,7 +55,7 @@ get_change_status({ changeId: "7h2kd9x0qw3m5z8r1vtc" })
 
 | You see | Do |
 |---|---|
-| `runs[0].status: "failed"` | Find the step with `status: "failed"`, fetch its `logRef` from `GET /api/v1/blobs/<ref>`, fix, push again. A new push starts a new run. |
+| `runs[0].status: "failed"` | Find the step with `status: "failed"`, fetch its `logRef` from `GET /api/v1/blobs/<ref>`, fix, push again. A new push starts a new run. A flaky step needs no push: `rerun_ci({ changeId: "7h2kd9x0qw3m5z8r1vtc", reason: "flaky" })` runs the same head again. |
 | `classification.lane: 1` or `2` | Read `classification.reasons[]`: each has a `code` and `message`. Fix what you can (a missing test, a sensitive path you didn't mean to touch), or ask for review. |
 | `classification.lane: 0`, `shadow: false` | Lane 0 is on and every gate passed: the Change merges by itself. Skip to step 7. |
 
@@ -85,3 +85,4 @@ Expected: `change.status` `"merged"` and `change.mergedSha`. With a deploy targe
 - A `fix` needs a test that fails on the base and passes on the head: [Prove a fix](/docs/guides/prove-a-fix).
 - Send an `idempotencyKey` on every mutating call and reuse it on retry.
 - Every error has `fix.call` or `fix.command`: run it.
+- A Change that won't merge (superseded, a dead end): `close_change({ changeId: "7h2kd9x0qw3m5z8r1vtc", reason: "superseded" })`. It stops its CI and leaves the merge queue; the author, the human who owns that agent, or a maintainer can close it.
