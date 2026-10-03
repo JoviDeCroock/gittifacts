@@ -33,6 +33,7 @@ import {
   changeSubject,
   changeWorkflowId,
   FORK_PREFIX,
+  distinctShas,
   forkNameFor,
   isBootstrapChange,
   isForkName,
@@ -710,7 +711,8 @@ export function createCoordinator(
         if (change.host != null) {
           if (await options.isHostAuthor?.(change, actor.id)) {
             fail("self-approval", "no principal reviews its own change", {
-              explanation: "You opened this pull request on GitHub. Ask another human with change:review to review it.",
+              explanation:
+                "You opened this pull request on GitHub. Ask another human with change:review to review it.",
               call: status(changeId),
             });
           }
@@ -744,14 +746,11 @@ export function createCoordinator(
         const headSha = review.headSha ?? change.headSha;
         if (headSha !== change.headSha) {
           // Reviews bind to a head: approving an older head does nothing.
-          fail(
-            "conflict",
-            `review is for ${headSha.slice(0, 12)} but the change's head is ${change.headSha.slice(0, 12)}`,
-            {
-              explanation: "The author pushed again. Review the tour for the current head.",
-              call: status(changeId),
-            },
-          );
+          const [given, current] = distinctShas(headSha, change.headSha);
+          fail("conflict", `review is for ${given} but the change's current head is ${current}`, {
+            explanation: `The headSha you sent is not the change's current head ${change.headSha} (the author pushed again, or the sha was mistyped). Review the tour for the current head, then send that sha or none.`,
+            call: status(changeId),
+          });
         }
         const classification = await store.getClassification(changeId, headSha);
         if (classification === null) {

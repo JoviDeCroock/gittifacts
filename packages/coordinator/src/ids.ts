@@ -39,6 +39,15 @@ export const REBASE_BRANCH = "gittifacts/rebased";
 
 export const ZERO_SHA = "0".repeat(40);
 
+/**
+ * Two shas for a message: 12 characters each when that tells them apart, the full shas when the
+ * short forms collide (M5 dogfood: "review is for eb99ce836502 but the change's head is
+ * eb99ce836502" after a mistyped full sha).
+ */
+export function distinctShas(a: string, b: string): [string, string] {
+  return a.slice(0, 12) === b.slice(0, 12) ? [a, b] : [a.slice(0, 12), b.slice(0, 12)];
+}
+
 /** 20 chars of [0-9a-z]: short enough for fork names, flag keys and workflow ids. */
 export function newId(): string {
   const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";

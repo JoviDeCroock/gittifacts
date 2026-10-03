@@ -329,13 +329,22 @@ describe("submitReview", () => {
   it("binds to the current head and records computedLane for shadow agreement", async () => {
     const s = await scenario();
     const { change, headSha } = await startAndPush(s);
-    await rejects(
+    const other = await rejects(
       s.coordinator.submitReview(s.reviewer, change.id, {
         decision: "approve",
         headSha: "f".repeat(40),
       }),
       "conflict",
     );
+    expect(other.message).toContain(`but the change's current head is ${headSha.slice(0, 12)}`);
+    // A sha that shares its first 12 characters with the head (mistyped later on): full shas.
+    const typo = `${headSha.slice(0, 12)}${headSha[12] === "0" ? "1" : "0"}${headSha.slice(13)}`;
+    const near = await rejects(
+      s.coordinator.submitReview(s.reviewer, change.id, { decision: "approve", headSha: typo }),
+      "conflict",
+    );
+    expect(near.message).toBe(`review is for ${typo} but the change's current head is ${headSha}`);
+    expect(near.fix.explanation).toContain(headSha);
     await s.coordinator.submitReview(s.reviewer, change.id, {
       decision: "approve",
       humanLane: 0,
