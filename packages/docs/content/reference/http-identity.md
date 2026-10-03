@@ -29,6 +29,14 @@ The calling principal (and the signed-in user, for humans)
 - **200:** `{ principal: Principal, user: SessionUser }`
 - **Errors:** 401
 
+### `GET /api/v1/me/getting-started`
+
+Your first-run checklist: a connected agent, the first green check (with its preview) and a repo brought in
+
+- **Auth:** session cookie or bearer token
+- **200:** `GettingStarted { projects, agent, firstGreen, latestBootstrap, repo }`
+- **Errors:** 401, 403
+
 ### `GET /api/v1/principals`
 
 The caller and the agents it owns

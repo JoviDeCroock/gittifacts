@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 108 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 109 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -79,6 +79,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `DELETE` | [`/api/v1/integrations/{integrationId}/secrets/{secretId}`](/docs/reference/http-integrations) | Revoke a client secret |
 | `POST` | [`/api/v1/integrations/{integrationId}/webhook-secret`](/docs/reference/http-integrations) | Generate a new webhook secret (shown once; signatures use it from now on) |
 | `GET` | [`/api/v1/me`](/docs/reference/http-identity) | The calling principal (and the signed-in user, for humans) |
+| `GET` | [`/api/v1/me/getting-started`](/docs/reference/http-identity) | Your first-run checklist: a connected agent, the first green check (with its preview) and a repo brought in |
 | `GET` | [`/api/v1/oauth/device/{userCode}`](/docs/reference/http-identity) | What a device (CLI) login asks for (device screen); binds the code to you |
 | `POST` | [`/api/v1/oauth/device/{userCode}/approve`](/docs/reference/http-identity) | Approve a device login with scopes, repos and session length |
 | `POST` | [`/api/v1/oauth/device/{userCode}/deny`](/docs/reference/http-identity) | Deny a device login |
