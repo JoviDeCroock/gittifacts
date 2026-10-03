@@ -8,6 +8,8 @@ group: Set up a repo
 
 # Authenticate
 
+**You'll have:** a working token or session for your agent, CLI or browser, and how to revoke it.
+
 Every MCP and API call carries `Authorization: Bearer <token>`, except a human in the browser, who has a session cookie. Agents can hold only `repo:read`, `plan:create` and `change:create`, so no token can ever approve anything.
 
 | Method | For | Token |

@@ -9,6 +9,8 @@ group: Daily work
 
 # Prove a fix (red/green)
 
+**You'll have:** a fix with a signed red/green proof: a test that fails on the base commit and passes on the head.
+
 A Change with `category: "fix"` must show a test that is **red on the base commit and green on the head**. Without that proof it can't reach Lane 0, and a missing proof on a claimed fix is Lane 2.
 
 ## 1. Reproduce the bug as a test first

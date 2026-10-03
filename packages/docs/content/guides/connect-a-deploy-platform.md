@@ -8,6 +8,8 @@ group: Set up a repo
 
 # Connect a deploy platform
 
+**You'll have:** a deploy platform installed on your repos, reporting deployments and previews back as evidence.
+
 Deploy platforms connect to gittifacts the way they connect to GitHub: an OAuth install, webhooks, `git clone`, and deployment statuses reported back. A connected platform builds a preview for each Change and production from the default branch, and its results show up as signed evidence.
 
 **Coming soon.** Cloudflare Workers Builds, Netlify, Vercel, Render and Fly don't ship a gittifacts connector yet. Until they do, use the platform's own [deploy target](/docs/guides/deploy-and-roll-out), or register your own integration as a bridge (step 4).

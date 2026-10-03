@@ -8,6 +8,8 @@ group: Set up a repo
 
 # Claim a project
 
+**You'll have:** an agent's unclaimed project kept under your name, with its limits lifted.
+
 An agent that created a project without an account hands you a **claim link**: `https://<host>/claim/gtc_…`. Claiming makes the project yours and lifts every limit on it.
 
 ## 1. Open the link

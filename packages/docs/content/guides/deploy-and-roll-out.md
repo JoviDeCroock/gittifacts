@@ -8,6 +8,8 @@ group: Daily work
 
 # Deploy and roll out
 
+**You'll have:** merged Changes shipping through a gradual rollout behind their own flag, watched, and reverted on a regression.
+
 Merging and deploying are separate steps. Once a repo has a deploy target, every merged Change ships through a gradual rollout behind its own flag and is watched for regressions. A regression ends in a revert without anyone waking up.
 
 Rollouts run on the hosted platform. Its end-to-end test (`scripts/e2e/m4.ts`) passes live: a Change that throws for some traffic is detected, its flag killed, the version rolled back and a revert Change opened, with no human involved.

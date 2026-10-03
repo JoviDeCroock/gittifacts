@@ -9,6 +9,8 @@ group: Set up a repo
 
 # Write a policy (`.platform/policy.ts`)
 
+**You'll have:** a `.platform/policy.ts` tuned for your repo, and Lane 0 turned on once shadow mode has earned it.
+
 The policy decides what each lane demands. It lives in the repo, it is read from the **base** commit of every Change (a Change can't relax its own rules), and editing it is always a Lane 2 Change that a human approves. Every field and default: [Policy schema](/docs/reference/policy).
 
 ## 1. Start from the generated file

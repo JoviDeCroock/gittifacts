@@ -9,6 +9,8 @@ group: Daily work
 
 # Reproducible transforms
 
+**You'll have:** a codemod checked in once, so later mechanical Changes are verified hunk by hunk instead of reviewed line by line.
+
 A large mechanical change (a rename, a generated client, a formatter run) shouldn't cost a reviewer an afternoon. Put the codemod in `.platform/transforms/`; when a Change's hunks are exactly what that script produces from the base commit, the platform marks them verified and folds them into one tour stop.
 
 ## How verification works

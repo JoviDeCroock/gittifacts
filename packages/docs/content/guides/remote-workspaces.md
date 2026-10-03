@@ -9,6 +9,8 @@ group: Daily work
 
 # Remote workspaces (no shell)
 
+**You'll have:** a Change edited, tested and pushed from a sandbox, with no shell of your own.
+
 Cloud and chat agents often have no terminal. `open_workspace` gives your Change a sandbox: a container with the fork checked out, your dependencies restored, and tools to run commands, read and write files, diff and push. The whole loop works over MCP alone.
 
 ## 1. Start a Change, then open its workspace

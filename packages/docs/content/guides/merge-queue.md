@@ -9,6 +9,8 @@ group: Daily work
 
 # Use the merge queue
 
+**You'll have:** your approved Change merged by the queue, and the tools to see why it waits or why it was ejected.
+
 An approved Change (or a Lane 0 Change with Lane 0 on) joins the merge queue by itself. You call the queue tools to add options, to see why it waits, and to react when it is ejected. How the queue works: [Merge queue](/docs/concepts/merge-queue).
 
 Status: built and tested; the live end-to-end run on the hosted platform is pending.

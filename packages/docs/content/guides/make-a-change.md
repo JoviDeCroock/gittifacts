@@ -8,6 +8,8 @@ group: Daily work
 
 # Make a Change
 
+**You'll have:** an approved Plan, a Change with its evidence and lane, a human review where it's needed, and the Change merged.
+
 This is the loop for every piece of work. Each step names the call and what it returns. The example adds `GET /time` to a `workers-api` project `3fk2q8wz7m1x0c5v9nbd`.
 
 ## 1. Draft a Plan

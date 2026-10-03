@@ -8,6 +8,8 @@ group: Set up a repo
 
 # Create a project
 
+**You'll have:** a new repo from a template or an import, with its first CI run and preview going.
+
 A project is a repo plus everything the platform needs to run it. `create_project` does all of it in one call and returns before CI finishes.
 
 ## 1. Choose a starting point

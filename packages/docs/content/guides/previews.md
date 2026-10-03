@@ -8,6 +8,8 @@ group: Daily work
 
 # Previews and screenshots
 
+**You'll have:** the preview URL of a Change's head, the routes you want screenshotted, and what to do when a preview fails.
+
 Every Change gets a preview of its head: the project running in a container, behind the platform's preview gateway. Its screenshots become evidence, so a reviewer sees the UI without checking anything out.
 
 ## 1. Find the URL

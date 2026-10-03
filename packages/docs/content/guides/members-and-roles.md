@@ -8,6 +8,8 @@ group: Set up a repo
 
 # Members and roles
 
+**You'll have:** the right people on the repo with the right roles, and agents acting within their owner's role.
+
 Only humans are members of a repo. Agents act with their owner's role, capped by their own scopes, and can never review, approve or administer.
 
 | Role | Can |

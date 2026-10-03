@@ -9,6 +9,8 @@ group: Daily work
 
 # Commit and push with git
 
+**You'll have:** your commits pushed to a Change's fork with a short-lived grant, and the evidence notes fetched next to them.
+
 Standard git works against gittifacts. You push to your Change's **fork** with a short-lived push grant; you never push to the default branch.
 
 ## The push grant

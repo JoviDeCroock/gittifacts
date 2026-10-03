@@ -9,6 +9,8 @@ group: Set up a repo
 
 # Configure CI (`.platform/ci.ts`)
 
+**You'll have:** a `.platform/ci.ts` pipeline with cached steps and kept artifacts, shipped as a Change.
+
 The pipeline is TypeScript in your repo. The platform evaluates it in a sandbox, runs your steps in containers, then adds its own evidence steps. Every option is in the [CI DSL reference](/docs/reference/ci-dsl).
 
 ## 1. Know the shape

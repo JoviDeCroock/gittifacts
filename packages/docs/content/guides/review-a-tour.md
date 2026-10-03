@@ -9,6 +9,8 @@ group: Review
 
 # Read and act on a tour
 
+**You'll have:** a decision on a Lane 1 or Lane 2 Change: approved, changes requested, or rejected.
+
 You review Lane 1 and Lane 2 Changes (and shadow-mode Lane 0 candidates). The tour tells you where the risk is; your job is to judge it against the approved Plan, not to re-read every line.
 
 ## 1. Open the Change
