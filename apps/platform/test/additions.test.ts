@@ -161,4 +161,18 @@ describe("audit summaries and principal names", () => {
     );
     expect(summarizeAudit(ev("plan.approved"), null)).toBe("Plan approved");
   });
+
+  it("says which signal a regression attribution came from", () => {
+    const ev = { action: "deploy.regression-attributed", subject: "change:c1" };
+    expect(summarizeAudit(ev, { trainId: "t2", issueId: "8274234c-61a8" })).toBe(
+      "Regression attributed in train t2, seen by Workers Issues (issue 8274234c-61a8)",
+    );
+    expect(summarizeAudit(ev, { trainId: "t2", issueId: "telemetry-t2-1" })).toBe(
+      "Regression attributed in train t2, seen by the Workers Logs poll (telemetry-t2-1)",
+    );
+    expect(summarizeAudit(ev, { trainId: "t2", issueId: "telemetry-t2-1", confirmed: true })).toBe(
+      "Regression attributed in train t2 and confirmed, seen by the Workers Logs poll (telemetry-t2-1)",
+    );
+    expect(summarizeAudit(ev, null)).toBe("Regression attributed");
+  });
 });

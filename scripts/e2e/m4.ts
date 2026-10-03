@@ -15,7 +15,9 @@
  *  2. agent proposes a faster rollout policy (`.platform/policy.ts`, Lane 2) → human approves →
  *     the merge queue merges it (policy is read from BASE, so this is how the e2e gets short stages);
  *  3. human sets the deploy target (`PATCH /repos/{id}/deploy-target`);
- *  4. agent adds `GET /version` → human approves → merge → first production deploy (100%);
+ *  4. agent drafts a plan for `GET /version` → human approves the plan → agent implements it (the
+ *     calibrated judge must not raise `llm.concern` on it) → human approves → merge → first
+ *     production deploy (100%);
  *  5. agent makes `/` throw for ~40% of requests when its flag is on → human approves → merge →
  *     gradual rollout; a traffic generator hits the workers.dev URL throughout;
  *  6. the platform detects the regression, switches the flag off, rolls back and opens the revert
@@ -57,13 +59,17 @@ const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
 const log = (message: string) => console.log(`[${elapsed().padStart(7)}] ${message}`);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** A failed step: thrown (not `process.exit`) so `main`'s cleanup still deletes the Worker and app. */
+class Fatal extends Error {}
+
 function die(message: string): never {
-  console.error(`✗ ${message}`);
-  process.exit(1);
+  throw new Fatal(message);
 }
 
-if (BASE_URL === "" || TOKEN === "" || COOKIE === "")
-  die("pass --url, --agent-file (or GITTIFACTS_TOKEN) and --cookie-jar");
+if (BASE_URL === "" || TOKEN === "" || COOKIE === "") {
+  console.error("✗ pass --url, --agent-file (or GITTIFACTS_TOKEN) and --cookie-jar");
+  process.exit(1);
+}
 
 /** `Cookie:` value from a Netscape cookie file (curl -c), for the platform host only. */
 function cookieHeader(path: string): string {
@@ -203,8 +209,15 @@ async function agentChange(input: {
   repoId: string;
   title: string;
   category: "feature" | "chore" | "fix";
+  /** The approved plan this Change implements (none: a planless Change). */
+  planId?: string;
   edit: (dir: string, changeId: string) => void;
-}): Promise<{ id: string; head: string }> {
+}): Promise<{
+  id: string;
+  head: string;
+  lane: number | null;
+  reasons: Array<{ code: string; lane: number }>;
+}> {
   const stamp = new Date().toISOString();
   const { change, remote } = ok(
     "start_change",
@@ -212,6 +225,7 @@ async function agentChange(input: {
       repoId: input.repoId,
       title: input.title,
       category: input.category,
+      ...(input.planId === undefined ? {} : { planId: input.planId }),
       idempotencyKey: `m4-${input.repoId}-${input.title}-${stamp}`,
     }),
   );
@@ -245,14 +259,44 @@ async function agentChange(input: {
     if (Date.now() > DEADLINE) die(`${change.id}: no lane in time`);
   }
   const s = ok("get_change_status", await mcp.tools.get_change_status({ changeId: change.id }));
+  // Every reason that raised the lane, plus the LLM judge's verdict whatever its lane.
   log(
     `  ${change.id}: lane ${s.classification?.lane ?? "?"} (${(s.classification?.reasons ?? [])
-      .filter((r) => r.lane > 0)
-      .map((r) => r.code)
+      .filter((r) => r.lane > 0 || r.code.startsWith("llm.") || r.code.includes("llm-judgment"))
+      .map((r) => `${r.code}:${r.lane}`)
       .join(", ")})`,
   );
   ok("request_review", await mcp.tools.request_review({ changeId: change.id }));
-  return { id: change.id, head };
+  const reasons = (s.classification?.reasons ?? []).map((r) => ({ code: r.code, lane: r.lane }));
+  return { id: change.id, head, lane: s.classification?.lane ?? null, reasons };
+}
+
+/** The agent drafts a plan, the human approves it (humans approve intent); returns its id. */
+async function approvedPlan(repoId: string, draft: Omit<PlanDraft, "repoId">): Promise<string> {
+  const { plan } = ok(
+    "create_plan",
+    await mcp.tools.create_plan({
+      repoId,
+      ...draft,
+      // Idempotency keys are printable ASCII without spaces.
+      idempotencyKey: `m4-plan-${repoId}-${draft.title.replace(/[^\x21-\x7e]+/g, "-")}`,
+    }),
+  );
+  await api("POST", `/api/v1/plans/${plan.id}/approve`, {
+    body: { comment: "m4 e2e: intent approved by the human" },
+    key: `m4-plan-approve-${plan.id}`,
+  });
+  log(`agent drafted plan ${plan.id} "${draft.title}"; human approved it`);
+  return plan.id;
+}
+
+interface PlanDraft {
+  repoId: string;
+  title: string;
+  intent: string;
+  acceptanceCriteria: string[];
+  outOfScope: string[];
+  scopePaths: string[];
 }
 
 /** The human approves the pushed head once the Change waits for review, then it merges. */
@@ -406,6 +450,19 @@ describe("GET /version", () => {
   );
 }
 
+const VERSION_PLAN = {
+  title: "Add GET /version",
+  intent:
+    "Add GET /version returning the deployed version, so we can tell which version of the Worker serves traffic during a rollout. Read it from the VERSION binding the platform adds to every deployed version.",
+  acceptanceCriteria: [
+    "GET /version returns JSON { version, tag } with env.VERSION.id and env.VERSION.tag",
+    "Outside a deployment (no VERSION binding) it returns { version: null, tag: null }",
+    "A test covers both cases",
+  ],
+  outOfScope: ["Changing the existing / and /health routes"],
+  scopePaths: ["src/app.ts", "test/version.test.ts"],
+};
+
 const FAST_ROLLOUT = `rollout: {
     stages: [50, 100],
     stageMinutes: 2,
@@ -433,6 +490,29 @@ async function auditOf(subject: string): Promise<{ events: AuditRow[]; verified:
     `/api/v1/audit?subject=${encodeURIComponent(subject)}&limit=200`,
   );
   return { events: page.events, verified: page.chain.verified };
+}
+
+/** The Flagship app ids a deployed Worker version binds (`cf` CLI, your own login); null if unreadable. */
+function flagshipAppsOf(script: string, versionId: string): string[] | null {
+  const res = spawnSync("cf", ["workers", "versions", "get", versionId, "--worker-id", script], {
+    encoding: "utf8",
+  });
+  if (res.status !== 0) return null;
+  const ids = new Set<string>();
+  const walk = (x: unknown): void => {
+    if (Array.isArray(x)) x.forEach(walk);
+    else if (x !== null && typeof x === "object") {
+      const o = x as Record<string, unknown>;
+      if (o.type === "flagship" && typeof o.app_id === "string") ids.add(o.app_id);
+      Object.values(o).forEach(walk);
+    }
+  };
+  try {
+    walk(JSON.parse(res.stdout) as unknown);
+  } catch {
+    return null;
+  }
+  return [...ids];
 }
 
 const marks: Record<string, number> = {};
@@ -501,10 +581,13 @@ async function main(): Promise<void> {
     log(`human set the deploy target: ${script} (${workerUrl})`);
 
     // ------------------------------------------------------------ 4. first production deploy
+    // In-plan: the judge compares the diff with this plan (the calibration set's case a).
+    const versionPlan = await approvedPlan(repoId, VERSION_PLAN);
     const v1 = await agentChange({
       repoId,
       title: "Add GET /version",
       category: "feature",
+      planId: versionPlan,
       edit: (dir) => addVersionRoute(dir),
     });
     await humanApproveAndMerge(v1.id, v1.head);
@@ -587,22 +670,34 @@ async function main(): Promise<void> {
       return e === undefined ? null : Date.parse(e.at);
     };
     const detectedAt = firstAt("deploy.regression-attributed", "rollout.regression");
-    // Who saw it first: a Workers Issues webhook (an Issues id) or the telemetry poll.
+    // Who saw it first: a Workers Issues webhook (an Issues id) or the telemetry poll
+    // (`telemetry-<train>-<n>`). The audit API returns summaries, not payloads: the summary names
+    // the issue ("seen by Workers Issues (issue …)" / "seen by the Workers Logs poll (…)").
     const attributed = events.find((x) => x.action === "deploy.regression-attributed");
-    const issueId = String(
-      (attributed?.payload as { issueId?: unknown } | undefined)?.issueId ?? "",
-    );
+    const issueId =
+      String((attributed?.payload as { issueId?: unknown } | undefined)?.issueId ?? "") ||
+      (/\((?:issue )?([^()\s]+)\)$/.exec(attributed?.summary ?? "")?.[1] ?? "");
     const detectedBy =
       attributed === undefined
         ? "RolloutWorkflow health check"
-        : issueId.startsWith("telemetry-")
-          ? `telemetry poll (${issueId})`
-          : `Workers Issues webhook (${issueId || attributed.summary})`;
+        : issueId === ""
+          ? `unknown: no issue id in "${attributed.summary}"`
+          : issueId.startsWith("telemetry-")
+            ? `telemetry poll (${issueId})`
+            : `Workers Issues webhook (issue ${issueId})`;
     const repoNow = await api<{ repo?: { flagshipAppId?: string | null } }>(
       "GET",
       `/api/v1/repos/${repoId}`,
     ).catch(() => null);
     flagApp = repoNow?.repo?.flagshipAppId ?? flagApp;
+    // What the deployed Worker versions actually bind: FLAGS → the project's app, and nothing else.
+    const bound = [v1Version, badVersion].map((v) => flagshipAppsOf(script ?? "", v));
+    const boundApps = bound.every((b) => b !== null)
+      ? [...new Set(bound.flat() as string[])]
+      : null;
+    log(
+      `Flagship apps bound by ${script} (v1 + bad version): ${boundApps?.join(", ") ?? "unreadable"}`,
+    );
     const flagOffAt = firstAt("deploy.flag-off", "rollout.flag-off");
     const rolledBackAt = firstAt("deploy.train-rolled-back", "rollout.rolled-back");
     const revertOpenedAt = firstAt("change.revert-opened", "rollout.reverted");
@@ -682,6 +777,17 @@ async function main(): Promise<void> {
 
     const checks: Array<[string, boolean]> = [
       [`the project has its own Flagship app (${flagApp ?? "none"})`, flagApp !== null],
+      [
+        `the project Worker binds only that app (${boundApps?.join(", ") ?? "unreadable"})`,
+        boundApps !== null && boundApps.length > 0 && boundApps.every((a) => a === flagApp),
+      ],
+      [
+        `the judge raised no concern on the in-plan GET /version (lane ${v1.lane}: ${v1.reasons
+          .filter((r) => r.code.startsWith("llm.") || r.lane > 0)
+          .map((r) => `${r.code}:${r.lane}`)
+          .join(", ")})`,
+        !v1.reasons.some((r) => r.code === "llm.concern"),
+      ],
       ["the bad version served errors (traffic saw 5xx)", firstError !== null],
       ["the platform detected the regression", detectedAt !== null],
       ["the change's flag was switched off", flagOffAt !== null],
@@ -750,4 +856,9 @@ async function main(): Promise<void> {
   }
 }
 
-await main().catch((e: unknown) => die(e instanceof Error ? (e.stack ?? e.message) : String(e)));
+await main().catch((e: unknown) => {
+  console.error(
+    `✗ ${e instanceof Fatal ? e.message : e instanceof Error ? (e.stack ?? e.message) : String(e)}`,
+  );
+  process.exit(1);
+});

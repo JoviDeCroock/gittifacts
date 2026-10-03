@@ -128,6 +128,18 @@ const SUMMARIES: Record<string, (p: Payload) => string | null> = {
     if (groups !== null) return `${groups} new issue group${groups === 1 ? "" : "s"} detected`;
     return "Regression detected";
   },
+  // Which signal saw it: deploy trains name telemetry-poll regressions `telemetry-<train>-<n>`;
+  // any other id is a Workers Issues issue (pushed by the webhook).
+  "deploy.regression-attributed": (p) => {
+    const issue = str(p, "issueId");
+    const train = str(p, "trainId");
+    const where = train === null ? "" : ` in train ${train}`;
+    if (issue === null) return `Regression attributed${where}`;
+    const seenBy = issue.startsWith("telemetry-")
+      ? `the Workers Logs poll (${issue})`
+      : `Workers Issues (issue ${issue})`;
+    return `Regression attributed${where}${p.confirmed === true ? " and confirmed" : ""}, seen by ${seenBy}`;
+  },
   "rollout.released": () => "Released: the watch window closed clean",
   "rollout.rolled-back": () => "Rolled back to the previous version",
 };
