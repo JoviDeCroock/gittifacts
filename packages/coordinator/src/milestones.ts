@@ -20,21 +20,32 @@ const ROUTED: ReadonlySet<Change["status"]> = new Set([
   "reverted",
 ]);
 
+/**
+ * Whether `change` (its current head) has reached `until`. "reached" means the milestone holds
+ * now, so the snapshot returned with it never contradicts it:
+ *
+ * - evidence_ready: CI finished (passed or failed) and the head's signed evidence is sealed. A
+ *   bootstrap Change also has its final status by then (released when green, failing when not).
+ * - lane_assigned: the head has a lane (the status stays "running" while the tour is written).
+ * - tour_ready: the head has a tour and the change was routed (no longer "running").
+ * - merged / reverted: on the default branch / reverted.
+ */
 export function milestoneState(change: Change, until: WaitUntil): MilestoneState {
+  const bootstrap = isBootstrapChange(change);
   // A bootstrap Change is never classified: no lane, no tour.
-  if (isBootstrapChange(change) && (until === "lane_assigned" || until === "tour_ready")) {
+  if (bootstrap && (until === "lane_assigned" || until === "tour_ready")) {
     return "unreachable";
   }
   let reached: boolean;
   switch (until) {
     case "evidence_ready":
-      reached = change.evidenceId !== null;
+      reached = change.evidenceId !== null && !(bootstrap && change.status === "running");
       break;
     case "lane_assigned":
       reached = change.lane !== null;
       break;
     case "tour_ready":
-      reached = change.tourId !== null;
+      reached = change.tourId !== null && change.status !== "running";
       if (
         !reached &&
         change.lane !== null &&
@@ -77,6 +88,36 @@ export const MAX_WAIT_MS = 10 * 60_000;
 export function clampWait(timeoutMs: number): number {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return 0;
   return Math.min(Math.trunc(timeoutMs), MAX_WAIT_MS);
+}
+
+/** How long past its own timeout a held long-poll may take before the caller answers itself. */
+export const WAIT_GRACE_MS = 5_000;
+/** `retryAfterSec` of a long-poll the platform could not hold (a deploy reset the DO). */
+export const WAIT_RETRY_AFTER_SEC = 2;
+
+/**
+ * `p`'s value, or `{ kind: "interrupted" }` once it rejects or `ms` pass, whichever is first. The
+ * late result of `p` is dropped (and its rejection swallowed).
+ */
+export async function withDeadline<T>(
+  p: Promise<T>,
+  ms: number,
+): Promise<{ kind: "answered"; value: T } | { kind: "interrupted"; error: unknown }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<{ kind: "interrupted"; error: unknown }>((resolve) => {
+    timer = setTimeout(() => resolve({ kind: "interrupted", error: "deadline" }), ms);
+  });
+  try {
+    return await Promise.race([
+      p.then(
+        (value) => ({ kind: "answered" as const, value }),
+        (error: unknown) => ({ kind: "interrupted" as const, error }),
+      ),
+      deadline,
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 /**

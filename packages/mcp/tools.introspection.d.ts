@@ -8,6 +8,211 @@
 export type introspection = {
   "tools": {
     /**
+     * Close a change
+     * Close (abandon) a change that won't merge: stops its CI, takes it out of the merge queue and deletes its fork later. Author, its owner or a maintainer; the reason is audited. A merged change can't be closed.
+     * @param args.reason Why (recorded in the change's audit log).
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "close_change": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Why (recorded in the change's audit log)."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "changeId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "change": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "repoId": {
+                "type": "string"
+              },
+              "planId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "category": {
+                "enum": [
+                  "fix",
+                  "feature",
+                  "refactor",
+                  "dependency",
+                  "transform",
+                  "revert",
+                  "docs",
+                  "chore"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "awaiting-push",
+                  "running",
+                  "failing",
+                  "awaiting-review",
+                  "approved",
+                  "queued",
+                  "merged",
+                  "rolling-out",
+                  "released",
+                  "reverted",
+                  "rejected",
+                  "abandoned"
+                ]
+              },
+              "lane": {
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  null
+                ]
+              },
+              "computedLane": {
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  null
+                ]
+              },
+              "laneReasons": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "lane": {
+                      "enum": [
+                        0,
+                        1,
+                        2
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "lane",
+                    "message"
+                  ]
+                }
+              },
+              "baseSha": {
+                "type": "string"
+              },
+              "headSha": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "forkName": {
+                "type": "string"
+              },
+              "mergedSha": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "revertOf": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "repoId",
+              "planId",
+              "title",
+              "category",
+              "status",
+              "lane",
+              "computedLane",
+              "laneReasons",
+              "baseSha",
+              "headSha",
+              "forkName",
+              "mergedSha",
+              "revertOf",
+              "updatedAt"
+            ]
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "change",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      }
+    },
+    /**
      * Close the workspace
      * Stops the workspace and deletes its sleep snapshot. Uncommitted changes are lost; the fork keeps everything you pushed. open_workspace starts a fresh one.
      * @param args.workspaceId From open_workspace.
@@ -1235,6 +1440,13 @@ export type introspection = {
               }
             ]
           },
+          "previewUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The live preview of the current head once it answers (null before that, or when the project has no preview)."
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
@@ -1264,6 +1476,7 @@ export type introspection = {
           "change",
           "runs",
           "classification",
+          "previewUrl",
           "nextSteps"
         ]
       },
@@ -3249,6 +3462,216 @@ export type introspection = {
       }
     },
     /**
+     * Re-run CI
+     * Repeats CI, evidence, the lane and the tour on the change's current head, without a push (a flaky step). Author, its owner or a maintainer; only while the change is running, failing or awaiting review.
+     * @param args.reason Why (recorded in the change's audit log).
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "rerun_ci": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Why (recorded in the change's audit log)."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "changeId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "change": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "repoId": {
+                "type": "string"
+              },
+              "planId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "category": {
+                "enum": [
+                  "fix",
+                  "feature",
+                  "refactor",
+                  "dependency",
+                  "transform",
+                  "revert",
+                  "docs",
+                  "chore"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "awaiting-push",
+                  "running",
+                  "failing",
+                  "awaiting-review",
+                  "approved",
+                  "queued",
+                  "merged",
+                  "rolling-out",
+                  "released",
+                  "reverted",
+                  "rejected",
+                  "abandoned"
+                ]
+              },
+              "lane": {
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  null
+                ]
+              },
+              "computedLane": {
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  null
+                ]
+              },
+              "laneReasons": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "lane": {
+                      "enum": [
+                        0,
+                        1,
+                        2
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "lane",
+                    "message"
+                  ]
+                }
+              },
+              "baseSha": {
+                "type": "string"
+              },
+              "headSha": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "forkName": {
+                "type": "string"
+              },
+              "mergedSha": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "revertOf": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "repoId",
+              "planId",
+              "title",
+              "category",
+              "status",
+              "lane",
+              "computedLane",
+              "laneReasons",
+              "baseSha",
+              "headSha",
+              "forkName",
+              "mergedSha",
+              "revertOf",
+              "updatedAt"
+            ]
+          },
+          "headSha": {
+            "type": "string",
+            "description": "The head CI runs on again (unchanged)."
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "change",
+          "headSha",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
      * Find the right tool
      * Fuzzy search over every gittifacts tool's name and description. Returns matching tool names, a one-line description and an example call.
      * @param args.query What you want to do, e.g. "merge my change" or "workspace exec".
@@ -3571,7 +3994,7 @@ export type introspection = {
     },
     /**
      * Wait for a change
-     * Long-poll until the change reaches a milestone (evidence_ready, lane_assigned, tour_ready, merged, reverted), can no longer reach it, or the timeout passes. Prefer this to polling.
+     * Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a bootstrap Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the tour is written); tour_ready = the tour is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. On timeout call again, after retryAfterSec when it is set.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      * @param args.timeoutSec Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached.
      */
@@ -3614,7 +4037,8 @@ export type introspection = {
         "type": "object",
         "properties": {
           "reached": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when the milestone holds for the change's current head at the moment of this answer (each milestone is defined in the tool description)."
           },
           "reason": {
             "enum": [
@@ -3622,6 +4046,11 @@ export type introspection = {
               "timeout",
               "unreachable"
             ]
+          },
+          "retryAfterSec": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "With reason \"timeout\": call again after this many seconds (0: right away; more when the platform was interrupted, e.g. by a deploy)."
           },
           "change": {
             "type": "object",

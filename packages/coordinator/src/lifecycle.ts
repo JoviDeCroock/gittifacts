@@ -13,6 +13,9 @@ export const PUSHABLE_STATUSES: readonly ChangeStatus[] = [
   "queued",
 ];
 
+/** Statuses in which CI may be re-run on the same head (`rerun_ci`). */
+export const RERUNNABLE_STATUSES: readonly ChangeStatus[] = ["running", "failing", "awaiting-review"];
+
 /** Merged changes a human may kill (flag off, roll back, revert). */
 export const KILLABLE_STATUSES: readonly ChangeStatus[] = ["merged", "rolling-out", "released"];
 

@@ -8,7 +8,7 @@
  * grant), and every mutation (they all run through `idem`) needs `contribute` on the repo its
  * `scoped` call named, so a reader's agent can read and nothing else. The services re-check.
  */
-import { Principal } from "@app/domain";
+import { type Change, Principal } from "@app/domain";
 import type { McpBackend, McpCaller } from "@app/mcp";
 import { z } from "zod";
 import { type AccessTarget, assertTargetAccess } from "../access/access.js";
@@ -25,6 +25,7 @@ import type { AnonymousClient } from "../limits/client.js";
 import { createQueueMcpBackend } from "../queue/mcp.js";
 import { capabilities } from "../services/capabilities.js";
 import {
+  closeChange,
   getChangeDetail,
   getChangeEvidence,
   getChangeTour,
@@ -32,6 +33,7 @@ import {
   refreshPushGrant,
   requestReview,
   requireChange,
+  rerunChangeCi,
   startChange,
 } from "../services/changes.js";
 import { createPlan } from "../services/plans.js";
@@ -68,6 +70,18 @@ function callerFrom(c: McpCaller): Caller {
     via: "agent-token",
     expiresAtSec: c.authInfo.expiresAt,
   };
+}
+
+/** The current head's preview once it answered: the `preview` item of its sealed evidence. */
+async function previewUrlOf(svc: Services, change: Change): Promise<string | null> {
+  if (change.headSha === null || change.evidenceId === null) return null;
+  try {
+    const evidence = await svc.store.getEvidence(change.id, change.headSha);
+    const item = evidence?.items.find((i) => i.kind === "preview");
+    return item?.kind === "preview" && item.status === "ok" && item.url ? item.url : null;
+  } catch {
+    return null; // informational: never fail the status call over it
+  }
 }
 
 export function createPlatformMcpBackend(svc: Services): McpBackend {
@@ -168,6 +182,7 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     async getChangeStatus(mc, changeId) {
       const d = await getChangeDetail(svc, await scoped(mc, { changeId }), changeId);
       return {
+        previewUrl: await previewUrlOf(svc, d.change),
         change: d.change,
         runs: d.runs,
         classification: d.classification
@@ -199,6 +214,24 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
         opts.idempotencyKey,
         { changeId, message: message ?? null },
         () => requestReview(svc, caller, changeId, message),
+      );
+    },
+
+    async rerunCi(mc, changeId, reason, opts) {
+      const caller = await scoped(mc, { changeId });
+      return idem(caller, "rerun_ci", opts.idempotencyKey, { changeId, reason: reason ?? null }, () =>
+        rerunChangeCi(svc, caller, changeId, reason),
+      );
+    },
+
+    async closeChange(mc, changeId, reason, opts) {
+      const caller = await scoped(mc, { changeId });
+      return idem(
+        caller,
+        "close_change",
+        opts.idempotencyKey,
+        { changeId, reason: reason ?? null },
+        () => closeChange(svc, caller, changeId, reason),
       );
     },
 

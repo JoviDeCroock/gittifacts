@@ -620,8 +620,11 @@ export function searchTools(query: string, tools: readonly ToolSummary[]): ToolS
     const desc = words(t.description);
     let score = name === query.trim().toLowerCase() ? 100 : 0;
     for (const w of terms) {
-      if (name.split("_").includes(w)) score += 12;
-      else if (name.includes(w)) score += 8;
+      const segments = name.split("_");
+      if (segments.includes(w)) score += 12;
+      else if (segments.some((g) => g.startsWith(w))) score += 8;
+      // Inside a word ("run" in "rerun_ci") is a weaker hint than a word or its start.
+      else if (name.includes(w)) score += 4;
       if (desc.includes(w)) score += 3;
       else if (desc.some((d) => d.startsWith(w) || (w.length > 3 && w.startsWith(d.slice(0, 4)))))
         score += 1;

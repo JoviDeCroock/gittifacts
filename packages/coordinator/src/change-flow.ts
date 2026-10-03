@@ -468,6 +468,24 @@ export async function runChangeWorkflow(
       }
     }
 
+    // ------------------------------------------------------------ bootstrap: released, never routed
+    // Right after sealing, before the screenshots: `evidence_ready` on a bootstrap Change waits
+    // for this final status (journey 10: "reached" while the status still said running).
+    if (ctx.bootstrap) {
+      // No judge (no diff), no note (the main repo is only written by the merge queue), no lane.
+      const evidenceId = sealed.evidenceId;
+      released = await step.do("bootstrap-done", RETRY.quick, async () => {
+        const green = ciStatus === "passed";
+        if (green) await store.updateChange(changeId, { status: "released", mergedSha: headSha });
+        await log(green ? "change.bootstrap-released" : "change.bootstrap-failed", {
+          headSha,
+          ciStatus,
+          evidenceId,
+        });
+        return green;
+      });
+    }
+
     // ------------------------------------------------------------ 5b. screenshots of the preview
     const resealWith = async (item: EvidenceItem): Promise<SealedEvidence> => {
       const current = await store.getEvidence(changeId, headSha);
@@ -511,21 +529,8 @@ export async function runChangeWorkflow(
       }
     }
 
-    // ------------------------------------------------------------ bootstrap: released, never routed
-    if (ctx.bootstrap) {
-      // No judge (no diff), no note (the main repo is only written by the merge queue), no lane.
-      released = await step.do("bootstrap-done", RETRY.quick, async () => {
-        const green = ciStatus === "passed";
-        if (green) await store.updateChange(changeId, { status: "released", mergedSha: headSha });
-        await log(green ? "change.bootstrap-released" : "change.bootstrap-failed", {
-          headSha,
-          ciStatus,
-          evidenceId: sealed.evidenceId,
-        });
-        return green;
-      });
-      return { stop: true };
-    }
+    // ------------------------------------------------------------ bootstrap: never routed
+    if (ctx.bootstrap) return { stop: true };
 
     // ------------------------------------------------------------ pure revert? (platform-verified)
     let pureRevertVerified = false;

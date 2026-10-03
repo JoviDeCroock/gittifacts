@@ -24,6 +24,7 @@ export const unavailableCoordinator: CoordinatorApi = {
   ensureProjectFlags: async () => down(),
   onIssue: async () => down(),
   abandon: async () => down(),
+  rerun: async () => down(),
   waitFor: async () => down(),
   watchChange: async () => down(),
 };

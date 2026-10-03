@@ -246,6 +246,10 @@ export const ReviewBody = z.object({
 });
 export const KillBody = z.object({ reason: z.string().min(1).max(2000) });
 export const RequestReviewBody = z.object({ message: z.string().max(2000).optional() });
+/** `rerun_ci`: why CI runs again on the same head (audited). */
+export const RerunBody = z.object({ reason: z.string().max(2000).optional() });
+/** `close_change`: why the change is closed without merging (audited). */
+export const CloseBody = z.object({ reason: z.string().max(2000).optional() });
 
 /** Optional on every create/mutate call; retries with the same key are safe (onboarding §5). */
 export const IdempotencyHeaders = z.object({

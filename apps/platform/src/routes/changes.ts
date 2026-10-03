@@ -10,12 +10,14 @@ import {
   EvidenceSchema,
   GitRemoteSchema,
   IdempotencyHeaders,
+  CloseBody,
   KillBody,
   LinkedIssueSchema,
   PipelineRunSchema,
   PlanSchema,
   PrincipalsMapSchema,
   RequestReviewBody,
+  RerunBody,
   ResolutionSchema,
   ReviewBody,
   ReviewDecisionSchema,
@@ -28,6 +30,7 @@ import {
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
 import {
+  closeChange,
   getChangeDetail,
   getChangeDiff,
   getChangeEvidence,
@@ -39,6 +42,7 @@ import {
   listChangeReviews,
   refreshPushGrant,
   requestReview,
+  rerunChangeCi,
   startChange,
   submitReview,
 } from "../services/changes.js";
@@ -251,6 +255,48 @@ const kill = createRoute({
   },
 });
 
+// Author (or its owner) or a maintainer: the coordinator checks the role; the route only needs
+// a caller who can see the change. Stored by the idempotency middleware (no secrets in either).
+const rerun = createRoute({
+  method: "post",
+  path: "/api/v1/changes/{changeId}/rerun",
+  tags: ["changes"],
+  summary: "Re-run CI, evidence, lane and tour on the current head (author or maintainer)",
+  description:
+    "No push needed: a fresh workflow instance and CI run for the same head (a flaky step). Only while the change is running, failing or awaiting review; audited as `change.rerun-requested`.",
+  security: SECURITY,
+  middleware: [requirePrincipal([], { need: "read" }), idempotent()] as const,
+  request: { headers: IdempotencyHeaders, params: ChangeIdParam, body: body(RerunBody) },
+  responses: {
+    202: json(
+      z.object({
+        change: ChangeSchema,
+        headSha: z.string(),
+        instanceId: z.string().describe("The workflow instance now running"),
+        superseded: z.string().nullable().describe("The instance the re-run replaced"),
+      }),
+      "Re-run started",
+    ),
+    ...errors(400, 401, 403, 404, 409, 502),
+  },
+});
+
+const close = createRoute({
+  method: "post",
+  path: "/api/v1/changes/{changeId}/close",
+  tags: ["changes"],
+  summary: "Close (abandon) a change that won't merge (author or maintainer)",
+  description:
+    "Stops its CI, takes it out of the merge queue and deletes its fork later. `reason` is audited (`change.abandoned`). Closing a closed change returns it unchanged; a merged change can't be closed (kill it instead).",
+  security: SECURITY,
+  middleware: [requirePrincipal([], { need: "read" }), idempotent()] as const,
+  request: { headers: IdempotencyHeaders, params: ChangeIdParam, body: body(CloseBody) },
+  responses: {
+    200: json(z.object({ change: ChangeSchema }), "Closed"),
+    ...errors(400, 401, 403, 404, 409, 502),
+  },
+});
+
 const issues = createRoute({
   method: "get",
   path: "/api/v1/changes/{changeId}/issues",
@@ -377,6 +423,24 @@ export function registerChangeRoutes(app: ApiApp): void {
   );
   app.openapi(kill, async (c) => {
     const change = await killChange(
+      c.get("services"),
+      callerOf(c),
+      c.req.valid("param").changeId,
+      c.req.valid("json").reason,
+    );
+    return c.json({ change }, 200);
+  });
+  app.openapi(rerun, async (c) => {
+    const out = await rerunChangeCi(
+      c.get("services"),
+      callerOf(c),
+      c.req.valid("param").changeId,
+      c.req.valid("json").reason,
+    );
+    return c.json(out, 202);
+  });
+  app.openapi(close, async (c) => {
+    const change = await closeChange(
       c.get("services"),
       callerOf(c),
       c.req.valid("param").changeId,

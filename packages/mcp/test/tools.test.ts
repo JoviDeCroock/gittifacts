@@ -29,6 +29,7 @@ describe("gittifacts MCP tools", () => {
   it("lists every tool with input and output schemas", async () => {
     const tools = await mcp.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
+      "close_change",
       "close_workspace",
       "create_plan",
       "create_project",
@@ -47,6 +48,7 @@ describe("gittifacts MCP tools", () => {
       "refresh_push_token",
       "reprioritize",
       "request_review",
+      "rerun_ci",
       "search_tools",
       "start_change",
       "wait_for_change",
@@ -187,6 +189,33 @@ describe("gittifacts MCP tools", () => {
     } finally {
       await anonymous.client.close();
     }
+  });
+
+  it("rerun_ci re-runs on the same head and forwards the reason and idempotency key", async () => {
+    const r = await mcp.tools.rerun_ci({ changeId: "chg_1", reason: "flaky", idempotencyKey: "k1" });
+    if (r.isError) throw new Error(JSON.stringify(r.content));
+    expect(r.structuredContent).toMatchObject({
+      headSha: "b".repeat(40),
+      change: { id: "chg_1", status: "running", lane: null },
+    });
+    expect(r.structuredContent.nextSteps[0]?.call).toMatch(/until: "evidence_ready"/);
+    expect(backend.calls).toContain("rerunCi:chg_1:flaky:k1");
+    expect(errorOf(await mcp.tools.rerun_ci({ changeId: "chg_9" }))?.error.code).toBeDefined();
+  });
+
+  it("close_change abandons with a reason; it is marked destructive", async () => {
+    const r = await mcp.tools.close_change({ changeId: "chg_1", reason: "superseded" });
+    if (r.isError) throw new Error(JSON.stringify(r.content));
+    expect(r.structuredContent.change.status).toBe("abandoned");
+    expect(backend.calls).toContain("closeChange:chg_1:superseded:-");
+    const tool = (await mcp.listTools()).find((t) => t.name === "close_change");
+    expect(tool?.annotations?.destructiveHint).toBe(true);
+  });
+
+  it("get_change_status carries previewUrl (null when the backend knows none)", async () => {
+    const r = await mcp.tools.get_change_status({ changeId: "chg_1" });
+    if (r.isError) throw new Error(JSON.stringify(r.content));
+    expect(r.structuredContent.previewUrl).toBeNull();
   });
 
   it("request_review notifies and never approves", async () => {

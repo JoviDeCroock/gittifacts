@@ -270,6 +270,16 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
       calls.push(`requestReview:${changeId}`);
       return { change: change(), notified: true };
     },
+    async rerunCi(_caller, changeId, reason, opts) {
+      calls.push(`rerunCi:${changeId}:${reason ?? "-"}:${opts.idempotencyKey ?? "-"}`);
+      if (changeId !== "chg_1") throw new NotFound(`change ${changeId}`);
+      return { change: change({ status: "running", lane: null, computedLane: null }), headSha: HEAD };
+    },
+    async closeChange(_caller, changeId, reason, opts) {
+      calls.push(`closeChange:${changeId}:${reason ?? "-"}:${opts.idempotencyKey ?? "-"}`);
+      if (changeId !== "chg_1") throw new NotFound(`change ${changeId}`);
+      return change({ status: "abandoned" });
+    },
     async listIssuesForChange() {
       return [];
     },

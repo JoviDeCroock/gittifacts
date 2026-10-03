@@ -51,6 +51,20 @@ export interface WaitResult {
   reached: boolean;
   /** reached | timeout | unreachable (the change ended without reaching the milestone). */
   reason: "reached" | "timeout" | "unreachable";
+  /**
+   * With "timeout": seconds before asking again. Set only when the long-poll was interrupted
+   * (its Durable Object reset by a deploy, say) and answered from the store instead.
+   */
+  retryAfterSec?: number;
+}
+
+/** Result of `rerun`: the change (status "running" again) and the workflow instance now running. */
+export interface RerunResult {
+  change: Change;
+  headSha: string;
+  instanceId: string;
+  /** The instance the re-run replaced, if one was still known. */
+  superseded: string | null;
 }
 
 /** What `createRepo` asks the platform for: the files of a new repo's initial commit. */
@@ -170,7 +184,19 @@ export interface CoordinatorApi {
   /** Verified Workers Issues webhook payload (already authenticated by the HTTP layer). */
   onIssue(payload: unknown): Promise<void>;
 
-  abandon(actor: Principal, changeId: string): Promise<Change>;
+  /**
+   * Close (abandon) a change that will not merge: stops its workflow and CI, leaves the merge
+   * queue, garbage-collects the fork. The author (or the agent's owner) or a maintainer; `reason`
+   * goes to the audit log. Idempotent: an abandoned change is returned as it is.
+   */
+  abandon(actor: Principal, changeId: string, reason?: string): Promise<Change>;
+
+  /**
+   * Re-run CI (and the evidence, lane and tour after it) on the change's current head, without a
+   * push: a fresh workflow instance and CI run for the same head. The author (or the agent's
+   * owner) or a maintainer; only while the change is running, failing or awaiting review.
+   */
+  rerun(actor: Principal, changeId: string, reason?: string): Promise<RerunResult>;
 
   /**
    * `wait_for_change`: long-poll (backed by the change's Durable Object) until the change reaches

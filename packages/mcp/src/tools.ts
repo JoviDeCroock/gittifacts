@@ -25,6 +25,8 @@ import {
   ChangeRefInput,
   GITHUB_REF_PATTERN,
   ChangeStatusOutput,
+  CloseChangeInput,
+  CloseChangeOutput,
   CreatePlanInput,
   CreatePlanOutput,
   CreateProjectInput,
@@ -39,6 +41,8 @@ import {
   RepoIdInput,
   RequestReviewInput,
   RequestReviewOutput,
+  RerunCiInput,
+  RerunCiOutput,
   StartChangeInput as StartChangeInputSchema,
   StartChangeOutput,
   TourOutput,
@@ -153,13 +157,44 @@ export function changeBrief(c: Change) {
 
 type NextStep = { title: string; call?: string; why?: string };
 
+/** The platform-authored bootstrap Change of a project (first CI + preview; @app/coordinator ids). */
+export function isBootstrap(c: Pick<Change, "id" | "authorId">): boolean {
+  return c.id.startsWith("bs-") && c.authorId === "system";
+}
+
 /** What an agent should do next for a change in its current state. */
 export function changeNextSteps(c: Change, runs: readonly PipelineRun[] = []): NextStep[] {
   const id = c.id;
-  const wait = (until: string): NextStep => ({
-    title: `Wait for ${until.replace("_", " ")}`,
+  const wait = (until: string, title?: string): NextStep => ({
+    title: title ?? `Wait for ${until.replace("_", " ")}`,
     call: `wait_for_change({ changeId: "${id}", until: "${until}" })`,
   });
+  const rerun: NextStep = {
+    title: "If the failure looks flaky, re-run CI on the same head (no push needed)",
+    call: `rerun_ci({ changeId: "${id}", reason: "<why>" })`,
+  };
+  if (isBootstrap(c)) {
+    // The first CI run and preview of a new project: no lane, no tour, no review.
+    if (c.status === "running") return [wait("evidence_ready", "Wait for the first green")];
+    if (c.status === "released") {
+      return [
+        {
+          title: "The first CI run is green and the preview is up: start your first Change",
+          call: `start_change({ repoId: "${c.repoId}", title: "<what>", category: "feature" })`,
+        },
+      ];
+    }
+    if (c.status === "failing") {
+      return [
+        {
+          title: "The first CI run failed: read the failing step",
+          why: "This is the project's own pipeline on its initial commit; fix it in a Change.",
+          call: `get_change_status({ changeId: "${id}" })`,
+        },
+        rerun,
+      ];
+    }
+  }
   switch (c.status) {
     case "awaiting-push":
       return [
@@ -170,6 +205,9 @@ export function changeNextSteps(c: Change, runs: readonly PipelineRun[] = []): N
         },
       ];
     case "running":
+      // Follow the milestones the current head has already passed.
+      if (c.lane !== null) return [wait("tour_ready", "Lane assigned: wait for the tour")];
+      if (c.evidenceId !== null) return [wait("lane_assigned", "Evidence sealed: wait for the lane")];
       return [wait("evidence_ready")];
     case "failing": {
       const failed = runs[0]?.steps.filter((s) => s.status === "failed").map((s) => s.name) ?? [];
@@ -181,6 +219,11 @@ export function changeNextSteps(c: Change, runs: readonly PipelineRun[] = []): N
               : "Fix CI and push again",
           why: "A new push starts a new pipeline for the new head.",
           call: `get_change_status({ changeId: "${id}" })`,
+        },
+        rerun,
+        {
+          title: "Or close it if it won't merge",
+          call: `close_change({ changeId: "${id}", reason: "<why>" })`,
         },
       ];
     }
@@ -485,6 +528,7 @@ export function buildTools(backend: McpBackend) {
                 })),
               }
             : null,
+          previewUrl: s.previewUrl ?? null,
           nextSteps: changeNextSteps(s.change, s.runs),
         };
       },
@@ -583,6 +627,65 @@ export function buildTools(backend: McpBackend) {
       },
     },
     {
+      name: "rerun_ci",
+      title: "Re-run CI",
+      description:
+        "Repeats CI, evidence, the lane and the tour on the change's current head, without a push (a flaky step). Author, its owner or a maintainer; only while the change is running, failing or awaiting review.",
+      inputSchema: RerunCiInput,
+      outputSchema: RerunCiOutput,
+      annotations: WRITE,
+      handler: async (args, ctx) => {
+        const caller = callerOf(ctx);
+        requireScope(caller, "change:create");
+        const { changeId, reason } = parse(
+          ChangeIdArgs.extend({ reason: z.string().max(2000).optional() }),
+          { changeId: args.changeId, reason: args.reason },
+        );
+        const r = await run(backend, () =>
+          backend.rerunCi(caller, changeId, reason, { idempotencyKey: args.idempotencyKey }),
+        );
+        return {
+          change: changeBrief(r.change),
+          headSha: r.headSha,
+          nextSteps: [
+            {
+              title: "Wait for the new run's evidence",
+              call: `wait_for_change({ changeId: "${r.change.id}", until: "evidence_ready" })`,
+            },
+          ],
+        };
+      },
+    },
+    {
+      name: "close_change",
+      title: "Close a change",
+      description:
+        "Close (abandon) a change that won't merge: stops its CI, takes it out of the merge queue and deletes its fork later. Author, its owner or a maintainer; the reason is audited. A merged change can't be closed.",
+      inputSchema: CloseChangeInput,
+      outputSchema: CloseChangeOutput,
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      handler: async (args, ctx) => {
+        const caller = callerOf(ctx);
+        requireScope(caller, "change:create");
+        const { changeId, reason } = parse(
+          ChangeIdArgs.extend({ reason: z.string().max(2000).optional() }),
+          { changeId: args.changeId, reason: args.reason },
+        );
+        const change = await run(backend, () =>
+          backend.closeChange(caller, changeId, reason, { idempotencyKey: args.idempotencyKey }),
+        );
+        return {
+          change: changeBrief(change),
+          nextSteps: [
+            {
+              title: "Start a new change for this work, if any",
+              call: `start_change({ repoId: "${change.repoId}", title: "<what>", category: "feature" })`,
+            },
+          ],
+        };
+      },
+    },
+    {
       name: "list_issues_for_change",
       title: "List production issues for a change",
       description:
@@ -628,7 +731,7 @@ export function buildTools(backend: McpBackend) {
       name: "wait_for_change",
       title: "Wait for a change",
       description:
-        "Long-poll until the change reaches a milestone (evidence_ready, lane_assigned, tour_ready, merged, reverted), can no longer reach it, or the timeout passes. Prefer this to polling.",
+        "Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a bootstrap Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the tour is written); tour_ready = the tour is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. On timeout call again, after retryAfterSec when it is set.",
       inputSchema: WaitForChangeInput,
       outputSchema: WaitForChangeOutput,
       annotations: READ,
@@ -655,6 +758,7 @@ export function buildTools(backend: McpBackend) {
         return {
           reached: r.reached,
           reason: r.reason,
+          ...(r.reason === "timeout" ? { retryAfterSec: r.retryAfterSec ?? 0 } : {}),
           change: changeBrief(r.change),
           nextSteps: changeNextSteps(r.change),
         };

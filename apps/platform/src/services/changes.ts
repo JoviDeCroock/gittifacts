@@ -1,5 +1,5 @@
 import type { ClassifyResult } from "@app/classifier";
-import type { GitRemoteGrant } from "@app/coordinator";
+import type { GitRemoteGrant, RerunResult } from "@app/coordinator";
 import {
   type Change,
   type ChangeDiff,
@@ -368,4 +368,39 @@ export async function requestReview(
     payload: { headSha: change.headSha, status: change.status, message: text },
   });
   return { change, notified: true };
+}
+
+/**
+ * `rerun_ci` / `POST /api/v1/changes/{changeId}/rerun`: CI, evidence, lane and tour again on the
+ * same head (a flaky step no longer costs a re-dated push). The author (or the agent's owner) or
+ * a maintainer; the coordinator checks the role and the status, and audits it.
+ */
+export async function rerunChangeCi(
+  svc: Services,
+  caller: Caller,
+  changeId: string,
+  reason: string | undefined,
+): Promise<RerunResult> {
+  const change = await assertChangeAccess(svc, caller.principal, changeId, "read");
+  // A re-run costs CI minutes like a push: unclaimed projects pay it from their quota.
+  await admitUnclaimedWork(svc, await requireRepo(svc, change.repoId), {
+    ops: 0,
+    what: "rerun_ci",
+  });
+  return svc.coordinator.rerun(caller.principal, changeId, reason);
+}
+
+/**
+ * `close_change` / `POST /api/v1/changes/{changeId}/close`: abandon a change that won't merge
+ * (stops CI, leaves the queue, deletes the fork later). The author (or the agent's owner) or a
+ * maintainer; `reason` is audited. Closing a closed change returns it unchanged.
+ */
+export async function closeChange(
+  svc: Services,
+  caller: Caller,
+  changeId: string,
+  reason: string | undefined,
+): Promise<Change> {
+  await assertChangeAccess(svc, caller.principal, changeId, "read");
+  return svc.coordinator.abandon(caller.principal, changeId, reason);
 }

@@ -283,6 +283,26 @@ export const RequestReviewInput = {
   additionalProperties: false,
 } as const;
 
+const reason = {
+  type: "string",
+  maxLength: 2000,
+  description: "Why (recorded in the change's audit log).",
+} as const;
+
+export const RerunCiInput = {
+  type: "object",
+  properties: { changeId: id, reason, idempotencyKey },
+  required: ["changeId"],
+  additionalProperties: false,
+} as const;
+
+export const CloseChangeInput = {
+  type: "object",
+  properties: { changeId: id, reason, idempotencyKey },
+  required: ["changeId"],
+  additionalProperties: false,
+} as const;
+
 export const RefreshPushTokenInput = {
   type: "object",
   properties: { changeId: id },
@@ -536,9 +556,14 @@ export const ChangeStatusOutput = {
         },
       ],
     },
+    previewUrl: {
+      type: ["string", "null"],
+      description:
+        "The live preview of the current head once it answers (null before that, or when the project has no preview).",
+    },
     nextSteps: NextSteps,
   },
-  required: ["change", "runs", "classification", "nextSteps"],
+  required: ["change", "runs", "classification", "previewUrl", "nextSteps"],
 } as const;
 
 export const EvidenceOutput = {
@@ -626,6 +651,22 @@ export const RequestReviewOutput = {
   required: ["changeId", "status", "notified", "nextSteps"],
 } as const;
 
+export const RerunCiOutput = {
+  type: "object",
+  properties: {
+    change: ChangeBrief,
+    headSha: { type: "string", description: "The head CI runs on again (unchanged)." },
+    nextSteps: NextSteps,
+  },
+  required: ["change", "headSha", "nextSteps"],
+} as const;
+
+export const CloseChangeOutput = {
+  type: "object",
+  properties: { change: ChangeBrief, nextSteps: NextSteps },
+  required: ["change", "nextSteps"],
+} as const;
+
 export const IssuesOutput = {
   type: "object",
   properties: {
@@ -658,8 +699,18 @@ export const RefreshPushTokenOutput = {
 export const WaitForChangeOutput = {
   type: "object",
   properties: {
-    reached: bool,
+    reached: {
+      type: "boolean",
+      description:
+        "True when the milestone holds for the change's current head at the moment of this answer (each milestone is defined in the tool description).",
+    },
     reason: { enum: ["reached", "timeout", "unreachable"] },
+    retryAfterSec: {
+      type: "integer",
+      minimum: 0,
+      description:
+        'With reason "timeout": call again after this many seconds (0: right away; more when the platform was interrupted, e.g. by a deploy).',
+    },
     change: ChangeBrief,
     nextSteps: NextSteps,
   },

@@ -20,6 +20,8 @@ export const TOOL_NAMES = [
   "get_evidence",
   "get_tour",
   "request_review",
+  "rerun_ci",
+  "close_change",
   "list_issues_for_change",
   // merge queue
   "enqueue",

@@ -45,8 +45,21 @@ import {
   ZERO_SHA,
 } from "./ids.js";
 import { framesOf, normalizeIssue } from "./issues.js";
-import { FINAL_STATUSES, KILLABLE_STATUSES, PUSHABLE_STATUSES } from "./lifecycle.js";
-import { changeVersion, clampWait, withChangeNotifications } from "./milestones.js";
+import {
+  FINAL_STATUSES,
+  KILLABLE_STATUSES,
+  PUSHABLE_STATUSES,
+  RERUNNABLE_STATUSES,
+} from "./lifecycle.js";
+import {
+  changeVersion,
+  clampWait,
+  milestoneState,
+  WAIT_GRACE_MS,
+  WAIT_RETRY_AFTER_SEC,
+  withChangeNotifications,
+  withDeadline,
+} from "./milestones.js";
 import { errorMessage, parsePolicyExport, resolvePolicy } from "./policy.js";
 import { type Ports, type RepoNeed, SYSTEM_PRINCIPAL_ID } from "./ports.js";
 import { ensureProjectFlagApp } from "./project-flags.js";
@@ -276,10 +289,29 @@ export function createCoordinator(
       call: status(id),
     });
 
-  function canActOnChange(actor: Principal, change: Change, author: Principal | null): boolean {
-    if (actor.id === change.authorId) return true;
-    if (author?.kind === "agent" && author.ownerId === actor.id) return true;
-    return actor.kind === "human" && actor.scopes.includes("change:review");
+  /**
+   * Close or re-run a change: its author (or the agent's owning human) with `contribute`, or a
+   * human maintainer (`approve`). A bootstrap Change (authored by the platform) counts as every
+   * contributor's own.
+   */
+  async function assertAuthorOrMaintainer(
+    actor: Principal,
+    change: Change,
+    what: "close" | "rerun",
+  ): Promise<void> {
+    const author = await store.getPrincipal(change.authorId);
+    const own =
+      actor.id === change.authorId ||
+      (author !== null && author.ownerId !== null && author.ownerId === actor.id) ||
+      isBootstrapChange(change);
+    await assertAccess(actor, change.repoId, own ? "contribute" : "approve", noChange(change.id));
+    if (!own && !(actor.kind === "human" && actor.scopes.includes("change:review"))) {
+      fail(
+        "forbidden",
+        `only the change's author, its owner or a maintainer can ${what === "close" ? "close" : "re-run CI for"} it`,
+        { explanation: "Ask the change's author, or a maintainer of the repo.", call: status(change.id) },
+      );
+    }
   }
 
   async function grantFor(change: Change): Promise<GitRemoteGrant> {
@@ -1056,18 +1088,10 @@ export function createCoordinator(
       }
     },
 
-    async abandon(actor, changeId) {
+    async abandon(actor, changeId, reason) {
       const change = await requireChange(changeId);
       if (change.status === "abandoned") return change;
-      const author = await store.getPrincipal(change.authorId);
-      const own = actor.id === change.authorId || author?.ownerId === actor.id;
-      await assertAccess(actor, change.repoId, own ? "contribute" : "review", noChange(changeId));
-      if (!canActOnChange(actor, change, author)) {
-        fail("forbidden", "only the author, its owner or a reviewer can abandon a change", {
-          explanation: "Ask the change's author.",
-          call: status(changeId),
-        });
-      }
+      await assertAuthorOrMaintainer(actor, change, "close");
       if (FINAL_STATUSES.includes(change.status)) {
         fail("invalid-state", `change is ${change.status}`, {
           explanation:
@@ -1096,20 +1120,86 @@ export function createCoordinator(
         principalId: actor.id,
         action: "change.abandoned",
         subject: changeSubject(changeId),
-        payload: { previousStatus: change.status, headSha: change.headSha },
+        payload: {
+          previousStatus: change.status,
+          headSha: change.headSha,
+          ...(reason?.trim() ? { reason: reason.trim().slice(0, 2000) } : {}),
+        },
       });
       return updated;
+    },
+
+    async rerun(actor, changeId, reason) {
+      const change = await requireChange(changeId);
+      await assertAuthorOrMaintainer(actor, change, "rerun");
+      const head = change.headSha;
+      if (head === null) {
+        fail("invalid-state", "nothing has been pushed to this change yet", {
+          explanation: "CI runs on a pushed head. Push your commits to the change's fork first.",
+          call: `refresh_push_token({ changeId: "${changeId}" })`,
+        });
+      }
+      if (!RERUNNABLE_STATUSES.includes(change.status)) {
+        fail("invalid-state", `change is ${change.status}; CI can't be re-run now`, {
+          explanation:
+            change.status === "approved" || change.status === "queued"
+              ? "It is approved: the merge queue runs CI again on the merged result. To change it, push a new head."
+              : "Only a running, failing or awaiting-review change can re-run CI.",
+          call: status(changeId),
+        });
+      }
+      const why = reason?.trim() ? reason.trim().slice(0, 2000) : null;
+      const out = await upstream("re-run the change's CI", () =>
+        bindings
+          .changeCoordinator(changeId)
+          .regrade({ changeId, reason: `re-run by ${actor.id}${why === null ? "" : `: ${why}`}` }),
+      );
+      if (out.action !== "started") {
+        fail("invalid-state", `the re-run did not start (${out.action === "ignored" ? out.reason : out.action})`, {
+          explanation: "The change moved on while asking; read its status and try again.",
+          call: status(changeId),
+        });
+      }
+      await audit.append({
+        principalId: actor.id,
+        action: "change.rerun-requested",
+        subject: changeSubject(changeId),
+        payload: {
+          headSha: out.headSha,
+          previousStatus: change.status,
+          instanceId: out.instanceId,
+          superseded: out.superseded,
+          ...(why === null ? {} : { reason: why }),
+        },
+      });
+      return {
+        change: await requireChange(changeId),
+        headSha: out.headSha,
+        instanceId: out.instanceId,
+        superseded: out.superseded,
+      };
     },
 
     async waitFor(actor, changeId, until, timeoutMs) {
       const milestone = parse(WaitUntil, until, "wait");
       const watched = await requireChange(changeId);
       await assertAccess(actor, watched.repoId, "read", noChange(changeId));
-      const r = await bindings
-        .changeCoordinator(changeId)
-        .waitFor({ changeId, until: milestone, timeoutMs: clampWait(timeoutMs) });
-      const change = r.change ?? (await requireChange(changeId));
-      return { change, reached: r.reached, reason: r.reason };
+      const budget = clampWait(timeoutMs);
+      // The change's DO holds the long-poll. A deploy resets it mid-wait: the RPC then fails, or
+      // (seen live) never answers. Our own deadline makes every answer come on time; an
+      // interrupted wait answers from the store and says when to ask again.
+      const held = await withDeadline(
+        bindings.changeCoordinator(changeId).waitFor({ changeId, until: milestone, timeoutMs: budget }),
+        budget + WAIT_GRACE_MS,
+      );
+      if (held.kind === "answered") {
+        const change = held.value.change ?? (await requireChange(changeId));
+        return { change, reached: held.value.reached, reason: held.value.reason };
+      }
+      const change = await requireChange(changeId);
+      const state = milestoneState(change, milestone);
+      if (state !== "pending") return { change, reached: state === "reached", reason: state };
+      return { change, reached: false, reason: "timeout", retryAfterSec: WAIT_RETRY_AFTER_SEC };
     },
 
     async watchChange(actor, changeId, opts) {

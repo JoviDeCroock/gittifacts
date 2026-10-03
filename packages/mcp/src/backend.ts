@@ -151,7 +151,13 @@ export interface McpBackend extends WorkspaceToolsBackend, ImportToolsBackend, Q
   getChangeStatus(
     caller: McpCaller,
     changeId: string,
-  ): Promise<{ change: Change; runs: PipelineRun[]; classification: ClassificationSummary | null }>;
+  ): Promise<{
+    change: Change;
+    runs: PipelineRun[];
+    classification: ClassificationSummary | null;
+    /** The current head's preview once it answered (from its evidence); absent = unknown. */
+    previewUrl?: string | null;
+  }>;
   getEvidence(
     caller: McpCaller,
     changeId: string,
@@ -173,6 +179,20 @@ export interface McpBackend extends WorkspaceToolsBackend, ImportToolsBackend, Q
     message: string | undefined,
     opts: MutationOptions,
   ): Promise<{ change: Change; notified: boolean }>;
+  /** CI, evidence, lane and tour again on the same head (author, its owner or a maintainer). */
+  rerunCi(
+    caller: McpCaller,
+    changeId: string,
+    reason: string | undefined,
+    opts: MutationOptions,
+  ): Promise<{ change: Change; headSha: string }>;
+  /** Close (abandon) a change that won't merge (author, its owner or a maintainer). */
+  closeChange(
+    caller: McpCaller,
+    changeId: string,
+    reason: string | undefined,
+    opts: MutationOptions,
+  ): Promise<Change>;
   listIssuesForChange(caller: McpCaller, changeId: string): Promise<LinkedIssue[]>;
   refreshPushToken(caller: McpCaller, changeId: string, opts: MutationOptions): Promise<GitRemote>;
   waitForChange(
@@ -180,7 +200,13 @@ export interface McpBackend extends WorkspaceToolsBackend, ImportToolsBackend, Q
     changeId: string,
     until: WaitUntil,
     timeoutMs: number,
-  ): Promise<{ change: Change; reached: boolean; reason: "reached" | "timeout" | "unreachable" }>;
+  ): Promise<{
+    change: Change;
+    reached: boolean;
+    reason: "reached" | "timeout" | "unreachable";
+    /** With "timeout": seconds before calling again (the platform was interrupted when > 0). */
+    retryAfterSec?: number;
+  }>;
   /** The platform's error envelope for anything a backend call threw. */
   errorEnvelope(err: unknown): ApiError;
 }
