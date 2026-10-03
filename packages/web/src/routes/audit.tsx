@@ -47,7 +47,17 @@ function Subject({ subject }: { subject: string }) {
   );
 }
 
-function EventRow({ e, who, linksToPrev }: { e: AuditEvent; who: PrincipalRef | undefined; linksToPrev: boolean | null }) {
+/** The server's one-liner when it says more than the label (a reason, a sha, a count). */
+export function auditDetail(e: { action: string; summary?: string }): string | null {
+  const summary = e.summary?.trim();
+  if (!summary) return null;
+  const label = actionLabel(e.action).toLowerCase();
+  const plain = summary.toLowerCase();
+  return plain === label || plain === e.action.replace(/[._-]+/g, " ").toLowerCase() ? null : summary;
+}
+
+function EventRow({ e, who, linksToPrev }: { e: AuditEvent & { summary?: string }; who: PrincipalRef | undefined; linksToPrev: boolean | null }) {
+  const detail = auditDetail(e);
   return (
     <li class="audit__row">
       <span class="audit__seq tnum">#{num.format(e.seq)}</span>
@@ -68,6 +78,7 @@ function EventRow({ e, who, linksToPrev }: { e: AuditEvent; who: PrincipalRef | 
           {actionLabel(e.action)}
         </span>
         <Subject subject={e.subject} />
+        {detail ? <span class="audit__detail">{detail}</span> : null}
       </span>
       <details class="audit__hash">
         <summary>

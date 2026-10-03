@@ -37,6 +37,12 @@ const LABEL: Record<string, string> = {
   "merge-queue.evidence-resigned": "Merge evidence re-signed",
   "merge-queue.result-reused": "Earlier test result reused",
   "merge-queue.alarm-error": "Merge queue step failed, retrying",
+  "merge-queue.command-dropped": "Merge queue gave up on a step",
+  "merge-queue.build-errored": "Batch tree could not be built",
+  "merge-queue.batch-timed-out": "Batch stuck past its time limit",
+  "merge-queue.batch-gave-up": "Batch gave up after retries",
+  "merge-queue.resolution": "Conflict resolved by the resolver agent",
+  "merge-queue.approval-requested": "Fresh approval requested",
   "deploy.train-deployed": "Deploy train deployed",
   "deploy.train-released": "Deploy train released",
   "deploy.train-rolled-back": "Deploy train rolled back",
@@ -99,5 +105,5 @@ export function actionLabel(action: string): string {
 
 /** Actions a reader should notice: something failed, was undone or was stopped. */
 export function isBadAction(action: string): boolean {
-  return /failed|rolled-back|killed|regression|alarm-error|refused|undelivered/.test(action);
+  return /failed|rolled-back|killed|regression|alarm-error|refused|undelivered|dropped|errored|timed-out|gave-up/.test(action);
 }

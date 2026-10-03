@@ -185,7 +185,8 @@ export interface AuditQuery {
 }
 
 export interface AuditPage {
-  events: AuditEvent[];
+  /** `summary`: the server's one-liner from the payload (why a step failed, what it changed). */
+  events: (AuditEvent & { summary?: string })[];
   nextCursor: string | null;
   chain: { verified: boolean; brokenAt?: number };
   /** GAP: names and kinds for the principals referenced by `events`. */

@@ -9,6 +9,7 @@ import { isMockMode } from "../api/mode.js";
 import { fetchQueueOverview, QUEUE_POLL_MS, type QueueOverviewView } from "../api/queue.js";
 import { Icon } from "../components/Icon.js";
 import { QueueEntries } from "../components/QueueEntries.js";
+import { QueueStalls } from "../components/QueueStalls.js";
 import { DeployTrains, QueueLanes } from "../components/QueueLanes.js";
 import { Page } from "../components/Shell.js";
 import { ErrorState, Hash, Loading } from "../components/ui.js";
@@ -326,6 +327,7 @@ export function QueueView({ repoId }: { repoId: string }) {
       <div class="q">
         {q.halted ? <HaltedBanner halted={q.halted} now={now} /> : null}
         {q.frozen ? <FreezeBanner q={q} now={now} /> : null}
+        <QueueStalls q={q} now={now} />
         <Stats q={q} />
         <QueueLanes q={q} />
         <QueueEntries q={q} now={now} />

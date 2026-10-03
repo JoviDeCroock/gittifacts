@@ -38,6 +38,7 @@ const e = (
   plangroup: null,
   ejectReason: null,
   mergedSha: null,
+  stall: null,
 });
 
 describe("etaLabel", () => {

@@ -11,10 +11,13 @@ import type {
   Hold,
   Priority,
   QueueEntryView,
+  QueueStall,
   QueueTrack,
+  StallState,
   TrainState,
 } from "../api/queue.js";
 import type { IconId } from "../components/Icon.js";
+import { formatWhenPrecise } from "./time.js";
 import type { StatusMeta, Tone } from "./vocab.js";
 
 export const ENTRY_STATE: Record<EntryState, StatusMeta> = {
@@ -206,4 +209,46 @@ export function entryIndex(
     const entry = map.get(id) ?? null;
     return { title: entry?.title ?? id, entry };
   };
+}
+
+// ---------------------------------------------------------------- stalls
+
+export const STALL_STATE: Record<StallState, StatusMeta> = {
+  retrying: { label: "Retrying", tone: "warn", icon: "redo" },
+  stalled: { label: "Stalled", tone: "danger", icon: "pause" },
+  "needs-human": { label: "Needs a person", tone: "danger", icon: "user" },
+};
+
+/** "in 40 s", "in 8 min", "now" for a moment ahead of `now`. */
+export function inLabel(at: number, now: number): string {
+  const s = Math.round((at - now) / 1000);
+  if (s <= 0) return "now";
+  if (s < 60) return `in ${s} s`;
+  const m = Math.round(s / 60);
+  return m < 60 ? `in ${m} min` : `in ${durationShort(at - now)}`;
+}
+
+/** What happens next for a stall, in words ("Retries automatically at 09:31:20 (in 40 s)"). */
+export function stallNextLabel(next: QueueStall["next"], now: number): string {
+  switch (next.kind) {
+    case "retry":
+      return `Retries automatically at ${formatWhenPrecise(new Date(next.at).toISOString(), now)} (${inLabel(next.at, now)})`;
+    case "rebuild":
+      return next.at === null || next.at <= now
+        ? "Rebuilding the batch now"
+        : `Rebuilt automatically at ${formatWhenPrecise(new Date(next.at).toISOString(), now)} (${inLabel(next.at, now)}), and a person is notified`;
+    case "human":
+      return `Needs a person: ${next.message}`;
+  }
+}
+
+/** The banner's tone: anything stopped or waiting on a person is danger; retries are warn. */
+export function stallTone(stalls: QueueStall[]): Tone {
+  return stalls.some((x) => x.state !== "retrying") ? "danger" : "warn";
+}
+
+/** "3 of 6 attempts failed", "1 attempt failed" (retries of the step, or of the batch). */
+export function attemptsLabel(x: QueueStall): string {
+  if (x.attempts <= 0) return "No failed attempt recorded";
+  return `${x.attempts} of ${x.maxAttempts} attempt${x.maxAttempts === 1 ? "" : "s"} failed`;
 }

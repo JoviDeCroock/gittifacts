@@ -448,6 +448,7 @@ a.q-stat__sub {
 .q-entry__reason {
   max-inline-size: var(--measure);
   color: var(--text-2);
+  overflow-wrap: anywhere;
 }
 .q-entry__rel {
   font-size: var(--text-small);
@@ -643,4 +644,18 @@ a.q-stat__sub {
   font-size: var(--text-small);
   font-weight: var(--weight-medium);
   color: var(--text-2);
+}
+
+/* ---------------------------------------------------------------- stalls */
+.q-stall__state {
+  font-weight: var(--weight-bold);
+}
+.q-stall__error {
+  overflow-wrap: anywhere;
+}
+.q-stall__error code {
+  font-size: var(--text-small);
+}
+.q-freeze__facts > .q-stall__next {
+  grid-column: 1 / -1;
 }

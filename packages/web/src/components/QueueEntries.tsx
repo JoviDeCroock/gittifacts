@@ -14,6 +14,7 @@ import {
   PRIORITY,
   percentLabel,
   splitEntries,
+  STALL_STATE,
   trackLabel,
 } from "../lib/queue.js";
 import { shortAge } from "../lib/time.js";
@@ -125,7 +126,7 @@ function Facts({ e, trackName }: { e: QueueEntryView; trackName: string | null }
       {done ? null : (
         <div>
           <dt>ETA</dt>
-          <dd class={`tnum ${e.etaSeconds === null ? "q-dim" : ""}`}>{etaLabel(e.etaSeconds)}</dd>
+          <dd class={`tnum ${e.etaSeconds === null ? "q-dim" : ""}`}>{etaFor(e)}</dd>
         </div>
       )}
       {done ? null : (
@@ -138,6 +139,13 @@ function Facts({ e, trackName }: { e: QueueEntryView; trackName: string | null }
       )}
     </dl>
   );
+}
+
+/** No number while the queue cannot honestly estimate one: a stall, or a person's review. */
+function etaFor(e: QueueEntryView): string {
+  if (e.stall !== null) return `None while ${STALL_STATE[e.stall].label.toLowerCase()}`;
+  if (e.etaSeconds === null && e.hold === "approval") return "Waits on a person";
+  return etaLabel(e.etaSeconds);
 }
 
 function EntryRow({
@@ -172,6 +180,7 @@ function EntryRow({
         <div class="q-entry__tags">
           <LaneTag lane={e.lane} size="sm" label="name" />
           <StatusChip meta={ENTRY_STATE[e.state]} />
+          {e.stall !== null ? <StatusChip meta={STALL_STATE[e.stall]} /> : null}
           {e.frozen ? (
             <span class="chip chip--warn">
               <Icon name="lock" size={14} />

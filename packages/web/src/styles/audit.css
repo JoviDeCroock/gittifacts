@@ -95,6 +95,13 @@ a.audit__subject {
 .audit__kind {
   color: var(--text-3);
 }
+.audit__detail {
+  flex-basis: 100%;
+  color: var(--text-2);
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+  max-inline-size: var(--measure);
+}
 .audit__hash {
   grid-area: hash;
   justify-self: end;

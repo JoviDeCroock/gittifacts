@@ -49,6 +49,23 @@ export interface EjectReason {
   upstream: string[];
 }
 
+export type StallState = "retrying" | "stalled" | "needs-human";
+
+/** Something is not moving: why (class + redacted message) and what happens next. */
+export interface QueueStall {
+  state: StallState;
+  what: string;
+  command: string;
+  batchId: string | null;
+  changeIds: string[];
+  attempts: number;
+  maxAttempts: number;
+  error: { errorClass: string; message: string } | null;
+  /** epoch ms */
+  since: number | null;
+  next: { kind: "retry"; at: number } | { kind: "rebuild"; at: number | null } | { kind: "human"; message: string };
+}
+
 export interface QueueEntryView {
   changeId: string;
   title: string | null;
@@ -71,6 +88,8 @@ export interface QueueEntryView {
   plangroup: string | null;
   ejectReason: EjectReason | null;
   mergedSha: string | null;
+  /** Set while a step holding this change keeps failing or stopped (then there is no ETA). */
+  stall: StallState | null;
 }
 
 export type FreezeKind = "post-merge-check" | "revert-in-progress" | "manual";
@@ -143,6 +162,7 @@ export interface QueueOverviewView {
   quarantined: string[];
   flakeRates: Record<string, number>;
   trains: TrainView[];
+  stalls: QueueStall[];
   updatedAt: number;
 }
 
@@ -209,6 +229,25 @@ const entry = z.object({
   plangroup: z.string().nullable(),
   ejectReason: ejectReason.nullable(),
   mergedSha: z.string().nullable(),
+  // Older servers do not send it: nothing is known to be stalled.
+  stall: z.enum(["retrying", "stalled", "needs-human"]).nullable().default(null),
+});
+
+const stall = z.object({
+  state: z.enum(["retrying", "stalled", "needs-human"]),
+  what: z.string(),
+  command: z.string(),
+  batchId: z.string().nullable(),
+  changeIds: ids,
+  attempts: z.number(),
+  maxAttempts: z.number(),
+  error: z.object({ errorClass: z.string(), message: z.string() }).nullable(),
+  since: z.number().nullable(),
+  next: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("retry"), at: z.number() }),
+    z.object({ kind: z.literal("rebuild"), at: z.number().nullable() }),
+    z.object({ kind: z.literal("human"), message: z.string() }),
+  ]),
 });
 
 const overview: z.ZodType<QueueOverviewView> = z.object({
@@ -275,6 +314,7 @@ const overview: z.ZodType<QueueOverviewView> = z.object({
       killed: ids,
     }),
   ),
+  stalls: z.array(stall).default([]),
   updatedAt: z.number(),
 });
 
@@ -294,11 +334,11 @@ export function parseQueueOverview(value: unknown): QueueOverviewView {
 
 // ---------------------------------------------------------------- fetch
 
-/** Mock-only switches for screenshots and demos: `?frozen`, `?halted`. */
-function mockVariant(): { frozen: boolean; halted: boolean } {
-  if (typeof window === "undefined") return { frozen: false, halted: false };
+/** Mock-only switches for screenshots and demos: `?frozen`, `?halted`, `?stalled`. */
+function mockVariant(): { frozen: boolean; halted: boolean; stalled: boolean } {
+  if (typeof window === "undefined") return { frozen: false, halted: false, stalled: false };
   const q = new URLSearchParams(window.location.search);
-  return { frozen: q.has("frozen"), halted: q.has("halted") };
+  return { frozen: q.has("frozen"), halted: q.has("halted"), stalled: q.has("stalled") };
 }
 
 export async function fetchQueueOverview(repoId: string): Promise<QueueOverviewView> {

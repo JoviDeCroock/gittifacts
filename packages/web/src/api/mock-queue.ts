@@ -1,12 +1,13 @@
 /**
  * Synthetic merge queue for mock mode. Nothing here is real. `repo_billing` carries a busy queue
  * (express revert track, speculative batches, bisection, a landing lane, an ejected change and two
- * deploy trains); `?frozen` adds a revert-in-progress freeze and `?halted` an invariant stop.
+ * deploy trains); `?frozen` adds a revert-in-progress freeze, `?halted` an invariant stop and
+ * `?stalled` a batch whose tree build was given up plus a retrying affected-set analysis.
  * Other known repos have an empty queue; unknown ids answer 404 like the real API.
  */
 import { ApiError } from "./client.js";
 import { b64u, NOW, sha } from "./fixture-kit.js";
-import type { QueueEntryView, QueueOverviewView } from "./queue.js";
+import type { QueueEntryView, QueueOverviewView, QueueStall } from "./queue.js";
 
 const MIN = 60_000;
 const KNOWN = new Set(["repo_billing", "repo_edge", "repo_dashboard", "repo_ios", "repo_widget"]);
@@ -31,6 +32,7 @@ function entry(e: EntryInput & { enqueuedMin: number }): QueueEntryView {
     plangroup: null,
     ejectReason: null,
     mergedSha: null,
+    stall: null,
     ...rest,
     enqueuedAt: NOW - enqueuedMin * MIN,
   };
@@ -239,9 +241,60 @@ function billingWaitingAndDone(): QueueEntryView[] {
 const FREEZE_MESSAGE =
   "Reverting “Batch ledger writes per tenant”: the error rate on billing-ledger breached its budget during train trn_30. Only reverts and incident fixes land until the revert is on main.";
 
-function billing(variant: { frozen: boolean; halted: boolean }): QueueOverviewView {
+/** `?stalled`: the journey 06 stall (a build given up, nothing moving) and a step being retried. */
+function billingStalls(): QueueStall[] {
+  return [
+    {
+      state: "stalled",
+      what: "Building the batch tree",
+      command: "BuildBatchTree",
+      batchId: "b_42",
+      changeIds: ["chg_cm6t3"],
+      attempts: 6,
+      maxAttempts: 6,
+      error: {
+        errorClass: "Error",
+        message: "queue build job failed (WorkflowInternalError): Network connection lost",
+      },
+      since: NOW - 7 * MIN,
+      next: { kind: "rebuild", at: NOW + 8 * MIN },
+    },
+    {
+      state: "retrying",
+      what: "Computing the affected set",
+      command: "ComputeAffectedSet",
+      batchId: null,
+      changeIds: ["chg_wr5p8"],
+      attempts: 2,
+      maxAttempts: 6,
+      error: { errorClass: "TypeError", message: "fetch failed: https://[redacted]@artifacts.example/billing.git" },
+      since: null,
+      next: { kind: "retry", at: NOW + 40_000 },
+    },
+  ];
+}
+
+function withStalls(entries: QueueEntryView[], stalls: QueueStall[]): QueueEntryView[] {
+  return entries.map((e) => {
+    const x = stalls.find((st) => st.changeIds.includes(e.changeId));
+    if (x === undefined || e.state === "merged" || e.state === "ejected") return e;
+    const why = x.error ? `: ${x.error.errorClass}: ${x.error.message}` : "";
+    return {
+      ...e,
+      stall: x.state,
+      etaSeconds: null,
+      reason:
+        x.state === "stalled"
+          ? `stalled: ${x.what.toLowerCase()} stopped${why}; rebuilt automatically after the build timeout`
+          : `retrying: ${x.what.toLowerCase()} failed ${x.attempts} times${why}`,
+    };
+  });
+}
+
+function billing(variant: { frozen: boolean; halted: boolean; stalled: boolean }): QueueOverviewView {
   const freezes = variant.frozen;
-  const entries = [...billingEntries(), ...billingWaitingAndDone()].map((e) => {
+  const stalls = variant.stalled ? billingStalls() : [];
+  const entries = withStalls([...billingEntries(), ...billingWaitingAndDone()], stalls).map((e) => {
     if (
       !freezes ||
       e.priority === "revert" ||
@@ -354,6 +407,7 @@ function billing(variant: { frozen: boolean; halted: boolean }): QueueOverviewVi
         killed: ["chg_lg8b0"],
       },
     ],
+    stalls,
     updatedAt: Date.now(),
   };
 }
@@ -376,13 +430,14 @@ function empty(repoId: string): QueueOverviewView {
     quarantined: [],
     flakeRates: {},
     trains: [],
+    stalls: [],
     updatedAt: Date.now(),
   };
 }
 
 export async function mockQueueOverview(
   repoId: string,
-  variant: { frozen: boolean; halted: boolean },
+  variant: { frozen: boolean; halted: boolean; stalled: boolean },
 ): Promise<unknown> {
   await new Promise((r) => setTimeout(r, 220));
   if (!KNOWN.has(repoId)) {
