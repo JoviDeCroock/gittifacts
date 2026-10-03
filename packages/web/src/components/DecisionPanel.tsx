@@ -75,8 +75,19 @@ interface DecisionPanelProps {
   shadow: ShadowStats | null;
   lane0Enabled: boolean;
   layout: "bar" | "rail";
+  /** The merge queue's resolved head when the resolution needs a fresh approval: what lands. */
+  resolvedHead?: string | null;
   onDecided: (change: Change) => void;
 }
+
+/** Approving a resolution: the person approves what the resolver wrote, not only the agent's diff. */
+const RESOLUTION_APPROVE = {
+  title: "Approve the resolution",
+  confirm: "Approve resolution",
+  done: "Approved. The resolved change goes back into the merge queue.",
+  consequence:
+    "What lands is the resolver agent's version shown above, not the head the agent pushed. Approving lets the merge queue land it; it then rolls out behind its flag like any change.",
+};
 
 /** Why there is nothing to decide, for every status but awaiting-review. */
 const STATUS_NOTE: Partial<Record<Change["status"], string>> = {
@@ -89,7 +100,7 @@ const STATUS_NOTE: Partial<Record<Change["status"], string>> = {
   abandoned: "Closed by its author. Nothing to decide.",
 };
 
-export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, layout, onDecided }: DecisionPanelProps) {
+export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, layout, resolvedHead = null, onDecided }: DecisionPanelProps) {
   const decision = useSignal<ReviewDecisionKind | null>(null);
   const comment = useSignal("");
   const humanLane = useSignal<Lane | null>(null);
@@ -118,7 +129,7 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
           <Icon name={done.value === "reject" ? "ban" : "comment"} size={20} />
         )}
         <div>
-          <p class="decision__done">{COPY[done.value].done}</p>
+          <p class="decision__done">{done.value === "approve" && resolvedHead ? RESOLUTION_APPROVE.done : COPY[done.value].done}</p>
           <p class="decision__fine">Signed as {me?.name ?? "you"} and recorded in the audit log.</p>
         </div>
       </div>
@@ -180,19 +191,21 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
   }
 
   const d = decision.value;
+  const resolving = resolvedHead !== null;
+  const copy = d === "approve" && resolving ? { ...COPY.approve, ...RESOLUTION_APPROVE } : d ? COPY[d] : null;
   return (
     <div class={`decision decision--${layout} ${d ? "is-open" : ""}`}>
-      {d ? (
+      {d && copy ? (
         <form class="decision__form" onSubmit={submit} ref={formRef} aria-labelledby="decision-title">
           <div class="decision__formhead">
             <h2 id="decision-title" class="decision__title">
-              {COPY[d].title}
+              {copy.title}
             </h2>
             <button type="button" class="icon-btn" aria-label="Cancel" onClick={() => ((decision.value = null), (error.value = null), (intentKey.current = null))}>
               <Icon name="x" size={20} />
             </button>
           </div>
-          <p class="decision__consequence">{COPY[d].consequence}</p>
+          <p class="decision__consequence">{copy.consequence}</p>
           <label class="field">
             <span class="field__label">
               Comment for {authorName}
@@ -222,20 +235,27 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
             </p>
           ) : null}
           <p class="decision__fine">
-            <Icon name="signature" size={14} /> You sign as {me?.name ?? "yourself"} for head <code>{shortSha(change.headSha)}</code>.
+            <Icon name="signature" size={14} /> You sign as {me?.name ?? "yourself"} for head <code>{shortSha(change.headSha)}</code>
+            {resolving ? (
+              <>
+                {" "}
+                as resolved by the merge queue (<code>{shortSha(resolvedHead)}</code> lands)
+              </>
+            ) : null}
+            .
           </p>
           <div class="decision__confirm">
             <Button variant="secondary" onClick={() => ((decision.value = null), (error.value = null), (intentKey.current = null))} disabled={busy.value}>
               Back
             </Button>
-            <Button type="submit" variant={COPY[d].variant === "secondary" ? "primary" : COPY[d].variant} busy={busy.value} busyLabel={COPY[d].busy} wide>
-              {COPY[d].confirm}
+            <Button type="submit" variant={copy.variant === "secondary" ? "primary" : copy.variant} busy={busy.value} busyLabel={copy.busy} wide>
+              {copy.confirm}
             </Button>
           </div>
         </form>
       ) : (
         <div class="decision__choices" role="group" aria-label="Decide on this change">
-          {layout === "rail" ? <h2 class="decision__title">Your decision</h2> : null}
+          {layout === "rail" ? <h2 class="decision__title">{resolving ? "Your decision on the resolution" : "Your decision"}</h2> : null}
           <Button variant="secondary" class="decision__reject" onClick={() => (decision.value = "reject")}>
             Reject
           </Button>
@@ -243,7 +263,7 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
             Request changes
           </Button>
           <Button variant="primary" class="decision__approve" icon="check" onClick={() => (decision.value = "approve")}>
-            Approve
+            {resolving && layout === "rail" ? "Approve resolution" : "Approve"}
           </Button>
         </div>
       )}

@@ -249,6 +249,9 @@ export function reasonFamily(code: string): ReasonFamily {
       return "informational";
     case "resolution":
       return "resolution";
+    case "merge-queue":
+      // The queue's resolution reasons (novel lines, edits outside the hunks) are the resolution's.
+      return code.startsWith("merge-queue.resolution") ? "resolution" : "other";
     case "lane0":
       return "lane0";
     case "coverage":

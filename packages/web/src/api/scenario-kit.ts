@@ -5,6 +5,7 @@ import type { Change, ClaimedCategory, Evidence, Lane, LaneReason, RolloutState,
 import type { EvidenceItem } from "@app/evidence";
 import { fileStats, hunkFromText } from "../lib/diff.js";
 import { NOW, PLATFORM_KEY_ID, ago, b64u, passedRun, sha } from "./fixture-kit.js";
+import type { ResolutionView } from "./resolution.js";
 import type { ChangeDiff, DiffFile, DiffFileStatus, DiffHunk, EvidenceVerification, LinkedIssue, PipelineRun, TimelineEvent } from "./types.js";
 
 export interface Scenario {
@@ -17,6 +18,8 @@ export interface Scenario {
   issues: LinkedIssue[];
   /** A rollout timeline to the millisecond (with summaries); else the audit fixtures' events. */
   timeline?: TimelineEvent[];
+  /** The merge queue's conflict resolution (what lands instead of the pushed head). */
+  resolution?: ResolutionView | null;
 }
 
 export function hunk(oldStart: number, newStart: number, body: string): DiffHunk {

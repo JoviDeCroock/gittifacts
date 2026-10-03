@@ -316,6 +316,8 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     ([id]) => withScenario(id, (s) => (s.tour ? ok({ tour: s.tour }) : fail(404, "tour_not_ready", "The reviewer agent writes the tour after the pipeline passes."))),
   ],
 
+  ["GET", /^\/api\/v1\/changes\/([^/]+)\/resolution$/, ([id]) => withScenario(id, (s) => ok({ resolution: s.resolution ?? null }))],
+
   [
     "POST",
     /^\/api\/v1\/changes\/([^/]+)\/review$/,

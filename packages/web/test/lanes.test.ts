@@ -92,6 +92,10 @@ describe("triageChart", () => {
 
   it("maps codes to families", () => {
     expect(reasonFamily("deps.install-script")).toBe("dependencies");
+    expect(reasonFamily("merge-queue.resolution-novel-lines")).toBe("resolution");
+    expect(reasonFamily("merge-queue.resolution-outside-hunks")).toBe("resolution");
+    expect(familyLabel("merge-queue.resolution-novel-lines")).toBe("Conflict resolution");
+    expect(reasonFamily("merge-queue.quarantined-test")).toBe("other");
     expect(reasonFamily("signal.error.coverage")).toBe("missing");
     expect(reasonFamily("whatever")).toBe("other");
   });

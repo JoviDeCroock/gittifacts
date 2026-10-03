@@ -35,6 +35,8 @@ describe("mock fixtures match the domain contract", () => {
     for (const s of db.scenarios) {
       if (!s.tour) continue;
       const ids = new Set(s.evidence?.items.map((i) => i.id) ?? []);
+      // A resolution stop cites the resolved head's conflict-resolution item (the page merges it in).
+      if (s.resolution?.item) ids.add(s.resolution.item.id);
       for (const stop of s.tour.stops) {
         for (const ref of stop.hunkRefs) {
           const ex = excerptForRef(s.diff, ref);

@@ -8,12 +8,14 @@ import type { EvidenceItem } from "@app/evidence";
 import { useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 import { ApiError, api } from "../api/client.js";
+import { describesResolution, fetchResolution, type ResolutionView } from "../api/resolution.js";
 import type { ChangeDiff, EvidenceResponse, PipelineRun, PrincipalRef, RepoDetail } from "../api/types.js";
 import { DecisionPanel } from "../components/DecisionPanel.js";
 import { DiffExcerpt, WholeDiff } from "../components/DiffExcerpt.js";
 import { EvidenceChip, MissingChip, RedGreenList, ShotPair } from "../components/EvidenceBits.js";
 import { Icon } from "../components/Icon.js";
 import { Prose } from "../components/Prose.js";
+import { ResolutionPanel } from "../components/ResolutionPanel.js";
 import { Page } from "../components/Shell.js";
 import { TriageChart } from "../components/TriageChart.js";
 import { ErrorState, LaneTag, Loading, StatusChip, VerdictBadge, VerdictMark, Who } from "../components/ui.js";
@@ -37,6 +39,9 @@ interface TourData {
   diff: ChangeDiff | null;
   evidence: EvidenceResponse | null;
   evidenceError: unknown;
+  /** The merge queue's resolution: what lands instead of the pushed head (null: none). */
+  resolution: ResolutionView | null;
+  resolutionError: unknown;
   author: PrincipalRef | null;
   approver: PrincipalRef | null;
 }
@@ -50,7 +55,8 @@ async function loadTour(changeId: string): Promise<TourData> {
   const detail = await api.change(changeId);
   const c = detail.change;
   let evidenceError: unknown = null;
-  const [repo, tour, diff, evidence, author, approver] = await Promise.all([
+  let resolutionError: unknown = null;
+  const [repo, tour, diff, evidence, author, approver, resolution] = await Promise.all([
     api.repo(c.repoId),
     api.tour(changeId).then((r) => r.tour, notFoundToNull),
     api.diff(changeId).then((r) => r.diff, notFoundToNull),
@@ -60,8 +66,12 @@ async function loadTour(changeId: string): Promise<TourData> {
     }),
     api.principal(c.authorId).then((r) => r.principal, () => null),
     detail.plan?.approvedBy ? api.principal(detail.plan.approvedBy).then((r) => r.principal, () => null) : Promise.resolve(null),
+    fetchResolution(changeId).catch((err: unknown) => {
+      resolutionError = err;
+      return null;
+    }),
   ]);
-  return { change: c, plan: detail.plan, runs: detail.runs, repo, tour, diff, evidence, evidenceError, author, approver };
+  return { change: c, plan: detail.plan, runs: detail.runs, repo, tour, diff, evidence, evidenceError, resolution, resolutionError, author, approver };
 }
 
 // ---------------------------------------------------------------- station strip
@@ -288,7 +298,16 @@ function StopBody({ stop, data, items, tests }: { stop: TourStop; data: TourData
           </dd>
         </dl>
       ) : null}
-      {stop.hunkRefs.length > 0 && data.diff ? <DiffExcerpt diff={data.diff} refs={stop.hunkRefs} /> : null}
+      {stop.kind === "resolution" && data.resolution ? (
+        <p class="stop__noev">
+          <Icon name="git-merge" size={15} />
+          <span>
+            <a href="#resolution-title">The resolved lines are above</a>, next to what each side had.
+          </span>
+        </p>
+      ) : stop.hunkRefs.length > 0 && data.diff ? (
+        <DiffExcerpt diff={data.diff} refs={stop.hunkRefs} />
+      ) : null}
       {refs.length > 0 ? (
         <div class="stop__evidence">
           <span class="stop__evlabel">Evidence</span>
@@ -518,10 +537,13 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
   const desktop = useMedia("(min-width: 1100px)");
   const { change, tour, repo, author } = data;
   const me = principal.value;
-  const items = data.evidence?.evidence.items ?? [];
+  const own = data.evidence?.evidence.items ?? [];
+  // The resolution stop cites the resolved head's conflict-resolution item.
+  const resolutionItem = data.resolution?.item ?? null;
+  const items = resolutionItem && !own.some((i) => i.id === resolutionItem.id) ? [...own, resolutionItem] : own;
   const { current, resumeAt, listRef, jump } = useStopTracking(tour, change.id);
   const now = minuteClock.value;
-  const stale = tour && change.headSha && tour.headSha !== change.headSha;
+  const stale = tour && change.headSha && tour.headSha !== change.headSha && !describesResolution(tour.headSha, data.resolution);
   const authorName = author?.name ?? "the author";
   const testsAt = tour ? testsStopIndex(tour) : -1;
 
@@ -534,6 +556,7 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
       shadow={repo.shadow}
       lane0Enabled={repo.repo.policy.lane0Enabled}
       layout={desktop ? "rail" : "bar"}
+      resolvedHead={data.resolution?.approvalRequested ? data.resolution.headSha : null}
       onDecided={onChange}
     />
   );
@@ -593,6 +616,8 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
           ) : null}
 
           {data.evidenceError ? <ErrorState error={data.evidenceError} what="the evidence bundle" /> : null}
+          {data.resolutionError ? <ErrorState error={data.resolutionError} what="the merge queue's conflict resolution" /> : null}
+          {data.resolution ? <ResolutionPanel r={data.resolution} awaiting={change.status === "awaiting-review"} /> : null}
 
           {tour ? (
             <>
