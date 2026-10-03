@@ -8,11 +8,14 @@
 // The platform adds its evidence steps (red/green, coverage, public API, ...) after these; they run
 // vitest at the root, where vitest.config.ts hands each test file to its package's project.
 //
-// Mirrors the GitHub deploy gate (.github/workflows/deploy-gate.yml): built assets, every
-// package's typecheck, the platform's workerd suite; plus the fast unit suites. Not here, on
-// purpose: root `biome check .` (red on main: formatting debt, not enforced anywhere yet) and the
-// ci-engine / coordinator / gitwire / merge-queue suites (container-only flakes and live tests;
-// they run locally and in the deploy gate's typecheck).
+// Built assets, every package's typecheck, the fast unit suites and the docs check. Not here yet:
+// - the platform's workerd suite: in the runner container it times out (5 s test timeouts on a
+//   slower machine) and one exec over ~5 minutes loses its container connection; the GitHub deploy
+//   gate (.github/workflows/deploy-gate.yml) still runs it before every deploy. Changed test files
+//   still run here: the evidence runner's root vitest hands them to their package's project.
+// - root `biome check .` (red on main: formatting debt, enforced nowhere yet);
+// - the ci-engine / coordinator / gitwire / merge-queue suites (container-only unhandled
+//   rejections and live tests).
 
 type RunnerSpec = {
   name: string;
@@ -56,14 +59,6 @@ export default async (ci: Ci) => {
 
   await Promise.all([
     assets.runner({ name: "typecheck", command: "pnpm -r typecheck" }),
-    // Sharded: one exec that runs longer than ~5 minutes loses its container connection
-    // ("Network connection lost") and the step errors, even while its tests are passing.
-    ...[1, 2, 3, 4].map((i) =>
-      assets.runner({
-        name: `platform-tests-${i}`,
-        command: `cd apps/platform && CI=1 pnpm exec vitest run --maxWorkers=2 --shard=${i}/4`,
-      }),
-    ),
     install.runner({
       name: "test",
       command: `pnpm ${UNIT.map((p) => `--filter ${p}`).join(" ")} run test`,
