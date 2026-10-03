@@ -2,7 +2,7 @@
  * The queue view never hides a stall (journey 06, take 1): the banner says what stopped, why
  * (error class and redacted message), what happens next and when; held Changes show no ETA.
  */
-import { h } from "preact";
+import { type ComponentChildren, h } from "preact";
 import prerender from "preact-iso/prerender";
 import { describe, expect, it } from "vitest";
 import { mockQueueOverview } from "../src/api/mock-queue.js";
@@ -11,9 +11,10 @@ import { QueueEntries } from "../src/components/QueueEntries.js";
 import { QueueStalls } from "../src/components/QueueStalls.js";
 import { attemptsLabel, inLabel, stallNextLabel, stallTone } from "../src/lib/queue.js";
 
-/** Rendered HTML without preact-iso's empty hydration script. */
-async function html(vnode: Parameters<typeof prerender>[0]): Promise<string> {
-  return (await prerender(vnode)).html.replace('<script type="isodata"></script>', "");
+/** Rendered HTML of `child` (inside a bare div), without preact-iso's empty hydration script. */
+async function html(child: ComponentChildren): Promise<string> {
+  const out = (await prerender(h("div", null, child))).html;
+  return out.replace('<script type="isodata"></script>', "").replace(/^<div>|<\/div>$/g, "");
 }
 
 const NOW = Date.UTC(2026, 9, 3, 9, 30, 0);
