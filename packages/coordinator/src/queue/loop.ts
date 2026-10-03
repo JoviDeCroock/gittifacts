@@ -26,6 +26,7 @@ import {
   type TrainState,
   trainStep,
 } from "@app/merge-queue";
+import { type CommandFailure, describeFailure, failureText } from "./failure.js";
 import type { EventRow, OutboxRow, QueueStore } from "./store.js";
 
 export interface HaltInfo {
@@ -56,14 +57,15 @@ export interface LoopHandlers {
   /**
    * A command failed `maxAttempts` times. Return the result event the protocol allows for it
    * (e.g. an errored BatchResult), or null to drop it (the core's own timeouts recover).
+   * `error` is the redacted "<class>: <message>" of the last failure.
    */
   giveUp(cmd: Command, error: string): CoreEventInput | null;
   /** New §5 events were committed (wake long-polls and SSE). */
   onEvents(rows: EventRow[]): void;
   /** The core refused a step (InvariantViolation): alert. Never throws. */
   onHalt(halt: HaltInfo): Promise<void>;
-  /** A command failed for good (audited by the caller). */
-  onDropped(row: OutboxRow, error: string): Promise<void>;
+  /** A command failed for good (audited by the caller), with why (class + redacted message). */
+  onDropped(row: OutboxRow, failure: CommandFailure): Promise<void>;
 }
 
 export interface LoopOptions {
@@ -86,10 +88,6 @@ export type DispatchResult = { seqs: number[]; commands: number };
 export function upgradeState(loaded: QueueState): QueueState {
   const config = queueConfig(loaded.config);
   return { ...initialState(loaded.main.sha, config, 0), ...loaded, config };
-}
-
-function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 export class QueueLoop {
@@ -282,18 +280,24 @@ export class QueueLoop {
       this.store.deleteCommand(row.id);
     } catch (e) {
       if (e instanceof QueueHaltedError || e instanceof InvariantViolation) return;
-      const message = errorText(e);
+      const failure = describeFailure(e);
       const attempts = row.attempts + 1;
-      if (attempts < (this.opts.maxAttempts ?? 6)) {
+      if (attempts < this.maxAttempts) {
         const delay = this.opts.backoffMs?.(attempts) ?? Math.min(300_000, 5_000 * 2 ** attempts);
-        this.store.retryCommand(row.id, this.opts.now() + delay, message);
+        this.store.retryCommand(row.id, this.opts.now() + delay, failureText(failure));
         return;
       }
-      await this.giveUp(row, message);
+      await this.giveUp(row, failure);
     }
   }
 
-  private async giveUp(row: OutboxRow, message: string): Promise<void> {
+  /** How many times a command runs before it is given up (default 6). */
+  get maxAttempts(): number {
+    return this.opts.maxAttempts ?? 6;
+  }
+
+  private async giveUp(row: OutboxRow, failure: CommandFailure): Promise<void> {
+    const message = failureText(failure);
     const result =
       row.lane === "core" ? this.handlers.giveUp(row.command as Command, message) : null;
     const trainResult =
@@ -305,7 +309,7 @@ export class QueueLoop {
       // The synthesized result no longer applies (state moved on): drop the command anyway.
     }
     this.store.deleteCommand(row.id);
-    await this.handlers.onDropped(row, message).catch(() => undefined);
+    await this.handlers.onDropped(row, failure).catch(() => undefined);
   }
 
   /** When the DO alarm should fire next (null: nothing pending). */

@@ -71,6 +71,29 @@ export const QueueEntrySchema = z.object({
   plangroup: z.string().nullable(),
   ejectReason: EjectReasonSchema.nullable(),
   mergedSha: z.string().nullable(),
+  stall: z
+    .enum(["retrying", "stalled", "needs-human"])
+    .nullable()
+    .describe(
+      "Something holding this Change up is not moving (see the overview's stalls); no ETA then",
+    ),
+});
+
+export const QueueStallSchema = z.object({
+  state: z.enum(["retrying", "stalled", "needs-human"]),
+  what: z.string(),
+  command: z.string(),
+  batchId: z.string().nullable(),
+  changeIds: z.array(z.string()),
+  attempts: z.number().int(),
+  maxAttempts: z.number().int(),
+  error: z.object({ errorClass: z.string(), message: z.string() }).nullable(),
+  since: z.number().nullable(),
+  next: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("retry"), at: z.number() }),
+    z.object({ kind: z.literal("rebuild"), at: z.number().nullable() }),
+    z.object({ kind: z.literal("human"), message: z.string() }),
+  ]),
 });
 
 export const EnqueueResultSchema = z.object({
@@ -146,5 +169,10 @@ export const QueueOverviewSchema = z.object({
       killed: z.array(z.string()),
     }),
   ),
+  stalls: z
+    .array(QueueStallSchema)
+    .describe(
+      "Steps that keep failing or stopped: why (error class, redacted message) and what happens next",
+    ),
   updatedAt: z.number(),
 });

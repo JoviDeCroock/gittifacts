@@ -82,7 +82,7 @@ export class QueueAgentApi {
   private intentOf = (changeId: string) => this.svc.store.getIntent<QueueIntent>(changeId);
 
   private view(changeId: string): QueueEntryView | null {
-    return entryView(this.state, changeId, this.svc.ctx.now(), this.intentOf);
+    return entryView(this.state, changeId, this.svc.ctx.now(), this.intentOf, this.svc.stalls());
   }
 
   async status(changeId: string): Promise<QueueEntryView | null> {
@@ -99,6 +99,7 @@ export class QueueAgentApi {
       halted: this.svc.loop.halted,
       now: this.svc.ctx.now(),
       intentOf: this.intentOf,
+      stalls: this.svc.stalls(),
     });
   }
 

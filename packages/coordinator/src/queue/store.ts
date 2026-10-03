@@ -183,6 +183,13 @@ export class QueueStore {
     return r === undefined ? null : this.toOutbox(r);
   }
 
+  /** Every command in the outbox, oldest first (the queue view reads retries and errors). */
+  outbox(limit = 500): OutboxRow[] {
+    return this.rows("SELECT * FROM mq_outbox ORDER BY id ASC LIMIT ?", limit).map((r) =>
+      this.toOutbox(r),
+    );
+  }
+
   pendingCommands(): number {
     return Number(this.rows("SELECT COUNT(*) AS n FROM mq_outbox")[0]?.n ?? 0);
   }
@@ -307,6 +314,12 @@ export class QueueStore {
   getRun<T>(runId: string): T | null {
     const r = this.rows("SELECT data FROM mq_runs WHERE run_id = ?", runId)[0];
     return r === undefined ? null : (JSON.parse(String(r.data)) as T);
+  }
+
+  /** Append to a capped list in `mq_meta` (newest last), e.g. the queue's recent problems. */
+  pushMeta<T>(k: string, value: T, keep: number): void {
+    const list = this.getMeta<T[]>(k) ?? [];
+    this.setMeta(k, [...list, value].slice(-keep));
   }
 
   getMeta<T>(k: string): T | null {

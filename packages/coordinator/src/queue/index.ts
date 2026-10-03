@@ -28,6 +28,13 @@ export {
   MergeQueueService,
   type MergeQueueServiceDeps,
 } from "./service.js";
+export {
+  type CommandFailure,
+  describeFailure,
+  failureText,
+  redactSecrets,
+} from "./failure.js";
+export { type QueueProblem, type QueueStall, type StallNext, stallsOf } from "./stalls.js";
 export { type EventRow, type OutboxRow, QueueStore, type Transact } from "./store.js";
 export { CoordinatorTrainShell, type TrainProgress } from "./trains.js";
 export {

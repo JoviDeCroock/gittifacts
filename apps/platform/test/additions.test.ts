@@ -190,4 +190,33 @@ describe("audit summaries and principal names", () => {
       ),
     ).toBe("Automatic revert could not be opened (fork stuck): revert it by hand");
   });
+
+  it("says why the merge queue dropped a step and what happens next", () => {
+    const ev = (action: string) => ({ action, subject: "repo:r1" });
+    expect(
+      summarizeAudit(ev("merge-queue.command-dropped"), {
+        type: "BuildBatchTree",
+        attempts: 6,
+        errorClass: "TypeError",
+        error: "fetch failed",
+        next: "the batch is rebuilt at once",
+      }),
+    ).toBe(
+      "Merge queue gave up on BuildBatchTree after 6 attempts (TypeError: fetch failed). Next: the batch is rebuilt at once",
+    );
+    expect(summarizeAudit(ev("merge-queue.command-dropped"), { type: "Cas" })).toBe(
+      "Merge queue gave up on Cas (no error recorded)",
+    );
+    expect(
+      summarizeAudit(ev("merge-queue.batch-timed-out"), { state: "building", limitMs: 900_000 }),
+    ).toBe(
+      "Batch stuck building its tree past the 15 min limit; rebuilt, and a person was notified",
+    );
+    expect(
+      summarizeAudit(ev("merge-queue.approval-requested"), {
+        lane: 1,
+        reasons: ["merge-queue.resolution-novel-lines"],
+      }),
+    ).toBe("The resolution needs a fresh Lane 1 approval (merge-queue.resolution-novel-lines)");
+  });
 });

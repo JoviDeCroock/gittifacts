@@ -28,9 +28,12 @@ import type { Ports } from "../ports.js";
 import type { BatchRunParams } from "./batch-run.js";
 import { QueueContext, type QueueIntent, type ResolverFactory } from "./context.js";
 import { buildEnqueued } from "./enqueue.js";
+import { failureText } from "./failure.js";
 import { CoordinatorQueueShell } from "./handlers.js";
 import type { QueueJobs } from "./jobs.js";
 import { type HaltInfo, QueueLoop } from "./loop.js";
+import { commandDropped, recentProblems } from "./problems.js";
+import { type QueueStall, stallsOf } from "./stalls.js";
 import { type EventRow, QueueStore, type Transact } from "./store.js";
 import { CoordinatorTrainShell } from "./trains.js";
 
@@ -101,17 +104,12 @@ export class MergeQueueService {
         giveUp: (cmd, error) => this.shell.giveUp(cmd, error),
         onEvents: (rows) => this.wake(rows),
         onHalt: (halt) => this.alertHalt(halt),
-        onDropped: async (row, error) => {
+        onDropped: async (row, failure) => {
           const cmd = row.command as TrainCommand;
           // A revert that could not be opened goes to a human (the Change is only rolled back).
           if (row.lane === "train" && cmd.type === "RequestRevert")
-            await this.trainShell.revertFailed(cmd, error).catch(() => undefined);
-          await this.ctx.audit(this.ctx.repoSubject(), "merge-queue.command-dropped", {
-            lane: row.lane,
-            type: (row.command as { type?: string }).type ?? "unknown",
-            attempts: row.attempts + 1,
-            error,
-          });
+            await this.trainShell.revertFailed(cmd, failureText(failure)).catch(() => undefined);
+          await commandDropped(this.ctx, row, failure);
         },
       },
       {
@@ -361,6 +359,17 @@ export class MergeQueueService {
 
   lastEventSeq(): number {
     return this.store.lastEventSeq();
+  }
+
+  /** What is not moving right now, why, and what happens next (queue view, MCP). */
+  stalls(): QueueStall[] {
+    return stallsOf({
+      state: this.loop.state,
+      outbox: this.store.outbox(),
+      problems: recentProblems(this.store),
+      maxAttempts: this.loop.maxAttempts,
+      now: this.ctx.now(),
+    });
   }
 
   private alertHalt(halt: HaltInfo): Promise<void> {

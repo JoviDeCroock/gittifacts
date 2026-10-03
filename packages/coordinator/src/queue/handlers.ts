@@ -18,6 +18,7 @@ import { casHandler } from "./cas.js";
 import type { QueueContext } from "./context.js";
 import { onQueueEvent } from "./emit.js";
 import { openFlakyTestPlan, requestApproval } from "./human.js";
+import { onCoreAudit } from "./problems.js";
 import { resolutionHandler } from "./resolve.js";
 
 type Emit = (event: CoreEventInput) => Promise<void>;
@@ -62,6 +63,13 @@ export class CoordinatorQueueShell implements QueueShell {
   /** The result the protocol allows for a command that failed for good (null: drop it). */
   giveUp(cmd: Command, error: string): CoreEventInput | null {
     switch (cmd.type) {
+      case "BuildBatchTree":
+        // The core rebuilds at once (an infra retry) instead of waiting out buildTimeoutMs.
+        return {
+          type: "RebaseResult",
+          batchId: cmd.batchId,
+          result: { status: "errored", message: error.slice(0, 2000) },
+        };
       case "StartBatchRun":
         return {
           type: "BatchResult",
@@ -288,6 +296,8 @@ export class CoordinatorQueueShell implements QueueShell {
         ...(cmd.signature === null ? {} : { signature: cmd.signature }),
       },
     });
+    // Stalls are recorded and people told after the audit is safe (best effort, never retried).
+    await onCoreAudit(this.ctx, cmd).catch(() => undefined);
   }
 
   openPlan(cmd: CommandOf<"OpenPlan">): Promise<void> {

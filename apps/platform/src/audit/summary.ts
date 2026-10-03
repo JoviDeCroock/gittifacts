@@ -142,6 +142,41 @@ const SUMMARIES: Record<string, (p: Payload) => string | null> = {
   },
   "deploy.revert-failed": (p) =>
     `Automatic revert could not be opened${str(p, "error") ? ` (${clip(str(p, "error")!)})` : ""}: revert it by hand`,
+  // The merge queue says why a step stopped and what happens next (journey 06: "no reason").
+  "merge-queue.command-dropped": (p) => {
+    const type = str(p, "type") ?? "a step";
+    const n = num(p, "attempts");
+    const cls = str(p, "errorClass");
+    const err = str(p, "error");
+    const why =
+      err === null ? "no error recorded" : `${cls === null ? "" : `${cls}: `}${clip(err, 160)}`;
+    const next = str(p, "next");
+    return `Merge queue gave up on ${type}${n === null ? "" : ` after ${n} attempt${n === 1 ? "" : "s"}`} (${why})${next === null ? "" : `. Next: ${clip(next, 120)}`}`;
+  },
+  "merge-queue.build-errored": (p) =>
+    `Batch tree could not be built (${clip(str(p, "message") ?? "no error recorded", 160)}); rebuilding it`,
+  "merge-queue.batch-timed-out": (p) => {
+    const ms = num(p, "limitMs");
+    const what = str(p, "state") === "building" ? "building its tree" : "in CI";
+    return `Batch stuck ${what} past the ${ms === null ? "time" : `${Math.round(ms / 60_000)} min`} limit; rebuilt, and a person was notified`;
+  },
+  "merge-queue.batch-gave-up": (p) =>
+    `Batch gave up${num(p, "retries") === null ? "" : ` after ${num(p, "retries")} retries`}${str(p, "why") ? `: ${clip(str(p, "why")!)}` : ""}`,
+  "merge-queue.alarm-error": (p) =>
+    `Merge queue step failed, retrying${str(p, "error") ? ` (${clip(str(p, "error")!)})` : ""}`,
+  "merge-queue.resolution": (p) => {
+    const status = str(p, "status");
+    const kind = str(p, "kind") ?? "a";
+    if (status === "resolved")
+      return `Resolver agent resolved the ${kind} conflict${str(p, "newHead") ? ` as ${short(str(p, "newHead"))}` : ""}`;
+    return `Resolver agent could not resolve the ${kind} conflict${str(p, "cause") ? ` (${str(p, "cause")})` : ""}`;
+  },
+  "merge-queue.approval-requested": (p) => {
+    const lane = num(p, "lane");
+    const reasons = Array.isArray(p.reasons) ? p.reasons.filter((r) => typeof r === "string") : [];
+    const resolution = reasons.some((r) => r.startsWith("merge-queue.resolution"));
+    return `${resolution ? "The resolution needs" : "Needs"} a fresh${lane === null ? "" : ` Lane ${lane}`} approval${reasons.length > 0 ? ` (${clip(reasons.join(", "), 120)})` : ""}`;
+  },
   "rollout.released": () => "Released: the watch window closed clean",
   "rollout.rolled-back": () => "Rolled back to the previous version",
 };
