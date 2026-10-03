@@ -114,8 +114,9 @@ export function afterDrop(type: string): string {
     case "StartDeployTrain":
       return "the train counts as failed to deploy";
     case "KillFlag":
+      return "the train rolls back when the regression's deadline passes";
     case "RollbackTrain":
-      return "the deploy train escalates on its own timer (it is never left watching a regression)";
+      return "needs a human: the Worker may still serve the bad version; roll it back by hand";
     case "RequestRevert":
       return "needs a human: the Change is rolled back but not reverted; revert it by hand";
     default:
