@@ -56,7 +56,7 @@ const Envelope = z.object({
 const unauthorized = (message: string) =>
   new ApiError(401, "unauthorized", message, undefined, {
     explanation:
-      "GitHub App deliveries name the App in X-GitHub-Hook-Installation-Target-ID and are signed with that App's webhook secret (X-Hub-Signature-256 over the raw body). Only Apps created through /settings/github are accepted.",
+      "GitHub App deliveries name the App in X-GitHub-Hook-Installation-Target-ID and are signed with that App's webhook secret (X-Hub-Signature-256 over the raw body). Only the platform's own Apps (GITHUB_APP_ID, GITHUB_ACTOR_APP_ID in the Worker config) are accepted.",
   });
 
 const DELIVERY_ID = /^[A-Za-z0-9-]{8,64}$/;
