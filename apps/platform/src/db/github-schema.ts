@@ -126,3 +126,15 @@ export const githubInstallationLinks = sqliteTable(
     index("github_installation_links_principal_idx").on(t.principalId),
   ],
 );
+
+/** The `gittifacts/lane` check run of each (Change, head): created when grading starts, completed once. */
+export const githubCheckRuns = sqliteTable(
+  "github_check_runs",
+  {
+    changeId: text("change_id").notNull(),
+    headSha: text("head_sha").notNull(),
+    checkRunId: integer("check_run_id").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.changeId, t.headSha] })],
+);

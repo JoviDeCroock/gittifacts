@@ -65,6 +65,12 @@ importers:
       '@app/gitwire':
         specifier: workspace:*
         version: link:../../packages/gitwire
+      '@app/host':
+        specifier: workspace:*
+        version: link:../../packages/host
+      '@app/host-github':
+        specifier: workspace:*
+        version: link:../../packages/host-github
       '@app/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp

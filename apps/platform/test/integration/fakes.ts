@@ -183,19 +183,30 @@ export function resetIntegrationFakes(): IntegrationFakes {
   return fakes;
 }
 
-const GUARDED = new Set(["writeNote", "updateRef", "commitTree", "deleteRepo", "transferObjects"]);
+const GUARDED = new Set([
+  "writeNote",
+  "updateRef",
+  "commitTree",
+  "deleteRepo",
+  "transferObjects",
+  "fetchExternal",
+]);
 
-/** Like ArtifactsGitHost's default guard: outside the merge queue, only change forks are written. */
-function forkOnly(git: FakeGitHost): GitHost {
+/**
+ * Like ArtifactsGitHost's default guard: outside the merge queue, only change forks are written
+ * (and, for GitHub mode's `github` role, GitHub mirrors `ghm-*`).
+ */
+function forkOnly(git: FakeGitHost, mirrors = false): GitHost {
   return new Proxy(git, {
     get(target, prop) {
       const value: unknown = Reflect.get(target, prop);
       if (typeof value !== "function") return value;
       return (...args: unknown[]) => {
         const name = String(prop);
-        const repo = name === "transferObjects" ? args[1] : args[0];
+        const repo = name === "transferObjects" || name === "fetchExternal" ? args[1] : args[0];
         const writes = GUARDED.has(name) || (name === "mintToken" && args[1] === "write");
-        if (writes && typeof repo === "string" && !repo.startsWith("task-")) {
+        const allowed = (r: string) => r.startsWith("task-") || (mirrors && /^ghm-\d+$/.test(r));
+        if (writes && typeof repo === "string" && !allowed(repo)) {
           throw new Error(`forbidden: ${name} on main repo ${repo} outside the merge queue`);
         }
         return (value as (...a: unknown[]) => unknown).apply(target, args);
@@ -212,7 +223,7 @@ function forkOnly(git: FakeGitHost): GitHost {
 export function integrationOverrides(role: PortsRole, env?: PortsEnv): Partial<Ports> {
   const f = integrationFakes();
   return {
-    git: role === "merge-queue" ? f.git : forkOnly(f.git),
+    git: role === "merge-queue" ? f.git : forkOnly(f.git, role === "github"),
     sandbox: f.sandbox,
     ci: f.ci,
     reviewer: f.reviewer,

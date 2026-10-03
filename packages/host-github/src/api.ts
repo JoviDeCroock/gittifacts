@@ -7,7 +7,7 @@
  * - 403/429 rate limits become `GithubRateLimited` (retry-after, or the reset time, or 60 s);
  * - tokens come from a provider and never appear in errors or logs.
  */
-import { GithubRateLimited, WriteGovernor } from "./governor.js";
+import { GithubRateLimited, type WriteGate, WriteGovernor } from "./governor.js";
 
 export const GITHUB_API = "https://api.github.com";
 export const GITHUB_API_VERSION = "2026-03-10";
@@ -33,7 +33,7 @@ export interface GithubApiOptions {
   token: () => Promise<string>;
   fetch?: typeof fetch;
   apiBase?: string;
-  governor?: WriteGovernor;
+  governor?: WriteGate;
   etags?: EtagCache;
   now?: () => number;
 }
@@ -41,7 +41,7 @@ export interface GithubApiOptions {
 type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 export class GithubApi {
-  readonly governor: WriteGovernor;
+  readonly governor: WriteGate;
   private readonly etags: EtagCache;
   private readonly base: string;
 

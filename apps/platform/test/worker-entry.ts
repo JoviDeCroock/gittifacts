@@ -11,6 +11,7 @@ import { FakeQueueJobs } from "@app/coordinator/fakes";
 import { configureCoordinatorRuntime } from "@app/coordinator/workers";
 import type { Bindings } from "../src/app-env.js";
 import { COORDINATOR_OPTIONS } from "../src/coordinator.js";
+import { githubHostFor } from "../src/github/runtime.js";
 import { configureImportRuntime } from "../src/import/detect-job.js";
 import { platformPushObserver } from "../src/import/push-grant-runtime.js";
 import { withUnclaimedLimits } from "../src/limits/ci-quota.js";
@@ -37,6 +38,8 @@ configureCoordinatorRuntime<Bindings>({
   }),
   // Like src/index.ts: webhooks, and the first push to a repo closes its import-by-push grant.
   onPushEvent: (env, push) => platformPushObserver(env, push),
+  // Like src/index.ts: GitHub PRs publish their verdict through a GitHub host.
+  hosts: (env, ports) => ({ github: ({ repo }) => githubHostFor(env, ports, repo).host }),
 });
 
 // Workspaces: the real Workspace DO over an in-memory machine (no containers in workerd).

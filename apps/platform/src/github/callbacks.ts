@@ -11,6 +11,7 @@ import {
   userInstallations,
 } from "./api.js";
 import { githubKeys, openCredential, sealCredential } from "./crypto.js";
+import { grantLinkedRepos } from "./grading.js";
 import { FORBIDDEN_PERMISSIONS } from "./manifest.js";
 import { FlowError, type GithubFlowEnv, settingsUrl, takeState } from "./setup.js";
 import { addRepos, getApp, insertApp, linkInstallation, upsertInstallation } from "./store.js";
@@ -133,6 +134,8 @@ export async function finishSetup(
       githubLogin: user.login,
       linkedAt: now.toISOString(),
     });
+    // Repos of this installation already graded become visible to the person who linked it.
+    await grantLinkedRepos(svc.store, mine.id, caller.principal.id);
     await svc.audit.append({
       principalId: caller.principal.id,
       action: "github.installation.linked",

@@ -55,6 +55,8 @@ export interface GitHubHostDeps {
   setup?: GithubRepoSetup;
   /** Always true in M2. */
   shadow?: boolean;
+  /** End of a job that used the API (revokes its installation token). */
+  onJobEnd?(): Promise<void>;
 }
 
 const CATEGORIES: readonly ClaimedCategory[] = ["fix", "feature", "refactor", "dependency", "transform", "revert", "docs", "chore"];
@@ -203,9 +205,16 @@ export class GitHubHost implements HostAdapter {
   }
 
   async publishVerdict(ref: ChangeRef, verdict: LaneVerdict): Promise<void> {
-    const changeId = this.changeId(ref);
     // Only the final verdict for a head reaches GitHub: the run is updated once.
     if (verdict.preliminary) return;
+    try {
+      await this.completeCheck(this.changeId(ref), verdict);
+    } finally {
+      await this.deps.onJobEnd?.();
+    }
+  }
+
+  private async completeCheck(changeId: string, verdict: LaneVerdict): Promise<void> {
     const evidence = await this.deps.ports.store.getEvidence(changeId, verdict.headSha);
     const ctx: CheckRunContext = {
       changeId,

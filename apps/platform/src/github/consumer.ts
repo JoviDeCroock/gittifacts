@@ -6,7 +6,9 @@
 import { z } from "zod";
 import type { Bindings } from "../app-env.js";
 import { D1Store, type Db } from "../store/d1-store.js";
+import { GithubRateLimited } from "@app/host-github";
 import { InstallationInfo, RepoInfo } from "./api.js";
+import { onChangeDelivery, onCheckRunAction } from "./grading.js";
 import {
   addRepos,
   getInstallation,
@@ -22,6 +24,8 @@ export interface GithubEventDeps {
   db: Db;
   blobs: R2Bucket;
   now(): Date;
+  /** Change events need the whole Worker (coordinator runtime, App credentials). */
+  env?: Bindings;
 }
 
 const InstallationEvent = z.object({
@@ -100,10 +104,21 @@ export type GithubEventHandler = (
   payload: unknown,
 ) => Promise<void>;
 
-/** Event name → handler. Phase B adds pull_request, pull_request_review, push, merge_group. */
+const withEnv =
+  (fn: (env: Bindings, msg: GithubEventMessage, payload: unknown) => Promise<void>): GithubEventHandler =>
+  async (deps, msg, payload) => {
+    if (deps.env !== undefined) await fn(deps.env, msg, payload);
+  };
+
+/** Event name → handler. Change events grade through GithubSync (src/github/grading.ts). */
 export const GITHUB_EVENT_HANDLERS: Record<string, GithubEventHandler> = {
   installation: onInstallation,
   installation_repositories: onInstallationRepos,
+  pull_request: withEnv(onChangeDelivery),
+  pull_request_review: withEnv(onChangeDelivery),
+  push: withEnv(onChangeDelivery),
+  merge_group: withEnv(onChangeDelivery),
+  check_run: withEnv(onCheckRunAction),
 };
 
 async function payloadOf(deps: GithubEventDeps, msg: GithubEventMessage): Promise<unknown> {
@@ -122,7 +137,7 @@ export async function handleGithubEvent(deps: GithubEventDeps, msg: GithubEventM
 
 export async function runGithubEventQueue(batch: MessageBatch<unknown>, env: Bindings) {
   const store = new D1Store(env.DB, env.BLOBS, () => new Date());
-  const deps: GithubEventDeps = { db: store.db, blobs: env.BLOBS, now: () => new Date() };
+  const deps: GithubEventDeps = { db: store.db, blobs: env.BLOBS, now: () => new Date(), env };
   for (const m of batch.messages) {
     const parsed = GithubEventMessage.safeParse(m.body);
     if (!parsed.success) {
@@ -135,7 +150,9 @@ export async function runGithubEventQueue(batch: MessageBatch<unknown>, env: Bin
       m.ack();
     } catch (err) {
       console.error("github event failed", parsed.data.event, parsed.data.deliveryId, (err as Error).message);
-      m.retry({ delaySeconds: Math.min(300, 5 * 2 ** m.attempts) });
+      // GitHub's rate limits say when to come back; anything else backs off exponentially.
+      const delay = err instanceof GithubRateLimited ? err.retryAfterSec : 5 * 2 ** m.attempts;
+      m.retry({ delaySeconds: Math.min(900, Math.max(1, delay)) });
     }
   }
 }

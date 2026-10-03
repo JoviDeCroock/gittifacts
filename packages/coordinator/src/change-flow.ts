@@ -227,11 +227,11 @@ export async function runChangeWorkflow(
   // Built per run, never inside a step (an adapter is not a step result). A GitHub change with no
   // GitHub host configured is not graded at all: no verdict beats a verdict nobody can publish.
   const host: HostAdapter | null =
-    ctx.host === null
+    ctx.host == null
       ? null
       : (deps.hosts?.github?.({ changeId, repoId, repo: ctx.host.repo, change: ctx.host.change }) ??
         null);
-  if (ctx.host !== null && host === null) {
+  if (ctx.host != null && host === null) {
     return done("skipped", null, "GitHub change, but no GitHub host is configured");
   }
   const capabilities = host?.capabilities() ?? NATIVE_CAPABILITIES;
@@ -664,7 +664,7 @@ export async function runChangeWorkflow(
   // ------------------------------------------------------------ 8b. publish on the host (GitHub)
   // Its own durable step after grading: a GitHub outage retries the publish, never the grading.
   // Shadow mode writes nothing to the pull request but this one check run.
-  if (host !== null && ctx.host !== null) {
+  if (host !== null && ctx.host != null) {
     const ref = {
       host: "github" as const,
       owner: ctx.host.repo.owner,

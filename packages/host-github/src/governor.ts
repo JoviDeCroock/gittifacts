@@ -45,7 +45,12 @@ export interface GovernorOptions {
 const MINUTE = 60_000;
 const HOUR = 3_600_000;
 
-export class WriteGovernor {
+/** Where a write waits its turn: in memory (one isolate), or a Durable Object per installation. */
+export interface WriteGate {
+  run<T>(write: () => Promise<T>): Promise<T>;
+}
+
+export class WriteGovernor implements WriteGate {
   private chain: Promise<unknown> = Promise.resolve();
   private readonly perMinute: number;
   private readonly perHour: number;

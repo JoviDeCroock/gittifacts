@@ -9,6 +9,7 @@ import type { Bindings } from "./app-env.js";
 import { runExpiry } from "./claim/expire-runtime.js";
 import { COORDINATOR_OPTIONS } from "./coordinator.js";
 import { GITHUB_EVENTS_QUEUE, runGithubEventQueue, runGithubSweep } from "./github/consumer.js";
+import { githubHostFor } from "./github/runtime.js";
 import { platformPushObserver, runImportGrantSweep } from "./import/push-grant-runtime.js";
 import { runWebhookQueue, runWebhookSweep } from "./integrations/worker.js";
 import { withUnclaimedLimits } from "./limits/ci-quota.js";
@@ -29,6 +30,8 @@ configureCoordinatorRuntime<Bindings>({
   // Every push (default branch, change forks) → `push` webhooks of installed integrations; the
   // first push to a repo with an import-by-push grant closes it (src/import/push-grant.ts).
   onPushEvent: (env, push) => platformPushObserver(env, push),
+  // GitHub mode: the ChangeWorkflow publishes a GitHub PR's verdict through its GitHub host.
+  hosts: (env, ports) => ({ github: ({ repo }) => githubHostFor(env, ports, repo).host }),
 });
 
 export { CiEgressGateway, CiRunWorkflow, Runner } from "@app/ci-engine";
@@ -40,6 +43,7 @@ export {
   RolloutWorkflow,
 } from "@app/coordinator/workers";
 export { AuditLog } from "./audit/audit-log-do.js";
+export { GithubWriteGate } from "./github/write-gate-do.js";
 export { PlatformConfigWorkflow } from "./import/workflow.js";
 // The coordinator's ChangeCoordinator + settling unclaimed projects' CI usage on run finish.
 export { ChangeCoordinator } from "./limits/coordinator-do.js";

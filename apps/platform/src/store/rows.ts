@@ -66,6 +66,7 @@ export function repoFromRow(r: RepoRow): Repo {
       ...(r.flagshipAppId === null ? {} : { flagshipAppId: r.flagshipAppId }),
       claim: { status: r.claimStatus, ownerId: r.claimOwnerId, expiresAt: r.claimExpiresAt },
       template: r.template,
+      ...(r.host == null ? {} : { host: r.host }),
       createdAt: r.createdAt,
     },
     `repo ${r.id}`,
@@ -93,6 +94,7 @@ export function repoToRow(
     claimOwnerId: v.claim.ownerId,
     claimExpiresAt: v.claim.expiresAt,
     template: v.template,
+    host: v.host ?? null,
     createdBy,
     createdAt: v.createdAt,
   };
@@ -194,6 +196,7 @@ export function changeFromRow(r: ChangeRow): Change {
       revertOf: r.revertOf,
       revertedBy: r.revertedBy,
       agentTraceId: r.agentTraceId,
+      ...(r.host == null ? {} : { host: r.host }),
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     },
@@ -227,6 +230,7 @@ export function changeToRow(change: Change): typeof s.changes.$inferInsert {
     revertOf: v.revertOf,
     revertedBy: v.revertedBy,
     agentTraceId: v.agentTraceId,
+    host: v.host ?? null,
     createdAt: v.createdAt,
     updatedAt: v.updatedAt,
   };

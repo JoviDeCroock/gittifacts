@@ -15,6 +15,7 @@
 
 import { EngineKind, RunKeys, selectCiEngine } from "@app/ci-engine";
 import type { CiEngine, Clock, Ports, PortsRole, Reviewer, Signer } from "@app/coordinator";
+import { isForkName, isGithubMirrorRepo } from "@app/coordinator";
 import {
   ArtifactsGitHost,
   ContainerSandboxJobs,
@@ -208,8 +209,12 @@ export function buildPorts(env: PortsEnv, role: PortsRole, opts: BuildPortsOptio
     namespace: env.ARTIFACTS_NAMESPACE,
     accountId: env.CF_ACCOUNT_ID,
     // Only the merge queue writes main repos; everyone else may write change forks only (the
-    // adapter's default guard).
+    // adapter's default guard). GitHub mode's sync also writes its mirrors (`ghm-*`), whose source
+    // of truth is GitHub (never a native main repo).
     ...(role === "merge-queue" ? { canWrite: () => true } : {}),
+    ...(role === "github"
+      ? { canWrite: (repo: string) => isForkName(repo) || isGithubMirrorRepo(repo) }
+      : {}),
   });
   const api = { accountId: env.CF_ACCOUNT_ID, apiToken: env.CF_API_TOKEN };
   const ports: Ports = {

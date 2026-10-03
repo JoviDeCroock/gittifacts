@@ -133,7 +133,8 @@
       { "name": "PROJECT_LEDGER", "class_name": "ProjectLedger" },
       // Token buckets for credential-less create_project: one per `ip:<hash>`, `asn:<n>` and
       // `global` (long windows and one global counter, which the rate-limit binding can't do).
-      { "name": "ABUSE_LIMITER", "class_name": "AbuseLimiter" }
+      { "name": "ABUSE_LIMITER", "class_name": "AbuseLimiter" },
+      { "name": "GITHUB_WRITE_GATE", "class_name": "GithubWriteGate" }
     ]
   },
 
@@ -188,6 +189,7 @@
     "Workspace": { "type": "durable-object", "storage": "sqlite", "container": "workspace" },
     "ProjectLedger": { "type": "durable-object", "storage": "sqlite" },
     "AbuseLimiter": { "type": "durable-object", "storage": "sqlite" },
+    "GithubWriteGate": { "type": "durable-object", "storage": "sqlite" },
     // registries-only egress for workspaces: the CI policy plus `git push` to the own fork.
     "WorkspaceEgressGateway": { "type": "worker" }
   },

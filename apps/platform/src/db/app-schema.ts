@@ -119,6 +119,8 @@ export const repos = sqliteTable(
     claimOwnerId: text("claim_owner_id"),
     claimExpiresAt: text("claim_expires_at"),
     template: text("template"),
+    /** GitHub mode: the GitHub repository this repo mirrors (`GithubRepoHost`); null: native. */
+    host: text("host", { mode: "json" }).$type<unknown>(),
     createdBy: text("created_by"),
     createdAt: text("created_at").notNull(),
   },
@@ -222,11 +224,14 @@ export const changes = sqliteTable(
     revertOf: text("revert_of"),
     revertedBy: text("reverted_by"),
     agentTraceId: text("agent_trace_id"),
+    /** GitHub mode: the pull request this Change grades (`GithubChangeHost`); null: native. */
+    host: text("host", { mode: "json" }).$type<unknown>(),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
   (t) => [
-    uniqueIndex("changes_fork_name_uq").on(t.forkName),
+    // Native forks are one per Change; GitHub Changes share their repo's mirror (`ghm-*`).
+    uniqueIndex("changes_fork_name_uq").on(t.forkName).where(sql`${t.forkName} LIKE 'task-%'`),
     index("changes_repo_status_idx").on(t.repoId, t.status),
     index("changes_repo_updated_idx").on(t.repoId, t.updatedAt),
     index("changes_plan_id_idx").on(t.planId),

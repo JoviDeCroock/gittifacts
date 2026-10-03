@@ -25,6 +25,8 @@
     "@app/domain": "workspace:*",
     "@app/evidence": "workspace:*",
     "@app/gitwire": "workspace:*",
+    "@app/host": "workspace:*",
+    "@app/host-github": "workspace:*",
     "@app/mcp": "workspace:*",
     "@app/merge-queue": "workspace:*",
     "@app/resolver": "workspace:*",
