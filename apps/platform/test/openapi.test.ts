@@ -26,6 +26,7 @@ const EXPECTED: Record<string, string[]> = {
   "/api/v1/changes/{changeId}/review": ["post"],
   "/api/v1/changes/{changeId}/request-review": ["post"],
   "/api/v1/changes/{changeId}/rollout": ["get"],
+  "/api/v1/changes/{changeId}/resolution": ["get"],
   "/api/v1/changes/{changeId}/kill": ["post"],
   "/api/v1/changes/{changeId}/issues": ["get"],
   "/api/v1/changes/{changeId}/reviews": ["get"],

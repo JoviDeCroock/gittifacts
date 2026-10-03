@@ -25,7 +25,7 @@ import {
   StartChangeInput,
   Tour,
 } from "@app/domain";
-import { Sha } from "@app/evidence";
+import { ConflictResolution, Sha } from "@app/evidence";
 import { z } from "zod";
 import { ClassifyResultSchema } from "../store/rows.js";
 
@@ -52,6 +52,31 @@ export const AuditEventSchema = AuditEvent.extend({
 }).meta({ id: "AuditEvent" });
 export const ReviewDecisionSchema = ReviewDecision.meta({ id: "ReviewDecision" });
 export const RolloutPolicySchema = RolloutPolicy.meta({ id: "RolloutPolicy" });
+
+/** The merge queue's resolution of a Change: what lands instead of the pushed head. */
+export const ResolutionSchema = z
+  .object({
+    headSha: z.string().describe("The resolved head: what lands on main"),
+    originalHeadSha: z.string().nullable().describe("The head the author pushed"),
+    resolvedFrom: z.string().nullable().describe("The head the resolver started from"),
+    ontoSha: z.string().nullable(),
+    at: IsoDate,
+    attempt: z.number().int(),
+    kind: z.enum(["textual", "semantic"]),
+    item: ConflictResolution.nullable().describe(
+      "The sealed conflict-resolution evidence item (the diff from the merge with markers)",
+    ),
+    upstream: z.array(
+      z.object({ changeId: z.string(), title: z.string().nullable(), sha: z.string().nullable() }),
+    ),
+    tourId: z.string().nullable(),
+    approvalRequested: z
+      .boolean()
+      .describe("The resolution invalidated the approval: a person must approve what lands"),
+    lane: Lane.nullable(),
+    reasons: z.array(z.string()),
+  })
+  .meta({ id: "Resolution" });
 
 export const PrincipalRefSchema = z
   .object({

@@ -16,6 +16,7 @@ import {
   PlanSchema,
   PrincipalsMapSchema,
   RequestReviewBody,
+  ResolutionSchema,
   ReviewBody,
   ReviewDecisionSchema,
   RolloutPolicySchema,
@@ -30,6 +31,7 @@ import {
   getChangeDetail,
   getChangeDiff,
   getChangeEvidence,
+  getChangeResolution,
   getChangeRollout,
   getChangeTour,
   killChange,
@@ -192,6 +194,21 @@ const reviews = createRoute({
   },
 });
 
+const resolution = createRoute({
+  method: "get",
+  path: "/api/v1/changes/{changeId}/resolution",
+  tags: ["changes"],
+  summary:
+    "The merge queue's conflict resolution of this change (null when it needed none): what lands, what each side had",
+  security: SECURITY,
+  middleware: [read] as const,
+  request: { params: ChangeIdParam },
+  responses: {
+    200: json(z.object({ resolution: ResolutionSchema.nullable() }), "Resolution"),
+    ...errors(401, 403, 404),
+  },
+});
+
 const rollout = createRoute({
   method: "get",
   path: "/api/v1/changes/{changeId}/rollout",
@@ -346,6 +363,12 @@ export function registerChangeRoutes(app: ApiApp): void {
     );
     return c.json(out, 200);
   });
+  app.openapi(resolution, async (c) =>
+    c.json(
+      await getChangeResolution(c.get("services"), callerOf(c), c.req.valid("param").changeId),
+      200,
+    ),
+  );
   app.openapi(rollout, async (c) =>
     c.json(
       await getChangeRollout(c.get("services"), callerOf(c), c.req.valid("param").changeId),

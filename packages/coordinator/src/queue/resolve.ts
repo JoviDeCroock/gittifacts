@@ -193,6 +193,9 @@ async function resolveAndApply(
   await ctx.audit(changeSubject(change.id), "merge-queue.resolution", {
     attempt: cmd.attempt,
     kind: cmd.kind,
+    // The head that was resolved (the re-approval screen checks it is still the Change's head).
+    headSha: cmd.headSha,
+    ontoSha: onto,
     status: outcome.status,
     resolverId: RESOLVER_PRINCIPAL_ID,
     model: input.factoryModel,

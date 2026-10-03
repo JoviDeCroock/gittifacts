@@ -55,6 +55,7 @@ route definitions and served at `GET /api/v1/openapi.json`.
 | GET | /api/v1/changes/:changeId/tour | – | `{ tour: Tour }` |
 | POST | /api/v1/changes/:changeId/review | `{ decision: "approve"\|"request-changes"\|"reject", humanLane?: 0\|1\|2, comment? }` | `{ change: Change }` (not the author; `change:review`) |
 | GET | /api/v1/changes/:changeId/rollout | – | `{ rollout: RolloutState \| null, timeline: AuditEvent[] }` |
+| GET | /api/v1/changes/:changeId/resolution | – | `{ resolution: Resolution \| null }`: the merge queue's conflict resolution (resolved head, the `conflict-resolution` item with its diff, upstream Changes, whether a fresh approval is needed) |
 | POST | /api/v1/changes/:changeId/kill | `{ reason }` | `{ change: Change }` (flag off + rollback + revert change) |
 | GET | /api/v1/changes/:changeId/issues | – | `{ issues: LinkedIssue[] }` |
 
@@ -93,6 +94,8 @@ route definitions and served at `GET /api/v1/openapi.json`.
   or `null` if that can no longer be reached.
 - `GET /changes/:id/rollout` adds `policy: RolloutPolicy`, the rollout policy from the change's **base**, not the repo's current one.
 - A tour is stale when `tour.headSha !== change.headSha`. `GET /changes/:id/tour` adds `stale: boolean`.
+  Exception: after the merge queue's resolver rewrote the Change, the tour of the resolved head (it leads with
+  the resolution) is served and is not stale; `GET /changes/:id/resolution` names that head.
 - Policy: an agent's owner may approve that agent's change (allowed, recorded in the audit log). Agents can never hold
   `plan:approve` or `change:review`.
 - `ChangeDiff`, `PipelineRun` and `LinkedIssue` are defined by `@app/domain`. Where this document differs, the domain package wins.

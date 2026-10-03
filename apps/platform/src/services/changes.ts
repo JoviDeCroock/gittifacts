@@ -23,6 +23,7 @@ import type { ChangeSummary, PrincipalRef } from "../store/d1-store.js";
 import type { PlanView } from "../store/rows.js";
 import { type AuditEventView, withSummaries } from "./audit.js";
 import { planPrincipalIds } from "./plans.js";
+import { type ResolutionView, resolutionOf } from "./resolution.js";
 
 /** Statuses after which nobody needs to look at a change any more. */
 const TERMINAL: readonly Change["status"][] = [
@@ -177,12 +178,29 @@ export async function getChangeTour(
 ): Promise<{ tour: Tour; stale: boolean }> {
   const change = await assertChangeAccess(svc, caller.principal, changeId, "read");
   const head = requireHead(change);
+  const current = change.tourId ? await svc.store.getTourById(change.tourId) : null;
+  // The merge queue's resolver rewrote the Change: the tour of the resolved head (it leads with
+  // the resolution) describes what lands, so it wins over the pushed head's tour.
+  if (current !== null && current.headSha !== head) {
+    const resolution = await resolutionOf(svc, change);
+    if (resolution?.headSha === current.headSha) return { tour: current, stale: false };
+  }
   const tour =
     (await svc.store.getTour(change.id, head)) ??
-    (change.tourId ? await svc.store.getTourById(change.tourId) : null) ??
+    current ??
     (await svc.store.getLatestTour(change.id));
   if (!tour) throw notReady(change, "The tour", head);
   return { tour, stale: tour.headSha !== head };
+}
+
+/** The merge queue's resolution of this Change (null: it never needed one). */
+export async function getChangeResolution(
+  svc: Services,
+  caller: Caller,
+  changeId: string,
+): Promise<{ resolution: ResolutionView | null }> {
+  const change = await assertChangeAccess(svc, caller.principal, changeId, "read");
+  return { resolution: await resolutionOf(svc, change) };
 }
 
 export interface RolloutView {
