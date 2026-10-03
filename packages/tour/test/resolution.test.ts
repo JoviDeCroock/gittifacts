@@ -172,15 +172,10 @@ describe("placement", () => {
   };
   const s = (kind: TourStop["kind"]): TourStop => ({ ...r, kind, title: kind });
 
-  it("goes right after the riskiest stop", () => {
+  it("leads the tour (what lands is the resolution), before the riskiest stop", () => {
     const out = placeResolutionStop([s("intent"), s("risk"), s("proof"), s("risk")], r);
-    expect(out.map((x) => x.title)).toEqual(["intent", "risk", "R", "proof", "risk"]);
-  });
-
-  it("without a risk stop it starts the risk/proof section", () => {
-    const out = placeResolutionStop([s("intent"), s("behavior"), s("proof"), s("uncovered")], r);
-    expect(out.map((x) => x.title)).toEqual(["intent", "behavior", "R", "proof", "uncovered"]);
-    expect(placeResolutionStop([s("intent")], r).map((x) => x.title)).toEqual(["intent", "R"]);
+    expect(out.map((x) => x.title)).toEqual(["R", "intent", "risk", "proof", "risk"]);
+    expect(placeResolutionStop([], r).map((x) => x.title)).toEqual(["R"]);
   });
 
   it("is never dropped by the stop cap", () => {
@@ -205,7 +200,7 @@ describe("placement", () => {
 });
 
 describe("in a generated tour", () => {
-  it("adds the stop after the riskiest stop, tells the model, and validates as a Tour", async () => {
+  it("leads with the resolution stop, tells the model, and validates as a Tour", async () => {
     const client = new FakeLlmClient([{ json: goodModelTour() }]);
     const reviewer = createReviewer(client, {
       now: () => NOW,
@@ -233,9 +228,9 @@ describe("in a generated tour", () => {
     expect(out.status).toBe("ok");
     if (out.status !== "ok") return;
     const kinds = out.tour.stops.map((x) => x.kind);
-    const firstRisk = kinds.indexOf("risk");
-    expect(kinds[firstRisk + 1]).toBe("resolution");
-    expect(out.tour.stops[firstRisk + 1]?.verdict).toBe("risk");
+    expect(kinds[0]).toBe("resolution");
+    expect(out.tour.stops[0]?.verdict).toBe("risk");
+    expect(kinds.filter((k) => k === "resolution")).toHaveLength(1);
     expect(Tour.safeParse(out.tour).success).toBe(true);
     const prompt = client.requests[0]?.messages[0]?.content ?? "";
     expect(prompt).toContain("The platform adds one stop for the resolution itself");

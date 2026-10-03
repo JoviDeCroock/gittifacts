@@ -8,9 +8,10 @@
  *   judgment or agent trace, not a failing/unproven test result); otherwise it becomes "unproven".
  *   "risk" verdicts are never changed;
  * - verified-transform files are one platform-written "transform" stop;
- * - a merge-queue conflict resolution is one platform-written "resolution" stop, right after the
- *   riskiest stop: verdict "risk" when it edited outside its conflict hunks (or is semantic, or
- *   failed), else "proven" only when the merged tree's tests passed;
+ * - a merge-queue conflict resolution is one platform-written "resolution" stop, and it leads the
+ *   tour (what lands is the resolution, not the diff an earlier approval covered): verdict "risk"
+ *   when it edited outside its conflict hunks (or is semantic, or failed), else "proven" only when
+ *   the merged tree's tests passed;
  * - when the top-ranked hunk is anchored to a Lane-2 classifier reason, the first risk stop
  *   references that hunk (an existing risk stop is moved up, or a deterministic one inserted);
  * - stops are ordered intent → behavior → risk/proof → other → transform → uncovered;
@@ -350,17 +351,13 @@ export function resolutionStopFor(
   };
 }
 
-/** Put the resolution stop right after the riskiest (first risk) stop, else where risks start. */
+/**
+ * The resolution stop leads the tour. A person re-approving a resolved Change approves what the
+ * resolver wrote (journey 06: it sat after the riskiest stop, the reviewer read the agent's tour
+ * first and approved lines they never saw).
+ */
 export function placeResolutionStop(stops: readonly TourStop[], stop: TourStop): TourStop[] {
-  const out = [...stops];
-  const risk = out.findIndex((s) => s.kind === "risk");
-  if (risk !== -1) {
-    out.splice(risk + 1, 0, stop);
-    return out;
-  }
-  const section = out.findIndex((s) => SECTION[s.kind] >= SECTION.risk);
-  out.splice(section === -1 ? out.length : section, 0, stop);
-  return out;
+  return [stop, ...stops];
 }
 
 // ---------------------------------------------------------------- evidence
@@ -776,7 +773,7 @@ export function postprocessTour(input: PostprocessInput): PostprocessResult {
   report.reordered = ordered.some((s, i) => s !== stops[i]);
   stops = ordered;
 
-  // 4b. The platform's conflict-resolution stop, right after the riskiest stop.
+  // 4b. The platform's conflict-resolution stop leads the tour.
   if (input.resolutionStop) stops = placeResolutionStop(stops, input.resolutionStop);
 
   // 5. Stop cap.
