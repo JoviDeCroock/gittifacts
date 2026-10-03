@@ -176,6 +176,8 @@ export function agentsMd(opts: AgentsMdOptions): string {
     "## When CI fails",
     `1. \`${call("get_change_status", { changeId: ch })}\` shows the failing step and its log tail.`,
     "2. Reproduce it locally with the same command (table below), fix it, commit, push again.",
+    `3. Flaky, nothing to fix: \`${call("rerun_ci", { changeId: ch })}\` runs the same head again.`,
+    `   A Change that won't merge: \`${call("close_change", { changeId: ch, reason: "<why>" })}\`.`,
     "",
     "## Commands",
     "| Step | Command |",

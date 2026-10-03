@@ -97,6 +97,8 @@ in Workers templates). `env.FLAGS` exists only in deployed versions; elsewhere t
 ## When CI fails
 1. `get_change_status({ changeId: "<changeId>" })` shows the failing step and its log tail.
 2. Reproduce it locally with the same command (table below), fix it, commit, push again.
+3. Flaky, nothing to fix: `rerun_ci({ changeId: "<changeId>" })` runs the same head again.
+   A Change that won't merge: `close_change({ changeId: "<changeId>", reason: "<why>" })`.
 
 ## Commands
 | Step | Command |
