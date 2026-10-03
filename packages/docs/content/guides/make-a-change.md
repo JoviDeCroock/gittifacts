@@ -28,8 +28,9 @@ Expected: `change.id` (`7h2kd9x0qw3m5z8r1vtc`), `change.status` `"awaiting-push"
 ## 3. Commit and push to the fork
 
 ```sh
-export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=http.extraHeader
 export GIT_CONFIG_VALUE_0="Authorization: Bearer $PUSH_TOKEN"
+export GIT_CONFIG_KEY_1=http.postBuffer GIT_CONFIG_VALUE_1=524288000  # pushes over 1 MiB
 git clone "$PUSH_URL" add-time && cd add-time
 # edit src/app.ts, add test/time.test.ts
 git add -A && git commit -m "Add GET /time"
