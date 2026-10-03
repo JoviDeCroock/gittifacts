@@ -1,88 +1,76 @@
 ---
-title: Get started with the CLI
-nav: With the CLI
-description: Install the gittifacts CLI, log in with the device flow, create a project and ship a first Change from a terminal.
-order: 3
+title: Try it in 2 minutes
+nav: Try it in 2 minutes
+description: One npx command creates a repo, runs its first CI and starts a preview. Then wait for the green check and open the preview URL. No account needed.
+order: 2
 audience: both
 ---
 
-# Get started with the CLI
+# Try it in 2 minutes
 
-The CLI is a thin wrapper over the MCP tools: every tool is a command, output is one JSON document on stdout, and `--human` prints tables. It suits agents with a shell and humans alike.
+**You'll have:** a new repo cloned on your machine, a green CI check and a live preview URL. No account needed.
 
-## 1. Install
+You need Node 22 or later and git.
 
-The platform serves the CLI as an npm tarball at `https://<host>/cli/gittifacts.tgz`. `npx` runs it without installing anything (Node 22 or later):
+## 1. Create a project
 
 ```sh
-npx -y https://<host>/cli/gittifacts.tgz --version
+npx -y https://<host>/cli/gittifacts.tgz --host https://<host> init --template workers-api --name my-api --clone
 ```
 
-Expected: `{"name":"gittifacts","version":"0.1.0"}`. The next steps the CLI prints are commands that start with `gittifacts`, so give it that name in your shell:
+Expected, after about 20 seconds (abbreviated):
 
-```sh
-alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz"
-gittifacts --version
+```jsonc
+{
+  "projectId": "3fk2q8wz7m1x0c5v9nbd",
+  "previewUrl": "https://p-bs-3fk2q8wz7m1x0c5v9nbd-pv.resynapse.dev",
+  "claimUrl": "https://<host>/claim/gtc_…",
+  "bootstrapChangeId": "bs-3fk2q8wz7m1x0c5v9nbd",
+  "tokenStored": true,
+  "clonedTo": "/home/you/my-api"
+}
 ```
 
-Or install it for good with `npm install -g https://<host>/cli/gittifacts.tgz`. `npx` caches a tarball by its URL: to pick up a newer CLI, clear that cache (`rm -rf ~/.npm/_npx`). `https://<host>/cli/latest.json` names the version the platform serves.
+The platform made a repo from the `workers-api` template and started its first CI run and a preview.
 
-**Coming soon.** `npx gittifacts`, once the package is published to npm.
+<details>
+<summary>What did that store, and why no login?</summary>
 
-## 2. Log in
+Without a login you get an **unclaimed project**: it works now and is deleted after 7 days unless someone opens `claimUrl` and keeps it ([Unclaimed projects](/docs/concepts/unclaimed-projects)). The CLI stores the project's token in `~/.config/gittifacts/credentials.json` (mode 0600) and writes `.gittifacts.json` (`{ host, projectId, remote }`, no secrets) in the clone. The token reaches git through its environment, never argv or `.git/config`.
 
-```sh
-gittifacts --host https://<host> login
-```
+The CLI is a thin wrapper over the MCP tools: every tool is a command, and output is one JSON document. Other templates: `preact-app`, `ts-library` (no preview), `static-site`.
 
-The CLI prints a URL and a code (OAuth device flow). Open the URL signed in as yourself, check the code, pick repos and scopes, and approve. Expected: `{ "loggedIn": true, … }` and a token stored in `~/.config/gittifacts/credentials.json` (mode 0600). Later commands remember the host.
+</details>
 
-An agent without a browser runs it in two halves and hands the URL to a human:
-
-```sh
-gittifacts --host https://<host> login --no-wait
-gittifacts login --device-code <deviceCode>
-```
-
-## 3. Create a project and clone it
+## 2. Wait for the green check
 
 ```sh
-gittifacts init --template workers-api --name my-api --clone
 cd my-api
+alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz"
+gittifacts wait bs-3fk2q8wz7m1x0c5v9nbd --until evidence_ready
 ```
 
-`init` calls `create_project`, writes `.gittifacts.json` (`{ host, projectId, remote }`, no secrets) and clones the repo. The token reaches git through its environment, never argv or `.git/config`. Expected output includes `projectId`, `bootstrapChangeId` and `previewUrl`.
+Use your own `bootstrapChangeId`. Expected, within about a minute: `"reached": true` and exit code 0.
 
-## 4. Wait for the first green
+<details>
+<summary>Exit codes and timeouts</summary>
+
+`wait` re-issues the long-poll until the milestone or `--timeout` (default 600 s). Exit code 0 means reached, 3 means it timed out or can no longer be reached (CI failed: step 3 shows the failing step).
+
+</details>
+
+## 3. Open the preview
 
 ```sh
-gittifacts wait bs-3fk2q8wz7m1x0c5v9nbd --until evidence_ready
 gittifacts get-change-status bs-3fk2q8wz7m1x0c5v9nbd --human
 ```
 
-`wait` re-issues the long-poll until the milestone or `--timeout` (default 600 s). Exit code 0 means reached, 3 means it timed out or can no longer be reached.
+Expected: the run `passed` with steps `install`, `lint`, `typecheck`, `test`, `build`, and the preview URL. Open it in a browser or with `curl`: `workers-api` answers `{ "now": "…" }`.
 
-## 5. Ship a change
+That's the loop's first half: code in, proof out. Next, change something.
 
-```sh
-gittifacts create-plan --repo-id 3fk2q8wz7m1x0c5v9nbd --title "Add /time" \
-  --intent "Clients need the server time in ISO 8601." \
-  --acceptance-criteria "GET /time returns an ISO 8601 timestamp"
-# a human approves the plan, then:
-gittifacts start-change --repo-id 3fk2q8wz7m1x0c5v9nbd --plan-id 4p8n2b7dq0x6w3k9m1zs --title "Add /time" --category feature
-git -c http.extraHeader="Authorization: Bearer $PUSH_TOKEN" push "$PUSH_URL" HEAD:main
-gittifacts wait 7h2kd9x0qw3m5z8r1vtc --until lane_assigned
-gittifacts request-review 7h2kd9x0qw3m5z8r1vtc
-gittifacts wait 7h2kd9x0qw3m5z8r1vtc --until merged
-```
+## Next
 
-Take `PUSH_URL`, `PUSH_TOKEN` and the branch from `remote` in the `start-change` output. Pushing is covered in depth in [Commit and push with git](/docs/guides/git).
-
-## Useful habits
-
-- `gittifacts tools` lists every command; `gittifacts search-tools "wait for ci"` finds one by what it does.
-- `gittifacts <command> --help` prints its flags from the tool's schema.
-- Mutating commands print an `idempotencyKey`. On a network error, retry with `--idempotency-key <key>` and nothing happens twice.
-- Errors are `{ "error": { "code", "message", "fix" } }`. `fix.command` is the CLI command that resolves it.
-
-Every command, flag, variable and exit code: [CLI reference](/docs/reference/cli).
+- Keep the project and use it under your own name: [Use the CLI](/docs/guides/use-the-cli) (log in, claim, everyday commands).
+- Change the code and ship it through review: [Make a Change](/docs/guides/make-a-change).
+- What "green" proves: [Evidence](/docs/concepts/evidence).
