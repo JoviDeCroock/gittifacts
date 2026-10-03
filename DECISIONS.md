@@ -1753,3 +1753,58 @@ Live reruns of `scripts/e2e/m4.ts` (runs 5 to 8) on ec89addd and the deploys aft
 - **Workflows event delay across a deploy.** Run 5: a review sent 7 s after a platform deploy reached the
   ChangeWorkflow's `waitForEvent` 5 minutes later. It self-healed, so nothing was changed. This is noted in case it
   recurs.
+
+## 2026-10-03 — Two modes M2 (phase B): shadow grading of GitHub pull requests
+
+Spec: docs/prompts/06-two-modes.md §3.2–3.4, §6, §7 (M2); docs/research/github-app.md decisions 4–9, 11.
+Code: `packages/host-github` (`@app/host-github`), `apps/platform/src/github/`, the ChangeWorkflow.
+
+- **One Artifacts mirror per GitHub repository, not a fork per PR.** `ghm-<github repo id>` holds the default
+  branch and each PR head on `gittifacts/pr/<n>`. Fetches go through gitwire (`GitHost.fetchExternal`) with a
+  `contents: read` installation token as `x-access-token` basic auth, incrementally (the mirror's tips are the
+  haves); fork PR heads are read from the base repo, as GitHub serves `refs/pull/<n>/head`. Checked read-only
+  against github.com: ref listing, full fetch, incremental PR-head fetch by SHA. A PR's Change has
+  `forkName` = the mirror, so `changes_fork_name_uq` is now partial (`task-%`), and the ChangeCoordinator reads
+  the head from `Change.host.headBranch`. A new `github` ports role may write change forks and mirrors only;
+  the mirror's source of truth is GitHub, never a native main repo. Fork GC never touches a mirror.
+- **Deterministic ids.** Repo `gh-<id>`, Change `gh-<repo id>-<n>` (one Change per PR, every head), author
+  principal `gh-u-<user id>` (kind human or agent, created **disabled**: it never authenticates). Authors are
+  classified human / coding agent (known bot logins, agent branch prefixes) / bot; the kind never changes the
+  lane rules.
+- **What is graded.** Open, non-draft PRs against the default branch. The Change's base is the merge base
+  (`GET /compare/{base}...{head}`, ETag-cached), so the diff is the PR's own and the policy is read from a
+  default-branch commit. Stacked PRs (another base branch) are recorded and not graded in M2.
+- **Claims and Plans.** The claim is a `gittifacts:<category>` label, else a conventional-commit title prefix,
+  else `feature` (no special proof demanded, no special relief; without a Plan there is no Lane 0 anyway).
+  A platform Plan referenced in the PR body (`gittifacts-plan: <id>`, spec §3.5 c) links when it belongs to the
+  repo. That is the minimum the contract suite needs for parity; linked issues and plan files are M3.
+- **The `gittifacts/lane` check run.** Opened `in_progress` by the sync as soon as the head is mirrored, and
+  completed once by a durable `publish-verdict` step after grading (a GitHub outage retries the publish, never
+  the grading). `success` only when nothing needs a human (Lane 0, routed `label-ready`); Lane 0 that needs an
+  approval and Lane 1 are `neutral`; Lane 2 and blocked are `action_required`. The title starts with
+  "Shadow ·"; the summary (≤ 60 KB) has the reasons, the evidence table and `details_url` = the platform's
+  change page. A head replaced before grading gets its run closed `cancelled`. Buttons `approve_tour` and
+  `full_review` record intent only (`github.check-action` audit) until M3.
+- **Shadow route.** GitHub capabilities: `canMerge` false, `mergeMode: "none"`, no notes, no inline stops. The
+  ChangeWorkflow ends GitHub Changes after publishing (status `awaiting-review`, outcome `graded`): no review
+  wait, no queue. `pull_request.closed` marks the Change `merged` (GitHub merged it) or `abandoned`. Nothing is
+  written to the PR but the check run.
+- **Sandboxes.** Fork PRs run with registries-only egress (untrusted code). Previews are off for GitHub repos
+  (a preview URL is public; their code may be private).
+- **Tokens and writes.** Installation tokens are minted per job (a queue delivery, a publish step), scoped to the
+  one repository with `{checks: write, contents/pull_requests/metadata: read}` (grading) or `{contents,
+  metadata: read}` (fetch), and revoked when the job ends; never logged (opaque objects), never given to a
+  sandbox. Every GitHub write goes through a per-installation `GithubWriteGate` Durable Object: one write at a
+  time, ≤ 80/min and ≤ 500/h, 15 s leases; a budget wait over 20 s or a 403/429 rate limit becomes a queue
+  retry at GitHub's `retry-after`.
+- **Contract suite.** `@app/host-github` passes `runContractSuite` on recorded fixtures (octokit webhook
+  payload examples, OAS REST examples, substituted per scenario) with the same expectations as native: 10/10,
+  lanes and evidence kinds identical. GitHub Actions check runs are **not** turned into evidence in M2, so the
+  evidence-kind sets stay comparable; when they are (later), they get their own kind outside the comparison.
+  The suite runs on every relevant commit (`.github/workflows/host-contract.yml`, path-filtered).
+- **MCP and CLI.** `get_change_status`, `get_evidence`, `get_tour` and `wait_for_change` take
+  `github: "owner/repo#123"` instead of `changeId`. The CLI keeps `<changeId>` positional (a new fallback rule)
+  and adds `--github`. CLI versions older than this commit derive commands from `tools/list` and need
+  `--change-id` instead of the positional.
+- **Visibility.** The humans who linked an installation see its graded repos: the first becomes the repo's
+  claim owner (an `owner` member), the others `maintainer`; linking later grants the repos already graded.

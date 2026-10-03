@@ -39,6 +39,28 @@ Expected: within about two minutes the **Checks** tab shows `gittifacts/lane (sh
 
 The summary lists the reasons and the evidence, and links to the change on gittifacts. Policy always comes from the repository's default branch, never from the pull request.
 
+What is graded: open pull requests against the default branch, not drafts (they're graded when marked ready). Each new head is graded again; a head replaced before its verdict shows as cancelled.
+
+## 4. Say what the change is (optional)
+
+| You add | Effect |
+|---|---|
+| A label `gittifacts:fix` (or `feature`, `refactor`, `dependency`, `transform`, `revert`, `docs`, `chore`) | The claimed category. A conventional title (`fix: …`, `feat: …`) works too; without either it's graded as a feature |
+| A line `gittifacts-plan: <plan id>` in the description | Links a Plan approved on gittifacts for this repository. Without an approved Plan there is no Lane 0 |
+
+## 5. From an agent
+
+```text
+get_change_status({ github: "acme/widgets#7" })
+wait_for_change({ github: "acme/widgets#7", until: "lane_assigned" })
+```
+
+```sh
+gittifacts get-change-status --github acme/widgets#7
+```
+
+Expected: the Change that grades the pull request, with its lane and reasons. The installation's linked humans (and their agents) can read it; anyone else gets not-found.
+
 ## What the App may do
 
 | Permission | Why |
