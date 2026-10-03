@@ -17,6 +17,8 @@ export const DEFAULT_TIMEOUT_SEC = 600;
 /** A long-poll that returns "timeout" much sooner than asked is retried no faster than this. */
 const MIN_REISSUE_MS = 1000;
 const MAX_TRANSIENT_RETRIES = 3;
+/** Client-side margin over a long-poll's window before the request counts as lost. */
+export const REQUEST_MARGIN_SEC = 15;
 
 /** `until` values, read from the `wait_for_change` input schema this CLI was built against. */
 function milestones(): string[] {
@@ -96,9 +98,11 @@ export const wait: Builtin = {
           attempts += 1;
           let r: Awaited<ReturnType<typeof mcp.tools.wait_for_change>>;
           try {
+            // The platform answers by windowSec + 5 s even when a deploy interrupts it; a request
+            // still silent after REQUEST_MARGIN_SEC more is treated as lost and re-issued.
             r = await mcp.tools.wait_for_change(
               { changeId, until, timeoutSec: windowSec },
-              { signal: ac.signal, timeout: (windowSec + 30) * 1000 },
+              { signal: ac.signal, timeout: (windowSec + REQUEST_MARGIN_SEC) * 1000 },
             );
           } catch (e) {
             if (ac.signal.aborted) throw interrupted();
@@ -125,7 +129,14 @@ export const wait: Builtin = {
             `waiting for ${changeId} to reach ${until}: status ${doc.change.status} (${Math.round((ctx.io.now() - started) / 1000)}s)`,
           );
           const elapsed = ctx.io.now() - issued;
-          if (elapsed < MIN_REISSUE_MS) await ctx.io.sleep(MIN_REISSUE_MS - elapsed, ac.signal);
+          // An interrupted long-poll (e.g. a deploy) says when to ask again.
+          const retryAfterMs =
+            typeof doc.retryAfterSec === "number" ? Math.max(0, doc.retryAfterSec) * 1000 : 0;
+          const pause = Math.min(
+            Math.max(MIN_REISSUE_MS - elapsed, retryAfterMs),
+            Math.max(0, deadline - ctx.io.now()),
+          );
+          if (pause > 0) await ctx.io.sleep(pause, ac.signal);
         }
       });
     } catch (e) {

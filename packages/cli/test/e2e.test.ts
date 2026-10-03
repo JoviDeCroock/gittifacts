@@ -119,9 +119,11 @@ describe("bundled CLI against the real MCP server", () => {
     const r = await cli(["get-change-status", "--change-id", "chg_1", "--human"]);
     expect(r.code).toBe(0);
     expect(r.stdout).toMatch(/^Get change status\n/);
-    expect(r.stdout).toMatch(
-      /Lane reasons\n\s+CODE\s+LANE\s+MESSAGE\n\s+size\.lane1\s+1\s+medium diff/,
-    );
+    // A readable summary (src/views.ts), not the raw document.
+    expect(r.stdout).toMatch(/Status: +awaiting-review \(waiting for a human review\)/);
+    expect(r.stdout).toMatch(/Lane: +1 \(async glance\)/);
+    expect(r.stdout).toMatch(/Steps\n\s+STEP\s+KIND\s+STATUS\s+LOG\n\s+test\s+user\s+✓ passed/);
+    expect(r.stdout).toMatch(/Raised by\n\s+LANE\s+CODE\s+WHY\n\s+1\s+size\.lane1\s+medium diff/);
     expect(r.stdout).toMatch(
       /Next steps\n {2}1\. Read the tour a human will review\n {5}\$ gittifacts get-tour --change-id chg_1/,
     );

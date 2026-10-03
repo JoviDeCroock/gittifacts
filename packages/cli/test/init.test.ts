@@ -124,6 +124,25 @@ describe("gittifacts init", () => {
     h.cleanup();
   });
 
+  it("drops the platform's reconnect step: the CLI stored the token, so the bootstrap wait is nextSteps[0]", async () => {
+    const reconnect = {
+      title: `Reconnect to ${HOST}/mcp with Authorization: Bearer <token>`,
+      call: "whoami({})",
+      why: "Reconnect with `Authorization: Bearer <token>`.",
+    };
+    const base = created();
+    const { h } = initHarness({
+      ...base,
+      nextSteps: [reconnect, ...(base.nextSteps as unknown[])],
+    });
+    const r = await run(h, ["init", "--template", "workers-api"]);
+    expect(r.code).toBe(EXIT.ok);
+    const doc = r.json() as { nextSteps: { title: string; command?: string }[] };
+    expect(doc.nextSteps.map((s) => s.title)).toEqual(["Wait for the first green"]);
+    expect(doc.nextSteps[0]?.command).toMatch(/^gittifacts wait chg_1 /);
+    h.cleanup();
+  });
+
   it("then uses the project's token inside the project", async () => {
     const { h, connector } = initHarness();
     await run(h, ["init", "--template", "workers-api"]);

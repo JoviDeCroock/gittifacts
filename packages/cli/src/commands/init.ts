@@ -100,6 +100,20 @@ export function parseProjectResult(doc: Record<string, unknown>): ProjectResult 
   };
 }
 
+/**
+ * The platform's first step for a credential-less create_project is "reconnect with the token"
+ * (an MCP session stays anonymous). The CLI already stored the token and sends it on every later
+ * command, so that step is noise here and would push the bootstrap wait out of nextSteps[0]
+ * (journey 10; /start and the README promise the wait comes first).
+ */
+export function withoutReconnectStep(doc: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(doc.nextSteps)) return doc;
+  const steps = doc.nextSteps.filter(
+    (s) => !(isRecord(s) && typeof s.title === "string" && /^Reconnect\b/.test(s.title)),
+  );
+  return steps.length === doc.nextSteps.length ? doc : { ...doc, nextSteps: steps };
+}
+
 /** Removes secrets from what gets printed. */
 function redact(doc: Record<string, unknown>, showToken: boolean): Record<string, unknown> {
   const out = { ...doc };
@@ -259,10 +273,11 @@ export const init: Builtin = {
     });
 
     const showToken = bool(parsed, "showToken");
+    const shown = project.token !== null ? withoutReconnectStep(doc) : doc;
     ctx.out.result(
       withCommands(
         {
-          ...redact(doc, showToken),
+          ...redact(shown, showToken),
           tokenStored: project.token !== null,
           config: configPath,
           ...(clonedTo ? { clonedTo } : {}),

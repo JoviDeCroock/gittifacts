@@ -8,6 +8,7 @@
 import type { ErrorBody } from "./errors.js";
 import { makeStyle, renderError, renderHuman, type Style, useColor } from "./human.js";
 import type { CliIo } from "./io.js";
+import { isRecord } from "./tools/schema.js";
 
 export class Output {
   readonly style: Style;
@@ -26,10 +27,15 @@ export class Output {
     return typeof cols === "number" && cols > 20 ? cols : 100;
   }
 
-  result(doc: unknown, opts: { title?: string | undefined } = {}): void {
+  /** `view` reshapes the document for `--human` only; the JSON output is always `doc`. */
+  result(
+    doc: unknown,
+    opts: { title?: string | undefined; view?: ((doc: Record<string, unknown>) => unknown) | undefined } = {},
+  ): void {
     if (this.human) {
+      const shown = opts.view !== undefined && isRecord(doc) ? opts.view(doc) : doc;
       this.io.stdout.write(
-        renderHuman(doc, { style: this.style, width: this.width, title: opts.title }),
+        renderHuman(shown, { style: this.style, width: this.width, title: opts.title }),
       );
     } else {
       this.io.stdout.write(`${JSON.stringify(doc, null, 2)}\n`);

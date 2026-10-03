@@ -126,6 +126,29 @@ describe("gittifacts wait", () => {
     h.cleanup();
   });
 
+  it("waits retryAfterSec before asking again after an interrupted long-poll (a deploy)", async () => {
+    const interrupted = { ...waitResult("running", "timeout"), retryAfterSec: 2 };
+    const seen: (number | undefined)[] = [];
+    let i = 0;
+    const h = harness({
+      env: { GITTIFACTS_HOST: "https://gittifacts.example", GITTIFACTS_TOKEN: "t" },
+    });
+    h.io.connect = mockConnector({
+      tools: {
+        wait_for_change: async (_args, options) => {
+          seen.push(options?.timeout);
+          return i++ === 0 ? interrupted : waitResult("merged", "reached");
+        },
+      },
+    });
+    const r = await run(h, ["wait", "chg_1", "--until", "merged"]);
+    expect(r.code).toBe(EXIT.ok);
+    expect(h.sleeps).toContain(2000);
+    // A long-poll still silent 15 s after its window is lost: it is re-issued, not awaited.
+    expect(seen[0]).toBe((90 + 15) * 1000);
+    h.cleanup();
+  });
+
   it("stops cleanly on Ctrl-C (exit 130, with the command to resume)", async () => {
     const { h } = waitHarness([], { block: true });
     const r = await run(h, ["wait", "chg_1", "--until", "tour_ready", "--timeout", "300"]);

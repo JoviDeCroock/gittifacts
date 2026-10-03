@@ -16,6 +16,7 @@ import {
   toolNameOf,
 } from "../tools/commands.js";
 import { isRecord, toWireTool } from "../tools/schema.js";
+import { HUMAN_VIEWS } from "../views.js";
 import { commandHelp } from "./help.js";
 
 function firstText(r: AnyToolResult): string {
@@ -145,6 +146,7 @@ export async function runToolCommand(
     };
   }
   if (key) out = { ...out, idempotencyKey: key };
-  ctx.out.result(out, { title: spec.title ?? spec.command });
+  const tool = spec.tool ?? toolNameOf(spec.command);
+  ctx.out.result(out, { title: spec.title ?? spec.command, view: HUMAN_VIEWS[tool] });
   return EXIT.ok;
 }

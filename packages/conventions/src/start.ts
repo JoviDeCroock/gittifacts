@@ -203,15 +203,15 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
       why: "One call creates the repo from a template, writes .platform/ci.ts, .platform/policy.ts and AGENTS.md, runs the first CI and starts a preview. It returns at once.",
       call: call("create_project", { template: DEFAULT_TEMPLATE, name: "my-api" }),
       returns:
-        "{ projectId, remote, token, mcpUrl, previewUrl, claimUrl?, nextSteps }. remote is a push grant (url, token, branch) for your first Change's fork: push there right away. token is set only for unclaimed projects: use it as the Bearer token from then on. nextSteps[0] names the bootstrap Change running the first CI and preview.",
+        "{ projectId, remote, token, mcpUrl, previewUrl, claimUrl?, nextSteps }. remote is a push grant (url, token, branch) for your first Change's fork: push there right away. token is set only for unclaimed projects: use it as the Bearer token from then on. bootstrapChangeId is the Change running the first CI and preview.",
     },
     {
       step: 2,
       title: "Wait for the first green",
-      why: "create_project already committed the template and started CI and the preview; the changeId is in nextSteps[0]. Later edits go start_change, git push to the fork, then this same wait (see the loop below).",
+      why: "create_project already committed the template and started CI and the preview; the changeId is its bootstrapChangeId. Later edits go start_change, git push to the fork, then this same wait (see the loop below).",
       call: call("wait_for_change", { changeId: CH, until: "evidence_ready", timeoutSec: 50 }),
       returns:
-        '{ change, reached, reason } within 50 s (under the MCP client\'s 60 s request timeout). reason "timeout": call it again, and keep calling while reason is "timeout".',
+        '{ change, reached, reason, retryAfterSec? } within 50 s (under the MCP client\'s 60 s request timeout). reached: the milestone holds now (bootstrap: CI done, status released or failing). reason "timeout": call it again (after retryAfterSec when set) while reason is "timeout".',
     },
     {
       step: 3,

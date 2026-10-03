@@ -21,6 +21,7 @@ describe("command table generated from the MCP tool definitions", () => {
   it("has exactly one command per @app/mcp tool, named with dashes", () => {
     const tools = TOOL_DEFINITIONS.map((t) => t.name).sort();
     expect(tools).toEqual([
+      "close_change",
       "close_workspace",
       "create_plan",
       "create_project",
@@ -39,6 +40,7 @@ describe("command table generated from the MCP tool definitions", () => {
       "refresh_push_token",
       "reprioritize",
       "request_review",
+      "rerun_ci",
       "search_tools",
       "start_change",
       "wait_for_change",
@@ -76,6 +78,8 @@ describe("command table generated from the MCP tool definitions", () => {
       get_evidence: true,
       get_tour: true,
       request_review: true,
+      rerun_ci: true,
+      close_change: true,
       list_issues_for_change: true,
       refresh_push_token: true,
       wait_for_change: true,
