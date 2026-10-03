@@ -51,15 +51,25 @@ export function summarize(item: EvidenceItem): ItemSummary {
         value: item.verdict === "proven" ? "Proven" : item.verdict === "no-tests" ? "No tests" : "Not proven",
         tone: item.verdict === "proven" ? "ok" : "warn",
       };
-    case "test-run":
+    case "test-run": {
+      const pre = splitFailures(item).pre.length;
+      const counted = item.failed - pre;
       return {
         label: item.step.charAt(0).toUpperCase() + item.step.slice(1),
-        value: item.failed > 0 ? `${item.failed} failing` : `${item.passed} passed`,
-        tone: item.failed > 0 ? "danger" : "ok",
+        value:
+          counted > 0
+            ? `${counted} failing${pre > 0 ? ` (+${pre} pre-existing)` : ""}`
+            : pre > 0
+              ? `${pre} pre-existing`
+              : `${item.passed} passed`,
+        tone: counted > 0 ? "danger" : pre > 0 ? "warn" : "ok",
       };
+    }
     case "coverage":
       return { label: "Coverage", value: pct(item.ratio), tone: item.ratio >= 0.8 ? "ok" : "warn" };
     case "mutation":
+      if (item.killed + item.survived + item.timedOut === 0 && item.noCoverage > 0)
+        return { label: "Mutation", value: "No tests cover it", tone: "warn" };
       return { label: "Mutation", value: pct(item.score), tone: item.survived > 0 ? "warn" : "ok" };
     case "public-api":
       return {
@@ -148,4 +158,27 @@ export function unmeasuredEffect(itemId: string, reasons: readonly LaneReason[])
  */
 export function verifyCommand(headSha: string, origin: string): string {
   return `verify-attestation --repo . --commit ${headSha.slice(0, 12)} --keys-url ${origin.replace(/\/+$/, "")}/.well-known/gittifacts-keys.json`;
+}
+
+type TestRunItem = Extract<EvidenceItem, { kind: "test-run" }>;
+
+/**
+ * A test run's listed failures, new ones apart from pre-existing ones (fail identically on the
+ * base commit). Without a usable baseline nothing is pre-existing.
+ */
+export function splitFailures(item: TestRunItem): {
+  fresh: TestRunItem["failures"];
+  pre: TestRunItem["failures"];
+} {
+  const names = new Set(item.baseline?.status === "ok" ? (item.preExisting ?? []) : []);
+  return {
+    fresh: item.failures.filter((f) => !names.has(f.name)),
+    pre: item.failures.filter((f) => names.has(f.name)),
+  };
+}
+
+/** Tool output without colour codes (notes and failure messages are read by people). */
+export function stripAnsi(text: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching escape sequences is the point.
+  return text.replace(/[\u001b\u009b](?:\[[0-?]*[ -/]*[@-~]|\][^\u0007\u001b]*(?:\u0007|\u001b\\)|[@-Z\\-_])/g, "");
 }

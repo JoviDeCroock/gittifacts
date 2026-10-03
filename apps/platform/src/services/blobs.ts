@@ -9,6 +9,7 @@
  * otherwise the object's customMetadata `repoId` / `changeId`. Unattributable refs are 404.
  * Content is served inert (allowlisted types, nosniff, sandboxed CSP) because it is repo-controlled.
  */
+import { stripAnsi } from "@app/evidence";
 import { canAccess } from "../access/access.js";
 import type { Caller, Services } from "../app-env.js";
 import { ApiError, notFound } from "../errors.js";
@@ -63,6 +64,34 @@ async function owningRepoId(
   return null;
 }
 
+const CI_LOG = /^ci-logs\/.+\.log$/;
+/** Longest tail held back in case an escape sequence continues in the next chunk. */
+const MAX_ESCAPE = 64;
+
+/** Strips ANSI escapes from a UTF-8 byte stream (sequences may straddle chunks). */
+export function ansiStripper(): TransformStream<Uint8Array, Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let carry = "";
+  return new TransformStream({
+    transform(chunk, controller) {
+      let text = carry + decoder.decode(chunk, { stream: true });
+      const esc = text.lastIndexOf("\u001b");
+      if (esc !== -1 && text.length - esc < MAX_ESCAPE) {
+        carry = text.slice(esc);
+        text = text.slice(0, esc);
+      } else {
+        carry = "";
+      }
+      if (text !== "") controller.enqueue(encoder.encode(stripAnsi(text)));
+    },
+    flush(controller) {
+      const rest = carry + decoder.decode();
+      if (rest !== "") controller.enqueue(encoder.encode(stripAnsi(rest)));
+    },
+  });
+}
+
 function contentTypeOf(ref: string, stored: string | undefined): { type: string; inline: boolean } {
   const base = stored?.split(";")[0]?.trim().toLowerCase();
   if (base && SAFE_TYPES.has(base)) return { type: stored ?? base, inline: true };
@@ -88,11 +117,14 @@ export async function readBlob(svc: Services, caller: Caller, ref: string): Prom
   if (!obj) throw blobNotFound(ref);
   const { type, inline } = contentTypeOf(ref, obj.httpMetadata?.contentType);
   const file = ref.split("/").pop() ?? "blob";
-  return new Response(obj.body, {
+  // CI step logs are tool output read by people: served without colour codes.
+  const isLog = CI_LOG.test(ref);
+  const body = isLog ? obj.body.pipeThrough(ansiStripper()) : obj.body;
+  return new Response(body, {
     status: 200,
     headers: {
       "content-type": type,
-      "content-length": String(obj.size),
+      ...(isLog ? {} : { "content-length": String(obj.size) }),
       etag: obj.httpEtag,
       "cache-control": "private, max-age=60",
       "x-content-type-options": "nosniff",

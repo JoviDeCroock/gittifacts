@@ -9,7 +9,7 @@ import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
 import { Command, CopyButton, ErrorState, Hash, Loading, Meter } from "../components/ui.js";
 import { compressLines } from "../lib/diff.js";
-import { itemAnchor, itemTitle, summarize, unmeasuredEffect, verifyCommand } from "../lib/evidence.js";
+import { itemAnchor, itemTitle, splitFailures, stripAnsi, summarize, unmeasuredEffect, verifyCommand } from "../lib/evidence.js";
 import { gitNoteLine } from "../lib/evidence-note.js";
 import { pct } from "../lib/lanes.js";
 import { durationLabel, formatDateTime } from "../lib/time.js";
@@ -91,6 +91,7 @@ function Attestation({ ev, change }: { ev: EvidenceResponse; change: Change }) {
 // ---------------------------------------------------------------- per-kind bodies
 
 function TestRunBody({ item }: { item: Item<"test-run"> }) {
+  const { fresh, pre } = splitFailures(item);
   return (
     <>
       <p class="ev-stats tnum">
@@ -108,17 +109,35 @@ function TestRunBody({ item }: { item: Item<"test-run"> }) {
           {item.runner} on <code>{shortSha(item.sha)}</code>
         </span>
       </p>
-      {item.failures.length > 0 ? (
-        <ul class="failures">
-          {item.failures.map((f) => (
-            <li key={f.name}>
-              <b>{f.name}</b>
-              <pre class="scroll-x">{f.message}</pre>
-            </li>
-          ))}
-        </ul>
+      {item.selection ? (
+        <p class="ev-sub">
+          {item.selection.mode === "all" ? "Ran the whole suite" : `Ran ${plural(item.selection.files ?? 0, "test file")} that reach this change`}: {stripAnsi(item.selection.reason)}
+        </p>
+      ) : null}
+      <FailureList failures={fresh} />
+      {pre.length > 0 ? (
+        <>
+          <p class="ev-sub">
+            Already failing on main (<code>{shortSha(item.baseline?.sha ?? "")}</code>) in the same way, so not counted against this change:
+          </p>
+          <FailureList failures={pre} />
+        </>
       ) : null}
     </>
+  );
+}
+
+function FailureList({ failures }: { failures: Item<"test-run">["failures"] }) {
+  if (failures.length === 0) return null;
+  return (
+    <ul class="failures">
+      {failures.map((f) => (
+        <li key={f.name}>
+          <b>{f.name}</b>
+          <pre class="scroll-x">{stripAnsi(f.message)}</pre>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -364,6 +383,11 @@ function ItemBody({ item, policy }: { item: EvidenceItem; policy: RepoPolicy }) 
                 : "Tests exist, but they do not fail on main and pass here."}
           </p>
           <RedGreenList item={item} />
+          {item.preExisting?.length ? (
+            <p class="ev-sub">
+              Already failing on main in the same way (neither proves nor blocks this change): {item.preExisting.map((t) => t.id).join(", ")}.
+            </p>
+          ) : null}
         </>
       );
     case "test-run":
@@ -503,7 +527,7 @@ function ItemSection({ item, policy, reasons }: { item: EvidenceItem; policy: Re
         <p class={`ev-status ev-status--${item.status}`}>
           <Icon name={item.status === "error" ? "x-circle" : "circle-dashed"} size={15} />
           {item.status === "error" ? "Measurement failed" : "Not measured"}
-          {item.note ? `: ${item.note.replace(/\.$/, "")}.` : "."} {unmeasuredEffect(item.id, reasons)}
+          {item.note ? `: ${stripAnsi(item.note).replace(/\.$/, "")}.` : "."} {unmeasuredEffect(item.id, reasons)}
         </p>
       ) : (
         <div class="ev-item__body">

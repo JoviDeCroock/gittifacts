@@ -1,12 +1,21 @@
 /**
  * Runs in flight show their steps live (queued / running with elapsed / passed / failed) from the
  * CI engine's R2 records; D1 only has them once the run finishes (M5 friction 10: `steps: []`).
+ * Step logs and reason text reach people without tool colour codes.
  */
 import { env } from "cloudflare:workers";
 import type { PipelineRun } from "@app/domain";
 import { describe, expect, it } from "vitest";
+import { ansiStripper } from "../src/services/blobs.js";
 import { liveStep, withLiveSteps } from "../src/services/live-runs.js";
-import { addMember, HEAD_SHA, runFixture, seedWorld, store } from "./fixtures.js";
+import {
+  addMember,
+  classificationFixture,
+  HEAD_SHA,
+  runFixture,
+  seedWorld,
+  store,
+} from "./fixtures.js";
 import { call, createAgent, json, makeApp, signUpHuman } from "./http.js";
 
 const bucket = env.CI_BUCKET;
@@ -108,5 +117,54 @@ describe("live run steps", () => {
     ]);
     expect(steps[1]?.elapsedMs).toBeGreaterThanOrEqual(89_000);
     expect(steps[0]).toMatchObject({ durationMs: 4200, elapsedMs: 4200 });
+  });
+});
+
+describe("tool colour codes", () => {
+  it("are stripped from a byte stream even when a sequence straddles chunks", async () => {
+    const enc = new TextEncoder();
+    const parts = ["\u001b[32mok\u001b", "[39m 12 tests \u001b[1", ";31mred\u001b[0m\n"];
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        for (const p of parts) c.enqueue(enc.encode(p));
+        c.close();
+      },
+    });
+    expect(await new Response(stream.pipeThrough(ansiStripper())).text()).toBe("ok 12 tests red\n");
+  });
+
+  it("never reach step logs or reason text served by the API", async () => {
+    const { app } = makeApp({});
+    const human = await signUpHuman(app);
+    const agent = await createAgent(app, human.cookie);
+    const s = store();
+    const { repo, change } = await seedWorld(s);
+    await addMember(s, repo.id, human.principal.id, "owner");
+    const run = runFixture(change.id);
+    await s.upsertRun(run);
+    const ref = `ci-logs/${run.id}/evidence:mutation.log`;
+    await env.BLOBS.put(
+      ref,
+      "\u001b[32m09:08:11 (812) INFO\u001b[39m Instrumented 1 source file(s)\n",
+    );
+    const log = await call(app, "GET", `/api/v1/blobs/${encodeURIComponent(ref)}`, {
+      token: agent.token,
+    });
+    expect(await log.text()).toBe("09:08:11 (812) INFO Instrumented 1 source file(s)\n");
+
+    const cls = classificationFixture({
+      reasons: [
+        {
+          code: "signal.error.mutation",
+          lane: 1,
+          message: "Mutation testing errored: \u001b[32mINFO\u001b[39m x.",
+        },
+      ],
+    });
+    await s.putClassification(change.id, HEAD_SHA, cls);
+    const body = await json<{ classification: { reasons: { message: string }[] } }>(
+      await call(app, "GET", `/api/v1/changes/${change.id}`, { token: agent.token }),
+    );
+    expect(body.classification.reasons[0]?.message).toBe("Mutation testing errored: INFO x.");
   });
 });

@@ -13,6 +13,7 @@ import {
   StartChangeInput,
   type Tour,
 } from "@app/domain";
+import { stripAnsi } from "@app/evidence";
 import type { z } from "zod";
 import { assertChangeAccess, assertPlanAccess, assertRepoAccess } from "../access/access.js";
 import type { ReviewBody } from "../api/schemas.js";
@@ -63,6 +64,16 @@ export async function listChangeSummaries(
   return { changes, principals: await svc.store.principalRefs(changes.map((c) => c.authorId)) };
 }
 
+/** Reason text is read by people; classifications stored before the classifier stripped tool colour codes may carry them. */
+function withoutAnsi(c: ClassifyResult | null): ClassifyResult | null {
+  if (c === null) return null;
+  return {
+    ...c,
+    reasons: c.reasons.map((r) => ({ ...r, message: stripAnsi(r.message) })),
+    checklist: c.checklist.map((g) => ({ ...g, detail: stripAnsi(g.detail) })),
+  };
+}
+
 export interface ChangeDetail {
   change: Change;
   plan: PlanView | null;
@@ -83,7 +94,9 @@ export async function getChangeDetail(
     svc.store
       .listRuns(change.id)
       .then((stored) => withLiveSteps(svc.env.CI_BUCKET, stored, svc.clock.now().getTime())),
-    change.headSha ? svc.store.getClassification(change.id, change.headSha) : Promise.resolve(null),
+    change.headSha
+      ? svc.store.getClassification(change.id, change.headSha).then(withoutAnsi)
+      : Promise.resolve(null),
   ]);
   const principals = await svc.store.principalRefs([
     change.authorId,
