@@ -88,7 +88,7 @@ In merge-queue batch runs, every user step gets `GITTIFACTS_TEST_TARGETS`: the t
 pnpm exec vitest run $(printf '%s\n' "$GITTIFACTS_TEST_TARGETS" | tr '\n' ' ')
 ```
 
-Evidence steps choose their own tests: `test-run`, `red-green` and `coverage` run the test files that reach the Change, and the whole suite when that's unknown ([Evidence](/docs/concepts/evidence#which-tests-run)).
+Evidence steps choose their own tests: `test-run`, `red-green` and `coverage` run the test files that reach the Change, and the whole suite when that's unknown ([Evidence](/docs/concepts/evidence#what-runs)).
 
 ## 6. Ship the edit
 

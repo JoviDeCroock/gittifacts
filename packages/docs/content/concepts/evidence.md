@@ -27,13 +27,17 @@ After your own CI steps, the platform adds its evidence steps:
 
 Also possible: `agent-trace`, `llm-judgment` (raise-only), `conflict-resolution` and `quarantine` from the merge queue. Fields of every kind: [Evidence kinds](/docs/reference/evidence-kinds).
 
-## Which tests run
+<details>
+<summary>Which tests run</summary>
 
 `test-run`, `red-green` and `coverage` run the tests that can reach the Change: test files whose imports reach a changed file, touched tests, and every test under a runner config or Workers test pool whose setup or entry the Change reaches. The item's `selection` says which (`mode: "affected"`, `files`, `reason`).
 
 The whole suite runs (`mode: "all"`) whenever the impact is unknown: a changed config, manifest or lockfile, a file no analyzer understands, or a failed analysis.
 
-## Pre-existing failures
+</details>
+
+<details>
+<summary>Tests that already failed on the base commit</summary>
 
 A test that fails at head is compared with the base commit:
 
@@ -42,6 +46,8 @@ A test that fails at head is compared with the base commit:
 - **No baseline:** when base can't be measured (it installs other dependencies, or the run failed), `baseline.status` is `unavailable` and every failure counts.
 
 Base results are cached per Change and base commit, so a re-push doesn't measure base again.
+
+</details>
 
 ## Unknown is never green
 
