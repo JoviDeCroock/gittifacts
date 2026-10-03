@@ -117,11 +117,13 @@ describe("front door", () => {
     expect(prm.status).toBe(200);
   });
 
-  it("/ shows visitors the landing page and signed-in people the app", async () => {
+  it("/ is the landing page for everyone; /dashboard and deep links are the app", async () => {
     const { app } = makeApp();
     const visitor = await call(app, "GET", "/", { headers: { accept: "text/html" } });
     expect(visitor.status).toBe(200);
-    expect(visitor.headers.get("vary")).toContain("Cookie");
+    // Not session-dependent: no Cookie in Vary, so caches may share it.
+    expect(visitor.headers.get("vary")).toContain("Accept");
+    expect(visitor.headers.get("vary")).not.toContain("Cookie");
     expect(links(visitor.headers.get("link"))["service-doc"]).toBe(`${ORIGIN}/start`);
     const landing = await visitor.text();
     expect(landing).toContain('id="hero-title"');
@@ -132,37 +134,51 @@ describe("front door", () => {
     expect(landing.replace(/<wbr>/g, "")).toContain(`>${ORIGIN}/start</code>`);
     expect(landing).toContain("http://<wbr>localhost<wbr>/start");
     expect(landing).not.toContain("decroockjovi.workers.dev");
+    // The nav's session link: "Sign in" in the markup, swapped client-side when signed in.
+    expect(landing).toContain("data-session-link");
 
+    // Signed in, stale cookie or ?mock: still the landing page, never the app.
     const human = await signUpHuman(app);
-    const signedIn = await call(app, "GET", "/", {
-      headers: { accept: "text/html", cookie: human.cookie },
-    });
-    expect(signedIn.status).toBe(200);
-    const spa = await signedIn.text();
-    expect(spa).toContain('<div id="app">');
-    expect(spa).not.toContain('id="hero-title"');
-
-    // A stale session cookie is a visitor; ?mock keeps the demo app reachable.
-    const stale = await call(app, "GET", "/", {
-      headers: { accept: "text/html", cookie: "better-auth.session_token=expired.token" },
-    });
-    expect(await stale.text()).toContain('id="hero-title"');
+    for (const headers of [
+      { accept: "text/html", cookie: human.cookie },
+      { accept: "text/html", cookie: "better-auth.session_token=expired.token" },
+    ]) {
+      const res = await call(app, "GET", "/", { headers });
+      expect(res.status).toBe(200);
+      const html = await res.text();
+      expect(html).toContain('id="hero-title"');
+      expect(html).not.toContain('<div id="app">');
+    }
     const mock = await call(app, "GET", "/?mock", { headers: { accept: "text/html" } });
-    expect(await mock.text()).toContain('<div id="app">');
+    expect(await mock.text()).toContain('id="hero-title"');
 
-    // Revalidation: the landing's ETag gets a 304 for a visitor, never for a signed-in person.
+    // The app: /dashboard and every deep link agents print, signed in or not (the SPA itself
+    // sends a visitor to /signin?next=…).
+    for (const path of [
+      "/dashboard",
+      "/changes/ch_x",
+      "/repos/rp_x",
+      "/settings/github",
+      "/claim/tok",
+    ]) {
+      for (const cookie of [undefined, human.cookie]) {
+        const res = await call(app, "GET", path, {
+          headers: { accept: "text/html", ...(cookie ? { cookie } : {}) },
+        });
+        expect(res.status, path).toBe(200);
+        expect(await res.text(), path).toContain('<div id="app">');
+      }
+    }
+
+    // Revalidation: the landing's ETag gets a 304, signed in or not.
     const etag = visitor.headers.get("etag") ?? "";
     expect(etag).not.toBe("");
-    const again = await call(app, "GET", "/", {
-      headers: { accept: "text/html", "if-none-match": etag },
-    });
-    expect(again.status).toBe(304);
-    expect(again.headers.get("vary")).toContain("Cookie");
-    const switched = await call(app, "GET", "/", {
-      headers: { accept: "text/html", "if-none-match": etag, cookie: human.cookie },
-    });
-    expect(switched.status).toBe(200);
-    expect(await switched.text()).toContain('<div id="app">');
+    for (const cookie of [undefined, human.cookie]) {
+      const again = await call(app, "GET", "/", {
+        headers: { accept: "text/html", "if-none-match": etag, ...(cookie ? { cookie } : {}) },
+      });
+      expect(again.status).toBe(304);
+    }
   });
 
   it("an agent asking / for JSON or markdown gets the guide itself", async () => {

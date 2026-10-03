@@ -21,6 +21,7 @@ import { registerCliRoutes } from "./routes/cli.js";
 import { type ApiApp, newApiApp, SECURITY } from "./routes/common.js";
 import { registerDocsRoutes } from "./routes/docs.js";
 import { registerFrontDoorRoutes } from "./routes/front-door.js";
+import { registerGettingStartedRoutes } from "./routes/getting-started.js";
 import { registerIdentityRoutes } from "./routes/identity.js";
 import { registerPlanRoutes } from "./routes/plans.js";
 import { registerProjectRoutes } from "./routes/projects.js";
@@ -38,7 +39,8 @@ export const OPENAPI_PATH = "/api/v1/openapi.json";
 export const BLOBS_PATH = "/api/v1/blobs";
 
 /** Paths the Worker owns; everything else is the SPA (static assets). */
-const WORKER_PATHS = /^\/(api\/|mcp$|mcp\/|webhooks\/|\.well-known\/|internal\/ttfg$|git\/|github\/)/;
+const WORKER_PATHS =
+  /^\/(api\/|mcp$|mcp\/|webhooks\/|\.well-known\/|internal\/ttfg$|git\/|github\/)/;
 
 const OPENAPI_CONFIG = {
   openapi: "3.1.0",
@@ -94,6 +96,8 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerCliRoutes(app);
   registerWellKnownRoutes(app);
   registerIdentityRoutes(app);
+  // The dashboard's first-run checklist.
+  registerGettingStartedRoutes(app);
   registerRepoRoutes(app);
   registerMemberRoutes(app);
   registerImportRoutes(app);

@@ -2,8 +2,8 @@
  * The front door (docs/prompts/02-onboarding.md §2): everything an agent told only "use <host>"
  * needs to work out the rest.
  *
- *   GET /                              the landing page (no session) or the web app, with `Link`
- *                                      headers (and <link> tags) to the rest
+ *   GET /                              the landing page (signed in or not; the app is /dashboard),
+ *                                      with `Link` headers (and <link> tags) to the rest
  *   GET /start                         machine guide: markdown, JSON with `Accept: application/json`,
  *                                      or a page for a browser (`Accept: text/html`, same content)
  *   GET /start.md                      the guide as markdown, whatever the Accept header
@@ -26,10 +26,8 @@ import {
 } from "@app/conventions";
 import { defaultPolicy } from "@app/domain";
 import { sha256Hex } from "@app/evidence";
-import { getSessionCookie } from "better-auth/cookies";
 import type { Context } from "hono";
 import type { AppEnv } from "../app-env.js";
-import { authFor } from "../auth/middleware.js";
 import { quotaHints, unclaimedLimits } from "../limits/config.js";
 import { unclaimedCreationState } from "../limits/kill-switch.js";
 import { urlsFor } from "../oauth/context.js";
@@ -172,7 +170,7 @@ async function htmlPage(c: Context<AppEnv>, page: PageInput, headers: Record<str
   return etagged(c, frontPageHtml(shell, page), "text/html; charset=utf-8", headers);
 }
 
-/** The prerendered marketing page (packages/web/landing.html), served at `/` without a session. */
+/** The prerendered marketing page (packages/web/landing.html), served at `/` to everyone. */
 export const LANDING_ASSET = "/landing";
 /** The origin baked into the static landing HTML; rewritten to the request's origin. */
 const LANDING_ORIGIN = "https://gittifacts.decroockjovi.workers.dev";
@@ -200,18 +198,11 @@ export function breakableUrlHtml(url: string): string {
     .join("<wbr>");
 }
 
-/** A signed-in person gets the app at `/`; only a request carrying a session cookie is checked. */
-async function hasSession(c: Context<AppEnv>): Promise<boolean> {
-  if (!getSessionCookie(c.req.raw)) return false;
-  try {
-    return (await authFor(c).api.getSession({ headers: c.req.raw.headers })) !== null;
-  } catch {
-    return false;
-  }
-}
-
 /**
- * `/` for a browser: the landing page for visitors, the app for people with a session (or `?mock`).
+ * `/` for a browser: always the marketing page, signed in or not (the app lives at `/dashboard`).
+ * No session lookup, so the page is the same for everyone; its script swaps "Sign in" for "Open
+ * dashboard" after a cheap session check. Falls back to the SPA only when the build has no
+ * landing page (the SPA then routes to /dashboard).
  * `fresh`: fetch the landing unconditionally (its live numbers change while the asset doesn't, so
  * the caller answers conditional requests itself).
  */
@@ -220,15 +211,13 @@ async function homeAsset(
   fresh = false,
 ): Promise<{ res: Response; landing: boolean }> {
   const url = new URL(c.req.url);
-  if (!url.searchParams.has("mock") && !(await hasSession(c))) {
-    const init = new Request(c.req.raw);
-    if (fresh) {
-      init.headers.delete("if-none-match");
-      init.headers.delete("if-modified-since");
-    }
-    const landing = await c.env.ASSETS.fetch(new Request(new URL(LANDING_ASSET, url), init));
-    if (landing.status === 200 || landing.status === 304) return { res: landing, landing: true };
+  const init = new Request(c.req.raw);
+  if (fresh) {
+    init.headers.delete("if-none-match");
+    init.headers.delete("if-modified-since");
   }
+  const landing = await c.env.ASSETS.fetch(new Request(new URL(LANDING_ASSET, url), init));
+  if (landing.status === 200 || landing.status === 304) return { res: landing, landing: true };
   return { res: await c.env.ASSETS.fetch(c.req.raw), landing: false };
 }
 
@@ -375,7 +364,7 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
     });
   }
 
-  // The web app, with the front door in its headers and <head>, so a crawler or an agent that
+  // The landing page, with the front door in its headers and <head>, so a crawler or an agent that
   // only fetches "/" finds /start, /llms.txt, the OpenAPI document and the MCP card.
   app.get("/", async (c) => {
     const urls = frontDoorUrls(c);
@@ -392,7 +381,7 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
     const asset = await homeAsset(c, live !== null);
     const res = new Response(asset.res.body, asset.res);
     res.headers.append("link", frontDoorLinks(urls));
-    res.headers.append("vary", "Accept, Cookie");
+    res.headers.append("vary", "Accept");
     if (!(res.headers.get("content-type") ?? "").includes("text/html")) return res;
     let rewriter = new HTMLRewriter();
     if (live !== null && asset.landing) {
