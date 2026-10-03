@@ -56,7 +56,10 @@ const doc = (text) => {
   if (line === undefined) throw new Error("no ::merge:: document");
   return { line, value: JSON.parse(line.slice(9)) };
 };
-for (const sha of plan.fetch) { try { git("fetch", "-q", "--no-tags", "origin", sha); } catch {} }
+// Full objects (--no-filter), one commit deep each: the checkout is blobless and merge-attempt runs
+// with lazy fetching off, so every blob a replay reads has to be here before it starts. A failed fetch
+// fails the job (it used to be swallowed, and the replay then died on a missing blob).
+for (const sha of plan.fetch) git("fetch", "-q", "--no-tags", "--no-filter", "--depth=1", "origin", sha);
 const replay = (e, onto) => doc(run("gittifacts-runner", ["merge-attempt", "--base", e.replayBase, "--onto", onto, "--head", e.headSha]));
 const tree = (sha) => git("rev-parse", sha + "^{tree}");
 const push = (sha, ref) => git("push", "-q", "--force", "origin", sha + ":" + ref);
