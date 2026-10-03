@@ -27,10 +27,39 @@ export function seedRepoName(id: TemplateId): string {
   return `seed-${id}-${(TEMPLATE_DIGESTS[id] ?? "0").slice(0, 8)}`;
 }
 
+/**
+ * The seed commit for `refresh` (a worker version id): the head itself when its message already
+ * names it, else a new commit with the same tree on top. The CI engine derives a seed run's id
+ * from (template, sha), so only a new sha makes it seed again; the global cache key includes the
+ * runner image, which changes with almost every deploy (DECISIONS 2026-10-03).
+ */
+async function refreshedSeed(
+  git: GitHost,
+  repo: string,
+  id: TemplateId,
+  head: string,
+  refresh: string,
+): Promise<string> {
+  const label = `(worker ${refresh})`;
+  const message = (await git.commitMessage?.(repo, head)) ?? "";
+  if (message.includes(label)) return head;
+  const tree = await git.treeOf(repo, head);
+  if (tree === null) throw new Error(`seed repo ${repo}: no tree at ${head}`);
+  const { sha } = await git.commitTree(repo, {
+    treeSha: tree,
+    parents: [head],
+    message: `CI cache seed for template ${id} ${label}`,
+    branch: "main",
+    expectedOld: head,
+  });
+  return sha;
+}
+
 async function seedRepo(
   git: GitHost,
   id: TemplateId,
   origin: string,
+  refresh?: string,
 ): Promise<{ repo: string; sha: string }> {
   const repo = seedRepoName(id);
   try {
@@ -42,7 +71,9 @@ async function seedRepo(
     }
   }
   const head = await git.branchHead(repo, "main");
-  if (head !== null) return { repo, sha: head };
+  if (head !== null) {
+    return { repo, sha: refresh === undefined ? head : await refreshedSeed(git, repo, id, head, refresh) };
+  }
   const files = templateFiles(id, {
     projectName: id,
     host: origin,
@@ -61,12 +92,14 @@ async function seedRepo(
 export async function seedTemplateCaches(
   deps: { git: GitHost; engine: CiEngine; origin: string },
   templates: readonly TemplateId[] = TEMPLATE_IDS,
+  /** Seed again for this worker version (a new seed commit), even if the head was seeded. */
+  opts: { refresh?: string } = {},
 ): Promise<SeedResult[]> {
   const seed = deps.engine.seedCache?.bind(deps.engine);
   return Promise.all(
     templates.map(async (templateId): Promise<SeedResult> => {
       try {
-        const { repo, sha } = await seedRepo(deps.git, templateId, deps.origin);
+        const { repo, sha } = await seedRepo(deps.git, templateId, deps.origin, opts.refresh);
         if (seed === undefined) {
           return { templateId, repo, sha, runId: null, error: "this CI engine cannot seed caches" };
         }

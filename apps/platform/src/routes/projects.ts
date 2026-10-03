@@ -16,7 +16,7 @@ import { anonymousClient } from "../limits/client.js";
 import { assertPlatformAdmin } from "../limits/routes.js";
 import { ttfgFromAnalyticsEngine, ttfgFromD1, ttfgReport } from "../projects/onboarding.js";
 import { engineFor, seedTemplateCaches } from "../projects/seed-cache.js";
-import { buildPorts } from "../runtime/ports.js";
+import { seedGitHost } from "../projects/seed-on-deploy.js";
 import { CreateProjectInput, createProject } from "../services/projects.js";
 import { type ApiApp, body, errors, json, SECURITY } from "./common.js";
 
@@ -240,10 +240,13 @@ export function registerProjectRoutes(app: ApiApp): void {
   app.openapi(seed, async (c) => {
     assertPlatformAdmin(callerOf(c), c.env); // a platform-wide action, not a repo's
     const { template } = c.req.valid("query");
-    const ports = buildPorts(c.env, "default");
+    // A seed commit per worker version: the cache key includes the runner image, which most
+    // deploys rebuild, and the engine keys seed runs by sha (src/projects/seed-on-deploy.ts).
+    const version = c.env.VERSION?.id;
     const seeds = await seedTemplateCaches(
-      { git: ports.git, engine: engineFor(c.env), origin: c.get("services").origin },
+      { git: seedGitHost(c.env), engine: engineFor(c.env), origin: c.get("services").origin },
       template === undefined ? undefined : [template],
+      version === undefined ? {} : { refresh: version },
     );
     return c.json({ seeds }, 202);
   });
