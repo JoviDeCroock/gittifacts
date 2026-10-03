@@ -56,10 +56,14 @@ export default async (ci: Ci) => {
 
   await Promise.all([
     assets.runner({ name: "typecheck", command: "pnpm -r typecheck" }),
-    assets.runner({
-      name: "platform-tests",
-      command: "cd apps/platform && CI=1 pnpm exec vitest run --maxWorkers=2",
-    }),
+    // Sharded: one exec that runs longer than ~5 minutes loses its container connection
+    // ("Network connection lost") and the step errors, even while its tests are passing.
+    ...[1, 2, 3, 4].map((i) =>
+      assets.runner({
+        name: `platform-tests-${i}`,
+        command: `cd apps/platform && CI=1 pnpm exec vitest run --maxWorkers=2 --shard=${i}/4`,
+      }),
+    ),
     install.runner({
       name: "test",
       command: `pnpm ${UNIT.map((p) => `--filter ${p}`).join(" ")} run test`,
