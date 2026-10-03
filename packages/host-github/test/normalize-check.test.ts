@@ -3,7 +3,7 @@ import type { LaneVerdict } from "@app/host";
 import { describe, expect, it } from "vitest";
 import { claimedCategoryOf } from "../src/adapter.js";
 import { githubCapabilities } from "../src/capabilities.js";
-import { CHECK_ACTIONS, completedCheckRun, conclusionOf, SUMMARY_MAX } from "../src/check-run.js";
+import { CHECK_ACTIONS, completedCheckRun, conclusionOf, readCheckRunVerdict, SUMMARY_MAX } from "../src/check-run.js";
 import { classifyAuthor } from "../src/identity.js";
 import { mergeGroupPrNumbers, normalizeGithubDelivery } from "../src/normalize.js";
 
@@ -94,5 +94,38 @@ describe("gittifacts/lane check run", () => {
     expect(githubCapabilities()).toMatchObject({ canMerge: false, mergeMode: "none", supportsNotes: false, hasOwnMergeQueue: false });
     expect(githubCapabilities({ actorReady: true, hostQueueRequired: true })).toMatchObject({ canMerge: false, hostQueueRequired: true });
     expect(githubCapabilities({ actorReady: true, hostQueueRequired: false }).mergeMode).toBe("bypass-direct");
+  });
+});
+
+describe("reading a completed gittifacts/lane run back (live contract run)", () => {
+  const ctx = {
+    changeId: "gh-1-2", detailsUrl: "https://x/changes/gh-1-2", shadow: true,
+    evidence: [{ kind: "red-green", status: "proven" }, { kind: "api-diff", status: "none", note: "a | b" }, { kind: "red-green", status: "proven" }],
+  };
+  const read = (v: LaneVerdict, c = ctx) => readCheckRunVerdict(completedCheckRun(v, c, "t").output);
+
+  it("round-trips the verdict, the reason codes and the evidence kinds", () => {
+    const v = verdict({
+      reasons: [
+        { code: "shadow.lane0-disabled", lane: 1, message: "Lane 0 is in shadow mode." },
+        { code: "plan.missing", lane: 2, message: "No approved | plan" },
+      ],
+    });
+    expect(read(v)).toEqual({
+      verdict: { lane: 1, computedLane: 0, shadow: true, blocked: false, requiresHumanApproval: true, reasons: [{ code: "plan.missing" }, { code: "shadow.lane0-disabled" }] },
+      kinds: ["api-diff", "red-green"],
+    });
+  });
+
+  it("reads blocked, an unraised lane, no approval and no shadow", () => {
+    const v = verdict({ lane: 2, computedLane: 2, blocked: true, requiresHumanApproval: false, reasons: [], action: "blocked" });
+    expect(read(v, { ...ctx, shadow: false, evidence: [] })).toEqual({
+      verdict: { lane: 2, computedLane: 2, shadow: false, blocked: true, requiresHumanApproval: false, reasons: [] },
+      kinds: [],
+    });
+  });
+
+  it("an in-progress run has no verdict", () => {
+    expect(readCheckRunVerdict({ title: "Shadow · grading", summary: "gittifacts is running the evidence" }).verdict).toBeUndefined();
   });
 });

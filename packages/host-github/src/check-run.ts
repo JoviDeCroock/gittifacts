@@ -133,3 +133,42 @@ export function supersededCheckRun(newHead: string, completedAt: string) {
     },
   };
 }
+
+export interface CheckRunVerdict {
+  lane: number;
+  computedLane: number;
+  shadow: boolean;
+  blocked: boolean;
+  requiresHumanApproval: boolean;
+  reasons: { code: string }[];
+}
+
+/**
+ * The verdict as the completed check run states it (packages/host-github/src/check-run.ts): the
+ * title says shadow and blocked, the table the lane, a raised lane and a required approval, "Why"
+ * the reason codes (≤ 40) and "Evidence" the kinds. The inverse of `completedCheckRun`, used by the
+ * live contract run (scripts/github-live-contract.ts, GITTIFACTS_READ=check-run).
+ */
+export function readCheckRunVerdict(output: { title: string | null; summary: string | null }): { verdict: CheckRunVerdict | undefined; kinds: string[] } {
+  const title = output.title ?? "";
+  const summary = output.summary ?? "";
+  const lane = /^\| Lane \| \*\*(\d)\*\* \|$/m.exec(summary);
+  if (lane === null) return { verdict: undefined, kinds: [] };
+  const raised = /^\| Computed lane \| (\d) /m.exec(summary);
+  const section = (name: string) => summary.split(`\n### ${name}\n`)[1]?.split("\n### ")[0] ?? "";
+  const reasons = [...section("Why").matchAll(/^- `([^`]+)` \(lane \d\)/gm)].map((m) => ({ code: m[1] ?? "" }));
+  const kinds = [...section("Evidence").matchAll(/^\| ([^|]+?) \| [^|]* \|/gm)]
+    .map((m) => m[1] ?? "")
+    .filter((k) => k !== "Kind" && !/^-+$/.test(k));
+  return {
+    verdict: {
+      lane: Number(lane[1]),
+      computedLane: raised === null ? Number(lane[1]) : Number(raised[1]),
+      shadow: title.startsWith("Shadow · "),
+      blocked: title.includes("Blocked:"),
+      requiresHumanApproval: /^\| Human approval \| required \|$/m.test(summary),
+      reasons,
+    },
+    kinds: [...new Set(kinds)].sort(),
+  };
+}

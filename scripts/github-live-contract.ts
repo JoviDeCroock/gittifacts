@@ -11,6 +11,10 @@
  *   GITTIFACTS_READ=d1      instead of the agent token: read verdicts and evidence straight from the
  *                           platform's D1 with wrangler (operators only; scenarios that need a Plan
  *                           report "needs-plan-approval", since creating one needs a human's agent)
+ *   GITTIFACTS_READ=check-run  read the verdict from the completed `gittifacts/lane` run itself
+ *                           (title, summary table, reasons, evidence table): no platform access;
+ *                           scenarios that need a Plan report "needs-plan-approval" unless
+ *                           CONTRACT_PLANS names an approved one
  *   CONTRACT_SCENARIOS      optional comma list (default: every "grade" scenario)
  *
  * Per scenario: materialize the fixture, make the repo's main its base (a dedicated test repo),
@@ -21,6 +25,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { CONTRACT_SCENARIO_NAMES, CONTRACT_SCENARIOS, type ContractScenario } from "../packages/host-contract/src/scenarios.js";
+import { type CheckRunVerdict as Verdict, readCheckRunVerdict } from "../packages/host-github/src/check-run.js";
 import { materializeFixture } from "./lib/fixtures.js";
 
 const env = process.env;
@@ -29,10 +34,11 @@ const TOKEN = env.GITHUB_TEST_TOKEN ?? "";
 const PLATFORM = (env.GITTIFACTS_URL ?? "https://gittifacts.decroockjovi.workers.dev").replace(/\/$/, "");
 const AGENT = env.GITTIFACTS_AGENT_TOKEN ?? "";
 const READ_D1 = env.GITTIFACTS_READ === "d1";
+const READ_CHECK = env.GITTIFACTS_READ === "check-run";
 const API = "https://api.github.com";
 
-if (!/^[\w.-]+\/[\w.-]+$/.test(REPO) || TOKEN === "" || (AGENT === "" && !READ_D1)) {
-  console.log("skipped: set GITHUB_TEST_REPO, GITHUB_TEST_TOKEN and GITTIFACTS_AGENT_TOKEN (see the header)");
+if (!/^[\w.-]+\/[\w.-]+$/.test(REPO) || TOKEN === "" || (AGENT === "" && !READ_D1 && !READ_CHECK)) {
+  console.log("skipped: set GITHUB_TEST_REPO, GITHUB_TEST_TOKEN and GITTIFACTS_AGENT_TOKEN or GITTIFACTS_READ (see the header)");
   process.exit(0);
 }
 
@@ -91,8 +97,9 @@ async function api<T = unknown>(method: string, path: string, body?: unknown): P
 async function planFor(s: ContractScenario, repoId: string): Promise<{ id: string; approved: boolean } | null> {
   if (s.plan === null) return null;
   const known = PLANS[s.name];
-  if (READ_D1) {
+  if (READ_D1 || READ_CHECK) {
     if (known === undefined) return { id: "(none: create and approve one on gittifacts)", approved: false };
+    if (READ_CHECK) return { id: known, approved: true }; // CONTRACT_PLANS lists approved Plans
     const [p] = d1<{ status: string }>(`select status from plans where id = '${known.replace(/[^\w-]/g, "")}'`);
     return { id: known, approved: p?.status === "approved" };
   }
@@ -117,9 +124,10 @@ function d1<T>(sql: string): T[] {
   return (JSON.parse(out) as { results: T[] }[])[0]?.results ?? [];
 }
 
-type Verdict = { lane: number; computedLane: number; shadow: boolean; blocked: boolean; requiresHumanApproval: boolean; reasons: { code: string }[] };
 
 /** The verdict and evidence kinds for a PR: over MCP (agent token) or from D1. */
+type CheckRun = { status: string; conclusion: string | null; started_at: string; completed_at: string | null; output: { title: string | null; summary: string | null } };
+
 async function readResult(ref: string, changeId: string, head: string): Promise<{ c: Verdict | undefined; kinds: string[] }> {
   if (!READ_D1) {
     const status = (await mcp("get_change_status", { github: ref })) as { classification?: Verdict };
@@ -173,17 +181,23 @@ async function runScenario(s: ContractScenario, runId: string, repoId: string): 
   });
   try {
     const started = Date.parse(pr.created_at);
-    let run: { status: string; conclusion: string | null; completed_at: string | null } | undefined;
+    let run: CheckRun | undefined;
     for (let i = 0; i < 120; i++) {
-      const runs = await gh<{ check_runs: typeof run[] }>("GET", `/repos/${REPO}/commits/${fx.headSha}/check-runs?check_name=gittifacts/lane`);
-      run = runs.check_runs.find((r) => r?.status === "completed");
+      const runs = await gh<{ check_runs: CheckRun[] }>("GET", `/repos/${REPO}/commits/${fx.headSha}/check-runs?check_name=gittifacts/lane&filter=all`);
+      // Fixture heads are deterministic: earlier runs (other PRs, other nights) share the SHA, so
+      // only a run this PR started counts, and a superseded (cancelled) run is no verdict.
+      run = runs.check_runs.find(
+        (r) => r.status === "completed" && r.conclusion !== "cancelled" && Date.parse(r.started_at) >= started - 5000,
+      );
       if (run) break;
       await new Promise((r) => setTimeout(r, 5000));
     }
     if (!run?.completed_at) return { ...out, status: "error", detail: ["no completed gittifacts/lane run within 10 minutes"] };
     out.timeToGradeSec = Math.round((Date.parse(run.completed_at) - started) / 1000);
     const ref = `${REPO}#${pr.number}`;
-    const { c, kinds } = await readResult(ref, `gh-${repoId.replace(/^gh-/, "")}-${pr.number}`, fx.headSha);
+    const { c, kinds } = READ_CHECK
+      ? (({ verdict, kinds }) => ({ c: verdict, kinds }))(readCheckRunVerdict(run.output))
+      : await readResult(ref, `gh-${repoId.replace(/^gh-/, "")}-${pr.number}`, fx.headSha);
     const e = s.expected;
     const want = { lane: e.lane, computedLane: e.computedLane, shadow: e.shadow, blocked: e.blocked, requiresHumanApproval: e.requiresHumanApproval };
     const got = c === undefined ? null : { lane: c.lane, computedLane: c.computedLane, shadow: c.shadow, blocked: c.blocked, requiresHumanApproval: c.requiresHumanApproval };
