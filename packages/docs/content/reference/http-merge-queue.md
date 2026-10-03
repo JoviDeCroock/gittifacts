@@ -71,7 +71,7 @@ The merge queue: tracks, batches, landing, freeze state, entries with reasons an
 
 - **Auth:** session cookie or bearer token
 - **Parameters:** `repoId` (path, required)
-- **200:** `{ repoId, mainSha, frozen, freezeReasons, halted, tracks, landing, entries, waiting, resolving, throughputPerHour, timeInQueueMs, ciDurationMs, quarantined, flakeRates, trains, updatedAt }`
+- **200:** `{ repoId, mainSha, frozen, freezeReasons, halted, tracks, landing, entries, waiting, resolving, throughputPerHour, timeInQueueMs, ciDurationMs, quarantined, flakeRates, trains, stalls, updatedAt }`
 - **Errors:** 401, 403, 404
 
 ### `GET /api/v1/repos/{repoId}/queue/events`

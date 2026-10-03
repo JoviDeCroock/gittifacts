@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 107 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 108 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -45,6 +45,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `GET` | [`/api/v1/changes/{changeId}/queue/wait`](/docs/reference/http-merge-queue) | Long-poll until the Change merges, is ejected or dequeued, or the queue freezes |
 | `POST` | [`/api/v1/changes/{changeId}/request-review`](/docs/reference/http-changes) | Ask for human attention on a change (author or its owner); notifies, never approves |
 | `POST` | [`/api/v1/changes/{changeId}/rerun`](/docs/reference/http-changes) | Re-run CI, evidence, lane and tour on the current head (author or maintainer) |
+| `GET` | [`/api/v1/changes/{changeId}/resolution`](/docs/reference/http-changes) | The merge queue's conflict resolution of this change (null when it needed none): what lands, what each side had |
 | `POST` | [`/api/v1/changes/{changeId}/review`](/docs/reference/http-changes) | Review a change (human, change:review, not the author); binds to a head |
 | `GET` | [`/api/v1/changes/{changeId}/reviews`](/docs/reference/http-changes) | Human reviews of a change, oldest first (each bound to a head) |
 | `GET` | [`/api/v1/changes/{changeId}/rollout`](/docs/reference/http-changes) | Rollout state and the change's audit timeline |

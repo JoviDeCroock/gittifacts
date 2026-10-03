@@ -118,6 +118,15 @@ No push needed: a fresh workflow instance and CI run for the same head (a flaky 
 - **202:** `{ change: Change, headSha, instanceId, superseded }`
 - **Errors:** 400, 401, 403, 404, 409, 502
 
+### `GET /api/v1/changes/{changeId}/resolution`
+
+The merge queue's conflict resolution of this change (null when it needed none): what lands, what each side had
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `changeId` (path, required)
+- **200:** `{ resolution: Resolution }`
+- **Errors:** 401, 403, 404
+
 ### `POST /api/v1/changes/{changeId}/review`
 
 Review a change (human, change:review, not the author); binds to a head
