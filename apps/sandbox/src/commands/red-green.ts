@@ -24,9 +24,10 @@
  * runner, unsound base environment), the item says why and rests on the new/changed tests:
  * `no-tests` when there are none, exactly as before pre-existing tests counted.
  */
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { type RedGreenProof, redGreenProof, type TestRef, type TestResult } from "@app/evidence";
+import { BaselineStore, runnerId } from "../lib/baseline.js";
 import { type Changes, loadChanges, touchedHeadLines } from "../lib/changes.js";
 import { type Context, workdirCheck } from "../lib/context.js";
 import { git, readBlob, removeWorktree } from "../lib/git.js";
@@ -34,6 +35,12 @@ import { errorMessage, log } from "../lib/log.js";
 import { isTestFile, isTestSupportFile } from "../lib/patterns.js";
 import { type BaseScan, listPreexisting, outcomeOn, scanBase } from "../lib/preexisting-tests.js";
 import { prepareBaseWorktree, sameDependencyGraph } from "../lib/repo.js";
+import {
+  type Selection,
+  selectTests as selectAffected,
+  selectedFiles,
+  selectionEvidence,
+} from "../lib/selection.js";
 import { allStaticTests, changedTestCases } from "../lib/test-cases.js";
 import {
   detectTestRunner,
@@ -155,6 +162,8 @@ async function measureBase(
   files: readonly string[],
   headRunner: TestRunner,
   notes: string[],
+  selection: Selection,
+  store: BaselineStore,
 ): Promise<BasePhase | RedGreenProof> {
   const wtPath = join(ctx.tmp, "base");
   try {
@@ -178,9 +187,20 @@ async function measureBase(
     // The runner as installed for base (linked or freshly installed). Base failures only count
     // from base's own runner: anything else is not base as committed.
     const baseRunner = detectTestRunner(prepared.dir, ctx.testCommand);
-    const scan: BaseScan = baseRunner.ok
-      ? await scanBase({ runner: baseRunner.runner, dir: prepared.dir, tmp: ctx.tmp })
-      : { ok: false, reason: `base: ${baseRunner.reason}` };
+    // Only the selected test files can be fixed by the Change (all of them when its test impact
+    // is unknown); base results come from the cache when an earlier run measured this commit.
+    const scan: BaseScan = !baseRunner.ok
+      ? { ok: false, reason: `base: ${baseRunner.reason}` }
+      : selection.mode === "affected" && selection.files.length === 0
+        ? { ok: true, failures: [], notes: [], source: "none" }
+        : await scanBase({
+            runner: baseRunner.runner,
+            dir: prepared.dir,
+            tmp: ctx.tmp,
+            files: selectedFiles(selection),
+            store,
+            roots: rootsOf(ctx.repo, prepared.dir),
+          });
     if (files.length === 0) return { scan, overlaid: null };
 
     const overlay = changes.headFiles.filter((f) => isTestSupportFile(f.path)).map((f) => f.path);
@@ -244,20 +264,25 @@ export async function redGreen(ctx: Context): Promise<RedGreenProof> {
   if (files.length === 0 && !(await sameDependencyGraph(ctx.repo, ctx.base, ctx.head)))
     return unscanned("base and head install different dependencies (not installed for this alone)");
 
-  const base = await measureBase(ctx, changes, files, runner, notes);
-  if ("kind" in base) return base;
+  const selection = await selectAffected(ctx);
+  const store = BaselineStore.load(ctx.base, runnerId(runner));
+  const base = await measureBase(ctx, changes, files, runner, notes, selection, store);
+  store.save();
+  if ("kind" in base) return { ...base, selection: selectionEvidence(selection) };
   const { scan, overlaid } = base;
   if (scan.ok) notes.push(...scan.notes);
   else notes.push(`pre-existing tests not checked: ${scan.reason}`);
   const failures = scan.ok ? scan.failures : [];
-  if (files.length === 0 && failures.length === 0) return noTests(ctx, notes);
+  notes.push(`tests looked at: ${selection.reason}`);
+  if (files.length === 0 && failures.length === 0)
+    return { ...noTests(ctx, notes), selection: selectionEvidence(selection) };
 
   // Head: the new/changed test files and the files of base's failures that still exist.
   const failureFiles = failures.map((f) => f.file).filter((f) => existsSync(join(ctx.repo, f)));
   const headFiles = [...new Set([...files, ...failureFiles])];
   if (headFiles.length === 0) {
     notes.push("every test file failing on base is gone at head");
-    return noTests(ctx, notes);
+    return { ...noTests(ctx, notes), selection: selectionEvidence(selection) };
   }
   const headRun = await runTests({
     runner,
@@ -271,7 +296,12 @@ export async function redGreen(ctx: Context): Promise<RedGreenProof> {
   }
 
   const selected = await listSelected(ctx, selections, headRun, notes);
-  const pre = listPreexisting(failures, headRun, new Set(selected.map((t) => t.id)));
+  const pre = listPreexisting(
+    failures,
+    headRun,
+    new Set(selected.map((t) => t.id)),
+    rootsOf(ctx.repo, join(ctx.tmp, "base")),
+  );
   const baseResults: TestResult[] = selected.map((t) => ({
     id: t.id,
     outcome: overlaid === null ? "missing" : outcomeOn(overlaid, t.id, t.file, "base"),
@@ -287,16 +317,39 @@ export async function redGreen(ctx: Context): Promise<RedGreenProof> {
   if (pre.fixed.length > 0)
     notes.push(`pre-existing, fail on base and pass on head: ${ids(pre.fixed)}`);
   if (pre.stillFailing.length > 0)
-    notes.push(`pre-existing, fail on base and still fail on head: ${ids(pre.stillFailing)}`);
+    notes.push(`fail on base and fail differently on head: ${ids(pre.stillFailing)}`);
+  if (pre.identical.length > 0)
+    notes.push(
+      `pre-existing, fail identically on base and head (not counted): ${ids(pre.identical.map((t) => t.id))}`,
+    );
   if (pre.gone.length > 0) notes.push(`fail on base, no result at head: ${ids(pre.gone)}`);
   if (wd.note !== null) notes.push(wd.note);
   notes.push(
     `runner: ${runner.kind}${runner.version ? `@${runner.version}` : ""} (${runner.source})`,
   );
-  return redGreenProof({
+  const item = redGreenProof({
     tests: [...selected, ...pre.tests],
     base: { sha: ctx.base, results: [...baseResults, ...pre.base] },
     head: { sha: ctx.head, results: [...headResults, ...pre.head] },
     note: joinNotes(notes),
   });
+  return {
+    ...item,
+    ...(pre.identical.length === 0 ? {} : { preExisting: pre.identical.slice(0, 200) }),
+    selection: selectionEvidence(selection),
+  };
+}
+
+/** Checkout roots (and their real paths) that failure messages may embed. */
+function rootsOf(...dirs: string[]): string[] {
+  const out = new Set<string>();
+  for (const d of dirs) {
+    out.add(d);
+    try {
+      out.add(realpathSync(d));
+    } catch {
+      // gone already
+    }
+  }
+  return [...out];
 }

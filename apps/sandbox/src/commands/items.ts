@@ -1,11 +1,12 @@
 /** Small helpers for building evidence items honestly. */
-import type {
-  CoverageDelta,
-  DependencyDiff,
-  MutationScore,
-  PublicApiDiff,
-  SensitivePathHits,
-  TestRun,
+import {
+  type CoverageDelta,
+  type DependencyDiff,
+  type MutationScore,
+  type PublicApiDiff,
+  type SensitivePathHits,
+  stripAnsi,
+  type TestRun,
 } from "@app/evidence";
 
 const MAX_NOTE = 4000;
@@ -13,7 +14,11 @@ const MAX_NOTE = 4000;
 /** Join notes into one item note (deduplicated, capped at the schema limit). */
 export function joinNotes(notes: readonly (string | null | undefined)[]): string | undefined {
   const parts = [
-    ...new Set(notes.filter((n): n is string => typeof n === "string" && n.trim() !== "")),
+    ...new Set(
+      notes
+        .filter((n): n is string => typeof n === "string" && n.trim() !== "")
+        .map((n) => stripAnsi(n)),
+    ),
   ];
   if (parts.length === 0) return undefined;
   const text = parts.join("; ");

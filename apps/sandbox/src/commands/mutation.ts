@@ -16,6 +16,7 @@ import {
   mutationScore,
   parseStrykerReport,
   type StrykerReport,
+  stripAnsi,
 } from "@app/evidence";
 import { loadChanges } from "../lib/changes.js";
 import { type Context, workdirCheck } from "../lib/context.js";
@@ -129,6 +130,37 @@ export async function mutation(ctx: Context): Promise<MutationScore> {
         "timed out",
     );
   if (!existsSync(reportFile)) {
+    const output = stripAnsi(result.stdout + result.stderr);
+    const untested = noTestsFound(result.code, output);
+    if (untested !== null) {
+      // Stryker found no test related to the mutated files: a measurement (nothing covers these
+      // lines), not a tool failure.
+      if (untested === 0)
+        return withNote(
+          mutationScore(EMPTY_REPORT, {}),
+          "stryker generated no mutant on the changed lines",
+          ...notes,
+        );
+      const measured: MutationScore = {
+        id: "mutation",
+        kind: "mutation",
+        status: "ok",
+        tool: `stryker@${stryker?.version ?? "?"}`,
+        files,
+        killed: 0,
+        survived: 0,
+        timedOut: 0,
+        noCoverage: untested,
+        score: 0,
+        survivors: [],
+      };
+      return withNote(
+        measured,
+        `no test covers the changed files: no test is related to ${files.join(", ")}, so all ${untested} mutant(s) have no coverage`,
+        ...notes,
+        wd.note,
+      );
+    }
     return mutationError(
       joinNotes([
         `stryker exited ${result.code} without a report: ${tail(result.stdout + result.stderr, 12)}`,
@@ -162,6 +194,16 @@ export async function mutation(ctx: Context): Promise<MutationScore> {
       status: "error",
     };
   return withNote(item, ...notes, wd.note);
+}
+
+/**
+ * The mutant count when Stryker stopped because no test relates to the mutated files (exit 0, no
+ * report, "No tests were found"); null otherwise or when the count is not in its output.
+ */
+export function noTestsFound(code: number, output: string): number | null {
+  if (code !== 0 || !/\bNo tests were (?:found|executed)\b/.test(output)) return null;
+  const m = /Instrumented \d+ source file\(s\) with (\d+) mutant\(s\)/.exec(output);
+  return m === null ? null : Number(m[1]);
 }
 
 function countsOf(

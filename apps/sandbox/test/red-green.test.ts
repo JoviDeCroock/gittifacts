@@ -3,7 +3,7 @@
  * proves the change even when the change doesn't touch it (an imported repo's failing test, fixed
  * by a source-only change). Real vitest (the monorepo's), through the built bundle.
  */
-import { symlinkSync } from "node:fs";
+import { mkdirSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { RedGreenProof } from "@app/evidence";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -87,10 +87,11 @@ describe("red-green: pre-existing tests", { timeout: 240_000 }, () => {
       base: { results: [{ id: ROUNDED, outcome: "fail" }] },
       head: { results: [{ id: ROUNDED, outcome: "fail" }] },
     });
-    expect(item.note).toMatch(/still fail on head/);
+    expect(item.note).toMatch(/fail differently on head/);
+    expect(item.preExisting).toBeUndefined();
   });
 
-  it("still blocks the proof of a new test that is red on base and green on head", async () => {
+  it("a failure that is identical on base no longer blocks a new test's proof: it is pre-existing", async () => {
     const double = `import { expect, it } from "vitest";
 import { double } from "../src/math.js";
 
@@ -103,17 +104,21 @@ it("doubles", () => {
       "test/double.test.ts": double,
     });
     const item = await redGreen(r);
-    expect(item.verdict).toBe("not-proven");
+    expect(item.verdict).toBe("proven");
     const outcomes = (side: "base" | "head") =>
       Object.fromEntries(item[side].results.map((x) => [x.id, x.outcome]));
     expect(outcomes("base")).toEqual({
       "test/double.test.ts > doubles": expect.stringMatching(/^(fail|missing)$/),
-      [ROUNDED]: "fail",
     });
-    expect(outcomes("head")).toEqual({
-      "test/double.test.ts > doubles": "pass",
-      [ROUNDED]: "fail",
-    });
+    expect(outcomes("head")).toEqual({ "test/double.test.ts > doubles": "pass" });
+    expect(item.preExisting).toEqual([
+      expect.objectContaining({
+        id: ROUNDED,
+        file: "test/math.test.ts",
+        message: expect.stringContaining("expected 2.5 to be 2"),
+      }),
+    ]);
+    expect(item.note).toMatch(/pre-existing, fail identically on base and head \(not counted\)/);
   });
 
   it("a healthy base and a source-only change: no-tests (nothing was red)", async () => {
@@ -136,9 +141,40 @@ it("flaky", () => {
 });
 `;
     const r = repo({ "test/flaky.test.ts": flaky }, { "README.md": "docs\n" });
-    const item = await redGreen(r, { RG_FLAKY_MARKER: join(r.dir, "..", "flaky-marker") });
+    // The whole suite (a docs-only change selects no test: see "looks only at" below).
+    const item = await redGreen(r, {
+      RG_FLAKY_MARKER: join(r.dir, "..", "flaky-marker"),
+      GITTIFACTS_TEST_SELECTION: "all",
+    });
     expect(item).toMatchObject({ status: "ok", verdict: "no-tests", tests: [] });
     expect(item.note).toMatch(/failed once on base, then passed \(flaky: not red\)/);
+  });
+
+  it("looks only at the tests that reach the change, and reuses cached base results", async () => {
+    const other = `import { expect, it } from "vitest";\n\nit("unrelated and red", () => {\n  expect(1).toBe(2);\n});\n`;
+    const r = repo(
+      { ...BROKEN, "test/other.test.ts": other },
+      { "src/math.ts": MATH("return Math.floor(n / 2);") },
+    );
+    const cache = join(r.dir, "..", "baseline");
+    mkdirSync(join(cache, "in"), { recursive: true });
+    const env = {
+      GITTIFACTS_BASELINE_IN: join(cache, "in"),
+      GITTIFACTS_BASELINE_OUT: join(cache, "in", "out.json"),
+    };
+    const item = await redGreen(r, env);
+    expect(item.verdict).toBe("proven");
+    expect(item.tests.map((t) => t.id)).toEqual([ROUNDED]);
+    expect(item.selection).toMatchObject({
+      mode: "affected",
+      files: 1,
+      tests: ["test/math.test.ts"],
+    });
+    // test/other.test.ts fails on base too, but cannot reach src/math.ts: never run, never listed.
+    expect(JSON.stringify(item)).not.toContain("unrelated and red");
+    const again = await redGreen(r, env);
+    expect(again.verdict).toBe("proven");
+    expect(again.note).toMatch(/base results of 1 test file from the cache/);
   });
 
   it("a test file that fails to load on base and passes on head is proven (base: error)", async () => {

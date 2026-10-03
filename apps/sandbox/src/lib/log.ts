@@ -1,3 +1,5 @@
+import { stripAnsi } from "@app/evidence";
+
 /**
  * Human logs go to stderr; stdout is reserved for the single `::evidence::` / `::plan::` line.
  * Secrets are scrubbed from everything written here.
@@ -39,6 +41,6 @@ export function errorMessage(error: unknown): string {
 
 /** Last `lines` lines of `text`, trimmed; for notes on failed tool runs. */
 export function tail(text: string, lines = 20, maxChars = 1500): string {
-  const t = text.trim().split("\n").slice(-lines).join("\n");
+  const t = stripAnsi(text).trim().split("\n").slice(-lines).join("\n");
   return t.length > maxChars ? `…${t.slice(-maxChars)}` : t;
 }

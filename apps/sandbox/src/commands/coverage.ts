@@ -30,6 +30,7 @@ import { loadChanges } from "../lib/changes.js";
 import { type Context, workdirCheck } from "../lib/context.js";
 import { errorMessage, log } from "../lib/log.js";
 import { measuredChangedLines } from "../lib/patterns.js";
+import { selectedFiles, selectionEvidence, selectTests } from "../lib/selection.js";
 import { detectTestRunner, runTests, type TestRunner } from "../lib/test-runner.js";
 import { coverageV8Module, findPackageDir, majorMinor, versionOf } from "../lib/tools.js";
 import { coverageError, joinNotes, withNote } from "./items.js";
@@ -163,6 +164,20 @@ export async function coverage(ctx: Context): Promise<CoverageDelta> {
   const detected = detectTestRunner(ctx.repo, ctx.testCommand);
   if (!detected.ok) return coverageError(detected.reason);
   const runner = detected.runner;
+  // Only tests that reach the changed files can cover them (all tests when that is unknown).
+  const selection = await selectTests(ctx);
+  const recorded = selectionEvidence(selection);
+  if (selection.mode === "affected" && selection.files.length === 0) {
+    // No test reaches the changed files: every changed line is uncovered. Measured without a
+    // run, and never read as "not executable" (that would raise coverage, not lower it).
+    const { note: _empty, ...none } = changedLineCoverage(new Map(), changed, {
+      treatMissingAsUncovered: () => true,
+    });
+    return {
+      ...withNote({ ...none, status: "ok" as const }, `no test ran: ${selection.reason}`, wd.note),
+      selection: recorded,
+    };
+  }
   const dir = join(ctx.tmp, "coverage");
   let setup: CoverageSetup | { error: string };
   try {
@@ -173,16 +188,18 @@ export async function coverage(ctx: Context): Promise<CoverageDelta> {
   if ("error" in setup) return coverageError(setup.error);
   let result: Awaited<ReturnType<typeof runTests>>;
   try {
+    const files = selectedFiles(selection);
     result = await runTests({
       runner,
       dir: ctx.repo,
+      ...(files === undefined ? {} : { files }),
       reportPath: join(ctx.tmp, "coverage-tests.json"),
       extraArgs: setup.args,
     });
   } finally {
     setup.cleanup();
   }
-  const notes = [...setup.notes];
+  const notes = [`tests run: ${selection.reason}`, ...setup.notes];
   if (result.timedOut)
     return coverageError(joinNotes(["the test run timed out", ...notes]) ?? "timed out");
   if (!existsSync(setup.reportFile)) {
@@ -220,7 +237,7 @@ export async function coverage(ctx: Context): Promise<CoverageDelta> {
         `not in the coverage report (counted as non-executable): ${item.unmeasuredFiles.join(", ")}`,
       );
     }
-    return withNote(item, ...notes, wd.note);
+    return { ...withNote(item, ...notes, wd.note), selection: recorded };
   } catch (error) {
     return coverageError(
       joinNotes([`could not read the coverage report: ${errorMessage(error)}`, ...notes]) ??
