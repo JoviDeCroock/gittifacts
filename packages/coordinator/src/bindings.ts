@@ -58,6 +58,8 @@ export interface ChangeCoordinatorState {
   runId: string | null;
   spentUsd: number;
   gcAt: number | null;
+  /** Re-gradings of the current head so far (each gets its own workflow instance and CI run). */
+  regrades?: number;
 }
 
 export interface ChangeCoordinatorClient {

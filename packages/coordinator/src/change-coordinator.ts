@@ -167,7 +167,7 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     });
     // The same head pushed again after a different one (A → B → A): start it over.
     if (!created) await instance.restart();
-    await this.save({ ...state, headSha: tip, instanceId, runId: null });
+    await this.save({ ...state, headSha: tip, instanceId, runId: null, regrades: 0 });
     await this.changed(change.id);
     return { action: "started", headSha: tip, instanceId, superseded };
   }
@@ -360,13 +360,15 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
         subject: changeSubject(change.id),
         payload: { headSha: head, reason: input.reason, supersededInstance: state.instanceId },
       });
-      const instanceId = changeWorkflowId(change.id, head);
+      // A fresh instance (and so a fresh CI run id): the head's earlier run already finished.
+      const regrades = (state.headSha === head ? (state.regrades ?? 0) : 0) + 1;
+      const instanceId = `${changeWorkflowId(change.id, head)}-r${regrades}`;
       const { instance, created } = await createOrGet(bindings.changeWorkflow, instanceId, {
         changeId: change.id,
         headSha: head,
       });
       if (!created) await instance.restart();
-      await this.save({ ...state, changeId: change.id, forkName: change.forkName, headSha: head, instanceId, runId: null });
+      await this.save({ ...state, changeId: change.id, forkName: change.forkName, headSha: head, instanceId, runId: null, regrades });
       await this.changed(change.id);
       return { action: "started", headSha: head, instanceId, superseded: state.instanceId };
     });

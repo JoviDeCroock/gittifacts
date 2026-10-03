@@ -166,10 +166,13 @@ export function createRunSink(
       const summary = parsed.data;
       const run = toPipelineRun(summary);
       await ports.store.upsertRun(run);
-      const instanceId = changeWorkflowId(summary.changeId, summary.headSha);
-      // Only the full run of a ChangeWorkflow instance is forwarded (not merge-queue re-checks).
-      if (summary.id !== ciRunIdFor(instanceId))
+      // Only the full run of a ChangeWorkflow instance is forwarded (not merge-queue re-checks):
+      // the head's instance, or a re-grade of it (`<instance>-r<n>`, GitHub mode's edits).
+      const base = changeWorkflowId(summary.changeId, summary.headSha);
+      const suffix = summary.id.startsWith(ciRunIdFor(base)) ? summary.id.slice(ciRunIdFor(base).length) : null;
+      if (suffix === null || !/^(-r\d{1,6})?$/.test(suffix))
         return { accepted: true, forwarded: false, reason: "not a change workflow run" };
+      const instanceId = `${base}${suffix}`;
       const change = await ports.store.getChange(summary.changeId);
       if (change?.headSha !== summary.headSha)
         return { accepted: true, forwarded: false, reason: "head superseded" };
