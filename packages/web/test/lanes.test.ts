@@ -1,6 +1,6 @@
 import type { Change, LaneReason } from "@app/domain";
 import { describe, expect, it } from "vitest";
-import { familyLabel, groupByLane, matchesFilter, pct, reasonFamily, shadowProgress, triageChart, unroutedCopy } from "../src/lib/lanes.js";
+import { familyLabel, groupByLane, matchesFilter, noTourCopy, pct, reasonFamily, shadowProgress, triageChart, unroutedCopy } from "../src/lib/lanes.js";
 
 type C = Pick<Change, "lane" | "computedLane" | "status" | "updatedAt"> & { id: string };
 const c = (id: string, lane: C["lane"], computedLane: C["computedLane"], status: C["status"] = "awaiting-review", updatedAt = "2026-10-01T10:00:00Z"): C => ({
@@ -153,5 +153,47 @@ describe("unroutedCopy", () => {
   it("closed changes and the bootstrap are not routed, each with its own reason", () => {
     expect(unroutedCopy("abandoned", "chg_1")).toEqual({ title: "Not routed", line: "This change closed before a lane was computed." });
     expect(unroutedCopy("merged", "bs-abc").line).toMatch(/bootstrap/);
+  });
+});
+
+describe("noTourCopy", () => {
+  const ch = (status: Parameters<typeof noTourCopy>[0]["status"], extra: Partial<Parameters<typeof noTourCopy>[0]> = {}) => ({
+    id: "chg_1",
+    status,
+    lane: null,
+    laneReasons: [],
+    ...extra,
+  });
+  it("titles a failing change's section by what it holds; the chip and decision bar already say checks failed", () => {
+    const copy = noTourCopy(ch("failing"), "failed");
+    expect(copy.title).toBe("What failed");
+    expect(copy.title).not.toMatch(/checks fail/i);
+    expect(copy.showDiff).toBe(false);
+  });
+  it("follows the change and its latest run", () => {
+    expect(noTourCopy(ch("awaiting-push")).title).toBe("Waiting for the first push");
+    expect(noTourCopy(ch("awaiting-review"), "queued").title).toBe("The tour is not written yet");
+    expect(noTourCopy(ch("awaiting-review", { laneReasons: [{ code: "tour.failed" }] }), "passed").showDiff).toBe(true);
+    expect(noTourCopy(ch("merged", { id: "bs-abc" })).title).toMatch(/bootstrap/);
+    expect(noTourCopy(ch("merged", { lane: 0 })).title).toMatch(/Lane 0/);
+  });
+  it("covers every branch: running, review, the closed fallbacks", () => {
+    expect(noTourCopy(ch("running")).title).toBe("The tour is not written yet");
+    expect(noTourCopy(ch("awaiting-review"), "passed")).toMatchObject({
+      title: "The reviewer agent is writing the tour",
+      showDiff: true,
+    });
+    expect(noTourCopy(ch("awaiting-review", { laneReasons: [{ code: "tour.failed" }] })).title).toBe(
+      "No tour: the reviewer agent could not write one",
+    );
+    expect(noTourCopy(ch("merged", { lane: 1 }))).toEqual({
+      title: "No tour for this change",
+      body: "It was decided without a tour. The diff and the signed evidence are the record.",
+      showDiff: true,
+    });
+    expect(noTourCopy(ch("merged", { lane: 2, laneReasons: [{ code: "tour.failed" }] })).title).toBe(
+      "No tour: the reviewer agent could not write one",
+    );
+    expect(noTourCopy(ch("failing"), "failed").body).toMatch(/pushes a fix/);
   });
 });

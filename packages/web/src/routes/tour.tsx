@@ -18,7 +18,7 @@ import { Page } from "../components/Shell.js";
 import { TriageChart } from "../components/TriageChart.js";
 import { ErrorState, LaneTag, Loading, StatusChip, VerdictBadge, VerdictMark, Who } from "../components/ui.js";
 import { findItem } from "../lib/evidence.js";
-import { LANES, triageChart, unroutedCopy } from "../lib/lanes.js";
+import { LANES, noTourCopy, triageChart, unroutedCopy } from "../lib/lanes.js";
 import { durationLabel, relative, shortAge } from "../lib/time.js";
 import { CATEGORY_LABEL, CHANGE_STATUS, ROLLOUT_STATUS, STOP_KIND, VERDICT, plural, shortSha } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
@@ -393,7 +393,7 @@ function PipelineHead({ run }: { run: PipelineRun }) {
     case "errored":
       return (
         <>
-          <Icon name="x-circle" class="tone--danger" /> Checks failed at <b>{run.steps[idx]?.name ?? "a step"}</b>
+          <Icon name="x-circle" class="tone--danger" /> Failed at <b>{run.steps[idx]?.name ?? "a step"}</b>
         </>
       );
     case "cancelled":
@@ -436,35 +436,9 @@ function PipelineSteps({ run }: { run: PipelineRun }) {
   );
 }
 
-/** Why a change has no tour, in the change's own state, and what the reader can do instead. */
-function noTourCopy(data: TourData): { title: string; body: string; showDiff: boolean } {
-  const { change } = data;
-  const run = data.runs[0];
-  const tourFailed = change.laneReasons.some((r) => r.code === "tour.failed");
-  if (change.status === "awaiting-push")
-    return { title: "Waiting for the first push", body: "The author has not pushed a head yet. Checks, evidence and the tour follow the push.", showDiff: false };
-  if (change.status === "running" || (run && (run.status === "running" || run.status === "queued")))
-    return { title: "The tour is not written yet", body: "The reviewer agent writes the tour once the checks pass and the evidence is signed. Nothing can be approved until then.", showDiff: false };
-  if (change.status === "failing")
-    return { title: "Checks failed", body: "There is nothing to review until the author pushes a fix. The failing step is below.", showDiff: false };
-  if (change.status === "awaiting-review")
-    return tourFailed
-      ? { title: "No tour: the reviewer agent could not write one", body: "Review the change itself. Every changed file is below, the evidence is one step away, and the lane panel lists what was and was not measured.", showDiff: true }
-      : { title: "The reviewer agent is writing the tour", body: "You can already read the diff below and the signed evidence. The tour usually follows within a minute.", showDiff: true };
-  if (change.id.startsWith("bs-"))
-    return { title: "No tour for the bootstrap change", body: "The platform's first commit sets up CI and the first preview. It merges without review, so no tour is written.", showDiff: false };
-  if (change.lane === 0)
-    return { title: "No tour: this change merged in Lane 0", body: "In Lane 0 the evidence alone decides and nobody reviews, so no tour is written. The diff and the signed evidence are the record.", showDiff: true };
-  return {
-    title: tourFailed ? "No tour: the reviewer agent could not write one" : "No tour for this change",
-    body: "It was decided without a tour. The diff and the signed evidence are the record.",
-    showDiff: true,
-  };
-}
-
 function NotReady({ data }: { data: TourData }) {
   const run = data.runs[0];
-  const copy = noTourCopy(data);
+  const copy = noTourCopy(data.change, run?.status);
   const diff = copy.showDiff && data.diff && data.diff.files.length > 0 ? data.diff : null;
   return (
     <>
