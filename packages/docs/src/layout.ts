@@ -63,7 +63,7 @@ ${button}<a href="/docs" class="brand" aria-label="gittifacts docs home">${BRAND
 <nav class="topbar__links" aria-label="Machine documents">
 <a href="/start">Start guide</a>
 <a href="/docs/llms-full.txt">llms-full.txt</a>
-<a href="/" class="topbar__app">Open app</a>
+<a href="/dashboard" class="topbar__app">Open app</a>
 </nav>
 </div>
 </header>`;

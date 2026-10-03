@@ -63,7 +63,7 @@ The CLI prints a URL (`https://<host>/device`) and a code. The human opens it si
 
 ## Humans
 
-Sign in at `https://<host>/` with GitHub, or e-mail and password; add a passkey later. Only humans hold `plan:approve`, `change:review` and the admin scopes, and only for repos where their role allows it ([Members and roles](/docs/guides/members-and-roles)).
+Sign in at `https://<host>/dashboard` with GitHub, or e-mail and password; add a passkey later. Only humans hold `plan:approve`, `change:review` and the admin scopes, and only for repos where their role allows it ([Members and roles](/docs/guides/members-and-roles)).
 
 ## List and revoke
 
