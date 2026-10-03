@@ -72,4 +72,12 @@ if [ "$SKIP_TESTS" -eq 0 ] && [ "$GATE" = local ]; then
   CI=1 pnpm exec vitest run --maxWorkers=2
 fi
 CI=1 pnpm exec wrangler d1 migrations apply DB --remote
+# The container images build locally, and Docker Desktop on this shared machine sometimes quits
+# mid-session: start it if needed and wait for the daemon instead of failing the deploy.
+if ! docker info >/dev/null 2>&1; then
+  echo "docker: not running, starting Docker Desktop"
+  open -a Docker 2>/dev/null || true
+  for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 5; done
+  docker info >/dev/null 2>&1 || { echo "docker: still not running after 5 min"; exit 1; }
+fi
 CI=1 pnpm exec wrangler deploy
