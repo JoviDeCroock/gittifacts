@@ -1,0 +1,47 @@
+# Deploy gate: the same checks scripts/deploy-clean.sh runs locally (full typecheck + the platform
+# test suite) on the exact commit about to be deployed, on a GitHub runner instead of the
+# developer machine. Dispatch-only, so it spends Actions minutes only when deploying:
+#
+#   scripts/deploy-clean.sh --gate=ci            (dispatches this workflow, waits, then deploys)
+#   gh workflow run deploy-gate.yml -f sha=<sha> (manual)
+name: deploy-gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit to gate (must be on main)
+        required: true
+
+concurrency:
+  group: deploy-gate
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable corepack (pnpm from packageManager)
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build what tests read (web assets, docs, templates)
+        run: |
+          pnpm --filter @app/platform run bundle-templates
+          pnpm --filter @app/web build
+          pnpm --filter @app/docs build
+          pnpm --filter gittifacts pack:assets
+      - name: Typecheck (every package)
+        run: pnpm -r typecheck
+      - name: Platform tests
+        working-directory: apps/platform
+        env:
+          CI: "1"
+        run: pnpm exec vitest run --maxWorkers=2
