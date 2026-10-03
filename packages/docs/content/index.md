@@ -25,13 +25,12 @@ Reviewing an agent's work? Start at [For reviewers](/docs/get-started/humans).
 ## How it works
 
 ```text
- person               agent                       platform
- ──────               ─────                       ────────
- approve the Plan ◄── create_plan
-                      start_change ─────────────► a fork to push to
-                      git push ─────────────────► CI → signed evidence → lane
- read the tour ◄───────────────────────────────── Lanes 1, 2: a separate agent explains it
- approve ───────────────────────────────────────► merge queue → main → rollout
+ person             agent                 platform
+ approve Plan ◄──── create_plan
+                    start_change ───────► a fork to push to
+                    git push ───────────► CI → evidence → lane
+ read the tour ◄──────────────────────── Lanes 1, 2: a reviewer agent
+ approve ────────────────────────────────► merge queue → main
 ```
 
 The less a change can prove, the more review it gets. A change that proves everything can merge on its own, behind a flag, and reverts itself if production gets worse.
