@@ -35,17 +35,47 @@ export const journey: HumanJourney = {
       return ((await r.json()) as { change: { status: string } }).change.status;
     };
 
-    const approveOnPage = async (id: string) => {
-      await j.goto(`/changes/${id}`, { waitFor: ".decision__title, h1", settleMs: 900 });
-      await j.click(p.getByRole("button", { name: "Approve", exact: true }));
-      await j.click(p.getByRole("button", { name: "Approve change" }), { pauseMs: 200 });
+    const approveOnPage = async (id: string, opts: { goto?: boolean } = {}) => {
+      if (opts.goto !== false)
+        await j.goto(`/changes/${id}`, { waitFor: ".decision__title, h1", settleMs: 900 });
+      // A resolution asks for "Approve resolution" (the approval is for what the resolver wrote).
+      await j.click(p.getByRole("button", { name: /^Approve( resolution)?$/ }).first());
+      await j.click(p.getByRole("button", { name: /^Approve (change|resolution)$/ }), {
+        pauseMs: 200,
+      });
       await p
-        .getByText(/joins the merge queue|waiting in the merge queue|lands it next/)
+        .getByText(
+          /joins the merge queue|waiting in the merge queue|lands it next|back into the merge queue/,
+        )
         .first()
         .waitFor({ timeout: 30_000 });
       await j.hold(700);
     };
-    const all = [...(state.resolvedChangeId ? [String(state.resolvedChangeId)] : []), ...ids];
+    /** The resolution panel: what main had, what the Change had, what lands (resolver lines marked). */
+    const showResolution = async (id: string) => {
+      await j.goto(`/changes/${id}`, { waitFor: "h1", settleMs: 2600 });
+      const panel = p.locator(".resolution").first();
+      if ((await panel.count()) > 0) {
+        await j.reveal(panel, true);
+        await j.hold(2600);
+        await j.snap("resolution");
+        await j.scroll(420, 1000);
+        await j.hold(2600);
+        await j.snap("resolution-2");
+        await j.scroll(-420, 800);
+      } else {
+        await j.snap("resolved");
+        await j.scroll(500, 1000);
+        await j.hold(2200);
+        await j.scroll(-500, 800);
+      }
+    };
+    // A Change left awaiting re-approval by the previous round (only if it still is).
+    const resolved =
+      state.resolvedChangeId && (await status(String(state.resolvedChangeId))) === "awaiting-review"
+        ? String(state.resolvedChangeId)
+        : null;
+    const all = [...(resolved ? [resolved] : []), ...ids];
 
     await j.chapter(
       "Changes waiting for a person",
@@ -53,17 +83,13 @@ export const journey: HumanJourney = {
     );
     await j.goto(`/repos/${state.projectId}`, { waitFor: "h1", settleMs: 2200 });
     await j.snap("repo");
-    if (state.resolvedChangeId) {
+    if (resolved) {
       await j.chapter(
         "A resolved conflict",
         "From the last batch: the resolver merged a conflict; a person re-approves the result",
       );
-      await j.goto(`/changes/${state.resolvedChangeId}`, { waitFor: "h1", settleMs: 2600 });
-      await j.snap("resolved");
-      await j.scroll(500, 1000);
-      await j.hold(2200);
-      await j.scroll(-500, 800);
-      await approveOnPage(String(state.resolvedChangeId));
+      await showResolution(resolved);
+      await approveOnPage(resolved, { goto: false });
     }
     await j.chapter(
       "Approve three more",
@@ -89,9 +115,10 @@ export const journey: HumanJourney = {
       if (back) {
         await j.chapter(
           "Re-approve a resolution",
-          "The resolver merged a conflict in the queue: re-approve the resolved Change",
+          "The resolver merged a conflict in the queue: the page shows what lands; approve the resolution",
         );
-        await approveOnPage(back);
+        await showResolution(back);
+        await approveOnPage(back, { goto: false });
         await j.goto(`/repos/${state.projectId}/queue`, { waitFor: "h1", settleMs: 1800 });
         continue;
       }

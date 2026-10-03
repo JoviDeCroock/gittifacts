@@ -188,6 +188,36 @@ if (cmd === "plan") {
   }
   mergeState(statePath, { queueChangeIds: ids });
   console.log(JSON.stringify({ queueChangeIds: ids }));
+} else if (cmd === "queue3") {
+  // A round that works on any README: two Changes rewrite its title line (the resolver has to
+  // merge them, usually with a line of its own, so a person re-approves), one adds a closing line.
+  const mcp = await agent();
+  const readme = "README.md";
+  const title = (dir: string) => {
+    const line = readFileSync(join(dir, readme), "utf8")
+      .split("\n")
+      .find((l) => l.startsWith("# "));
+    if (line === undefined) throw new Error("README has no title line");
+    return line;
+  };
+  const ids = [
+    await change(mcp, "README: say what the project is in its title", (d) =>
+      edit(d, readme, title(d), `${title(d)} (a Preact and signals app on Workers)`),
+    ),
+    await change(mcp, "README: name the platform in the title", (d) =>
+      edit(d, readme, title(d), `${title(d)}, built through gittifacts`),
+    ),
+    await change(mcp, "README: end with where to ask questions", (d) => {
+      const p = join(d, readme);
+      writeFileSync(p, `${readFileSync(p, "utf8").trimEnd()}\n\nQuestions: open a Plan.\n`);
+    }),
+  ];
+  for (const id of ids) {
+    await waitFor(quiet, mcp, id, "lane_assigned");
+    ok("request_review", await mcp.tools.request_review({ changeId: id }));
+  }
+  mergeState(statePath, { queueChangeIds: ids });
+  console.log(JSON.stringify({ queueChangeIds: ids }));
 } else if (cmd === "queue") {
   const mcp = await agent();
   const readme = "README.md";
