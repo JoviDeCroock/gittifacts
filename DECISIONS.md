@@ -1804,8 +1804,9 @@ Code: `packages/host-github` (`@app/host-github`), `apps/platform/src/github/`, 
   The suite runs on every relevant commit (`.github/workflows/host-contract.yml`, path-filtered).
 - **MCP and CLI.** `get_change_status`, `get_evidence`, `get_tour` and `wait_for_change` take
   `github: "owner/repo#123"` instead of `changeId`. The CLI keeps `<changeId>` positional (a new fallback rule)
-  and adds `--github`. CLI versions older than this commit derive commands from `tools/list` and need
-  `--change-id` instead of the positional.
+  and adds `--github`. Older CLIs are unaffected: they use their bundled tool definitions (the live
+  `tools/list` only for tools newer than their build), keep `<changeId>` positional and send `{ changeId }`,
+  which the server still accepts; `changeId` and `github` are both accepted, exactly one per call.
 - **Visibility.** The humans who linked an installation see its graded repos: the first becomes the repo's
   claim owner (an `owner` member), the others `maintainer`; linking later grants the repos already graded.
 - **Failed deliveries are asked for again.** GitHub never redelivers on its own, so the 10-minute cron lists
