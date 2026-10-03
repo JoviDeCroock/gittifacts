@@ -139,4 +139,22 @@ describe("import detection → Plan + Change (O5)", () => {
       await mcp.client.close();
     }
   });
+
+  it("create_project({ from }) points the agent at propose_platform_config after the first CI", async () => {
+    const app = platformApp();
+    const human = await signUpHuman(app);
+    const agent = await createAgent(app, human.cookie);
+    const mcp = await createPlatformClient(`${ORIGIN}/mcp`, agent.token, { fetch: fetchVia(app) });
+    try {
+      const name = `imp-${Date.now().toString(36)}`;
+      const r = await mcp.tools.create_project({ from: URL, name });
+      if (r.isError) throw new Error(JSON.stringify(r.content));
+      const p = r.structuredContent;
+      const calls = p.nextSteps.map((s) => s.call ?? "");
+      expect(calls[0]).toMatch(/^wait_for_change\(\{ changeId: "bs-/);
+      expect(calls[1]).toBe(`propose_platform_config({ repoId: "${p.projectId}", waitSec: 45 })`);
+    } finally {
+      await mcp.client.close();
+    }
+  });
 });

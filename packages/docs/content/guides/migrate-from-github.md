@@ -65,12 +65,14 @@ Expected: the same commit count and head as on GitHub (`git ls-remote https://gi
 propose_platform_config({ repoId: "8t4xc6kq2w9m0d7z3r1b", waitSec: 45 })
 ```
 
-After an import by push the platform has already started it; the same call returns that proposal.
+After an import by push the platform has already started it; the same call returns that proposal. After `create_project({ from })` (or `gittifacts init --from`) nothing starts by itself: the response's `nextSteps` list this call right after the wait for the first CI run.
 
 Detection reads the repo in a sandbox (nothing is installed or run): package manager, test runner, build command, TypeScript config, wrangler configs, workspaces. Expected: `status: "proposed"` with a `planId` and a `changeId`:
 
-- the **Plan** (drafted by `system`) lists every guess it isn't sure of as a risk, starting "Detection is unsure: …";
+- the **Plan** (drafted by `system`) lists every guess it isn't sure of as a risk, starting "Detection is unsure: …". Its acceptance criteria only promise a green CI run when the default branch is green; a step that already fails on the default branch (a red test you imported) is named as pre-existing;
 - the **Change** adds `.platform/ci.ts`, `.platform/policy.ts` and an `AGENTS.md` section. It is Lane 2 because it touches `.platform/**`.
+
+**Install scripts (pnpm 11).** pnpm 11 fails the install (`ERR_PNPM_IGNORED_BUILDS`) while a dependency's install script is neither allowed nor denied in `pnpm-workspace.yaml` `allowBuilds`. When detection finds such dependencies, the Change also lists them as `false` there, so CI installs without running their scripts; it never sets one to `true`. If a test or the build needs one of them to run (a native module, a downloaded binary), set it to `true` in the Change before you approve it. Packages that only install on other platforms (`fsevents`, `os: [darwin]` in the lockfile) never install on the Linux runners and are not listed.
 
 A human approves the Plan, reviews the Change and approves it; the merge queue lands it. Until then CI uses a default pipeline detected from `package.json` and the default policy. `status: "not-needed"` means the repo already has its config.
 
