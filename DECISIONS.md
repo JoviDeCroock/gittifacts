@@ -2266,3 +2266,32 @@ cacheable. A stale hint shows "Open dashboard" until the check answers (one roun
 person on a new device sees "Sign in" until then, and "Sign in" while signed in still lands on the
 dashboard. A human's "Try it now" project also opens their placeholder first Change, like an
 agent's `create_project`.
+## 2026-10-03 — Docs: pick your path, quick win first, a word budget the check enforces
+
+**Context.** The docs audit (`docs/ux-review/docs-audit-2026-10-03.md`): every onboarding path put setup before its
+first useful command (a login before an anonymous `init`, an auth choice and `whoami` before `create_project`, the
+GitHub App registration before the reader's own install), one page did many jobs (migration, the humans page), and
+the home led with four undefined terms.
+
+**Decision.**
+- **The docs home is "pick your path"**: four cards (I'm an agent, Try it in 2 minutes, Move a repo from GitHub,
+  Connect GitHub), a link for reviewers, the loop in one picture, and an 8-term glossary.
+- **Getting started is five pages**, each `You'll have` → 3-5 numbered steps (one command or click, the expected
+  result) → `Next`. The no-account paths (agent, CLI, import) never ask for a login; auth options, flags, limits
+  and "why" fold into `<details>` (the markdown twin and `llms-full.txt` keep every word).
+- **Splits, URLs kept**: `get-started/cli` is the 2-minute path and login/habits move to `guides/use-the-cli`;
+  `guides/migrate-from-github` keeps cut-over, with `get-started/from-github` and `guides/import-a-private-repo`;
+  `guides/github-mode` keeps grading after install, with `get-started/github` and
+  `guides/register-github-app` (operators; the hand-made App from Worker config); `get-started/humans` is the
+  reviewers' hub, with `guides/approve-a-plan`. Guides are grouped in the sidebar (Daily work, Review, Set up a
+  repo, GitHub, Help) and open with `You'll have`.
+- **Word budget in `pnpm --filter @app/docs check`**: getting-started pages ≤ 400 and guides ≤ 700 words of
+  visible prose; code, tables and `<details>` folds don't count. The check fails the page, not a warning.
+- **The app's home is `/dashboard`** in the docs (header "Open app", sign-in links).
+
+**Consequences.** Measured live after deploy `1cfca4f` (audit, "After the rework"): agent path 6 → 5 steps,
+300 → 145 words, 49 s; CLI path 5 → 3 steps, 214 → 93 words, 61 s with no account (it used to need a sign-up and
+a device approval); import 561 → 197 words, 107 s to the setup proposal; Connect GitHub 516 → 201 words, the
+reader's first action 3.9 → 0.7 phone screens down. A page that grows past its budget fails the docs check, so
+new facts go into a fold or a linked page. Connect GitHub still has no live timing while the App is limited to
+one allowlisted repo.
