@@ -17,9 +17,11 @@
   "dependencies": {
     "@app/ci-engine": "workspace:*",
     "@app/classifier": "workspace:*",
+    "@app/core": "workspace:*",
     "@app/domain": "workspace:*",
     "@app/evidence": "workspace:*",
     "@app/gitwire": "workspace:*",
+    "@app/host": "workspace:*",
     "@app/merge-queue": "workspace:*",
     "@app/resolver": "workspace:*",
     "zod": "^4.6.5"

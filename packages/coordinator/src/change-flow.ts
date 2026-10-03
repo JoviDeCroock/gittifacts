@@ -7,21 +7,23 @@
  *  evidence-note → classify → tour → reclassify → route →
  *  (enqueue | request-review ⇢ review) ⇢ merged → rollout
  *
+ * From the CI run to the final classification, the body is `@app/core`'s `gradeChange` (the
+ * pipeline GitHub mode runs too); the native steps in between (preview, screenshots, bootstrap,
+ * pure-revert checks, git notes) are its hooks. Step names and results are unchanged.
+ *
  * Every external call is its own `step.do` (idempotent, retried per RETRY). Code between steps is
  * deterministic: it only uses step results, so a replay takes the same path. Node-safe; the
  * WorkflowEntrypoint wrapper lives in change-workflow.ts.
  */
-import { type ClassifyResult, classify, type TourStatus } from "@app/classifier";
 import {
-  type ClaimedCategory,
-  diffStatsOf,
-  type Lane,
-  type PipelineRun,
-  type RepoPolicy,
-  type RolloutState,
-  Tour,
-} from "@app/domain";
+  type AfterEvidence,
+  type EvidenceReport,
+  gradeChange,
+  type SealedEvidence,
+} from "@app/core";
+import type { ClaimedCategory, Lane, PipelineRun, RepoPolicy, RolloutState } from "@app/domain";
 import { EVIDENCE_NOTES_REF, type EvidenceItem, encodeNote, type Screenshots } from "@app/evidence";
+import { NATIVE_CAPABILITIES } from "@app/host";
 import { type CoordinatorBindings, createOrGet } from "./bindings.js";
 import {
   ChangeWorkflowParams,
@@ -34,24 +36,12 @@ import {
   ReviewEvent,
   type RolloutParams,
 } from "./events.js";
-import {
-  assembleEvidence,
-  erroredJudgment,
-  judgmentItems,
-  previewItem,
-  type SealedEvidence,
-  sealEvidence,
-} from "./evidence.js";
+import { previewItem, sealEvidence } from "./evidence.js";
+import { durableStages, persistClassification, persistTour, storeGradeData } from "./grading.js";
 import { changeSubject, ciRunIdFor, isBootstrapChange, rolloutWorkflowId } from "./ids.js";
 import { PUSHABLE_STATUSES, toCiStatus } from "./lifecycle.js";
 import { withChangeNotifications } from "./milestones.js";
-import {
-  errorMessage,
-  escalateForPolicy,
-  type ResolvedPolicy,
-  resolvePolicy,
-  unavailablePolicy,
-} from "./policy.js";
+import { errorMessage, type ResolvedPolicy, resolvePolicy, unavailablePolicy } from "./policy.js";
 import {
   type CiRunRequest,
   type CiRunStatus,
@@ -130,14 +120,9 @@ const SKIPPED: Omit<Loaded, "skip"> = {
   bootstrap: false,
 };
 
-interface Classified {
-  lane: Lane;
-  computedLane: Lane;
-  shadow: boolean;
-  blocked: boolean;
-  requiresHumanApproval: boolean;
-  /** The classifier waived every raised reason of a verified pure revert (`revert.auto-merge`). */
-  revertAutoMerge?: boolean;
+/** The CI run as grading sees it, plus the full report (preview snapshots, bundle for rollout). */
+interface NativeReport extends EvidenceReport {
+  report: CiFinishedEvent;
 }
 
 function placeholderRun(runId: string, changeId: string, headSha: string, at: string): PipelineRun {
@@ -254,494 +239,371 @@ export async function runChangeWorkflow(
     planWarning = `plan mode failed, using default pipeline: ${errorMessage(e)}`;
   }
 
-  // ------------------------------------------------------------ 4. ci
+  // ------------------------------------------------------------ 4. ci (the evidence run)
   const runId = ciRunIdFor(instanceId);
-  await step.do("ci-start", RETRY.remote, async () => {
-    const request: CiRunRequest = {
-      runId,
-      changeId,
-      repo: { remote: git.remoteOf(forkName), tokenProvider: "artifacts" },
-      artifactsRepo: forkName,
-      headSha,
-      baseSha,
-      // The pipeline comes from BASE: a change must not edit the CI that judges it.
-      pipelineFrom: "base",
-      limits: { maxMinutes: CI_BUDGET_MINUTES },
-      // Unclaimed projects: sandbox egress to package registries only (onboarding §4).
-      network: ctx.claimed ? "open" : "registries-only",
-      // A bootstrap has no diff (base = head): evidence steps would have nothing to measure.
-      ...(ctx.bootstrap ? { evidenceSteps: [] } : {}),
-    };
-    let note = planWarning;
-    try {
-      await ports.ci.start(pipeline === null ? request : { ...request, pipeline });
-    } catch (e) {
-      if (pipeline === null) throw e;
-      // The engine rejected our planned spec: let it plan from base itself.
-      note = `planned pipeline rejected (${errorMessage(e)}); the engine plans it`;
-      await ports.ci.start(request);
-    }
-    // Visible in the API right away; the run sink replaces it when the run finishes.
-    if ((await store.getRun(runId)) === null) {
-      await store.upsertRun({
-        ...placeholderRun(runId, changeId, headSha, clock.now().toISOString()),
-        status: "running",
-        finishedAt: null,
-      });
-    }
-    await bindings.changeCoordinator(changeId).registerRun({ changeId, instanceId, runId });
-    await log("change.ci-started", { runId, headSha, note });
-    return { runId };
-  });
-
-  const finished = await waitOrTimeout<unknown>(
-    step,
-    EVENT_CI_FINISHED,
-    EVENT_CI_FINISHED,
-    CI_TIMEOUT,
-  );
-  let report: CiFinishedEvent;
-  const parsedReport = finished === null ? null : CiFinishedEvent.safeParse(finished.payload);
-  if (parsedReport?.success && parsedReport.data.run.id === runId) {
-    report = parsedReport.data;
-  } else {
-    // Timed out or malformed: ask the engine. A run we cannot account for is "errored" (unknown),
-    // and without its summary the evidence is missing (which escalates).
-    report = await step.do("ci-status", RETRY.remote, async (): Promise<CiFinishedEvent> => {
-      const at = clock.now().toISOString();
-      let latest: CiRunStatus | null = null;
+  const runCi = async (): Promise<NativeReport> => {
+    await step.do("ci-start", RETRY.remote, async () => {
+      const request: CiRunRequest = {
+        runId,
+        changeId,
+        repo: { remote: git.remoteOf(forkName), tokenProvider: "artifacts" },
+        artifactsRepo: forkName,
+        headSha,
+        baseSha,
+        // The pipeline comes from BASE: a change must not edit the CI that judges it.
+        pipelineFrom: "base",
+        limits: { maxMinutes: CI_BUDGET_MINUTES },
+        // Unclaimed projects: sandbox egress to package registries only (onboarding §4).
+        network: ctx.claimed ? "open" : "registries-only",
+        // A bootstrap has no diff (base = head): evidence steps would have nothing to measure.
+        ...(ctx.bootstrap ? { evidenceSteps: [] } : {}),
+      };
+      let note = planWarning;
       try {
-        latest = await ports.ci.status(runId);
-      } catch {
-        latest = null;
+        await ports.ci.start(pipeline === null ? request : { ...request, pipeline });
+      } catch (e) {
+        if (pipeline === null) throw e;
+        // The engine rejected our planned spec: let it plan from base itself.
+        note = `planned pipeline rejected (${errorMessage(e)}); the engine plans it`;
+        await ports.ci.start(request);
       }
-      const lost = [{ step: "*", message: "the run's evidence never reached the coordinator" }];
-      if (latest !== null && latest.status !== "queued" && latest.status !== "running") {
+      // Visible in the API right away; the run sink replaces it when the run finishes.
+      if ((await store.getRun(runId)) === null) {
+        await store.upsertRun({
+          ...placeholderRun(runId, changeId, headSha, clock.now().toISOString()),
+          status: "running",
+          finishedAt: null,
+        });
+      }
+      await bindings.changeCoordinator(changeId).registerRun({ changeId, instanceId, runId });
+      await log("change.ci-started", { runId, headSha, note });
+      return { runId };
+    });
+
+    const finished = await waitOrTimeout<unknown>(
+      step,
+      EVENT_CI_FINISHED,
+      EVENT_CI_FINISHED,
+      CI_TIMEOUT,
+    );
+    let report: CiFinishedEvent;
+    const parsedReport = finished === null ? null : CiFinishedEvent.safeParse(finished.payload);
+    if (parsedReport?.success && parsedReport.data.run.id === runId) {
+      report = parsedReport.data;
+    } else {
+      // Timed out or malformed: ask the engine. A run we cannot account for is "errored" (unknown),
+      // and without its summary the evidence is missing (which escalates).
+      report = await step.do("ci-status", RETRY.remote, async (): Promise<CiFinishedEvent> => {
+        const at = clock.now().toISOString();
+        let latest: CiRunStatus | null = null;
+        try {
+          latest = await ports.ci.status(runId);
+        } catch {
+          latest = null;
+        }
+        const lost = [{ step: "*", message: "the run's evidence never reached the coordinator" }];
+        if (latest !== null && latest.status !== "queued" && latest.status !== "running") {
+          return {
+            run: toPipelineRun(latest),
+            items: [],
+            evidenceErrors: lost,
+            outputs: { bundleRef: null, snapshots: {} },
+          };
+        }
+        try {
+          await ports.ci.cancel(runId, "no result within the CI timeout");
+        } catch {
+          // best effort
+        }
+        const run =
+          latest === null
+            ? placeholderRun(runId, changeId, headSha, at)
+            : { ...toPipelineRun(latest), status: "errored" as const, finishedAt: at };
         return {
-          run: toPipelineRun(latest),
+          run,
           items: [],
           evidenceErrors: lost,
           outputs: { bundleRef: null, snapshots: {} },
         };
-      }
-      try {
-        await ports.ci.cancel(runId, "no result within the CI timeout");
-      } catch {
-        // best effort
-      }
-      const run =
-        latest === null
-          ? placeholderRun(runId, changeId, headSha, at)
-          : { ...toPipelineRun(latest), status: "errored" as const, finishedAt: at };
-      return { run, items: [], evidenceErrors: lost, outputs: { bundleRef: null, snapshots: {} } };
-    });
-  }
-  const ciStatus = toCiStatus(report.run.status);
-
-  await step.do("ci-outcome", RETRY.quick, async () => {
-    await store.upsertRun(report.run);
-    if (ciStatus === "failed") {
-      await store.updateChange(changeId, { status: "failing" });
-      await notifier.notify({
-        kind: "failing",
-        changeId,
-        repoId,
-        message: `CI failed for ${ctx.title} at ${headSha.slice(0, 12)}.`,
       });
     }
-    await log(ciStatus === "passed" ? "change.ci-passed" : "change.ci-failed", {
-      runId,
-      status: report.run.status,
-      items: report.items.length,
-      evidenceErrors: report.evidenceErrors,
+    const ciStatus = toCiStatus(report.run.status);
+
+    await step.do("ci-outcome", RETRY.quick, async () => {
+      await store.upsertRun(report.run);
+      if (ciStatus === "failed") {
+        await store.updateChange(changeId, { status: "failing" });
+        await notifier.notify({
+          kind: "failing",
+          changeId,
+          repoId,
+          message: `CI failed for ${ctx.title} at ${headSha.slice(0, 12)}.`,
+        });
+      }
+      await log(ciStatus === "passed" ? "change.ci-passed" : "change.ci-failed", {
+        runId,
+        status: report.run.status,
+        items: report.items.length,
+        evidenceErrors: report.evidenceErrors,
+      });
+      return ciStatus;
     });
-    return ciStatus;
-  });
+    return { ciStatus, items: report.items, report };
+  };
 
   // ------------------------------------------------------------ 4b. preview (Worker-side, informational)
   // Started from the CI build snapshot and served through the preview gateway. Before the
   // evidence is sealed, so `evidence_ready` means "CI finished and the preview answers".
   const previews = ports.previews;
   let preview: PreviewOutcome | null = null;
-  if (previews !== undefined) {
-    if (ciStatus !== "passed") {
-      preview = {
-        status: "skipped",
-        url: null,
-        reason: "CI did not pass, so there is no build to preview (informational)",
-      };
-    } else {
+  const startPreview = async ({ ciStatus, report }: NativeReport): Promise<EvidenceItem[]> => {
+    if (previews !== undefined) {
+      if (ciStatus !== "passed") {
+        preview = {
+          status: "skipped",
+          url: null,
+          reason: "CI did not pass, so there is no build to preview (informational)",
+        };
+      } else {
+        try {
+          preview = await step.do("preview", RETRY.preview, async (): Promise<PreviewOutcome> => {
+            const repo = await store.getRepo(repoId);
+            const out = await previews.start({
+              changeId,
+              repoId,
+              artifactsRepo: forkName,
+              headSha,
+              snapshots: report.outputs.snapshots,
+              claimed: ctx.claimed,
+              template: repo?.template ?? null,
+            });
+            await log("change.preview", out);
+            return out;
+          });
+        } catch (e) {
+          preview = {
+            status: "error",
+            url: null,
+            reason: `the preview did not start: ${errorMessage(e)}`,
+          };
+        }
+      }
+    }
+    return preview === null ? [] : [previewItem(preview)];
+  };
+
+  // ------------------------------------------------------------ after sealing (native steps)
+  // Onboarding metrics, screenshots, the bootstrap release and the pure-revert checks.
+  let released = false;
+  const afterEvidence = async (input: {
+    ci: NativeReport;
+    sealed: SealedEvidence;
+  }): Promise<AfterEvidence> => {
+    const { ciStatus } = input.ci;
+    let sealed = input.sealed;
+    // ------------------------------------------------------------ bootstrap: time-to-first-green
+    const onboarding = ports.onboarding;
+    if (ctx.bootstrap && onboarding !== undefined) {
       try {
-        preview = await step.do("preview", RETRY.preview, async (): Promise<PreviewOutcome> => {
-          const repo = await store.getRepo(repoId);
-          const out = await previews.start({
-            changeId,
+        await step.do("onboarding", RETRY.quick, async () => {
+          await onboarding.bootstrapReady({
             repoId,
-            artifactsRepo: forkName,
+            changeId,
+            ciStatus,
+            evidenceAt: clock.now().toISOString(),
+            preview,
+          });
+          return true;
+        });
+      } catch {
+        // Metrics are best effort.
+      }
+    }
+
+    // ------------------------------------------------------------ 5b. screenshots of the preview
+    const resealWith = async (item: EvidenceItem): Promise<SealedEvidence> => {
+      const current = await store.getEvidence(changeId, headSha);
+      if (current === null) throw new Error("evidence disappeared");
+      const keep = current.items.filter((i) => i.kind !== item.kind);
+      return sealEvidence(ports, { changeId, headSha, baseSha, items: [...keep, item] });
+    };
+    if (previews !== undefined && preview?.status === "ready") {
+      const url = preview.url;
+      try {
+        sealed = await step.do("screenshots", RETRY.preview, async () => {
+          const [repo, plan] = await Promise.all([
+            store.getRepo(repoId),
+            ctx.planId === null ? null : store.getPlan(ctx.planId),
+          ]);
+          const routes = [...new Set([...policy.previewRoutes, ...(plan?.affectedRoutes ?? [])])];
+          const shots = await previews.screenshots({
+            changeId,
             headSha,
-            snapshots: report.outputs.snapshots,
-            claimed: ctx.claimed,
+            url,
+            routes,
             template: repo?.template ?? null,
           });
-          await log("change.preview", out);
+          const out = await resealWith(shots);
+          await log("change.screenshots", { status: shots.status, shots: shots.shots.length });
           return out;
         });
       } catch (e) {
-        preview = {
-          status: "error",
-          url: null,
-          reason: `the preview did not start: ${errorMessage(e)}`,
-        };
+        const reason = errorMessage(e);
+        sealed = await step.do("screenshots-failed", RETRY.quick, async () => {
+          const failed: Screenshots = {
+            id: "screenshots",
+            kind: "screenshots",
+            status: "error",
+            note: `screenshots failed: ${reason}`.slice(0, 4000),
+            shots: [],
+          };
+          await log("change.screenshots-failed", { error: reason });
+          return resealWith(failed);
+        });
       }
     }
-  }
 
-  // ------------------------------------------------------------ 5. evidence (CI + Worker items, signed)
-  let sealed: SealedEvidence = await step.do("evidence", RETRY.quick, async () => {
-    const diff = await store.getDiff(changeId, headSha);
-    const { items, dropped } = assembleEvidence({
-      ciItems: report.items,
-      diff,
-      policy,
-      agentTraceId: ctx.agentTraceId,
-      workerItems: preview === null ? [] : [previewItem(preview)],
-    });
-    const out = await sealEvidence(ports, { changeId, headSha, baseSha, items });
-    await log("change.evidence-signed", { ...out, dropped });
-    return out;
-  });
-
-  // ------------------------------------------------------------ bootstrap: time-to-first-green
-  const onboarding = ports.onboarding;
-  if (ctx.bootstrap && onboarding !== undefined) {
-    try {
-      await step.do("onboarding", RETRY.quick, async () => {
-        await onboarding.bootstrapReady({
-          repoId,
-          changeId,
+    // ------------------------------------------------------------ bootstrap: released, never routed
+    if (ctx.bootstrap) {
+      // No judge (no diff), no note (the main repo is only written by the merge queue), no lane.
+      released = await step.do("bootstrap-done", RETRY.quick, async () => {
+        const green = ciStatus === "passed";
+        if (green) await store.updateChange(changeId, { status: "released", mergedSha: headSha });
+        await log(green ? "change.bootstrap-released" : "change.bootstrap-failed", {
+          headSha,
           ciStatus,
-          evidenceAt: clock.now().toISOString(),
-          preview,
+          evidenceId: sealed.evidenceId,
         });
-        return true;
+        return green;
       });
-    } catch {
-      // Metrics are best effort.
+      return { stop: true };
     }
-  }
 
-  // ------------------------------------------------------------ 5b. screenshots of the preview
-  const resealWith = async (item: EvidenceItem): Promise<SealedEvidence> => {
-    const current = await store.getEvidence(changeId, headSha);
-    if (current === null) throw new Error("evidence disappeared");
-    const keep = current.items.filter((i) => i.kind !== item.kind);
-    return sealEvidence(ports, { changeId, headSha, baseSha, items: [...keep, item] });
-  };
-  if (previews !== undefined && preview?.status === "ready") {
-    const url = preview.url;
-    try {
-      sealed = await step.do("screenshots", RETRY.preview, async () => {
-        const [repo, plan] = await Promise.all([
-          store.getRepo(repoId),
-          ctx.planId === null ? null : store.getPlan(ctx.planId),
-        ]);
-        const routes = [...new Set([...policy.previewRoutes, ...(plan?.affectedRoutes ?? [])])];
-        const shots = await previews.screenshots({
-          changeId,
-          headSha,
-          url,
-          routes,
-          template: repo?.template ?? null,
+    // ------------------------------------------------------------ pure revert? (platform-verified)
+    let pureRevertVerified = false;
+    if (ctx.revertOf !== null && ctx.category === "revert") {
+      const revertOf = ctx.revertOf;
+      try {
+        pureRevertVerified = await step.do("verify-revert", RETRY.remote, async () => {
+          const original = await store.getChange(revertOf);
+          if (original?.mergedSha == null || original.repoId !== repoId) return false;
+          const ok = await verifyPureRevert(git, {
+            repo: forkName,
+            baseSha,
+            headSha,
+            mergedSha: original.mergedSha,
+          });
+          await log("change.revert-verified", {
+            revertOf,
+            mergedSha: original.mergedSha,
+            pureRevertVerified: ok,
+          });
+          return ok;
         });
-        const out = await resealWith(shots);
-        await log("change.screenshots", { status: shots.status, shots: shots.shots.length });
-        return out;
-      });
-    } catch (e) {
-      const reason = errorMessage(e);
-      sealed = await step.do("screenshots-failed", RETRY.quick, async () => {
-        const failed: Screenshots = {
-          id: "screenshots",
-          kind: "screenshots",
-          status: "error",
-          note: `screenshots failed: ${reason}`.slice(0, 4000),
-          shots: [],
-        };
-        await log("change.screenshots-failed", { error: reason });
-        return resealWith(failed);
-      });
+      } catch {
+        pureRevertVerified = false; // unknown is not verified
+      }
     }
-  }
 
-  // ------------------------------------------------------------ bootstrap: released, never routed
-  if (ctx.bootstrap) {
-    // No judge (no diff), no note (the main repo is only written by the merge queue), no lane.
-    const released = await step.do("bootstrap-done", RETRY.quick, async () => {
-      const green = ciStatus === "passed";
-      if (green) await store.updateChange(changeId, { status: "released", mergedSha: headSha });
-      await log(green ? "change.bootstrap-released" : "change.bootstrap-failed", {
-        headSha,
-        ciStatus,
-        evidenceId: sealed.evidenceId,
-      });
-      return green;
-    });
-    return done(released ? "bootstrapped" : "blocked", null, released ? null : "ci failed");
-  }
-
-  // ------------------------------------------------------------ pure revert? (platform-verified)
-  let pureRevertVerified = false;
-  if (ctx.revertOf !== null && ctx.category === "revert") {
-    const revertOf = ctx.revertOf;
-    try {
-      pureRevertVerified = await step.do("verify-revert", RETRY.remote, async () => {
-        const original = await store.getChange(revertOf);
-        if (original?.mergedSha == null || original.repoId !== repoId) return false;
-        const ok = await verifyPureRevert(git, {
-          repo: forkName,
-          baseSha,
-          headSha,
-          mergedSha: original.mergedSha,
+    // A verified revert whose tree IS the pre-merge tree of the Change it reverts restores a state
+    // the platform already merged under review: the LLM judge is skipped for it (and only for it),
+    // so a model can't keep the undo of a regression waiting for a human. Anything else is judged.
+    let skipJudge: { headTree: string; restoredTree: string; mergedSha: string } | null = null;
+    if (pureRevertVerified && ctx.revertOf !== null) {
+      const revertOf = ctx.revertOf;
+      try {
+        skipJudge = await step.do("revert-tree", RETRY.remote, async () => {
+          const original = await store.getChange(revertOf);
+          if (original?.mergedSha == null) return null;
+          const trees = await revertTrees(git, {
+            repo: forkName,
+            headSha,
+            mergedSha: original.mergedSha,
+          });
+          return trees === null || trees.headTree !== trees.restoredTree
+            ? null
+            : { ...trees, mergedSha: original.mergedSha };
         });
-        await log("change.revert-verified", {
-          revertOf,
-          mergedSha: original.mergedSha,
-          pureRevertVerified: ok,
-        });
-        return ok;
-      });
-    } catch {
-      pureRevertVerified = false; // unknown is not verified
+      } catch {
+        skipJudge = null; // unknown: judge as usual
+      }
     }
-  }
-
-  // A verified revert whose tree IS the pre-merge tree of the Change it reverts restores a state
-  // the platform already merged under review: the LLM judge is skipped for it (and only for it),
-  // so a model can't keep the undo of a regression waiting for a human. Anything else is judged.
-  let skipJudge: { headTree: string; restoredTree: string; mergedSha: string } | null = null;
-  if (pureRevertVerified && ctx.revertOf !== null) {
-    const revertOf = ctx.revertOf;
-    try {
-      skipJudge = await step.do("revert-tree", RETRY.remote, async () => {
-        const original = await store.getChange(revertOf);
-        if (original?.mergedSha == null) return null;
-        const trees = await revertTrees(git, {
-          repo: forkName,
-          headSha,
-          mergedSha: original.mergedSha,
-        });
-        return trees === null || trees.headTree !== trees.restoredTree
+    return {
+      sealed,
+      pureRevertVerified,
+      skipJudge:
+        skipJudge === null
           ? null
-          : { ...trees, mergedSha: original.mergedSha };
-      });
-    } catch {
-      skipJudge = null; // unknown: judge as usual
-    }
-  }
-
-  // ------------------------------------------------------------ 6. judge (raise-only, within budget)
-  const coordinator = bindings.changeCoordinator(changeId);
-  const limitUsd = policy.ai.budgetUsdPerChange;
-  let budgetExceeded = false;
-  const reseal = async (extra: EvidenceItem[]): Promise<SealedEvidence> => {
-    const current = await store.getEvidence(changeId, headSha);
-    if (current === null) throw new Error("evidence disappeared");
-    const keep = current.items.filter((i) => i.kind !== "llm-judgment");
-    return sealEvidence(ports, { changeId, headSha, baseSha, items: [...keep, ...extra] });
+          : {
+              reason: "verified-pure-revert",
+              detail: {
+                revertOf: ctx.revertOf,
+                mergedSha: skipJudge.mergedSha,
+                headTree: skipJudge.headTree,
+                restoredTree: skipJudge.restoredTree,
+              },
+            },
+    };
   };
-  if (skipJudge !== null) {
-    const skipped = skipJudge;
-    await step.do("judge-skipped", RETRY.quick, async () => {
-      await log("change.judge-skipped", {
-        reason: "verified-pure-revert",
-        revertOf: ctx.revertOf,
-        mergedSha: skipped.mergedSha,
-        headTree: skipped.headTree,
-        restoredTree: skipped.restoredTree,
-      });
-      return true;
-    });
-  } else {
-    try {
-      const judged = await step.do("judge", RETRY.model, async () => {
-        const spentUsd = await coordinator.spent(changeId);
-        if (spentUsd >= limitUsd) {
-          return { sealed: null, budgetExceeded: true, costUsd: 0, judgments: 0 };
-        }
-        const [plan, diff] = await Promise.all([
-          ctx.planId === null ? null : store.getPlan(ctx.planId),
-          store.getDiff(changeId, headSha),
-        ]);
-        if (diff === null) throw new Error("diff missing");
-        const out = await ports.reviewer.judge({
-          plan,
-          diff,
-          budget: { changeId, limitUsd, spentUsd },
-          model: policy.ai.reviewerModel,
-        });
-        const total = await coordinator.recordSpend({ changeId, usd: out.costUsd });
-        const items = judgmentItems(out.items);
-        const resealed = items.length > 0 ? await reseal(items) : null;
-        await log("change.judged", {
-          judgments: items.length,
-          costUsd: out.costUsd,
-          totalUsd: total,
-        });
-        return {
-          sealed: resealed,
-          budgetExceeded: out.budgetExceeded || total > limitUsd,
-          costUsd: out.costUsd,
-          judgments: items.length,
-        };
-      });
-      if (judged.sealed !== null) sealed = judged.sealed;
-      budgetExceeded = judged.budgetExceeded;
-    } catch (e) {
-      const reason = errorMessage(e);
-      sealed = await step.do("judge-failed", RETRY.quick, async () => {
-        const out = await reseal([erroredJudgment(`judge failed: ${reason}`)]);
-        await log("change.judge-failed", { error: reason });
-        return out;
-      });
-    }
-  }
 
   // ------------------------------------------------------------ evidence note on the fork
-  try {
-    await step.do("evidence-note", RETRY.remote, async () => {
-      const evidence = await store.getEvidence(changeId, headSha);
-      if (evidence === null) throw new Error("evidence missing");
-      await git.writeNote(forkName, headSha, encodeNote(evidence), {
-        notesRef: EVIDENCE_NOTES_REF,
-        mode: "replace",
-      });
-      await store.putEvidence({ ...evidence, notesWritten: true });
-      return true;
+  const writeEvidenceNote = async (): Promise<void> => {
+    const evidence = await store.getEvidence(changeId, headSha);
+    if (evidence === null) throw new Error("evidence missing");
+    await git.writeNote(forkName, headSha, encodeNote(evidence), {
+      notesRef: EVIDENCE_NOTES_REF,
+      mode: "replace",
     });
-  } catch (e) {
-    const reason = errorMessage(e);
-    await step.do("evidence-note-failed", RETRY.quick, async () => {
-      await log("change.evidence-note-failed", { error: reason });
-      return true;
-    });
-  }
+    await store.putEvidence({ ...evidence, notesWritten: true });
+  };
 
-  // ------------------------------------------------------------ 7. classify (pure)
-  const classifyStep = (
-    name: string,
-    tourStatus: TourStatus,
-    overBudget: boolean,
-    verified: boolean,
-  ) =>
-    step.do(name, RETRY.quick, async (): Promise<Classified> => {
-      const [evidence, diff, plan] = await Promise.all([
-        store.getEvidence(changeId, headSha),
-        store.getDiff(changeId, headSha),
-        ctx.planId === null ? null : store.getPlan(ctx.planId),
-      ]);
-      const raw: ClassifyResult = classify(
-        evidence === null ? null : { items: evidence.items },
-        policy,
-        plan,
-        diff === null ? null : diffStatsOf(diff),
-        { category: ctx.category },
-        {
-          ciStatus,
-          evidenceVerified: verified,
-          budgetExceeded: overBudget,
-          tourStatus,
-          pureRevertVerified,
-        },
-      );
-      const result = escalateForPolicy(raw, resolved);
-      await store.putClassification(changeId, headSha, result);
-      await store.updateChange(changeId, {
-        computedLane: result.computedLane,
-        lane: result.lane,
-        laneReasons: result.reasons,
-      });
-      await log("change.classified", {
+  // ------------------------------------------------------------ 5–8. grade (@app/core)
+  // evidence (signed) → judge → evidence note → classify → tour → reclassify: the same pipeline
+  // a GitHub PR goes through, with each stage a durable step of this workflow.
+  const coordinator = bindings.changeCoordinator(changeId);
+  const graded = await gradeChange<NativeReport>(
+    {
+      change: {
+        id: changeId,
+        title: ctx.title,
+        baseSha,
         headSha,
-        lane: result.lane,
-        computedLane: result.computedLane,
-        shadow: result.shadow,
-        blocked: result.blocked,
-        requiresHumanApproval: result.requiresHumanApproval,
-        tourStatus,
-        budgetExceeded: overBudget,
-        pureRevertVerified,
-        policy: resolved.source,
-        reasons: result.reasons.filter((r) => r.lane > 0).map((r) => r.code),
-      });
-      return {
-        lane: result.lane,
-        computedLane: result.computedLane,
-        shadow: result.shadow,
-        blocked: result.blocked,
-        requiresHumanApproval: result.requiresHumanApproval,
-        revertAutoMerge: result.reasons.some((r) => r.code === "revert.auto-merge"),
-      };
-    });
-  let cls = await classifyStep("classify", "not-generated", budgetExceeded, sealed.verified);
-
-  // ------------------------------------------------------------ 8. tour (lane ≥ 1, and shadowed lane 0)
-  if (!cls.blocked && (cls.lane >= 1 || cls.shadow)) {
-    let tour: { status: "ok" | "failed"; reason: string | null; budgetExceeded: boolean };
-    try {
-      tour = await step.do("tour", RETRY.model, async () => {
-        const spentUsd = await coordinator.spent(changeId);
-        if (spentUsd >= limitUsd)
-          return { status: "failed" as const, reason: "AI budget exhausted", budgetExceeded: true };
-        const [change, plan, diff, evidence, classification] = await Promise.all([
-          store.getChange(changeId),
-          ctx.planId === null ? null : store.getPlan(ctx.planId),
-          store.getDiff(changeId, headSha),
-          store.getEvidence(changeId, headSha),
-          store.getClassification(changeId, headSha),
-        ]);
-        if (change === null || diff === null || evidence === null || classification === null) {
-          throw new Error("tour inputs missing");
-        }
-        // The reviewer agent never sees the author's own summary: only id/title/shas.
-        const out = await ports.reviewer.tour({
-          change: { id: change.id, title: change.title, headSha, baseSha },
-          plan,
-          diff,
-          evidence,
-          classification,
-          budget: { changeId, limitUsd, spentUsd },
-          model: policy.ai.reviewerModel,
-        });
-        const total = await coordinator.recordSpend({ changeId, usd: out.costUsd });
-        const overBudget = out.budgetExceeded || total > limitUsd;
-        if (out.status === "failed") {
-          await log("change.tour-failed", { reason: out.reason, costUsd: out.costUsd });
-          return { status: "failed" as const, reason: out.reason, budgetExceeded: overBudget };
-        }
-        const valid = Tour.safeParse(out.tour);
-        if (!valid.success || valid.data.changeId !== changeId || valid.data.headSha !== headSha) {
-          await log("change.tour-failed", {
-            reason: "tour failed schema validation or is for another head",
-          });
-          return { status: "failed" as const, reason: "invalid tour", budgetExceeded: overBudget };
-        }
-        await store.putTour(valid.data);
-        await store.updateChange(changeId, { tourId: valid.data.id });
-        await log("change.tour-generated", {
-          tourId: valid.data.id,
-          stops: valid.data.stops.length,
-          costUsd: out.costUsd,
-        });
-        return { status: "ok" as const, reason: null, budgetExceeded: overBudget };
-      });
-    } catch (e) {
-      tour = { status: "failed", reason: errorMessage(e), budgetExceeded: false };
-    }
-    budgetExceeded = budgetExceeded || tour.budgetExceeded;
-    // Tour failure → reclassify (Lane 2); success is recorded too so the reasons say "generated".
-    cls = await classifyStep("reclassify", tour.status, budgetExceeded, sealed.verified);
+        category: ctx.category,
+        agentTraceId: ctx.agentTraceId,
+      },
+      policy: resolved,
+      // Unclaimed projects never auto-merge (their policy already has Lane 0 off; belt and braces).
+      autoMergeAllowed: ctx.claimed,
+      capabilities: NATIVE_CAPABILITIES,
+    },
+    {
+      stage: durableStages(step),
+      evidence: { run: runCi },
+      sealer: { seal: (items) => sealEvidence(ports, { changeId, headSha, baseSha, items }) },
+      reviewer: ports.reviewer,
+      budget: {
+        spent: () => coordinator.spent(changeId),
+        record: (usd) => coordinator.recordSpend({ changeId, usd }),
+      },
+      data: storeGradeData(store, { changeId, headSha, planId: ctx.planId }),
+      sink: {
+        verdict: (_verdict, result) => persistClassification(store, { changeId, headSha, result }),
+        tour: (tour) => persistTour(store, changeId, tour),
+      },
+      log: async (action, payload) => {
+        await log(action, payload);
+      },
+      hooks: { workerItems: startPreview, afterEvidence, publishEvidence: writeEvidenceNote },
+    },
+  );
+  if (graded.status === "stopped") {
+    return done(released ? "bootstrapped" : "blocked", null, released ? null : "ci failed");
   }
-  if (budgetExceeded) {
+  const { ciStatus, report } = graded.ci;
+  const sealed = graded.evidence;
+  const cls = graded.classification;
+  const limitUsd = policy.ai.budgetUsdPerChange;
+  if (graded.budgetExceeded) {
     await step.do("budget-exceeded", RETRY.quick, async () => {
       await notifier.notify({
         kind: "budget-exceeded",
@@ -794,11 +656,12 @@ export async function runChangeWorkflow(
       return position;
     });
 
-  // Unclaimed projects never auto-merge (their policy already has Lane 0 and revert auto-merge off;
-  // this is the belt to that pair of braces). The classifier's lane decides: a verified pure revert
-  // is Lane 0 only when every raised reason was waivable (`revert.auto-merge`); anything else
-  // raised (a model concern, a sensitive path) still goes to a human.
-  const autoMerge = ctx.claimed && !cls.requiresHumanApproval && cls.lane === 0;
+  // The core's routing: Lane 0, nothing needing a human, and a claimed project (unclaimed projects
+  // never auto-merge; their policy already has Lane 0 and revert auto-merge off, this is the belt to
+  // that pair of braces). A verified pure revert is Lane 0 only when every raised reason was
+  // waivable (`revert.auto-merge`); anything else raised still goes to a human. Natively the
+  // platform can merge, so "merge" is never degraded to "label-ready" here.
+  const autoMerge = graded.verdict.action === "merge";
   if (autoMerge) {
     await enqueue("enqueue", cls.revertAutoMerge === true ? "verified-revert" : "lane-0", null);
   } else {

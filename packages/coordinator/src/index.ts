@@ -22,6 +22,12 @@ export * from "./events.js";
 export { assembleEvidence, sealEvidence, touchedPaths } from "./evidence.js";
 export { changeFlagKey, changeFlags, type FlagshipLike, isChangeEnabled } from "./flags-helper.js";
 export {
+  durableStages,
+  persistClassification,
+  persistTour,
+  storeGradeData,
+} from "./grading.js";
+export {
   evaluateHealth,
   type HealthSample,
   type HealthStatus,

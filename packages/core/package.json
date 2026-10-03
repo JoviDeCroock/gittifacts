@@ -1,0 +1,26 @@
+{
+  "name": "@app/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./evidence": "./src/evidence-engine.ts",
+    "./queue": "./src/queue.ts",
+    "./tour": "./src/tour.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@app/classifier": "workspace:*",
+    "@app/domain": "workspace:*",
+    "@app/evidence": "workspace:*",
+    "@app/host": "workspace:*",
+    "@app/merge-queue": "workspace:*",
+    "@app/tour": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {}
+}

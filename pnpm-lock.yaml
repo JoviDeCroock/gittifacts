@@ -227,6 +227,9 @@ importers:
       '@app/classifier':
         specifier: workspace:*
         version: link:../classifier
+      '@app/core':
+        specifier: workspace:*
+        version: link:../core
       '@app/domain':
         specifier: workspace:*
         version: link:../domain
@@ -236,12 +239,39 @@ importers:
       '@app/gitwire':
         specifier: workspace:*
         version: link:../gitwire
+      '@app/host':
+        specifier: workspace:*
+        version: link:../host
       '@app/merge-queue':
         specifier: workspace:*
         version: link:../merge-queue
       '@app/resolver':
         specifier: workspace:*
         version: link:../resolver
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
+  packages/core:
+    dependencies:
+      '@app/classifier':
+        specifier: workspace:*
+        version: link:../classifier
+      '@app/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@app/evidence':
+        specifier: workspace:*
+        version: link:../evidence
+      '@app/host':
+        specifier: workspace:*
+        version: link:../host
+      '@app/merge-queue':
+        specifier: workspace:*
+        version: link:../merge-queue
+      '@app/tour':
+        specifier: workspace:*
+        version: link:../tour
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -323,6 +353,58 @@ importers:
         version: 4.6.5
 
   packages/gitwire: {}
+
+  packages/host:
+    dependencies:
+      '@app/classifier':
+        specifier: workspace:*
+        version: link:../classifier
+      '@app/domain':
+        specifier: workspace:*
+        version: link:../domain
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+
+  packages/host-artifacts:
+    dependencies:
+      '@app/coordinator':
+        specifier: workspace:*
+        version: link:../coordinator
+      '@app/core':
+        specifier: workspace:*
+        version: link:../core
+      '@app/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@app/host':
+        specifier: workspace:*
+        version: link:../host
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@app/host-contract':
+        specifier: workspace:*
+        version: link:../host-contract
+
+  packages/host-contract:
+    dependencies:
+      '@app/classifier':
+        specifier: workspace:*
+        version: link:../classifier
+      '@app/core':
+        specifier: workspace:*
+        version: link:../core
+      '@app/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@app/evidence':
+        specifier: workspace:*
+        version: link:../evidence
+      '@app/host':
+        specifier: workspace:*
+        version: link:../host
 
   packages/mcp:
     dependencies:
