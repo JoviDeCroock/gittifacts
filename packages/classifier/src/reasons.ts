@@ -136,7 +136,14 @@ export const REASON_CODES = {
     "fail",
     ["tests"],
     "Test run {step} reported {failed} failing test(s).",
-    'A test-run item with status "ok" reports failed > 0 (even if CI says passed).',
+    'A test-run item with status "ok" reports failures that are new against the Change\'s base (failed minus preExisting ones proven against a usable baseline of diffStats.baseSha; every failure without one), even if CI says passed.',
+  ),
+  "tests.preexisting": spec(
+    0,
+    "pass",
+    ["tests"],
+    "{count} failing test(s) in {step} fail identically on base {base}: pre-existing, not counted.",
+    "A test-run item lists preExisting failures against a usable baseline of the Change's base commit (diffStats.baseSha); they are discounted from failed.",
   ),
   "signal.missing.test-run": spec(
     2,
@@ -565,6 +572,13 @@ export const REASON_CODES = {
     ["mutation"],
     "Mutation score {score} is below the threshold of {threshold}.",
     "Lowest mutation score over ok items < policy.thresholds.mutationScore.",
+  ),
+  "mutation.no-coverage": spec(
+    1,
+    "fail",
+    ["mutation"],
+    "No test exercises the changed lines: {mutants} mutant(s) without coverage (threshold {threshold}).",
+    "The lowest-scoring ok mutation item killed, timed out and survived nothing and has noCoverage > 0 (no test is related to the mutated files).",
   ),
   "signal.missing.mutation": spec(
     1,

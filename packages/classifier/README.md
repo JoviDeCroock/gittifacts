@@ -112,10 +112,11 @@ table lists every code with its lane.
 | `signal.error.test-run` | 2 | tests ? | A test-run item has status "error". |
 | `signal.missing.red-green` | 2 | red-green ? | Claimed fix and no red-green item with status "ok" (absent, or only skipped). |
 | `signal.missing.test-run` | 2 | tests ? | No test-run item with status "ok" (absent, or only skipped). |
-| `tests.failing` | 2 | tests ✗ | A test-run item with status "ok" reports failed > 0 (even if CI says passed). |
+| `tests.failing` | 2 | tests ✗ | A test-run item with status "ok" reports failures that are new against the Change's base (failed minus preExisting ones proven against a usable baseline of diffStats.baseSha; every failure without one), even if CI says passed. |
 | `red-green.not-required` | 0 | red-green ✓ | Claimed category is not fix. |
 | `red-green.proven` | 0 | red-green ✓ | Claimed fix and every red-green item has verdict "proven". |
-| `tests.passed` | 0 | tests ✓ | At least one test-run item has status "ok" and none reports failures. |
+| `tests.passed` | 0 | tests ✓ | At least one test-run item has status "ok" and none reports failures new against the Change's base. |
+| `tests.preexisting` | 0 | tests ✓ | A test-run item lists preExisting failures (fail identically on base, confirmed twice) against a usable baseline of the Change's base commit; they are discounted from failed. |
 
 ### Public API
 
@@ -190,6 +191,7 @@ table lists every code with its lane.
 |---|---|---|---|
 | `coverage.below-threshold` | 1 | coverage ✗ | Lowest coverage ratio over ok items < policy.thresholds.changedLineCoverage. |
 | `mutation.below-threshold` | 1 | mutation ✗ | Lowest mutation score over ok items < policy.thresholds.mutationScore. |
+| `mutation.no-coverage` | 1 | mutation ✗ | The lowest-scoring ok mutation item killed, timed out and survived nothing and has noCoverage > 0: no test exercises the changed lines (measured, not an error). |
 | `signal.error.coverage` | 1 | coverage ? | A coverage item has status "error". |
 | `signal.error.mutation` | 1 | mutation ? | A mutation item has status "error". |
 | `signal.missing.coverage` | 1 | coverage ? | No coverage item with status "ok", and no accepted skip. |

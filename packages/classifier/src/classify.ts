@@ -17,21 +17,23 @@ import type {
   PlanlessCategory,
   RepoPolicy,
 } from "@app/domain";
-import type {
-  ConflictResolution,
-  CoverageDelta,
-  DependencyDiff,
-  EvidenceItem,
-  EvidenceKind,
-  LlmJudgment,
-  MutationScore,
-  PublicApiDiff,
-  Quarantine,
-  RedGreenProof,
-  ReproducibleTransform,
-  SensitivePathHits,
-  SignalStatus,
-  TestRun,
+import {
+  type ConflictResolution,
+  type CoverageDelta,
+  type DependencyDiff,
+  type EvidenceItem,
+  type EvidenceKind,
+  type LlmJudgment,
+  type MutationScore,
+  newFailureCount,
+  type PublicApiDiff,
+  type Quarantine,
+  type RedGreenProof,
+  type ReproducibleTransform,
+  type SensitivePathHits,
+  type SignalStatus,
+  stripAnsi,
+  type TestRun,
 } from "@app/evidence";
 import {
   compareStrings,
@@ -184,7 +186,8 @@ function readSignal<T extends { status: SignalStatus }>(items: readonly T[]): Si
 }
 
 function truncate(text: string, max = 280): string {
-  const oneLine = text.replace(/\s+/g, " ").trim();
+  // Tool output in notes can carry colour codes; reasons are read by people.
+  const oneLine = stripAnsi(text).replace(/\s+/g, " ").trim();
   return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine;
 }
 
@@ -335,7 +338,12 @@ function checkCi(out: Reasons, status: CiStatus): void {
   out.add(lookup<ReasonCode>(CI_CODES, status, "ci.unknown"));
 }
 
-function checkTests(out: Reasons, items: readonly TestRun[]): void {
+/**
+ * Test runs. Only failures that are new against the Change's base count: a run's `preExisting`
+ * failures are discounted when its baseline is usable and of the Change's base commit. Without
+ * the base (`diffStats` unknown) or a baseline, every failure counts (unknown escalates).
+ */
+function checkTests(out: Reasons, items: readonly TestRun[], baseSha: string | null): void {
   const s = readSignal(items);
   for (const e of s.errored) out.add("signal.error.test-run", { detail: errorDetail(e) }, e.id);
   if (s.ok.length === 0) {
@@ -343,8 +351,21 @@ function checkTests(out: Reasons, items: readonly TestRun[]): void {
       out.add("signal.missing.test-run", { detail: skippedDetail(s.skipped) }, s.skipped[0]?.id);
     return;
   }
-  const failing = s.ok.filter((r) => r.failed > 0);
-  for (const r of failing) out.add("tests.failing", { step: r.step, failed: r.failed }, r.id);
+  const counted = s.ok.map((r) => ({
+    r,
+    failed: baseSha === null ? r.failed : newFailureCount(r, baseSha),
+  }));
+  const failing = counted.filter((c) => c.failed > 0);
+  for (const c of failing) out.add("tests.failing", { step: c.r.step, failed: c.failed }, c.r.id);
+  for (const c of counted) {
+    const pre = c.r.failed - c.failed;
+    if (pre > 0)
+      out.add(
+        "tests.preexisting",
+        { step: c.r.step, count: pre, base: (baseSha ?? "").slice(0, 12) },
+        c.r.id,
+      );
+  }
   if (failing.length === 0) {
     const passed = s.ok.reduce((n, r) => n + r.passed, 0);
     out.add(
@@ -711,7 +732,15 @@ function checkMutation(
     }
   }
   const params = { score: pct(worstScore), threshold: pct(threshold) };
+  // No mutant ran against a test: nothing exercises the changed lines (measured, not an error).
+  const untested = worst.killed + worst.timedOut + worst.survived === 0 && worst.noCoverage > 0;
   if (worstScore >= threshold) out.add("mutation.ok", params, worst.id);
+  else if (untested)
+    out.add(
+      "mutation.no-coverage",
+      { mutants: worst.noCoverage, threshold: params.threshold },
+      worst.id,
+    );
   else out.add("mutation.below-threshold", params, worst.id);
 }
 
@@ -888,7 +917,7 @@ export function classify(
   if (diffStats === null) out.add("signal.missing.diff-stats");
 
   // Required signals (absent/errored → Lane 2).
-  checkTests(out, ofKind(items, "test-run"));
+  checkTests(out, ofKind(items, "test-run"), diffStats?.baseSha ?? null);
   checkQuarantine(out, ofKind(items, "quarantine"));
   checkRedGreen(out, ofKind(items, "red-green"), change.category);
   checkPublicApi(out, ofKind(items, "public-api"), noSourceChanged);
