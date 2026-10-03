@@ -92,6 +92,29 @@ export function durationLabel(ms: number): string {
   return rest ? `${m} min ${rest} s` : `${m} min`;
 }
 
+const clock = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+const dateClock = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+
+/** Time of day to the second ("09:06:12"): for events seconds apart, like a rollback. */
+export function formatClock(iso: string): string {
+  return clock.format(new Date(iso));
+}
+
+/** `formatWhen` to the second: "09:06:12" today, "Oct 3, 09:06:12" otherwise. */
+export function formatWhenPrecise(iso: string, now: number): string {
+  const d = new Date(iso);
+  const n = new Date(now);
+  const sameDay = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+  return sameDay ? formatClock(iso) : dateClock.format(d);
+}
+
+/** A short span with tenths of a second under a minute: "0.0 s", "23.9 s", "1 min 22 s". */
+export function spanLabel(ms: number): string {
+  const abs = Math.max(0, ms);
+  if (abs < 60_000) return `${(Math.round(abs / 100) / 10).toFixed(1)} s`;
+  return durationLabel(abs);
+}
+
 /** Time of day for today's events, date and time otherwise. */
 export function formatWhen(iso: string, now: number): string {
   const d = new Date(iso);

@@ -147,8 +147,16 @@ describe("M4 through deploy trains", () => {
     expect(reverted?.status).toBe("reverted");
     expect(reverted?.revertedBy).toBe(revertIdFor("c1"));
     expect(reverted?.rolloutState?.status).toBe("rolled-back");
+    // The rates the train was judged on are kept on the Change (the rollout page's health panel).
+    expect(reverted?.rolloutState?.lastCheck).toMatchObject({ errorRate: 0.4, requests: 200 });
     expect(audit.actions()).toEqual(
       expect.arrayContaining(["deploy.flag-off", "deploy.regression-attributed"]),
+    );
+    // The rollback is on the Change's own timeline, after the detection (to the millisecond).
+    const own = audit.events.filter((e) => e.subject === "change:c1").map((e) => e.action);
+    expect(own).toContain("rollout.rolled-back");
+    expect(own.indexOf("rollout.rolled-back")).toBeGreaterThan(
+      own.indexOf("deploy.regression-attributed"),
     );
     // Train events are scoped to the repo (train ids count per queue).
     const trainEvents = audit.events.filter((e) => e.subject.startsWith("train:"));

@@ -168,9 +168,12 @@ export interface ReviewInput {
   comment?: string;
 }
 
+/** A timeline event as the rollout API returns it: with the server's readable one-liner. */
+export type TimelineEvent = AuditEvent & { summary?: string };
+
 export interface RolloutResponse {
   rollout: RolloutState | null;
-  timeline: AuditEvent[];
+  timeline: TimelineEvent[];
 }
 
 // ---------------------------------------------------------------- audit

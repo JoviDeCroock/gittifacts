@@ -5,7 +5,7 @@ import type { Change, ClaimedCategory, Evidence, Lane, LaneReason, RolloutState,
 import type { EvidenceItem } from "@app/evidence";
 import { fileStats, hunkFromText } from "../lib/diff.js";
 import { NOW, PLATFORM_KEY_ID, ago, b64u, passedRun, sha } from "./fixture-kit.js";
-import type { ChangeDiff, DiffFile, DiffFileStatus, DiffHunk, EvidenceVerification, LinkedIssue, PipelineRun } from "./types.js";
+import type { ChangeDiff, DiffFile, DiffFileStatus, DiffHunk, EvidenceVerification, LinkedIssue, PipelineRun, TimelineEvent } from "./types.js";
 
 export interface Scenario {
   change: Change;
@@ -15,6 +15,8 @@ export interface Scenario {
   verification: EvidenceVerification;
   runs: PipelineRun[];
   issues: LinkedIssue[];
+  /** A rollout timeline to the millisecond (with summaries); else the audit fixtures' events. */
+  timeline?: TimelineEvent[];
 }
 
 export function hunk(oldStart: number, newStart: number, body: string): DiffHunk {

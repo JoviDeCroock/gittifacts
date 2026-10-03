@@ -2,12 +2,12 @@ import type { Change, RolloutPolicy, RolloutState } from "@app/domain";
 import { useSignal } from "@preact/signals";
 import { useRef } from "preact/hooks";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
-import type { AuditEvent, LinkedIssue, RepoDetail } from "../api/types.js";
+import type { LinkedIssue, RepoDetail, TimelineEvent } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
 import { Button, EmptyState, ErrorState, LinkButton, Loading, StatusChip } from "../components/ui.js";
-import { actionLabel, isBadAction } from "../lib/audit-actions.js";
-import { addMinutes, countdown, countdownWords, formatTime, formatWhen, relative } from "../lib/time.js";
+import { detectionSentence, findIncident, healthGapCopy, type Incident, SIGNAL_LABEL, type TimelineRow, timelineRows } from "../lib/rollout-incident.js";
+import { addMinutes, countdown, countdownWords, formatClock, formatTime, formatWhenPrecise, relative, spanLabel } from "../lib/time.js";
 import { CHANGE_STATUS, ROLLOUT_STATUS, num, plural } from "../lib/vocab.js";
 import { useTick } from "../state/clock.js";
 import { useResource } from "../state/resource.js";
@@ -16,15 +16,23 @@ import "../styles/rollout.css";
 interface RolloutData {
   change: Change;
   rollout: RolloutState | null;
-  timeline: AuditEvent[];
+  timeline: TimelineEvent[];
+  /** The revert change's own timeline (it merging and shipping), when this change was reverted. */
+  revertTimeline: TimelineEvent[];
   issues: LinkedIssue[];
   repo: RepoDetail;
 }
 
 async function loadRollout(changeId: string): Promise<RolloutData> {
   const { change } = await api.change(changeId);
-  const [r, issues, repo] = await Promise.all([api.rollout(changeId), api.issues(changeId).then((x) => x.issues, () => []), api.repo(change.repoId)]);
-  return { change, rollout: r.rollout, timeline: r.timeline, issues, repo };
+  const revertId = change.revertedBy;
+  const [r, issues, repo, revertTimeline] = await Promise.all([
+    api.rollout(changeId),
+    api.issues(changeId).then((x) => x.issues, () => []),
+    api.repo(change.repoId),
+    revertId ? api.rollout(revertId).then((x) => x.timeline, () => []) : Promise.resolve([]),
+  ]);
+  return { change, rollout: r.rollout, timeline: r.timeline, revertTimeline, issues, repo };
 }
 
 type NodeState = "done" | "current" | "pending" | "failed" | "skipped";
@@ -81,7 +89,7 @@ function StageTrack({ nodes }: { nodes: TrackNode[] }) {
   );
 }
 
-function headline(r: RolloutState, policy: RolloutPolicy, now: number): { title: string; line: string; live: boolean } {
+function headline(r: RolloutState, policy: RolloutPolicy, now: number, incident: Incident | null): { title: string; line: string; live: boolean } {
   const current = r.stages.find((s) => s.startedAt && !s.completedAt);
   const next = current ? r.stages[r.stages.indexOf(current) + 1] : undefined;
   switch (r.status) {
@@ -103,7 +111,11 @@ function headline(r: RolloutState, policy: RolloutPolicy, now: number): { title:
     case "released":
       return { title: "Released", line: "The watch window closed with no breach.", live: false };
     case "rolled-back":
-      return { title: "Rolled back", line: "Traffic went back to the previous version and a revert change was opened.", live: false };
+      return {
+        title: "Rolled back",
+        line: incident ? detectionSentence(incident, spanLabel) : "Traffic went back to the previous version and a revert change was opened.",
+        live: false,
+      };
     case "rolling-back":
       return { title: "Rolling back", line: "Traffic is moving back to the previous version.", live: true };
     case "failed":
@@ -113,11 +125,60 @@ function headline(r: RolloutState, policy: RolloutPolicy, now: number): { title:
   }
 }
 
-function Health({ r, policy, now }: { r: RolloutState; policy: RolloutPolicy; now: number }) {
+/** What happened, to the second: the first error, the detection, and each automatic step after it. */
+function IncidentFacts({ incident }: { incident: Incident }) {
+  const by = incident.signal === "person" ? "Killed by a person" : incident.signal ? `Detected by ${SIGNAL_LABEL[incident.signal]}` : "Regression detected";
+  return (
+    <div class="incident">
+      <ol class="incident__list" aria-label="What happened, to the second">
+        {incident.firstError ? (
+          <li class="incident__row is-bad">
+            <span class="incident__what">First error in production</span>
+            <time class="incident__clock tnum" dateTime={incident.firstError.at}>
+              {formatClock(incident.firstError.at)}
+            </time>
+            <span class="incident__after tnum" />
+          </li>
+        ) : null}
+        <li class="incident__row is-bad">
+          <span class="incident__what">{by}</span>
+          <time class="incident__clock tnum" dateTime={incident.detectedAt}>
+            {formatClock(incident.detectedAt)}
+          </time>
+          <span class="incident__after tnum">{incident.detectedAfterMs !== null ? `+${spanLabel(incident.detectedAfterMs)}` : "0 s"}</span>
+        </li>
+        {incident.steps.map((s) => (
+          <li key={s.key} class="incident__row">
+            <span class="incident__what">{s.label}</span>
+            <time class="incident__clock tnum" dateTime={s.at}>
+              {formatClock(s.at)}
+            </time>
+            <span class="incident__after tnum">+{spanLabel(s.afterMs)}</span>
+          </li>
+        ))}
+      </ol>
+      <p class="incident__legend">
+        {incident.firstError ? "The detection is timed from the first error, each step after it from the detection." : "Each step is timed from the detection."}
+      </p>
+    </div>
+  );
+}
+
+function stoppedNote(incident: Incident): string {
+  const at = formatClock(incident.detectedAt);
+  if (incident.signal === "person") return `Killed by a person at ${at}. The rates below are from the last check that was kept.`;
+  const by = incident.signal ? ` by ${SIGNAL_LABEL[incident.signal]}` : "";
+  return `Stopped at ${at}${by}. The rates below are from the last check that was kept.`;
+}
+
+function Health({ r, policy, now, incident }: { r: RolloutState; policy: RolloutPolicy; now: number; incident: Incident | null }) {
   const c = r.lastCheck;
+  const live = r.status === "rolling" || r.status === "watching" || r.status === "pending";
   if (!c) {
-    const live = r.status === "rolling" || r.status === "watching" || r.status === "pending";
-    return <p class="ev-sub">{live ? "No health check has run yet." : "No health check result was recorded for this rollout. The timeline has what happened."}</p>;
+    let copy = "No health check result was recorded for this rollout. The timeline has what happened.";
+    if (live) copy = "No health check has run yet.";
+    else if (incident) copy = healthGapCopy(incident, formatClock);
+    return <p class="ev-sub">{copy}</p>;
   }
   const base = c.baselineErrorRate;
   const limit = base !== null ? base + policy.maxErrorRateIncrease : null;
@@ -135,6 +196,7 @@ function Health({ r, policy, now }: { r: RolloutState; policy: RolloutPolicy; no
           {tooFew ? <span class="tone--warn"> · fewer than the {policy.minRequests} needed to trust the rate</span> : null}
         </span>
       </div>
+      {incident && !live ? <p class="health__note">{stoppedNote(incident)}</p> : null}
       <div class="rates" role="group" aria-label="Error rate against baseline">
         <div class={`rate ${breach ? "rate--bad" : ""}`}>
           <span class="rate__label">This version</span>
@@ -237,22 +299,43 @@ function KillSwitch({ change, onKilled }: { change: Change; onKilled: (c: Change
   );
 }
 
-function Timeline({ events, now }: { events: AuditEvent[]; now: number }) {
-  if (events.length === 0) return null;
-  const ordered = [...events].sort((a, b) => b.seq - a.seq);
+function Timeline({ rows, now, revertId }: { rows: TimelineRow[]; now: number; revertId: string | null }) {
+  if (rows.length === 0) return null;
   return (
     <section class="timeline" aria-labelledby="timeline-title">
       <h2 id="timeline-title">Timeline</h2>
       <ol>
-        {ordered.map((e) => (
-          <li key={e.seq} class={isBadAction(e.action) ? "is-bad" : ""}>
-            <time class="tnum" dateTime={e.at}>
-              {formatWhen(e.at, now)}
+        {rows.map((r) => (
+          <li key={r.key} class={r.bad ? "is-bad" : ""}>
+            <time class="tnum" dateTime={r.at} title={new Date(r.at).toLocaleString()}>
+              {formatWhenPrecise(r.at, now)}
             </time>
-            <span title={e.action}>{actionLabel(e.action)}</span>
-            <a href={`/audit?subject=${encodeURIComponent(e.subject)}`} class="timeline__seq tnum" aria-label={`Audit event ${e.seq}`}>
-              #{e.seq}
-            </a>
+            <span class="timeline__what">
+              {r.source === "revert" && revertId ? (
+                <a href={`/changes/${revertId}`} class="timeline__label" title={r.action ?? undefined}>
+                  {r.label}
+                </a>
+              ) : (
+                <span class="timeline__label" title={r.action ?? undefined}>
+                  {r.label}
+                </span>
+              )}
+              {r.detail ? <span class="timeline__detail">{r.detail}</span> : null}
+            </span>
+            <span class="timeline__end">
+              {r.afterMs !== null && r.afterMs > 0 ? (
+                <span class="timeline__after tnum" title="After the detection">
+                  +{spanLabel(r.afterMs)}
+                </span>
+              ) : null}
+              {r.seq !== null && r.subject ? (
+                <a href={`/audit?subject=${encodeURIComponent(r.subject)}`} class="timeline__seq tnum" aria-label={`Audit event ${r.seq}`}>
+                  #{r.seq}
+                </a>
+              ) : (
+                <span class="timeline__seq">Issues</span>
+              )}
+            </span>
           </li>
         ))}
       </ol>
@@ -279,7 +362,7 @@ export function RolloutView({ changeId }: { changeId: string }) {
       </Page>
     );
   }
-  const { change, rollout, timeline, issues, repo } = st.data;
+  const { change, rollout, timeline, revertTimeline, issues, repo } = st.data;
   const policy = repo.repo.policy.rollout;
   const now = tick.value;
   const pageCrumbs = [...crumbs, { href: `/repos/${repo.repo.id}`, label: repo.repo.name }, { href: `/changes/${change.id}`, label: change.title }];
@@ -294,7 +377,8 @@ export function RolloutView({ changeId }: { changeId: string }) {
     );
   }
 
-  const h = headline(rollout, policy, now);
+  const incident = findIncident(timeline, issues);
+  const h = headline(rollout, policy, now, incident);
   const live = rollout.status === "rolling" || rollout.status === "watching" || rollout.status === "pending";
   const meta = ROLLOUT_STATUS[rollout.status];
 
@@ -318,6 +402,7 @@ export function RolloutView({ changeId }: { changeId: string }) {
               {h.title}
             </p>
             <p class="rollout-state__line">{h.line}</p>
+            {incident ? <IncidentFacts incident={incident} /> : null}
             <StageTrack nodes={trackNodes(rollout, policy, now)} />
             <dl class="rollout-facts">
               <div>
@@ -339,7 +424,7 @@ export function RolloutView({ changeId }: { changeId: string }) {
             </dl>
           </section>
 
-          <Health r={rollout} policy={policy} now={now} />
+          <Health r={rollout} policy={policy} now={now} incident={incident} />
 
           {issues.length > 0 ? (
             <section class="issues" aria-labelledby="issues-title">
@@ -390,7 +475,7 @@ export function RolloutView({ changeId }: { changeId: string }) {
               </div>
             </section>
           ) : null}
-          <Timeline events={timeline} now={now} />
+          <Timeline rows={timelineRows(timeline, revertTimeline, incident)} now={now} revertId={change.revertedBy} />
         </aside>
       </div>
     </Page>

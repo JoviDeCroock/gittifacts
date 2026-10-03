@@ -20,6 +20,7 @@ import {
   testRun,
   trace,
 } from "./scenario-kit.js";
+import { TRAIN_SCENARIOS } from "./scenarios-trains.js";
 
 const BILLING = "repo_billing";
 const DASH = "repo_dashboard";
@@ -1329,5 +1330,5 @@ const ghTotal = scenario({
 
 export const SCENARIOS: Scenario[] = [
   tz, locale, paginate, breaking, pdf, session, codemod, policy, drift, fx, ledger, ledgerRevert, numbering, wrangler,
-  undici, cors, laneTags, darkMode, ghTotal,
+  undici, cors, laneTags, darkMode, ghTotal, ...TRAIN_SCENARIOS,
 ];

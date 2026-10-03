@@ -239,7 +239,16 @@ export class CoordinatorTrainShell {
         trainId: cmd.trainId,
         reason: "no previous version; the flags are the only mitigation",
       });
-    for (const id of p?.changeIds ?? []) await this.setRollout(id, "rolled-back");
+    for (const id of p?.changeIds ?? []) {
+      // On each Change's own timeline too (the train's event is on the train): the rollout page
+      // times the rollback against the detection, to the tenth of a second.
+      if (to !== null)
+        await this.ctx.audit(changeSubject(id), "rollout.rolled-back", {
+          trainId: cmd.trainId,
+          to,
+        });
+      await this.setRollout(id, "rolled-back");
+    }
     await emit({ type: "RollbackDone", trainId: cmd.trainId });
   }
 
@@ -344,7 +353,35 @@ export class CoordinatorTrainShell {
     }
     const p = this.progress(trainId);
     if (cmd.action === "deploy.train-released" && p !== null)
-      for (const id of p.changeIds) await this.setRollout(id, "released");
+      for (const id of p.changeIds) {
+        await this.ctx.audit(changeSubject(id), "rollout.released", { trainId });
+        await this.setRollout(id, "released");
+      }
+  }
+
+  /**
+   * The latest good health sample as each Change's `rolloutState.lastCheck` (as the
+   * RolloutWorkflow records it), so the rollout page shows the rates the train was judged on.
+   */
+  private async recordCheck(p: TrainProgress, sample: HealthSample): Promise<void> {
+    if (!sample.ok) return;
+    const { store } = this.ctx.ports;
+    for (const id of p.changeIds) {
+      const change = await store.getChange(id);
+      if (change?.rolloutState == null) continue;
+      await store.updateChange(id, {
+        rolloutState: {
+          ...change.rolloutState,
+          lastCheck: {
+            at: sample.at,
+            errorRate: sample.errorRate,
+            baselineErrorRate: sample.baselineErrorRate,
+            requests: Math.trunc(sample.requests),
+            newIssueGroups: Math.trunc(sample.newIssueGroups),
+          },
+        },
+      });
+    }
   }
 
   private async setRollout(changeId: string, status: "released" | "rolled-back"): Promise<void> {
@@ -402,17 +439,18 @@ export class CoordinatorTrainShell {
       const now = this.ctx.now();
       if (t.state === "killing") {
         if (p.regression === null) continue;
-        const after = [
-          ...p.regression.samplesAfterKill,
-          await this.sample(p, p.regression.at),
-        ].slice(-10);
+        const latest = await this.sample(p, p.regression.at);
+        await this.recordCheck(p, latest);
+        const after = [...p.regression.samplesAfterKill, latest].slice(-10);
         this.save({ ...p, regression: { ...p.regression, samplesAfterKill: after } });
         const verdict = evaluateHealth(policy, after);
         if (verdict.status !== "regression" && after.length >= 2)
           dispatch({ type: "RegressionCleared", trainId: t.id, issueId: p.regression.issueId });
         continue;
       }
-      const samples = [...p.samples, await this.sample(p, p.stageSince)].slice(-30);
+      const latest = await this.sample(p, p.stageSince);
+      await this.recordCheck(p, latest);
+      const samples = [...p.samples, latest].slice(-30);
       if (evaluateHealth(policy, samples).status === "regression") {
         const issueId = `telemetry-${t.id}-${p.regressions + 1}`;
         this.save({ ...p, samples: [], regressions: p.regressions + 1 });
