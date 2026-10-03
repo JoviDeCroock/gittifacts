@@ -1475,3 +1475,88 @@ make the queue's CAS go stale (it retries), never an agent write.
 **Not done.** No web UI for it yet (the response and `GET …/import-grant` are the interface). The MCP tool
 accepts `importMode` so agents learn the human step from the error. `create_project({ from })` still doesn't
 start detection by itself (the guide says to call `propose_platform_config`); push imports do.
+
+## 2026-10-02 — One Flagship app per project (cross-tenant flag isolation)
+
+Every project shared the platform's change-flag app (`FLAGSHIP_APP_ID`), and every deployed project Worker bound
+`FLAGS` to it, so any project's code could read every other project's change flags (and the platform's own).
+
+- **Per-project app.** A claimed project with a deploy target gets its own Flagship app, named `gf-<repoId>`,
+  recorded as `repos.flagship_app_id` (migration 0011, unique index: two projects never share one). It is created when
+  the deploy target is set (`CoordinatorApi.ensureProjectFlags`, owners only, audited `repo.flag-app-created`; best
+  effort: the route still sets the target if Flagship is down) and lazily before any flag write or deploy
+  (`ensureProjectFlagApp`), which is also the migration for existing deploy targets (only test projects existed).
+- **Idempotency without unique names.** Flagship app names are not unique (verified: two `POST /apps` with one name
+  made two apps). `Flags.ensureApp(name)` reuses the oldest app with the name, so a retried create converges; the D1
+  compare-and-set (`Store.setRepoFlagshipApp`, `WHERE flagship_app_id IS NULL`) keeps the first id, and a race loser
+  deletes its own app. `D1Store.updateRepo` never rewrites the column unless the patch names it, so an update built
+  from a stale row cannot erase the app id.
+- **Ports.** `Flags` takes the app id on every call (`ensureApp`, `deleteApp`, `ensureChangeFlag(appId, …)`,
+  `setEnabled(appId, …)`); rollouts, deploy trains and the kill switch use the project's app.
+  `Deployer.uploadVersion({ …, flagshipAppId })` is required: a deploy without the project's app fails rather than
+  ship a Worker without a working kill switch (or with someone else's flags). Bundles still cannot declare any
+  Flagship binding themselves.
+- **Deletion.** Flagship refuses to delete an app a Worker still binds (409), so project deletion (O3 expiry, the only
+  deletion path today) deletes the project's `gf-` Worker first (`DELETE …/scripts/{s}?force=true`), then its app. A
+  failure leaves the project `expiring` for the next run. Clearing a deploy target keeps the app (the Worker still
+  exists and binds it).
+- **Platform flags** (`unclaimed-creation-enabled`) stay in `FLAGSHIP_APP_ID`, which only the platform Worker binds.
+  The two stale `change-*` flags from earlier M4 runs were deleted from it.
+
+## 2026-10-02 — Workers Issues webhooks for project Workers (one account-wide automation)
+
+Detection polled Workers Logs every 30 s. Workers Issues now also pushes new error groups.
+
+- **Wiring is account-level, once** (`scripts/setup-workers-issues.sh`, idempotent, `cf` CLI): a Notifications
+  generic-webhook destination → `/webhooks/workers-issues` with the shared secret (`ISSUES_WEBHOOK_SECRET`, rotated
+  to a fresh 32-byte value set from a 0600 file that was deleted afterwards), a policy for
+  `workers_observability_real_time_issue`, and **one account-wide Issues automation** (`service` omitted, threshold
+  1). Not one per project Worker: an account has at most 50 automations. The deviation from "per project, created and
+  cleaned up with the deploy target": nothing per project is needed, and the webhook keeps only `gf-` Workers (the
+  platform's own Worker, other Workers in the account and the destination's "Hello World" test message are
+  acknowledged and dropped, not stored). Project Workers already get `observability.issues.enabled` from the deployer.
+  The `cf` OAuth login could create all three; the Worker's `CF_API_TOKEN` only needs Observability Read (occurrences).
+- **The payload has no version id** (captured live, research §2): `data.issue` has the issue id, title, count,
+  timestamps and `services[].name`. The coordinator reads the version from the issue's newest occurrence
+  (`Telemetry.issueOccurrence`: `GET …/issues/{id}/occurrences` → `worker.scriptVersion.id`), then routes it: a
+  version a deploy train shipped → `IssueReported` (attribution, flag off, rollback, revert, no poll needed); a
+  RolloutWorkflow version → the workflow's wait is cut short and its health check counts the issue.
+- **Policy still applies.** An issue on a version that has at most `rollout.maxNewIssueGroups` issue groups is stored,
+  not acted on (the default 0 means the first new group acts), the same limit the health check applies.
+- **Latency measured on the probe:** first occurrence → issue created ≈ 21 s → webhook delivered ≈ 31 s. That is the
+  same order as the poll (M4 run 4 detected 32.5 s after the first error), so the webhook is a second, independent
+  signal more than a faster one; polling stays as the fallback (and remains the only signal when the regression is
+  a higher rate of an error group that already existed: an automation fires once per issue).
+
+## 2026-10-03 — GitHub mode: Lane 0 without weakening human protection; two Apps; permissions (user decisions)
+
+Source: docs/research/github-app.md (GitHub's current docs, verified 2026-10-03).
+
+**Lane 0 on GitHub (path A, the only one we offer).**
+- Split the repo's rules into two rulesets:
+  - **"human-review"**: holds only the required-approvals rule. Our Actor App is its sole bypass actor
+    (`Integration`, `bypass_mode: pull_request`).
+  - **"baseline"**: holds required checks (including `<platform>/lane`), code owners, no force push and no deletion.
+    Nobody bypasses it, our App included.
+- Humans' rules are unchanged. The setup wizard explains exactly this change and why.
+- The App merges with `PUT /pulls/{n}/merge-async`, using the expected-head-SHA guard (`sha`); GA 2026-10-01.
+- Stop condition #1 ("Lane 0 impossible without weakening protection for humans") does **not** apply.
+- **Not offered:**
+  - Path B, App approvals counting toward required reviews. It relies on behaviour GitHub doesn't document for
+    third-party Apps; spec §3.8 allows only documented ruleset paths.
+  - Path C, zero required approvals. It weakens protection for humans.
+- **Open, to verify on the live test org:** whether `merge-async` with `bypass_rules` can enter a merge queue without
+  skipping it.
+- **Merge-queue repos:** we act as a required check on `merge_group`.
+
+**Two Apps, because GitHub permissions are per installation, not per repo.**
+- **Reader App** (public, shadow grading): metadata, contents and issues read; pull_requests and checks write; plus
+  `merge_queues: read`, `deployments: read` and `statuses: read`. The user approved these additions to spec §3.1
+  (stop condition #2 resolved). `statuses: write` was declined.
+- **Actor App** (private, one per customer, created through the manifest flow): `contents: write`. Installed only on
+  repos where the owner turned on acting (Lane 0 merge, resolver pushes, revert PRs). It is the ruleset bypass actor.
+- **`workflows`:** spec §3.1's "workflows read" doesn't exist. Actions results come through `checks: read`. Revert PRs
+  that touch `.github/workflows` are refused rather than requesting `workflows: write`.
+
+**Setup (user decision).** The platform offers the one-click App manifest flow. The user clicks through on GitHub to
+create the Reader and Actor Apps and a test org, and the credentials land directly in the platform's secrets.
