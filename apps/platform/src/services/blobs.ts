@@ -13,7 +13,8 @@ import { canAccess } from "../access/access.js";
 import type { Caller, Services } from "../app-env.js";
 import { ApiError, notFound } from "../errors.js";
 
-const REF_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._\-/]{0,511}$/;
+// ":" appears in evidence step logs (`ci-logs/<run>/evidence:red-green.log`).
+const REF_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._:\-/]{0,511}$/;
 
 const RULES: Array<{ re: RegExp; kind: "run" | "change" | "repo" }> = [
   { re: /^ci-(?:logs|runs|evidence)\/([^/]+)\//, kind: "run" },

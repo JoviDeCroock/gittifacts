@@ -85,6 +85,15 @@ describe("GET /api/v1/blobs/:ref", () => {
     // Unencoded slashes work too.
     const raw = await call(app, "GET", `/api/v1/blobs/${ref}`, { token: agent.token });
     expect(await raw.text()).toBe("ok 12 tests\n");
+
+    // Evidence step logs have a ":" in the step name (found in M5 dogfood: they answered 400).
+    const evidenceLog = `ci-logs/${run.id}/evidence:red-green.log`;
+    await env.BLOBS.put(evidenceLog, "proven\n");
+    for (const path of [encodeURIComponent(evidenceLog), evidenceLog]) {
+      const r = await call(app, "GET", `/api/v1/blobs/${path}`, { token: agent.token });
+      expect(r.status).toBe(200);
+      expect(await r.text()).toBe("proven\n");
+    }
   });
 
   it("never serves HTML as HTML, and 404s unattributable or unknown refs", async () => {
