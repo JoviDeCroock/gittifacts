@@ -18,6 +18,7 @@ import {
   WaitUntil,
 } from "@app/domain";
 import { z } from "zod";
+import { recordHostReview } from "./host-review.js";
 import {
   type CoordinatorApi,
   CoordinatorError,
@@ -64,6 +65,11 @@ export interface CoordinatorOptions {
   idempotencyTtlMs?: number;
   /** Files of a new repo's initial commit. Without it, `createRepo` creates an empty repo. */
   initialCommit?: InitialCommitProvider;
+  /**
+   * A review of a change whose host merges it (GitHub mode) was recorded: the platform refreshes
+   * what the host shows (the PR's summary comment). Best effort; never fails the review.
+   */
+  onHostReview?: (change: Change, review: ReviewDecision) => Promise<void>;
 }
 
 const MAX_PUSH_TTL = 3600;
@@ -697,6 +703,29 @@ export function createCoordinator(
         return requireChange(changeId); // a retry of a review we already accepted
       }
       try {
+        // GitHub mode: GitHub merges, so a review here is recorded (the same record a GitHub
+        // approval makes) and shown on the PR; there is no workflow waiting and no queue.
+        if (change.host != null) {
+          const out = await recordHostReview(ports, {
+            changeId,
+            headSha: review.headSha ?? change.headSha ?? "",
+            reviewer: { principalId: actor.id, kind: "human" },
+            decision: review.decision,
+            humanLane: review.humanLane ?? null,
+            comment: review.comment ?? null,
+            source: "platform",
+            ...(key === null ? {} : { id: await derivedId("review", changeId, key) }),
+          });
+          if (!out.recorded) {
+            fail("invalid-state", `this review was not recorded: ${out.reason}`, {
+              explanation: "Review the current head of a graded pull request.",
+              call: status(changeId),
+            });
+          }
+          const updated = await requireChange(changeId);
+          await options.onHostReview?.(updated, out.review).catch(() => undefined);
+          return updated;
+        }
         if (change.status !== "awaiting-review" || change.headSha === null) {
           fail("invalid-state", `change is ${change.status}, not awaiting review`, {
             explanation:

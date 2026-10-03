@@ -8,8 +8,9 @@ import { createFakeEnvironment, type FakeEnvironment, portsForRole, principal } 
 import type { GradeReviewer } from "@app/core";
 import { RepoPolicy } from "@app/domain";
 import { type ChangeRef, laneZeroAction, type LaneAction } from "@app/host";
-import type { ContractHost, ContractHostFactory, ContractScenario, Observed, OpenInput } from "@app/host-contract";
+import type { ContractHost, ContractHostFactory, ContractReviewer, ContractScenario, Observed, OpenInput } from "@app/host-contract";
 import { memoryCheckRunIndex, GitHubHost } from "../src/adapter.js";
+import { memoryPrIndex } from "../src/pr-index.js";
 import { GithubApi } from "../src/api.js";
 import { changeIdFor, principalIdFor } from "../src/ids.js";
 import { GithubSync } from "../src/sync.js";
@@ -27,10 +28,15 @@ export class GithubContractHost implements ContractHost {
   readonly sync: GithubSync;
   private ciItems: ContractScenario["ciItems"] | null = null;
   private pr: FakePull | null = null;
+  /** Tests: the next PR's description and labels instead of the scenario's (plan, claim). */
+  prBody: string | null = null;
+  prLabels: string[] | null = null;
+  /** Tests: extra files on the base (plan files). */
+  baseExtra: Record<string, string> = {};
   /** The job token the adapter's API calls share (released after each delivery, like a queue job). */
   readonly job: JobToken;
 
-  constructor(reviewer: GradeReviewer) {
+  constructor(reviewer: GradeReviewer, opts: { prWrites?: boolean } = {}) {
     const { ports, bindings } = this.env;
     ports.reviewer.judge = (input) => reviewer.judge(input);
     ports.reviewer.tour = (input) => reviewer.tour(input);
@@ -50,7 +56,12 @@ export class GithubContractHost implements ContractHost {
     this.adapter = new GitHubHost({
       repoId: `gh-${REPO.id}`, mirror: `ghm-${REPO.id}`, repo: repoHost, api,
       ports: githubPorts, checks: memoryCheckRunIndex(), origin: "https://gittifacts.test",
+      // M3: the tour review and the summary comment (the installation is linked).
+      prs: memoryPrIndex(), prWrites: async () => opts.prWrites ?? true,
     });
+    for (const [login, p] of [["maint-1", "write"], ["octo-author", "write"], ["copilot-swe-agent[bot]", "write"]] as const) {
+      this.gh.permissions.set(login, p);
+    }
     // The platform's runtime hands the ChangeWorkflow this adapter for GitHub changes.
     bindings.hosts = { github: () => this.adapter };
     this.sync = new GithubSync({
@@ -66,10 +77,16 @@ export class GithubContractHost implements ContractHost {
           release: async () => void (await tokens.revoke(t)),
         };
       },
+      plans: {
+        upsert: async (plan) => {
+          ports.store.addPlan(plan);
+          return plan;
+        },
+      },
       authorPrincipal: async (who) => {
         const id = principalIdFor(Number(who.id));
         if ((await ports.store.getPrincipal(id)) === null) {
-          ports.store.addPrincipal(principal({ id, kind: who.kind === "human" ? "human" : "agent", name: who.login }));
+          ports.store.addPrincipal(principal({ id, kind: who.kind === "human" ? "human" : "agent", name: `${who.login} (GitHub)` }));
         }
         return id;
       },
@@ -79,7 +96,7 @@ export class GithubContractHost implements ContractHost {
   async open({ scenario, base, push, title }: OpenInput) {
     const { ports } = this.env;
     this.ciItems = scenario.ciItems;
-    const baseSha = this.gh.seed(base);
+    const baseSha = this.gh.seed({ ...base, ...this.baseExtra });
     // As if an earlier delivery created the repo: the mirror, and the policy read from base.
     const repo = await this.sync.ensureRepo(this.gh.repoJson() as never);
     await ports.git.fetchExternal(
@@ -98,7 +115,7 @@ export class GithubContractHost implements ContractHost {
     const headRepo = scenario.kind === "fork" ? this.gh.fork("outside-contributor") : REPO;
     const head = this.gh.commit(headRepo, "change", push);
     this.pr = {
-      number: 1, title: title.slice(0, 200), body, labels: [`gittifacts:${scenario.category}`],
+      number: 1, title: title.slice(0, 200), body: this.prBody ?? body, labels: this.prLabels ?? [`gittifacts:${scenario.category}`],
       user: { login: "octo-author", id: 4711, type: "User" },
       head: { ref: "change", sha: head, repo: headRepo }, base: { ref: "main", sha: baseSha },
       state: "open", merged: false,
@@ -108,6 +125,12 @@ export class GithubContractHost implements ContractHost {
     await this.sync.handle(this.gh.pullRequestDelivery("opened", this.pr));
     await this.job.release();
     return { ref: this.ref(), headSha: head };
+  }
+
+  /** The open PR (tests edit it, then deliver an `edited` / `labeled` event). */
+  get pull(): FakePull {
+    if (this.pr === null) throw new Error("no PR open");
+    return this.pr;
   }
 
   private ref(): Extract<ChangeRef, { host: "github" }> {
@@ -137,6 +160,12 @@ export class GithubContractHost implements ContractHost {
   async settle() {
     await this.env.settle();
     await this.job.release();
+  }
+
+  /** The tour as GitHub shows it: the head's (latest, not minimized) review and its inline stops. */
+  private publishedTour(headSha: string): Observed["publishedTour"] {
+    const r = [...this.gh.reviews.values()].filter((x) => x.commit_id === headSha && !x.minimized).at(-1);
+    return r === undefined ? null : { stops: r.comments.length, riskiestFile: r.comments[0]?.path ?? null };
   }
 
   /** What GitHub shows: the completed check run's conclusion, read back as a routing action. */
@@ -178,7 +207,22 @@ export class GithubContractHost implements ContractHost {
           : { kinds: [...new Set(evidence.items.map((i) => i.kind))].sort(), verified: (await signer.verifyEvidence(evidence)).ok },
       tour,
       run: runs.at(-1)?.status.status ?? null,
+      publishedTour: this.publishedTour(headSha),
+      approved: [...store.reviews.values()].some((r) => r.changeId === changeId && r.headSha === headSha && r.decision === "approve"),
     };
+  }
+
+  /** GitHub's path: a PR review (APPROVED) webhook from that account. */
+  async review(_ref: ChangeRef, headSha: string, who: ContractReviewer): Promise<void> {
+    const pr = this.pr;
+    if (pr === null) return;
+    const user =
+      who === "maintainer" ? { login: "maint-1", id: 6001, type: "User" }
+      : who === "author" ? pr.user
+      : { login: "copilot-swe-agent[bot]", id: 198982749, type: "Bot" };
+    await this.sync.handle(this.gh.reviewDelivery(pr, user, "approved", headSha));
+    await this.job.release();
+    await this.settle();
   }
 
   async verdictHeads(ref: ChangeRef): Promise<string[]> {

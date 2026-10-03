@@ -77,6 +77,11 @@ export interface ChangeCoordinatorClient {
   spent(changeId: string): Promise<number>;
   /** Terminate the in-flight workflow and cancel its CI run. */
   abandon(changeId: string): Promise<void>;
+  /**
+   * Grade the current head again from the start (its claim or Plan changed: GitHub mode's
+   * label, title or body edits). Terminates the in-flight run first. `ignored` without a head.
+   */
+  regrade(input: { changeId: string; reason: string }): Promise<PushOutcome>;
   /** Delete the change's fork after `delayMs` (Artifacts bills per operation). */
   scheduleForkGc(input: { changeId: string; forkName: string; delayMs: number }): Promise<void>;
   state(changeId: string): Promise<ChangeCoordinatorState>;

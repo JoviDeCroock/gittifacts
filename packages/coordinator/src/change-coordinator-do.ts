@@ -63,6 +63,10 @@ export class ChangeCoordinator
     return this.core.spent(changeId);
   }
 
+  regrade(input: { changeId: string; reason: string }): Promise<PushOutcome> {
+    return this.core.regrade(input);
+  }
+
   abandon(changeId: string): Promise<void> {
     return this.core.abandon(changeId);
   }

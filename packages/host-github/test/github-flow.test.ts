@@ -8,10 +8,10 @@ import { describe, expect, it } from "vitest";
 import { changeIdFor } from "../src/ids.js";
 import { GithubContractHost } from "./github-host.js";
 
-async function graded(name: keyof typeof CONTRACT_SCENARIOS) {
+async function graded(name: keyof typeof CONTRACT_SCENARIOS, opts: { prWrites?: boolean } = {}) {
   const s = CONTRACT_SCENARIOS[name]();
   const fx = loadFixture(s.fixture);
-  const host = new GithubContractHost(contractReviewer());
+  const host = new GithubContractHost(contractReviewer(), opts);
   const opened = await host.open({ scenario: s, base: fx.base, push: fx.push, title: fx.title });
   await host.settle();
   return { host, s, fx, ...opened };
@@ -19,7 +19,7 @@ async function graded(name: keyof typeof CONTRACT_SCENARIOS) {
 
 describe("GitHub shadow mode (recorded fixtures)", () => {
   it("one gittifacts/lane run per head: created in progress, completed once, saying shadow", async () => {
-    const { host, headSha } = await graded("pure-bugfix-with-regression-test");
+    const { host, headSha } = await graded("pure-bugfix-with-regression-test", { prWrites: false });
     const runs = [...host.gh.checkRuns.values()];
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
@@ -27,7 +27,7 @@ describe("GitHub shadow mode (recorded fixtures)", () => {
     expect(run.output.title).toMatch(/^Shadow · /);
     expect(run.output.summary).toContain("Shadow mode");
     expect(run).toMatchObject({ details_url: "https://gittifacts.test/changes/gh-9001-1" });
-    // Nothing but check runs reaches the PR (no comments, reviews or labels in shadow mode).
+    // With PR writes off, nothing but check runs reaches the PR.
     expect(new Set(host.gh.writes)).toEqual(new Set(["POST check-runs", "PATCH check-runs"]));
     // Every installation token minted for a job was revoked.
     expect(host.gh.tokens.minted).toBeGreaterThan(0);

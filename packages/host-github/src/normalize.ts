@@ -88,6 +88,15 @@ export function normalizeGithubDelivery(
             forced: true,
           },
         ];
+      case "edited":
+      case "labeled":
+      case "unlabeled": {
+        const changes = (p.data as { changes?: Record<string, unknown> }).changes ?? {};
+        const what: ("title" | "body" | "labels")[] = p.data.action === "edited"
+          ? (["title", "body"] as const).filter((k) => k in changes)
+          : ["labels"];
+        return what.length === 0 ? [] : [{ type: "change.edited", ref, what }];
+      }
       case "closed":
         return [
           {

@@ -14,12 +14,15 @@
  * Every step is idempotent: deliveries are at least once and may race.
  */
 import { type ChangeCoordinatorClient, type ExternalRemote, PUSHABLE_STATUSES, type Ports, SYSTEM_PRINCIPAL_ID, ZERO_SHA } from "@app/coordinator";
-import { type Change, defaultPolicy, type GithubChangeHost, type Repo } from "@app/domain";
+import { type Change, defaultPolicy, type GithubChangeHost, type Plan, type Repo } from "@app/domain";
 import type { Identity } from "@app/host";
-import { claimedCategoryOf, type GitHubHost, planRefOf } from "./adapter.js";
+import { claimedCategoryOf, type GitHubHost } from "./adapter.js";
 import { changeIdFor, headBranchFor, mirrorNameFor, repoIdFor } from "./ids.js";
 import { identityOf, normalizeGithubDelivery } from "./normalize.js";
-import { type GithubDelivery, type GithubRepo, PullRequestEvent, PushEvent } from "./payloads.js";
+import { type GithubDelivery, type GithubRepo, IssueEvent, type PullRequest, PullRequestEvent, PushEvent } from "./payloads.js";
+import { PLAN_LABEL } from "./plans.js";
+import { resolvePlan } from "./sync-plans.js";
+import { onCheckAction, onReview, refreshSummary } from "./sync-reviews.js";
 
 /** A GitHub remote readable for one job; `release` revokes its token. */
 export interface GithubSource {
@@ -30,7 +33,7 @@ export interface GithubSource {
 export interface GithubSyncDeps {
   /** Ports of the `github` role (writes the mirror). */
   ports: Ports;
-  coordinator(changeId: string): Pick<ChangeCoordinatorClient, "onPush">;
+  coordinator(changeId: string): Pick<ChangeCoordinatorClient, "onPush" | "regrade">;
   host: GitHubHost;
   installationId: number;
   appId: number;
@@ -40,6 +43,10 @@ export interface GithubSyncDeps {
   authorPrincipal(identity: Identity & { login: string }): Promise<string>;
   /** The platform adds the installation's linked humans as members. */
   onRepoCreated?(repo: Repo): Promise<void>;
+  /** Who a GitHub reviewer acts as: the human who linked that GitHub login, else its own principal. */
+  reviewerPrincipal?(identity: Identity & { login: string }): Promise<string>;
+  /** Plans from issues and plan files (the platform signs approvals). Absent: no such plans. */
+  plans?: { upsert(plan: Plan): Promise<Plan> };
 }
 
 export interface SyncOutcome {
@@ -62,18 +69,25 @@ export class GithubSync {
 
   async handle(delivery: GithubDelivery): Promise<SyncOutcome[]> {
     const out: SyncOutcome[] = [];
+    // Not host events: approvals from the check run's buttons, and plan labels on issues.
+    if (delivery.event === "check_run") return [await onCheckAction(this.deps, delivery)];
+    if (delivery.event === "issues") return this.onIssue(delivery);
     for (const ev of normalizeGithubDelivery(delivery)) {
-      if (ev.type === "change.opened" || ev.type === "change.updated") {
+      if (ev.type === "review.submitted") {
+        out.push(await onReview(this.deps, delivery));
+      } else if (ev.type === "change.edited") {
+        out.push(await this.onEdited(delivery));
+      } else if (ev.type === "change.opened" || ev.type === "change.updated") {
         out.push(await this.onHead(delivery));
       } else if (ev.type === "change.closed") {
         out.push(await this.onClosed(delivery, ev.merged, ev.mergedSha));
       } else if (ev.type === "main.advanced") {
         out.push(await this.onMain(delivery));
       } else {
-        const where = "ref" in ev ? ev.ref : ev.repo;
-        const subject = where.host === "github" ? `github:${where.owner}/${where.repo}` : "github";
+        // A merge group: we answer merge_group as a required check from M5.
+        const subject = ev.repo.host === "github" ? `github:${ev.repo.owner}/${ev.repo.repo}` : "github";
         await this.log(`github.${ev.type}`, subject, ev);
-        out.push({ event: ev.type, action: "recorded", detail: "recorded; acted on from M3/M5" });
+        out.push({ event: ev.type, action: "recorded", detail: "recorded; acted on in M5" });
       }
     }
     return out;
@@ -178,10 +192,10 @@ export class GithubSync {
       author: { login: pr.user.login, id: pr.user.id, kind: author.kind },
       url: pr.html_url,
     };
-    // A platform Plan referenced in the body links only if it belongs to this repo.
-    const planRef = planRefOf(pr.body);
-    const plan = planRef === null ? null : await store.getPlan(planRef);
-    const planId = plan !== null && plan.repoId === repo.id ? plan.id : null;
+    // The Plan: a reference in the body (platform Plan or plan file), else a labelled issue.
+    const link = await resolvePlan(this.deps, this.deps.host, { pr, githubRepoId: r.id, repoId: repo.id, mirror, baseSha });
+    const planId = link.planId;
+    hostInfo.issueRefs = link.issueRefs;
     let change = await store.getChange(changeId);
     const previous = change?.headSha ?? null;
     if (change === null) {
@@ -226,11 +240,13 @@ export class GithubSync {
     }
 
     // 3. The check run, in progress, as soon as we know the head (best effort: if GitHub refuses
-    //    now, the verdict creates it completed). A replaced head's run is closed, never left open.
+    //    now, the verdict creates it completed). A replaced head's run is closed, never left open,
+    //    and its tour review says "stale" and is minimized.
     try {
       await this.deps.host.startCheck(changeId, headSha);
       if (previous !== null && previous !== headSha) {
         await this.deps.host.supersedeCheck(changeId, previous, headSha);
+        await this.deps.host.publisher?.staleOlder(changeId, pr.number, headSha);
       }
     } catch (e) {
       await this.log("github.check-start-failed", `change:${changeId}`, { headSha, error: (e as Error).message });
@@ -243,7 +259,10 @@ export class GithubSync {
       before: previous ?? ZERO_SHA,
       after: headSha,
     });
-    await this.log("github.pr-head", `change:${changeId}`, { headSha, previous, outcome: pushed.action });
+    await this.log("github.pr-head", `change:${changeId}`, { headSha, previous, outcome: pushed.action, plan: link });
+    if (previous !== null && previous !== headSha) {
+      await refreshSummary(this.deps, changeId, r.owner.login, r.name, pr.number);
+    }
     return {
       event,
       action: pushed.action === "ignored" ? "ignored" : "graded",
@@ -251,6 +270,71 @@ export class GithubSync {
       changeId,
       headSha,
     };
+  }
+
+  /** Title, description or labels changed: if the claim or the Plan changed, grade the head again. */
+  private async onEdited(delivery: GithubDelivery): Promise<SyncOutcome> {
+    const event = delivery.event;
+    const p = PullRequestEvent.safeParse(delivery.payload);
+    if (!p.success) return { event, action: "ignored", detail: "unreadable payload" };
+    const { pull_request: pr, repository: r } = p.data;
+    return this.reconsider(event, changeIdFor(r.id, pr.number), pr, "the title, description or labels changed");
+  }
+
+  /** A plan label or issue text changed: PRs closing that issue may have another Plan now. */
+  private async onIssue(delivery: GithubDelivery): Promise<SyncOutcome[]> {
+    const event = delivery.event;
+    const p = IssueEvent.safeParse(delivery.payload);
+    if (!p.success) return [{ event, action: "ignored", detail: "unreadable payload" }];
+    const { action, issue, label, repository: r } = p.data;
+    if ((action === "labeled" || action === "unlabeled") && label?.name !== PLAN_LABEL) {
+      return [{ event, action: "ignored", detail: "not the plan label" }];
+    }
+    if (!["labeled", "unlabeled", "edited"].includes(action)) return [{ event, action: "ignored", detail: action }];
+    const open = await this.deps.ports.store.listChanges(repoIdFor(r.id), [...PUSHABLE_STATUSES]);
+    const linked = open.filter((c) => c.host?.issueRefs?.includes(issue.number) === true);
+    const out: SyncOutcome[] = [];
+    for (const c of linked.slice(0, 20)) {
+      if (c.host == null) continue;
+      const pr = await this.deps.host.pull(c.host.number);
+      out.push(await this.reconsider(event, c.id, pr, `issue #${issue.number} was ${action}`));
+    }
+    return out.length > 0 ? out : [{ event, action: "ignored", detail: "no open PR closes it" }];
+  }
+
+  private async reconsider(event: string, changeId: string, pr: PullRequest, reason: string): Promise<SyncOutcome> {
+    const { store } = this.deps.ports;
+    const change = await store.getChange(changeId);
+    if (change?.host == null || change.headSha === null) return { event, action: "ignored", detail: "not graded yet", changeId };
+    const repo = await store.getRepo(change.repoId);
+    if (repo?.host == null) return { event, action: "ignored", detail: "repo not mirrored", changeId };
+    const before = change.planId === null ? null : await store.getPlan(change.planId);
+    const link = await resolvePlan(this.deps, this.deps.host, {
+      pr, githubRepoId: repo.host.githubRepoId, repoId: repo.id, mirror: repo.artifactsName, baseSha: change.baseSha,
+    });
+    const after = link.planId === null ? null : await store.getPlan(link.planId);
+    const category = claimedCategoryOf(pr) ?? change.claim.category;
+    await store.updateChange(changeId, {
+      title: (pr.title || `#${pr.number}`).slice(0, 200),
+      claim: { category, summary: pr.body?.slice(0, 10_000) ?? null },
+      planId: link.planId,
+      host: { ...change.host, issueRefs: link.issueRefs },
+    });
+    const changed =
+      category !== change.claim.category ||
+      link.planId !== change.planId ||
+      (before?.status ?? null) !== (after?.status ?? null);
+    if (!changed) return { event, action: "recorded", detail: "nothing that grades changed", changeId };
+    const head = change.headSha;
+    try {
+      await this.deps.host.publisher?.staleOlder(changeId, pr.number, head, { sameHeadToo: true });
+      await this.deps.host.startCheck(changeId, head, { fresh: true });
+    } catch (e) {
+      await this.log("github.check-start-failed", `change:${changeId}`, { headSha: head, error: (e as Error).message });
+    }
+    const out = await this.deps.coordinator(changeId).regrade({ changeId, reason });
+    await this.log("github.pr-regrade", `change:${changeId}`, { headSha: head, reason, plan: link, category });
+    return { event, action: out.action === "ignored" ? "ignored" : "graded", detail: reason, changeId, headSha: head };
   }
 
   private async onClosed(delivery: GithubDelivery, merged: boolean, mergedSha: string | null): Promise<SyncOutcome> {

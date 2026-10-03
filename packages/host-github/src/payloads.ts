@@ -107,6 +107,16 @@ export const MergeGroupEvent = z
   })
   .passthrough();
 
+export const IssueEvent = z
+  .object({
+    action: z.string(),
+    issue: z.object({ number: z.number().int().positive() }).passthrough(),
+    label: z.object({ name: z.string() }).passthrough().optional(),
+    repository: GithubRepo,
+    installation: Installation.optional(),
+  })
+  .passthrough();
+
 /** One delivery as the queue carries it: the event name and the parsed JSON body. */
 export interface GithubDelivery {
   event: string;

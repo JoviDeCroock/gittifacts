@@ -70,6 +70,10 @@ export interface Store {
   putTour(tour: Tour): Promise<void>;
 
   putReview(review: ReviewDecision): Promise<void>;
+  /** Reviews of a change, oldest first (GitHub mode's summary comment; optional). */
+  listReviews?(changeId: string): Promise<ReviewDecision[]>;
+  /** The tour for (change, head), if one was generated (GitHub mode publishes it; optional). */
+  getTour?(changeId: string, headSha: string): Promise<Tour | null>;
   /** Human reviews of changes whose computed lane was 0, for shadow-mode agreement. */
   listShadowSamples(repoId: string): Promise<ShadowSample[]>;
 

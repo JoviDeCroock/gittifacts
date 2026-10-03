@@ -46,9 +46,33 @@ export interface FakeCheckRun {
 const fullName = (r: FakeRepo) => `${r.owner}/${r.name}`;
 export const gitName = (r: FakeRepo) => `github.com/${fullName(r)}`;
 
+export interface FakeReview {
+  id: number;
+  node_id: string;
+  commit_id: string;
+  body: string;
+  event: string;
+  comments: { id: number; path: string; line: number; side: string; body: string }[];
+  minimized: boolean;
+}
+
+export interface FakeIssue {
+  number: number;
+  title: string;
+  body: string;
+  user: { login: string; id: number; type: string };
+  labels: string[];
+  events: { event: string; label: { name: string }; actor: { login: string; id: number; type: string }; created_at: string }[];
+}
+
 export class FakeGithub {
   readonly pulls = new Map<number, FakePull>();
   readonly checkRuns = new Map<number, FakeCheckRun>();
+  readonly reviews = new Map<number, FakeReview>();
+  readonly comments = new Map<number, { id: number; body: string; edits: number }>();
+  readonly issues = new Map<number, FakeIssue>();
+  /** login → GitHub permission ("admin" | "write" | "read" | "none"). */
+  readonly permissions = new Map<string, string>();
   readonly tokens = { minted: 0, revoked: 0, scopes: [] as unknown[] };
   readonly writes: string[] = [];
   private nextId = 1000;
@@ -166,6 +190,68 @@ export class FakeGithub {
       const sha = this.mergeBase(m[1] as string, m[2] as string);
       return Response.json({ ...c, merge_base_commit: { ...(c.merge_base_commit as object), sha } });
     }
+    if (method === "POST" && (m = new RegExp(`^${repoPath}/pulls/(\\d+)/reviews$`).exec(path))) {
+      this.writes.push("POST reviews");
+      const b = body as { commit_id: string; body: string; event: string; comments: { path: string; line: number; side: string; body: string }[] };
+      const pr = this.pulls.get(Number(m[1]));
+      // GitHub refuses a review whose comments aren't on lines of the diff (422).
+      if (pr === undefined || b.comments.some((c) => c.line < 1)) return Response.json({ message: "Unprocessable" }, { status: 422 });
+      const id = this.nextId++;
+      const review: FakeReview = { id, node_id: `PRR_${id}`, commit_id: b.commit_id, body: b.body, event: b.event, minimized: false,
+        comments: b.comments.map((c) => ({ ...c, id: this.nextId++ })) };
+      this.reviews.set(id, review);
+      return Response.json({ ...clone(load("rest", "pull-request")), id, node_id: review.node_id, body: b.body, commit_id: b.commit_id, state: "COMMENTED" });
+    }
+    if (method === "GET" && (m = new RegExp(`^${repoPath}/pulls/\\d+/reviews/(\\d+)/comments$`).exec(path))) {
+      return Response.json(this.reviews.get(Number(m[1]))?.comments ?? []);
+    }
+    if (method === "PUT" && (m = new RegExp(`^${repoPath}/pulls/\\d+/reviews/(\\d+)$`).exec(path))) {
+      this.writes.push("PUT review");
+      const r = this.reviews.get(Number(m[1]));
+      if (r === undefined) return Response.json({ message: "Not Found" }, { status: 404 });
+      r.body = String((body as { body: string }).body);
+      return Response.json({ id: r.id, body: r.body });
+    }
+    if (method === "PATCH" && (m = new RegExp(`^${repoPath}/pulls/comments/(\\d+)$`).exec(path))) {
+      this.writes.push("PATCH review comment");
+      for (const r of this.reviews.values()) {
+        const c = r.comments.find((x) => x.id === Number(m?.[1]));
+        if (c !== undefined) c.body = String((body as { body: string }).body);
+      }
+      return Response.json({ id: Number(m[1]) });
+    }
+    if (method === "POST" && path === "/graphql") {
+      this.writes.push("POST graphql");
+      const id = (body as { variables: { id: string } }).variables.id;
+      for (const r of this.reviews.values()) if (r.node_id === id) r.minimized = true;
+      return Response.json({ data: { minimizeComment: { minimizedComment: { isMinimized: true } } } });
+    }
+    if (method === "POST" && (m = new RegExp(`^${repoPath}/issues/\\d+/comments$`).exec(path))) {
+      this.writes.push("POST issue comment");
+      const id = this.nextId++;
+      this.comments.set(id, { id, body: String((body as { body: string }).body), edits: 0 });
+      return Response.json({ id }, { status: 201 });
+    }
+    if (method === "PATCH" && (m = new RegExp(`^${repoPath}/issues/comments/(\\d+)$`).exec(path))) {
+      this.writes.push("PATCH issue comment");
+      const c = this.comments.get(Number(m[1]));
+      if (c === undefined) return Response.json({ message: "Not Found" }, { status: 404 });
+      c.body = String((body as { body: string }).body);
+      c.edits++;
+      return Response.json({ id: c.id });
+    }
+    if (method === "GET" && (m = new RegExp(`^${repoPath}/collaborators/([^/]+)/permission$`).exec(path))) {
+      const permission = this.permissions.get(decodeURIComponent(m[1] as string)) ?? "none";
+      return Response.json({ permission, role_name: permission, user: { login: m[1] } });
+    }
+    if (method === "GET" && (m = new RegExp(`^${repoPath}/issues/(\\d+)$`).exec(path))) {
+      const i = this.issues.get(Number(m[1]));
+      if (i === undefined) return Response.json({ message: "Not Found" }, { status: 404 });
+      return Response.json({ number: i.number, title: i.title, body: i.body, user: i.user, labels: i.labels.map((name) => ({ name })) });
+    }
+    if (method === "GET" && (m = new RegExp(`^${repoPath}/issues/(\\d+)/events$`).exec(path))) {
+      return Response.json(this.issues.get(Number(m[1]))?.events ?? []);
+    }
     if (method === "POST" && path === `${repoPath}/check-runs`) {
       this.writes.push("POST check-runs");
       const run: FakeCheckRun = { ...(clone(load("rest", "check-run")) as object), ...(body as object), id: this.nextId++, updates: 0 } as FakeCheckRun;
@@ -182,6 +268,42 @@ export class FakeGithub {
     }
     return Response.json({ message: `fake GitHub has no ${method} ${path}` }, { status: 404 });
   }) as typeof fetch;
+
+  /** Recorded `pull_request_review` (submitted) delivery for a review by `user` at `commitId`. */
+  reviewDelivery(pr: FakePull, user: { login: string; id: number; type: string }, state: "approved" | "changes_requested" | "commented", commitId: string) {
+    const payload = clone(load("webhooks", "pull_request_review_submitted"));
+    const review = { ...(payload.review as object), id: this.nextId++, state, commit_id: commitId, user: { ...user, node_id: "U" } };
+    Object.assign(payload, { action: "submitted", review, pull_request: this.pullJson(pr), repository: this.repoJson(), installation: { id: this.installationId } });
+    return { event: "pull_request_review", payload };
+  }
+
+  /** A `check_run` requested_action delivery: someone pressed a button on our run. */
+  buttonDelivery(runId: number, identifier: "approve_tour" | "full_review", sender: { login: string; id: number; type: string }) {
+    const run = this.checkRuns.get(runId);
+    return {
+      event: "check_run",
+      payload: {
+        action: "requested_action",
+        check_run: { ...run, id: runId, app: { id: 1180001 } },
+        requested_action: { identifier },
+        repository: this.repoJson(),
+        sender,
+        installation: { id: this.installationId },
+      },
+    };
+  }
+
+  /** `pull_request` edited / labeled delivery (the PR object is the current one). */
+  editDelivery(pr: FakePull, action: "edited" | "labeled", changes: Record<string, unknown> = {}) {
+    const payload = clone(load("webhooks", "pull_request_opened"));
+    Object.assign(payload, { action, number: pr.number, changes, pull_request: this.pullJson(pr), repository: this.repoJson(), installation: { id: this.installationId } });
+    return { event: "pull_request", payload };
+  }
+
+  /** `issues` labeled delivery. */
+  issueLabelDelivery(issue: FakeIssue, label: string) {
+    return { event: "issues", payload: { action: "labeled", issue: { number: issue.number }, label: { name: label }, repository: this.repoJson(), installation: { id: this.installationId } } };
+  }
 
   /** The completed `gittifacts/lane` run for a head, if any. */
   laneRun(headSha: string): FakeCheckRun | null {

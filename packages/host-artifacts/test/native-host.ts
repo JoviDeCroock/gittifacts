@@ -15,6 +15,7 @@ import type { Change, Principal } from "@app/domain";
 import type { ChangeRef, LaneAction } from "@app/host";
 import type {
   ContractHost,
+  ContractReviewer,
   ContractHostFactory,
   ContractScenario,
   Observed,
@@ -37,6 +38,7 @@ export class NativeContractHost implements ContractHost {
   readonly adapter: ArtifactsHost;
   private ciItems: ContractScenario["ciItems"] | null = null;
   private agent: Principal | null = null;
+  private owner: Principal | null = null;
 
   constructor(reviewer: GradeReviewer) {
     const { ports, bindings } = this.env;
@@ -56,6 +58,7 @@ export class NativeContractHost implements ContractHost {
     this.ciItems = scenario.ciItems;
     const repo = await env.seedRepo({ files: base, policy: scenario.policy });
     const owner = env.ports.store.addPrincipal(principal({ kind: "human" }));
+    this.owner = owner;
     this.agent = env.ports.store.addPrincipal(principal({ kind: "agent", ownerId: owner.id }));
     const planId = scenario.plan === null ? null : `plan-${repo.id}`;
     if (scenario.plan !== null && planId !== null) {
@@ -152,8 +155,31 @@ export class NativeContractHost implements ContractHost {
             },
       tour,
       run: runs.at(-1)?.status.status ?? null,
+      approved: [...store.reviews.values()].some(
+        (r) => r.changeId === change.id && r.headSha === headSha && r.decision === "approve",
+      ),
     };
   }
+
+  /** Natively: the platform's review API (humans only; the author is the change's agent). */
+  async review(ref: ChangeRef, headSha: string, who: ContractReviewer): Promise<void> {
+    const change = await this.change(ref);
+    const { store } = this.env.ports;
+    const actor =
+      who === "maintainer"
+        ? (this.maintainer ??= store.addPrincipal(principal({ kind: "human" })))
+        : who === "author"
+          ? await store.getPrincipal(change.authorId)
+          : store.addPrincipal(principal({ kind: "agent", ownerId: this.owner?.id ?? null }));
+    if (actor === null) return;
+    try {
+      await this.env.coordinator.submitReview(actor, change.id, { decision: "approve", headSha });
+    } catch {
+      // refused: not counted
+    }
+    await this.env.settle();
+  }
+  private maintainer: Principal | null = null;
 
   async verdictHeads(ref: ChangeRef): Promise<string[]> {
     const change = await this.change(ref);

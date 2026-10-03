@@ -24,6 +24,8 @@ import { type GithubRepoSetup, githubCapabilities } from "./capabilities.js";
 import { type CheckRunContext, completedCheckRun, startedCheckRun, supersededCheckRun } from "./check-run.js";
 import { changeIdFor } from "./ids.js";
 import { identityOf, normalizeGithubDelivery } from "./normalize.js";
+import type { PrIndex } from "./pr-index.js";
+import { PrPublisher } from "./pr-publisher.js";
 import { type GithubDelivery, PullRequest } from "./payloads.js";
 
 /** Check run ids per (change, head): created when grading starts, completed once. */
@@ -57,6 +59,9 @@ export interface GitHubHostDeps {
   shadow?: boolean;
   /** End of a job that used the API (revokes its installation token). */
   onJobEnd?(): Promise<void>;
+  /** PR writes beyond the check run (M3): where they are recorded, and whether they're on. */
+  prs?: PrIndex;
+  prWrites?(): Promise<boolean>;
 }
 
 const CATEGORIES: readonly ClaimedCategory[] = ["fix", "feature", "refactor", "dependency", "transform", "revert", "docs", "chore"];
@@ -87,7 +92,34 @@ export function planRefOf(body: string | null): string | null {
 
 export class GitHubHost implements HostAdapter {
   readonly kind = "github" as const;
-  constructor(private readonly deps: GitHubHostDeps) {}
+  /** Tour reviews, the summary comment, collaborator checks (null without a PR index). */
+  readonly publisher: PrPublisher | null;
+
+  constructor(private readonly deps: GitHubHostDeps) {
+    const prs = deps.prs;
+    this.publisher =
+      prs === undefined
+        ? null
+        : new PrPublisher({
+            api: deps.api,
+            owner: deps.repo.owner,
+            repo: deps.repo.repo,
+            ports: deps.ports,
+            prs,
+            enabled: deps.prWrites ?? (async () => false),
+            detailsUrl: (id) => this.detailsUrl(id),
+            shadow: deps.shadow ?? true,
+          });
+  }
+
+  /** One job (a workflow step): its installation token is revoked when it ends. */
+  private async job<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } finally {
+      await this.deps.onJobEnd?.();
+    }
+  }
 
   capabilities(): HostCapabilities {
     return githubCapabilities(this.deps.setup);
@@ -164,6 +196,42 @@ export class GitHubHost implements HostAdapter {
     return stored ?? this.deps.ports.git.diff(this.deps.mirror, change.baseSha, change.headSha);
   }
 
+  /** An issue (not a PR), or null. */
+  async issue(number: number): Promise<{
+    number: number;
+    title: string;
+    body: string | null;
+    user: { login: string; id: number; type: string };
+    labels: { name: string }[];
+  } | null> {
+    try {
+      const i = (await this.deps.api.get(this.path(`/issues/${number}`))) as Record<string, unknown>;
+      if (i.pull_request !== undefined || typeof i.title !== "string") return null;
+      const user = i.user as { login: string; id: number; type?: string };
+      return {
+        number,
+        title: i.title,
+        body: typeof i.body === "string" ? i.body : null,
+        user: { login: user.login, id: user.id, type: user.type ?? "User" },
+        labels: ((i.labels ?? []) as { name?: string }[]).map((l) => ({ name: String(l.name ?? "") })),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Who last applied `label` to an issue, and when (its timeline), or null. */
+  async labeledBy(number: number, label: string): Promise<{ login: string; id: number; type: string; at: string } | null> {
+    const events = (await this.deps.api.get(this.path(`/issues/${number}/events?per_page=100`))) as {
+      event?: string;
+      label?: { name?: string };
+      actor?: { login: string; id: number; type?: string } | null;
+      created_at?: string;
+    }[];
+    const last = events.filter((e) => e.event === "labeled" && e.label?.name === label && e.actor).at(-1);
+    return last?.actor ? { login: last.actor.login, id: last.actor.id, type: last.actor.type ?? "User", at: last.created_at ?? "" } : null;
+  }
+
   /** The merge base of a PR (`GET /compare/{base}...{head}`, ETag-cached); `base` if unknown. */
   async mergeBase(base: string, head: string): Promise<string> {
     try {
@@ -182,8 +250,9 @@ export class GitHubHost implements HostAdapter {
   }
 
   /** Open the in-progress run for a head as soon as grading starts (idempotent per head). */
-  async startCheck(changeId: string, headSha: string): Promise<number> {
-    const known = await this.deps.checks.get(changeId, headSha);
+  async startCheck(changeId: string, headSha: string, opts: { fresh?: boolean } = {}): Promise<number> {
+    // A re-grade of the same head gets a run of its own (the earlier one keeps its verdict).
+    const known = opts.fresh === true ? null : await this.deps.checks.get(changeId, headSha);
     if (known !== null) return known;
     const body = startedCheckRun({
       headSha,
@@ -208,11 +277,7 @@ export class GitHubHost implements HostAdapter {
   async publishVerdict(ref: ChangeRef, verdict: LaneVerdict): Promise<void> {
     // Only the final verdict for a head reaches GitHub: the run is updated once.
     if (verdict.preliminary) return;
-    try {
-      await this.completeCheck(this.changeId(ref), verdict);
-    } finally {
-      await this.deps.onJobEnd?.();
-    }
+    await this.job(() => this.completeCheck(this.changeId(ref), verdict));
   }
 
   private async completeCheck(changeId: string, verdict: LaneVerdict): Promise<void> {
@@ -244,9 +309,20 @@ export class GitHubHost implements HostAdapter {
     await this.deps.checks.put(changeId, verdict.headSha, run.id);
   }
 
-  /** Shadow mode: the tour stays on the platform (one PR review from M3). */
-  async publishTour(ref: ChangeRef, _tour: Tour): Promise<void> {
-    this.own(ref);
+  /** The tour as the head's one PR review (Lane ≥ 1, PR writes on); idempotent per head. */
+  async publishTour(ref: ChangeRef, tour: Tour): Promise<void> {
+    const r = this.own(ref);
+    const p = this.publisher;
+    if (p === null) return;
+    await this.job(() => p.publishTour(this.changeId(r), r.number, tour));
+  }
+
+  /** The summary comment, edited in place only when its text changes. */
+  async publishSummary(ref: ChangeRef): Promise<void> {
+    const r = this.own(ref);
+    const p = this.publisher;
+    if (p === null) return;
+    await this.job(() => p.publishSummary(this.changeId(r), r.number));
   }
 
   /** Shadow mode: no review requests on GitHub. */

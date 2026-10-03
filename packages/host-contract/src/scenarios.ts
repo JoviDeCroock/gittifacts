@@ -22,6 +22,7 @@ export const CONTRACT_SCENARIO_NAMES = [
   "fork-pr",
   "force-push-during-eval",
   "stale-head-at-merge",
+  "approval-binds-to-head",
 ] as const;
 export type ContractScenarioName = (typeof CONTRACT_SCENARIO_NAMES)[number];
 
@@ -31,7 +32,11 @@ export type ContractScenarioName = (typeof CONTRACT_SCENARIO_NAMES)[number];
  * - `force-push`: `firstFixture`'s head is pushed, then force-replaced mid-grading.
  * - `stale-head`: graded, then a new head arrives and a merge for the old head is attempted.
  */
-export type ContractKind = "grade" | "fork" | "force-push" | "stale-head";
+/**
+ * - `approval`: graded (Lane 1), then reviews arrive: the author's, an agent's, a maintainer's on
+ *   an older head; none counts. A maintainer's on the current head does.
+ */
+export type ContractKind = "grade" | "fork" | "force-push" | "stale-head" | "approval";
 
 export interface ContractExpectation {
   lane: Lane;
@@ -147,5 +152,10 @@ export const CONTRACT_SCENARIOS: Record<ContractScenarioName, () => ContractScen
     fromClassifier("stale-head-at-merge", "pure-bugfix-with-regression-test", "stale-head", {
       description:
         "Graded, then a new head arrives: a merge guarded by the old head is refused and the new head is graded.",
+    }),
+  "approval-binds-to-head": () =>
+    fromClassifier("approval-binds-to-head", "pure-bugfix-with-regression-test", "approval", {
+      description:
+        "Lane 1 in shadow mode: approvals by the author, by an agent and for an older head don't count; a maintainer's for the head does, the same record on either host.",
     }),
 };

@@ -40,7 +40,17 @@ export interface Observed {
   tour: Tour | null;
   /** The evidence run for this head, as the host's CI reports it. */
   run: "queued" | "running" | "passed" | "failed" | "cancelled" | "superseded" | null;
+  /**
+   * The tour as the host shows it to humans (GitHub: the head's PR review), when the host
+   * publishes it somewhere other than the platform: its stop count and its riskiest stop's file.
+   */
+  publishedTour?: { stops: number; riskiestFile: string | null } | null;
+  /** An approval for this head is on record (the same record wherever it was given). */
+  approved?: boolean;
 }
+
+/** Who reviews in the `approval` scenario. */
+export type ContractReviewer = "maintainer" | "author" | "agent";
 
 export interface ContractHost {
   readonly adapter: HostAdapter;
@@ -62,6 +72,8 @@ export interface ContractHost {
   observe(ref: ChangeRef, headSha: string): Promise<Observed>;
   /** Every head that got a verdict published (preliminary or final), in order. */
   verdictHeads(ref: ChangeRef): Promise<string[]>;
+  /** A review of `headSha` by `who`, through the host's own path (a refusal is not an error). */
+  review(ref: ChangeRef, headSha: string, who: ContractReviewer): Promise<void>;
   dispose?(): Promise<void>;
 }
 

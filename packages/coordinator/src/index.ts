@@ -35,6 +35,7 @@ export {
   type HealthVerdict,
   UNAVAILABLE_LIMIT,
 } from "./health.js";
+export * from "./host-review.js";
 export * from "./ids.js";
 export { type NormalizedIssue, normalizeIssue } from "./issues.js";
 export * from "./lifecycle.js";

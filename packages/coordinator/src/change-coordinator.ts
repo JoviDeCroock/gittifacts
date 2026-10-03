@@ -333,6 +333,45 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     return this.serial(async () => (await this.load()).spentUsd);
   }
 
+  regrade(input: { changeId: string; reason: string }): Promise<PushOutcome> {
+    return this.serial(async () => {
+      const { ports, bindings } = this.deps;
+      const change = await ports.store.getChange(input.changeId);
+      if (change === null) return { action: "ignored", reason: "unknown change" };
+      const head = change.headSha;
+      if (head === null) return { action: "ignored", reason: "nothing pushed yet" };
+      if (!PUSHABLE_STATUSES.includes(change.status)) {
+        return { action: "ignored", reason: `change is ${change.status}` };
+      }
+      const state = await this.load();
+      if (state.instanceId !== null) await terminateQuietly(bindings.changeWorkflow, state.instanceId);
+      if (state.runId !== null) await this.supersedeRun(state.runId);
+      await ports.store.updateChange(change.id, {
+        status: "running",
+        computedLane: null,
+        lane: null,
+        laneReasons: [],
+        evidenceId: null,
+        tourId: null,
+      });
+      await ports.audit.append({
+        principalId: SYSTEM_PRINCIPAL_ID,
+        action: "change.regrade",
+        subject: changeSubject(change.id),
+        payload: { headSha: head, reason: input.reason, supersededInstance: state.instanceId },
+      });
+      const instanceId = changeWorkflowId(change.id, head);
+      const { instance, created } = await createOrGet(bindings.changeWorkflow, instanceId, {
+        changeId: change.id,
+        headSha: head,
+      });
+      if (!created) await instance.restart();
+      await this.save({ ...state, changeId: change.id, forkName: change.forkName, headSha: head, instanceId, runId: null });
+      await this.changed(change.id);
+      return { action: "started", headSha: head, instanceId, superseded: state.instanceId };
+    });
+  }
+
   abandon(changeId: string): Promise<void> {
     return this.serial(async () => {
       const state = await this.load();

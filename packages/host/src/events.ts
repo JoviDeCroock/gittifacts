@@ -40,6 +40,13 @@ export const ChangeClosed = z.object({
   mergedSha: Sha.nullable().default(null),
 });
 
+/** The author changed what the change claims (title, description, labels): grade it again. */
+export const ChangeEdited = z.object({
+  type: z.literal("change.edited"),
+  ref: ChangeRef,
+  what: z.array(z.enum(["title", "body", "labels"])).min(1),
+});
+
 export const ReviewSubmitted = z.object({
   type: z.literal("review.submitted"),
   ref: ChangeRef,
@@ -72,6 +79,7 @@ export const HostEvent = z.discriminatedUnion("type", [
   ChangeOpened,
   ChangeUpdated,
   ChangeClosed,
+  ChangeEdited,
   ReviewSubmitted,
   MainAdvanced,
   QueueGroupCreated,

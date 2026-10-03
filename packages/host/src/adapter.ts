@@ -88,6 +88,11 @@ export interface HostAdapter {
   diff(ref: ChangeRef): Promise<DiffInfo>;
   publishVerdict(ref: ChangeRef, verdict: LaneVerdict): Promise<void>;
   publishTour(ref: ChangeRef, tour: Tour): Promise<void>;
+  /**
+   * The host's one summary of the change for humans (GitHub: a comment edited in place), after a
+   * verdict or a review. Optional: hosts that show the platform itself omit it.
+   */
+  publishSummary?(ref: ChangeRef): Promise<void>;
   requestReview(ref: ChangeRef, request: ReviewRequest): Promise<void>;
   /** Must be guarded by `expectedHeadSha`: a head that moved is refused, never merged. */
   merge(

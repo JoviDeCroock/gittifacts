@@ -56,6 +56,11 @@ async function expectGraded(
   expect(o.evidence?.verified).toBe(true);
   expect(riskiestFile(o.tour)).toBe(e.riskiestFile);
   if (o.tour !== null) expect(o.tour.headSha).toBe(headSha);
+  // Where the host shows the tour itself (a PR review), it is the same tour.
+  if (o.publishedTour !== undefined) {
+    expect(o.publishedTour?.riskiestFile ?? null).toBe(e.riskiestFile);
+    expect(o.publishedTour?.stops ?? 0).toBeLessThanOrEqual(20);
+  }
 }
 
 type Runner = (host: ContractHost, s: ContractScenario) => Promise<void>;
@@ -74,6 +79,9 @@ const grade: Runner = async (host, s) => {
 
 const RUNNERS: Record<ContractKind, Runner> = {
   grade,
+
+  /** Who may approve, and that an approval binds to its head (approvalRunner below). */
+  approval: (host, s) => approvalRunner(host, s),
 
   /** Natively every change is a fork: agents never hold a write token for the main repo. */
   fork: async (host, s) => {
@@ -147,6 +155,24 @@ const RUNNERS: Record<ContractKind, Runner> = {
     await host.settle();
     await expectGraded(host, ref, second, s, fx);
   },
+};
+
+const approvalRunner: Runner = async (host, s) => {
+  const fx = loadFixture(s.fixture);
+  const { ref, headSha: first } = await host.open({ scenario: s, base: fx.base, push: fx.push, title: fx.title });
+  await host.settle();
+  await expectGraded(host, ref, first, s, fx);
+  await host.review(ref, first, "author");
+  await host.review(ref, first, "agent");
+  expect((await host.observe(ref, first)).approved).toBe(false);
+  // A new head: an approval of the old one does nothing.
+  const path = "test/allocate.test.ts";
+  const second = await host.push(ref, { [path]: `${fx.head[path] ?? ""}// re-pushed\n` }, { force: false });
+  await host.settle();
+  await host.review(ref, first, "maintainer");
+  expect((await host.observe(ref, second)).approved).toBe(false);
+  await host.review(ref, second, "maintainer");
+  expect((await host.observe(ref, second)).approved).toBe(true);
 };
 
 export function runContractSuite(

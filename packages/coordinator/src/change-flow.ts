@@ -696,6 +696,30 @@ export async function runChangeWorkflow(
         return true;
       });
     }
+    // The tour as one PR review (Lane ≥ 1) and the summary comment: each its own step, so a
+    // GitHub hiccup retries that write only; neither changes the verdict.
+    const publishOnHost = async (name: string, run: () => Promise<void>) => {
+      try {
+        await step.do(name, RETRY.remote, async () => {
+          await run();
+          return true;
+        });
+      } catch (e) {
+        const reason = errorMessage(e);
+        await step.do(`${name}-failed`, RETRY.quick, async () => {
+          await log("change.host-publish-failed", { host: "github", what: name, headSha, error: reason });
+          return true;
+        });
+      }
+    };
+    await publishOnHost("publish-tour", async () => {
+      const tour = (await store.getTour?.(changeId, headSha)) ?? null;
+      if (tour !== null) await host.publishTour(ref, tour);
+    });
+    const publishSummary = host.publishSummary;
+    if (publishSummary !== undefined) {
+      await publishOnHost("publish-summary", () => publishSummary.call(host, ref));
+    }
   }
 
   // ------------------------------------------------------------ 9. route

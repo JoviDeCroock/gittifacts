@@ -161,6 +161,16 @@ export class FakeStore implements Store {
   async putReview(review: ReviewDecision) {
     this.reviews.set(review.id, clone(review));
   }
+  async listReviews(changeId: string) {
+    return [...this.reviews.values()]
+      .filter((r) => r.changeId === changeId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map(clone);
+  }
+  async getTour(changeId: string, headSha: string) {
+    const t = [...this.tours.values()].find((x) => x.changeId === changeId && x.headSha === headSha);
+    return t === undefined ? null : clone(t);
+  }
   async listShadowSamples(repoId: string): Promise<ShadowSample[]> {
     return [...this.reviews.values()]
       .filter((r) => this.changes.get(r.changeId)?.repoId === repoId)

@@ -115,6 +115,8 @@ export const GithubChangeHost = z.object({
     kind: z.enum(["human", "agent", "bot"]),
   }),
   url: z.string().url(),
+  /** Issues the PR closes (`Closes #N`): a labelled one is its Plan (spec §3.5 a). */
+  issueRefs: z.array(z.number().int().positive()).max(50).optional(),
 });
 export type GithubChangeHost = z.infer<typeof GithubChangeHost>;
 
@@ -429,6 +431,11 @@ export const ReviewDecision = z.object({
   humanLane: Lane.nullable(),
   computedLane: Lane,
   comment: z.string().max(10_000).nullable(),
+  /**
+   * Where the decision was made; one record either way (GitHub mode, spec §3.4): the platform UI
+   * or API (absent), a GitHub PR review, or the `gittifacts/lane` check run's button.
+   */
+  source: z.enum(["platform", "github-review", "github-check"]).optional(),
   createdAt: IsoDate,
 });
 export type ReviewDecision = z.infer<typeof ReviewDecision>;
