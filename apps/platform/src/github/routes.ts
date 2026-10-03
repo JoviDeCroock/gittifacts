@@ -16,6 +16,7 @@ import { callerOf, requirePrincipal, resolveCaller } from "../auth/middleware.js
 import { ApiError } from "../errors.js";
 import { type ApiApp, body, errors, json, SECURITY } from "../routes/common.js";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
+import { repoAllowed } from "./allowlist.js";
 import { finishSetup } from "./callbacks.js";
 import { assertTargetAccess } from "../access/access.js";
 import { GithubOverview, githubOverview } from "./overview.js";
@@ -197,6 +198,18 @@ export function registerGithubRoutes(app: ApiApp): void {
     if (repo?.host == null)
       throw new ApiError(404, "not-found", "not a GitHub repository graded here");
     const { days, maxPrs } = c.req.valid("json");
+    if (
+      !repoAllowed(
+        svc.env as unknown as Record<string, unknown>,
+        `${repo.host.owner}/${repo.host.repo}`,
+      )
+    ) {
+      throw new ApiError(
+        403,
+        "repo-not-allowed",
+        "this platform runs GitHub mode for an allowlist of repositories only",
+      );
+    }
     const out = await startBacktest(svc.env, {
       installationId: repo.host.installationId,
       appId: repo.host.appId,

@@ -21,6 +21,7 @@ import { githubInstallationLinks, githubInstallationRepos } from "../db/github-s
 import { D1Store } from "../store/d1-store.js";
 import { githubActorPrincipal, upsertGithubPlan } from "./plans.js";
 import { githubHostFor, githubReadSource } from "./runtime.js";
+import { repoAllowed } from "./allowlist.js";
 import { githubApp } from "./app-config.js";
 import { getInstallation } from "./store.js";
 import type { GithubEventMessage } from "./webhook.js";
@@ -120,6 +121,9 @@ export async function onChangeDelivery(
 ): Promise<void> {
   const parsed = WithRepo.safeParse(payload);
   if (!parsed.success || msg.installationId === null) return;
+  // Outside GITHUB_REPO_ALLOWLIST: no mirror, no grade, no write (and nothing read from D1).
+  if (!repoAllowed(env as unknown as Record<string, unknown>, parsed.data.repository.full_name))
+    return;
   const store = new D1Store(env.DB, env.BLOBS, () => new Date());
   const inst = await getInstallation(store.db, msg.installationId);
   if (

@@ -30,6 +30,8 @@ export type Bindings = Env & {
   GITHUB_APP_PRIVATE_KEY?: string;
   GITHUB_APP_WEBHOOK_SECRET?: string;
   GITHUB_APP_WEBHOOK_SECRET_PREVIOUS?: string;
+  /** Comma-separated `owner/repo`: GitHub mode acts on these repos only (src/github/allowlist.ts). */
+  GITHUB_REPO_ALLOWLIST?: string;
   /** Verified GitHub deliveries (queue `gittifacts-github-events`). */
   GITHUB_EVENTS?: import("./github/webhook.js").GithubEventsQueue;
   GITHUB_WEBHOOK_LIMITER?: { limit(input: { key: string }): Promise<{ success: boolean }> };

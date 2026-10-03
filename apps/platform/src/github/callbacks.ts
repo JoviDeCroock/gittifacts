@@ -7,6 +7,7 @@ import {
   userInstallationRepos,
   userInstallations,
 } from "./api.js";
+import { repoAllowed } from "./allowlist.js";
 import { githubApp } from "./app-config.js";
 import { grantLinkedRepos } from "./grading.js";
 import { FlowError, settingsUrl, takeState } from "./setup.js";
@@ -63,7 +64,9 @@ export async function finishSetup(
     await addRepos(
       svc.store.db,
       mine.id,
-      repos.map((r) => ({ id: r.id, fullName: r.full_name, private: r.private })),
+      repos
+        .filter((r) => repoAllowed(svc.env as unknown as Record<string, unknown>, r.full_name))
+        .map((r) => ({ id: r.id, fullName: r.full_name, private: r.private })),
       now,
     );
     await linkInstallation(svc.store.db, {

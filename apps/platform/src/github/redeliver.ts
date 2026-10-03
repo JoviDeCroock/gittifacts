@@ -9,8 +9,9 @@ import { GITHUB_API_VERSION, InstallationTokens } from "@app/host-github";
 import { inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Bindings } from "../app-env.js";
-import { githubDeliveries } from "../db/github-schema.js";
-import { D1Store } from "../store/d1-store.js";
+import { githubDeliveries, githubInstallationRepos } from "../db/github-schema.js";
+import { D1Store, type Db } from "../store/d1-store.js";
+import { repoAllowed, repoAllowlist } from "./allowlist.js";
 import { githubApp } from "./app-config.js";
 
 const WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
@@ -23,7 +24,27 @@ const Delivery = z.object({
   redelivery: z.boolean(),
   status_code: z.number(),
   event: z.string(),
+  repository_id: z.number().nullable().optional(),
 });
+
+/** Recorded repo ids that pass the allowlist (null: no allowlist, everything is in scope). */
+async function allowedRepoIds(
+  cfg: Record<string, unknown>,
+  db: Db,
+  deliveries: z.infer<typeof Delivery>[],
+): Promise<Set<number> | null> {
+  if (repoAllowlist(cfg) === null) return null;
+  const ids = [
+    ...new Set(deliveries.flatMap((d) => (d.repository_id == null ? [] : [d.repository_id]))),
+  ];
+  if (ids.length === 0) return new Set();
+  const rows = await db
+    .select({ id: githubInstallationRepos.repoId, fullName: githubInstallationRepos.fullName })
+    .from(githubInstallationRepos)
+    .where(inArray(githubInstallationRepos.repoId, ids))
+    .all();
+  return new Set(rows.filter((r) => repoAllowed(cfg, r.fullName)).map((r) => r.id));
+}
 
 export async function runGithubRedeliveries(env: Bindings, now = new Date()): Promise<number> {
   const db = new D1Store(env.DB, env.BLOBS, () => now).db;
@@ -60,6 +81,10 @@ export async function runGithubRedeliveries(env: Bindings, now = new Date()): Pr
           now.getTime() - Date.parse(d.delivered_at) < WINDOW_MS,
       );
       if (failed.length === 0) continue;
+      // Oldest first, so installation state replays in order (created, then repos changed).
+      failed.sort((a, b) => Date.parse(a.delivered_at) - Date.parse(b.delivered_at));
+      // With GITHUB_REPO_ALLOWLIST set, only installation-level deliveries and allowed repos'.
+      const inScope = await allowedRepoIds(cfg, db, failed);
       const seen = new Set(
         (
           await db
@@ -80,6 +105,7 @@ export async function runGithubRedeliveries(env: Bindings, now = new Date()): Pr
       );
       for (const d of failed) {
         if (asked >= MAX_PER_RUN || seen.has(d.guid) || succeeded.has(d.guid)) continue;
+        if (inScope !== null && d.repository_id != null && !inScope.has(d.repository_id)) continue;
         const r = await fetch(`https://api.github.com/app/hook/deliveries/${d.id}/attempts`, {
           method: "POST",
           headers,

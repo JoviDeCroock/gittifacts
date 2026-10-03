@@ -49,6 +49,8 @@ export default defineConfig(async () => ({
           GITHUB_APP_CLIENT_SECRET: "cs-test-secret",
           GITHUB_APP_WEBHOOK_SECRET: "whsec-test-0123456789",
           GITHUB_APP_PRIVATE_KEY: testGithubAppPem(),
+          // wrangler.jsonc limits production to its allowlist; tests cover every repo unless they set one.
+          GITHUB_REPO_ALLOWLIST: "",
           CF_API_TOKEN: "",
           // wrangler.jsonc carries the production Turnstile site key and admins: tests use
           // Cloudflare's test keys (an empty var falls back to them) and no platform admins.

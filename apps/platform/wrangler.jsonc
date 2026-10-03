@@ -46,7 +46,15 @@
     "PLATFORM_AUDITORS": "ag_1770dabb6851453aa53f721a47cfcf25",
     // Merge queue deploy trains (docs/prompts/03-merge-queue.md §4.8): merged Changes deploy in
     // per-Worker trains with flag-first attribution. "off" = one RolloutWorkflow per Change.
-    "MERGE_QUEUE_TRAINS": "on"
+    "MERGE_QUEUE_TRAINS": "on",
+    // GitHub mode's App (public values; the key, webhook secret and client secret are Worker
+    // secrets): https://github.com/apps/gitifacts, registered by hand (docs/deploy.md "GitHub mode").
+    "GITHUB_APP_ID": "5174425",
+    "GITHUB_APP_SLUG": "gitifacts",
+    "GITHUB_APP_CLIENT_ID": "Iv23lifFn949tEXikiBR",
+    // Operator guard (src/github/allowlist.ts): GitHub mode only grades, mirrors, backtests and
+    // writes for these repos while the App is installed on a real organization. Empty: all repos.
+    "GITHUB_REPO_ALLOWLIST": "ReSynapse/fixture-lib"
   },
 
   // The preview gateway: every *-pv.resynapse.dev request reaches this Worker. Previews are
@@ -59,9 +67,8 @@
   // and in `wrangler secret put` remotely.
   // Required to run at all. Optional secrets (feature degrades with a clear error when absent):
   // GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET (GitHub sign-in), CF_API_TOKEN (rollouts, flags, telemetry),
-  // and GitHub mode's App (docs/deploy.md "GitHub mode"): GITHUB_APP_ID, GITHUB_APP_SLUG,
-  // GITHUB_APP_CLIENT_ID (public; `wrangler secret put` keeps them across deploys) and
-  // GITHUB_APP_PRIVATE_KEY, GITHUB_APP_WEBHOOK_SECRET, GITHUB_APP_CLIENT_SECRET. Unset: "not configured".
+  // and GitHub mode's App secrets (docs/deploy.md "GitHub mode"): GITHUB_APP_PRIVATE_KEY,
+  // GITHUB_APP_WEBHOOK_SECRET, GITHUB_APP_CLIENT_SECRET (its public values are vars above). Unset: "not configured".
   "secrets": {
     "required": [
       "PLATFORM_SIGNING_KEY",

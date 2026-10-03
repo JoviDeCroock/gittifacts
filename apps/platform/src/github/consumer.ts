@@ -10,6 +10,7 @@ import { GithubRateLimited } from "@app/host-github";
 import { InstallationInfo, RepoInfo } from "./api.js";
 import { repoIdFor } from "@app/host-github";
 import { AUTO_REPOS, latestBacktest, startBacktest } from "./backtests.js";
+import { repoAllowed } from "./allowlist.js";
 import { githubApp } from "./app-config.js";
 import { onChangeDelivery } from "./grading.js";
 import {
@@ -45,8 +46,15 @@ const InstallationReposEvent = z.object({
   repositories_removed: z.array(RepoInfo.pick({ id: true, full_name: true })).default([]),
 });
 
-const repoRows = (rs: z.infer<typeof RepoInfo>[]) =>
-  rs.map((r) => ({ id: r.id, fullName: r.full_name, private: r.private }));
+/** Repo rows to record; with GITHUB_REPO_ALLOWLIST set, only allowed repos are recorded at all. */
+const repoRows = (deps: GithubEventDeps, rs: z.infer<typeof RepoInfo>[]) =>
+  rs
+    .filter(
+      (r) =>
+        deps.env === undefined ||
+        repoAllowed(deps.env as unknown as Record<string, unknown>, r.full_name),
+    )
+    .map((r) => ({ id: r.id, fullName: r.full_name, private: r.private }));
 
 async function onInstallation(deps: GithubEventDeps, msg: GithubEventMessage, payload: unknown) {
   const ev = InstallationEvent.safeParse(payload);
@@ -79,7 +87,8 @@ async function onInstallation(deps: GithubEventDeps, msg: GithubEventMessage, pa
     },
     now,
   );
-  if (ev.data.repositories) await addRepos(deps.db, i.id, repoRows(ev.data.repositories), now);
+  if (ev.data.repositories)
+    await addRepos(deps.db, i.id, repoRows(deps, ev.data.repositories), now);
   // The "aha" report (spec §3.7): a backtest of a few of the new installation's repos.
   if (ev.data.action === "created" && deps.env !== undefined) {
     await autoBacktest(deps.env, msg, i.id, ev.data.repositories ?? []);
@@ -95,7 +104,8 @@ async function autoBacktest(
 ) {
   const store = new D1Store(env.DB, env.BLOBS);
   if (githubApp(env as unknown as Record<string, unknown>)?.appId !== msg.appId) return;
-  for (const r of repos.slice(0, AUTO_REPOS)) {
+  const cfg = env as unknown as Record<string, unknown>;
+  for (const r of repos.filter((x) => repoAllowed(cfg, x.full_name)).slice(0, AUTO_REPOS)) {
     if ((await latestBacktest(store.db, repoIdFor(r.id))) !== null) continue;
     try {
       await startBacktest(env, {
@@ -135,7 +145,7 @@ async function onInstallationRepos(
       now,
     );
   }
-  await addRepos(deps.db, i.id, repoRows(ev.data.repositories_added), now);
+  await addRepos(deps.db, i.id, repoRows(deps, ev.data.repositories_added), now);
   await removeRepos(
     deps.db,
     i.id,

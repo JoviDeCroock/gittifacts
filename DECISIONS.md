@@ -2210,3 +2210,16 @@ tests, 13–17 min; past vitest's 1,200 s budget with six Changes in flight), an
 still count (a step has no per-failure identity, so it stays unknown). `signal.error.public-api` from an
 unmeasurable package main already has is unchanged: discounting it would lower a lane on an errored signal,
 which needs a decision first.
+
+## 2026-10-03 — GitHub repo allowlist (operator guard while the App is on a real org)
+
+The App was installed on the user's company org ReSynapse with "All repositories" before the env-App code was live
+(later narrowed to `fixture-lib`). PR writes are on for linked installations, so a broad installation must never
+mirror, grade, backtest or comment on repos nobody chose to test. `GITHUB_REPO_ALLOWLIST` (comma-separated
+`owner/repo`, case-insensitive; `wrangler.jsonc` sets `ReSynapse/fixture-lib`) is enforced in
+`src/github/allowlist.ts` callers: change events (before any D1 read, mirror or GitHub call), auto and manual
+backtests (`repo-not-allowed`, 403), the repo lists recorded from installation events and the link flow (only
+allowed repos are stored), and the redelivery cron (only installation-level deliveries and allowed repos', oldest
+first so installation state replays in order). Unset or empty means every repo of an installation. The Reader App's
+public values (`GITHUB_APP_ID` 5174425, slug `gitifacts`, client id) are `vars` in `wrangler.jsonc`, so they ship in
+the same deploy as the allowlist and there is no moment where the App is configured without the guard.

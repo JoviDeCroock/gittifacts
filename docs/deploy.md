@@ -44,11 +44,14 @@ pnpm exec wrangler secret put GITHUB_APP_PRIVATE_KEY < <slug>.<date>.private-key
 ```
 
 The first three may live under `vars` in `wrangler.jsonc` instead (never both: a var and a secret can't share a
-name). A PEM pasted on one line may write its newlines as `\n`. Webhook secret rotation: set the old one as
+name); this platform does that (App `gitifacts`, id 5174425), so only the last three are secrets here. A PEM pasted on one line may write its newlines as `\n`. Webhook secret rotation: set the old one as
 `GITHUB_APP_WEBHOOK_SECRET_PREVIOUS`, the new one as `GITHUB_APP_WEBHOOK_SECRET`, change it on GitHub, then
 `wrangler secret delete GITHUB_APP_WEBHOOK_SECRET_PREVIOUS`. Until all six are set, `/github/webhooks` answers 503
 and `/settings/github` lists the missing names; the redelivery cron asks GitHub again for failed deliveries of the
 last three days once it is configured.
+
+`GITHUB_REPO_ALLOWLIST` (a var, comma-separated `owner/repo`) limits GitHub mode to those repos whatever an
+installation covers: nothing else is mirrored, graded, backtested, redelivered or written to. Empty: every repo.
 
 The M5 Actor App is a second App we own, registered the same way, with the same names under `GITHUB_ACTOR_APP_`
 (`GITHUB_ACTOR_APP_ID`, `…_SLUG`, `…_CLIENT_ID`, `…_CLIENT_SECRET`, `…_WEBHOOK_SECRET`, `…_PRIVATE_KEY`).
