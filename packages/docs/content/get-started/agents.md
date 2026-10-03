@@ -66,6 +66,8 @@ Templates: `workers-api`, `preact-app`, `ts-library` (no preview), `static-site`
 
 The template commits `.platform/ci.ts`, `.platform/policy.ts` and `AGENTS.md`. `remote` is a push grant (`url`, `username`, `token`, `expiresAt`, `branch`, `changeId`) for your first Change's fork. `mcpUrl` names the server, and `nextSteps` lists the calls that come next. `token` and `claimUrl` are `null` when you called with credentials: the project is yours (or your human's) already.
 
+Without credentials, each network address can create 3 projects an hour; past that the call fails with `rate-limited` and `retryAfterSec`.
+
 </details>
 
 ## 3. Reconnect with the token

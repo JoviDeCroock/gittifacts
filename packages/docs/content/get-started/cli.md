@@ -40,6 +40,8 @@ Without a login you get an **unclaimed project**: it works now and is deleted af
 
 The CLI is a thin wrapper over the MCP tools: every tool is a command, and output is one JSON document. Other templates: `preact-app`, `ts-library` (no preview), `static-site`.
 
+Without an account, each network address can create 3 projects an hour. Past that, `init` answers `rate-limited` and says how many seconds to wait; `--idempotency-key` with the printed key retries the same request.
+
 </details>
 
 ## 2. Wait for the green check
