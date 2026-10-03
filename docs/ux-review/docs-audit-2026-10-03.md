@@ -254,3 +254,52 @@ Generated reference pages (not hand-edited; listed for size):
 | `reference/mcp-tools.md` | 840 | 92 |
 | `reference/mcp-workspaces.md` | 672 | 135 |
 | `reference/policy.md` | 548 | 110 |
+
+## After the rework
+
+Shipped 2026-10-03 (docs commits from `3f237a0`, live with deploy `1cfca4f`; the narrower loop picture with the next deploy). Each path was followed
+again as written, from the docs home, on the live platform (agent and CLI after the deploy; the import with the
+same commands just before it). Recordings: journey 14, `14-docs-v2-{before,after}{,-mobile}.webm`; the phone take
+of the old home failed at its first click (the table link to the CLI page never navigated), the new one completes.
+
+### The four paths, before and after
+
+"Words" counts the text a reader passes before the quick win: prose, lists and table cells; code, headings and
+`<details>` folds excluded (one counter for both versions, so the before numbers differ a little from the
+headline table above, which also counted headings).
+
+| Path | Steps to the quick win | Words before it | Asks for first | Quick win | Wall time (live) |
+|---|---|---|---|---|---|
+| I'm an agent (MCP) | 6 → **5** (connect, create, reconnect, wait, open) | 300 → **145** | a token, OAuth or "nothing" → **nothing** | green run + preview | 78 s, 6 requests → **49 s**, 4 tool calls (create, `whoami` check, one wait, status) |
+| Try it in 2 minutes (CLI) | 5 → **3** (init, wait, open) | 214 → **93** | an account and a device approval → **nothing** | green check + preview | 60 s + sign-up and device approval → **61 s** (init 22 s with a cold npm cache, wait 35 s, status 5 s) |
+| Move a repo from GitHub | 3 → **3** (import, watch CI, proposal) | 561 → **197** | `$GITTIFACTS_TOKEN`, an undefined `<owner>` → **nothing** | first CI run + setup proposal | 76.5 s → **107 s** (init 32 s with a cold npm cache and the clone, CI 41 s, proposal 34 s) |
+| Connect GitHub | 3 → **3**, but the old step 1 was operator work | 516 → **201** | a 15-row App form and 6 secrets → **an account and GitHub admin** | graded pull request | not measurable live (below) |
+| For reviewers | 1 → **1** to signed in, then 2 to a first project | 534 → **315** (whole page) | none | the Dashboard, then a green project | not re-measured |
+
+- **The reader's own first action on the GitHub path** (**Install on GitHub**) moved from 3.1 to 0.6 screens
+  down at 1280 px, and from 3.9 to 0.7 on a phone.
+- **A red import now says what success looks like.** The sample repo's `test` step fails (on GitHub too):
+  `wait` reaches `evidence_ready` with status `failing`, and the proposal's Plan says "`test` already fails on
+  the default branch (pre-existing, not caused by this Change)". The page shows both.
+- **Connect GitHub** still can't be timed end to end: the live App is limited to `ReSynapse/fixture-lib`
+  (`GITHUB_REPO_ALLOWLIST`), and no installation of the measuring account exists.
+- **Live drift found while verifying** (now fixed by the same deploy): before `1cfca4f`, `get_change_status`
+  returned no `previewUrl`, the CLI printed the reconnect step first after an anonymous `init`, and
+  `GET /api/v1/stats/first-green` answered 404.
+- **The no-account limit is real**: three projects an hour per address. Measuring three paths in a row hit
+  it (`rate-limited`, `retryAfterSec` 1087); the quick pages now say so in a fold.
+
+### Layout (live, after)
+
+| Page | Height at 1280 (screens) | Height at 390 | First command at 390 |
+|---|--:|--:|--:|
+| `/docs` | 2.4 → 2.9 | 2.9 → 3.7 | 1.2 → 1.3 |
+| `get-started/agents` | 5.1 → **3.7** | 5.7 → **4.3** | 0.5 → 0.7 |
+| `get-started/cli` | 4.1 → **2.7** | 4.8 → **3.0** | 0.6 → 0.5 |
+| `get-started/from-github` (new) | 5.4 (migrate) → **2.6** | 6.5 → **3.2** | 0.5 → 0.6 |
+| `get-started/github` (new) | 4.8 (github-mode) → **2.5** | 6.2 → **3.1** | first action 3.9 → **0.7** |
+| `get-started/humans` | 3.6 → **2.6** | 4.6 → **3.3** | none |
+| `guides/migrate-from-github` | 5.4 → **3.3** | 6.5 → **3.9** | 0.5 → 1.9 (cut-over starts with a review, not a command) |
+| `guides/github-mode` | 4.8 → **3.7** | 6.2 → **4.7** | 3.9 → 2.0 |
+
+The home grew by its glossary (8 terms) and the four cards; the loop picture no longer clips at 1280 px.
