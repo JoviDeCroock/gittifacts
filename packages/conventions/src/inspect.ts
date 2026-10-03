@@ -22,6 +22,13 @@ import {
   type TestRunner,
 } from "./project.js";
 
+/**
+ * Start of the `uncertain` sentence about unapproved install scripts (pnpm 11). The import Plan
+ * gives these dependencies their own risk, so it skips this sentence among the doubts.
+ */
+export const BUILD_SCRIPTS_DOUBT =
+  "pnpm 11 refuses to install until install scripts are approved (ERR_PNPM_IGNORED_BUILDS)";
+
 /** Marker of the `detect` result line on the runner's stdout. */
 export const DETECT_PREFIX = "::detect::";
 export const DETECT_REPORT_VERSION = 1;
@@ -308,6 +315,72 @@ export function pnpmLockPackages(lock: string): Map<string, string[]> {
   return out;
 }
 
+/** The platform CI and preview runners: what a lockfile's `os`/`cpu`/`libc` fields are matched against. */
+export const RUNNER_PLATFORM = { os: "linux", cpu: "x64", libc: "glibc" } as const;
+
+/** npm/pnpm platform list semantics: empty = any; `!x` excludes x; otherwise x must be listed. */
+function platformAllows(list: readonly string[], value: string): boolean {
+  if (list.length === 0) return true;
+  if (list.includes(`!${value}`)) return false;
+  const positive = list.filter((v) => !v.startsWith("!"));
+  return positive.length === 0 || positive.includes(value);
+}
+
+/** `[a, b]` or `a` → values (quotes dropped). */
+function inlineList(text: string): string[] {
+  return text
+    .replace(/^\[|\]$/g, "")
+    .split(",")
+    .map(unquote)
+    .filter((s) => s !== "");
+}
+
+/**
+ * Package names whose every pnpm lockfile entry is restricted (`os`, `cpu`, `libc`) to platforms
+ * other than the runner's (`RUNNER_PLATFORM`): pnpm never installs them there, so their install
+ * scripts never run in CI (`fsevents`: `os: [darwin]`).
+ */
+export function pnpmLockSkippedOnRunner(lock: string): Set<string> {
+  const block = yamlBlock(lock, "packages");
+  if (block === null) return new Set();
+  const installable = new Map<string, boolean>();
+  let current: { name: string; fields: Record<string, string[]> } | null = null;
+  let listKey: string | null = null;
+  const close = () => {
+    if (current === null) return;
+    const f = current.fields;
+    const ok =
+      platformAllows(f.os ?? [], RUNNER_PLATFORM.os) &&
+      platformAllows(f.cpu ?? [], RUNNER_PLATFORM.cpu) &&
+      platformAllows(f.libc ?? [], RUNNER_PLATFORM.libc);
+    installable.set(current.name, (installable.get(current.name) ?? false) || ok);
+  };
+  for (const line of block.lines) {
+    const entry = /^ {2}['"]?\/?((?:@[^/@\s'"]+\/)?[^@\s'"/]+)@[^\s'":(]+/.exec(line);
+    if (entry?.[1] !== undefined) {
+      close();
+      current = { name: entry[1], fields: {} };
+      listKey = null;
+      continue;
+    }
+    if (current === null) continue;
+    const field = /^ {4}(os|cpu|libc)\s*:\s*(.*?)\s*$/.exec(line);
+    if (field?.[1] !== undefined) {
+      listKey = field[2] === "" ? field[1] : null;
+      current.fields[field[1]] = field[2] === "" ? [] : inlineList(field[2] ?? "");
+      continue;
+    }
+    const item = /^ {6}-\s+(.+?)\s*$/.exec(line);
+    if (listKey !== null && item?.[1] !== undefined) {
+      current.fields[listKey]?.push(unquote(item[1]));
+      continue;
+    }
+    if (/^ {4}\S/.test(line)) listKey = null;
+  }
+  close();
+  return new Set([...installable].filter(([, ok]) => !ok).map(([name]) => name));
+}
+
 /** npm lockfile packages flagged `hasInstallScript`. */
 export function npmInstallScriptPackages(lock: string): Map<string, string[]> {
   const out = new Map<string, string[]>();
@@ -526,6 +599,9 @@ export function inspectRepo(tree: RepoTree, opts: { sha?: string | null } = {}):
     const lock = features.lockfile === null ? null : tree.read(features.lockfile);
     const known = new Set(KNOWN_BUILD_SCRIPT_PACKAGES);
     let candidates: Map<string, string[]>;
+    // Platform-restricted packages (fsevents: os darwin) are never installed on the runners.
+    const otherPlatforms = lock === null ? new Set<string>() : pnpmLockSkippedOnRunner(lock);
+    const skippedOnRunner: string[] = [];
     if (lock !== null) {
       candidates = pnpmLockPackages(lock);
       if (candidates.size === 0) {
@@ -539,11 +615,20 @@ export function inspectRepo(tree: RepoTree, opts: { sha?: string | null } = {}):
     }
     for (const [name, versions] of [...candidates].sort(([a], [b]) => a.localeCompare(b))) {
       if (!known.has(name) || denied.has(name) || approvedBuilds.includes(name)) continue;
+      if (otherPlatforms.has(name)) {
+        skippedOnRunner.push(name);
+        continue;
+      }
       buildScriptsNeedingApproval.push({ name, versions: versions.slice(0, 20), source: "known" });
+    }
+    if (skippedOnRunner.length > 0) {
+      notes.push(
+        `${skippedOnRunner.join(", ")} only ${skippedOnRunner.length === 1 ? "installs" : "install"} on other platforms (os/cpu/libc in ${features.lockfile}): pnpm skips them on the Linux runners, so their install scripts never run in CI and need no approval there.`,
+      );
     }
     if (buildScriptsNeedingApproval.length > 0) {
       uncertain.push(
-        `pnpm 11 refuses to install until install scripts are approved (ERR_PNPM_IGNORED_BUILDS) for: ${buildScriptsNeedingApproval.map((d) => d.name).join(", ")}. A human must approve them in pnpm-workspace.yaml \`allowBuilds\` (the platform never approves build scripts on its own, and never for unclaimed projects).`,
+        `${BUILD_SCRIPTS_DOUBT} for: ${buildScriptsNeedingApproval.map((d) => d.name).join(", ")}. Each needs a decision in pnpm-workspace.yaml \`allowBuilds\`: true runs its install script, false skips it (the platform never approves build scripts on its own, and never for unclaimed projects).`,
       );
     }
     extraDoubts.push(

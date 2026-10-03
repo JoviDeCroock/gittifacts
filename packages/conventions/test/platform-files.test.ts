@@ -12,6 +12,8 @@ import {
   defaultPolicyValue,
   detectProject,
   PLACEHOLDER_SELF,
+  pnpmFailsOnUnapprovedBuilds,
+  pnpmWorkspaceSkippingBuilds,
   TEMPLATE_IDS,
   TEMPLATES,
   templateGeneratedFiles,
@@ -213,5 +215,39 @@ describe("defaultPolicyTs", () => {
       uncertain: [expect.stringMatching(/previewRoutes is empty/)],
     });
     expect(defaultPolicyTs({ worker: true, previewRoutes: ["/"] }).uncertain).toEqual([]);
+  });
+});
+
+describe("pnpmWorkspaceSkippingBuilds (imports: skip, never approve)", () => {
+  const COMMENT =
+    "# Skipped by the gittifacts import proposal (their install scripts don't run); set true to approve one.";
+
+  it("creates the file, or appends allowBuilds after the existing settings", () => {
+    expect(pnpmWorkspaceSkippingBuilds(null, ["esbuild", "@parcel/watcher"])).toBe(
+      `allowBuilds:\n  ${COMMENT}\n  '@parcel/watcher': false\n  esbuild: false\n`,
+    );
+    expect(pnpmWorkspaceSkippingBuilds("packages:\n  - apps/*\n", ["sharp"])).toBe(
+      `packages:\n  - apps/*\n\nallowBuilds:\n  ${COMMENT}\n  sharp: false\n`,
+    );
+  });
+
+  it("extends an existing allowBuilds block with its indentation, keeping approvals", () => {
+    const current = "# hi\nallowBuilds:\n    sharp: true\n\ncatalog:\n  x: 1\n";
+    expect(pnpmWorkspaceSkippingBuilds(current, ["esbuild", "sharp"])).toBe(
+      `# hi\nallowBuilds:\n    sharp: true\n    ${COMMENT}\n    esbuild: false\n\ncatalog:\n  x: 1\n`,
+    );
+  });
+
+  it("never writes true, and leaves flow-style or already-decided files alone", () => {
+    expect(pnpmWorkspaceSkippingBuilds("allowBuilds: { sharp: true }\n", ["esbuild"])).toBeNull();
+    expect(pnpmWorkspaceSkippingBuilds("allowBuilds:\n  esbuild: false\n", ["esbuild"])).toBeNull();
+    expect(pnpmWorkspaceSkippingBuilds(null, [])).toBeNull();
+    expect(pnpmWorkspaceSkippingBuilds(null, ["a", "b"])).not.toMatch(/: true/);
+  });
+
+  it("pnpm 11 (or no pin, the runners' default) fails on unapproved builds; pnpm 10 warns", () => {
+    expect(pnpmFailsOnUnapprovedBuilds("pnpm@11.27.0")).toBe(true);
+    expect(pnpmFailsOnUnapprovedBuilds(null)).toBe(true);
+    expect(pnpmFailsOnUnapprovedBuilds("pnpm@10.12.1+sha512.abc")).toBe(false);
   });
 });

@@ -7,6 +7,7 @@ import {
   parseDetectOutput,
   parseJsonc,
   pnpmLockPackages,
+  pnpmLockSkippedOnRunner,
   type RepoTree,
 } from "../src/index.js";
 
@@ -87,6 +88,17 @@ describe("inspectRepo", () => {
     expect(r.confidence).not.toBe("high");
   });
 
+  it("never flags a darwin-only optional package (fsevents) on the Linux runners", () => {
+    const lock = PNPM_LOCK.replace(
+      "  sharp@0.34.1:",
+      "  fsevents@2.3.3:\n    resolution: {integrity: sha512-f}\n    os: [darwin]\n  sharp@0.34.1:",
+    );
+    const r = inspectRepo(tree({ ...worker, "pnpm-lock.yaml": lock }));
+    expect(r.buildScriptsNeedingApproval.map((d) => d.name)).toEqual(["sharp"]);
+    expect(r.uncertain.join("\n")).not.toMatch(/fsevents/);
+    expect(r.notes.join("\n")).toMatch(/fsevents only installs on other platforms/);
+  });
+
   it("refines an unknown test runner from a vitest config and says so", () => {
     const r = inspectRepo(
       tree({
@@ -159,6 +171,48 @@ describe("parsers", () => {
     expect(pnpmLockPackages("packages:\n  /left-pad@1.3.0:\n    x: 1\n").get("left-pad")).toEqual([
       "1.3.0",
     ]);
+  });
+
+  it("pnpmLockSkippedOnRunner: packages that can't install on linux x64 glibc", () => {
+    const lock = `lockfileVersion: '9.0'
+
+packages:
+  fsevents@2.3.3:
+    resolution: {integrity: x}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+  '@img/sharp-linuxmusl-x64@0.34.1':
+    resolution: {integrity: x}
+    os: [linux]
+    cpu: [x64]
+    libc: [musl]
+  '@img/sharp-linux-x64@0.34.1':
+    resolution: {integrity: x}
+    os: [linux]
+    cpu: [x64]
+    libc: [glibc]
+  not-windows@1.0.0:
+    os: ['!win32']
+  arm-only@1.0.0:
+    cpu:
+      - arm64
+  either@1.0.0:
+    os: [darwin]
+  either@2.0.0:
+    resolution: {integrity: x}
+  sharp@0.34.1:
+    resolution: {integrity: x}
+
+snapshots:
+  fsevents@2.3.3:
+    optional: true
+`;
+    expect([...pnpmLockSkippedOnRunner(lock)].sort()).toEqual([
+      "@img/sharp-linuxmusl-x64",
+      "arm-only",
+      "fsevents",
+    ]);
+    expect(pnpmLockSkippedOnRunner("nothing here").size).toBe(0);
   });
 
   it("npmInstallScriptPackages tolerates junk", () => {

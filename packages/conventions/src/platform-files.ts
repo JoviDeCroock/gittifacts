@@ -270,3 +270,66 @@ export function defaultPolicyTs(opts: PolicyOptions = {}): GeneratedFile {
     uncertain,
   };
 }
+
+// ---------------------------------------------------------------- pnpm-workspace.yaml (imports)
+
+export const PNPM_WORKSPACE_PATH = "pnpm-workspace.yaml";
+
+/** pnpm 11 and later fail installs on unapproved install scripts; pnpm 10 only warns. */
+export function pnpmFailsOnUnapprovedBuilds(packageManagerSpec: string | null): boolean {
+  const m = /^pnpm@(\d+)/.exec(packageManagerSpec ?? "");
+  // No pin: the runners use pnpm 11.
+  return m?.[1] === undefined || Number(m[1]) >= 11;
+}
+
+const PLAIN_KEY = /^[A-Za-z0-9._-]+$/;
+const SKIP_COMMENT =
+  "# Skipped by the gittifacts import proposal (their install scripts don't run); set true to approve one.";
+
+/**
+ * `pnpm-workspace.yaml` with each of `names` set to `false` under `allowBuilds`: pnpm 11 then
+ * installs without running their install scripts instead of failing (`ERR_PNPM_IGNORED_BUILDS`).
+ * Never approves anything (`true` stays a human's decision). Verified with pnpm 11.27.0: a
+ * `--config.strict-dep-builds=false` install passes but writes placeholders into this file, and
+ * the next `pnpm run` re-installs and fails, so the decision has to live in the file itself.
+ *
+ * `current` null = no file yet. Returns null when there is nothing to add, or when `allowBuilds`
+ * is written in a form this line-based edit can't extend safely (flow style).
+ */
+export function pnpmWorkspaceSkippingBuilds(
+  current: string | null,
+  names: readonly string[],
+): string | null {
+  const entry = (indent: string, name: string) =>
+    `${indent}${PLAIN_KEY.test(name) ? name : `'${name.replaceAll("'", "''")}'`}: false`;
+  const unique = [...new Set(names)].sort();
+  if (unique.length === 0) return null;
+  const text = current ?? "";
+  const lines = text === "" ? [] : text.replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
+  const start = lines.findIndex((l) => /^allowBuilds\s*:/.test(l));
+  if (start === -1) {
+    const block = ["allowBuilds:", `  ${SKIP_COMMENT}`, ...unique.map((n) => entry("  ", n))];
+    return `${[...lines, ...(lines.length > 0 && lines.at(-1) !== "" ? [""] : []), ...block].join("\n")}\n`;
+  }
+  const inline = (lines[start] ?? "").replace(/^allowBuilds\s*:/, "").trim();
+  if (inline !== "" && !inline.startsWith("#")) return null;
+  let last = start;
+  let indent = "  ";
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (line.trim() === "" || /^\s+#/.test(line)) continue;
+    if (/^\S/.test(line)) break;
+    if (last === start) indent = /^(\s+)/.exec(line)?.[1] ?? indent;
+    last = i;
+  }
+  const present = new Set(
+    lines
+      .slice(start + 1, last + 1)
+      .map((l) => /^\s+(['"]?)(.+?)\1\s*:/.exec(l)?.[2])
+      .filter((n): n is string => n !== undefined),
+  );
+  const added = unique.filter((n) => !present.has(n));
+  if (added.length === 0) return null;
+  const insert = [`${indent}${SKIP_COMMENT}`, ...added.map((n) => entry(indent, n))];
+  return `${[...lines.slice(0, last + 1), ...insert, ...lines.slice(last + 1)].join("\n")}\n`;
+}
