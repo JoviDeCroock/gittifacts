@@ -2295,3 +2295,35 @@ a device approval); import 561 → 197 words, 107 s to the setup proposal; Conne
 reader's first action 3.9 → 0.7 phone screens down. A page that grows past its budget fails the docs check, so
 new facts go into a fold or a linked page. Connect GitHub still has no live timing while the App is limited to
 one allowlisted repo.
+
+## 2026-10-03 — GitHub mode live on ReSynapse/fixture-lib: first grades, time-to-grade, what blocks the contract run
+
+The Reader App (`gitifacts`, 5174425) went live with 39aa04a (version 8aa5bbbc); installation 167500140 on
+ReSynapse, `fixture-lib` only (`GITHUB_REPO_ALLOWLIST`). Test PRs were opened as JoviDeCroock with `gh`.
+
+- **A change event for an unrecorded installation is no longer dropped.** Every delivery before the deploy had
+  failed, so `installation.created` waited for the redelivery cron, and a `pull_request` arriving first was
+  acknowledged and ignored for good. `onChangeDelivery` now asks GitHub (`GET /app/installations/{id}`, App
+  JWT) and records the installation with only the event's (already allowed) repo; GitHub not knowing it (404)
+  records nothing; any other GitHub error throws, so the queue retries (2223a2a, live in d608bf83).
+- **Time-to-grade (PR opened → `gittifacts/lane` completed), target ≤ 2 min: missed with full evidence.**
+  Cold #1: 93 s, but blocked at CI install (below). With green CI (#2, first run: 177 s; warm #3: 158 s;
+  warm #4: 193 s). The run opens 10–15 s after the PR; the rest is CI, red-green, coverage, mutation, the
+  judge and the tour. Same verdict on all three heads (Lane 2, shadow; tour generated).
+- **The fixture tree can't pass real CI.** `fixtures/_base` has no `pnpm-lock.yaml` and its `.platform/ci.ts`
+  runs `pnpm install --frozen-lockfile` (pnpm 11: `ERR_PNPM_NO_LOCKFILE`; native would fail the same way).
+  The recorded-fixture suites never noticed: they replay recorded CI items. A lockfile generated with the
+  sandbox's pnpm (11.27.0) makes all five steps pass locally (41 tests). Putting it on fixture-lib's main
+  needs the user's OK (default branch); adding it to `fixtures/_base` changes every fixture's base SHA and
+  new-dependency's lockfile expectation, so it waits for a decision. Measurements above used PR branches that
+  carry the lockfile (so they also show `dependency.lockfile-only` and a 730-line size).
+- **Red-green on a base without a lockfile errors** when the head adds one: the base is installed with npm,
+  which crashes on the head's pnpm `node_modules` ("Cannot read properties of null (reading 'edgesOut')").
+  Unknown → escalate held (`signal.error.red-green`, Lane 2). Open: install the base with the head's package
+  manager when the base has no lockfile.
+- **Live contract script.** Fixture heads are deterministic, so the script now only counts a run this PR
+  started (it read a previous PR's or night's run, time-to-grade ≈ 0) and ignores cancelled runs.
+  `GITTIFACTS_READ=check-run` reads the verdict back from the completed run (`readCheckRunVerdict`, the
+  inverse of `completedCheckRun`; checked on #4's real output), for runs without an agent token or D1 access.
+  The judge's `llm-judgment` items are left out of the evidence comparison, as in the recorded suite. All six
+  grade scenarios need an approved Plan, so the live run needs a human for those Plans first.
