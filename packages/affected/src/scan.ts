@@ -695,6 +695,10 @@ const SETUP_KEYS = new Set([
   "snapshotResolver",
   "testEnvironment",
   "environment",
+  // Workers test pools (`@cloudflare/vitest-plugin` / vitest-pool-workers): every test runs inside
+  // the Worker built from `main`, or from the `main` of the wrangler config at `configPath`.
+  "main",
+  "configPath",
 ]);
 
 /**

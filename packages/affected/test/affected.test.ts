@@ -553,3 +553,36 @@ describe("contentNeeded", () => {
     expect(contentNeeded("data/table.csv")).toBe(false);
   });
 });
+
+describe("Workers test pools", () => {
+  const POOL: Files = {
+    ...REPO,
+    "packages/app/vitest.config.ts":
+      'import { cloudflareTest } from "@cloudflare/vitest-plugin";\nexport default { plugins: [cloudflareTest({ wrangler: { configPath: "./test/wrangler.jsonc" } })] };\n',
+    "packages/app/test/wrangler.jsonc": '{ "name": "app-test", "main": "./entry.ts" }\n',
+    "packages/app/test/entry.ts": 'export { App } from "../src/main.js";\n',
+  };
+
+  it("a change reaching the pool's wrangler main selects every test under the config", () => {
+    const s = affected(POOL, { "packages/app/src/main.ts": "export const App = 2;\n" });
+    expect(s.complete).toBe(true);
+    expect(s.testTargets).toEqual([
+      "packages/app/test/a.test.ts",
+      "packages/app/test/main.test.ts",
+    ]);
+  });
+
+  it("a `main` option of the test pool counts the same way", () => {
+    const base: Files = {
+      ...REPO,
+      "packages/app/vitest.config.ts":
+        'export default { plugins: [cloudflareTest({ main: "./test/entry.ts" })] };\n',
+      "packages/app/test/entry.ts": 'export { App } from "../src/main.js";\n',
+    };
+    const s = affected(base, { "packages/app/src/main.ts": "export const App = 2;\n" });
+    expect(s.testTargets).toEqual([
+      "packages/app/test/a.test.ts",
+      "packages/app/test/main.test.ts",
+    ]);
+  });
+});

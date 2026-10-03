@@ -19,10 +19,27 @@ import {
   isStyleFile,
   isTestRunnerConfig,
 } from "../classify.js";
+import { parseJsonc } from "../jsonc.js";
 import { dirOf, escapeRegExp, globToRegExp, joinPath } from "../paths.js";
 import { type FileSet, Resolver } from "../resolve.js";
 import { scanModule, setupFileLiterals, type TemplateGlob } from "../scan.js";
 import type { Analyzer, AnalyzerContext, Edge, PartialGraph } from "../types.js";
+import { isWorkerConfigFile } from "../workers.js";
+
+/** `main` of a wrangler JSON(C) config (TOML: not read; the entry then needs a direct import). */
+function wranglerMain(text: string | null): string | null {
+  if (text === null) return null;
+  try {
+    const main = (parseJsonc(text) as { main?: unknown } | null)?.main;
+    return typeof main === "string" && main !== ""
+      ? main.startsWith(".")
+        ? main
+        : `./${main}`
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export const TS_ANALYZER_NAME = "ts-js";
 export const TS_ANALYZER_VERSION = "1.0.0";
@@ -185,7 +202,13 @@ export function tsAnalyzer(): Analyzer & { analyze(ctx: AnalyzerContext): TsPart
               const target = joinPath(dirOf(path), lit);
               if (target === null) continue;
               const hit = resolver.resolveFile(target);
-              if (hit !== null) out.add(hit);
+              if (hit === null) continue;
+              out.add(hit);
+              // A Workers test pool's wrangler config: its `main` is the module every test runs in.
+              const main = isWorkerConfigFile(hit) ? wranglerMain(ctx.tree.read(hit)) : null;
+              const entry = main === null ? null : joinPath(dirOf(hit), main);
+              const entryHit = entry === null ? null : resolver.resolveFile(entry);
+              if (entryHit !== null) out.add(entryHit);
             }
           }
         }
