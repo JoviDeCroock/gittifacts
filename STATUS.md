@@ -14,7 +14,7 @@ Specs:
 | M1 Vertical slice | **integrated, passes locally** (workerd vertical slice: MCP start_change → push event → ChangeWorkflow → CI → evidence → lane); `wrangler deploy --dry-run` + sandbox image build pass; deploy pending a `wrangler login` refresh, then `scripts/e2e/m1.ts` |
 | M2 Evidence | **acceptance passes locally**: sandbox e2e, real red/green on a seeded bug fix, attestation verified with the standalone CLI |
 | M3 Classifier + tour | **acceptance passes locally**: all 9 fixtures classify exactly, and the breaking-api tour puts `formatMoney` as its riskiest stop |
-| M4 Merge, rollout, revert | **acceptance passes live** (`scripts/e2e/m4.ts`, 2026-10-02, deploy trains): a Change that throws for 40% of traffic behind its flag is detected 32.5 s after its first error; flag off + rollback within 0.5 s; verified pure revert opened 4.5 s after detection, auto-merged (Lane 0, judge skipped) 77.5 s later and deployed; no human after the review |
+| M4 Merge, rollout, revert | **acceptance passes live** (`scripts/e2e/m4.ts`, 2026-10-03 run 8 on 3b4b4d6: deploy trains, one Flagship app per project, Workers Issues webhook + Workers Logs poll): a Change that throws for 40% of traffic behind its flag is detected 23.9 s after its first error (by the poll; the Issues webhook came 4 s later, and it won runs 5 and 7 at 27-30 s); flag off 0.1 s and rollback 1.1 s after detection; a verified pure revert opened 6.8 s after detection, auto-merged (Lane 0, judge skipped) 81.5 s later and deployed. The project Worker binds only its own Flagship app. The in-plan `GET /version` is Lane 1 with no judge concern. No human acts after the review |
 | M5 Mutation, transforms, screenshots, dogfood | mutation + transforms done in the sandbox; screenshots and dogfood pending |
 | O1 Front door + templates | **acceptance passes locally** (workerd, fakes): front door discovery, `create_project` per template → initial commit → bootstrap CI → preview through the gateway with banner → `evidence_ready`; TTFG metrics + dashboard; live check after deploy (docs/deploy.md) |
 | O2 Ergonomics | errors with `fix`, idempotency, `wait_for_change`, `whoami` done; CLI built, served by the platform as an npm tarball (`npx -y https://<host>/cli/gittifacts.tgz`; not on npm yet) |
@@ -90,20 +90,29 @@ in `docs/screenshots/docs-*`.
   Kimi K2.7 Code (Workers AI via AI Gateway) at $0.015 per change.
 - **Previews:** `p-<change>-pv.resynapse.dev` serves the container preview with valid TLS, the banner and
   hardened headers. `/cdn-cgi` is blocked, and the zone's other subdomains are untouched.
-- **M4 live** (`scripts/e2e/m4.ts`, run 4 on ce82c695, project `j0r358cwx6dehxm2bvw5`, deploy trains).
+- **M4 live** (`scripts/e2e/m4.ts`, run 8 on 3b4b4d6, project `u55e2x3pjdfpdtbimy4o`, deploy trains, 2026-10-03).
   - Setup: a human created a `workers-api` project. The agent's Lane-2 rollout policy change (stages 50/100,
-    2-minute stages, 3-minute watch) was approved by the human and merged by the agent-native queue. The human set
-    the deploy target, and `GET /version` became the first deploy, creating `gf-<repoId>-api` on workers.dev with
-    logs and Issues on.
-  - The bad Change made `/?n=…` throw 2 in 5 times behind `isChangeEnabled`. After human approval it merged and
-    deployed as train t2 at 50/50, once t1's 5-minute window ended.
-  - From there, with no human (t = 0 at the merge): first 5xx +155.9 s; telemetry regression +188.4 s (32.5 s
-    after the first error); flag off +0.0 s, rollback +0.5 s and revert `rv-…` opened +4.5 s after detection.
+    2-minute stages, 3-minute watch) was approved by the human and merged by the agent-native queue.
+  - The human set the deploy target, which created the project's own Flagship app (`gf-<repoId>`).
+  - The agent drafted the `GET /version` plan, and the human approved it. The change came out Lane 1: the judge
+    answered `no-concern` to all three questions, and Lane 0 is off for the repo. It became the first deploy.
+    `cf workers versions get` shows that both deployed versions bind `FLAGS` to the project's app and nothing else.
+  - The bad Change made `/?n=…` throw 2 in 5 times behind `isChangeEnabled` (Lane 2: `llm.concern`, no plan).
+    After human approval it merged and deployed as train t2 at 50/50.
+  - From there, with no human (t = 0 at the merge):
+    - t2 deployed +154.3 s and the first 5xx came +161.7 s;
+    - the Workers Logs poll detected the regression +185.6 s, 23.9 s after the first error. The Workers Issues
+      webhook arrived 27.9 s after the first occurrence, 4 s after the poll;
+    - flag off +0.1 s, rollback +1.1 s and revert `rv-…` opened +6.8 s after detection.
   - The revert was verified pure with an identical tree, so the judge was skipped. It merged on its own in Lane 0
-    77.5 s after it opened, then deployed.
-  - After the rollback: 0/177 5xx, and `/version` serves the previous version again. The `regression-detected`
-    and `reverted` notifications were sent, the audit chain verifies, and the test Worker was deleted.
-  - Run 3 (before the judge fix) passed with the same latencies, within ±2 s.
+    81.5 s after it opened, then deployed.
+  - After the rollback: 0/186 5xx, and `/version` serves the previous version again. The audit chain verifies.
+    The Worker and its Flagship app were deleted.
+  - In runs 5 and 7 the webhook won: it was attributed 30.3 s and 27.1 s after the first occurrence, before the
+    next poll.
+  - Run 7 found a gap. A platform deploy landed 2 s before the regression, and the revert's Artifacts fork stuck
+    "in progress". The revert was never opened, and the dropped command told no one. Stuck forks are now deleted
+    and forked again, and a revert that can't be opened is escalated to a human (DECISIONS 2026-10-03).
 - **Fixed by dogfooding:**
   - the deployments API rejects the `workers/triggered_by` annotation (10210), so every split and rollback failed;
   - a deploy train whose deploy failed held its Worker forever (now `TrainDeployFailed`, not re-queued);

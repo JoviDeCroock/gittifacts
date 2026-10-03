@@ -1722,3 +1722,34 @@ Spec: docs/prompts/06-two-modes.md §3.1, §7 (M2); docs/research/github-app.md 
   ping after creating an App fails with 401 because it arrives before the callback stores the keys (expected).
 - **Phase A consumer** handles `installation` and `installation_repositories` only (idempotent upserts, events for
   another App's installation ignored). Change events are phase B.
+
+## 2026-10-03 — M4 rerun after per-project Flagship apps, Issues webhooks and the calibrated judge
+
+Live reruns of `scripts/e2e/m4.ts` (runs 5 to 8) on ec89addd and the deploys after it.
+
+- **Stuck revert forks.** Run 7: the platform was redeployed as a deploy train regressed. The flag went off and the
+  Worker rolled back, but the revert's Artifacts fork stayed "being forked" (`FORK_IN_PROGRESS`) for 40+ minutes.
+  Every `RequestRevert` retry failed and the outbox dropped the command with only `merge-queue.command-dropped`: no
+  revert, no notification, the Change stuck in `rolling-out`. Deleting a stuck fork works (verified live), so
+  `ArtifactsGitHost.forkRepo` now deletes a fork that is still in progress after the whole wait and forks it again,
+  once. And a `RequestRevert` the queue gives up on now escalates: `deploy.revert-failed`, a `regression-detected`
+  notification asking a human to revert by hand, and the Change leaves `rolling-out` (merged, rolled back), the same
+  shape as `deploy.revert-skipped`. The root cause on the Artifacts side is not proven: the fork was requested
+  within seconds of the deploy, so an interrupted fork request is the likely trigger.
+- **Which signal saw the regression.** The audit API returns summaries, not payloads, so the e2e could not read
+  `issueId` and reported "Workers Issues webhook" by default. `deploy.regression-attributed` now summarizes as
+  "seen by Workers Issues (issue <id>)" or "seen by the Workers Logs poll (telemetry-<train>-<n>)". The e2e parses
+  that.
+- **Planless changes and the judge.** Without a plan the judge asks only `hidden-behavior-change`, and the
+  calibrated planless note counts any runtime change as not stated. So the e2e's planless `GET /version` got
+  `llm.concern` (Lane 2). That is by design (no human approved the intent), not a calibration bug. The e2e now
+  makes the agent draft the plan of calibration case a, which the human approves before the change is started (the
+  product flow). In-plan, the judge answers `no-concern` on all three questions, and the change is Lane 1 only because
+  Lane 0 is off for the repo (`shadow.lane0-disabled`).
+- **Both detection signals, measured.** The webhook was stored 30.3 s (run 5), 27.1 s (run 7) and 27.9 s (run 8)
+  after the first occurrence. The 30 s poll detected run 8 first, 23.9 s after the first error. The two signals race
+  at about the same latency, which confirms the 2026-10-02 reading: the webhook is an independent second signal, not
+  a faster one.
+- **Workflows event delay across a deploy.** Run 5: a review sent 7 s after a platform deploy reached the
+  ChangeWorkflow's `waitForEvent` 5 minutes later. It self-healed, so nothing was changed. This is noted in case it
+  recurs.
