@@ -10,10 +10,10 @@ import { GithubRateLimited } from "@app/host-github";
 import { InstallationInfo, RepoInfo } from "./api.js";
 import { repoIdFor } from "@app/host-github";
 import { AUTO_REPOS, latestBacktest, startBacktest } from "./backtests.js";
+import { githubApp } from "./app-config.js";
 import { onChangeDelivery } from "./grading.js";
 import {
   addRepos,
-  getApp,
   getInstallation,
   patchInstallation,
   removeRepos,
@@ -55,7 +55,11 @@ async function onInstallation(deps: GithubEventDeps, msg: GithubEventMessage, pa
   const now = deps.now();
   if (ev.data.action === "deleted") {
     await patchInstallation(deps.db, i.id, { deletedAt: now.toISOString() }, now);
-    await removeRepos(deps.db, i.id, (await reposOf(deps.db, i.id)).map((r) => r.repoId));
+    await removeRepos(
+      deps.db,
+      i.id,
+      (await reposOf(deps.db, i.id)).map((r) => r.repoId),
+    );
     return;
   }
   if (!i.account) return;
@@ -68,7 +72,10 @@ async function onInstallation(deps: GithubEventDeps, msg: GithubEventMessage, pa
       repositorySelection: i.repository_selection,
       permissions: i.permissions,
       events: i.events,
-      suspendedAt: ev.data.action === "suspend" ? (i.suspended_at ?? now.toISOString()) : (i.suspended_at ?? null),
+      suspendedAt:
+        ev.data.action === "suspend"
+          ? (i.suspended_at ?? now.toISOString())
+          : (i.suspended_at ?? null),
     },
     now,
   );
@@ -80,20 +87,35 @@ async function onInstallation(deps: GithubEventDeps, msg: GithubEventMessage, pa
 }
 
 /** Backtest up to AUTO_REPOS repos of a new installation of the Reader App (never twice). */
-async function autoBacktest(env: Bindings, msg: GithubEventMessage, installationId: number, repos: z.infer<typeof RepoInfo>[]) {
+async function autoBacktest(
+  env: Bindings,
+  msg: GithubEventMessage,
+  installationId: number,
+  repos: z.infer<typeof RepoInfo>[],
+) {
   const store = new D1Store(env.DB, env.BLOBS);
-  if ((await getApp(store.db, msg.appId))?.kind !== "reader") return;
+  if (githubApp(env as unknown as Record<string, unknown>)?.appId !== msg.appId) return;
   for (const r of repos.slice(0, AUTO_REPOS)) {
     if ((await latestBacktest(store.db, repoIdFor(r.id))) !== null) continue;
     try {
-      await startBacktest(env, { installationId, appId: msg.appId, githubRepoId: r.id, fullName: r.full_name, by: "system" });
+      await startBacktest(env, {
+        installationId,
+        appId: msg.appId,
+        githubRepoId: r.id,
+        fullName: r.full_name,
+        by: "system",
+      });
     } catch (e) {
       console.error("auto backtest failed to start", r.full_name, (e as Error).message);
     }
   }
 }
 
-async function onInstallationRepos(deps: GithubEventDeps, msg: GithubEventMessage, payload: unknown) {
+async function onInstallationRepos(
+  deps: GithubEventDeps,
+  msg: GithubEventMessage,
+  payload: unknown,
+) {
   const ev = InstallationReposEvent.safeParse(payload);
   if (!ev.success || ev.data.installation.app_id !== msg.appId) return;
   const i = ev.data.installation;
@@ -114,7 +136,11 @@ async function onInstallationRepos(deps: GithubEventDeps, msg: GithubEventMessag
     );
   }
   await addRepos(deps.db, i.id, repoRows(ev.data.repositories_added), now);
-  await removeRepos(deps.db, i.id, ev.data.repositories_removed.map((r) => r.id));
+  await removeRepos(
+    deps.db,
+    i.id,
+    ev.data.repositories_removed.map((r) => r.id),
+  );
   const selection = ev.data.repository_selection ?? i.repository_selection;
   await patchInstallation(deps.db, i.id, { repositorySelection: selection }, now);
 }
@@ -126,7 +152,9 @@ export type GithubEventHandler = (
 ) => Promise<void>;
 
 const withEnv =
-  (fn: (env: Bindings, msg: GithubEventMessage, payload: unknown) => Promise<void>): GithubEventHandler =>
+  (
+    fn: (env: Bindings, msg: GithubEventMessage, payload: unknown) => Promise<void>,
+  ): GithubEventHandler =>
   async (deps, msg, payload) => {
     if (deps.env !== undefined) await fn(deps.env, msg, payload);
   };
@@ -172,7 +200,12 @@ export async function runGithubEventQueue(batch: MessageBatch<unknown>, env: Bin
       await handleGithubEvent(deps, parsed.data);
       m.ack();
     } catch (err) {
-      console.error("github event failed", parsed.data.event, parsed.data.deliveryId, (err as Error).message);
+      console.error(
+        "github event failed",
+        parsed.data.event,
+        parsed.data.deliveryId,
+        (err as Error).message,
+      );
       // GitHub's rate limits say when to come back; anything else backs off exponentially.
       const delay = err instanceof GithubRateLimited ? err.retryAfterSec : 5 * 2 ** m.attempts;
       m.retry({ delaySeconds: Math.min(900, Math.max(1, delay)) });

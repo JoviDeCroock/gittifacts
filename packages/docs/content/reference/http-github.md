@@ -1,7 +1,7 @@
 ---
 title: "HTTP API: GitHub mode"
 nav: "HTTP: GitHub"
-description: "HTTP endpoints for the GitHub App manifest flow, install verification and the GitHub webhook receiver."
+description: "HTTP endpoints for the GitHub App overview, install verification and the GitHub webhook receiver."
 order: 36
 audience: both
 generated: true
@@ -15,22 +15,32 @@ generated: true
 
 ### `GET /api/v1/github`
 
-GitHub mode: our GitHub Apps and the installations you linked (with their repos)
+GitHub mode: our GitHub App (or which config is missing) and the installations you linked
 
 - **Auth:** session cookie or bearer token
-- **200:** `GithubOverview { apps, installations, canCreateApps, actorAppsEnabled, webhookUrl }`
+- **200:** `GithubOverview { app: GithubApp, missing, installations, webhookUrl }`
 - **Errors:** 401, 403
 
-### `POST /api/v1/github/manifests`
+### `POST /api/v1/github/repos/{repoId}/backtests`
 
-Platform admins: a GitHub App manifest and a signed one-hour state to create the App
+Repo owners: backtest the repository's merged PRs (lanes, later reverts and patches, calibration)
 
-The browser form-POSTs `manifest` to `action`. kind=actor (per-customer Actor App) needs GITHUB_ACTOR_APPS=on and an org.
+Grades the newest settled merged PRs of the window with the live pipeline (no tours, nothing written to GitHub). One at a time per repo.
 
 - **Auth:** session cookie or bearer token
-- **Body:** `{ kind?, org?, name? }`
-- **200:** `GithubManifestStart { kind, name, org, action, manifest, state, expiresAt }`
-- **Errors:** 400, 401, 403
+- **Parameters:** `repoId` (path, required)
+- **Body:** `{ days?, maxPrs? }`
+- **202:** `{ id, started }`
+- **Errors:** 400, 401, 403, 404
+
+### `GET /api/v1/github/repos/{repoId}/backtests/latest`
+
+The repository's latest backtest and its report
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `repoId` (path, required)
+- **200:** `{ backtest: GithubBacktest }`
+- **Errors:** 401, 403, 404
 
 ### `PUT /api/v1/github/repos/{repoId}/pr-writes`
 
@@ -43,13 +53,6 @@ The gittifacts/lane check run is always posted. Off: nothing else is written to 
 - **Body:** `{ value }`
 - **200:** `{ repoId, prWrites }`
 - **Errors:** 400, 401, 403, 404
-
-### `GET /github/manifest/callback`
-
-GitHub redirect after creating an App (code + state); browser only
-
-- **Auth:** none
-- **Errors:** 302, 303
 
 ### `GET /github/oauth/callback`
 

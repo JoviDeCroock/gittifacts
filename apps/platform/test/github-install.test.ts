@@ -3,7 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleGithubEvent } from "../src/github/consumer.js";
 import { getInstallation, reposOf } from "../src/github/store.js";
 import type { GithubEventMessage } from "../src/github/webhook.js";
-import { CLIENT_SECRET, callEnv, jsonRes, seedApp, stubGithub } from "./github-helpers.js";
+import {
+  APP_ID,
+  CLIENT_ID,
+  CLIENT_SECRET,
+  callEnv,
+  jsonRes,
+  stubGithub,
+} from "./github-helpers.js";
 import { makeApp, signUpHuman } from "./http.js";
 import { store } from "./fixtures.js";
 
@@ -26,14 +33,26 @@ const installation = (id: number, appId: number) => ({
 describe("GitHub install: setup URL → user authorization → link", () => {
   const { app } = makeApp();
 
-  async function setup(appId: number, installationId: number, cookie: string) {
-    const res = await callEnv(app, {}, "GET", `/github/setup?installation_id=${installationId}&setup_action=install`, { cookie });
+  /** The setup leg: the OAuth state, and the browser's cookies now including the install nonce. */
+  async function setup(installationId: number, cookie: string) {
+    const res = await callEnv(
+      app,
+      {},
+      "GET",
+      `/github/setup?installation_id=${installationId}&setup_action=install`,
+      { cookie },
+    );
     expect(res.status).toBe(303);
     const to = new URL(res.headers.get("location")!);
     expect(`${to.origin}${to.pathname}`).toBe(`${WEB}/login/oauth/authorize`);
-    expect(to.searchParams.get("client_id")).toBe(`Iv23test${appId}`);
+    expect(to.searchParams.get("client_id")).toBe(CLIENT_ID);
     expect(to.searchParams.get("redirect_uri")).toBe("http://localhost/github/oauth/callback");
-    return to.searchParams.get("state")!;
+    const set = res.headers.get("set-cookie") ?? "";
+    expect(set).toMatch(
+      /^gh_install_nonce=[A-Za-z0-9_-]+; Max-Age=600; Path=\/github; HttpOnly; Secure; SameSite=Lax$/,
+    );
+    const nonce = /^gh_install_nonce=([^;]+)/.exec(set)![1]!;
+    return { state: to.searchParams.get("state")!, cookie: `${cookie}; gh_install_nonce=${nonce}` };
   }
 
   function github(appId: number, visible: number[]) {
@@ -45,58 +64,92 @@ describe("GitHub install: setup URL → user authorization → link", () => {
       },
       [`GET ${API}/user`]: () => jsonRes({ login: "octo-owner", id: 7 }),
       [`GET ${API}/user/installations`]: () =>
-        jsonRes({ total_count: visible.length, installations: visible.map((i) => installation(i, appId)) }),
+        jsonRes({
+          total_count: visible.length,
+          installations: visible.map((i) => installation(i, appId)),
+        }),
       ...Object.fromEntries(
         visible.map((i) => [
           `GET ${API}/user/installations/${i}/repositories`,
-          () => jsonRes({ total_count: 1, repositories: [{ id: 101, full_name: "gf-test-org/bugfix", private: true }] }),
+          () =>
+            jsonRes({
+              total_count: 1,
+              repositories: [{ id: 101, full_name: "gf-test-org/bugfix", private: true }],
+            }),
         ]),
       ),
-      [`DELETE ${API}/applications/Iv23test${appId}/token`]: () => new Response(null, { status: 204 }),
+      [`DELETE ${API}/applications/${CLIENT_ID}/token`]: () => new Response(null, { status: 204 }),
     });
   }
 
   it("never trusts installation_id: an installation the user can't access is refused", async () => {
-    const appId = await seedApp();
+    const appId = APP_ID;
     const h = await signUpHuman(app);
     const forged = nextInst++;
-    const state = await setup(appId, forged, h.cookie);
+    const { state, cookie } = await setup(forged, h.cookie);
     const seen = github(appId, [nextInst++]);
-    const res = await callEnv(app, {}, "GET", `/github/oauth/callback?code=c0de&state=${encodeURIComponent(state)}`, { cookie: h.cookie });
+    const res = await callEnv(
+      app,
+      {},
+      "GET",
+      `/github/oauth/callback?code=c0de&state=${encodeURIComponent(state)}`,
+      { cookie },
+    );
     expect(res.headers.get("location")).toBe("/settings/github?error=installation-not-yours");
     expect(await getInstallation(store().db, forged)).toBeNull();
     // The user token was revoked either way.
     expect(seen.some((s) => s.method === "DELETE" && s.url.includes("/token"))).toBe(true);
   });
 
-  it("links a verified installation; the GitHub page lists it with its repos; the state is single-use", async () => {
-    const appId = await seedApp();
+  it("links a verified installation; the GitHub page lists it with its repos; the state is this browser's", async () => {
+    const appId = APP_ID;
     const h = await signUpHuman(app);
     const id = nextInst++;
     // The usual order: the installation webhook lands first and names the App.
     await handleGithubEvent(
       { db: store().db, blobs: env.BLOBS, now: () => new Date() },
       {
-        v: 1, deliveryId: crypto.randomUUID(), appId, event: "installation", action: "created",
-        installationId: id, receivedAt: new Date().toISOString(),
+        v: 1,
+        deliveryId: crypto.randomUUID(),
+        appId,
+        event: "installation",
+        action: "created",
+        installationId: id,
+        receivedAt: new Date().toISOString(),
         payload: { action: "created", installation: installation(id, appId), repositories: [] },
       },
     );
-    const state = await setup(appId, id, h.cookie);
+    const { state, cookie } = await setup(id, h.cookie);
     github(appId, [id]);
     const cb = `/github/oauth/callback?code=c0de&state=${encodeURIComponent(state)}`;
-    const res = await callEnv(app, {}, "GET", cb, { cookie: h.cookie });
+    // Without the nonce cookie (a leaked callback URL opened elsewhere): refused before GitHub is asked.
+    const elsewhere = await callEnv(app, {}, "GET", cb, { cookie: h.cookie });
+    expect(elsewhere.headers.get("location")).toBe("/settings/github?error=state-not-this-browser");
+    const res = await callEnv(app, {}, "GET", cb, { cookie });
     expect(res.headers.get("location")).toBe(`/settings/github?linked=${id}`);
+    // The nonce cookie is cleared, so the same browser can't replay it either.
+    expect(res.headers.get("set-cookie")).toMatch(/^gh_install_nonce=; Max-Age=0; Path=\/github/);
     const view = await callEnv(app, {}, "GET", "/api/v1/github", { cookie: h.cookie });
-    const body = (await view.json()) as { installations: { id: number; linkedAs: string; repos: { fullName: string }[] }[] };
+    const body = (await view.json()) as {
+      installations: { id: number; linkedAs: string; repos: { fullName: string }[] }[];
+    };
     expect(body.installations).toEqual([
-      expect.objectContaining({ id, linkedAs: "octo-owner", repos: [expect.objectContaining({ fullName: "gf-test-org/bugfix" })] }),
+      expect.objectContaining({
+        id,
+        linkedAs: "octo-owner",
+        repos: [expect.objectContaining({ fullName: "gf-test-org/bugfix" })],
+      }),
     ]);
-    const replay = await callEnv(app, {}, "GET", cb, { cookie: h.cookie });
-    expect(replay.headers.get("location")).toBe("/settings/github?error=state-expired");
+    // Another signed-in human with the same state and cookie: not theirs.
+    const mallory = await signUpHuman(app, "Mallory");
+    const theirCookie = cookie.replace(h.cookie, mallory.cookie);
+    const stolen = await callEnv(app, {}, "GET", cb, { cookie: theirCookie });
+    expect(stolen.headers.get("location")).toBe("/settings/github?error=state-not-yours");
     // Someone else sees nothing.
     const other = await signUpHuman(app, "Eve");
-    const theirs = (await (await callEnv(app, {}, "GET", "/api/v1/github", { cookie: other.cookie })).json()) as { installations: unknown[] };
+    const theirs = (await (
+      await callEnv(app, {}, "GET", "/api/v1/github", { cookie: other.cookie })
+    ).json()) as { installations: unknown[] };
     expect(theirs.installations).toEqual([]);
   });
 });
@@ -104,28 +157,56 @@ describe("GitHub install: setup URL → user authorization → link", () => {
 describe("GITHUB_EVENTS consumer: installation events", () => {
   const deps = () => ({ db: store().db, blobs: env.BLOBS, now: () => new Date() });
   const msg = (appId: number, event: string, payload: unknown): GithubEventMessage => ({
-    v: 1, deliveryId: crypto.randomUUID(), appId, event, action: null, installationId: null,
-    receivedAt: new Date().toISOString(), payload,
+    v: 1,
+    deliveryId: crypto.randomUUID(),
+    appId,
+    event,
+    action: null,
+    installationId: null,
+    receivedAt: new Date().toISOString(),
+    payload,
   });
 
   it("created → repos added/removed → deleted", async () => {
-    const appId = await seedApp();
+    const appId = APP_ID;
     const id = nextInst++;
     const inst = installation(id, appId);
-    await handleGithubEvent(deps(), msg(appId, "installation", {
-      action: "created", installation: inst,
-      repositories: [{ id: 1, full_name: "gf-test-org/a", private: false }, { id: 2, full_name: "gf-test-org/b", private: true }],
-    }));
-    expect((await reposOf(store().db, id)).map((r) => r.fullName)).toEqual(["gf-test-org/a", "gf-test-org/b"]);
-    await handleGithubEvent(deps(), msg(appId, "installation_repositories", {
-      action: "removed", installation: inst, repository_selection: "selected",
-      repositories_added: [], repositories_removed: [{ id: 1, full_name: "gf-test-org/a" }],
-    }));
+    await handleGithubEvent(
+      deps(),
+      msg(appId, "installation", {
+        action: "created",
+        installation: inst,
+        repositories: [
+          { id: 1, full_name: "gf-test-org/a", private: false },
+          { id: 2, full_name: "gf-test-org/b", private: true },
+        ],
+      }),
+    );
+    expect((await reposOf(store().db, id)).map((r) => r.fullName)).toEqual([
+      "gf-test-org/a",
+      "gf-test-org/b",
+    ]);
+    await handleGithubEvent(
+      deps(),
+      msg(appId, "installation_repositories", {
+        action: "removed",
+        installation: inst,
+        repository_selection: "selected",
+        repositories_added: [],
+        repositories_removed: [{ id: 1, full_name: "gf-test-org/a" }],
+      }),
+    );
     expect((await reposOf(store().db, id)).map((r) => r.fullName)).toEqual(["gf-test-org/b"]);
     // An event for another App's installation is ignored.
-    await handleGithubEvent(deps(), msg(appId + 1, "installation", { action: "deleted", installation: inst }));
+    await handleGithubEvent(
+      deps(),
+      msg(appId + 1, "installation", { action: "deleted", installation: inst }),
+    );
     expect((await getInstallation(store().db, id))?.deletedAt).toBeNull();
-    await handleGithubEvent(deps(), msg(appId, "installation", { action: "deleted", installation: inst }));
+    await handleGithubEvent(
+      deps(),
+      msg(appId, "installation", { action: "deleted", installation: inst }),
+    );
     expect((await getInstallation(store().db, id))?.deletedAt).not.toBeNull();
     expect(await reposOf(store().db, id)).toEqual([]);
   });

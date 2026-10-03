@@ -1,4 +1,4 @@
-import { webcrypto } from "node:crypto";
+import { generateKeyPairSync, webcrypto } from "node:crypto";
 import path from "node:path";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
@@ -18,6 +18,12 @@ async function testSigningKey(): Promise<string> {
   return JSON.stringify({ privateKey, publicKey, name: "test" });
 }
 
+/** A throwaway GitHub App private key per run (PKCS#1 PEM, the format GitHub hands out). */
+function testGithubAppPem(): string {
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  return privateKey.export({ type: "pkcs1", format: "pem" }).toString();
+}
+
 export default defineConfig(async () => ({
   plugins: [
     cloudflareTest({
@@ -35,8 +41,14 @@ export default defineConfig(async () => ({
           GITHUB_CLIENT_ID: "",
           GITHUB_CLIENT_SECRET: "",
           ISSUES_WEBHOOK_SECRET: "test-issues-webhook-secret",
-          // A throwaway GitHub App credential key per run (32 bytes, base64).
-          GITHUB_APP_KEK: Buffer.from(webcrypto.getRandomValues(new Uint8Array(32))).toString("base64"),
+          // GitHub mode's Reader App (src/github/app-config.ts); tests blank any of these to
+          // exercise "not configured" (test/github-helpers.ts).
+          GITHUB_APP_ID: "4242",
+          GITHUB_APP_SLUG: "gittifacts-test",
+          GITHUB_APP_CLIENT_ID: "Iv23testclient",
+          GITHUB_APP_CLIENT_SECRET: "cs-test-secret",
+          GITHUB_APP_WEBHOOK_SECRET: "whsec-test-0123456789",
+          GITHUB_APP_PRIVATE_KEY: testGithubAppPem(),
           CF_API_TOKEN: "",
           // wrangler.jsonc carries the production Turnstile site key and admins: tests use
           // Cloudflare's test keys (an empty var falls back to them) and no platform admins.

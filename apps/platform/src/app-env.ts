@@ -19,10 +19,17 @@ export type Bindings = Env & {
   PLATFORM_AUDITORS?: string;
   /** JSON override of unclaimed-project limits (src/limits/config.ts). */
   UNCLAIMED_LIMITS?: string;
-  /** GitHub mode (src/github/): 32-byte base64 key sealing GitHub App credentials (secret). */
-  GITHUB_APP_KEK?: string;
-  /** "on" enables per-customer Actor Apps (M5). */
-  GITHUB_ACTOR_APPS?: string;
+  /**
+   * GitHub mode (src/github/app-config.ts): the Reader App's vars and secrets. The Actor App (M5)
+   * uses the same names with `GITHUB_ACTOR_APP_`; read through `githubApp(env, kind)`.
+   */
+  GITHUB_APP_ID?: string;
+  GITHUB_APP_SLUG?: string;
+  GITHUB_APP_CLIENT_ID?: string;
+  GITHUB_APP_CLIENT_SECRET?: string;
+  GITHUB_APP_PRIVATE_KEY?: string;
+  GITHUB_APP_WEBHOOK_SECRET?: string;
+  GITHUB_APP_WEBHOOK_SECRET_PREVIOUS?: string;
   /** Verified GitHub deliveries (queue `gittifacts-github-events`). */
   GITHUB_EVENTS?: import("./github/webhook.js").GithubEventsQueue;
   GITHUB_WEBHOOK_LIMITER?: { limit(input: { key: string }): Promise<{ success: boolean }> };

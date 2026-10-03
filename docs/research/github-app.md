@@ -164,6 +164,15 @@ Tokens. `POST /app/installations/{id}/access_tokens` takes a JWT (RS256, `iat` =
 
 ## 7. App creation (manifest), install, least privilege
 
+> **Superseded for gittifacts (2026-10-03, user decision; DECISIONS "GitHub Apps are registered by hand").** We don't
+> use the manifest flow. Both Apps (Reader, and the M5 Actor App, also public and ours) are registered by hand on
+> GitHub's form and read from Worker config. The form's fields, in order [D:apps/creating-github-apps/registering-a-github-app/registering-a-github-app]:
+> name (≤34), description, homepage URL, callback URL (≤10), "Expire user authorization tokens" (default on),
+> "Request user authorization (OAuth) during installation" (when selected, "you will not be able to enter a URL" for
+> the setup URL), "Enable Device Flow", setup URL, "Redirect on update", webhook "Active", webhook URL, webhook
+> secret, SSL verification, permissions, "Subscribe to events", "Where can this GitHub App be installed?" ("Only on
+> this account" / "Any account"). The manifest notes below stay as research; the permission sets still apply.
+
 Flow [D:apps/sharing-github-apps/registering-a-github-app-from-a-manifest]:
 1. Form-POST the field `manifest=<json>` to `https://github.com/settings/apps/new?state=…`, or to `…/organizations/ORG/settings/apps/new?state=…`.
 2. GitHub redirects to `redirect_url?code=…&state=…`.

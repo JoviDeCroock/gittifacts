@@ -58,7 +58,7 @@ const GROUPS: readonly {
     title: "HTTP API: GitHub mode",
     nav: "HTTP: GitHub",
     tags: ["github"],
-    blurb: "the GitHub App manifest flow, install verification and the GitHub webhook receiver",
+    blurb: "the GitHub App overview, install verification and the GitHub webhook receiver",
   },
   {
     file: "reference/http-platform.md",

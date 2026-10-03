@@ -1,25 +1,18 @@
-/** GET /api/v1/github: our Apps (public facts only) and the installations this human linked. */
+/** GET /api/v1/github: our GitHub App (from config) and the installations this human linked. */
+import { repoIdFor } from "@app/host-github";
 import { z } from "zod";
 import type { Caller, Services } from "../app-env.js";
-import { isPlatformAdmin } from "../access/config.js";
 import { GITHUB_WEB } from "./api.js";
-import type { GithubFlowEnv } from "./setup.js";
-import { repoIdFor } from "@app/host-github";
+import { appUrl, githubApp, installUrl, missingConfig } from "./app-config.js";
 import { prWritesSetting } from "./pr-index.js";
-import { linkedInstallations, listApps, reposOf } from "./store.js";
+import { linkedInstallations, reposOf } from "./store.js";
 
 export const GithubAppView = z
   .object({
     id: z.number().int(),
-    kind: z.enum(["reader", "actor"]),
     slug: z.string(),
-    name: z.string(),
-    owner: z.object({ login: z.string(), type: z.string() }),
     htmlUrl: z.string(),
     installUrl: z.string(),
-    permissions: z.record(z.string(), z.string()),
-    events: z.array(z.string()),
-    createdAt: z.string(),
   })
   .meta({ id: "GithubApp" });
 
@@ -49,18 +42,19 @@ export const GithubInstallationView = z
 
 export const GithubOverview = z
   .object({
-    apps: z.array(GithubAppView),
+    /** The Reader App, or null when GitHub mode isn't configured. */
+    app: GithubAppView.nullable(),
+    /** Config names still missing (never values); empty when configured. */
+    missing: z.array(z.string()),
     installations: z.array(GithubInstallationView),
-    canCreateApps: z.boolean(),
-    actorAppsEnabled: z.boolean(),
     webhookUrl: z.string(),
   })
   .meta({ id: "GithubOverview" });
 export type GithubOverview = z.infer<typeof GithubOverview>;
 
 export async function githubOverview(svc: Services, caller: Caller): Promise<GithubOverview> {
-  const env = svc.env as GithubFlowEnv;
-  const apps = await listApps(svc.store.db);
+  const env = svc.env as unknown as Record<string, unknown>;
+  const app = githubApp(env);
   const rows = await linkedInstallations(svc.store.db, caller.principal.id);
   const installations = await Promise.all(
     rows.map(async ({ inst, link }) => ({
@@ -77,7 +71,8 @@ export async function githubOverview(svc: Services, caller: Caller): Promise<Git
             fullName: r.fullName,
             private: r.private,
             repoId: graded?.id ?? null,
-            prWrites: graded === null ? ("on" as const) : await prWritesSetting(svc.store.db, graded.id),
+            prWrites:
+              graded === null ? ("on" as const) : await prWritesSetting(svc.store.db, graded.id),
           };
         }),
       ),
@@ -90,21 +85,17 @@ export async function githubOverview(svc: Services, caller: Caller): Promise<Git
     })),
   );
   return {
-    apps: apps.map((a) => ({
-      id: a.id,
-      kind: a.kind,
-      slug: a.slug,
-      name: a.name,
-      owner: { login: a.ownerLogin, type: a.ownerType },
-      htmlUrl: a.htmlUrl,
-      installUrl: `${GITHUB_WEB}/apps/${a.slug}/installations/new`,
-      permissions: a.permissions,
-      events: a.events,
-      createdAt: a.createdAt,
-    })),
+    app:
+      app === null
+        ? null
+        : {
+            id: app.appId,
+            slug: app.slug,
+            htmlUrl: appUrl(app.slug),
+            installUrl: installUrl(app.slug),
+          },
+    missing: missingConfig(env),
     installations,
-    canCreateApps: isPlatformAdmin(caller.principal, env),
-    actorAppsEnabled: env.GITHUB_ACTOR_APPS === "on",
     webhookUrl: `${svc.origin}/github/webhooks`,
   };
 }

@@ -20,9 +20,15 @@ GITHUB_CLIENT_SECRET=
 # POST /webhooks/workers-issues.
 ISSUES_WEBHOOK_SECRET=
 
-# GitHub mode: 32 random bytes, base64, sealing GitHub App credentials (client secret, webhook
-# secret, private key) in D1. `openssl rand -base64 32`. Losing it means re-creating the Apps.
-GITHUB_APP_KEK=
+# GitHub mode: the platform's GitHub App, registered by hand (docs/deploy.md "GitHub mode").
+# Leave GITHUB_APP_ID empty to keep GitHub mode off ("not configured"). The private key is the
+# PEM GitHub downloads; on one line, write its newlines as \n.
+GITHUB_APP_ID=
+GITHUB_APP_SLUG=
+GITHUB_APP_CLIENT_ID=
+GITHUB_APP_CLIENT_SECRET=
+GITHUB_APP_PRIVATE_KEY=
+GITHUB_APP_WEBHOOK_SECRET=
 
 # Cloudflare API access for Workers Versions/Deployments, Flagship, Observability and Issues APIs.
 # (CF_ACCOUNT_ID is a var in wrangler.jsonc.)

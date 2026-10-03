@@ -1,68 +1,18 @@
 /** D1 rows for GitHub mode (src/db/github-schema.ts). */
-import { and, desc, eq, gt, inArray, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import {
-  githubApps,
   githubDeliveries,
   githubInstallationLinks,
   githubInstallationRepos,
   githubInstallations,
-  githubStates,
 } from "../db/github-schema.js";
 import type { Db } from "../store/d1-store.js";
 
-export type GithubAppRow = typeof githubApps.$inferSelect;
-export type GithubStateRow = typeof githubStates.$inferSelect;
 export type GithubInstallationRow = typeof githubInstallations.$inferSelect;
 export type GithubRepoRow = typeof githubInstallationRepos.$inferSelect;
 
-/** States are valid for one hour (the manifest flow must finish within an hour anyway). */
-export const STATE_TTL_MS = 60 * 60 * 1000;
 /** Delivery GUIDs are kept 8 days (≥ 7 days, research decision 7). */
 export const DELIVERY_TTL_MS = 8 * 24 * 60 * 60 * 1000;
-
-/** Insert, or refresh the credentials of an App we already know (same GitHub App id). */
-export async function insertApp(db: Db, row: GithubAppRow): Promise<void> {
-  const { id: _id, createdAt: _at, createdBy: _by, ...set } = row;
-  await db.insert(githubApps).values(row).onConflictDoUpdate({ target: githubApps.id, set });
-}
-
-export async function getApp(db: Db, id: number): Promise<GithubAppRow | null> {
-  return (await db.select().from(githubApps).where(eq(githubApps.id, id)).get()) ?? null;
-}
-
-export async function listApps(db: Db): Promise<GithubAppRow[]> {
-  return db.select().from(githubApps).orderBy(desc(githubApps.createdAt)).all();
-}
-
-export async function createState(db: Db, row: Omit<GithubStateRow, "consumedAt">) {
-  await db.insert(githubStates).values({ ...row, consumedAt: null });
-}
-
-/**
- * Consume a state exactly once: unexpired, unconsumed, the right purpose. Null otherwise
- * (replayed, expired, unknown). One UPDATE, so two concurrent callbacks can't both win.
- */
-export async function consumeState(
-  db: Db,
-  id: string,
-  purpose: GithubStateRow["purpose"],
-  now: Date,
-): Promise<GithubStateRow | null> {
-  const iso = now.toISOString();
-  const out = await db
-    .update(githubStates)
-    .set({ consumedAt: iso })
-    .where(
-      and(
-        eq(githubStates.id, id),
-        eq(githubStates.purpose, purpose),
-        isNull(githubStates.consumedAt),
-        gt(githubStates.expiresAt, iso),
-      ),
-    )
-    .returning();
-  return out[0] ?? null;
-}
 
 /** True when this delivery GUID is new (and is now recorded). */
 export async function recordDelivery(
@@ -81,14 +31,13 @@ export async function forgetDelivery(db: Db, id: string): Promise<void> {
   await db.delete(githubDeliveries).where(eq(githubDeliveries.id, id));
 }
 
-/** Cron: drop delivery GUIDs past their TTL and states that expired a day ago. */
+/** Cron: drop delivery GUIDs past their TTL. */
 export async function sweepGithub(db: Db, now: Date): Promise<void> {
   await db
     .delete(githubDeliveries)
-    .where(lt(githubDeliveries.receivedAt, new Date(now.getTime() - DELIVERY_TTL_MS).toISOString()));
-  await db
-    .delete(githubStates)
-    .where(lt(githubStates.expiresAt, new Date(now.getTime() - 86_400_000).toISOString()));
+    .where(
+      lt(githubDeliveries.receivedAt, new Date(now.getTime() - DELIVERY_TTL_MS).toISOString()),
+    );
 }
 
 export interface InstallationInput {
@@ -131,7 +80,12 @@ export async function getInstallation(db: Db, id: number) {
 export async function patchInstallation(
   db: Db,
   id: number,
-  set: Partial<Pick<GithubInstallationRow, "suspendedAt" | "deletedAt" | "repositorySelection" | "permissions" | "events">>,
+  set: Partial<
+    Pick<
+      GithubInstallationRow,
+      "suspendedAt" | "deletedAt" | "repositorySelection" | "permissions" | "events"
+    >
+  >,
   now: Date,
 ): Promise<void> {
   await db
@@ -157,10 +111,7 @@ export async function addRepos(db: Db, installationId: number, repos: RepoInput[
       private: r.private,
       addedAt: iso,
     }));
-    await db
-      .insert(githubInstallationRepos)
-      .values(rows)
-      .onConflictDoNothing();
+    await db.insert(githubInstallationRepos).values(rows).onConflictDoNothing();
   }
 }
 
@@ -187,7 +138,12 @@ export async function replaceRepos(db: Db, installationId: number, repos: RepoIn
     have.filter((r) => !want.has(r.repoId)).map((r) => r.repoId),
   );
   const known = new Set(have.map((r) => r.repoId));
-  await addRepos(db, installationId, repos.filter((r) => !known.has(r.id)), now);
+  await addRepos(
+    db,
+    installationId,
+    repos.filter((r) => !known.has(r.id)),
+    now,
+  );
 }
 
 export async function reposOf(db: Db, installationId: number): Promise<GithubRepoRow[]> {
@@ -217,8 +173,16 @@ export async function linkedInstallations(db: Db, principalId: string) {
   return db
     .select({ inst: githubInstallations, link: githubInstallationLinks })
     .from(githubInstallationLinks)
-    .innerJoin(githubInstallations, eq(githubInstallations.id, githubInstallationLinks.installationId))
-    .where(and(eq(githubInstallationLinks.principalId, principalId), isNull(githubInstallations.deletedAt)))
+    .innerJoin(
+      githubInstallations,
+      eq(githubInstallations.id, githubInstallationLinks.installationId),
+    )
+    .where(
+      and(
+        eq(githubInstallationLinks.principalId, principalId),
+        isNull(githubInstallations.deletedAt),
+      ),
+    )
     .orderBy(desc(githubInstallationLinks.linkedAt))
     .all();
 }

@@ -1,5 +1,5 @@
 /**
- * GitHub mode on Cloudflare: the App's credentials (sealed in D1, `GITHUB_APP_KEK`), per-job
+ * GitHub mode on Cloudflare: the App's credentials (Worker config, app-config.ts), per-job
  * installation tokens, the per-installation write gate (a Durable Object) and the D1 check-run
  * index, assembled into a `GitHubHost` for one repository. Both the queue consumer (mirror sync)
  * and the ChangeWorkflow (publishing the verdict) build hosts here.
@@ -28,8 +28,7 @@ import type { Bindings } from "../app-env.js";
 import { githubCheckRuns } from "../db/github-schema.js";
 import { platformOrigin } from "../integrations/runtime.js";
 import { D1Store, type Db } from "../store/d1-store.js";
-import { githubKeys, openCredential } from "./crypto.js";
-import { getApp } from "./store.js";
+import { appForId } from "./app-config.js";
 import { d1PrIndex, prWritesEnabled } from "./pr-index.js";
 import { durableWriteGate, type GithubWriteGate } from "./write-gate-do.js";
 
@@ -46,31 +45,30 @@ export const HOST_PERMISSIONS: Permissions = {
 export const FETCH_PERMISSIONS: Permissions = { contents: "read", metadata: "read" };
 
 export interface GithubRuntimeBindings {
-  GITHUB_APP_KEK?: string;
   GITHUB_WRITE_GATE?: DurableObjectNamespace<GithubWriteGate>;
 }
 
-const creds = new Map<number, { value: Promise<AppCredentials | null>; until: number }>();
-
-/** The App's id, client id and private key (decrypted, cached per isolate for 5 minutes). */
-export function appCredentials(env: Bindings, db: Db, appId: number): Promise<AppCredentials | null> {
-  const hit = creds.get(appId);
-  if (hit !== undefined && hit.until > Date.now()) return hit.value;
-  const value = (async () => {
-    const app = await getApp(db, appId);
-    if (app === null) return null;
-    const keys = await githubKeys((env as GithubRuntimeBindings).GITHUB_APP_KEK);
-    return { appId, clientId: app.clientId, privateKey: await openCredential(keys, appId, "pem", app.pemEnc) };
-  })();
-  creds.set(appId, { value, until: Date.now() + 300_000 });
-  value.catch(() => creds.delete(appId));
-  return value;
+/** The App's id, client id and private key, from Worker config (null when not configured). */
+export function appCredentials(env: Bindings, appId: number): AppCredentials | null {
+  const app = appForId(env as unknown as Record<string, unknown>, appId);
+  return app === null
+    ? null
+    : { appId: app.appId, clientId: app.clientId, privateKey: app.privateKey };
 }
 
-async function tokensFor(env: Bindings, db: Db, appId: number): Promise<InstallationTokens> {
-  const c = await appCredentials(env, db, appId);
-  if (c === null) throw new Error(`GitHub App ${appId} is not known to this platform`);
-  return new InstallationTokens(c);
+const tokenSources = new Map<string, InstallationTokens>();
+
+/** Token minting for one of our Apps (the JWT is cached per isolate until it nearly expires). */
+function tokensFor(env: Bindings, appId: number): InstallationTokens {
+  const c = appCredentials(env, appId);
+  if (c === null) throw new Error(`GitHub App ${appId} is not configured on this platform`);
+  const key = `${c.appId}:${c.clientId}:${c.privateKey.length}`;
+  let t = tokenSources.get(key);
+  if (t === undefined) {
+    t = new InstallationTokens(c);
+    tokenSources.set(key, t);
+  }
+  return t;
 }
 
 export function d1CheckRunIndex(db: Db, now: () => Date = () => new Date()): CheckRunIndex {
@@ -87,7 +85,10 @@ export function d1CheckRunIndex(db: Db, now: () => Date = () => new Date()): Che
       await db
         .insert(githubCheckRuns)
         .values({ changeId, headSha, checkRunId, createdAt: now().toISOString() })
-        .onConflictDoUpdate({ target: [githubCheckRuns.changeId, githubCheckRuns.headSha], set: { checkRunId } });
+        .onConflictDoUpdate({
+          target: [githubCheckRuns.changeId, githubCheckRuns.headSha],
+          set: { checkRunId },
+        });
     },
   };
 }
@@ -101,7 +102,7 @@ export function githubHostFor(
   const db = new D1Store(env.DB, env.BLOBS, () => new Date()).db;
   let job: JobToken | null = null;
   const token = async () => {
-    job ??= new JobToken(await tokensFor(env, db, repo.appId), repo.installationId, {
+    job ??= new JobToken(tokensFor(env, repo.appId), repo.installationId, {
       repositoryIds: [repo.githubRepoId],
       permissions: HOST_PERMISSIONS,
     });
@@ -134,9 +135,11 @@ export function githubHostFor(
 
 /** A GitHub remote readable for one fetch: a contents-read token for this one repo, revoked after. */
 export async function githubReadSource(env: Bindings, repo: GithubRepoHost): Promise<GithubSource> {
-  const db = new D1Store(env.DB, env.BLOBS, () => new Date()).db;
-  const tokens = await tokensFor(env, db, repo.appId);
-  const t = await tokens.mint(repo.installationId, { repositoryIds: [repo.githubRepoId], permissions: FETCH_PERMISSIONS });
+  const tokens = tokensFor(env, repo.appId);
+  const t = await tokens.mint(repo.installationId, {
+    repositoryIds: [repo.githubRepoId],
+    permissions: FETCH_PERMISSIONS,
+  });
   return {
     remote: {
       url: `https://github.com/${repo.owner}/${repo.repo}.git`,

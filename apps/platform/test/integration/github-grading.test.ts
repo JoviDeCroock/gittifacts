@@ -11,44 +11,22 @@ import { changeWorkflowId, ciRunIdFor } from "@app/coordinator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bindings } from "../../src/app-env.js";
 import { handleGithubEvent } from "../../src/github/consumer.js";
-import { githubKeys, sealCredential } from "../../src/github/crypto.js";
-import { insertApp, upsertInstallation } from "../../src/github/store.js";
+import { upsertInstallation } from "../../src/github/store.js";
 import type { GithubEventMessage } from "../../src/github/webhook.js";
 import { createPlatformClient } from "@app/mcp/client";
 import { githubInstallationLinks } from "../../src/db/github-schema.js";
 import { store } from "../fixtures.js";
-import { jsonRes, stubGithub } from "../github-helpers.js";
+import { APP_ID, jsonRes, stubGithub } from "../github-helpers.js";
 import { createAgent, ORIGIN, signUpHuman } from "../http.js";
 import { fetchVia, platformApp } from "./harness.js";
 import { type IntegrationFakes, resetIntegrationFakes } from "./fakes.js";
 
 const API = "https://api.github.com";
-const APP_ID = 424242;
 const INSTALLATION = 777001;
 const REPO = { id: 31337, name: "widgets", owner: "acme" };
 
-async function pemKey(): Promise<string> {
-  const pair = (await crypto.subtle.generateKey(
-    { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
-    true,
-    ["sign", "verify"],
-  )) as CryptoKeyPair;
-  const der = new Uint8Array((await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer);
-  const b64 = btoa(String.fromCharCode(...der)).replace(/(.{64})/g, "$1\n");
-  return `-----BEGIN PRIVATE KEY-----\n${b64}\n-----END PRIVATE KEY-----\n`;
-}
-
+/** The Reader App comes from Worker config (vitest.config.ts); only its installation is seeded. */
 async function seedReaderApp() {
-  const keys = await githubKeys((env as Bindings).GITHUB_APP_KEK);
-  const now = new Date().toISOString();
-  await insertApp(store().db, {
-    id: APP_ID, kind: "reader", slug: "gittifacts-it", name: "gittifacts it", ownerLogin: "acme",
-    ownerType: "Organization", clientId: "Iv23integration", htmlUrl: "https://github.com/apps/gittifacts-it",
-    clientSecretEnc: await sealCredential(keys, APP_ID, "client_secret", "cs"),
-    webhookSecretEnc: await sealCredential(keys, APP_ID, "webhook_secret", "wh"),
-    pemEnc: await sealCredential(keys, APP_ID, "pem", await pemKey()),
-    permissions: { checks: "write" }, events: ["pull_request"], createdBy: "hu_admin", createdAt: now, updatedAt: now,
-  });
   await upsertInstallation(store().db, {
     id: INSTALLATION, appId: APP_ID, account: { login: "acme", id: 99, type: "Organization" },
     repositorySelection: "selected", permissions: { checks: "write" }, events: ["pull_request"], suspendedAt: null,

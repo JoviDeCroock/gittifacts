@@ -22,21 +22,39 @@ Run `wrangler login` again before deploying. The `cf` CLI token has all of these
 
 ## Secrets (`wrangler secret put <NAME>`)
 
-`PLATFORM_SIGNING_KEY`, `BETTER_AUTH_SECRET`, `ISSUES_WEBHOOK_SECRET`, `GITHUB_APP_KEK`, `CF_API_TOKEN`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`.
+`PLATFORM_SIGNING_KEY`, `BETTER_AUTH_SECRET`, `ISSUES_WEBHOOK_SECRET`, `CF_API_TOKEN`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`.
 Optional: `AI_GATEWAY_TOKEN` (HTTP fallback for the reviewer when the `AI` binding fails).
 
-`GITHUB_APP_KEK` (GitHub mode, required since 2026-10-03) is 32 random bytes, base64. It seals the GitHub Apps'
-client secret, webhook secret and private key in D1 (`github_apps`, AES-256-GCM bound to the App id and field).
-Set it without ever printing it:
+### GitHub mode (optional; off until configured)
+
+One platform GitHub App, registered by hand on GitHub and read from Worker config (DECISIONS 2026-10-03,
+"GitHub Apps are registered by hand"). No D1 table holds App credentials and nothing in the app creates Apps.
+Register it with the exact settings in [the GitHub mode guide](../packages/docs/content/guides/github-mode.md)
+§1 (URLs `https://<host>/github/oauth/callback`, `/github/setup` with "Redirect on update", `/github/webhooks`;
+OAuth during installation off; the eight read permissions plus pull requests and checks write; nine events;
+"Any account"). Then, from `apps/platform`, without printing anything:
 
 ```sh
-cd apps/platform && openssl rand -base64 32 | tr -d '\n' | pnpm exec wrangler secret put GITHUB_APP_KEK
+pnpm exec wrangler secret put GITHUB_APP_ID              # the App ID (public)
+pnpm exec wrangler secret put GITHUB_APP_SLUG            # github.com/apps/<slug>
+pnpm exec wrangler secret put GITHUB_APP_CLIENT_ID       # Client ID (Iv23…)
+pnpm exec wrangler secret put GITHUB_APP_CLIENT_SECRET   # "Generate a new client secret"
+pnpm exec wrangler secret put GITHUB_APP_WEBHOOK_SECRET  # the value typed into the App's webhook secret
+pnpm exec wrangler secret put GITHUB_APP_PRIVATE_KEY < <slug>.<date>.private-key.pem
 ```
 
-It can't be read back. If it is lost or rotated, every sealed credential is unreadable: delete the `github_apps`
-rows and create the Apps again through `/settings/github` (installations stay on GitHub; people re-link them).
+The first three may live under `vars` in `wrangler.jsonc` instead (never both: a var and a secret can't share a
+name). A PEM pasted on one line may write its newlines as `\n`. Webhook secret rotation: set the old one as
+`GITHUB_APP_WEBHOOK_SECRET_PREVIOUS`, the new one as `GITHUB_APP_WEBHOOK_SECRET`, change it on GitHub, then
+`wrangler secret delete GITHUB_APP_WEBHOOK_SECRET_PREVIOUS`. Until all six are set, `/github/webhooks` answers 503
+and `/settings/github` lists the missing names; the redelivery cron asks GitHub again for failed deliveries of the
+last three days once it is configured.
+
+The M5 Actor App is a second App we own, registered the same way, with the same names under `GITHUB_ACTOR_APP_`
+(`GITHUB_ACTOR_APP_ID`, `…_SLUG`, `…_CLIENT_ID`, `…_CLIENT_SECRET`, `…_WEBHOOK_SECRET`, `…_PRIVATE_KEY`).
 GitHub mode also needs the queues `gittifacts-github-events` and `gittifacts-github-events-dlq`
-(`wrangler queues create <name>`) and migration 0012.
+(`wrangler queues create <name>`) and migrations 0012–0016. `GITHUB_APP_KEK` is gone (migration 0016 dropped
+`github_apps` and `github_states`); delete the secret where it still exists: `wrangler secret delete GITHUB_APP_KEK`.
 `CF_ACCOUNT_ID` is a plain var in `wrangler.jsonc`; don't also put it as a secret.
 
 `CF_API_TOKEN` needs Workers Scripts Edit (versions and deployments for rollouts, deleting expired projects'

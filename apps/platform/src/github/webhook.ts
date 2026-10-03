@@ -2,7 +2,8 @@
  * POST /github/webhooks — every GitHub App's webhook (docs/research/github-app.md §4, decision 7).
  *
  * 1. Rate-limit by client IP before any work (nothing is authenticated yet).
- * 2. Pick the secret by App id (`X-GitHub-Hook-Installation-Target-ID`); unknown App → 401.
+ * 2. Our App from config (`X-GitHub-Hook-Installation-Target-ID` must be its id, else 401; the
+ *    current webhook secret and, during a rotation, the previous one). Not configured → 503.
  * 3. HMAC-SHA-256 over the raw body, constant-time; bad or missing signature → 401.
  * 4. Dedupe on `X-GitHub-Delivery` (D1, kept 8 days): a redelivery is acknowledged, not re-queued.
  * 5. Enqueue on `GITHUB_EVENTS` (payloads over 96 KB go to R2 first; a queue message is ≤ 128 KB)
@@ -13,15 +14,15 @@ import type { Context } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app-env.js";
 import { ApiError } from "../errors.js";
-import { githubKeys, openCredential, verifyGithubSignature } from "./crypto.js";
-import { forgetDelivery, getApp, recordDelivery } from "./store.js";
+import { appForId, githubApp } from "./app-config.js";
+import { verifyGithubSignature } from "./crypto.js";
+import { forgetDelivery, recordDelivery } from "./store.js";
 
 export const GITHUB_WEBHOOK_PATH = "/github/webhooks";
 /** Inline payloads up to this size; larger ones go through R2. */
 const INLINE_MAX = 96 * 1024;
 /** GitHub doesn't deliver payloads over 25 MB. */
 const BODY_MAX = 25 * 1024 * 1024;
-const SECRET_TTL_MS = 60_000;
 
 export const GithubEventMessage = z.object({
   v: z.literal(1),
@@ -42,7 +43,6 @@ export interface GithubEventsQueue {
 }
 
 export interface GithubWebhookBindings {
-  GITHUB_APP_KEK?: string;
   GITHUB_EVENTS?: GithubEventsQueue;
   GITHUB_WEBHOOK_LIMITER?: { limit(input: { key: string }): Promise<{ success: boolean }> };
 }
@@ -62,28 +62,6 @@ const unauthorized = (message: string) =>
 const DELIVERY_ID = /^[A-Za-z0-9-]{8,64}$/;
 const EVENT_NAME = /^[a-z_]{1,64}$/;
 
-/** Per-isolate cache of App webhook secrets (60 s), so a burst doesn't hit D1 + AES each time. */
-const secrets = new Map<number, { secret: string | null; until: number }>();
-
-async function webhookSecret(c: Context<AppEnv>, appId: number): Promise<string | null> {
-  const hit = secrets.get(appId);
-  if (hit && hit.until > Date.now()) return hit.secret;
-  const svc = c.get("services");
-  const app = await getApp(svc.store.db, appId);
-  const env = c.env as GithubWebhookBindings;
-  const secret = app
-    ? await openCredential(await githubKeys(env.GITHUB_APP_KEK), app.id, "webhook_secret", app.webhookSecretEnc)
-    : null;
-  // Unknown Apps are remembered briefly only: a just-created App must start working quickly.
-  secrets.set(appId, { secret, until: Date.now() + (secret ? SECRET_TTL_MS : 5_000) });
-  return secret;
-}
-
-/** Tests and the manifest callback drop a cached "unknown App" right after creating it. */
-export function forgetWebhookSecret(appId: number): void {
-  secrets.delete(appId);
-}
-
 export async function handleGithubWebhook(c: Context<AppEnv>): Promise<Response> {
   const env = c.env as GithubWebhookBindings;
   const ip = c.req.header("cf-connecting-ip") ?? "unknown";
@@ -94,19 +72,35 @@ export async function handleGithubWebhook(c: Context<AppEnv>): Promise<Response>
       throw new ApiError(429, "rate-limited", "too many webhook requests from this address");
     }
   }
+  // GitHub mode not configured (Worker vars and secrets): say so plainly, not "unauthorized".
+  if (githubApp(c.env as unknown as Record<string, unknown>) === null) {
+    throw new ApiError(
+      503,
+      "github-not-configured",
+      "GitHub mode is not configured on this platform",
+      undefined,
+      {
+        explanation:
+          "Set the GitHub App's vars and secrets (docs/deploy.md, GitHub mode); until then GitHub deliveries are refused.",
+      },
+    );
+  }
   const appHeader = c.req.header("x-github-hook-installation-target-id") ?? "";
   const targetType = c.req.header("x-github-hook-installation-target-type");
   if (!/^\d{1,12}$/.test(appHeader) || (targetType && targetType !== "integration")) {
     throw unauthorized("not a GitHub App webhook we know");
   }
-  const appId = Number(appHeader);
-  const secret = await webhookSecret(c, appId);
-  if (!secret) throw unauthorized("not a GitHub App webhook we know");
+  // Only our own App(s), from config: the Reader App (and the Actor App once configured).
+  const app = appForId(c.env as unknown as Record<string, unknown>, Number(appHeader));
+  if (app === null) throw unauthorized("not a GitHub App webhook we know");
+  const appId = app.appId;
 
   const declared = Number(c.req.header("content-length") ?? "0");
   if (declared > BODY_MAX) throw new ApiError(413, "payload-too-large", "payload over 25 MB");
   const raw = new Uint8Array(await c.req.arrayBuffer());
-  if (!(await verifyGithubSignature(secret, raw, c.req.header("x-hub-signature-256")))) {
+  if (
+    !(await verifyGithubSignature(app.webhookSecrets, raw, c.req.header("x-hub-signature-256")))
+  ) {
     throw unauthorized("bad webhook signature");
   }
 
@@ -138,7 +132,15 @@ export async function handleGithubWebhook(c: Context<AppEnv>): Promise<Response>
   });
   if (!fresh) return c.json({ received: true, duplicate: true, deliveryId }, 202);
 
-  const msg: GithubEventMessage = { v: 1, deliveryId, appId, event, action, installationId, receivedAt };
+  const msg: GithubEventMessage = {
+    v: 1,
+    deliveryId,
+    appId,
+    event,
+    action,
+    installationId,
+    receivedAt,
+  };
   try {
     if (!env.GITHUB_EVENTS) throw new Error("GITHUB_EVENTS queue is not bound");
     if (raw.byteLength > INLINE_MAX) {
@@ -151,7 +153,11 @@ export async function handleGithubWebhook(c: Context<AppEnv>): Promise<Response>
     await env.GITHUB_EVENTS.send(msg, { contentType: "json" });
   } catch (err) {
     await forgetDelivery(svc.store.db, deliveryId);
-    throw new ApiError(503, "unavailable", `could not queue the delivery: ${(err as Error).message}`);
+    throw new ApiError(
+      503,
+      "unavailable",
+      `could not queue the delivery: ${(err as Error).message}`,
+    );
   }
   return c.json({ received: true, deliveryId }, 202);
 }

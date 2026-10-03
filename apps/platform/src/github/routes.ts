@@ -1,9 +1,7 @@
 /**
  * GitHub mode routes (mounted by src/app.ts):
  *
- *   GET  /api/v1/github                 our Apps + the installations you linked (humans)
- *   POST /api/v1/github/manifests       a manifest + signed state to create an App (platform admins)
- *   GET  /github/manifest/callback      GitHub → us after "Create GitHub App" (browser)
+ *   GET  /api/v1/github                 our App (from config) + the installations you linked (humans)
  *   GET  /github/setup                  GitHub → us after an install (browser; verified, see setup.ts)
  *   GET  /github/oauth/callback         the user authorization that proves the install is yours
  *   POST /github/webhooks               every App's webhook (src/github/webhook.ts)
@@ -17,51 +15,27 @@ import type { AppEnv, Caller, Services } from "../app-env.js";
 import { callerOf, requirePrincipal, resolveCaller } from "../auth/middleware.js";
 import { ApiError } from "../errors.js";
 import { type ApiApp, body, errors, json, SECURITY } from "../routes/common.js";
-import { finishManifest, finishSetup } from "./callbacks.js";
-import { ManifestRequest } from "./manifest.js";
+import { getCookie, setCookie, deleteCookie } from "hono/cookie";
+import { finishSetup } from "./callbacks.js";
 import { assertTargetAccess } from "../access/access.js";
 import { GithubOverview, githubOverview } from "./overview.js";
 import { latestBacktest, startBacktest } from "./backtests.js";
 import { setPrWrites } from "./pr-index.js";
-import { beginSetup, FlowError, settingsUrl, startManifest } from "./setup.js";
+import { beginSetup, FlowError, NONCE_COOKIE, settingsUrl } from "./setup.js";
 import { GITHUB_WEBHOOK_PATH, handleGithubWebhook } from "./webhook.js";
 
 const TAG = ["github"];
 const human = requirePrincipal([], { humanOnly: true });
-
-const ManifestStartSchema = z
-  .object({
-    kind: z.enum(["reader", "actor"]),
-    name: z.string(),
-    org: z.string().nullable(),
-    action: z.string().describe("Form action on github.com (carries ?state=)"),
-    manifest: z.string().describe("The `manifest` form field (JSON)"),
-    state: z.string(),
-    expiresAt: z.string(),
-  })
-  .meta({ id: "GithubManifestStart" });
 
 const overview = createRoute({
   method: "get",
   path: "/api/v1/github",
   tags: TAG,
   security: SECURITY,
-  summary: "GitHub mode: our GitHub Apps and the installations you linked (with their repos)",
+  summary:
+    "GitHub mode: our GitHub App (or which config is missing) and the installations you linked",
   middleware: [human] as const,
   responses: { 200: json(GithubOverview, "Overview"), ...errors(401, 403) },
-});
-
-const manifest = createRoute({
-  method: "post",
-  path: "/api/v1/github/manifests",
-  tags: TAG,
-  security: SECURITY,
-  summary: "Platform admins: a GitHub App manifest and a signed one-hour state to create the App",
-  description:
-    "The browser form-POSTs `manifest` to `action`. kind=actor (per-customer Actor App) needs GITHUB_ACTOR_APPS=on and an org.",
-  middleware: [human] as const,
-  request: { body: body(ManifestRequest) },
-  responses: { 200: json(ManifestStartSchema, "Form data"), ...errors(400, 401, 403) },
 });
 
 const prWrites = createRoute({
@@ -73,36 +47,57 @@ const prWrites = createRoute({
   description:
     "The gittifacts/lane check run is always posted. Off: nothing else is written to the repo's pull requests.",
   middleware: [human] as const,
-  request: { params: z.object({ repoId: z.string().min(1).max(64) }), body: body(z.object({ value: z.enum(["on", "off"]) })) },
-  responses: { 200: json(z.object({ repoId: z.string(), prWrites: z.enum(["on", "off"]) }), "Saved"), ...errors(400, 401, 403, 404) },
+  request: {
+    params: z.object({ repoId: z.string().min(1).max(64) }),
+    body: body(z.object({ value: z.enum(["on", "off"]) })),
+  },
+  responses: {
+    200: json(z.object({ repoId: z.string(), prWrites: z.enum(["on", "off"]) }), "Saved"),
+    ...errors(400, 401, 403, 404),
+  },
 });
 
-const BacktestView = z.object({
-  id: z.string(),
-  status: z.enum(["running", "done", "failed"]),
-  since: z.string(),
-  until: z.string(),
-  maxPrs: z.number().int(),
-  report: z.unknown().nullable().describe("BacktestReport (packages/host-github/src/backtest/report.ts) once done"),
-  eligible: z.boolean().nullable(),
-  error: z.string().nullable(),
-  createdAt: z.string(),
-  finishedAt: z.string().nullable(),
-}).meta({ id: "GithubBacktest" });
+const BacktestView = z
+  .object({
+    id: z.string(),
+    status: z.enum(["running", "done", "failed"]),
+    since: z.string(),
+    until: z.string(),
+    maxPrs: z.number().int(),
+    report: z
+      .unknown()
+      .nullable()
+      .describe("BacktestReport (packages/host-github/src/backtest/report.ts) once done"),
+    eligible: z.boolean().nullable(),
+    error: z.string().nullable(),
+    createdAt: z.string(),
+    finishedAt: z.string().nullable(),
+  })
+  .meta({ id: "GithubBacktest" });
 
 const startBacktestRoute = createRoute({
   method: "post",
   path: "/api/v1/github/repos/{repoId}/backtests",
   tags: TAG,
   security: SECURITY,
-  summary: "Repo owners: backtest the repository's merged PRs (lanes, later reverts and patches, calibration)",
-  description: "Grades the newest settled merged PRs of the window with the live pipeline (no tours, nothing written to GitHub). One at a time per repo.",
+  summary:
+    "Repo owners: backtest the repository's merged PRs (lanes, later reverts and patches, calibration)",
+  description:
+    "Grades the newest settled merged PRs of the window with the live pipeline (no tours, nothing written to GitHub). One at a time per repo.",
   middleware: [human] as const,
   request: {
     params: z.object({ repoId: z.string().min(1).max(64) }),
-    body: body(z.object({ days: z.number().int().min(14).max(365).default(90), maxPrs: z.number().int().min(1).max(100).default(24) })),
+    body: body(
+      z.object({
+        days: z.number().int().min(14).max(365).default(90),
+        maxPrs: z.number().int().min(1).max(100).default(24),
+      }),
+    ),
   },
-  responses: { 202: json(z.object({ id: z.string(), started: z.boolean() }), "Started (or already running)"), ...errors(400, 401, 403, 404) },
+  responses: {
+    202: json(z.object({ id: z.string(), started: z.boolean() }), "Started (or already running)"),
+    ...errors(400, 401, 403, 404),
+  },
 });
 
 const latestBacktestRoute = createRoute({
@@ -113,12 +108,23 @@ const latestBacktestRoute = createRoute({
   summary: "The repository's latest backtest and its report",
   middleware: [human] as const,
   request: { params: z.object({ repoId: z.string().min(1).max(64) }) },
-  responses: { 200: json(z.object({ backtest: BacktestView.nullable() }), "Latest"), ...errors(401, 403, 404) },
+  responses: {
+    200: json(z.object({ backtest: BacktestView.nullable() }), "Latest"),
+    ...errors(401, 403, 404),
+  },
 });
 
-type Flow = (svc: Services, caller: Caller, query: Record<string, string>) => Promise<string>;
+type Flow = (
+  svc: Services,
+  caller: Caller,
+  query: Record<string, string>,
+  nonce: string | undefined,
+) => Promise<{ redirect: string; nonce?: string } | string>;
 
-/** A browser leg: signed-in human or off to sign in; any failure lands on the settings page. */
+/**
+ * A browser leg: signed-in human or off to sign in; any failure lands on the settings page. The
+ * install nonce rides in an HttpOnly cookie set by /github/setup and cleared by the callback.
+ */
 function browser(flow: Flow) {
   return async (c: Context<AppEnv>) => {
     const caller = await resolveCaller(c);
@@ -127,8 +133,22 @@ function browser(flow: Flow) {
       return c.redirect(`/signin?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
     }
     try {
-      return c.redirect(await flow(c.get("services"), caller, c.req.query()), 303);
+      const out = await flow(c.get("services"), caller, c.req.query(), getCookie(c, NONCE_COOKIE));
+      const to = typeof out === "string" ? out : out.redirect;
+      if (typeof out !== "string" && out.nonce !== undefined) {
+        setCookie(c, NONCE_COOKIE, out.nonce, {
+          httpOnly: true,
+          secure: true,
+          sameSite: "Lax",
+          path: "/github",
+          maxAge: 600,
+        });
+      } else {
+        deleteCookie(c, NONCE_COOKIE, { path: "/github" });
+      }
+      return c.redirect(to, 303);
     } catch (err) {
+      deleteCookie(c, NONCE_COOKIE, { path: "/github" });
       if (err instanceof FlowError) return c.redirect(settingsUrl({ error: err.code }), 303);
       if (err instanceof ApiError && err.status === 403) {
         return c.redirect(settingsUrl({ error: "not-admin" }), 303);
@@ -143,17 +163,6 @@ export function registerGithubRoutes(app: ApiApp): void {
   app.openapi(overview, async (c) =>
     c.json(await githubOverview(c.get("services"), callerOf(c)), 200),
   );
-  app.openapi(manifest, async (c) => {
-    try {
-      const out = await startManifest(c.get("services"), callerOf(c), c.req.valid("json"));
-      return c.json(out, 200);
-    } catch (err) {
-      if (err instanceof FlowError) {
-        throw new ApiError(err.code === "actor-apps-disabled" ? 403 : 400, err.code, err.code);
-      }
-      throw err;
-    }
-  });
 
   app.openapi(prWrites, async (c) => {
     const svc = c.get("services");
@@ -161,10 +170,21 @@ export function registerGithubRoutes(app: ApiApp): void {
     const { repoId } = c.req.valid("param");
     await assertTargetAccess(svc, caller.principal, { repoId }, "admin");
     const repo = await svc.store.getRepo(repoId);
-    if (repo?.host == null) throw new ApiError(404, "not-found", "not a GitHub repository graded here");
+    if (repo?.host == null)
+      throw new ApiError(404, "not-found", "not a GitHub repository graded here");
     const { value } = c.req.valid("json");
-    await setPrWrites(svc.store.db, { repoId, value, by: caller.principal.id, at: svc.clock.now().toISOString() });
-    await svc.audit.append({ principalId: caller.principal.id, action: "github.pr-writes", subject: `repo:${repoId}`, payload: { value } });
+    await setPrWrites(svc.store.db, {
+      repoId,
+      value,
+      by: caller.principal.id,
+      at: svc.clock.now().toISOString(),
+    });
+    await svc.audit.append({
+      principalId: caller.principal.id,
+      action: "github.pr-writes",
+      subject: `repo:${repoId}`,
+      payload: { value },
+    });
     return c.json({ repoId, prWrites: value }, 200);
   });
 
@@ -174,11 +194,17 @@ export function registerGithubRoutes(app: ApiApp): void {
     const { repoId } = c.req.valid("param");
     await assertTargetAccess(svc, caller.principal, { repoId }, "admin");
     const repo = await svc.store.getRepo(repoId);
-    if (repo?.host == null) throw new ApiError(404, "not-found", "not a GitHub repository graded here");
+    if (repo?.host == null)
+      throw new ApiError(404, "not-found", "not a GitHub repository graded here");
     const { days, maxPrs } = c.req.valid("json");
     const out = await startBacktest(svc.env, {
-      installationId: repo.host.installationId, appId: repo.host.appId, githubRepoId: repo.host.githubRepoId,
-      fullName: `${repo.host.owner}/${repo.host.repo}`, by: caller.principal.id, days, maxPrs,
+      installationId: repo.host.installationId,
+      appId: repo.host.appId,
+      githubRepoId: repo.host.githubRepoId,
+      fullName: `${repo.host.owner}/${repo.host.repo}`,
+      by: caller.principal.id,
+      days,
+      maxPrs,
     });
     return c.json(out, 202);
   });
@@ -187,23 +213,47 @@ export function registerGithubRoutes(app: ApiApp): void {
     const { repoId } = c.req.valid("param");
     await assertTargetAccess(svc, callerOf(c).principal, { repoId }, "read");
     const b = await latestBacktest(svc.store.db, repoId);
-    return c.json({
-      backtest: b === null ? null : {
-        id: b.id, status: b.status, since: b.since, until: b.until, maxPrs: b.maxPrs, report: b.report ?? null,
-        eligible: b.eligible ?? null, error: b.error, createdAt: b.createdAt, finishedAt: b.finishedAt,
+    return c.json(
+      {
+        backtest:
+          b === null
+            ? null
+            : {
+                id: b.id,
+                status: b.status,
+                since: b.since,
+                until: b.until,
+                maxPrs: b.maxPrs,
+                report: b.report ?? null,
+                eligible: b.eligible ?? null,
+                error: b.error,
+                createdAt: b.createdAt,
+                finishedAt: b.finishedAt,
+              },
       },
-    }, 200);
+      200,
+    );
   });
 
-  app.get("/github/manifest/callback", browser(finishManifest));
-  app.get("/github/setup", browser(beginSetup));
-  app.get("/github/oauth/callback", browser(finishSetup));
+  app.get(
+    "/github/setup",
+    browser((svc, caller, q) => beginSetup(svc, caller, q)),
+  );
+  app.get(
+    "/github/oauth/callback",
+    browser((svc, caller, q, nonce) => finishSetup(svc, caller, q, nonce)),
+  );
   app.post(GITHUB_WEBHOOK_PATH, handleGithubWebhook);
 
   for (const [path, summary] of [
-    ["/github/manifest/callback", "GitHub redirect after creating an App (code + state); browser only"],
-    ["/github/setup", "GitHub redirect after installing an App; verified through user authorization"],
-    ["/github/oauth/callback", "User authorization callback: links the installation if it is yours"],
+    [
+      "/github/setup",
+      "GitHub redirect after installing an App; verified through user authorization",
+    ],
+    [
+      "/github/oauth/callback",
+      "User authorization callback: links the installation if it is yours",
+    ],
   ] as const) {
     app.openAPIRegistry.registerPath({
       method: "get",

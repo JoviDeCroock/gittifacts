@@ -52,8 +52,9 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `POST` | [`/api/v1/claims/{token}`](/docs/reference/http-repos) | Claim an unclaimed project (signed-in human + Turnstile); single-use, idempotent |
 | `GET` | [`/api/v1/deployments/{deploymentId}`](/docs/reference/http-integrations) | A deployment with its status history |
 | `POST` | [`/api/v1/deployments/{deploymentId}/statuses`](/docs/reference/http-integrations) | Integrations: report a deployment's state (queued, in_progress, success, failure, error) with its URL and log |
-| `GET` | [`/api/v1/github`](/docs/reference/http-github) | GitHub mode: our GitHub Apps and the installations you linked (with their repos) |
-| `POST` | [`/api/v1/github/manifests`](/docs/reference/http-github) | Platform admins: a GitHub App manifest and a signed one-hour state to create the App |
+| `GET` | [`/api/v1/github`](/docs/reference/http-github) | GitHub mode: our GitHub App (or which config is missing) and the installations you linked |
+| `POST` | [`/api/v1/github/repos/{repoId}/backtests`](/docs/reference/http-github) | Repo owners: backtest the repository's merged PRs (lanes, later reverts and patches, calibration) |
+| `GET` | [`/api/v1/github/repos/{repoId}/backtests/latest`](/docs/reference/http-github) | The repository's latest backtest and its report |
 | `PUT` | [`/api/v1/github/repos/{repoId}/pr-writes`](/docs/reference/http-github) | Repo owners: turn the tour review and summary comment on GitHub PRs on or off |
 | `GET` | [`/api/v1/installation`](/docs/reference/http-integrations) | Integration tokens: this installation, its account and its repositories (with clone URLs) |
 | `GET` | [`/api/v1/installations`](/docs/reference/http-integrations) | Integrations installed on your account: what each may do and on which repos |
@@ -115,7 +116,6 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `POST` | [`/git/{owner}/{repo}.git/git-receive-pack`](/docs/reference/http-integrations) | Always 403: nothing pushes through the integration git endpoint |
 | `POST` | [`/git/{owner}/{repo}.git/git-upload-pack`](/docs/reference/http-integrations) | Git smart HTTP upload-pack (clone/fetch), streamed from the Artifacts remote |
 | `GET` | [`/git/{owner}/{repo}.git/info/refs`](/docs/reference/http-integrations) | Git smart HTTP ref advertisement (service=git-upload-pack only; read-only) |
-| `GET` | [`/github/manifest/callback`](/docs/reference/http-github) | GitHub redirect after creating an App (code + state); browser only |
 | `GET` | [`/github/oauth/callback`](/docs/reference/http-github) | User authorization callback: links the installation if it is yours |
 | `GET` | [`/github/setup`](/docs/reference/http-github) | GitHub redirect after installing an App; verified through user authorization |
 | `POST` | [`/github/webhooks`](/docs/reference/http-github) | GitHub App webhooks (HMAC-SHA-256 per App, deduplicated by delivery id, queued) |

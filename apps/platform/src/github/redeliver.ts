@@ -11,8 +11,7 @@ import { z } from "zod";
 import type { Bindings } from "../app-env.js";
 import { githubDeliveries } from "../db/github-schema.js";
 import { D1Store } from "../store/d1-store.js";
-import { appCredentials } from "./runtime.js";
-import { listApps } from "./store.js";
+import { githubApp } from "./app-config.js";
 
 const WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const MAX_PER_RUN = 10;
@@ -29,19 +28,25 @@ const Delivery = z.object({
 export async function runGithubRedeliveries(env: Bindings, now = new Date()): Promise<number> {
   const db = new D1Store(env.DB, env.BLOBS, () => now).db;
   let asked = 0;
-  for (const app of await listApps(db)) {
-    if (asked >= MAX_PER_RUN) break;
+  const cfg = env as unknown as Record<string, unknown>;
+  for (const kind of ["reader", "actor"] as const) {
+    const app = githubApp(cfg, kind);
+    if (app === null || asked >= MAX_PER_RUN) continue;
     try {
-      const creds = await appCredentials(env, db, app.id);
-      if (creds === null) continue;
-      const jwt = await new InstallationTokens(creds).appJwt();
+      const jwt = await new InstallationTokens({
+        appId: app.appId,
+        clientId: app.clientId,
+        privateKey: app.privateKey,
+      }).appJwt();
       const headers = {
         accept: "application/vnd.github+json",
         "x-github-api-version": GITHUB_API_VERSION,
         authorization: `Bearer ${jwt}`,
         "user-agent": "gittifacts",
       };
-      const res = await fetch("https://api.github.com/app/hook/deliveries?per_page=100", { headers });
+      const res = await fetch("https://api.github.com/app/hook/deliveries?per_page=100", {
+        headers,
+      });
       if (!res.ok) {
         await res.body?.cancel();
         continue;
@@ -60,21 +65,31 @@ export async function runGithubRedeliveries(env: Bindings, now = new Date()): Pr
           await db
             .select({ id: githubDeliveries.id })
             .from(githubDeliveries)
-            .where(inArray(githubDeliveries.id, failed.map((d) => d.guid)))
+            .where(
+              inArray(
+                githubDeliveries.id,
+                failed.map((d) => d.guid),
+              ),
+            )
             .all()
         ).map((r) => r.id),
       );
       // One attempt per GUID: a GUID that already succeeded (or whose redelivery is pending) is skipped.
-      const succeeded = new Set(list.data.filter((d) => d.status_code >= 200 && d.status_code < 300).map((d) => d.guid));
+      const succeeded = new Set(
+        list.data.filter((d) => d.status_code >= 200 && d.status_code < 300).map((d) => d.guid),
+      );
       for (const d of failed) {
         if (asked >= MAX_PER_RUN || seen.has(d.guid) || succeeded.has(d.guid)) continue;
-        const r = await fetch(`https://api.github.com/app/hook/deliveries/${d.id}/attempts`, { method: "POST", headers });
+        const r = await fetch(`https://api.github.com/app/hook/deliveries/${d.id}/attempts`, {
+          method: "POST",
+          headers,
+        });
         await r.body?.cancel();
         succeeded.add(d.guid);
         asked++;
       }
     } catch (e) {
-      console.error("github redelivery sweep failed", app.id, (e as Error).message);
+      console.error("github redelivery sweep failed", app.appId, (e as Error).message);
     }
   }
   return asked;

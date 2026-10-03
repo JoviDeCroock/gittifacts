@@ -4,13 +4,13 @@ import type { Bindings } from "../src/app-env.js";
 import { runGithubRedeliveries } from "../src/github/redeliver.js";
 import { recordDelivery } from "../src/github/store.js";
 import { store } from "./fixtures.js";
-import { jsonRes, seedSigningApp, stubGithub } from "./github-helpers.js";
+import { APP_ID, jsonRes, stubGithub } from "./github-helpers.js";
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("cron: redeliver failed GitHub deliveries", () => {
   it("asks GitHub again for recent failures we never recorded, once each, never pings", async () => {
-    const appId = await seedSigningApp();
+    const appId = APP_ID;
     const now = new Date("2026-10-03T12:00:00Z");
     const at = (h: number) => new Date(now.getTime() - h * 3_600_000).toISOString();
     await recordDelivery(store().db, { id: "guid-recorded", appId, event: "push", action: null, installationId: 1, receivedAt: at(1) });

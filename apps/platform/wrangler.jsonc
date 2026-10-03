@@ -58,13 +58,15 @@
   // `wrangler types` reads this list; values live in `.dev.vars` locally (see .dev.vars.example)
   // and in `wrangler secret put` remotely.
   // Required to run at all. Optional secrets (feature degrades with a clear error when absent):
-  // GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET (GitHub sign-in), CF_API_TOKEN (rollouts, flags, telemetry).
+  // GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET (GitHub sign-in), CF_API_TOKEN (rollouts, flags, telemetry),
+  // and GitHub mode's App (docs/deploy.md "GitHub mode"): GITHUB_APP_ID, GITHUB_APP_SLUG,
+  // GITHUB_APP_CLIENT_ID (public; `wrangler secret put` keeps them across deploys) and
+  // GITHUB_APP_PRIVATE_KEY, GITHUB_APP_WEBHOOK_SECRET, GITHUB_APP_CLIENT_SECRET. Unset: "not configured".
   "secrets": {
     "required": [
       "PLATFORM_SIGNING_KEY",
       "BETTER_AUTH_SECRET",
-      "ISSUES_WEBHOOK_SECRET",
-      "GITHUB_APP_KEK"
+      "ISSUES_WEBHOOK_SECRET"
     ]
   },
 

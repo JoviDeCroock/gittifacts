@@ -113,6 +113,13 @@
       "when": 1791024419286,
       "tag": "0015_github_backtests",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1791025443473,
+      "tag": "0016_drop_github_app_store",
+      "breakpoints": true
     }
   ]
 }

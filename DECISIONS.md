@@ -1903,3 +1903,36 @@ while A and G were landing).
   (`c94befc`): a command the shell drops must not leave the core waiting forever.
 - **Not done.** `giveUp` could answer `BuildBatchTree` with a failure event right away instead of waiting for
   the timeout; that needs a new protocol event.
+
+## 2026-10-03 — GitHub Apps are registered by hand and read from Worker config (supersedes "two Apps / manifest")
+
+User decision: no in-app GitHub App creation. Supersedes the Setup paragraph and the "Actor App (private, one per
+customer, created through the manifest flow)" bullet of "GitHub mode: Lane 0 without weakening human protection; two
+Apps", the credentials and manifest bullets of "Two modes M2 (phase A)", and research github-app.md §7's manifest
+flow and "Decisions this forces" #1.
+
+- **One platform App, from config.** Vars `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID` (public; unset
+  in `wrangler.jsonc`, so they can be set with `wrangler secret put` and survive deploys, or committed under `vars`)
+  and secrets `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_SECRET`, optionally
+  `GITHUB_APP_WEBHOOK_SECRET_PREVIOUS` for rotation (both verified, every candidate checked). Read in one place,
+  `apps/platform/src/github/app-config.ts`. Missing anything: `GET /api/v1/github` returns `app: null` and the
+  missing names (never values), `/settings/github` says "not set up" and lists them, the webhook answers 503 (not
+  401: nothing is wrong with the delivery, and the redelivery cron asks GitHub again once it's configured).
+- **Webhooks**: `X-GitHub-Hook-Installation-Target-ID` must equal a configured App's id (else 401), then the HMAC.
+- **Removed**: `POST /api/v1/github/manifests`, `GET /github/manifest/callback`, the `CreateApp` form, credential
+  sealing and `GITHUB_APP_KEK`, `GITHUB_ACTOR_APPS`. Migration 0016 drops `github_apps` and `github_states` (no App
+  was ever created on the live platform, so nothing is lost).
+- **Install verification without a state table.** The OAuth `state` is `base64url(JSON{principalId,
+  installationId, nonce, exp}).HMAC`, keyed by HKDF(`BETTER_AUTH_SECRET`, "gittifacts/github-oauth-state/v1"),
+  valid 10 minutes. `/github/setup` sets the nonce in an HttpOnly, Secure, SameSite=Lax cookie on `Path=/github`;
+  the callback requires the same nonce, the same signed-in human, and clears the cookie. Replays: the cookie is
+  gone and GitHub's code works once. Still linked only if `GET /user/installations` lists it for this App; the user
+  token is still revoked after use.
+- **Actor App (M5)** is a second public App we own, configured the same way under `GITHUB_ACTOR_APP_*`. No
+  per-customer private Apps. Installed only on repos whose owners turn on acting; grading ignores its deliveries.
+- **Registration settings** (guide `github-mode.md` §1, docs/deploy.md): callback `/github/oauth/callback`; setup
+  URL `/github/setup` with "Redirect on update"; "Request user authorization (OAuth) during installation" off
+  (GitHub drops the setup URL when it's on); webhook `/github/webhooks` with a secret; repository permissions
+  metadata, contents, issues, merge queues, deployments, commit statuses read, pull requests and checks read and
+  write; events pull request, pull request review, check run, check suite, issues, push, merge group, deployment
+  status, status; installable on any account.

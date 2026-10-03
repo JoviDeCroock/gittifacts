@@ -2,43 +2,31 @@ import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test"
 import { env } from "cloudflare:workers";
 import { vi } from "vitest";
 import type { Bindings } from "../src/app-env.js";
-import { githubKeys, githubSignature, sealCredential } from "../src/github/crypto.js";
+import { githubSignature } from "../src/github/crypto.js";
 import type { GithubEventMessage } from "../src/github/webhook.js";
-import { insertApp } from "../src/github/store.js";
-import { store } from "./fixtures.js";
 import { ORIGIN, type TestApp } from "./http.js";
 
-export const WEBHOOK_SECRET = "whsec-test-0123456789";
-export const CLIENT_SECRET = "cs-test-secret";
-export const PEM = "-----BEGIN RSA PRIVATE KEY-----\nMIIfake\n-----END RSA PRIVATE KEY-----\n";
+const cfg = env as Bindings;
+/** The Reader App the test Worker is configured with (vitest.config.ts). */
+export const APP_ID = Number(cfg.GITHUB_APP_ID);
+export const APP_SLUG = cfg.GITHUB_APP_SLUG as string;
+export const CLIENT_ID = cfg.GITHUB_APP_CLIENT_ID as string;
+export const WEBHOOK_SECRET = cfg.GITHUB_APP_WEBHOOK_SECRET as string;
+export const CLIENT_SECRET = cfg.GITHUB_APP_CLIENT_SECRET as string;
 
+/** Env overrides with GitHub mode unconfigured (every Reader App name blank). */
+export const UNCONFIGURED = {
+  GITHUB_APP_ID: "",
+  GITHUB_APP_SLUG: "",
+  GITHUB_APP_CLIENT_ID: "",
+  GITHUB_APP_CLIENT_SECRET: "",
+  GITHUB_APP_PRIVATE_KEY: "",
+  GITHUB_APP_WEBHOOK_SECRET: "",
+} satisfies Partial<Bindings>;
+
+/** An App id that isn't ours (someone else's App, or a stale one). */
 let nextAppId = 900_000 + Math.floor(Math.random() * 50_000);
-export const newAppId = () => nextAppId++;
-
-/** Insert an App row the way the manifest callback would (sealed credentials). */
-export async function seedApp(id = newAppId(), kind: "reader" | "actor" = "reader") {
-  const keys = await githubKeys((env as Bindings).GITHUB_APP_KEK);
-  const now = new Date().toISOString();
-  await insertApp(store().db, {
-    id,
-    kind,
-    slug: `gittifacts-test-${id}`,
-    name: `gittifacts test ${id}`,
-    ownerLogin: "gf-test-org",
-    ownerType: "Organization",
-    clientId: `Iv23test${id}`,
-    htmlUrl: `https://github.com/apps/gittifacts-test-${id}`,
-    clientSecretEnc: await sealCredential(keys, id, "client_secret", CLIENT_SECRET),
-    webhookSecretEnc: await sealCredential(keys, id, "webhook_secret", WEBHOOK_SECRET),
-    pemEnc: await sealCredential(keys, id, "pem", PEM),
-    permissions: { metadata: "read", checks: "write" },
-    events: ["pull_request"],
-    createdBy: "hu_test",
-    createdAt: now,
-    updatedAt: now,
-  });
-  return id;
-}
+export const otherAppId = () => nextAppId++;
 
 export interface FakeQueue {
   sent: GithubEventMessage[];
@@ -94,7 +82,9 @@ export async function delivery(
   opts: { secret?: string; id?: string } = {},
 ) {
   const body = JSON.stringify(payload);
-  const id = opts.id ?? `0f6c5e10-${Date.now().toString(16)}-${(deliveries++).toString(16).padStart(4, "0")}`;
+  const id =
+    opts.id ??
+    `0f6c5e10-${Date.now().toString(16)}-${(deliveries++).toString(16).padStart(4, "0")}`;
   return {
     id,
     body,
@@ -104,7 +94,10 @@ export async function delivery(
       "x-github-hook-id": "1",
       "x-github-hook-installation-target-type": "integration",
       "x-github-hook-installation-target-id": String(appId),
-      "x-hub-signature-256": await githubSignature(opts.secret ?? WEBHOOK_SECRET, new TextEncoder().encode(body)),
+      "x-hub-signature-256": await githubSignature(
+        opts.secret ?? WEBHOOK_SECRET,
+        new TextEncoder().encode(body),
+      ),
       "cf-connecting-ip": "192.0.2.10",
     },
   };
@@ -113,39 +106,24 @@ export async function delivery(
 /** Stub GitHub (api.github.com + github.com) with a route table; returns the calls seen. */
 export function stubGithub(routes: Record<string, (req: Request) => Response | Promise<Response>>) {
   const seen: { method: string; url: string; body: string }[] = [];
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const req = new Request(input, init);
-    const url = new URL(req.url);
-    const key = `${req.method} ${url.origin}${url.pathname}`;
-    seen.push({ method: req.method, url: req.url, body: req.method === "GET" ? "" : await req.clone().text() });
-    const handler = routes[key];
-    if (!handler) return new Response(JSON.stringify({ message: `no stub for ${key}` }), { status: 599 });
-    return handler(req);
-  });
+  vi.spyOn(globalThis, "fetch").mockImplementation(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = new Request(input, init);
+      const url = new URL(req.url);
+      const key = `${req.method} ${url.origin}${url.pathname}`;
+      seen.push({
+        method: req.method,
+        url: req.url,
+        body: req.method === "GET" ? "" : await req.clone().text(),
+      });
+      const handler = routes[key];
+      if (!handler)
+        return new Response(JSON.stringify({ message: `no stub for ${key}` }), { status: 599 });
+      return handler(req);
+    },
+  );
   return seen;
 }
 
 export const jsonRes = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
-
-/** A real RSA private key (PKCS#8 PEM), generated per run: App JWTs must sign. */
-export async function rsaPem(): Promise<string> {
-  const pair = (await crypto.subtle.generateKey(
-    { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
-    true,
-    ["sign", "verify"],
-  )) as CryptoKeyPair;
-  const der = new Uint8Array((await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer);
-  const b64 = btoa(String.fromCharCode(...der)).replace(/(.{64})/g, "$1\n");
-  return `-----BEGIN PRIVATE KEY-----\n${b64}\n-----END PRIVATE KEY-----\n`;
-}
-
-/** An App row whose PEM can really sign (for code paths that mint JWTs). */
-export async function seedSigningApp(id = newAppId()): Promise<number> {
-  await seedApp(id);
-  const keys = await githubKeys((env as Bindings).GITHUB_APP_KEK);
-  const { githubApps } = await import("../src/db/github-schema.js");
-  const { eq } = await import("drizzle-orm");
-  await store().db.update(githubApps).set({ pemEnc: await sealCredential(keys, id, "pem", await rsaPem()) }).where(eq(githubApps.id, id));
-  return id;
-}

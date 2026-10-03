@@ -106,6 +106,7 @@ Up to 8 attempts, retried after 10 s, 30 s, 2 min, 10 min, 30 min, 60 min, 120 m
 | `resolutionMaxAttempts` | 2 |  |
 | `affectedSetTimeoutMs` | 15 min | An affected set not computed after this long is treated as unknown (conflicts with all). |
 | `runTimeoutMs` | 90 min | A CI run with no result after this long is cancelled and retried. |
+| `buildTimeoutMs` | 15 min | A batch tree still building after this long is rebuilt. Building is git work (a replay in the scratch repo), minutes at most; the shell drops a BuildBatchTree that keeps failing, so without this the batch (and every landing behind it) waited out `runTimeoutMs` (M5 dogfood: 90 min). |
 | `maxInfraRetries` | 3 |  |
 | `initialCiDurationMs` | 10 min | Prior for the CI duration estimate (ETAs) before any run has finished. |
 | `mainLogLimit` | 2000 | Landed main commits remembered for staleness checks. |
