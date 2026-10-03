@@ -1,7 +1,7 @@
 ---
 title: "Lane reason codes"
 nav: "Lane reasons"
-description: "All 104 reason codes the classifier can put on a Change: the lane each one forces, its gate and when it fires."
+description: "All 106 reason codes the classifier can put on a Change: the lane each one forces, its gate and when it fires."
 order: 52
 audience: both
 generated: true
@@ -55,7 +55,7 @@ A Change is Lane 0 only when every gate passes. The checklist in `get_change_sta
 | `signal.missing.test-run` | 2 | unknown | tests | No test-run item with status "ok" (absent, or only skipped). |
 | `size.files-over-lane1` | 2 | fail | size | Counted files > lane1MaxFiles. |
 | `size.lines-over-lane1` | 2 | fail | size | Counted lines > lane1MaxDiffLines. |
-| `tests.failing` | 2 | fail | tests | A test-run item with status "ok" reports failed > 0 (even if CI says passed). |
+| `tests.failing` | 2 | fail | tests | A test-run item with status "ok" reports failures that are new against the Change's base (failed minus preExisting ones proven against a usable baseline of diffStats.baseSha; every failure without one), even if CI says passed. |
 | `tour.failed` | 2 | fail | tour | context.tourStatus is "failed". |
 | `transform.mismatch` | 2 | fail | transform | A transform item (any claimed category) has status "ok" and mismatchedFiles. |
 | `api.additive` | 1 | fail | public-api | A public-api item classifies the change as "additive". |
@@ -67,6 +67,7 @@ A Change is Lane 0 only when every gate passes. The checklist in `get_change_sta
 | `dependency.removed` | 1 | fail | dependencies | A dependency item lists removed dependencies. |
 | `llm.unsure` | 1 | unknown | llm-judgments | An llm-judgment item has outcome "unsure". |
 | `mutation.below-threshold` | 1 | fail | mutation | Lowest mutation score over ok items < policy.thresholds.mutationScore. |
+| `mutation.no-coverage` | 1 | fail | mutation | The lowest-scoring ok mutation item killed, timed out and survived nothing and has noCoverage > 0 (no test is related to the mutated files). |
 | `plan.missing` | 1 | fail | plan | plan is null and no planless category applies. |
 | `plan.not-approved` | 1 | fail | plan | Plan is draft/superseded/rejected, has no approver, or was approved by its own author; and no planless category applies. |
 | `plan.scope-undeclared` | 1 | unknown | scope | Plan is attached, scopePaths is empty and no planless category applies. |
@@ -120,7 +121,8 @@ A Change is Lane 0 only when every gate passes. The checklist in `get_change_sta
 | `signal.skip-accepted.public-api` | 0 | pass | public-api | Only skipped public-api items, diffStats present and every changed file is non-source (docs, images, license). |
 | `size.ok` | 0 | pass | size | Counted lines <= lane0MaxDiffLines and counted files <= lane0MaxFiles. |
 | `size.transform-excluded` | 0 | pass | size | Some changed files are fully reproduced by a verified transform. |
-| `tests.passed` | 0 | pass | tests | At least one test-run item has status "ok" and none reports failures. |
+| `tests.passed` | 0 | pass | tests | At least one test-run item has status "ok" and none reports failures new against the Change's base. |
+| `tests.preexisting` | 0 | pass | tests | A test-run item lists preExisting failures against a usable baseline of the Change's base commit (diffStats.baseSha); they are discounted from failed. |
 | `tests.quarantined-unaffected` | 0 | pass | tests | A quarantine item with status "ok" lists quarantined tests, none of them in inAffectedSet. |
 | `tour.ok` | 0 | pass | tour | context.tourStatus is "ok" or "not-generated". |
 | `transform.not-applicable` | 0 | pass | transform | Category is not transform and no transform item verified, mismatched or errored. |

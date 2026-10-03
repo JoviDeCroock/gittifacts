@@ -67,6 +67,7 @@ Schema `CoverageDelta`.
 | `ratio` | number | coveredChangedLines / changedLines; 1 when no executable lines changed. |
 | `files` | object[] |  |
 | `unmeasuredFiles?` | string[] | Changed files with no entry at all in the coverage report. Per the contract their lines count as non-executable, so they do not affect `ratio` — but a source file missing from the report usually means "never loaded by any test". Listed so a consumer can escalate instead of reading silence as safety. |
+| `selection?` | { mode, reason, files, tests } |  |
 
 ### `dependencies`
 
@@ -143,7 +144,9 @@ Schema `RedGreenProof`.
 | `tests` | object[] |  |
 | `base` | { sha, results } |  |
 | `head` | { sha, results } |  |
-| `verdict` | "proven" \| "not-proven" \| "no-tests" | `tests`: the change's new/changed tests, plus pre-existing tests that fail on base (as committed) and pass, or still fail, on head. proven: >=1 listed test fails (or is missing) on base and every one passes on head. not-proven: tests are listed but the fail-then-pass pattern does not hold. no-tests: nothing is listed (no new or changed test, and no test fails on base). |
+| `verdict` | "proven" \| "not-proven" \| "no-tests" | `tests`: the change's new/changed tests, plus pre-existing tests that fail on base (as committed) and pass, or fail differently, on head (identical failures: `preExisting`). proven: >=1 listed test fails (or is missing) on base and every one passes on head. not-proven: tests are listed but the fail-then-pass pattern does not hold. no-tests: nothing is listed (no new or changed test, and no test fails on base). |
+| `preExisting?` | object[] | Pre-existing failures: tests (not new or changed by the Change) that fail on base and fail identically on head (same first line of the failure). Not listed in `tests`, so an unrelated failure on the default branch neither proves nor blocks the proof. |
+| `selection?` | { mode, reason, files, tests } |  |
 
 ### `screenshots`
 
@@ -176,6 +179,9 @@ Schema `TestRun`.
 | `skipped` | integer |  |
 | `durationMs` | number |  |
 | `failures` | object[] |  |
+| `preExisting?` | string[] | Names (from `failures`) that fail identically on the base commit (`baseline`): pre-existing, so they do not count against the Change. `failed` still counts every failure. |
+| `baseline?` | { sha, status, source, note } |  |
+| `selection?` | { mode, reason, files, tests } |  |
 
 ### `transform`
 

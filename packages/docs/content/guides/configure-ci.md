@@ -87,6 +87,8 @@ In merge-queue batch runs, every user step gets `GITTIFACTS_TEST_TARGETS`: the t
 pnpm exec vitest run $(printf '%s\n' "$GITTIFACTS_TEST_TARGETS" | tr '\n' ' ')
 ```
 
+Evidence steps choose their own tests: `test-run`, `red-green` and `coverage` run the test files that reach the Change, and the whole suite when that's unknown ([Evidence](/docs/concepts/evidence#which-tests-run)).
+
 ## 6. Ship the edit
 
 `.platform/**` is a sensitive path: the Change is Lane 2 and needs a human's approval. The pipeline is read from the Change's **base** commit, so your edit applies to Changes that start after it merges, not to the Change that makes it.
@@ -103,5 +105,7 @@ start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "CI: add e2e step", catego
 | A step name is refused | Names are letters, digits, `.`, `_`, `-`; `prepare`, `plan` and `finalize` are reserved |
 | `install` fails with a lockfile error | Commit the lockfile that matches `package.json` |
 | A step named `unclaimed-limits` failed | An unclaimed project ran out of CI minutes: claim it |
+
+Long steps are durable: each runs as a job on its runner, and the run checks on it with short calls. A dropped connection is retried, and a step attempt that dies re-attaches to the job that is still running instead of starting it again.
 
 No file at all? The platform detects a default pipeline from `package.json` (install, then lint, typecheck, test and build when those scripts exist).

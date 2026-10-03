@@ -63,7 +63,9 @@ Expected: an item with `kind: "red-green"` and `verdict: "proven"`. Its `base.re
 - A **new or changed** test that fails on base and passes on head.
 - A **pre-existing** test that already fails on base as committed and passes on head. A source-only fix of a failing test counts.
 - Failing files run twice on base; only a failure in both runs counts, so a flaky test can't fake a proof.
-- A pre-existing test that still fails on head is listed too, so a fix that doesn't work is never proven.
+- A pre-existing test that fails **differently** on head is listed too, so a fix that doesn't work is never proven.
+- A pre-existing test that fails **the same way** on base and head is listed apart (`preExisting`): it neither proves nor blocks your proof.
+- Only tests that can reach your change are looked at (`selection`); the whole suite when that's unknown.
 
 ## When the platform says `red-green-missing`
 

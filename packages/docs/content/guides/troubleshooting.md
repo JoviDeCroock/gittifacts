@@ -41,6 +41,11 @@ Every platform error carries `{ code, message, fix }`, and `fix.call` or `fix.co
 | `install` can't reach a host | Unclaimed projects reach package registries only | Use the registry, or claim the project |
 | A step named `unclaimed-limits` failed | Out of CI minutes for the day | Wait for the reset, or claim the project |
 | An `evidence:*` step errored | A platform evidence tool failed, not your code | It raises the lane; `rerun_ci({ changeId: "<changeId>" })` if it looks transient (no push needed) |
+| A step's reason says it "re-attached to the running job" | The connection to its runner dropped; the retry picked the job up where it was instead of starting over | Nothing: the result is the job's own |
+| `tests.failing` names fewer tests than failed | Failures that fail the same way on the base commit are pre-existing (`tests.preexisting`) and don't count | Fix them on main in their own Change |
+| Every failure counts although main is red too | No baseline: base installs other dependencies, or base couldn't run (`baseline.status: "unavailable"` on `test-run`) | Expected: unknown escalates |
+| Mutation says "No test exercises the changed lines" | No test is related to the files you changed (Lane 1, measured) | Add a test that imports the code |
+| `runs[].steps` while a run is in flight | Live: `pending` (queued), `running` with `elapsedMs`, then the result | Poll `get_change_status`, or `wait_for_change` |
 
 ## Lanes and reviews
 

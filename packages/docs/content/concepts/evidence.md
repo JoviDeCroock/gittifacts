@@ -16,7 +16,7 @@ After your own CI steps, the platform adds its evidence steps:
 | Evidence | Proves | Raises the lane when |
 |---|---|---|
 | `red-green` | A test fails on the base commit and passes on the head | A claimed fix has no proof |
-| `test-run` | Which tests passed and failed | Any test failed |
+| `test-run` | Which tests passed and failed | A test failed that doesn't fail the same way on the base commit |
 | `coverage` | Changed lines covered by tests | Below the policy threshold (default 0.8) |
 | `mutation` | Mutants on changed lines killed by tests | Below the threshold (default 0.6) |
 | `public-api` | Exported surface: `none`, `additive` or `breaking` | Additive (Lane 1) or breaking (Lane 2) |
@@ -26,6 +26,22 @@ After your own CI steps, the platform adds its evidence steps:
 | `transform` | A declared codemod reproduces hunks byte for byte | Never; verified hunks are hidden from review |
 
 Also possible: `agent-trace`, `llm-judgment` (raise-only), `conflict-resolution` and `quarantine` from the merge queue. Fields of every kind: [Evidence kinds](/docs/reference/evidence-kinds).
+
+## Which tests run
+
+`test-run`, `red-green` and `coverage` run the tests that can reach the Change: test files whose imports reach a changed file, touched tests, and every test under a runner config or Workers test pool whose setup or entry the Change reaches. The item's `selection` says which (`mode: "affected"`, `files`, `reason`).
+
+The whole suite runs (`mode: "all"`) whenever the impact is unknown: a changed config, manifest or lockfile, a file no analyzer understands, or a failed analysis.
+
+## Pre-existing failures
+
+A test that fails at head is compared with the base commit:
+
+- **Pre-existing:** it fails on base too, in two runs, with the same failure message. Listed in the item's `preExisting`, shown apart in evidence and the tour, and not counted against the Change (`tests.preexisting`, Lane 0).
+- **Counted:** it passes on base, fails differently there, failed only once there, or is new.
+- **No baseline:** when base can't be measured (it installs other dependencies, or the run failed), `baseline.status` is `unavailable` and every failure counts.
+
+Base results are cached per Change and base commit, so a re-push doesn't measure base again.
 
 ## Unknown is never green
 
