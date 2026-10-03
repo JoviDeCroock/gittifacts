@@ -2396,7 +2396,8 @@ class Machine {
         (b.state === "running" || b.state === "rechecking" || b.state === "building") &&
         b.startedAt !== null
       ) {
-        if (this.now - b.startedAt < this.cfg.runTimeoutMs) continue;
+        const limit = b.state === "building" ? this.cfg.buildTimeoutMs : this.cfg.runTimeoutMs;
+        if (this.now - b.startedAt < limit) continue;
         if (b.runId !== null && b.state !== "building")
           this.out.push({
             type: "CancelBatchRun",

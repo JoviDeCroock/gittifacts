@@ -95,6 +95,16 @@ export const QueueConfig = z.object({
     .int()
     .min(1)
     .default(90 * 60_000),
+  /**
+   * A batch tree still building after this long is rebuilt. Building is git work (a replay in the
+   * scratch repo), minutes at most; the shell drops a BuildBatchTree that keeps failing, so without
+   * this the batch (and every landing behind it) waited out `runTimeoutMs` (M5 dogfood: 90 min).
+   */
+  buildTimeoutMs: z
+    .number()
+    .int()
+    .min(1)
+    .default(15 * 60_000),
   maxInfraRetries: z.number().int().min(0).default(3),
   /** Prior for the CI duration estimate (ETAs) before any run has finished. */
   initialCiDurationMs: z
