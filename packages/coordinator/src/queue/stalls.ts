@@ -100,8 +100,9 @@ export function afterDrop(type: string): string {
     case "BuildBatchTree":
       return "the batch is rebuilt at once; after repeated failures its Changes are ejected (infra-error)";
     case "StartBatchRun":
-    case "RunFlakeRecheck":
       return "the run counts as errored and the batch is retried";
+    case "RunFlakeRecheck":
+      return "the re-check is dropped; the batch is retried when its run timeout passes";
     case "ComputeAffectedSet":
       return "the affected set counts as unknown (conflicts with everything, never parallel)";
     case "RequestResolution":
@@ -112,6 +113,9 @@ export function afterDrop(type: string): string {
       return "needs a human: nobody was told this Change needs approval; open it and approve the resolution";
     case "StartDeployTrain":
       return "the train counts as failed to deploy";
+    case "KillFlag":
+    case "RollbackTrain":
+      return "the deploy train escalates on its own timer (it is never left watching a regression)";
     case "RequestRevert":
       return "needs a human: the Change is rolled back but not reverted; revert it by hand";
     default:
