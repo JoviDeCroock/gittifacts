@@ -104,6 +104,10 @@ describe("getting started", () => {
       bootstrap_change_id: "chboot1",
       created_at: created,
     });
+    // Its CI passes before the preview is up: still running, not yet the first green.
+    const boot = changeFixture(repo.id, ada.principal.id, { id: "chboot1" });
+    await s.insertChange(boot);
+    await s.upsertRun(runFixture(boot.id));
     const running = await state(app, ada.cookie);
     expect(running.projects).toBe(1);
     expect(running.firstGreen).toBeNull();

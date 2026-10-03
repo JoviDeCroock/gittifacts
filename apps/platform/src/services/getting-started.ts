@@ -12,7 +12,7 @@
  * plus the newest create_project bootstrap of the human's repos, so the "Try it now" step can show
  * its run while it is still going. Every query is scoped to the caller's own memberships.
  */
-import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, notExists, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Caller, Services } from "../app-env.js";
 import {
@@ -118,7 +118,11 @@ async function connectedAgent(svc: Services, ownerId: string, now: string) {
   return rows[0]?.name ?? null;
 }
 
-/** A passed CI run on any Change of these repos (imports and GitHub mirrors have no bootstrap row). */
+/**
+ * A passed CI run on a Change of these repos (imports and GitHub mirrors have no bootstrap row).
+ * Bootstrap Changes are left out: their first green is the onboarding row's (CI green *and* the
+ * preview serving), and their CI passes before the preview is up.
+ */
 async function anyPassedRun(svc: Services, repoIds: readonly string[]) {
   const rows = await chunked(repoIds, (slice) =>
     svc.store.db
@@ -129,7 +133,18 @@ async function anyPassedRun(svc: Services, repoIds: readonly string[]) {
       })
       .from(pipelineRuns)
       .innerJoin(changes, eq(changes.id, pipelineRuns.changeId))
-      .where(and(inArray(changes.repoId, slice), eq(pipelineRuns.status, "passed")))
+      .where(
+        and(
+          inArray(changes.repoId, slice),
+          eq(pipelineRuns.status, "passed"),
+          notExists(
+            svc.store.db
+              .select({ one: sql`1` })
+              .from(projectOnboarding)
+              .where(eq(projectOnboarding.bootstrapChangeId, changes.id)),
+          ),
+        ),
+      )
       .orderBy(pipelineRuns.finishedAt)
       .limit(1)
       .all(),
@@ -175,18 +190,22 @@ export async function gettingStarted(svc: Services, caller: Caller): Promise<Get
       : previewUrlFor(zone, row.bootstrapChangeId);
   const byNewest = [...onboarding].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const latest = byNewest[0];
-  const greens = byNewest.filter((r) => r.outcome === "green" && r.bootstrapChangeId !== null);
-  const firstBootstrapGreen = greens[greens.length - 1];
+  // Oldest first: green with its preview, else a finished bootstrap whose CI passed (a template
+  // without a preview, or a preview that failed), else a passed run on any other Change.
+  const finished = [...byNewest].reverse().filter((r) => r.bootstrapChangeId !== null);
+  const bootstrapGreen =
+    finished.find((r) => r.outcome === "green") ??
+    finished.find((r) => r.outcome === "no-preview" || r.outcome === "preview-failed");
 
   let firstGreen: GettingStarted["firstGreen"] = null;
-  if (firstBootstrapGreen?.bootstrapChangeId) {
+  if (bootstrapGreen?.bootstrapChangeId) {
     firstGreen = {
-      projectId: firstBootstrapGreen.projectId,
-      projectName: nameOf.get(firstBootstrapGreen.projectId) ?? firstBootstrapGreen.projectId,
-      changeId: firstBootstrapGreen.bootstrapChangeId,
-      previewUrl: previewOf(firstBootstrapGreen),
-      at: firstBootstrapGreen.previewReadyAt ?? firstBootstrapGreen.evidenceAt,
-      msToFirstGreen: msToFirstGreen(firstBootstrapGreen),
+      projectId: bootstrapGreen.projectId,
+      projectName: nameOf.get(bootstrapGreen.projectId) ?? bootstrapGreen.projectId,
+      changeId: bootstrapGreen.bootstrapChangeId,
+      previewUrl: bootstrapGreen.outcome === "green" ? previewOf(bootstrapGreen) : null,
+      at: bootstrapGreen.previewReadyAt ?? bootstrapGreen.evidenceAt,
+      msToFirstGreen: msToFirstGreen(bootstrapGreen),
     };
   } else if (ids.length > 0) {
     const run = await anyPassedRun(svc, ids);
