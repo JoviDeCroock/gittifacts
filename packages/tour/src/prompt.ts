@@ -7,11 +7,11 @@
  * and the reviewer copies only whitelisted fields into them.
  */
 import type { LaneReason, Plan } from "@app/domain";
-import type { EvidenceItem } from "@app/evidence";
+import { type EvidenceItem, stripAnsi } from "@app/evidence";
 import type { RankedHunk } from "./rank.js";
 import { JUDGE_JSON_SCHEMA, type JudgeQuestion, TOUR_JSON_SCHEMA } from "./schema.js";
 
-export const PROMPT_VERSION = "tour-2026-10-01.2";
+export const PROMPT_VERSION = "tour-2026-10-03.1";
 
 const DATA_TAGS = [
   "change",
@@ -44,7 +44,7 @@ function attr(value: string): string {
 }
 
 function oneLine(text: string, max: number): string {
-  const s = text.replace(/\s+/g, " ").trim();
+  const s = stripAnsi(text).replace(/\s+/g, " ").trim();
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
@@ -92,16 +92,27 @@ export function summarizeEvidenceItem(item: EvidenceItem): string {
     case "red-green": {
       const baseOutcome = new Map(item.base.results.map((r) => [r.id, r.outcome]));
       const headOutcome = new Map(item.head.results.map((r) => [r.id, r.outcome]));
-      body = ` · verdict ${item.verdict} · tests: ${list(item.tests, 8, (t) => `${t.file} > ${oneLine(t.name, 120)} (base ${baseOutcome.get(t.id) ?? "?"}, head ${headOutcome.get(t.id) ?? "?"})`)}`;
-      break;
-    }
-    case "test-run":
-      body = ` · step ${item.step} · ${item.runner} · ${item.passed} passed, ${item.failed} failed, ${item.skipped} skipped${
-        item.failures.length > 0
-          ? ` · failures: ${list(item.failures, 5, (f) => oneLine(f.name, 120))}`
+      body = ` · verdict ${item.verdict} · tests: ${list(item.tests, 8, (t) => `${t.file} > ${oneLine(t.name, 120)} (base ${baseOutcome.get(t.id) ?? "?"}, head ${headOutcome.get(t.id) ?? "?"})`)}${
+        item.preExisting?.length
+          ? ` · pre-existing (fail identically on base and head; neither proves nor blocks): ${list(item.preExisting, 5, (t) => oneLine(t.id, 120))}`
           : ""
       }`;
       break;
+    }
+    case "test-run": {
+      const pre = new Set(item.baseline?.status === "ok" ? (item.preExisting ?? []) : []);
+      const fresh = item.failures.filter((f) => !pre.has(f.name));
+      body = ` · step ${item.step} · ${item.runner} · ${item.passed} passed, ${item.failed} failed, ${item.skipped} skipped${
+        item.selection
+          ? ` · ran ${item.selection.mode === "all" ? "the whole suite" : `${item.selection.files ?? 0} affected test file(s)`}`
+          : ""
+      }${fresh.length > 0 ? ` · new failures: ${list(fresh, 5, (f) => oneLine(f.name, 120))}` : ""}${
+        pre.size > 0
+          ? ` · pre-existing on base ${item.baseline?.sha.slice(0, 12)} (not counted): ${list([...pre], 5, (n) => oneLine(n, 120))}`
+          : ""
+      }`;
+      break;
+    }
     case "coverage":
       body = ` · changed-line coverage ${(item.ratio * 100).toFixed(1)}% (${item.coveredChangedLines}/${item.changedLines})${
         item.files.some((f) => f.uncoveredLines.length > 0)

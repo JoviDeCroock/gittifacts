@@ -32,7 +32,9 @@ import type {
   ApiChange,
   ConflictResolution,
   EvidenceItem,
+  RedGreenProof,
   ReproducibleTransform,
+  TestRun,
 } from "@app/evidence";
 import { baseRange, checkHunkRef, headRange, type Side } from "./diff.js";
 import { lane2Anchor, type RankedHunk, type RiskFactor, refHitsCandidate } from "./rank.js";
@@ -351,6 +353,50 @@ export function resolutionStopFor(
   };
 }
 
+/** Stops the platform writes from evidence; never dropped to fit the stop cap. */
+const PLATFORM_STOPS = new WeakSet<TourStop>();
+
+/**
+ * The platform's "pre-existing failures" stop, or null when no test failure is pre-existing: tests
+ * that fail on the base commit and fail the same way on this head. They do not count against the
+ * Change (classifier `tests.preexisting`); the stop says so, and that nothing proves them fixed.
+ */
+export function preexistingStopFor(items: readonly EvidenceItem[]): TourStop | null {
+  const runs = items.filter(
+    (i): i is TestRun =>
+      i.kind === "test-run" &&
+      i.status === "ok" &&
+      i.baseline?.status === "ok" &&
+      (i.preExisting?.length ?? 0) > 0,
+  );
+  const proofs = items.filter(
+    (i): i is RedGreenProof =>
+      i.kind === "red-green" && i.status === "ok" && (i.preExisting?.length ?? 0) > 0,
+  );
+  const names = [
+    ...new Set([
+      ...runs.flatMap((r) => r.preExisting ?? []),
+      ...proofs.flatMap((p) => (p.preExisting ?? []).map((t) => t.id)),
+    ]),
+  ];
+  if (names.length === 0) return null;
+  const base = runs[0]?.baseline?.sha ?? proofs[0]?.base.sha ?? "";
+  const n = names.length;
+  const stop: TourStop = {
+    kind: "other",
+    title: `${n} test${n === 1 ? "" : "s"} already fail${n === 1 ? "s" : ""} on the base commit (not counted)`,
+    why: clip(
+      `${n === 1 ? "This test fails" : "These tests fail"} on base ${base.slice(0, 12)} and the same way on this head, so ${n === 1 ? "it is" : "they are"} pre-existing: not counted against this change, and nothing here proves ${n === 1 ? "it" : "them"} fixed or broken. ${shortList(names, 6)}.`,
+      1200,
+    ),
+    hunkRefs: [],
+    evidenceRefs: [...runs, ...proofs].map((i) => i.id).slice(0, 20),
+    verdict: "unproven",
+  };
+  PLATFORM_STOPS.add(stop);
+  return stop;
+}
+
 /**
  * The resolution stop leads the tour. A person re-approving a resolved Change approves what the
  * resolver wrote (journey 06: it sat after the riskiest stop, the reviewer read the agent's tour
@@ -427,6 +473,8 @@ export interface PostprocessInput {
   transformStop: TourStop | null;
   /** The platform's conflict-resolution stop (see `resolutionStopFor`), if any. */
   resolutionStop?: TourStop | null;
+  /** The platform's pre-existing failures stop (see `preexistingStopFor`), if any. */
+  preexistingStop?: TourStop | null;
   caps: TourCaps;
   /** Platform notes for notDone (diff trimmed, lockfiles not read, ...). */
   notDoneNotes?: readonly string[];
@@ -639,7 +687,7 @@ export function orderStops(stops: readonly TourStop[]): TourStop[] {
 function keepPriority(stops: readonly TourStop[], index: number): number {
   const s = stops[index]!;
   const isFirst = stops.findIndex((x) => x.kind === s.kind) === index;
-  if (s.kind === "transform" || s.kind === "resolution") return 0;
+  if (s.kind === "transform" || s.kind === "resolution" || PLATFORM_STOPS.has(s)) return 0;
   if (s.kind === "risk") return isFirst ? 0 : 3;
   if (s.kind === "intent") return isFirst ? 1 : 5;
   if (s.kind === "uncovered") return isFirst ? 1 : 4;
@@ -767,6 +815,7 @@ export function postprocessTour(input: PostprocessInput): PostprocessResult {
 
   // 3. The platform's transform stop.
   if (input.transformStop !== null) stops.push(input.transformStop);
+  if (input.preexistingStop) stops.push(input.preexistingStop);
 
   // 4. Order.
   const ordered = orderStops(stops);

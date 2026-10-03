@@ -36,6 +36,7 @@ import {
   countWords,
   type PostprocessReport,
   postprocessTour,
+  preexistingStopFor,
   type Readability,
   resolutionStopFor,
 } from "./postprocess.js";
@@ -280,7 +281,9 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
 
   // Merge-queue conflict resolution: one platform-written stop (computed, not the model's).
   const resolutionStop = resolutionStopFor(input.diff, items);
-  const platformStops = [collapse.stop, resolutionStop].filter((s) => s !== null);
+  // Failures the base commit already has: one platform-written stop, so a reviewer sees them apart.
+  const preexistingStop = preexistingStopFor(items);
+  const platformStops = [collapse.stop, resolutionStop, preexistingStop].filter((s) => s !== null);
   const transformWords = platformStops.reduce(
     (n, s) => n + countWords(s.title) + countWords(s.why),
     0,
@@ -439,6 +442,7 @@ async function runTour(input: TourInput, deps: Deps): Promise<TourOutcome> {
     ranking,
     transformStop: collapse.stop,
     resolutionStop,
+    preexistingStop,
     caps,
     notDoneNotes: notDoneNotes(rendered.omitted, rendered.partial.length),
   });
