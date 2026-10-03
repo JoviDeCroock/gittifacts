@@ -44,6 +44,15 @@ import { codemodRename, pureBugfixWithRegressionTest } from "./scenarios.js";
 
 // ---------------------------------------------------------------- bases
 
+/**
+ * These tests enumerate inputs × mutations (the pairs test is quadratic). They take seconds and
+ * run while other suites load the machine (the M5 dogfood ran six CI runs at once), so they get
+ * an explicit budget far above their cost instead of vitest's 5 s default, and the enumeration is
+ * bounded so growth is a visible decision, not a slow creep into the budget.
+ */
+const PROPERTY_TIMEOUT_MS = 120_000;
+const MAX_PAIRS = 10_000;
+
 const BASES: ReadonlyArray<readonly [string, () => ClassifyInput]> = [
   ["green (Lane 0)", green],
   ["green in shadow mode", () => mutate(green(), (d) => (d.policy.lane0Enabled = false))],
@@ -360,7 +369,9 @@ describe.each(BASES)("base: %s", (_name, base) => {
 
   it("satisfies the invariants", () => expectInvariants(before, "base"));
 
-  it("no single negative mutation lowers computedLane or lane", () => {
+  it("no single negative mutation lowers computedLane or lane", {
+    timeout: PROPERTY_TIMEOUT_MS,
+  }, () => {
     for (const [name, , apply] of MUTATIONS) {
       const after = run(apply(base()));
       const msg = `${name}: before ${summary(before)} / after ${summary(after)}`;
@@ -370,7 +381,9 @@ describe.each(BASES)("base: %s", (_name, base) => {
     }
   });
 
-  it("a no-concern LLM judgment never changes the outcome (judgments only raise)", () => {
+  it("a no-concern LLM judgment never changes the outcome (judgments only raise)", {
+    timeout: PROPERTY_TIMEOUT_MS,
+  }, () => {
     for (const [name, , apply] of [
       ["(none)", "add", (i: ClassifyInput) => i] as const,
       ...MUTATIONS,
@@ -404,7 +417,12 @@ describe("pairs of additive negative mutations", () => {
   // ADDED must compose monotonically.
   const additive = MUTATIONS.filter(([, kind]) => kind === "add");
 
-  it("adding two negative signals is never lower than adding either one", () => {
+  it("adding two negative signals is never lower than adding either one", {
+    timeout: PROPERTY_TIMEOUT_MS,
+  }, () => {
+    expect(additive.length ** 2, "bounded: raise MAX_PAIRS consciously").toBeLessThanOrEqual(
+      MAX_PAIRS,
+    );
     const single = new Map(
       additive.map(([name, , apply]) => [name, run(apply(green())).computedLane]),
     );
@@ -421,7 +439,7 @@ describe("pairs of additive negative mutations", () => {
 describe("determinism and purity", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("the same input twice gives deep-equal results", () => {
+  it("the same input twice gives deep-equal results", { timeout: PROPERTY_TIMEOUT_MS }, () => {
     for (const [, base] of BASES) {
       for (const [, , apply] of MUTATIONS.slice(0, 20)) {
         const input = apply(base());
