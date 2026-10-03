@@ -66,10 +66,11 @@ const verdict = (over: Partial<LaneVerdict> = {}): LaneVerdict => ({
 
 describe("gittifacts/lane check run", () => {
   it("success = Lane 0, neutral = Lane 1, action_required = Lane 2 or blocked", () => {
-    expect(conclusionOf({ lane: 0, blocked: false })).toBe("success");
-    expect(conclusionOf({ lane: 1, blocked: false })).toBe("neutral");
-    expect(conclusionOf({ lane: 2, blocked: false })).toBe("action_required");
-    expect(conclusionOf({ lane: 0, blocked: true })).toBe("action_required");
+    expect(conclusionOf({ lane: 0, blocked: false, action: "label-ready" })).toBe("success");
+    expect(conclusionOf({ lane: 0, blocked: false, action: "request-review" })).toBe("neutral");
+    expect(conclusionOf({ lane: 1, blocked: false, action: "request-review" })).toBe("neutral");
+    expect(conclusionOf({ lane: 2, blocked: false, action: "request-review" })).toBe("action_required");
+    expect(conclusionOf({ lane: 0, blocked: true, action: "blocked" })).toBe("action_required");
   });
 
   it("says shadow, links the change, stays under 60 KB and GitHub's button limits", () => {

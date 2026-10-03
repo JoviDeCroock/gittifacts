@@ -1,0 +1,49 @@
+# The host contract suite (docs/prompts/06-two-modes.md §2) on every commit that can change a
+# lane: native (in-memory fakes) and GitHub (recorded webhook/API fixtures) must give the same
+# lane, evidence and tour for the same change. Node only, ~2 minutes. Path-filtered so docs and
+# UI commits don't spend Actions minutes. The live test-org run is nightly (github-live.yml).
+name: host-contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/host*/**"
+      - "packages/core/**"
+      - "packages/coordinator/**"
+      - "packages/classifier/**"
+      - "packages/evidence/**"
+      - "packages/domain/**"
+      - "packages/tour/**"
+      - "fixtures/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/host-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: host-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable corepack (pnpm from packageManager)
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck the hosts
+        run: |
+          pnpm --filter @app/host --filter @app/host-artifacts --filter @app/host-github --filter @app/host-contract typecheck
+      - name: Contract suite (native, then GitHub on recorded fixtures)
+        run: |
+          pnpm --filter @app/host-artifacts exec vitest run --maxWorkers=2
+          pnpm --filter @app/host-github exec vitest run --maxWorkers=2

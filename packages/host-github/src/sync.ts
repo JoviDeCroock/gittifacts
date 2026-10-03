@@ -16,7 +16,7 @@
 import { type ChangeCoordinatorClient, type ExternalRemote, PUSHABLE_STATUSES, type Ports, SYSTEM_PRINCIPAL_ID, ZERO_SHA } from "@app/coordinator";
 import { type Change, defaultPolicy, type GithubChangeHost, type Repo } from "@app/domain";
 import type { Identity } from "@app/host";
-import { claimedCategoryOf, type GitHubHost } from "./adapter.js";
+import { claimedCategoryOf, type GitHubHost, planRefOf } from "./adapter.js";
 import { changeIdFor, headBranchFor, mirrorNameFor, repoIdFor } from "./ids.js";
 import { identityOf, normalizeGithubDelivery } from "./normalize.js";
 import { type GithubDelivery, type GithubRepo, PullRequestEvent, PushEvent } from "./payloads.js";
@@ -178,6 +178,10 @@ export class GithubSync {
       author: { login: pr.user.login, id: pr.user.id, kind: author.kind },
       url: pr.html_url,
     };
+    // A platform Plan referenced in the body links only if it belongs to this repo.
+    const planRef = planRefOf(pr.body);
+    const plan = planRef === null ? null : await store.getPlan(planRef);
+    const planId = plan !== null && plan.repoId === repo.id ? plan.id : null;
     let change = await store.getChange(changeId);
     const previous = change?.headSha ?? null;
     if (change === null) {
@@ -185,7 +189,7 @@ export class GithubSync {
       change = {
         id: changeId,
         repoId: repo.id,
-        planId: null,
+        planId,
         title: (pr.title || `#${pr.number}`).slice(0, 200),
         claim: { category: claimedCategoryOf(pr) ?? DEFAULT_PR_CATEGORY, summary: pr.body?.slice(0, 10_000) ?? null },
         baseSha,
@@ -214,6 +218,7 @@ export class GithubSync {
         title: (pr.title || `#${pr.number}`).slice(0, 200),
         claim: { category: claimedCategoryOf(pr) ?? change.claim.category, summary: pr.body?.slice(0, 10_000) ?? null },
         baseSha,
+        planId,
         host: hostInfo,
         // Reopened after closing: pushable again.
         ...(PUSHABLE_STATUSES.includes(change.status) ? {} : { status: "awaiting-push" as const }),

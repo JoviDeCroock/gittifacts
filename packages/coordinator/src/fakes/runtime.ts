@@ -17,7 +17,7 @@ import type {
   WorkflowRunStatus,
 } from "../bindings.js";
 import { ChangeCoordinatorCore, MemoryKv } from "../change-coordinator.js";
-import { runChangeWorkflow } from "../change-flow.js";
+import { type FlowHosts, runChangeWorkflow } from "../change-flow.js";
 import type { ChangeWorkflowParams, RolloutParams } from "../events.js";
 import { MemoryQueueStorage, MergeQueueCore, type MergeQueueOptions } from "../merge-queue.js";
 import type { Ports } from "../ports.js";
@@ -256,10 +256,20 @@ export class FakeBindings implements CoordinatorBindings {
     private readonly queueOptions: Partial<MergeQueueOptions> = { pollMs: 0 },
   ) {}
 
+  /** Host adapters for non-native changes (GitHub mode), as the platform's runtime supplies them. */
+  hosts: FlowHosts | undefined = undefined;
+
   /** Run the real workflow bodies inside the fake instances. */
   runWorkflows(): this {
     this.changeWorkflow.runner = (params, step, id) =>
-      runChangeWorkflow({ ports: this.portsFor("default"), bindings: this }, params, step, id);
+      runChangeWorkflow(
+        this.hosts === undefined
+          ? { ports: this.portsFor("default"), bindings: this }
+          : { ports: this.portsFor("default"), bindings: this, hosts: this.hosts },
+        params,
+        step,
+        id,
+      );
     this.rolloutWorkflow.runner = (params, step) =>
       runRollout({ ports: this.portsFor("default"), bindings: this }, params, step);
     return this;

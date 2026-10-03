@@ -15,6 +15,7 @@ import {
   type HostEvents,
   HostError,
   type LaneVerdict,
+  type MergeMethod,
   type MergeResult,
   type SandboxCheckout,
 } from "@app/host";
@@ -72,6 +73,15 @@ export function claimedCategoryOf(pr: { title: string; labels: { name: string }[
   return t === null ? null : (PREFIXES[(t[1] ?? "").toLowerCase()] ?? null);
 }
 
+/**
+ * A Plan created on the platform and referenced in the PR body (spec §3.5 c): a line
+ * `gittifacts-plan: <plan id>`. Linked issues and plan files come in M3.
+ */
+export function planRefOf(body: string | null): string | null {
+  const m = /^\s*gittifacts-plan:\s*([A-Za-z0-9_-]{1,64})\s*$/m.exec(body ?? "");
+  return m === null ? null : (m[1] ?? null);
+}
+
 export class GitHubHost implements HostAdapter {
   readonly kind = "github" as const;
   constructor(private readonly deps: GitHubHostDeps) {}
@@ -117,7 +127,7 @@ export class GitHubHost implements HostAdapter {
       baseSha: row?.baseSha ?? pr.base.sha,
       headSha: pr.head.sha,
       category: claimedCategoryOf(pr),
-      planRefs: [],
+      planRefs: planRefOf(pr.body) === null ? [] : [planRefOf(pr.body) as string],
       revertOf: null,
       agentTraceId: null,
       source: { fork, repo: pr.head.repo?.full_name ?? "(deleted fork)" },
@@ -234,7 +244,7 @@ export class GitHubHost implements HostAdapter {
     this.own(ref);
   }
 
-  async merge(ref: ChangeRef, input: { expectedHeadSha: string }): Promise<MergeResult> {
+  async merge(ref: ChangeRef, input: { expectedHeadSha: string; method: MergeMethod }): Promise<MergeResult> {
     const r = this.own(ref);
     const pr = await this.pull(r.number);
     if (pr.state === "closed") {

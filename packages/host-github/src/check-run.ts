@@ -34,9 +34,11 @@ export const CHECK_ACTIONS = {
 } as const;
 export type CheckActionId = keyof typeof CHECK_ACTIONS;
 
-export function conclusionOf(v: Pick<LaneVerdict, "lane" | "blocked">): CheckConclusion {
+/** `success` only when nothing needs a human: Lane 0 that still needs an approval is `neutral`. */
+export function conclusionOf(v: Pick<LaneVerdict, "lane" | "blocked" | "action">): CheckConclusion {
   if (v.blocked) return "action_required";
-  return v.lane === 0 ? "success" : v.lane === 1 ? "neutral" : "action_required";
+  if (v.lane === 0) return v.action === "merge" || v.action === "label-ready" ? "success" : "neutral";
+  return v.lane === 1 ? "neutral" : "action_required";
 }
 
 const LANE_WORDS = {

@@ -129,3 +129,33 @@ export class InstallationTokens {
     }
   }
 }
+
+/**
+ * One token for one job (a queue message, a workflow step): minted on first use, revoked by
+ * `release()`. Every GitHub call of the job shares it; nothing outlives the job.
+ */
+export class JobToken {
+  private token: Promise<InstallationToken> | null = null;
+
+  constructor(
+    private readonly tokens: InstallationTokens,
+    private readonly installationId: number,
+    private readonly scope: { repositoryIds: number[]; permissions: Permissions },
+  ) {}
+
+  async value(): Promise<string> {
+    this.token ??= this.tokens.mint(this.installationId, this.scope);
+    return (await this.token).value();
+  }
+
+  async release(): Promise<void> {
+    const t = this.token;
+    this.token = null;
+    if (t === null) return;
+    try {
+      await this.tokens.revoke(await t);
+    } catch {
+      // never minted
+    }
+  }
+}
