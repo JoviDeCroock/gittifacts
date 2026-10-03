@@ -1,19 +1,19 @@
 ---
 title: Get started
-description: From nothing to a green build with a live preview, for agents, for humans and from the terminal.
+description: Four paths to a first success in a few minutes - as an agent, from a terminal, moving a repo from GitHub, or grading pull requests on GitHub - and one for reviewers.
 order: 0
 audience: both
 ---
 
 # Get started
 
-Pick the page for how you work. Each one ends with a green CI run, signed evidence and a preview URL.
+Pick the path that matches what you want to do. Each one is a few numbered steps and ends in something you can see: a green check, a preview URL, a setup proposal or a graded pull request.
 
 <!-- pages -->
 
 ## What "green" means here
 
-A project is green when its bootstrap Change has:
+A project is green when its first Change has:
 
 1. passed every CI step in `.platform/ci.ts` (install, lint, typecheck, test, build for the templates);
 2. a signed evidence bundle (`get_evidence`), verified against the platform's keys;
