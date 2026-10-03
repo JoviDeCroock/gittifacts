@@ -1,4 +1,4 @@
-import type { RepoPolicy } from "@app/domain";
+import type { LaneReason, RepoPolicy } from "@app/domain";
 import type { EvidenceItem } from "@app/evidence";
 import { useSignal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
@@ -9,7 +9,7 @@ import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
 import { CopyButton, ErrorState, Hash, Loading, Meter } from "../components/ui.js";
 import { compressLines } from "../lib/diff.js";
-import { itemAnchor, itemTitle, summarize } from "../lib/evidence.js";
+import { itemAnchor, itemTitle, summarize, unmeasuredEffect } from "../lib/evidence.js";
 import { pct } from "../lib/lanes.js";
 import { durationLabel, formatDateTime } from "../lib/time.js";
 import { num, plural, shortSha } from "../lib/vocab.js";
@@ -480,7 +480,7 @@ function ItemBody({ item, policy }: { item: EvidenceItem; policy: RepoPolicy }) 
   }
 }
 
-function ItemSection({ item, policy }: { item: EvidenceItem; policy: RepoPolicy }) {
+function ItemSection({ item, policy, reasons }: { item: EvidenceItem; policy: RepoPolicy; reasons: readonly LaneReason[] }) {
   const s = summarize(item);
   return (
     <section class="ev-item" id={itemAnchor(item.id)} aria-labelledby={`${itemAnchor(item.id)}-t`} tabIndex={-1}>
@@ -495,7 +495,7 @@ function ItemSection({ item, policy }: { item: EvidenceItem; policy: RepoPolicy 
         <p class={`ev-status ev-status--${item.status}`}>
           <Icon name={item.status === "error" ? "x-circle" : "circle-dashed"} size={15} />
           {item.status === "error" ? "Measurement failed" : "Not measured"}
-          {item.note ? `: ${item.note}` : "."} Unknown counts as risk, so this raises the lane.
+          {item.note ? `: ${item.note.replace(/\.$/, "")}.` : "."} {unmeasuredEffect(item.id, reasons)}
         </p>
       ) : (
         <div class="ev-item__body">
@@ -577,7 +577,7 @@ export function EvidenceView({ changeId }: { changeId: string }) {
         <div class="ev-main">
           <Attestation ev={ev} change={change} />
           {items.map((i) => (
-            <ItemSection key={i.id} item={i} policy={repo.repo.policy} />
+            <ItemSection key={i.id} item={i} policy={repo.repo.policy} reasons={change.laneReasons} />
           ))}
         </div>
       </div>

@@ -2,6 +2,7 @@
  * Evidence vocabulary: one label per kind, a short honest summary per item, and a tone.
  * A skipped or errored item is "not measured", which never reads as good.
  */
+import type { LaneReason } from "@app/domain";
 import type { EvidenceItem, EvidenceKind } from "@app/evidence";
 import { pct } from "./lanes.js";
 import type { Tone } from "./vocab.js";
@@ -124,4 +125,18 @@ export function findItem(items: EvidenceItem[], id: string): EvidenceItem | unde
 /** Anchor id for an evidence item; ids may contain ":" and "/". */
 export function itemAnchor(id: string): string {
   return `ev-${id.replace(/[^A-Za-z0-9_-]+/g, "-")}`;
+}
+
+/**
+ * What a skipped or failed measurement did to the lane, read from the classifier's own reasons
+ * (anchored to the item by evidenceRef). Before the change is classified it can only say "can".
+ */
+export function unmeasuredEffect(itemId: string, reasons: readonly LaneReason[]): string {
+  if (reasons.length === 0) return "Unknown counts as risk, so it can raise the lane.";
+  const own = reasons.filter((r) => r.evidenceRef === itemId);
+  const top = own.reduce((max, r) => Math.max(max, r.lane), 0);
+  if (top > 0) return `Unknown counts as risk: this forces at least Lane ${top}.`;
+  if (own.some((r) => r.code.startsWith("signal.skip-accepted.")))
+    return "The repository's policy accepts this skip, so it does not raise the lane.";
+  return "It did not raise this change's lane.";
 }
