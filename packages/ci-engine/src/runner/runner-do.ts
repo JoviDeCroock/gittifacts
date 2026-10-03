@@ -40,6 +40,7 @@ import { parseEvidenceDocument } from "./evidence.js";
 import {
   type EvidenceCapture,
   type LogInfo,
+  MAX_JOB_FILE_BYTES,
   PlanJob,
   type PlanOutcome,
   type RunnerErrorCode,
@@ -706,6 +707,7 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
       if (job.kind === "evidence") {
         await this.runQuiet(c, ["sh", "-c", "rm -rf /tmp/gittifacts && mkdir -p /tmp/gittifacts"]);
       }
+      for (const input of job.inputs) await this.copyIn(c, input, log);
 
       await log.line(`$ ${job.command}`);
       const commandStarted = Date.now();
@@ -732,6 +734,7 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
           ? await session.phase("evidenceMs", () => this.captureEvidence(c, job, log))
           : null;
       if (evidence !== null && "error" in evidence) await log.line(`evidence: ${evidence.error}`);
+      for (const output of job.outputs) await this.copyOut(c, output, log);
 
       const artifacts: Record<string, ArtifactRef> = {};
       const artifactErrors: Record<string, { error: string; optional: boolean }> = {};
@@ -1196,6 +1199,65 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
       .join("");
     const bytes = await upload.close();
     return { ref: { key: artifact.key, bytes, sha256 } };
+  }
+
+  /** Copies an R2 object into the container (best effort: a missing object is skipped). */
+  private async copyIn(
+    c: ContainerLike,
+    input: { key: string; path: string },
+    log: StepLog,
+  ): Promise<void> {
+    try {
+      const obj = await this.objectStore().get(input.key);
+      if (obj === null) return;
+      const bytes = new TextEncoder().encode(await obj.text());
+      if (bytes.byteLength > MAX_JOB_FILE_BYTES) return;
+      const stdin = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(bytes);
+          controller.close();
+        },
+      });
+      const dir = input.path.slice(0, input.path.lastIndexOf("/"));
+      const proc = await c.exec(
+        ["sh", "-c", `mkdir -p ${shellQuote(dir)} && cat > ${shellQuote(input.path)}`],
+        { user: RUNNER_USER, stdin, stdout: "ignore", stderr: "ignore" },
+      );
+      if ((await proc.exitCode) === 0)
+        await log.line(`input ${input.path}: ${bytes.byteLength} bytes from ${input.key}`);
+    } catch (error) {
+      await log.line(`input ${input.path} skipped: ${errorMessage(error)}`);
+    }
+  }
+
+  /** Stores a container file in R2 (best effort: a missing or oversized file is skipped). */
+  private async copyOut(
+    c: ContainerLike,
+    output: { path: string; key: string },
+    log: StepLog,
+  ): Promise<void> {
+    try {
+      const path = shellQuote(output.path);
+      const proc = await c.exec(
+        [
+          "sh",
+          "-c",
+          `if [ -f ${path} ]; then head -c ${MAX_JOB_FILE_BYTES + 1} ${path}; else exit 3; fi`,
+        ],
+        { user: RUNNER_USER, stdout: "pipe", stderr: "ignore" },
+      );
+      const [file, code] = await Promise.all([
+        readCapped(proc.stdout, MAX_JOB_FILE_BYTES + 1),
+        proc.exitCode,
+      ]);
+      if (code !== 0 || file.bytes > MAX_JOB_FILE_BYTES) return;
+      await this.objectStore().put(output.key, file.text, {
+        httpMetadata: { contentType: "application/json" },
+      });
+      await log.line(`output ${output.path}: ${file.bytes} bytes to ${output.key}`);
+    } catch (error) {
+      await log.line(`output ${output.path} skipped: ${errorMessage(error)}`);
+    }
   }
 
   private async captureEvidence(

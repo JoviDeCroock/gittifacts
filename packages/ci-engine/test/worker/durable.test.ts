@@ -6,6 +6,7 @@ import { introspectWorkflowInstance, runInDurableObject } from "cloudflare:test"
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { type RunRequest, RunSummary } from "../../src/engine.js";
+import { evidenceCommand } from "../../src/evidence-steps.js";
 import { RunnerJobState } from "../../src/runner/client.js";
 import { RunnerOutcome } from "../../src/runner/job.js";
 import { WorkflowsCiEngine } from "../../src/workflows/engine.js";
@@ -168,5 +169,63 @@ describe("CiRunWorkflow with lost connections", () => {
     expect(st).toMatchObject({ status: "passed" });
     expect(st?.reason).toContain("re-attached to the running job (main)");
     expect(summary.usage.containers).toBe(1);
+  });
+});
+
+describe("baseline files for test-run and red-green", () => {
+  it("are exchanged per Change and base: a later run gets both steps' documents in", async () => {
+    const run = async (runId: string) => {
+      const req: RunRequest = {
+        runId,
+        changeId: "chg-baseline",
+        repo: { remote: "https://example.com/r.git", tokenProvider: "artifacts" },
+        artifactsRepo: "fork-1",
+        headSha: SHAS.head,
+        baseSha: SHAS.base,
+        limits: { maxMinutes: 30 },
+        pipeline: {
+          version: 1,
+          source: "file",
+          steps: [{ name: "install", command: "fake:touch=node_modules", parent: null, after: [] }],
+          warnings: [],
+        },
+        evidenceSteps: (["test-run", "red-green", "coverage"] as const).map((kind) => ({
+          name: `evidence:${kind}` as const,
+          command: evidenceCommand(kind, { testCommand: "pnpm test" }),
+          parent: "install",
+          requiresGreen: false,
+        })),
+      };
+      await using inst = await introspectWorkflowInstance(e.CI_RUN_WORKFLOW, runId);
+      await inst.modify(async (m) => {
+        await m.disableRetryDelays();
+      });
+      await engine.start(req);
+      await inst.waitForStatus("complete");
+    };
+    const docs = async () => {
+      const list = await e.CI_BUCKET.list({ prefix: `ci-baselines/chg-baseline/${SHAS.base}/` });
+      return Object.fromEntries(
+        await Promise.all(
+          list.objects.map(async (o) => [
+            o.key.split("/").at(-1),
+            JSON.parse((await (await e.CI_BUCKET.get(o.key))?.text()) ?? "null") as {
+              kind: string;
+              received: Record<string, string>;
+            },
+          ]),
+        ),
+      );
+    };
+    await run("baseline-1");
+    const first = await docs();
+    expect(Object.keys(first).sort()).toEqual(["red-green.json", "test-run.json"]);
+    expect(first["test-run.json"]).toEqual({ kind: "test-run", received: {} });
+    await run("baseline-2");
+    const second = await docs();
+    expect(Object.keys(second["test-run.json"]?.received ?? {}).sort()).toEqual([
+      "/tmp/gittifacts/baseline-in/red-green.json",
+      "/tmp/gittifacts/baseline-in/test-run.json",
+    ]);
   });
 });

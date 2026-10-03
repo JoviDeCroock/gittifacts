@@ -72,6 +72,15 @@ export const StartFrom = z.discriminatedUnion("kind", [
 ]);
 export type StartFrom = z.infer<typeof StartFrom>;
 
+/** Scratch files a job exchanges with R2 live under here (cleared before evidence steps). */
+export const JOB_FILES_DIR = "/tmp/gittifacts/";
+const JobFilePath = z
+  .string()
+  .max(300)
+  .regex(/^\/tmp\/gittifacts\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/)
+  .refine((p) => !p.split("/").includes(".."), "no .. segments");
+export const MAX_JOB_FILE_BYTES = 16 * 1024 * 1024;
+
 export const RunnerJob = z
   .object({
     runId: z.string().min(1).max(100),
@@ -120,6 +129,16 @@ export const RunnerJob = z
       .min(1024 * 1024)
       .max(2 * 1024 * 1024 * 1024)
       .default(100 * 1024 * 1024),
+    /** R2 objects copied into the container before the command (a missing object is skipped). */
+    inputs: z
+      .array(z.object({ key: z.string().min(1).max(512), path: JobFilePath }).strict())
+      .max(8)
+      .default([]),
+    /** Container files stored to R2 after the command (a missing or oversized file is skipped). */
+    outputs: z
+      .array(z.object({ path: JobFilePath, key: z.string().min(1).max(512) }).strict())
+      .max(8)
+      .default([]),
   })
   .strict();
 export type RunnerJob = z.output<typeof RunnerJob>;

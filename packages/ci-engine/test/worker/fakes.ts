@@ -328,11 +328,19 @@ export class FakeContainer implements ContainerLike {
       return 0;
     }
     if (script.startsWith("rm -rf /tmp/gittifacts")) {
-      delete state.files[EVIDENCE_OUT];
+      for (const k of Object.keys(state.files))
+        if (k.startsWith("/tmp/gittifacts/")) delete state.files[k];
       return 0;
     }
-    if (script.includes(EVIDENCE_OUT) && script.includes("head -c")) {
-      const content = state.files[EVIDENCE_OUT];
+    const catInto = /cat > '?(\/tmp\/gittifacts\/[^' ]+)'?$/.exec(script);
+    if (catInto !== null) {
+      state.files[catInto[1]!] =
+        options.stdin instanceof ReadableStream ? await new Response(options.stdin).text() : "";
+      return 0;
+    }
+    const headOf = /head -c \d+ '?(\/tmp\/gittifacts\/[^' ;]+)'?/.exec(script);
+    if (headOf !== null && script.startsWith("if [ -f")) {
+      const content = state.files[headOf[1]!];
       if (content === undefined) return 3;
       await write(content);
       return 0;
@@ -385,6 +393,16 @@ export class FakeContainer implements ContainerLike {
       if (kind === "policy") await write(`noise\n::evidence::${JSON.stringify(item)}\n`);
       else if (kind === "mutation") await write("::evidence::{not json\n");
       else state.files[EVIDENCE_OUT] = JSON.stringify([item]);
+      // Baseline exchange (lib/baseline.ts in the sandbox): echo what came in, as what goes out.
+      const out = env.GITTIFACTS_BASELINE_OUT;
+      const inDir = env.GITTIFACTS_BASELINE_IN;
+      if (out !== undefined && inDir !== undefined) {
+        const received = Object.keys(state.files)
+          .filter((k) => k.startsWith(`${inDir}/`))
+          .sort()
+          .map((k) => [k, state.files[k]]);
+        state.files[out] = JSON.stringify({ kind, received: Object.fromEntries(received) });
+      }
       await write(
         `evidence ${kind} base=${env.GITTIFACTS_BASE_SHA} head=${env.GITTIFACTS_HEAD_SHA}\n`,
       );

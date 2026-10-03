@@ -188,6 +188,19 @@ export type Prepared = {
   durationMs: number;
 };
 
+/** Evidence steps that compare against base-commit test results (`baselineFiles`). */
+const BASELINE_STEPS: Readonly<Record<string, string>> = {
+  "evidence:test-run": "test-run",
+  "evidence:red-green": "red-green",
+};
+const BASELINE_IN_DIR = "/tmp/gittifacts/baseline-in";
+const BASELINE_OUT = "/tmp/gittifacts/baseline-out.json";
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** Runner job ids within one step's Runner: the command, a lineage replay, the full checkout. */
 type JobPurpose = "main" | "replay" | "full";
 
@@ -553,6 +566,7 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       }
     }
 
+    const baseline = await this.baselineFiles(req, spec, prepared);
     const job: RunnerJobInput = {
       runId: req.runId,
       step: spec.name,
@@ -560,7 +574,8 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
       attempt,
       command: spec.command,
       ...(spec.cwd === undefined ? {} : { cwd: spec.cwd }),
-      env: stepEnv(spec.kind, spec.env, req.testTargets),
+      env: { ...stepEnv(spec.kind, spec.env, req.testTargets), ...(baseline?.env ?? {}) },
+      ...(baseline === null ? {} : { inputs: baseline.inputs, outputs: baseline.outputs }),
       instance: spec.instance,
       timeoutSeconds,
       artifactsRepo: req.artifactsRepo,
@@ -698,6 +713,40 @@ export class CiRunWorkflow<E extends CiWorkflowEnv = CiWorkflowEnv> extends Work
           : { count: outcome.egress.denied, hosts: outcome.egress.hosts },
       artifacts: outcome.artifacts,
     });
+  }
+
+  /**
+   * Base-commit test results for `evidence:test-run` / `evidence:red-green` (apps/sandbox
+   * lib/baseline.ts): both steps' cached documents go in, the step's own goes back out.
+   *
+   * Scoped to the Change: the document is written from inside a container that ran the Change's
+   * code, so it is only as trustworthy as the Change's own evidence and is never reused for
+   * another Change (that would let one Change's code forge another's baseline). Later pushes of
+   * the same Change on the same base, and the two steps of one run, share it.
+   */
+  protected async baselineFiles(
+    req: CiRunParams,
+    spec: ExecSpec,
+    prepared: Prepared,
+  ): Promise<{
+    env: Record<string, string>;
+    inputs: { key: string; path: string }[];
+    outputs: { key: string; path: string }[];
+  } | null> {
+    const kind = BASELINE_STEPS[spec.name];
+    if (spec.kind !== "evidence" || kind === undefined) return null;
+    let image = prepared.image;
+    if (image === null) image = await this.runnerImage(req).catch(() => null);
+    const config = spec.command.replace(/\bevidence (?:test-run|red-green)\b/, "evidence *");
+    const dir = `ci-baselines/${req.changeId}/${req.baseSha}/${(await sha256Hex(`${config}\n${image ?? ""}`)).slice(0, 16)}`;
+    return {
+      env: { GITTIFACTS_BASELINE_IN: BASELINE_IN_DIR, GITTIFACTS_BASELINE_OUT: BASELINE_OUT },
+      inputs: Object.values(BASELINE_STEPS).map((k) => ({
+        key: `${dir}/${k}.json`,
+        path: `${BASELINE_IN_DIR}/${k}.json`,
+      })),
+      outputs: [{ key: `${dir}/${kind}.json`, path: BASELINE_OUT }],
+    };
   }
 
   /**
