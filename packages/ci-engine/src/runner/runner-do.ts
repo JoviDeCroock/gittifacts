@@ -1149,6 +1149,9 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
       contentType: "application/gzip",
     });
     const digest = new crypto.DigestStream("SHA-256");
+    // Aborting the writer (a failed or oversized artifact) rejects `digest.digest`, which nothing
+    // awaits on that path: observe it here so it is not an unhandled rejection.
+    digest.digest.catch(() => {});
     const digestWriter = digest.getWriter();
     let tooLarge = false;
     const pump = async (): Promise<void> => {
