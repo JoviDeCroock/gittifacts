@@ -2146,3 +2146,67 @@ step: the bootstrap wait is `nextSteps[0]` there. `/start` now points at `bootst
 position. `get_change_status` returns `previewUrl` (the head's sealed `preview` evidence when it answered), and
 `--human` renders a view: status with its meaning, lane or why there is none, preview, head, the latest run's
 steps as a table, what raised the lane, next steps. The JSON output is unchanged apart from the new field.
+
+## 2026-10-03 — CI steps are durable Runner jobs: start, long-poll, re-attach
+
+**Context.** M5 dogfood (friction 6): a step awaited one `Runner.run` DO RPC for its whole duration. Around
+2–5 minutes in, attempts died with `WorkflowInternalError` / "Network connection lost" while the container kept
+working, and the step's one retry started the job over (`exclusive()` superseded the live job). Bootstrap
+typecheck, the platform suite and two queue steps lost attempts that way; a second loss failed the step.
+
+**Decision.** The Runner runs jobs in the background: `start({ jobId, job })` returns at once, `poll(jobId,
+waitMs)` answers when the job finishes or after ≤ 30 s, and the outcome is stored in the DO. The step body
+(`runDurably`, `@app/ci-engine/runner-client`) starts the job and long-polls it; a failed poll is retried
+(8 in a row before the attempt gives up). Job ids are the step's purpose (`main`, `replay`, `full`) on the
+step's own Runner, so a retry after a dropped connection **re-attaches**: to the running job, or to its
+finished outcome when that is `ok`. An infrastructure failure (`ok: false`) starts a new launch, which is what
+a retry is for. A heartbeat alarm keeps the DO in memory while a job runs; a job whose DO restarted reports
+`lost` and the retry starts it again (its exec stream is gone). `clearAbort` (restartFrom) forgets finished
+jobs. Step names, the step result shape and the run output are unchanged, so in-flight Workflows replay; usage
+records are keyed by job and launch, so a re-attached job is counted once. The coordinator's sandbox, queue and
+detect jobs use the same client (no RPC held for a whole job; their ids are random per call, so no re-attach).
+
+**Consequences.** A dropped connection costs a re-poll, not a restart. Not covered: a Runner DO restart (a
+platform deploy) still loses the process; surviving that needs the command detached inside the container with
+its output in a file, which the log streaming doesn't do yet.
+
+## 2026-10-03 — Evidence runs the tests that reach the Change; only failures new against base count
+
+**Context.** M5 dogfood (frictions 5, 7, 18): evidence ran the whole monorepo suite on every Change (2,575
+tests, 13–17 min; past vitest's 1,200 s budget with six Changes in flight), and failures main already had
+(`tests.failing`, 10 container-only worker failures) put every Change in Lane 2 and made red/green unprovable
+(a pre-existing failure was listed and still failed on head).
+
+**Decision.**
+- **Selection.** `evidence:test-run`, `red-green` (its base scan) and `coverage` run `@app/affected`'s test
+  targets: test files whose import closure reaches the touched files, touched tests, and every test under a
+  runner config or Workers test pool (cloudflareTest `main` / wrangler `main`) whose setup or entry the Change
+  reaches. Unknown impact runs everything: an incomplete analysis, a config/manifest/lockfile change (`*`), or
+  a crash. No reachable test means nothing runs: `test-run` reports 0 tests, `coverage` counts every changed
+  line uncovered (never "not executable"). Items record `selection` (mode, reason, files).
+- **Baseline.** A head failure is **pre-existing** only when the same test fails on the base commit in two runs
+  with the same failure signature (ANSI-free lines up to the first stack frame, checkout paths normalized).
+  `test-run` lists those in `preExisting` with `baseline: { sha, status, source }`; `failed` still counts every
+  failure. The classifier discounts them (`tests.preexisting`, Lane 0) only when the baseline is `ok` **and of
+  the Change's own base** (`diffStats.baseSha`); otherwise every failure counts (`tests.failing`). Red/green no
+  longer lists a base failure that fails identically on head (reported in `preExisting`: it neither proves nor
+  blocks); one that fails differently still blocks. Base results come from a cache when the Change measured
+  that base before, else the failing files run on base now, but only when base installs the same dependency
+  graph: nothing is installed for this, so a different graph means `baseline: unavailable` and every failure
+  counts.
+- **Why this respects "unknown → escalate".** Nothing is discounted on a missing or errored signal: no baseline,
+  a baseline of another commit, a failure seen once on base, a different failure message, or a file base can't
+  run all count against the Change. Only a measured, confirmed, identical failure on the very commit the Change
+  is based on is set aside, and it stays visible (evidence, tour stop, `tests.preexisting`).
+- **Cache scope.** Base results are cached per Change and base commit (`ci-baselines/<changeId>/<baseSha>/…`),
+  not shared across Changes: the document is written from inside a container that ran the Change's code, so it
+  is only as trustworthy as that Change's own evidence. Sharing main's results needs a baseline job that never
+  runs head code (open).
+- **Mutation.** Stryker stopping with "No tests were found" (no test related to the mutated files) is a measured
+  result, `noCoverage` = the instrumented mutant count, score 0 → `mutation.no-coverage` (Lane 1, `fail`), not
+  `signal.error.mutation`.
+
+**Consequences.** Evidence cost scales with what a Change reaches. User pipeline steps that fail on main too
+still count (a step has no per-failure identity, so it stays unknown). `signal.error.public-api` from an
+unmeasurable package main already has is unchanged: discounting it would lower a lane on an errored signal,
+which needs a decision first.
