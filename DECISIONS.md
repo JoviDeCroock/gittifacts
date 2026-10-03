@@ -1861,3 +1861,45 @@ Code: `packages/host-github` (`pr-writes`, `pr-publisher`, `plans`, `sync-plans`
 - **Contract suite.** A tenth scenario, `approval-binds-to-head` (the author's, an agent's and an old head's
   approvals don't count; a maintainer's for the head does), runs on both hosts; GitHub also reports the tour as
   published (the review) and it must match the platform's tour. Native 16/16, GitHub 11/11 + M3 tests.
+
+
+## 2026-10-03 — Until cut-over, GitHub is canonical; gittifacts hosts a mirror where changes are gated
+
+M5 dogfood put this repo on the platform (`gittifacts`, project `4okfnz50jaf0xzzt4uiu`, imported by push from
+GitHub main `bef7d6b`). GitHub stays the source of truth until a cut-over decision; other agents keep committing
+there and the deploy gate (`scripts/deploy-clean.sh --gate=ci`) deploys GitHub main.
+
+- **Where changes go.** A change meant to be dogfooded is proposed on gittifacts: `create_plan` → a human
+  approves → `start_change` → push to the fork → CI, evidence, lane, tour → a human approves the Change (which
+  enqueues it) → the merge queue writes the gittifacts main. Then the **same commits** are cherry-picked onto
+  GitHub main (`git cherry-pick -x`, plus a `Gittifacts-Change: <changeId>` trailer) and deployed like any other
+  commit.
+- **Platform fixes that unblock the platform** (it can't gate a change it can't run) land on GitHub first, then
+  reach the mirror with the next sync.
+- **Sync (GitHub → mirror).** The mirror's main only moves through its merge queue, so commits made directly on
+  GitHub (other agents' work, unblocking platform fixes) come over as a sync Change: an agent replays the
+  GitHub-only commits (those without a `Gittifacts-Change` trailer) onto the mirror's main in a fork, and it is
+  judged and merged like any other Change. Dogfood commits are already on GitHub, so they are never replayed.
+  Not automated yet; until it is, the mirror trails GitHub between syncs.
+- **Cut-over** (later, user decision): stop committing on GitHub, push the mirror's main back to GitHub as a
+  read-only mirror, and point the deploy gate at the gittifacts main.
+
+## 2026-10-03 — Merge queue: a dropped batch build no longer stalls the queue; replays fetch full objects
+
+Found in M5 dogfood, the first time this queue had to land a Change onto a main that had moved (Change E merged
+while A and G were landing).
+
+- **Replays never had their blobs.** The job's checkout is blobless and `gittifacts-runner merge-attempt` runs
+  with lazy fetching off, but the job fetched its inputs with the inherited `blob:none` filter and swallowed
+  any error, so the replay died on the first changed blob ("could not fetch <blob> from promisor remote").
+  Every non-fast-forward build failed. The job now fetches each input with `--no-filter --depth=1` (one commit
+  deep, full objects) and a failed fetch fails the job. Reproduced against the live scratch repo: the blob is
+  missing after the old fetch and present after the new one. (Small repos and fast-forward batches never took
+  this path: a lone Change on an unmoved base is "chained" and needs no container.)
+- **A dropped build stalled everything for 90 minutes.** The shell gives up on a `BuildBatchTree` after 6
+  attempts and `giveUp` returns nothing for it, so the batch stayed `building`, and the landing chain behind
+  it, until `runTimeoutMs` (90 min, sized for CI runs). New `buildTimeoutMs` (15 min): a batch still building
+  after that is rebuilt (`infraRetry`, bounded by `maxInfraRetries`). Same shape as the deploy-train fix
+  (`c94befc`): a command the shell drops must not leave the core waiting forever.
+- **Not done.** `giveUp` could answer `BuildBatchTree` with a failure event right away instead of waiting for
+  the timeout; that needs a new protocol event.
