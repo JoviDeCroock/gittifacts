@@ -2,28 +2,48 @@
  * For agents: one URL, three calls, the measured time to first green, errors that say what to
  * do next, and starting without an account.
  */
-import { DEFAULT_ORIGIN, ERROR_EXAMPLE, SHIP_CALLS } from "./content.js";
+import { DEFAULT_ORIGIN, ERROR_EXAMPLE, FIRST_GREEN, MEASURED, SHIP_CALLS } from "./content.js";
 import { CopyButton, CopyLine } from "./Hero.js";
 
-/** Time to first green on the live platform: 36 to 48 s against a 60 s target. */
+/** Axis position of `sec` seconds (the Worker computes the same for the live numbers). */
+export function ttfgPct(sec: number): string {
+  const clamped = Math.min(Math.max(sec, 0), FIRST_GREEN.axisMaxSec);
+  return `${Math.round((clamped / FIRST_GREEN.axisMaxSec) * 1000) / 10}%`;
+}
+
+/**
+ * Time to first green on the live platform against the 60 s target: the bar runs from the median
+ * to the 90th percentile. Static numbers here; the Worker fills in the live ones (data-ttfg-*).
+ */
 function FirstGreen() {
-  const pct = (s: number) => `${(s / 60) * 100}%`;
+  const { p50Sec, p90Sec, targetSec, axisMaxSec } = FIRST_GREEN;
   return (
     <figure class="ttfg" aria-labelledby="ttfg-caption">
       <div class="ttfg__axis" aria-hidden="true">
-        <span class="ttfg__range" style={{ left: pct(36), width: pct(12) }} />
-        <span class="ttfg__target" style={{ left: "100%" }}>
+        <span
+          class="ttfg__range"
+          data-ttfg-range=""
+          style={{ left: ttfgPct(p50Sec), width: ttfgPct(p90Sec - p50Sec) }}
+        />
+        <span class="ttfg__median" data-ttfg-median="" style={{ left: ttfgPct(p50Sec) }} />
+        <span class="ttfg__target" style={{ left: ttfgPct(targetSec) }}>
           <span>target</span>
         </span>
-        {[0, 15, 30, 45, 60].map((s) => (
-          <span class="ttfg__tick" key={s} style={{ left: pct(s) }}>
+        {[0, 30, 60, axisMaxSec].map((s) => (
+          <span class="ttfg__tick" key={s} style={{ left: ttfgPct(s) }}>
             {s} s
           </span>
         ))}
       </div>
       <figcaption id="ttfg-caption">
-        <strong>First green in 36 to 48 seconds,</strong> measured on the live platform: from one
-        URL to a repo, a passing CI run and a live preview. The target is under a minute.
+        <strong>First green in {MEASURED.firstGreen}:</strong> from one URL to a repo, a passing CI
+        run and a live preview. The target is under a minute.{" "}
+        <span data-ttfg-live="">
+          Median {p50Sec}&nbsp;s, 9 in 10 projects within {p90Sec}&nbsp;s, over {FIRST_GREEN.window}
+          .
+        </span>{" "}
+        The bar runs from the median to the 90th percentile.{" "}
+        <a href={FIRST_GREEN.statsPath}>Live numbers (JSON)</a>
       </figcaption>
     </figure>
   );

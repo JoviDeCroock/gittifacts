@@ -127,6 +127,19 @@
   border-radius: 3px;
   background: var(--ok);
 }
+/* The median: a tick across the start of the median → p90 bar. */
+.ttfg__median {
+  position: absolute;
+  inset-block-end: 0.375rem;
+  block-size: 1.5rem;
+  inline-size: 3px;
+  translate: -1px 0;
+  border-radius: 2px;
+  background: var(--text);
+}
+.ttfg figcaption a {
+  white-space: nowrap;
+}
 .ttfg__target {
   position: absolute;
   inset-block: 0.25rem 0;

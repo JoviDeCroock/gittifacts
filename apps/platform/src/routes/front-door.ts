@@ -38,6 +38,7 @@ import { DELEGABLE_SCOPES } from "../oauth/scopes.js";
 import { limitsFor, type WorkspaceConfigVars } from "../workspace/model.js";
 import type { ApiApp } from "./common.js";
 import { frontPageHtml, loadShell, type PageInput } from "./front-page.js";
+import { firstGreenStats, secondsLabel } from "./stats.js";
 
 export const FRONT_DOOR_PATHS = {
   start: "/start",
@@ -209,14 +210,78 @@ async function hasSession(c: Context<AppEnv>): Promise<boolean> {
   }
 }
 
-/** `/` for a browser: the landing page for visitors, the app for people with a session (or `?mock`). */
-async function homeAsset(c: Context<AppEnv>): Promise<Response> {
+/**
+ * `/` for a browser: the landing page for visitors, the app for people with a session (or `?mock`).
+ * `fresh`: fetch the landing unconditionally (its live numbers change while the asset doesn't, so
+ * the caller answers conditional requests itself).
+ */
+async function homeAsset(
+  c: Context<AppEnv>,
+  fresh = false,
+): Promise<{ res: Response; landing: boolean }> {
   const url = new URL(c.req.url);
   if (!url.searchParams.has("mock") && !(await hasSession(c))) {
-    const landing = await c.env.ASSETS.fetch(new Request(new URL(LANDING_ASSET, url), c.req.raw));
-    if (landing.status === 200 || landing.status === 304) return landing;
+    const init = new Request(c.req.raw);
+    if (fresh) {
+      init.headers.delete("if-none-match");
+      init.headers.delete("if-modified-since");
+    }
+    const landing = await c.env.ASSETS.fetch(new Request(new URL(LANDING_ASSET, url), init));
+    if (landing.status === 200 || landing.status === 304) return { res: landing, landing: true };
   }
-  return c.env.ASSETS.fetch(c.req.raw);
+  return { res: await c.env.ASSETS.fetch(c.req.raw), landing: false };
+}
+
+// ---------------------------------------------------------------- live time to first green
+
+/** Fewer green projects than this in the window: the landing keeps its static figure. */
+const LIVE_MIN_GREEN = 5;
+/** The landing never waits longer than this for the numbers (they're memoized per isolate). */
+const LIVE_WAIT_MS = 250;
+/** Right end of the landing figure's axis (packages/web FIRST_GREEN.axisMaxSec). */
+const AXIS_MAX_SEC = 90;
+
+export interface LiveFirstGreen {
+  p50Ms: number;
+  p90Ms: number;
+  green: number;
+  sinceDays: number;
+}
+
+/** The live numbers for the landing, or null (too few projects, slow, or failing: fail soft). */
+export async function liveFirstGreen(c: Context<AppEnv>): Promise<LiveFirstGreen | null> {
+  try {
+    const stats = await Promise.race([
+      firstGreenStats(c.get("services"), 30),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), LIVE_WAIT_MS)),
+    ]);
+    if (stats === null || stats.p50Ms === null || stats.p90Ms === null) return null;
+    if (stats.green < LIVE_MIN_GREEN) return null;
+    return {
+      p50Ms: stats.p50Ms,
+      p90Ms: stats.p90Ms,
+      green: stats.green,
+      sinceDays: stats.sinceDays,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Position on the landing figure's axis (same rounding as packages/web `ttfgPct`). */
+export function axisPct(sec: number): string {
+  const clamped = Math.min(Math.max(sec, 0), AXIS_MAX_SEC);
+  return `${Math.round((clamped / AXIS_MAX_SEC) * 1000) / 10}%`;
+}
+
+export function liveCaption(live: LiveFirstGreen): string {
+  return `Live: median ${secondsLabel(live.p50Ms)}, 9 in 10 projects within ${secondsLabel(live.p90Ms)}, over the last ${live.sinceDays} days (${live.green} projects reached first green).`;
+}
+
+/** The landing's ETag with the live numbers in it, so a revalidation sees them change. */
+function liveEtag(assetTag: string, live: LiveFirstGreen): string {
+  const suffix = `-ttfg${Math.round(live.p50Ms / 1000)}.${Math.round(live.p90Ms / 1000)}.${live.green}`;
+  return assetTag.endsWith('"') ? `${assetTag.slice(0, -1)}${suffix}"` : `${assetTag}${suffix}`;
 }
 
 export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): void {
@@ -226,7 +291,12 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
     const links = { ...CACHE, link: frontDoorLinks(urls) };
     const format = forced ?? negotiateFormat(c.req.header("accept"), c.req.query("format"), true);
     if (format === "json") {
-      return etagged(c, JSON.stringify(doc.json, null, 2), "application/json; charset=utf-8", links);
+      return etagged(
+        c,
+        JSON.stringify(doc.json, null, 2),
+        "application/json; charset=utf-8",
+        links,
+      );
     }
     if (format === "html") {
       return htmlPage(
@@ -238,8 +308,16 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
           description:
             "How an agent starts on gittifacts: the MCP server, authentication, and the three calls that create a project, run CI and return a live preview.",
           alternates: [
-            { href: FRONT_DOOR_PATHS.startMarkdown, label: "View as Markdown", type: "text/markdown" },
-            { href: `${FRONT_DOOR_PATHS.start}?format=json`, label: "JSON", type: "application/json" },
+            {
+              href: FRONT_DOOR_PATHS.startMarkdown,
+              label: "View as Markdown",
+              type: "text/markdown",
+            },
+            {
+              href: `${FRONT_DOOR_PATHS.start}?format=json`,
+              label: "JSON",
+              type: "application/json",
+            },
           ],
         },
         links,
@@ -267,9 +345,14 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
           markdown: text,
           title: "llms.txt · gittifacts",
           url: `${urls.origin}${FRONT_DOOR_PATHS.llmsTxt}`,
-          description: "The llms.txt index of gittifacts: where an agent starts, and every machine document.",
+          description:
+            "The llms.txt index of gittifacts: where an agent starts, and every machine document.",
           alternates: [
-            { href: `${FRONT_DOOR_PATHS.llmsTxt}?format=text`, label: "View as plain text", type: "text/plain" },
+            {
+              href: `${FRONT_DOOR_PATHS.llmsTxt}?format=text`,
+              label: "View as plain text",
+              type: "text/plain",
+            },
           ],
         },
         headers,
@@ -305,11 +388,42 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
         ? etagged(c, JSON.stringify(doc.json, null, 2), "application/json; charset=utf-8", links)
         : etagged(c, doc.markdown, "text/markdown; charset=utf-8", links);
     }
-    const asset = await homeAsset(c);
-    const res = new Response(asset.body, asset);
+    const live = await liveFirstGreen(c);
+    const asset = await homeAsset(c, live !== null);
+    const res = new Response(asset.res.body, asset.res);
     res.headers.append("link", frontDoorLinks(urls));
     res.headers.append("vary", "Accept, Cookie");
     if (!(res.headers.get("content-type") ?? "").includes("text/html")) return res;
+    let rewriter = new HTMLRewriter();
+    if (live !== null && asset.landing) {
+      const tag = res.headers.get("etag");
+      if (tag !== null) {
+        const etag = liveEtag(tag, live);
+        res.headers.set("etag", etag);
+        const inm = c.req.header("if-none-match");
+        if (inm?.split(",").some((t) => t.trim() === etag)) {
+          return new Response(null, { status: 304, headers: res.headers });
+        }
+      }
+      const p50 = live.p50Ms / 1000;
+      const p90 = live.p90Ms / 1000;
+      rewriter = rewriter
+        .on("[data-ttfg-live]", {
+          element(el) {
+            el.setInnerContent(liveCaption(live));
+          },
+        })
+        .on("[data-ttfg-range]", {
+          element(el) {
+            el.setAttribute("style", `left:${axisPct(p50)};width:${axisPct(p90 - p50)};`);
+          },
+        })
+        .on("[data-ttfg-median]", {
+          element(el) {
+            el.setAttribute("style", `left:${axisPct(p50)};`);
+          },
+        });
+    }
     const tags = [
       `<link rel="service-doc" type="text/markdown" href="${FRONT_DOOR_PATHS.start}">`,
       `<link rel="describedby" type="text/plain" href="${FRONT_DOOR_PATHS.llmsTxt}">`,
@@ -317,7 +431,7 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
       `<link rel="ai-catalog" href="${FRONT_DOOR_PATHS.aiCatalog}">`,
     ].join("");
     return (
-      new HTMLRewriter()
+      rewriter
         .on("head", {
           element(el) {
             el.append(tags, { html: true });

@@ -4,7 +4,7 @@
  */
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { EXAMPLE, MEASURED } from "../src/landing/content.js";
+import { EXAMPLE, FIRST_GREEN, MEASURED } from "../src/landing/content.js";
 import { renderLanding } from "../src/landing/render.js";
 
 const html = await renderLanding();
@@ -30,7 +30,14 @@ describe("landing page", () => {
 
   it("links the human action and every machine document", () => {
     const hrefs = new Set(all(/href="([^"]+)"/g));
-    for (const href of ["/signin", "/start", "/llms.txt", "/openapi.json", "/mcp/server-card", "/docs"]) {
+    for (const href of [
+      "/signin",
+      "/start",
+      "/llms.txt",
+      "/openapi.json",
+      "/mcp/server-card",
+      "/docs",
+    ]) {
       expect(hrefs.has(href), href).toBe(true);
     }
     // In-page anchors point at sections that exist.
@@ -62,9 +69,24 @@ describe("landing page", () => {
     expect(html).toContain(">Demo data</span>");
     expect(html).toContain("Screens are");
     expect(html).toContain(EXAMPLE.id);
-    expect(html).toContain("36 to 48 seconds");
+    expect(html).toContain("First green in about a minute");
+    expect(html).toContain(
+      `Median ${FIRST_GREEN.p50Sec}\u00a0s, 9 in 10 projects within ${FIRST_GREEN.p90Sec}\u00a0s`,
+    );
     expect(html).toContain(MEASURED.pushToEvidence);
     expect(html).toContain(MEASURED.tourCost);
+  });
+
+  it("never claims a first green faster than measured, and links the live numbers", () => {
+    expect(html).not.toMatch(/36 to 48|36–48/);
+    // The parts the Worker fills with the live numbers are there, and the live JSON is linked.
+    expect(html).toMatch(/<span data-ttfg-live(="")?>Median 57\u00a0s/);
+    expect(html).toMatch(
+      /class="ttfg__range" data-ttfg-range(="")? style="left:63\.3%;width:25\.6%;"/,
+    );
+    expect(html).toContain(`href="${FIRST_GREEN.statsPath}"`);
+    // The 60 s target sits inside the axis, which runs past it.
+    expect(html).toContain('class="ttfg__target" style="left:66.7%;"');
   });
 
   it("keeps copy buttons hidden until the script enables them", () => {

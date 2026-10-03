@@ -22,9 +22,25 @@ export function urlParts(url: string): string[] {
 
 /** Measured on the live platform (2026-10-02). Never round these up. */
 export const MEASURED = {
-  firstGreen: "36 to 48 seconds",
+  /** The headline: conservative on purpose (the 60 s target is not met yet). */
+  firstGreen: "about a minute",
   pushToEvidence: "~50 s",
   tourCost: "~$0.015",
+} as const;
+
+/**
+ * Time to first green (create_project → CI green and the preview serving) over the 30 days to
+ * 2026-10-03, from `GET /api/v1/stats/first-green`. The static fallback: the Worker replaces the
+ * `data-ttfg-*` parts with the live numbers when it has them.
+ */
+export const FIRST_GREEN = {
+  p50Sec: 57,
+  p90Sec: 80,
+  window: "the 30 days to 3 October 2026",
+  statsPath: "/api/v1/stats/first-green",
+  /** Right end of the figure's axis, in seconds. */
+  axisMaxSec: 90,
+  targetSec: 60,
 } as const;
 
 export type Mark = "proven" | "lane1";

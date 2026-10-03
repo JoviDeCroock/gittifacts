@@ -25,6 +25,7 @@ import { registerIdentityRoutes } from "./routes/identity.js";
 import { registerPlanRoutes } from "./routes/plans.js";
 import { registerProjectRoutes } from "./routes/projects.js";
 import { registerRepoRoutes } from "./routes/repos.js";
+import { registerStatsRoutes } from "./routes/stats.js";
 import { registerWellKnownRoutes } from "./routes/well-known.js";
 import { readBlob } from "./services/blobs.js";
 import {
@@ -101,6 +102,8 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerPlanRoutes(app);
   registerChangeRoutes(app);
   registerProjectRoutes(app);
+  // Public aggregates the landing page quotes (live time to first green).
+  registerStatsRoutes(app);
   registerClaimRoutes(app);
   registerLimitRoutes(app);
   registerAuditRoutes(app);

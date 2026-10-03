@@ -199,7 +199,9 @@ describe("front door", () => {
     // Every heading of the guide, as a heading with an anchor.
     for (const [, level, text] of md.matchAll(/^(#{1,3}) (.+)$/gm)) {
       const plain = (text ?? "").replace(/[`*]/g, "");
-      expect(html).toMatch(new RegExp(`<h${level?.length} id="[^"]+">.*${escapeRe(plain.replace(/'/g, "&#39;"))}`));
+      expect(html).toMatch(
+        new RegExp(`<h${level?.length} id="[^"]+">.*${escapeRe(plain.replace(/'/g, "&#39;"))}`),
+      );
     }
     // URLs are links; placeholders and other angle brackets are text, never markup.
     expect(html).toContain(`<a href="${ORIGIN}/mcp">${ORIGIN}/mcp</a>`);
