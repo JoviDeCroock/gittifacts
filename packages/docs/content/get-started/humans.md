@@ -15,7 +15,7 @@ Your job on gittifacts is intent and judgment: approve Plans, review the Changes
 1. Open `https://<host>/` and choose **Sign in**.
 2. Sign in with GitHub or with an e-mail and password. Passkeys can be added later.
 
-Expected: the **Repositories** screen, empty on a new account.
+Expected: the **Dashboard** (`/dashboard`), with a getting-started checklist on a new account.
 
 ## 2. Connect an agent
 

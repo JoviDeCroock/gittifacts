@@ -2223,3 +2223,46 @@ allowed repos are stored), and the redelivery cron (only installation-level deli
 first so installation state replays in order). Unset or empty means every repo of an installation. The Reader App's
 public values (`GITHUB_APP_ID` 5174425, slug `gitifacts`, client id) are `vars` in `wrangler.jsonc`, so they ship in
 the same deploy as the allowlist and there is no moment where the App is configured without the guard.
+
+## 2026-10-03 — `/` is always the marketing page; the app's home is `/dashboard`, with a first-run checklist
+
+**Context.** `/` served the landing page to visitors and the SPA to anyone with a session cookie, so
+a signed-in person could never see the marketing page, the Worker looked up the session on every
+`/` request (`Vary: Cookie`), and "home" meant two different things. A new account landed on an
+empty "No repositories yet" with an API call as its only suggestion.
+
+**Decision.** `GET /` (front-door.ts) always serves the prerendered landing page to a browser; no
+session lookup, `Vary: Accept` only, `?mock` no longer switches it. The landing nav's "Sign in"
+(top bar and footer) is a `SessionLink`: the head script shows "Open dashboard" before first paint
+when the app left a `gf:authed` localStorage hint, and client.ts confirms with one
+`GET /api/auth/get-session` (the cookie is HttpOnly) and points the link at `/dashboard` or
+`/signin`. The SPA's home is `/dashboard` (title "Dashboard · gittifacts"; sidebar logo, nav item,
+breadcrumbs, 404, a new screen error boundary and the consent screens' logo all point there).
+`/dashboard` needs no Worker route: it is an SPA path like `/changes/<id>`. Redirect rules live in
+`packages/web/src/lib/nav.ts` (unit-tested): sign-in or sign-up lands on a safe same-origin `next`,
+else `/dashboard` (`/` and `/signin` are never a `next`); a signed-out visit to any app route is
+sent to `/signin?next=<path>`; GitHub sign-in's `callbackURL` is that same target (it used to be
+`/signin` itself); sign-out is a full load of `/`. Server-side returns were checked and needed no
+change: the claim page links the repo, device approval stays on `/device`, OAuth consent returns
+to the client's `redirect_uri`, the GitHub App setup returns to `/settings/github`, and unsigned
+`/github/*` legs already send `/signin?next=`.
+
+The checklist reads `GET /api/v1/me/getting-started` (humans only, `no-store`), scoped to the
+caller's memberships: **agent** = an agent principal the human owns, not disabled, with a token
+neither revoked nor expired (covers tokens, OAuth/device sessions, and claimed projects, since a
+claim transfers the agent); **first green** = the earliest `project_onboarding` row with outcome
+`green` (CI green and the preview serving, so it has a preview link and a measured
+create→green time), else any passed `pipeline_runs` row on the caller's repos (imports and GitHub
+mirrors have no bootstrap row); **repo** = a member repo with `imported_from` or a GitHub `host`,
+a `source = 'import'` onboarding row, or a `github_installation_links` row; plus the newest
+bootstrap, so "Try it now" can show its run while it goes. "Try it now" is the human's own
+`POST /api/v1/projects { template }` (static-site by default; templates without a preview are not
+offered) and the dashboard polls every 2.5 s while a run is going. All three done, the checklist
+collapses to one slim line; dismissal is per user in localStorage (`gf:getting-started:dismissed:<id>`).
+
+**Consequences.** Every deep link agents print (`/changes/<id>`, repo pages, `/settings/*`,
+`/claim/*`, `/docs`, `/start`, `/llms.txt`) is unchanged. The landing is identical for everyone and
+cacheable. A stale hint shows "Open dashboard" until the check answers (one round trip); a signed-in
+person on a new device sees "Sign in" until then, and "Sign in" while signed in still lands on the
+dashboard. A human's "Try it now" project also opens their placeholder first Change, like an
+agent's `create_project`.
