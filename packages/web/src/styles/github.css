@@ -1,0 +1,74 @@
+/*
+ * /settings/github: the App row, the create form, installations with their repos.
+ * Reuses the integrations page's hairline rows (integrations.css); teal only on the primary action.
+ */
+.gh-lede {
+  max-inline-size: var(--measure);
+  color: var(--text-2);
+  margin-block-end: var(--s-4);
+}
+.gh-create {
+  display: grid;
+  gap: var(--s-4);
+  max-inline-size: 36rem;
+}
+.gh-create .gh-lede {
+  margin-block-end: 0;
+}
+.gh-perms__list {
+  display: grid;
+  gap: var(--s-2);
+  margin-block-start: var(--s-2);
+  padding-inline-start: var(--s-5);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.gh-app {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-4);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-block: var(--s-4);
+  border-block: 1px solid var(--rule);
+}
+.gh-app__main {
+  flex: 1 1 18rem;
+  min-inline-size: 0;
+}
+.gh-shadow {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  margin-block-start: var(--s-2);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.gh-shadow .icon {
+  flex: none;
+  margin-block-start: 2px;
+}
+.gh-repos {
+  display: grid;
+  gap: var(--s-1);
+  margin-block-start: var(--s-2);
+  list-style: none;
+  padding: 0;
+  font-size: var(--text-small);
+}
+.gh-repos li {
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+  min-inline-size: 0;
+}
+.gh-repos a {
+  overflow-wrap: anywhere;
+}
+.gh-repos .icon {
+  flex: none;
+  color: var(--text-3);
+}
+.gh-notice--error .icon {
+  color: var(--danger);
+}

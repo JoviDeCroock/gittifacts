@@ -24,6 +24,7 @@ const InstalledIntegrations = lazy(() => import("./routes/integrations.js").then
 const IntegrationInstall = lazy(() => import("./routes/integration-install.js").then((m) => m.IntegrationInstall));
 const IntegrationsDeveloper = lazy(() => import("./routes/integrations-developer.js").then((m) => m.IntegrationsDeveloper));
 const IntegrationDetail = lazy(() => import("./routes/integration-detail.js").then((m) => m.IntegrationDetail));
+const GithubSettings = lazy(() => import("./routes/github.js").then((m) => m.GithubSettings));
 const IntegrationDeliveries = lazy(() => import("./routes/integration-deliveries.js").then((m) => m.IntegrationDeliveries));
 
 /** Agent consent screens: one decision, no navigation to wander off to. */
@@ -63,6 +64,7 @@ function AuthedApp() {
           <Route path="/settings/integrations/developer" component={IntegrationsDeveloper} />
           <Route path="/settings/integrations/developer/:integrationId" component={IntegrationDetail} />
           <Route path="/settings/integrations/developer/:integrationId/deliveries/:deliveryId?" component={IntegrationDeliveries} />
+          <Route path="/settings/github" component={GithubSettings} />
           <Route path="/internal/onboarding" component={OnboardingView} />
           <Route path="/signin" component={RedirectHome} />
           <Route default component={NotFound} />
@@ -77,7 +79,9 @@ function RedirectHome() {
   useEffect(() => {
     const next =
       query.next && query.next.startsWith("/") && !query.next.startsWith("//") ? query.next : "/";
-    route(next, true);
+    // Server routes (the GitHub App redirects) need a real navigation, not the SPA router.
+    if (/^\/github\//.test(next)) window.location.replace(next);
+    else route(next, true);
   }, [route, query.next]);
   return null;
 }

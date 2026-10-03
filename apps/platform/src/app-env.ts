@@ -19,6 +19,13 @@ export type Bindings = Env & {
   PLATFORM_AUDITORS?: string;
   /** JSON override of unclaimed-project limits (src/limits/config.ts). */
   UNCLAIMED_LIMITS?: string;
+  /** GitHub mode (src/github/): 32-byte base64 key sealing GitHub App credentials (secret). */
+  GITHUB_APP_KEK?: string;
+  /** "on" enables per-customer Actor Apps (M5). */
+  GITHUB_ACTOR_APPS?: string;
+  /** Verified GitHub deliveries (queue `gittifacts-github-events`). */
+  GITHUB_EVENTS?: import("./github/webhook.js").GithubEventsQueue;
+  GITHUB_WEBHOOK_LIMITER?: { limit(input: { key: string }): Promise<{ success: boolean }> };
 };
 
 /**

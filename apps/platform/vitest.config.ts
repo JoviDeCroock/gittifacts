@@ -35,6 +35,8 @@ export default defineConfig(async () => ({
           GITHUB_CLIENT_ID: "",
           GITHUB_CLIENT_SECRET: "",
           ISSUES_WEBHOOK_SECRET: "test-issues-webhook-secret",
+          // A throwaway GitHub App credential key per run (32 bytes, base64).
+          GITHUB_APP_KEK: Buffer.from(webcrypto.getRandomValues(new Uint8Array(32))).toString("base64"),
           CF_API_TOKEN: "",
           // wrangler.jsonc carries the production Turnstile site key and admins: tests use
           // Cloudflare's test keys (an empty var falls back to them) and no platform admins.

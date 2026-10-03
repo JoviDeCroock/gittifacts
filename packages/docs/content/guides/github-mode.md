@@ -1,0 +1,57 @@
+---
+title: Grade pull requests on GitHub
+description: Install the gittifacts GitHub App on an organization and get a lane on every pull request in shadow mode - one check run, nothing else changes.
+order: 13
+audience: humans
+---
+
+# Grade pull requests on GitHub
+
+GitHub mode keeps your code on GitHub. The gittifacts App reads each pull request, runs the same evidence as native mode on a disposable mirror, and posts **one** check run, `gittifacts/lane`, on the pull request's head commit. Shadow mode is the default: no comments, no reviews, no merges, and the check never blocks.
+
+## 1. Create the App (platform admins, once)
+
+Open `https://<host>/settings/github` signed in as a platform admin.
+
+1. Pick the owner: an organization you own, or your own GitHub account.
+2. Keep the name `gittifacts`, or pick another. App names are unique across GitHub (34 characters at most).
+3. Select **Continue on GitHub**. GitHub shows the App it's about to create; select **Create GitHub App**.
+
+Expected: you're back on `/settings/github` with "GitHub created …". The App's keys never pass through your hands: GitHub hands them to the platform, which stores them encrypted. The link is good for one hour and works once.
+
+## 2. Install it
+
+Select **Install on GitHub**, pick the organization and **Only select repositories**, choose one or two, and select **Install**.
+
+Expected: GitHub sends you back, asks you to authorize gittifacts (this proves the installation is yours; we never trust the installation id alone), then `/settings/github` lists the installation with its repositories.
+
+## 3. Open a pull request
+
+Push a branch and open a pull request in an installed repository.
+
+Expected: within about two minutes the **Checks** tab shows `gittifacts/lane (shadow)`:
+
+| Conclusion | Means |
+|---|---|
+| `success` | Lane 0: eligible to merge without a human (shadow mode merges nothing) |
+| `neutral` | Lane 1: a quick look with a guided tour |
+| `action_required` | Lane 2: full review |
+
+The summary lists the reasons and the evidence, and links to the change on gittifacts. Policy always comes from the repository's default branch, never from the pull request.
+
+## What the App may do
+
+| Permission | Why |
+|---|---|
+| Metadata, contents, issues: read | Read the code (fork pull requests too, through `pull/<n>/head`) and linked issues |
+| Checks: write | Post `gittifacts/lane` |
+| Pull requests: write | Tours as one review, from milestone M3. Shadow mode posts none |
+| Merge queues, deployments, commit statuses: read | `merge_group`, deployment signals and other CI results as extra evidence |
+
+Never requested: administration, workflows, commit statuses (write). Installation tokens are minted per job for one repository and are never given to the sandbox that runs pull request code.
+
+## Troubleshooting
+
+- **"That step expired or was already used"**: start again from `/settings/github`. Each step works once, within an hour.
+- **"Your GitHub account can't see that installation"**: authorize with the GitHub account that installed the App, or ask an organization owner to link it.
+- **A failed `ping` delivery** in the App's **Advanced** tab right after creating it is expected: GitHub pings before the platform has stored the App's keys.

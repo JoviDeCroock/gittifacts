@@ -60,7 +60,12 @@
   // Required to run at all. Optional secrets (feature degrades with a clear error when absent):
   // GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET (GitHub sign-in), CF_API_TOKEN (rollouts, flags, telemetry).
   "secrets": {
-    "required": ["PLATFORM_SIGNING_KEY", "BETTER_AUTH_SECRET", "ISSUES_WEBHOOK_SECRET"]
+    "required": [
+      "PLATFORM_SIGNING_KEY",
+      "BETTER_AUTH_SECRET",
+      "ISSUES_WEBHOOK_SECRET",
+      "GITHUB_APP_KEK"
+    ]
   },
 
   "d1_databases": [
@@ -138,7 +143,9 @@
     { "name": "UNCLAIMED_TOKEN_LIMITER", "namespace_id": "4301", "simple": { "limit": 120, "period": 60 } },
     // One request budget per external integration (all its installations), API + /git/ proxy
     // (src/integrations/auth.ts). Namespace id is ours to choose; nothing to create.
-    { "name": "INTEGRATION_LIMITER", "namespace_id": "4302", "simple": { "limit": 600, "period": 60 } }
+    { "name": "INTEGRATION_LIMITER", "namespace_id": "4302", "simple": { "limit": 600, "period": 60 } },
+    // GitHub webhooks, per client IP, before anything is verified (src/github/webhook.ts).
+    { "name": "GITHUB_WEBHOOK_LIMITER", "namespace_id": "4303", "simple": { "limit": 600, "period": 60 } }
   ],
 
   // Integration webhooks (src/integrations/delivery.ts): one message per delivery, at least once.
@@ -146,7 +153,11 @@
   // goes to the dead-letter queue (the delivery row already says `failed` by then).
   // Create once: `wrangler queues create gittifacts-webhooks` and `… gittifacts-webhooks-dlq`.
   "queues": {
-    "producers": [{ "binding": "WEBHOOK_QUEUE", "queue": "gittifacts-webhooks" }],
+    "producers": [
+      { "binding": "WEBHOOK_QUEUE", "queue": "gittifacts-webhooks" },
+      // Verified GitHub App deliveries (src/github/webhook.ts → src/github/consumer.ts).
+      { "binding": "GITHUB_EVENTS", "queue": "gittifacts-github-events" }
+    ],
     "consumers": [
       {
         "queue": "gittifacts-webhooks",
@@ -154,6 +165,13 @@
         "max_batch_timeout": 5,
         "max_retries": 10,
         "dead_letter_queue": "gittifacts-webhooks-dlq"
+      },
+      {
+        "queue": "gittifacts-github-events",
+        "max_batch_size": 10,
+        "max_batch_timeout": 2,
+        "max_retries": 8,
+        "dead_letter_queue": "gittifacts-github-events-dlq"
       }
     ]
   },

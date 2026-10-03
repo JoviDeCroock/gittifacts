@@ -2,6 +2,7 @@ export * from "./access-schema.js";
 export * from "./app-schema.js";
 export * from "./auth-schema.js";
 export * from "./claim-schema.js";
+export * from "./github-schema.js";
 export * from "./import-schema.js";
 export * from "./integration-schema.js";
 export * from "./oauth-schema.js";

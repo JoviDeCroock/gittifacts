@@ -23,6 +23,7 @@ const NAV: { href: string; label: string; icon: IconId; match: (path: string) =>
   { href: "/audit", label: "Audit log", icon: "scroll-text", match: (p) => p.startsWith("/audit") },
   { href: "/agents", label: "Agents", icon: "key", match: (p) => p.startsWith("/agents") },
   { href: "/settings/integrations", label: "Integrations", icon: "plug", match: (p) => p.startsWith("/settings/integrations") },
+  { href: "/settings/github", label: "GitHub", icon: "git-branch", match: (p) => p.startsWith("/settings/github") },
   { href: "/docs", label: "Docs", icon: "file-text", match: () => false, server: true },
 ];
 

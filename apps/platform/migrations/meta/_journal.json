@@ -85,6 +85,13 @@
       "when": 1790956684501,
       "tag": "0011_repo_flagship_app",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791008009502,
+      "tag": "0012_github_apps",
+      "breakpoints": true
     }
   ]
 }

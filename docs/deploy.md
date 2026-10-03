@@ -22,8 +22,21 @@ Run `wrangler login` again before deploying. The `cf` CLI token has all of these
 
 ## Secrets (`wrangler secret put <NAME>`)
 
-`PLATFORM_SIGNING_KEY`, `BETTER_AUTH_SECRET`, `ISSUES_WEBHOOK_SECRET`, `CF_API_TOKEN`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`.
+`PLATFORM_SIGNING_KEY`, `BETTER_AUTH_SECRET`, `ISSUES_WEBHOOK_SECRET`, `GITHUB_APP_KEK`, `CF_API_TOKEN`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`.
 Optional: `AI_GATEWAY_TOKEN` (HTTP fallback for the reviewer when the `AI` binding fails).
+
+`GITHUB_APP_KEK` (GitHub mode, required since 2026-10-03) is 32 random bytes, base64. It seals the GitHub Apps'
+client secret, webhook secret and private key in D1 (`github_apps`, AES-256-GCM bound to the App id and field).
+Set it without ever printing it:
+
+```sh
+cd apps/platform && openssl rand -base64 32 | tr -d '\n' | pnpm exec wrangler secret put GITHUB_APP_KEK
+```
+
+It can't be read back. If it is lost or rotated, every sealed credential is unreadable: delete the `github_apps`
+rows and create the Apps again through `/settings/github` (installations stay on GitHub; people re-link them).
+GitHub mode also needs the queues `gittifacts-github-events` and `gittifacts-github-events-dlq`
+(`wrangler queues create <name>`) and migration 0012.
 `CF_ACCOUNT_ID` is a plain var in `wrangler.jsonc`; don't also put it as a secret.
 
 `CF_API_TOKEN` needs Workers Scripts Edit (versions and deployments for rollouts, deleting expired projects'

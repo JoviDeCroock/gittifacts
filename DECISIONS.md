@@ -1685,3 +1685,40 @@ pipeline could ever be adopted.
   adopted, every later Change (including ones editing `ci.ts`) is judged by the base's again.
 - **Not done.** A red *adopted* pipeline still blocks everything; "only new failures block" (compare with main's
   last run) would be the general fix.
+
+## 2026-10-03 — Two modes M2 (phase A): GitHub App credentials, manifest flow, install verification, webhooks
+
+Spec: docs/prompts/06-two-modes.md §3.1, §7 (M2); docs/research/github-app.md §4, §5, §7. Code: `apps/platform/src/github/`.
+
+- **Credentials at rest.** `github_apps` (migration 0012) holds kind (`reader|actor`), App id, slug, owner, client id
+  in clear; client secret, webhook secret and PEM are AES-256-GCM sealed under the new Worker secret
+  `GITHUB_APP_KEK` (32 random bytes). HKDF splits the KEK into a sealing key and a state-MAC key. Each ciphertext's
+  AAD is `app id | field`, so a ciphertext copied to another row or column doesn't open. The KEK was generated and
+  set with `wrangler secret put` without being printed; it isn't backed up anywhere: losing it means re-creating
+  the Apps (docs/deploy.md).
+- **Manifest flow.** `POST /api/v1/github/manifests` (platform admins) returns the manifest, the form action
+  (`github.com/settings/apps/new` or `/organizations/<org>/…`) and a state. The state is a D1 nonce plus an HMAC;
+  it is valid for one hour, consumed by a single conditional UPDATE (replays and races lose), and bound to the
+  admin who started it. The callback exchanges the code (`POST /app-manifests/{code}/conversions`) and seals the
+  credentials. The Reader App asks for research §7's permissions plus the approved read-only opt-ins
+  (`merge_queues`, `deployments`, `statuses` with `merge_group`, `deployment_status`, `status`). The Actor App
+  (`gittifacts-actor-<org>`, private, minimal permissions) uses the same code behind `GITHUB_ACTOR_APPS=on`, off
+  until M5.
+- **`request_oauth_on_install: false` (differs from research §7's sample manifest).** GitHub's registration docs:
+  with OAuth during installation "you will not be able to enter a URL here. Users will instead be redirected to
+  the Callback URL", i.e. the setup URL is dropped. We keep `setup_url` = `/github/setup` and do the user
+  authorization ourselves: setup → `github.com/login/oauth/authorize` (the App's client id, a signed `install`
+  state) → `/github/oauth/callback` → code → user token → the installation is linked only if
+  `GET /user/installations` lists it for this App. The user token is revoked right after
+  (`DELETE /applications/{client_id}/token`) and never stored. An already-authorized user passes straight through.
+- **Links, not owners.** `github_installation_links` is many-to-many (installation × platform human × the GitHub
+  login that proved it). Repos come from the user's view at link time (union) and from `installation*` webhooks.
+- **Webhooks.** `POST /github/webhooks`: rate-limited per client IP first (`GITHUB_WEBHOOK_LIMITER`, 600/min,
+  since nothing is authenticated yet), secret picked by `X-GitHub-Hook-Installation-Target-ID`, HMAC-SHA-256 over
+  the raw body compared in constant time, unknown App or bad signature → 401. Dedupe on `X-GitHub-Delivery` in D1
+  (`github_deliveries`, swept after 8 days by the cron). Enqueue on `gittifacts-github-events` (+ DLQ) and answer
+  202; payloads over 96 KB go to R2 first (a queue message is ≤ 128 KB). If the enqueue fails, the GUID is
+  forgotten and GitHub gets a 503, so a redelivery is processed. `ping` is acknowledged, never queued; the first
+  ping after creating an App fails with 401 because it arrives before the callback stores the keys (expected).
+- **Phase A consumer** handles `installation` and `installation_repositories` only (idempotent upserts, events for
+  another App's installation ignored). Change events are phase B.

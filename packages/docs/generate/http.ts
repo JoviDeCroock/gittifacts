@@ -54,6 +54,13 @@ const GROUPS: readonly {
       "the developer portal, installations, webhook deliveries, deployments and the read-only git proxy",
   },
   {
+    file: "reference/http-github.md",
+    title: "HTTP API: GitHub mode",
+    nav: "HTTP: GitHub",
+    tags: ["github"],
+    blurb: "the GitHub App manifest flow, install verification and the GitHub webhook receiver",
+  },
+  {
     file: "reference/http-platform.md",
     title: "HTTP API: MCP, webhooks and operators",
     nav: "HTTP: platform",

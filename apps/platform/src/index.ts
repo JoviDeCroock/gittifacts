@@ -8,6 +8,7 @@ import { createApp } from "./app.js";
 import type { Bindings } from "./app-env.js";
 import { runExpiry } from "./claim/expire-runtime.js";
 import { COORDINATOR_OPTIONS } from "./coordinator.js";
+import { GITHUB_EVENTS_QUEUE, runGithubEventQueue, runGithubSweep } from "./github/consumer.js";
 import { platformPushObserver, runImportGrantSweep } from "./import/push-grant-runtime.js";
 import { runWebhookQueue, runWebhookSweep } from "./integrations/worker.js";
 import { withUnclaimedLimits } from "./limits/ci-quota.js";
@@ -63,7 +64,12 @@ export default {
     ctx.waitUntil(runExpiry(env).then(() => undefined));
     ctx.waitUntil(runWebhookSweep(env).then(() => undefined));
     ctx.waitUntil(runImportGrantSweep(env).then(() => undefined));
+    ctx.waitUntil(runGithubSweep(env));
   },
-  // WEBHOOK_QUEUE consumer: signed integration webhook deliveries (src/integrations/delivery.ts).
-  queue: (batch, env) => runWebhookQueue(batch, env),
+  // WEBHOOK_QUEUE consumer: signed integration webhook deliveries (src/integrations/delivery.ts);
+  // GITHUB_EVENTS consumer: verified GitHub App deliveries (src/github/consumer.ts).
+  queue: (batch, env) =>
+    batch.queue === GITHUB_EVENTS_QUEUE
+      ? runGithubEventQueue(batch, env)
+      : runWebhookQueue(batch, env),
 } satisfies ExportedHandler<Bindings>;
