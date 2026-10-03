@@ -13,6 +13,11 @@ export interface ReplaySpec {
   replayBase: string;
   /** Artifacts repo holding `headSha` (the Change's fork, or the scratch repo). */
   repo: string;
+  /**
+   * How many commits `replayBase..headSha` holds when it is a straight line the squashed commit's
+   * message lists (DECISIONS 2026-10-03: one commit per Change); absent: nothing to list.
+   */
+  commits?: number;
 }
 
 const Sha = z.string().regex(/^[0-9a-f]{40,64}$/);

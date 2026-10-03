@@ -18,10 +18,14 @@ import { casHandler } from "./cas.js";
 import type { QueueContext } from "./context.js";
 import { onQueueEvent } from "./emit.js";
 import { openFlakyTestPlan, requestApproval } from "./human.js";
+import type { ReplaySpec } from "./jobs.js";
 import { onCoreAudit } from "./problems.js";
 import { resolutionHandler } from "./resolve.js";
 
 type Emit = (event: CoreEventInput) => Promise<void>;
+
+/** A squashed Change's message lists at most this many of its commits. */
+const MAX_LISTED = 50;
 
 /** `refs/queue/<batchId>` → the sha the DO pointed it at (so GC can delete it with CAS). */
 const refKey = (refName: string) => `ref:${refName}`;
@@ -118,12 +122,22 @@ export class CoordinatorQueueShell implements QueueShell {
     const repo = await this.ctx.repo();
     const main = repo.artifactsName;
     const specs = await Promise.all(
-      cmd.entries.map((e) => this.ctx.replaySpec(e.changeId, e.headSha)),
+      cmd.entries.map(async (e) => {
+        const spec = await this.ctx.replaySpec(e.changeId, e.headSha);
+        // Resolved heads (scratch) hold the queue's own conflict + resolution commits: never listed.
+        const own = spec.repo === this.ctx.scratch ? null : await this.ownCommits(spec);
+        return { ...spec, ...(own !== null && own > 1 ? { commits: own } : {}), own };
+      }),
     );
     // Fast path: every head already sits on the tip before it (a lone Change on an unmoved base,
-    // or a stack): the heads ARE the batch commits, no container needed.
+    // or a stack) as ONE commit: the heads ARE the batch commits, no container needed. A Change of
+    // several commits is replayed as one commit like any other (DECISIONS 2026-10-03: one commit
+    // per Change, so its evidence, notes and pure revert all bind to one merge commit).
     const chained = specs.every(
-      (s, i) => s.replayBase === (i === 0 ? cmd.baseSha : specs[i - 1]?.headSha),
+      (s, i) =>
+        s.replayBase === (i === 0 ? cmd.baseSha : specs[i - 1]?.headSha) &&
+        s.own !== null &&
+        s.own <= 1,
     );
     let result: Extract<CoreEventInput, { type: "RebaseResult" }>["result"];
     if (chained && specs.length > 0) {
@@ -142,7 +156,7 @@ export class CoordinatorQueueShell implements QueueShell {
         scratch: this.ctx.scratch,
         baseRepo: main,
         baseSha: cmd.baseSha,
-        entries: specs,
+        entries: specs.map(({ own: _own, ...spec }) => spec),
         ref: `refs/heads/mq/${cmd.batchId}`,
       });
       if (built.status === "error") throw new Error(`batch ${cmd.batchId}: ${built.note}`);
@@ -173,6 +187,21 @@ export class CoordinatorQueueShell implements QueueShell {
       this.ctx.deps.store.putRun(refKey(cmd.refName), { sha: result.tipSha });
     }
     await emit({ type: "RebaseResult", batchId: cmd.batchId, result });
+  }
+
+  /**
+   * The number of commits in `replayBase..headSha` when it is a straight line of at most
+   * MAX_LISTED commits (null: a merge commit, or longer: replayed and squashed without a list).
+   */
+  private async ownCommits(s: ReplaySpec): Promise<number | null> {
+    let sha = s.headSha;
+    for (let n = 0; n <= MAX_LISTED; n++) {
+      if (sha === s.replayBase) return n;
+      const parents = await this.ctx.ports.git.commitParents(s.repo, sha);
+      if (parents === null || parents.length !== 1 || parents[0] === undefined) return null;
+      sha = parents[0];
+    }
+    return null;
   }
 
   async deleteQueueRef(cmd: CommandOf<"DeleteQueueRef">): Promise<void> {

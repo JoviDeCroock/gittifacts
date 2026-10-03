@@ -1936,3 +1936,80 @@ flow and "Decisions this forces" #1.
   metadata, contents, issues, merge queues, deployments, commit statuses read, pull requests and checks read and
   write; events pull request, pull request review, check run, check suite, issues, push, merge group, deployment
   status, status; installable on any account.
+
+## 2026-10-03 — Merge queue stalls say why and what happens next; a given-up build is an errored result
+
+**Context.** Journey 06 (take 1): three approved Changes sat in "Building tree" for 16 minutes with an ETA on
+screen. The audit log had three "Merge queue command dropped" rows and nothing said why: the payload carried
+only the message, no summary rendered it, and the audit view showed labels only. The queue view never showed a
+failure. The core only recovered when `buildTimeoutMs` (a4bf134) rebuilt the batch.
+
+**Decision.**
+- `RebaseResult` gains `{ status: "errored", message }`. The shell answers a `BuildBatchTree` it gives up on with
+  it (like an errored `BatchResult`), and the core retries the batch at once (`infraRetry`, then `infra-error`
+  ejection with the reason in its message). `buildTimeoutMs` stays as the backstop for a lost command, and a
+  batch past its build or run timeout is audited (`merge-queue.batch-timed-out`) and a person is notified.
+- Every failure is recorded as `<class>: <message>`, with credentials removed (auth headers, URL userinfo,
+  `token=`, `gtf_`/GitHub tokens, JWTs). The `command-dropped` audit names the command, its batch and Changes,
+  the attempts, the error class and message, and what happens next. Server summaries say all of this, and the
+  audit log now shows them.
+- The queue overview gains `stalls`: a step being retried (with its next attempt time), a batch that stopped
+  (with its rebuild time) and drops that need a person. Entries held by a stall carry `stall` and no ETA. A
+  Change held for approval has no ETA either, and its reason names the resolver when there is one.
+
+**Consequences.** A stalled queue reads as stalled within one 10 s refresh, with a reason and a time. Infra
+failures that keep repeating now end in an ejection with the cause, not in a silent wait. Drops of
+`RequestApproval`/`RequestRevert` notify a person (nothing automatic follows them).
+
+## 2026-10-03 — Re-approving a resolver resolution shows the resolution, and its stop leads the tour
+
+**Context.** Journey 06: after the resolver merged a conflict, the person re-approving saw the agent's original
+tour and diff. The only trace of the resolved line was an "Other" row in the lane chart. Two causes: the tour
+endpoint preferred the pushed head's tour over `change.tourId` (the tour written for the resolved head), and
+the resolution stop sat after the riskiest stop.
+
+**Decision.** `GET /changes/:id/resolution` returns the latest resolution of the Change's current head:
+the resolved head, the sealed `conflict-resolution` item (its diff from the merge with markers to the resolved
+files), the upstream Changes, and whether a fresh approval was requested. The queue's resolution audit records
+the head it resolved, so a re-push hides it. The tour endpoint serves the resolved head's tour, which is not
+stale. The resolution stop leads the tour. The change page shows, per conflict region, what main had, what the
+Change had and what lands, with each landed line tagged by its origin and the resolver's own lines marked.
+Edits outside the conflict are flagged. The decision reads "Approve resolution", and resolution reasons sit under
+"Conflict resolution".
+
+**Consequences.** The approval is about the lines that land. The view is built from the evidence item, not
+from the model's tour, so it works even when the resolution tour could not be written.
+
+## 2026-10-03 — One commit per Change in the merge queue (squash, kept on purpose)
+
+**Context.** M5 friction 22: a Change of several commits landed as one commit carrying only its last message
+when the queue replayed it, while a fast-forward kept every commit. Looking closer, the fast-forward case was
+unsafe. The merge commit's first parent was then the Change's own previous commit. The revert path (the tree
+revert in `openRevertChange`, `revertTrees`, `verifyPureRevert`) inverts `mergedSha^..mergedSha`, so an
+automatic revert of such a Change would have been verified as pure while leaving its earlier commits on main.
+
+**Decision.** Keep one commit per Change everywhere, on purpose. Evidence, git notes, the attestation and the
+pure-revert check all bind to that one merge commit. The fast path now takes only single-commit heads, and a
+Change of several commits is replayed like any other. Its commit keeps the head's message and lists every commit
+it was made of, oldest first (12-char sha and subject). The rewrite is deterministic (same tree, parent,
+identities and dates), and best effort: if the history can't be read, merge-attempt's commit lands as it is.
+The queue view says "one commit per change". Preserving the commits would need a recorded pre-merge base per
+Change (a domain field and migration), range reverts in the sandbox and per-commit replays. Not now.
+
+**Consequences.** History on main has one commit per Change, and its message keeps the agent's commit list.
+Reverts invert exactly one Change. A multi-commit Change on an unmoved main costs a replay job (about a minute)
+instead of a fast-forward.
+
+## 2026-10-03 — Smaller merge-queue and rollout UX fixes from the journey review
+
+- **Evidence notes on main are recorded.** The queue writes the merged commit's evidence note on main and now
+  stores `notesWritten` for that row. A failed write is audited (`merge-queue.evidence-note-failed`), never
+  swallowed. Before, every fast-path merge (the verified Lane 0 revert of journey 05 included) read "Git note:
+  Not written". The evidence page says where the note is, or why there is none.
+- **Rollout timeline to the second.** Deploy trains record `lastCheck` per Change and audit `rollout.rolled-back` /
+  `rollout.released` on each Change's subject. The rollout page shows clock times with seconds, offsets from
+  detection (+0.1 s, +1.1 s, +6.8 s), the first error, the signal that detected the regression (taken from the
+  `deploy.regression-attributed` summary) and the revert's own merge. It no longer claims "no health check
+  result" for a rollout that health monitoring rolled back.
+- **A review for another head names both shas.** The full shas are shown when the 12-character forms collide,
+  and the message says which one is current.

@@ -63,12 +63,31 @@ for (const sha of plan.fetch) git("fetch", "-q", "--no-tags", "--no-filter", "--
 const replay = (e, onto) => doc(run("gittifacts-runner", ["merge-attempt", "--base", e.replayBase, "--onto", onto, "--head", e.headSha]));
 const tree = (sha) => git("rev-parse", sha + "^{tree}");
 const push = (sha, ref) => git("push", "-q", "--force", "origin", sha + ":" + ref);
+// One commit per Change (DECISIONS 2026-10-03): a Change of several commits lands squashed, and its
+// message keeps the head's message and lists every commit it was made of, oldest first. Same tree,
+// parent, identities and dates as merge-attempt's commit, so a re-run reproduces the sha. Best
+// effort: if the history can't be read, merge-attempt's commit lands as it is.
+const squashed = (e, sha, onto) => {
+  if (!(e.commits > 1)) return sha;
+  try {
+    git("fetch", "-q", "--no-tags", "--no-filter", "--depth=" + e.commits, "origin", e.headSha);
+    const list = git("log", "--format=%H %s", "-n", String(e.commits), e.headSha).split("\n").filter(Boolean).reverse();
+    if (list.length !== e.commits) return sha;
+    const [an, ae, ad, cn, ce, cd, ...body] = run("git", ["log", "-1", "--date=raw", "--format=%an%x00%ae%x00%ad%x00%cn%x00%ce%x00%cd%x00%B", sha]).split("\0");
+    const lines = list.map((l) => "- " + l.slice(0, 12) + l.slice(40));
+    writeFileSync("/tmp/gittifacts-squash-msg", body.join("\0").trimEnd() + "\n\nLanded by the merge queue as one commit, squashed from the change's " + e.commits + " commits (oldest first):\n" + lines.join("\n") + "\n");
+    const env = { ...process.env, GIT_AUTHOR_NAME: an, GIT_AUTHOR_EMAIL: ae, GIT_AUTHOR_DATE: ad, GIT_COMMITTER_NAME: cn, GIT_COMMITTER_EMAIL: ce, GIT_COMMITTER_DATE: cd };
+    return execFileSync("git", ["commit-tree", tree(sha), "-p", onto, "-F", "/tmp/gittifacts-squash-msg"], { encoding: "utf8", env, stdio: ["ignore", "pipe", "inherit"] }).trim();
+  } catch {
+    return sha;
+  }
+};
 if (plan.mode === "build") {
   let tip = plan.base;
   const commits = [];
   for (const e of plan.entries) {
     const d = replay(e, tip).value;
-    if (d.status === "clean") { tip = d.newSha; commits.push({ changeId: e.changeId, commitSha: tip, treeSha: tree(tip) }); continue; }
+    if (d.status === "clean") { tip = squashed(e, d.newSha, tip); commits.push({ changeId: e.changeId, commitSha: tip, treeSha: tree(tip) }); continue; }
     if (d.status === "conflict") { out({ status: "conflict", changeId: e.changeId, files: d.files.map((f) => f.path), upstreamCommits: (d.upstreamCommits || []).map((c) => c.sha) }); process.exit(0); }
     out({ status: "error", changeId: e.changeId, note: String(d.note || "merge-attempt failed").slice(0, 2000) }); process.exit(0);
   }
@@ -176,10 +195,11 @@ export class ContainerQueueJobs implements QueueJobs {
     const out = await this.exec("build", input.scratch, input.baseSha, {
       mode: "build",
       base: input.baseSha,
-      entries: input.entries.map(({ changeId, headSha, replayBase }) => ({
+      entries: input.entries.map(({ changeId, headSha, replayBase, commits }) => ({
         changeId,
         headSha,
         replayBase,
+        ...(commits === undefined ? {} : { commits }),
       })),
       ref: input.ref,
       fetch: [input.baseSha, ...input.entries.flatMap((e) => [e.headSha, e.replayBase])],

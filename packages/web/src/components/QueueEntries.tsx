@@ -220,8 +220,8 @@ function EntryRow({
           </p>
         ) : null}
         {e.mergedSha ? (
-          <p class="q-entry__rel">
-            Merged as <Hash value={e.mergedSha} head={7} tail={0} />
+          <p class="q-entry__rel" title="The queue lands every change as one commit; a change of several commits is squashed and its message lists them.">
+            Merged as <Hash value={e.mergedSha} head={7} tail={0} /> <span class="q-dim">· one commit per change</span>
           </p>
         ) : null}
         {e.ejectReason ? <EjectPanel r={e.ejectReason} find={find} /> : null}
