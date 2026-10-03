@@ -293,6 +293,44 @@ describe("M4 through deploy trains", () => {
     ).toBe(true);
   });
 
+  it("a revert that cannot be opened goes to a human once the queue gives up", async () => {
+    const env = await trainEnv();
+    const { store, deployer, telemetry, audit, notifier, git } = env.ports;
+    const c1 = await env.change("c1", { "src/app.ts": "throw sometimes\n" }, 1);
+    await env.admit(c1);
+    await env.drive();
+    // Live 2026-10-03: the revert's fork stayed "being forked" (it was requested as the platform
+    // was redeployed), so every RequestRevert retry failed and the command was dropped silently.
+    const fork = git.forkRepo.bind(git);
+    git.forkRepo = async (source: string, target: string) => {
+      if (target.includes("rv-"))
+        throw Object.assign(new Error(`Repository "${target}" is currently being forked`), {
+          code: "FORK_IN_PROGRESS",
+        });
+      return fork(source, target);
+    };
+    const healthy = telemetry.fallback;
+    telemetry.fallback = { ...healthy, requests: 200, errorRate: 0.4, baselineErrorRate: 0 };
+    await tick(env, 1);
+    telemetry.fallback = healthy;
+    expect(deployer.rollbacks).toHaveLength(1);
+    await tick(env, 20); // retried with backoff, then given up
+    const c = await store.getChange("c1");
+    expect(c).toMatchObject({ revertedBy: null, status: "merged" });
+    expect(c?.rolloutState?.status).toBe("rolled-back");
+    expect(audit.actions()).toEqual(
+      expect.arrayContaining(["deploy.revert-failed", "merge-queue.command-dropped"]),
+    );
+    expect(
+      notifier.sent.some(
+        (n) =>
+          n.kind === "regression-detected" &&
+          n.changeId === "c1" &&
+          /automatic revert could not be opened/.test(n.message),
+      ),
+    ).toBe(true);
+  });
+
   it("holds the Worker for the deploy-time policy's stages + watch, then releases", async () => {
     expect(watchMsFor(fast, [50, 100])).toBe((2 * 2 + 3) * 60_000);
     expect(watchMsFor({ ...fast, watchMinutes: 1, stageMinutes: 1 }, [100])).toBe(2 * 60_000);

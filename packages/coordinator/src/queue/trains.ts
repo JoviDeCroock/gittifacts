@@ -288,6 +288,32 @@ export class CoordinatorTrainShell {
     });
   }
 
+  /**
+   * A RequestRevert the outbox gave up on: the Change is rolled back with its flag off, but no
+   * revert exists. Regressions must end in a revert, so a human is told to write it (unknown →
+   * escalate), and the Change leaves `rolling-out`.
+   */
+  async revertFailed(
+    cmd: Extract<TrainCommand, { type: "RequestRevert" }>,
+    error: string,
+  ): Promise<void> {
+    const { store, notifier } = this.ctx.ports;
+    const original = await store.getChange(cmd.changeId);
+    if (original === null || original.revertedBy !== null) return;
+    if (original.status === "rolling-out")
+      await store.updateChange(original.id, { status: "merged" });
+    await this.ctx.audit(changeSubject(original.id), "deploy.revert-failed", {
+      issueId: cmd.issueId,
+      error: error.slice(0, 2000),
+    });
+    await notifier.notify({
+      kind: "regression-detected",
+      changeId: original.id,
+      repoId: original.repoId,
+      message: `${original.title} regressed after deploy and was rolled back (its flag is off), but the automatic revert could not be opened (${error.slice(0, 300)}). Revert it by hand.`,
+    });
+  }
+
   private async onEmit(event: Extract<TrainCommand, { type: "Emit" }>["event"]): Promise<void> {
     await onQueueEvent(this.ctx, event);
   }

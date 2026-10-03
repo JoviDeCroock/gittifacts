@@ -174,5 +174,11 @@ describe("audit summaries and principal names", () => {
       "Regression attributed in train t2 and confirmed, seen by the Workers Logs poll (telemetry-t2-1)",
     );
     expect(summarizeAudit(ev, null)).toBe("Regression attributed");
+    expect(
+      summarizeAudit(
+        { action: "deploy.revert-failed", subject: "change:c1" },
+        { error: "fork stuck" },
+      ),
+    ).toBe("Automatic revert could not be opened (fork stuck): revert it by hand");
   });
 });

@@ -676,6 +676,10 @@ describe("ArtifactsGitHost", () => {
     let forkError: Error | null = null;
     const transfers: Array<{ sha: string; toRef: string; oldSha?: string; haves?: string[] }> = [];
     let transferOk = true;
+    // Forks Artifacts reports as "being forked" (until deleted); `restick` keeps re-forks stuck too.
+    const stuck = new Set<string>();
+    let restick = false;
+    const deleted: string[] = [];
     const repo = (name: string): ArtifactsRepoLike => ({
       createToken: async (scope, ttl) => {
         tokens.push([name, scope, ttl]);
@@ -708,15 +712,28 @@ describe("ArtifactsGitHost", () => {
       log: async () => [{ hash: "c2" }],
       fork: async (target) => {
         if (forkError) throw forkError;
+        if (restick) stuck.add(target);
+        if (stuck.has(target))
+          throw Object.assign(new Error("in progress"), { code: "FORK_IN_PROGRESS" });
         created.push(target);
         return { remote: target };
       },
     });
     const binding: ArtifactsBindingLike = {
       create: async (name) => ({ remote: name, defaultBranch: "main" }),
-      get: async (name) => repo(name),
+      get: async (name) => {
+        if (stuck.has(name))
+          throw Object.assign(new Error(`Repository "${name}" is currently being forked`), {
+            code: "FORK_IN_PROGRESS",
+          });
+        return repo(name);
+      },
       import: async () => ({ remote: "r", defaultBranch: "main" }),
-      delete: async () => true,
+      delete: async (name) => {
+        deleted.push(name);
+        stuck.delete(name);
+        return true;
+      },
     };
     const err = (name: string, reason: string) =>
       Object.assign(new Error(reason), { name, reason });
@@ -768,6 +785,9 @@ describe("ArtifactsGitHost", () => {
       setForkError: (e: Error) => (forkError = e),
       transfers,
       failTransfers: () => (transferOk = false),
+      stuck,
+      restickForks: () => (restick = true),
+      deleted,
     };
   }
 
@@ -936,6 +956,24 @@ describe("ArtifactsGitHost", () => {
     expect(await h.branchHead("main", "main")).toBe("c2");
     expect(await h.commitParents("main", "c2")).toEqual(["c1"]);
     expect(await h.treeOf("main", "c1")).toBe("root1");
+  });
+
+  it("deletes a fork stuck in progress and forks it again (once)", async () => {
+    // Live: a revert's fork stayed "being forked" for 40 minutes, so the revert never opened.
+    const { h, stuck, deleted, created, restickForks } = host();
+    stuck.add("task-rv-1");
+    expect(await h.forkRepo("main", "task-rv-1")).toEqual({
+      remote: "https://acc.artifacts.cloudflare.net/git/ns/task-rv-1.git",
+    });
+    expect(deleted).toEqual(["task-rv-1"]);
+    expect(created).toEqual(["task-rv-1"]);
+    // Still stuck after the second fork: give up (the caller retries), no delete loop.
+    stuck.add("task-rv-2");
+    restickForks();
+    await expect(h.forkRepo("main", "task-rv-2")).rejects.toMatchObject({
+      code: "FORK_IN_PROGRESS",
+    });
+    expect(deleted).toEqual(["task-rv-1", "task-rv-2"]);
   });
 
   it("diffs commits by walking trees: modified, binary, exact rename across directories", async () => {

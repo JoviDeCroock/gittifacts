@@ -42,6 +42,7 @@ const LABEL: Record<string, string> = {
   "deploy.train-rolled-back": "Deploy train rolled back",
   "deploy.regression-attributed": "Regression traced to this change",
   "deploy.flag-off": "Flag turned off",
+  "deploy.revert-failed": "Automatic revert failed: revert it by hand",
   "deployment.created": "Deployment reported",
   "rollout.via-train": "Rolling out on a deploy train",
   "rollout.stage.started": "Stage started",

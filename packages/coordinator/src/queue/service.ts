@@ -12,6 +12,7 @@ import {
   type QueueState,
   queueConfig,
   TERMINAL_STATES,
+  type TrainCommand,
 } from "@app/merge-queue";
 import type {
   CoordinatorBindings,
@@ -100,13 +101,18 @@ export class MergeQueueService {
         giveUp: (cmd, error) => this.shell.giveUp(cmd, error),
         onEvents: (rows) => this.wake(rows),
         onHalt: (halt) => this.alertHalt(halt),
-        onDropped: (row, error) =>
-          this.ctx.audit(this.ctx.repoSubject(), "merge-queue.command-dropped", {
+        onDropped: async (row, error) => {
+          const cmd = row.command as TrainCommand;
+          // A revert that could not be opened goes to a human (the Change is only rolled back).
+          if (row.lane === "train" && cmd.type === "RequestRevert")
+            await this.trainShell.revertFailed(cmd, error).catch(() => undefined);
+          await this.ctx.audit(this.ctx.repoSubject(), "merge-queue.command-dropped", {
             lane: row.lane,
             type: (row.command as { type?: string }).type ?? "unknown",
             attempts: row.attempts + 1,
             error,
-          }),
+          });
+        },
       },
       {
         now: () => this.ctx.now(),

@@ -140,6 +140,8 @@ const SUMMARIES: Record<string, (p: Payload) => string | null> = {
       : `Workers Issues (issue ${issue})`;
     return `Regression attributed${where}${p.confirmed === true ? " and confirmed" : ""}, seen by ${seenBy}`;
   },
+  "deploy.revert-failed": (p) =>
+    `Automatic revert could not be opened${str(p, "error") ? ` (${clip(str(p, "error")!)})` : ""}: revert it by hand`,
   "rollout.released": () => "Released: the watch window closed clean",
   "rollout.rolled-back": () => "Rolled back to the previous version",
 };

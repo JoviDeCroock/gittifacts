@@ -352,6 +352,28 @@ export class ArtifactsGitHost implements GitHost {
     target: string,
     opts: { readOnly?: boolean } = {},
   ): Promise<{ remote: string }> {
+    await this.startFork(source, target, opts);
+    let info: { defaultBranch: string; remote: string };
+    try {
+      info = await this.waitReady(target);
+    } catch (e) {
+      if (errorCode(e) !== "FORK_IN_PROGRESS") throw e;
+      // Still "being forked" after the whole wait: the fork is stuck and never completes (seen live
+      // 2026-10-03: a revert's fork, requested as the platform was redeployed, was still in progress
+      // 40 minutes later, so the revert was never opened). A stuck fork can be deleted: fork again.
+      await this.deleteRepo(target);
+      await this.startFork(source, target, opts);
+      info = await this.waitReady(target);
+    }
+    await this.hydrateFork(source, target, info.defaultBranch);
+    return { remote: info.remote };
+  }
+
+  private async startFork(
+    source: string,
+    target: string,
+    opts: { readOnly?: boolean },
+  ): Promise<void> {
     try {
       await this.withRepo(source, (r) =>
         r.fork(target, {
@@ -364,9 +386,6 @@ export class ArtifactsGitHost implements GitHost {
       const code = errorCode(e);
       if (code !== "ALREADY_EXISTS" && code !== "FORK_IN_PROGRESS") throw e;
     }
-    const info = await this.waitReady(target);
-    await this.hydrateFork(source, target, info.defaultBranch);
-    return { remote: info.remote };
   }
 
   /**
