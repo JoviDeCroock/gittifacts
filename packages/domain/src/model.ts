@@ -84,6 +84,40 @@ export type Principal = z.infer<typeof Principal>;
 export const Jurisdiction = z.enum(["eu", "us", "unrestricted"]);
 export type Jurisdiction = z.infer<typeof Jurisdiction>;
 
+/**
+ * GitHub mode (docs/prompts/06-two-modes.md §3): GitHub is the source of truth and the repo's
+ * Artifacts repo (`artifactsName`) is a disposable mirror the evidence runs on.
+ */
+export const GithubRepoHost = z.object({
+  kind: z.literal("github"),
+  owner: z.string().min(1).max(100),
+  repo: z.string().min(1).max(100),
+  githubRepoId: z.number().int().positive(),
+  installationId: z.number().int().positive(),
+  appId: z.number().int().positive(),
+  private: z.boolean(),
+});
+export type GithubRepoHost = z.infer<typeof GithubRepoHost>;
+
+/** A pull request graded as a Change (GitHub mode). */
+export const GithubChangeHost = z.object({
+  kind: z.literal("github"),
+  number: z.number().int().positive(),
+  /** Branch in the mirror holding this pull request's head (`gittifacts/pr/<n>`). */
+  headBranch: z.string().min(1).max(200),
+  /** The head comes from another repository (a fork): untrusted code. */
+  fork: z.boolean(),
+  headRepo: z.string().max(200).nullable(),
+  baseRef: z.string().min(1).max(255),
+  author: z.object({
+    login: z.string().min(1).max(100),
+    id: z.number().int(),
+    kind: z.enum(["human", "agent", "bot"]),
+  }),
+  url: z.string().url(),
+});
+export type GithubChangeHost = z.infer<typeof GithubChangeHost>;
+
 export const Repo = z.object({
   id: Id,
   namespace: z.string(),
@@ -116,6 +150,8 @@ export const Repo = z.object({
   }),
   /** Template the project was created from, if any. */
   template: z.string().nullable(),
+  /** Where the code lives when it isn't native (GitHub mode); absent or null: native. */
+  host: GithubRepoHost.nullable().optional(),
   createdAt: IsoDate,
 });
 export type Repo = z.infer<typeof Repo>;
@@ -280,6 +316,8 @@ export const Change = z.object({
   revertOf: Id.nullable(),
   revertedBy: Id.nullable(),
   agentTraceId: z.string().nullable(),
+  /** The pull request this Change grades (GitHub mode); absent or null: a native Change. */
+  host: GithubChangeHost.nullable().optional(),
   createdAt: IsoDate,
   updatedAt: IsoDate,
 });

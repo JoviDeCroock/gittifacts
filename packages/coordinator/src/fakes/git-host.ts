@@ -358,6 +358,27 @@ export class FakeGitHost implements GitHost {
     this.writes.push({ op: "transfer", repo: toRepo, ref: toRef });
   }
 
+  /**
+   * GitHub mode: `source.url` names another repo of this fake (the "GitHub" side, e.g.
+   * `https://github.com/acme/app.git` → repo `github.com/acme/app`); the fetch copies objects.
+   */
+  readonly externalFetches: Array<{ url: string; toRepo: string; sha: string; toRef: string; authed: boolean }> = [];
+  async fetchExternal(
+    source: { url: string; auth?: { basic: { username: string; password: string } } },
+    toRepo: string,
+    input: { sha: string; toRef: string },
+  ): Promise<void> {
+    this.guard(toRepo, "fetch external");
+    const from = source.url.replace(/^https:\/\//, "").replace(/\.git$/, "");
+    if (!this.repo(from).objects.has(input.sha)) {
+      throw new FakeGitError("NOT_FOUND", `${input.sha} in ${from}`);
+    }
+    this.copyObjects(toRepo, input.sha);
+    this.repo(toRepo).refs.set(input.toRef, input.sha);
+    this.externalFetches.push({ url: source.url, toRepo, ...input, authed: source.auth !== undefined });
+    this.writes.push({ op: "fetch-external", repo: toRepo, ref: input.toRef });
+  }
+
   async updateRef(
     repo: string,
     ref: string,

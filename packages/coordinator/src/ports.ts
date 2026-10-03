@@ -163,6 +163,16 @@ export interface GitHost {
   ): Promise<void>;
   /** Copy the objects reachable from `sha` out of `fromRepo` into `toRepo`, pointing `toRef` at it. */
   transferObjects(fromRepo: string, toRepo: string, sha: string, toRef: string): Promise<void>;
+  /**
+   * GitHub mode: fetch the objects reachable from `sha` out of an external git remote (a GitHub
+   * repository, read with a short-lived installation token) into `toRepo` (a mirror), and point
+   * `toRef` at it (non-fast-forward allowed). Incremental: the target's tips are the haves.
+   */
+  fetchExternal?(
+    source: ExternalRemote,
+    toRepo: string,
+    input: { sha: string; toRef: string },
+  ): Promise<void>;
   /** Compare-and-swap ref update. `oldSha` = 40 zeros to create. */
   updateRef(repo: string, ref: string, oldSha: string, newSha: string): Promise<FastForwardResult>;
   /**
@@ -501,7 +511,22 @@ export interface Clock {
  * Which component a `Ports` bundle is built for. Only `merge-queue` gets a GitHost that may write
  * to main repos (the MergeQueue DO is the only writer of the default branch).
  */
-export type PortsRole = "default" | "merge-queue";
+/**
+ * - `default`: writes change forks only.
+ * - `merge-queue`: the only writer of native main repos.
+ * - `github`: GitHub mode's mirror sync; writes change forks and GitHub mirrors (`ghm-*`), whose
+ *   source of truth is GitHub, never a native main repo.
+ */
+export type PortsRole = "default" | "merge-queue" | "github";
+
+/** An external git remote (GitHub) and its credentials for one fetch. */
+export interface ExternalRemote {
+  url: string;
+  auth?: { basic: { username: string; password: string } };
+}
+
+/** GitHub mirrors are `ghm-<github repo id>` (packages/host-github/src/ids.ts). */
+export const isGithubMirrorRepo = (name: string): boolean => /^ghm-\d+$/.test(name);
 
 /** The platform's own principal id, used for machine actions in the audit log. */
 export const SYSTEM_PRINCIPAL_ID = "system";

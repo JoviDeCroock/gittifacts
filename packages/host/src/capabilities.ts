@@ -22,11 +22,24 @@ export interface HostCapabilities {
   supportsInlineTourStops: boolean;
   /** Identity kinds the host can tell apart. */
   identityKinds: readonly IdentityKind[];
+  /**
+   * How a Lane 0 change can land (docs/research/github-app.md, decision 4):
+   * - `own-queue`: the platform's own merge queue (native);
+   * - `bypass-direct`: a direct, head-guarded merge by an App that bypasses the approval ruleset
+   *   (GitHub path A, needs the Actor App);
+   * - `approve`: an App approval counts toward required reviews (GitHub path B; not offered);
+   * - `none`: the platform never merges here (GitHub shadow mode).
+   */
+  mergeMode: MergeMode;
+  /** Merges must go through the host's merge queue (a required GitHub merge queue). */
+  hostQueueRequired: boolean;
 }
+
+export type MergeMode = "own-queue" | "bypass-direct" | "approve" | "none";
 
 /** One capability-driven change of behaviour, carried in the verdict so it is always visible. */
 export interface Degradation {
-  capability: Exclude<keyof HostCapabilities, "identityKinds">;
+  capability: Exclude<keyof HostCapabilities, "identityKinds" | "mergeMode">;
   /** What the platform would have done with the capability. */
   wanted: string;
   /** What it did instead. */
@@ -81,4 +94,6 @@ export const NATIVE_CAPABILITIES: HostCapabilities = Object.freeze({
   supportsNotes: true,
   supportsInlineTourStops: true,
   identityKinds: Object.freeze(["human", "agent", "bot"] as const),
+  mergeMode: "own-queue",
+  hostQueueRequired: false,
 });

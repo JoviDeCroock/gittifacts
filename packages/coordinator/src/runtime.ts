@@ -33,6 +33,7 @@ export interface MergeQueueRuntime {
   config?: QueueConfigInput;
 }
 
+import type { FlowHosts } from "./change-flow.js";
 import type { CoordinatorOptions } from "./service.js";
 
 export interface CoordinatorRuntime<Env = unknown> {
@@ -49,6 +50,8 @@ export interface CoordinatorRuntime<Env = unknown> {
    * Best effort: a failure is logged and never fails or re-routes the push.
    */
   onPushEvent?(env: Env, push: PushEventInfo): Promise<void>;
+  /** Host adapters for non-native changes (GitHub mode), handed to the ChangeWorkflow. */
+  hosts?(env: Env, ports: Ports): FlowHosts;
 }
 
 /** A validated Artifacts push, as the PushRouter saw it. */

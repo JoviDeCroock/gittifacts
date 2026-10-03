@@ -21,9 +21,17 @@ import {
   gradeChange,
   type SealedEvidence,
 } from "@app/core";
-import type { ClaimedCategory, Lane, PipelineRun, RepoPolicy, RolloutState } from "@app/domain";
+import type {
+  ClaimedCategory,
+  GithubChangeHost,
+  GithubRepoHost,
+  Lane,
+  PipelineRun,
+  RepoPolicy,
+  RolloutState,
+} from "@app/domain";
 import { EVIDENCE_NOTES_REF, type EvidenceItem, encodeNote, type Screenshots } from "@app/evidence";
-import { NATIVE_CAPABILITIES } from "@app/host";
+import { type HostAdapter, type LaneVerdict, NATIVE_CAPABILITIES } from "@app/host";
 import { type CoordinatorBindings, createOrGet } from "./bindings.js";
 import {
   ChangeWorkflowParams,
@@ -54,9 +62,21 @@ import { revertTrees, verifyPureRevert } from "./revert.js";
 import { toPipelineRun } from "./run-sink.js";
 import { RETRY, type Step, waitOrTimeout } from "./step.js";
 
+/** Where non-native changes live: the platform builds a host adapter per change (GitHub mode). */
+export interface FlowHosts {
+  github?(input: {
+    changeId: string;
+    repoId: string;
+    repo: GithubRepoHost;
+    change: GithubChangeHost;
+  }): HostAdapter | null;
+}
+
 export interface FlowDeps {
   ports: Ports;
   bindings: CoordinatorBindings;
+  /** Absent: native only (a GitHub change is then skipped, never graded blind). */
+  hosts?: FlowHosts;
 }
 
 export type ChangeOutcome =
@@ -68,7 +88,9 @@ export type ChangeOutcome =
   | "review-expired"
   | "merge-failed"
   | "merge-wait-expired"
-  | "merged";
+  | "merged"
+  /** Graded and published on a host where the platform doesn't merge (GitHub shadow mode). */
+  | "graded";
 
 export interface ChangeWorkflowOutput {
   outcome: ChangeOutcome;
@@ -104,6 +126,8 @@ interface Loaded {
   claimed: boolean;
   /** The repo's bootstrap Change: CI + evidence + preview, then released (no lane, no review). */
   bootstrap: boolean;
+  /** GitHub mode: the repo and pull request (null: a native change). */
+  host: { repo: GithubRepoHost; change: GithubChangeHost } | null;
 }
 
 const SKIPPED: Omit<Loaded, "skip"> = {
@@ -119,6 +143,7 @@ const SKIPPED: Omit<Loaded, "skip"> = {
   title: "",
   claimed: false,
   bootstrap: false,
+  host: null,
 };
 
 /** The CI run as grading sees it, plus the full report (preview snapshots, bundle for rollout). */
@@ -191,10 +216,25 @@ export async function runChangeWorkflow(
       title: change.title,
       claimed: repo.claim.status === "claimed",
       bootstrap: isBootstrapChange(change),
+      host:
+        change.host != null && repo.host != null ? { repo: repo.host, change: change.host } : null,
     };
   });
   if (ctx.skip !== null) return done("skipped", null, ctx.skip);
   const { baseSha, forkName, repoId } = ctx;
+
+  // ------------------------------------------------------------ the host (GitHub mode)
+  // Built per run, never inside a step (an adapter is not a step result). A GitHub change with no
+  // GitHub host configured is not graded at all: no verdict beats a verdict nobody can publish.
+  const host: HostAdapter | null =
+    ctx.host === null
+      ? null
+      : (deps.hosts?.github?.({ changeId, repoId, repo: ctx.host.repo, change: ctx.host.change }) ??
+        null);
+  if (ctx.host !== null && host === null) {
+    return done("skipped", null, "GitHub change, but no GitHub host is configured");
+  }
+  const capabilities = host?.capabilities() ?? NATIVE_CAPABILITIES;
 
   // ------------------------------------------------------------ 1. diff
   await step.do("diff", RETRY.remote, async () => {
@@ -256,8 +296,9 @@ export async function runChangeWorkflow(
         // The pipeline comes from BASE: a change must not edit the CI that judges it.
         pipelineFrom: "base",
         limits: { maxMinutes: CI_BUDGET_MINUTES },
-        // Unclaimed projects: sandbox egress to package registries only (onboarding §4).
-        network: ctx.claimed ? "open" : "registries-only",
+        // Unclaimed projects and fork pull requests (untrusted code, spec §3.8): sandbox egress
+        // to package registries only (onboarding §4).
+        network: ctx.claimed && ctx.host?.change.fork !== true ? "open" : "registries-only",
         // A bootstrap has no diff (base = head): evidence steps would have nothing to measure.
         ...(ctx.bootstrap ? { evidenceSteps: [] } : {}),
       };
@@ -357,7 +398,8 @@ export async function runChangeWorkflow(
   // ------------------------------------------------------------ 4b. preview (Worker-side, informational)
   // Started from the CI build snapshot and served through the preview gateway. Before the
   // evidence is sealed, so `evidence_ready` means "CI finished and the preview answers".
-  const previews = ports.previews;
+  // No previews of GitHub repos yet: a preview URL is public and their code may be private.
+  const previews = host === null ? ports.previews : undefined;
   let preview: PreviewOutcome | null = null;
   const startPreview = async ({ ciStatus, report }: NativeReport): Promise<EvidenceItem[]> => {
     if (previews !== undefined) {
@@ -577,7 +619,7 @@ export async function runChangeWorkflow(
       policy: resolved,
       // Unclaimed projects never auto-merge (their policy already has Lane 0 off; belt and braces).
       autoMergeAllowed: ctx.claimed,
-      capabilities: NATIVE_CAPABILITIES,
+      capabilities,
     },
     {
       stage: durableStages(step),
@@ -619,6 +661,43 @@ export async function runChangeWorkflow(
     });
   }
 
+  // ------------------------------------------------------------ 8b. publish on the host (GitHub)
+  // Its own durable step after grading: a GitHub outage retries the publish, never the grading.
+  // Shadow mode writes nothing to the pull request but this one check run.
+  if (host !== null && ctx.host !== null) {
+    const ref = {
+      host: "github" as const,
+      owner: ctx.host.repo.owner,
+      repo: ctx.host.repo.repo,
+      number: ctx.host.change.number,
+    };
+    const summary = graded.verdict;
+    try {
+      await step.do("publish-verdict", RETRY.remote, async () => {
+        const stored = await store.getClassification(changeId, headSha);
+        if (stored === null) throw new Error("classification missing");
+        const verdict: LaneVerdict = {
+          ...stored,
+          headSha,
+          action: summary.action,
+          degradations: summary.degradations,
+          tourStatus: summary.tourStatus,
+          preliminary: false,
+          evidence: summary.evidence,
+        };
+        await host.publishVerdict(ref, verdict);
+        await log("change.verdict-published", { host: "github", headSha, lane: verdict.lane });
+        return true;
+      });
+    } catch (e) {
+      const reason = errorMessage(e);
+      await step.do("publish-verdict-failed", RETRY.quick, async () => {
+        await log("change.verdict-publish-failed", { host: "github", headSha, error: reason });
+        return true;
+      });
+    }
+  }
+
   // ------------------------------------------------------------ 9. route
   if (cls.blocked) {
     await step.do("blocked", RETRY.quick, async () => {
@@ -635,6 +714,22 @@ export async function runChangeWorkflow(
       return true;
     });
     return done("blocked", cls.lane, ciStatus === "failed" ? "ci failed" : "evidence unverified");
+  }
+
+  // GitHub mode, shadow: the verdict is the whole outcome. Nothing merges here; GitHub's own
+  // merge closes the PR (`pull_request.closed`). Approvals from GitHub bind in M3.
+  if (host !== null) {
+    await step.do("graded-on-host", RETRY.quick, async () => {
+      await store.updateChange(changeId, { status: "awaiting-review" });
+      await log("change.graded-on-host", {
+        host: "github",
+        lane: cls.lane,
+        action: graded.verdict.action,
+        shadow: cls.shadow,
+      });
+      return true;
+    });
+    return done("graded", cls.lane, graded.verdict.action);
   }
 
   const enqueue = (

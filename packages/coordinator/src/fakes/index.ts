@@ -9,7 +9,7 @@ import type { CoordinatorApi } from "../api.js";
 import { isForkName } from "../ids.js";
 import type { MergeQueueOptions } from "../merge-queue.js";
 import { withChangeNotifications } from "../milestones.js";
-import type { Ports, PortsRole } from "../ports.js";
+import { isGithubMirrorRepo, type Ports, type PortsRole } from "../ports.js";
 import { createRunSink } from "../run-sink.js";
 import { type CoordinatorOptions, createCoordinator } from "../service.js";
 import { FakeGitHost, type Files } from "./git-host.js";
@@ -71,10 +71,13 @@ export function createFakePorts(opts: { namespace?: string } = {}): FakePorts {
 /** The merge-queue role's GitHost may write main repos; every other role only forks. */
 export function portsForRole(ports: FakePorts, role: PortsRole): Ports {
   if (role === "merge-queue") return ports;
-  return { ...ports, git: forkOnlyGit(ports.git) };
+  return {
+    ...ports,
+    git: forkOnlyGit(ports.git, role === "github" ? isGithubMirrorRepo : () => false),
+  };
 }
 
-function forkOnlyGit(git: FakeGitHost): FakeGitHost {
+function forkOnlyGit(git: FakeGitHost, alsoWritable: (repo: string) => boolean): FakeGitHost {
   return new Proxy(git, {
     get(target, prop) {
       const value: unknown = Reflect.get(target, prop);
@@ -82,12 +85,13 @@ function forkOnlyGit(git: FakeGitHost): FakeGitHost {
       const guarded = new Set(["writeNote", "updateRef", "commitTree", "deleteRepo"]);
       return (...args: unknown[]) => {
         const name = String(prop);
-        const repo = name === "transferObjects" ? args[1] : args[0];
+        const repo = name === "transferObjects" || name === "fetchExternal" ? args[1] : args[0];
         const writes =
           guarded.has(name) ||
           name === "transferObjects" ||
+          name === "fetchExternal" ||
           (name === "mintToken" && args[1] === "write");
-        if (writes && typeof repo === "string" && !isForkName(repo)) {
+        if (writes && typeof repo === "string" && !isForkName(repo) && !alsoWritable(repo)) {
           throw new Error(`forbidden: ${name} on main repo ${repo} outside the merge queue`);
         }
         return (value as (...a: unknown[]) => unknown).apply(target, args);

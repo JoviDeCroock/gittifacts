@@ -406,6 +406,31 @@ importers:
         specifier: workspace:*
         version: link:../host
 
+  packages/host-github:
+    dependencies:
+      '@app/coordinator':
+        specifier: workspace:*
+        version: link:../coordinator
+      '@app/core':
+        specifier: workspace:*
+        version: link:../core
+      '@app/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@app/gitwire':
+        specifier: workspace:*
+        version: link:../gitwire
+      '@app/host':
+        specifier: workspace:*
+        version: link:../host
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@app/host-contract':
+        specifier: workspace:*
+        version: link:../host-contract
+
   packages/mcp:
     dependencies:
       '@app/domain':

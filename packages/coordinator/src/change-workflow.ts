@@ -10,9 +10,10 @@ export class ChangeWorkflow extends WorkflowEntrypoint<unknown, ChangeWorkflowPa
     event: Readonly<WorkflowEvent<ChangeWorkflowParams>>,
     step: WorkflowStep,
   ): Promise<ChangeWorkflowOutput> {
-    const { ports, bindings } = resolveRuntime(this.env, "default");
+    const { ports, bindings, runtime } = resolveRuntime(this.env, "default");
+    const hosts = runtime.hosts?.(this.env, ports);
     return runChangeWorkflow(
-      { ports, bindings },
+      hosts === undefined ? { ports, bindings } : { ports, bindings, hosts },
       event.payload,
       fromWorkflowStep(step),
       event.instanceId,

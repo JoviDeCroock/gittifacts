@@ -14,7 +14,14 @@ import type {
   PushOutcome,
 } from "./bindings.js";
 import { createOrGet, terminateQuietly } from "./bindings.js";
-import { changeSubject, changeWorkflowId, isBootstrapChange, isForkName, ZERO_SHA } from "./ids.js";
+import {
+  changeSubject,
+  changeWorkflowId,
+  headBranchOf,
+  isBootstrapChange,
+  isForkName,
+  ZERO_SHA,
+} from "./ids.js";
 import { PUSHABLE_STATUSES } from "./lifecycle.js";
 import { changeVersion, clampWait, type MilestoneState, milestoneState } from "./milestones.js";
 import { errorMessage } from "./policy.js";
@@ -102,7 +109,9 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     }
     const repo = await store.getRepo(change.repoId);
     if (repo === null) return { action: "ignored", reason: "unknown repo" };
-    const branchRef = `refs/heads/${repo.defaultBranch}`;
+    // Natively the fork's default branch; a GitHub PR's head branch in the mirror.
+    const headBranch = headBranchOf(change, repo);
+    const branchRef = `refs/heads/${headBranch}`;
     if (input.ref !== branchRef)
       return { action: "ignored", reason: `push to ${input.ref}, not ${branchRef}` };
     if (input.after === ZERO_SHA) return { action: "ignored", reason: "branch deleted" };
@@ -111,7 +120,7 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     state = { ...state, changeId: change.id, forkName: change.forkName };
 
     // Events can arrive out of order or twice: the fork's actual tip is the truth.
-    const tip = (await git.branchHead(change.forkName, repo.defaultBranch)) ?? null;
+    const tip = (await git.branchHead(change.forkName, headBranch)) ?? null;
     if (tip === null) return { action: "ignored", reason: "branch no longer exists" };
     if (tip === state.headSha)
       return { action: "duplicate", headSha: tip, instanceId: state.instanceId };

@@ -10,6 +10,7 @@ export {
   type ChangeOutcome,
   type ChangeWorkflowOutput,
   type FlowDeps,
+  type FlowHosts,
   runChangeWorkflow,
 } from "./change-flow.js";
 export {

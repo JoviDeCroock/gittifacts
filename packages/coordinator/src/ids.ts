@@ -101,3 +101,14 @@ export function evidenceIdFor(changeId: string, headSha: string): string {
 
 export const changeSubject = (changeId: string): string => `change:${changeId}`;
 export const repoSubject = (repoId: string): string => `repo:${repoId}`;
+
+/**
+ * The branch a change's head lives on in its fork repo: natively the fork's default branch; a
+ * GitHub pull request's head is `gittifacts/pr/<n>` in the repo's mirror (`Change.host`).
+ */
+export function headBranchOf(
+  change: { host?: { headBranch: string } | null },
+  repo: { defaultBranch: string },
+): string {
+  return change.host?.headBranch ?? repo.defaultBranch;
+}

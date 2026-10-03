@@ -563,6 +563,27 @@ export class ArtifactsGitHost implements GitHost {
       throw new Error(`transfer to ${toRepo} ${toRef} failed: ${result.reason ?? "unknown"}`);
   }
 
+  /**
+   * GitHub mode: fetch from GitHub (the installation token as `x-access-token` basic auth) into
+   * a mirror, incrementally (the mirror's tips are the haves). The GitHub fetch never uses this
+   * host's own `fetch` (that one reaches Artifacts).
+   */
+  async fetchExternal(
+    source: { url: string; auth?: { basic: { username: string; password: string } } },
+    toRepo: string,
+    input: { sha: string; toRef: string },
+  ): Promise<void> {
+    if (!/^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\.git$/.test(source.url)) {
+      throw new Error("fetchExternal only reads from github.com repositories");
+    }
+    const to = await this.remote(toRepo, "write");
+    const from: WireRemote = { url: source.url, ...(source.auth === undefined ? {} : { auth: source.auth }) };
+    const result = await this.opts.wire.transferObjects(from, to, { sha: input.sha, toRef: input.toRef });
+    if (!result.ok) {
+      throw new Error(`mirror fetch into ${toRepo} ${input.toRef} failed: ${result.reason ?? "unknown"}`);
+    }
+  }
+
   async updateRef(
     repo: string,
     ref: string,
