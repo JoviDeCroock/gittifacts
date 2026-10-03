@@ -62,10 +62,11 @@ export function SignIn() {
   return (
     <div class="signin">
       <main class="signin__main" id="main">
-        <div class="signin__brand">
+        {/* The marketing page: a full load (the Worker serves `/`), not an SPA route. */}
+        <a class="signin__brand" href="/" target="_top">
           <BrandMark size={26} />
           <span class="brand__word">gittifacts</span>
-        </div>
+        </a>
         <h1 class="signin__title">
           {mode.value === "signin" ? "Sign in to review" : "Create your account"}
         </h1>

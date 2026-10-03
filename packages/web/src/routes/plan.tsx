@@ -308,7 +308,7 @@ export function PlanView({ planId }: { planId: string }) {
   const res = useResource(() => loadPlan(planId), [planId]);
   const desktop = useMedia("(min-width: 1100px)");
   const st = res.state.value;
-  const crumbs = [{ href: "/", label: "Repositories" }];
+  const crumbs = [{ href: "/dashboard", label: "Dashboard" }];
   if (st.status === "loading") {
     return (
       <Page title="Plan" crumbs={crumbs}>

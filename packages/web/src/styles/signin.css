@@ -21,6 +21,8 @@
   align-items: center;
   gap: 10px;
   margin-block-end: var(--s-5);
+  color: var(--text);
+  text-decoration: none;
 }
 .signin__brand .brand-mark {
   fill: var(--text);

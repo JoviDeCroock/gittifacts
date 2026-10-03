@@ -118,6 +118,15 @@ html {
 .topbar__signin {
   margin-inline-start: auto;
 }
+/* "Sign in" or "Open dashboard" (SessionLink): one label shows, the other is display:none. */
+.session-authed,
+.btn > .session-authed,
+:root[data-authed] .session-anon {
+  display: none;
+}
+:root[data-authed] .session-authed {
+  display: inline;
+}
 .topbar__menu {
   position: relative;
   margin-inline-start: calc(-1 * var(--s-3));

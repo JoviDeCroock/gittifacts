@@ -1,6 +1,7 @@
 /**
  * The landing page's only script: copy buttons, the theme switch (same storage key as the app),
- * and the start URL on hosts the Worker did not rewrite (local preview). The page works without it.
+ * the start URL on hosts the Worker did not rewrite (local preview), and the nav's "Sign in" /
+ * "Open dashboard" link (one session check). The page works without it.
  */
 const DEFAULT_ORIGIN = "https://gittifacts.decroockjovi.workers.dev";
 const THEME_KEY = "gf:theme";
@@ -128,7 +129,45 @@ function wireMenu(): void {
   });
 }
 
+const AUTHED_HINT = "gf:authed";
+
+/** Signed in: the nav's session links say "Open dashboard" and go to /dashboard. */
+function showSession(authed: boolean): void {
+  const root = document.documentElement;
+  if (authed) root.setAttribute("data-authed", "");
+  else root.removeAttribute("data-authed");
+  for (const a of document.querySelectorAll<HTMLAnchorElement>("a[data-session-link]")) {
+    a.setAttribute("href", authed ? "/dashboard" : "/signin");
+  }
+  try {
+    if (authed) window.localStorage.setItem(AUTHED_HINT, "1");
+    else window.localStorage.removeItem(AUTHED_HINT);
+  } catch {
+    /* storage unavailable: the check runs again on the next visit */
+  }
+}
+
+/**
+ * The one data fetch: better-auth's session endpoint (null without a session; the cookie is
+ * HttpOnly, so the page can't tell by itself). Unknown (offline, an error) keeps what the hint said.
+ */
+async function wireSession(): Promise<void> {
+  if (document.documentElement.hasAttribute("data-authed")) showSession(true);
+  try {
+    const res = await fetch("/api/auth/get-session", {
+      credentials: "same-origin",
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) return;
+    const body: unknown = await res.json();
+    showSession(typeof body === "object" && body !== null && "session" in body);
+  } catch {
+    /* unknown: leave the link as it is */
+  }
+}
+
 fixOrigin();
 wireCopy();
 wireTheme();
 wireMenu();
+void wireSession();

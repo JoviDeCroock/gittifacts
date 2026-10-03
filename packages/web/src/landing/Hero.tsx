@@ -32,9 +32,7 @@ export function TopBar() {
             ))}
           </ul>
         </nav>
-        <a class="btn btn--secondary topbar__signin" href="/signin">
-          Sign in
-        </a>
+        <SessionLink class="btn btn--secondary topbar__signin" />
         {/* Phones: the same sections behind a disclosure that needs no script. */}
         <details class="topbar__menu">
           <summary aria-label="Sections">
@@ -52,6 +50,20 @@ export function TopBar() {
         </details>
       </div>
     </header>
+  );
+}
+
+/**
+ * "Sign in", or "Open dashboard" (→ /dashboard) when signed in. The page is static and the same
+ * for everyone: the head script shows the signed-in label before first paint from a hint the app
+ * leaves, and client.ts confirms it with a session check and fixes the href.
+ */
+export function SessionLink({ class: cls }: { class?: string }) {
+  return (
+    <a class={cls} href="/signin" data-session-link>
+      <span class="session-anon">Sign in</span>
+      <span class="session-authed">Open dashboard</span>
+    </a>
   );
 }
 

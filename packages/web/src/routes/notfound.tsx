@@ -8,8 +8,8 @@ export function NotFound() {
         icon="route"
         title="Nothing lives at this address"
         action={
-          <LinkButton href="/" variant="secondary" icon="layers">
-            Go to repositories
+          <LinkButton href="/dashboard" variant="secondary" icon="layers">
+            Go to dashboard
           </LinkButton>
         }
       >

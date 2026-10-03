@@ -49,7 +49,7 @@ export function ConsentFrame({
   return (
     <div class="consent-frame">
       <header class="consent-frame__brand">
-        <a href="/" class="brand" aria-label="gittifacts home">
+        <a href="/dashboard" class="brand" aria-label="gittifacts dashboard">
           <BrandMark />
           <span class="brand__word">gittifacts</span>
         </a>

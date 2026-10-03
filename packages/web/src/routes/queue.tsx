@@ -285,7 +285,7 @@ export function QueueView({ repoId }: { repoId: string }) {
   const rs = repo.state.value;
   const repoName = rs.status === "ok" ? rs.data.repo.name : "Repository";
   const crumbs = [
-    { href: "/", label: "Repositories" },
+    { href: "/dashboard", label: "Dashboard" },
     { href: `/repos/${repoId}`, label: repoName },
   ];
   const { state, retry } = useQueue(repoId);

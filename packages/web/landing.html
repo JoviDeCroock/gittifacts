@@ -52,6 +52,12 @@
       if (theme === "light" || theme === "dark") {
         document.documentElement.setAttribute("data-theme", theme);
       }
+      // Signed in (a hint the app leaves): the nav says "Open dashboard" from the first paint.
+      try {
+        if (localStorage.getItem("gf:authed") === "1") {
+          document.documentElement.setAttribute("data-authed", "");
+        }
+      } catch (e) {}
     </script>
     <link rel="stylesheet" href="/src/landing/styles/landing.css" />
   </head>

@@ -186,14 +186,14 @@ export function RepoChanges({ repoId }: { repoId: string }) {
 
   if (st.status === "loading") {
     return (
-      <Page title="Repository" crumbs={[{ href: "/", label: "Repositories" }]}>
+      <Page title="Repository" crumbs={[{ href: "/dashboard", label: "Dashboard" }]}>
         <Loading label="Loading changes" lines={8} />
       </Page>
     );
   }
   if (st.status === "error") {
     return (
-      <Page title="Repository" crumbs={[{ href: "/", label: "Repositories" }]}>
+      <Page title="Repository" crumbs={[{ href: "/dashboard", label: "Dashboard" }]}>
         <ErrorState error={st.error} what="this repository" onRetry={res.reload} />
       </Page>
     );
@@ -225,7 +225,7 @@ export function RepoChanges({ repoId }: { repoId: string }) {
           </LinkButton>
         </>
       }
-      crumbs={[{ href: "/", label: "Repositories" }]}
+      crumbs={[{ href: "/dashboard", label: "Dashboard" }]}
       meta={
         <>
           <span>

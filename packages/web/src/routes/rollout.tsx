@@ -347,7 +347,7 @@ export function RolloutView({ changeId }: { changeId: string }) {
   const res = useResource(() => loadRollout(changeId), [changeId]);
   const tick = useTick(1000);
   const st = res.state.value;
-  const crumbs = [{ href: "/", label: "Repositories" }];
+  const crumbs = [{ href: "/dashboard", label: "Dashboard" }];
   if (st.status === "loading") {
     return (
       <Page title="Rollout" crumbs={crumbs}>

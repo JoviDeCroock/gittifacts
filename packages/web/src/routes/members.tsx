@@ -130,7 +130,7 @@ export function MembersPage({ repoId }: { repoId: string }) {
   const { route } = useLocation();
   const res = useResource(() => Promise.all([api.repo(repoId), membersApi.list(repoId)]), [repoId]);
   const st = res.state.value;
-  const crumbs = [{ href: "/", label: "Repositories" }];
+  const crumbs = [{ href: "/dashboard", label: "Dashboard" }];
 
   if (st.status === "loading") {
     return (
@@ -174,7 +174,7 @@ export function MembersPage({ repoId }: { repoId: string }) {
                 isMe={m.principalId === me}
                 now={minuteClock.value}
                 onChanged={res.reload}
-                onLeft={() => route("/")}
+                onLeft={() => route("/dashboard")}
               />
             ))}
           </ul>

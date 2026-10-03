@@ -24,7 +24,7 @@ export default defineConfig({
     // es2022 browsers all support modulepreload; skip the polyfill script.
     modulePreload: { polyfill: false },
     rolldownOptions: {
-      // The app (SPA) and the prerendered landing page the Worker serves at `/` to visitors.
+      // The app (SPA, signed-in home /dashboard) and the prerendered landing page the Worker serves at `/`.
       input: { main: "index.html", landing: "landing.html" },
     },
   },

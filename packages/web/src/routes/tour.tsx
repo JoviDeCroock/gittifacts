@@ -653,7 +653,7 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
 export function TourView({ changeId }: { changeId: string }) {
   const res = useResource(() => loadTour(changeId), [changeId]);
   const st = res.state.value;
-  const crumbsBase = [{ href: "/", label: "Repositories" }];
+  const crumbsBase = [{ href: "/dashboard", label: "Dashboard" }];
 
   if (st.status === "loading") {
     return (

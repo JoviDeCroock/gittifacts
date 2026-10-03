@@ -19,7 +19,7 @@ export { BrandMark };
 
 /** `server`: a page the Worker serves (not an SPA route), so the router must not intercept it. */
 const NAV: { href: string; label: string; icon: IconId; match: (path: string) => boolean; server?: boolean }[] = [
-  { href: "/", label: "Repositories", icon: "layers", match: (p) => p === "/" || p.startsWith("/repos") || p.startsWith("/changes") || p.startsWith("/plans") },
+  { href: "/dashboard", label: "Dashboard", icon: "layers", match: (p) => p === "/dashboard" || p.startsWith("/repos") || p.startsWith("/changes") || p.startsWith("/plans") },
   { href: "/audit", label: "Audit log", icon: "scroll-text", match: (p) => p.startsWith("/audit") },
   { href: "/agents", label: "Agents", icon: "key", match: (p) => p.startsWith("/agents") },
   { href: "/settings/integrations", label: "Integrations", icon: "plug", match: (p) => p.startsWith("/settings/integrations") },
@@ -87,7 +87,7 @@ function Sidebar() {
   const s = session.value;
   return (
     <aside class="sidebar" aria-label="Main">
-      <a href="/" class="brand">
+      <a href="/dashboard" class="brand" aria-label="gittifacts dashboard">
         <BrandMark />
         <span class="brand__word">gittifacts</span>
       </a>
@@ -250,7 +250,7 @@ export function Page({ title, crumbs = [], actions, meta, children, wide, barTit
             </span>
           </a>
         ) : (
-          <a href="/" class="topbar__brand" aria-label="gittifacts home">
+          <a href="/dashboard" class="topbar__brand" aria-label="gittifacts dashboard">
             <BrandMark />
             <span class="brand__word topbar__word" aria-hidden="true">
               gittifacts

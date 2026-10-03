@@ -1,0 +1,188 @@
+/* The dashboard's getting-started checklist (components/GettingStarted.tsx). One panel, a numbered
+   list of three steps with a state mark each; no cards inside it. */
+.gs {
+  display: grid;
+  gap: var(--s-4);
+  margin-block-end: var(--s-6);
+  padding: var(--s-4);
+  border-radius: var(--r-panel);
+  background: var(--panel);
+}
+.gs__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-3);
+}
+.gs__title {
+  font-size: var(--text-title);
+  line-height: var(--leading-tight);
+  color: var(--text);
+}
+.gs__count {
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.gs__hide {
+  margin-inline-start: auto;
+}
+.gs__steps {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.gs-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-3);
+  padding-block: var(--s-4);
+  border-block-start: 1px solid var(--rule);
+}
+.gs-step:first-child {
+  border-block-start: 0;
+  padding-block-start: var(--s-1);
+}
+.gs-step__mark {
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  color: var(--text-3);
+}
+.gs-step[data-state="done"] .gs-step__mark {
+  color: var(--ok);
+}
+.gs-step[data-state="running"] .gs-step__mark {
+  color: var(--action);
+}
+.gs-step[data-state="failed"] .gs-step__mark {
+  color: var(--danger);
+}
+.gs-step__body {
+  display: grid;
+  gap: var(--s-2);
+  min-inline-size: 0;
+}
+.gs-step__title {
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  line-height: 24px;
+  color: var(--text);
+}
+.gs-step[data-state="done"] .gs-step__title {
+  color: var(--text-2);
+}
+.gs-step__line,
+.gs-step__aside {
+  max-inline-size: var(--measure);
+  color: var(--text-2);
+}
+.gs-step__line b {
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+.gs-step__line--failed {
+  color: var(--danger);
+}
+.gs-step__aside {
+  font-size: var(--text-small);
+}
+/* External links keep their arrow on the same line. */
+.gs-ext {
+  white-space: nowrap;
+}
+.gs-ext .icon {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-inline-start: 2px;
+}
+
+/* "Tell your agent: use <origin>/start" with its copy button, wrapping at "/" on phones. */
+.gs-step__cmd .cmd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-2);
+  max-inline-size: 36rem;
+  padding: 6px 6px 6px 12px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+}
+.gs-step__cmd.is-next .cmd {
+  border-color: var(--action);
+}
+.gs-step__cmd code {
+  min-inline-size: 0;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  color: var(--text);
+}
+
+/* Template picker + create, and the import form: stacked on phones, one row from 480px. */
+.gs-try {
+  display: grid;
+  gap: var(--s-2);
+  align-items: end;
+}
+.gs-try__field {
+  min-inline-size: 0;
+}
+.gs-repo {
+  display: grid;
+  gap: var(--s-3);
+  justify-items: start;
+}
+.gs-repo__import {
+  inline-size: 100%;
+}
+.gs-repo__import summary {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  color: var(--action-ink);
+  cursor: pointer;
+}
+.gs-repo__import[open] summary {
+  margin-block-end: var(--s-2);
+}
+@media (min-width: 480px) {
+  .gs-try {
+    grid-template-columns: minmax(10rem, 14rem) auto;
+    justify-content: start;
+  }
+  .gs-try:has(.gs-try__field--wide) {
+    grid-template-columns: minmax(0, 24rem) auto;
+  }
+}
+@media (min-width: 768px) {
+  .gs {
+    padding: var(--s-5);
+  }
+}
+
+/* All done: one slim, dismissible line. */
+.gs-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-2);
+  margin-block-end: var(--s-5);
+  padding: 2px 2px 2px var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--ok-tint);
+  color: var(--text-2);
+}
+.gs-banner > .icon {
+  color: var(--ok);
+}
+.gs-banner__text {
+  padding-block: var(--s-2);
+  font-size: var(--text-small);
+}
+.gs-banner__close {
+  color: var(--text-2);
+}

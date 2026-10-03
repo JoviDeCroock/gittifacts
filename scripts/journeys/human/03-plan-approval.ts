@@ -13,8 +13,8 @@ export const journey: HumanJourney = {
     if (!state.projectId || !state.planId)
       throw new Error("state.projectId / state.planId missing");
 
-    await j.chapter("Repositories", "Signed in: which repository needs me?");
-    await j.goto("/", { waitFor: "h1", settleMs: 1800 });
+    await j.chapter("Dashboard", "Signed in: which repository needs me?");
+    await j.goto("/dashboard", { waitFor: "h1", settleMs: 1800 });
     await j.snap("repos");
     const row = p.locator(`a.repo-row[href='/repos/${state.projectId}']`).first();
     await j.reveal(row);

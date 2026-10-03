@@ -1,7 +1,9 @@
 import { useEffect } from "preact/hooks";
 import { ErrorBoundary, LocationProvider, lazy, Route, Router, useLocation } from "preact-iso";
+import { AppErrorBoundary } from "./components/AppErrorBoundary.js";
 import { Shell } from "./components/Shell.js";
 import { Loading } from "./components/ui.js";
+import { APP_HOME, isServerPath, postAuthTarget, signInHref } from "./lib/nav.js";
 import { loadSession, session } from "./state/session.js";
 
 const SignIn = lazy(() => import("./routes/signin.js").then((m) => m.SignIn));
@@ -33,6 +35,10 @@ const FOCUSED = /^\/(oauth\/consent|device|integrations\/install)\/?$/;
 /** Claim links: public (an agent hands one to a person who may not be signed in yet) and focused. */
 const PUBLIC = /^\/claim\/[^/]+\/?$/;
 
+/** Where this page load started: the SPA only boots at `/` on the dev server (or a build without
+ * the landing page); everywhere else the Worker serves `/` as the marketing page. */
+const BOOT_PATH = typeof window === "undefined" ? "" : window.location.pathname;
+
 function AuthedApp() {
   const { path } = useLocation();
   if (FOCUSED.test(path)) {
@@ -48,9 +54,10 @@ function AuthedApp() {
   }
   return (
     <Shell>
-      <ErrorBoundary>
+      <AppErrorBoundary>
         <Router>
-          <Route path="/" component={Repos} />
+          <Route path="/" component={MarketingHome} />
+          <Route path="/dashboard" component={Repos} />
           <Route path="/repos/:repoId" component={RepoChanges} />
           <Route path="/repos/:repoId/queue" component={QueueView} />
           <Route path="/repos/:repoId/members" component={MembersPage} />
@@ -69,21 +76,40 @@ function AuthedApp() {
           <Route path="/signin" component={RedirectHome} />
           <Route default component={NotFound} />
         </Router>
-      </ErrorBoundary>
+      </AppErrorBoundary>
     </Shell>
   );
 }
 
+/** Signed in on /signin: off to `next`, else the dashboard. */
 function RedirectHome() {
   const { route, query } = useLocation();
   useEffect(() => {
-    const next =
-      query.next && query.next.startsWith("/") && !query.next.startsWith("//") ? query.next : "/";
-    // Server routes (the GitHub App redirects) need a real navigation, not the SPA router.
-    if (/^\/github\//.test(next)) window.location.replace(next);
+    const next = postAuthTarget(query.next);
+    // Server routes (GitHub App redirects, docs, /start) need a real navigation, not the SPA router.
+    if (isServerPath(next)) window.location.replace(next);
     else route(next, true);
   }, [route, query.next]);
   return null;
+}
+
+/** `/` is the marketing page the Worker serves; the SPA only shows the app there in dev. */
+function MarketingHome() {
+  const { route } = useLocation();
+  useEffect(() => {
+    if (BOOT_PATH === "/") route(APP_HOME, true);
+    else window.location.assign("/");
+  }, [route]);
+  return null;
+}
+
+/** Signed out on an app route: sign in first, then come back here. */
+function ToSignIn() {
+  const { path, url, route } = useLocation();
+  useEffect(() => {
+    if (path !== "/signin") route(signInHref(url), true);
+  }, [path, url, route]);
+  return <SignIn />;
 }
 
 function Gate() {
@@ -109,7 +135,7 @@ function Gate() {
   if (s.status === "authed") return <AuthedApp />;
   return (
     <ErrorBoundary>
-      <SignIn />
+      <ToSignIn />
     </ErrorBoundary>
   );
 }

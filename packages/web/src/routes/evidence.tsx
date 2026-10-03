@@ -564,7 +564,7 @@ export function EvidenceView({ changeId }: { changeId: string }) {
     }
   }, [st.status]);
 
-  const crumbs = [{ href: "/", label: "Repositories" }];
+  const crumbs = [{ href: "/dashboard", label: "Dashboard" }];
   if (st.status === "loading") {
     return (
       <Page title="Evidence" crumbs={crumbs}>

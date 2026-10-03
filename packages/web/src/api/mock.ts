@@ -10,6 +10,7 @@ import { b64u, ago, sha } from "./fixture-kit.js";
 import { type MockDb, chainEvents, createDb, principalRef } from "./fixtures.js";
 import type { RawResponse } from "./client.js";
 import { createClaimMock } from "./mock-claim.js";
+import { mockCreatedProjects, mockFreshAccount } from "./mock-getting-started.js";
 import type { Scenario } from "./scenario-kit.js";
 import type {
   AuditPage,
@@ -202,7 +203,13 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     /^\/api\/v1\/repos$/,
     () => {
       const repos: RepoSummary[] = db.repos.map((r) => ({ ...r.repo, counts: countsFor(r.repo.id), shadow: r.shadow }));
-      return ok({ repos });
+      if (!mockFreshAccount()) return ok({ repos });
+      // `?gs=new`: a brand-new account sees only the projects "Try it now" made in this tab.
+      const base = repos[0];
+      const fresh: RepoSummary[] = base
+        ? mockCreatedProjects().map((p) => ({ ...base, id: p.id, name: p.name, template: p.template, counts: countsFor(p.id) }))
+        : [];
+      return ok({ repos: fresh });
     },
   ],
 

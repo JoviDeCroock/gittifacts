@@ -1,14 +1,20 @@
 import type { Lane } from "@app/domain";
+import { useSignal } from "@preact/signals";
+import { useEffect } from "preact/hooks";
 import { api } from "../api/client.js";
+import { gettingStartedApi } from "../api/getting-started.js";
 import type { RepoSummary } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
+import { GettingStarted } from "../components/GettingStarted.js";
 import { Page } from "../components/Shell.js";
 import { EmptyState, ErrorState, LaneTag, Loading, Meter } from "../components/ui.js";
+import { checklistView, POLL_MS, readDismissed, writeDismissed } from "../lib/getting-started.js";
 import { LANES, pct, shadowProgress } from "../lib/lanes.js";
 import { relative } from "../lib/time.js";
 import { plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
 import { useResource } from "../state/resource.js";
+import { principal } from "../state/session.js";
 import "../styles/repos.css";
 
 function LaneCount({ lane, count, shadow = false }: { lane: Lane; count: number; shadow?: boolean }) {
@@ -126,8 +132,32 @@ function byAttention(a: RepoSummary, b: RepoSummary): number {
   return waiting(b) - waiting(a) || Number(live(b) > 0) - Number(live(a) > 0) || a.name.localeCompare(b.name);
 }
 
+/** The signed-in home (`/dashboard`): the getting-started checklist, then repositories by attention. */
 export function Repos() {
   const res = useResource(() => api.repos(), []);
+  const gs = useResource(() => gettingStartedApi.state(), []);
+  const me = principal.value;
+  const dismissed = useSignal(me ? readDismissed(me.id) : false);
+  const gsState = gs.state.value.status === "ok" ? gs.state.value.data : null;
+  const view = gsState ? checklistView(gsState, dismissed.value) : null;
+  const running = view?.steps.some((s) => s.state === "running") ?? false;
+  // While a first run is going, re-read the checklist (and the list, when it finishes).
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => gs.reload(), POLL_MS);
+    return () => {
+      window.clearInterval(id);
+      res.reload();
+    };
+  }, [running]);
+  const onChanged = () => {
+    gs.reload();
+    res.reload();
+  };
+  const onDismiss = () => {
+    if (me) writeDismissed(me.id, true);
+    dismissed.value = true;
+  };
   const st = res.state.value;
   // Triage order: work waiting for you first, then live rollouts and failures, then the rest by name.
   const repos = st.status === "ok" ? [...st.data.repos].sort(byAttention) : [];
@@ -138,7 +168,7 @@ export function Repos() {
 
   return (
     <Page
-      title="Repositories"
+      title="Dashboard"
       wide
       meta={
         st.status === "ok" && repos.length > 0 ? (
@@ -158,13 +188,14 @@ export function Repos() {
         ) : null
       }
     >
+      {gsState && view ? <GettingStarted state={gsState} view={view} onDismiss={onDismiss} onChanged={onChanged} /> : null}
       {st.status === "loading" ? <Loading label="Loading repositories" lines={6} /> : null}
       {st.status === "error" ? <ErrorState error={st.error} what="your repositories" onRetry={res.reload} /> : null}
-      {st.status === "ok" && repos.length === 0 ? (
+      {st.status === "ok" && repos.length === 0 && view?.mode !== "full" ? (
         <EmptyState icon="git-branch" title="No repositories yet">
-          <p>Import a GitHub repository or create an empty one. Agents then start changes through the API or MCP, and you review them here by lane.</p>
           <p>
-            Use <code>POST /api/v1/repos</code> with <code>importFrom</code>, or ask a repo admin to add you.
+            Ask your agent to <code>use {window.location.origin}/start</code>, connect the GitHub App in{" "}
+            <a href="/settings/github">GitHub settings</a>, or ask a repo admin to add you. Changes then show up here by lane.
           </p>
         </EmptyState>
       ) : null}

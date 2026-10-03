@@ -1,6 +1,6 @@
 /**
- * The marketing landing page, served at `/` to visitors without a session. Static HTML, no
- * hydration: client.ts only adds copy buttons and the theme switch.
+ * The marketing landing page, served at `/` to everyone (the app is /dashboard). Static HTML, no
+ * hydration: client.ts only adds copy buttons, the theme switch and the nav's session link.
  */
 import { Agents } from "./Agents.js";
 import { Close, Footer } from "./Close.js";

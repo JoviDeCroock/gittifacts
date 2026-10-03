@@ -3,7 +3,7 @@
  */
 import { BrandMark } from "../components/BrandMark.js";
 import { Icon, type IconId } from "../components/Icon.js";
-import { CopyLine } from "./Hero.js";
+import { CopyLine, SessionLink } from "./Hero.js";
 
 export function Close() {
   return (
@@ -61,7 +61,7 @@ export function Footer() {
               </li>
             ))}
             <li>
-              <a href="/signin">Sign in</a>
+              <SessionLink />
             </li>
           </ul>
         </nav>
