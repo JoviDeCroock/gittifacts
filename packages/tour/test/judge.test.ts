@@ -153,8 +153,11 @@ describe("reviewer.judge", () => {
     // Skipped (ignored by the classifier), so a verified planless change can still reach Lane 0.
     expect(q["scope-drift"]).toMatchObject({
       status: "skipped",
-      note: expect.stringMatching(/No plan/),
+      note: expect.stringMatching(/^Skipped because this change has no plan to compare it with\. /),
     });
+    // Written for the reviewer reading the evidence page (UX review 2026-10-02, open item 5).
+    expect(q["scope-drift"]?.note).not.toMatch(/not applicable|classifier/);
+    expect(q["plan-conformance"]?.note).toBe(q["scope-drift"]?.note);
     expect(q["plan-conformance"]).toMatchObject({ status: "skipped" });
     expect(q["hidden-behavior-change"]).toMatchObject({ status: "ok", outcome: "no-concern" });
     const prompt = client.requests[0]!.messages[0]!.content;

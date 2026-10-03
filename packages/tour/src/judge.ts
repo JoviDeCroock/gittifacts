@@ -162,8 +162,9 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
   // Without a plan the plan questions do not apply. They are reported as "skipped" (which the
   // classifier ignores) rather than "unsure": the classifier's own plan rules (plan.missing, or a
   // verified planless category) decide, and an "unsure" here would make planless Lane 0 impossible.
+  // Shown on the evidence page as the item's note, so it is written for the reviewer.
   const NOT_APPLICABLE =
-    "No plan is attached: not applicable (the classifier's plan rules decide).";
+    "Skipped because this change has no plan to compare it with. The plan rules set the lane instead: no plan means at least Lane 1, unless the repository's policy lets this kind of change go without one.";
   const fixed: LlmJudgment[] =
     input.plan === null
       ? [
