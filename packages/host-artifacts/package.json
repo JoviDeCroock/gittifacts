@@ -1,0 +1,23 @@
+{
+  "name": "@app/host-artifacts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@app/coordinator": "workspace:*",
+    "@app/core": "workspace:*",
+    "@app/domain": "workspace:*",
+    "@app/host": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@app/host-contract": "workspace:*"
+  }
+}

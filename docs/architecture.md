@@ -43,6 +43,52 @@ and tests provide fakes.
 | `Onboarding` | D1 `project_onboarding` + Analytics Engine | Time-to-first-green of new projects |
 | `Clock` | `Date` | Deterministic time in tests |
 
+## Hosts (core + host adapters)
+
+The platform runs over one shared core in two modes: **native** (Cloudflare Artifacts is the source of
+truth) and **GitHub** (code stays on GitHub; M2+). The core never knows which host a change lives on.
+
+```
+@app/core            Change, Plan, Evidence, classifier, policy rules, evidence assembly, gradeChange
+  ├─ @app/core/evidence   evidence engine + signing (@app/evidence, standalone)
+  ├─ @app/core/queue      merge-queue core (@app/merge-queue)
+  └─ @app/core/tour       reviewer agent (@app/tour)
+@app/host            HostAdapter, HostCapabilities, ChangeRef, normalized events, LaneVerdict, degradations
+@app/host-artifacts  native adapter: ArtifactsHost over the coordinator's ports (ArtifactsGitHost, merge queue)
+@app/host-github     GitHub App adapter (M2)
+@app/host-contract   contract suite: the same scenarios against every adapter
+```
+
+| `HostAdapter` | Native (`ArtifactsHost`) |
+|---|---|
+| `capabilities()` | everything: merge, own merge queue, push to the change branch, git notes, inline stops; identities human/agent/bot |
+| `getChange(ref)` | the Change row; `source.fork` is always true (agents only ever write their own fork) |
+| `materialize(ref, sha)` | the change fork + a 600 s read token (sandboxes never write) |
+| `diff(ref)` | `GitHost.diff(fork, base, head)` |
+| `publishVerdict` / `publishTour` | classification + lane on the Change row / stored tour (same helpers as the ChangeWorkflow); stale heads dropped |
+| `requestReview` | status `awaiting-review` + notification |
+| `merge(ref, { expectedHeadSha })` | head guard (`refused: stale-head`), admission (approved or Lane 0), then the platform's merge queue (`queued`) |
+| `revert(sha, reason, { of })` | a revert Change (pure inverse when possible) |
+| `events().normalize(raw)` | Artifacts push → `change.updated` (fork) / `main.advanced` (default branch) |
+
+**Grading is shared.** `gradeChange(input, deps)` (`@app/core`) is the pipeline from the CI run to the final
+lane: evidence run → evidence (assemble + seal) → judge → evidence on the host → classify → tour → reclassify →
+`LaneVerdict`. Its deps are ports (stage runner, evidence runner, sealer, reviewer, spend ledger, data, sink, log,
+hooks). The native ChangeWorkflow runs it with each stage as a durable step (same names as before), and the
+native-only steps (preview, screenshots, bootstrap, pure-revert checks, git notes) as hooks. GitHub mode runs
+the same function, so the same change gets the same lane, evidence and tour.
+
+**Capabilities degrade explicitly.** `routeVerdict` turns a classification into `merge | label-ready |
+request-review | blocked`. Without `canMerge`, Lane 0 becomes `label-ready`. Without `supportsNotes`, evidence
+is linked instead of written as a git note. Each degradation is recorded in the verdict.
+
+**Contract suite.** `@app/host-contract` defines nine scenarios once (`pure-bugfix-with-regression-test`,
+`breaking-api`, `new-dependency`, `touches-auth`, `codemod-rename`, `scope-drift`, `fork-pr`,
+`force-push-during-eval`, `stale-head-at-merge`). Their inputs come from `fixtures/` and the classifier
+scenarios. Each host drives its real event path and reports what it published. Lane, reasons, routing, exact
+evidence kinds and the tour's riskiest stop must match. The native run is in
+`packages/host-artifacts/test/contract.test.ts`.
+
 ## Change lifecycle
 
 ```
@@ -51,7 +97,7 @@ POST /changes ──► fork repo → task-<id>; mint write token for the fork o
 git push (agent) ─► cf.artifacts.repo.pushed ─► PushRouter ─► ChangeCoordinator.onPush(ref, after)
                    coordinator: supersede any in-flight ChangeWorkflow for an older head
                    (terminate its CI run), then start ChangeWorkflow(change, head)
-ChangeWorkflow (id = `${changeId}-${head[0..12]}`):
+ChangeWorkflow (id = `${changeId}-${head[0..12]}`; steps 4–8 are @app/core `gradeChange`):
   1. diff        GitHost.diff(base, head) → DiffStats + hunks (stored)
   2. policy      policy from BASE (default branch at baseSha), cached per sha
   3. plan-ci     sandbox: evaluate .platform/ci.ts in plan mode → PipelineSpec (or defaults)

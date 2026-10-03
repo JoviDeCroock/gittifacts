@@ -1584,3 +1584,85 @@ fine: a fork can't serve the objects it **inherited**.
   up unexpectedly"), which git uses for any push over `http.postBuffer` (1 MiB by default). The import grant's
   `command` and the migrate guide now pass `-c http.postBuffer=524288000`. Change pushes are usually small; the
   same flag in the per-Change push instructions is an M5 dogfood change.
+
+## 2026-10-03 — Two modes M1: `@app/core`, `HostAdapter`, the native adapter, the host contract suite
+
+Spec: docs/prompts/06-two-modes.md §2, §4, §7 (M1). Native behaviour is unchanged (coordinator unit 220/220 and the
+workflow tests pass untouched).
+
+**Packages (dependency order).**
+- `@app/host`: the host boundary, types and small pure helpers only. `HostAdapter`, `HostCapabilities`,
+  `ChangeRef` (`{host:"artifacts",repoId,changeId} | {host:"github",owner,repo,number}`, `changeRefKey` /
+  `parseChangeRef`, which also accepts `owner/repo#12`), `ChangeMeta`, `DiffInfo` (= `ChangeDiff`), `SandboxCheckout`
+  (read-only by type: `writable: false`, `token.scope: "read"`), `MergeResult` (`merged | queued | refused`, with
+  `stale-head` carrying `currentHeadSha`), normalized events (zod: `change.opened|updated|closed`,
+  `review.submitted`, `main.advanced`, `queue.group_created`), and `LaneVerdict` (the classifier result + `action` +
+  `degradations` + `tourStatus` + `preliminary` + evidence id).
+- `@app/core`: the host-agnostic domain. Re-exports `@app/domain` and `@app/classifier`; owns the pure policy rules
+  and evidence assembly (moved from the coordinator, re-exported there so every old import works) and
+  `gradeChange`. Heavier engines are subpaths: `@app/core/evidence`, `@app/core/queue` (merge-queue core),
+  `@app/core/tour` (reviewer agent), so importing the core stays cheap for Workers.
+- `@app/host-artifacts`: `ArtifactsHost`, the native adapter, a thin layer over the coordinator's ports; re-exports
+  the native plumbing (`ArtifactsGitHost`, the grading helpers) without moving it.
+- `@app/host-contract`: the contract suite (`runContractSuite(factory)`), scenarios, fixture loader, a deterministic
+  reviewer. Test-only.
+
+**Capabilities degrade explicitly.** `routeVerdict(cls, caps)` decides `merge | label-ready | request-review |
+blocked`; `laneZeroAction(caps)` turns Lane 0 into `label-ready` without `canMerge`, and the `Degradation`
+(`capability`, `wanted`, `instead`, `message`) is in the verdict. A host without `supportsNotes` gets a recorded
+"linked, not a git note" degradation. Natively (`NATIVE_CAPABILITIES`) nothing degrades. Identity kinds are
+`human | agent | bot`; native `system` and `integration` principals are bots. A GitHub adapter is built per
+installation/repo, so `capabilities()` without arguments can still differ per repo (Actor App installed or not).
+
+**`gradeChange(input, deps)` is the ChangeWorkflow's body from the CI run to the final classification.** evidence run
+→ host items → `evidence` (assemble + seal) → host steps → `judge` → `evidence-note` → `classify` → `tour` →
+`reclassify` → verdict. Deps are ports: a `StageRunner` (natively `step.do` with the same names and retry presets),
+`EvidenceRunner` (natively the durable CI phase: `ci-start` ⇢ `ci-finished` → `ci-outcome`), sealer (signer), reviewer,
+spend ledger, data access, sink (verdict, tour), audit log, and hooks for the native steps in between (preview,
+onboarding, screenshots, the bootstrap release that stops grading, pure-revert checks, git notes).
+- **Why stages, not one function call.** In-flight native workflows replay by step name and cached result. Keeping
+  every step name, retry preset and result shape (the `classify` step still returns
+  `{lane, computedLane, shadow, blocked, requiresHumanApproval, revertAutoMerge}`) means a deploy doesn't break a
+  workflow waiting for review. Grading uses only stage results between stages; the full `LaneVerdict` is built and
+  published inside the stage, and `gradeChange` returns a `VerdictSummary` (no reasons/checklist).
+- **Why the diff and evidence are read through `deps.data`.** They can be megabytes. The native store keeps them out
+  of step results, as before. `memoryGradeDeps` serves them from memory (tests, contract suite, backtests later).
+- **Routing.** The workflow's auto-merge test is now `verdict.action === "merge"` (same truth table: Lane 0, no human
+  needed, claimed project, `canMerge`). Audit payloads are unchanged.
+
+**Native adapter semantics.**
+- `getChange`: `source.fork` is always true. Natively every change lives in its own fork and agents never hold a
+  main-repo write token, so the contract's `fork-pr` holds by construction. Native `category` is the claim.
+- `materialize`: a 600 s read token for the fork, and only for commits the fork has.
+- `publishVerdict` / `publishTour`: the same `persistClassification` / `persistTour` the workflow uses. A verdict or
+  tour for a head the change no longer has is dropped.
+- `merge`: guarded by `expectedHeadSha` (a moved head is `refused: stale-head` with the current head). Then admission:
+  only an approved head, or a Lane 0 head needing no human on a claimed project. It enqueues in the platform's queue
+  (`queued`); the queue lands it. The native queue always fast-forwards (rebasing when main moved), whatever `method`.
+- `revert` needs `of` (the change that merged it) and opens a revert Change (`openRevertChange`).
+- `events().normalize(raw)`: Artifacts push → `change.updated` (fork; `forced` from a bounded ancestry walk,
+  unknown → forced) or `main.advanced` (default branch). Native `change.opened`, `review.submitted` and `closed` come
+  from the platform's own API, not deliveries. Hosts deliver by push, so the stream is "normalize each delivery"
+  (`subscribe` is optional, for in-process hosts).
+
+**Contract suite (run now against native: 10/10).** The nine scenarios are defined once in `@app/host-contract`. Their
+inputs come from the classifier fixture scenarios (plan, base policy, claim, measured evidence) and the `fixtures/`
+trees. Expectations: lane, computed lane, shadow, blocked, human approval, reason codes, routing action (degraded via
+`laneZeroAction` on hosts without `canMerge`), exactly the evidence kinds, and the tour's riskiest stop. Each host
+drives its real event path. Natively that is a push to the fork → `onPush` → ChangeWorkflow → `gradeChange` with
+the in-memory coordinator. The host reports what it published.
+- The tour comes from a deterministic reviewer built on `rankHunks` (risk candidate 1), so "same tour" means "the
+  host fed the reviewer the same diff, evidence, plan and reasons". Pinned riskiest files are the platform's ranking.
+  For the bugfix it is the 19-line regression test, not the 1-line fix: neither hunk has a risk factor, so size wins.
+- `force-push-during-eval`: the first head's run is in flight (held), a force-push replaces it, the old run ends
+  `superseded`, and only the new head ever gets a verdict.
+- `stale-head-at-merge`: after grading, an in-scope push lands; `merge(expectedHeadSha: old)` is refused with the new
+  head, which is graded.
+- "Lanes and evidence must match exactly" is enforced as exact evidence-kind sets. If GitHub mode stores Actions
+  check runs as evidence (§3.3), they need their own kind outside the comparable set, or the suite must grow an
+  allow-list. That is decided in M2.
+
+**Left for M2.** `@app/host-github` plugs into `runContractSuite` (recorded webhook/API fixtures every commit, live
+test org nightly). The ChangeWorkflow takes the host adapter through `FlowDeps` (built per host by apps/platform)
+for `getChange`/`diff`/`materialize`/publishing; until then it calls the native helpers directly. A GitHub
+`EvidenceRunner` runs the same CI engine on the Artifacts mirror.
