@@ -8,6 +8,7 @@
  * job needs, revoked when the job ends; never logged, never handed to a sandbox (the sandbox
  * reads the Artifacts mirror with an Artifacts read token).
  */
+import { qaViewFor } from "../qa/github.js";
 import type { Ports } from "@app/coordinator";
 import type { GithubRepoHost } from "@app/domain";
 import {
@@ -129,6 +130,8 @@ export function githubHostFor(
     onJobEnd: release,
     prs: d1PrIndex(db),
     prWrites: () => prWritesEnabled(db, repoIdFor(repo.githubRepoId), repo.installationId),
+    // QA in a browser (src/qa/): the summary's optional QA section and the check run's QA fold.
+    qa: qaViewFor(env),
   });
   return { host, api, release };
 }

@@ -83,7 +83,7 @@ export async function finishQaRun(env: Bindings, runId: string, item: QaRun): Pr
 
   const now = new Date().toISOString();
   await qa.update(runId, {
-    status: item.status === "error" ? "failed" : "done",
+    status: item.status === "ok" ? "done" : "failed",
     progress: null,
     item,
     passed: count(item, "pass"),
@@ -93,7 +93,7 @@ export async function finishQaRun(env: Bindings, runId: string, item: QaRun): Pr
     laneAfter,
     costUsd: item.usage.llmUsd,
     wallMs: item.usage.wallMs,
-    error: item.status === "error" ? (item.note ?? "QA could not run").slice(0, 2000) : null,
+    error: item.status === "ok" ? null : (item.note ?? "QA could not run").slice(0, 2000),
     finishedAt: now,
   });
   await ports.audit.append({
@@ -117,7 +117,7 @@ export async function finishQaRun(env: Bindings, runId: string, item: QaRun): Pr
       ? ` The lane went from ${laneLabel(before.lane)} to ${laneLabel(laneAfter as 0 | 1 | 2)}.`
       : "";
   const what =
-    item.status === "error"
+    item.status !== "ok"
       ? `QA could not run on ${change?.title ?? row.changeId} at ${row.headSha.slice(0, 12)}: ${(item.note ?? "").slice(0, 200)}.`
       : `QA on ${change?.title ?? row.changeId} at ${row.headSha.slice(0, 12)}: ${count(item, "pass")} passed, ${count(item, "fail")} failed, ${count(item, "couldnt-test")} couldn't test.`;
   await new D1Notifier(new D1Store(env.DB, env.BLOBS)).notify({

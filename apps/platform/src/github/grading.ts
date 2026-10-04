@@ -8,6 +8,7 @@
  * memberships for the humans who linked the installation, and check-run buttons (intent only
  * until M3).
  */
+import { githubQaPort } from "../qa/github.js";
 import { resolveRuntime } from "@app/coordinator";
 import type { GithubRepoHost, Repo } from "@app/domain";
 import type { Identity } from "@app/host";
@@ -204,6 +205,8 @@ export async function onChangeDelivery(
     reviewerPrincipal: (who) => githubActorPrincipal(store, who),
     plans: { upsert: (plan) => upsertGithubPlan(env, store, plan) },
     onRepoCreated: (repo) => grantInstallationMembers(store, repo, repoHost.installationId),
+    // QA on request: the check run's Run QA button and `/gittifacts qa` (src/qa/github.ts).
+    qa: githubQaPort(env),
   });
   try {
     const out = await sync.handle({ event: msg.event, payload });

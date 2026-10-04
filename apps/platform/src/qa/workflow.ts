@@ -144,6 +144,12 @@ export class QaRunWorkflow extends WorkflowEntrypoint<Bindings, unknown> {
     const origin = qaOrigin(env, previewId);
     let item: QaRun;
     try {
+      if (
+        ctx.template !== null &&
+        isTemplateId(ctx.template) &&
+        TEMPLATES[ctx.template].manifest.previewCommand === null
+      )
+        throw new Error(`nothing to preview: the ${ctx.template} template has no app to serve`);
       if (ctx.snapshotId === null)
         throw new Error("CI left no build (or install) snapshot of this head to serve");
       const snapshotId = ctx.snapshotId;
@@ -263,8 +269,11 @@ function errored(ctx: Loaded, runId: string, origin: string, e: unknown): QaRun 
   return {
     id: "qa-run",
     kind: "qa-run",
-    status: "error",
-    note: `QA could not run: ${why}`,
+    // A repo with no app at all (a library) is not an unknown about this change: nothing to test.
+    status: /nothing to preview/.test(why) ? "skipped" : "error",
+    note: /nothing to preview/.test(why)
+      ? `nothing to test in a browser: ${why}`
+      : `QA could not run: ${why}`,
     runId,
     trigger: ctx.trigger,
     requestedBy: ctx.requestedBy,

@@ -180,6 +180,8 @@ export const GITHUB_EVENT_HANDLERS: Record<string, GithubEventHandler> = {
   // M3: the check run's buttons, and plan labels on issues.
   check_run: withEnv(onChangeDelivery),
   issues: withEnv(onChangeDelivery),
+  // QA on request: `/gittifacts qa` in a PR comment (needs the App's Issue comment event).
+  issue_comment: withEnv(onChangeDelivery),
 };
 
 async function payloadOf(deps: GithubEventDeps, msg: GithubEventMessage): Promise<unknown> {
