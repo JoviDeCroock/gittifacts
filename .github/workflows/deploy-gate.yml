@@ -71,15 +71,26 @@ jobs:
         run: pnpm --filter @app/e2e prepare-assets
       - name: Browser
         run: pnpm --filter @app/e2e exec playwright install --with-deps chromium
+      - name: A fresh canary password (tests/gate/secrets.spec.ts)
+        run: |
+          canary="$(openssl rand -hex 24)"
+          echo "::add-mask::$canary"
+          echo "E2E_CANARY_PASSWORD=$canary" >> "$GITHUB_ENV"
       - name: Pre-deploy E2E (desktop + phone)
         env:
           CI: "1"
         run: pnpm --filter @app/e2e gate
+      - name: The canary is nowhere in the report (deletes it and fails otherwise)
+        id: scan
+        if: always()
+        env:
+          SECRET_ENV: E2E_CANARY_PASSWORD
+        run: node scripts/check-report-secrets.mjs --allow-traces apps/e2e/playwright-report/gate apps/e2e/test-results
       - name: Summary
         if: always()
         run: node scripts/e2e-summary.mjs apps/e2e/test-results/gate.json "Pre-deploy E2E" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.scan.outcome == 'success'
         with:
           name: e2e-gate-report
           path: |

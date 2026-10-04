@@ -73,6 +73,9 @@ jobs:
       SMOKE_GITHUB: ${{ contains(inputs.url, 'gittifacts-staging.') && 'off' || 'on' }}
       CI: "1"
     steps:
+      - name: Mask credentials in logs
+        run: |
+          for v in "$E2E_EMAIL" "$E2E_PASSWORD"; do [ -n "$v" ] && echo "::add-mask::$v"; done; true
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -84,11 +87,17 @@ jobs:
       - name: Smoke
         id: smoke
         run: pnpm --filter @app/e2e smoke
-      - name: Report
+      - name: No secret in the report (deletes it and fails otherwise)
+        id: scan
         if: always()
+        env:
+          SECRET_ENV: E2E_EMAIL,E2E_PASSWORD
+        run: node scripts/check-report-secrets.mjs apps/e2e/playwright-report/smoke apps/e2e/test-results
+      - name: Report
+        if: always() && steps.scan.outcome == 'success'
         run: node scripts/e2e-summary.mjs apps/e2e/test-results/smoke.json "Post-deploy smoke" >> "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.scan.outcome == 'success'
         with:
           name: smoke-report
           path: |

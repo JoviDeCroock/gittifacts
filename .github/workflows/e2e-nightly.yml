@@ -65,6 +65,9 @@ jobs:
       E2E_PASSWORD: ${{ contains(inputs.url, 'gittifacts-staging.') && secrets.STAGING_E2E_PASSWORD || secrets.E2E_PASSWORD }}
       SUITE: ${{ matrix.suite }}
     steps:
+      - name: Mask credentials in logs
+        run: |
+          for v in "$E2E_EMAIL" "$E2E_PASSWORD" "$E2E_AGENT_TOKEN"; do [ -n "$v" ] && echo "::add-mask::$v"; done; true
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -82,6 +85,14 @@ jobs:
           case "$code" in 0) result=passed ;; 78) result=skipped ;; *) result=failed ;; esac
           mkdir -p out && printf '{"suite":"%s","result":"%s","seconds":%s}\n' "$SUITE" "$result" "$secs" > "out/$SUITE.json"
           [ "$result" != failed ]
+      - name: No secret in the log (deletes it and fails otherwise)
+        id: scan
+        if: always()
+        env:
+          SECRET_ENV: E2E_EMAIL,E2E_PASSWORD,E2E_AGENT_TOKEN
+        # Only the log can hold output from the suites; out/ is the runner's own result line, kept
+        # so the summary still lists this suite when the log had to be deleted.
+        run: node scripts/check-report-secrets.mjs suite.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:

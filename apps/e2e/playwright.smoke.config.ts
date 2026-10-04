@@ -14,6 +14,12 @@ const baseURL = (process.env.SMOKE_BASE_URL ?? "").replace(/\/+$/, "");
 if (baseURL === "") throw new Error("set SMOKE_BASE_URL to the deployed origin");
 const CI = process.env.CI !== undefined && process.env.CI !== "";
 
+// Real credentials are in play: no aria page snapshot in error-context.md (it captured a filled
+// sign-in form once), no traces (they hold request bodies and DOM). Screenshots stay: they show
+// pages after an API sign-in, where no secret is ever rendered. scripts/check-report-secrets.mjs
+// scans every report before upload anyway.
+process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
+
 export default defineConfig({
   testDir: "./tests/smoke",
   // The agent path waits for a real first green (CI + preview) under its own budget.
@@ -28,7 +34,7 @@ export default defineConfig({
     ? [["list"], ["github"], ["html", { open: "never", outputFolder: "playwright-report/smoke" }], ["json", { outputFile: "test-results/smoke.json" }]]
     : [["list"]],
   outputDir: "test-results/smoke",
-  use: { baseURL, trace: "retain-on-failure", screenshot: "only-on-failure" },
+  use: { baseURL, trace: "off", screenshot: "only-on-failure" },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 } } },
     { name: "phone", use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } }, testMatch: /pages\.spec\.ts/ },

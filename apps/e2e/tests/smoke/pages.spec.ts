@@ -1,8 +1,10 @@
 /**
  * Post-deploy, in a browser (desktop and 390 px): landing, docs, /start as a page, and the
- * dedicated E2E account signing in through the real form and reaching a dashboard with its data.
+ * dedicated E2E account (signed in through the API, never the form: no secret on any page) reaching
+ * a dashboard with its data.
  * Reads only; the account is never used to change anything.
  */
+import { signInWithApi } from "../../lib/auth.js";
 import { expect, expectNoHorizontalScroll, test } from "../../lib/fixtures.js";
 
 const EMAIL = process.env.E2E_EMAIL ?? "";
@@ -20,14 +22,14 @@ test("landing, docs and /start render", async ({ page }) => {
   }
 });
 
-test("the E2E account signs in and sees its dashboard", async ({ page }) => {
+test("the E2E account signs in and sees its dashboard", async ({ page, context, baseURL }) => {
   test.skip(EMAIL === "" || PASSWORD === "", "E2E_EMAIL / E2E_PASSWORD not configured");
+  // Signed out, the app sends the dashboard to sign-in (the form itself is tested in the gate).
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/signin/);
-  const form = page.locator("form").filter({ has: page.locator('input[type="password"]') });
-  await form.locator('input[type="email"]').fill(EMAIL);
-  await form.locator('input[type="password"]').fill(PASSWORD);
-  await form.locator('button[type="submit"]').click();
+  // Sign in through the API: the password never reaches a page, a trace or a report.
+  await signInWithApi(context, baseURL as string, EMAIL, PASSWORD);
+  await page.goto("/dashboard");
   await expect(page).toHaveURL((u) => u.pathname === "/dashboard"); // the path: "?next=/dashboard" also ends in /dashboard
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   // Real data: the dashboard's own API answers for this account, and the page shows its name.
@@ -46,14 +48,14 @@ test("the E2E account signs in and sees its dashboard", async ({ page }) => {
  * at both widths. Screenshots are kept in the report (review aid for copy changes such as the
  * 2026-10-04 terms); the assertions are on roles, test ids and the account's own data, never copy.
  */
-test("the E2E account's dashboard and newest Change page render", async ({ page }, testInfo) => {
+test("the E2E account's dashboard and newest Change page render", async ({ page, context, baseURL }, testInfo) => {
   test.skip(EMAIL === "" || PASSWORD === "", "E2E_EMAIL / E2E_PASSWORD not configured");
+  // Signed out, the app sends the dashboard to sign-in (the form itself is tested in the gate).
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/signin/);
-  const form = page.locator("form").filter({ has: page.locator('input[type="password"]') });
-  await form.locator('input[type="email"]').fill(EMAIL);
-  await form.locator('input[type="password"]').fill(PASSWORD);
-  await form.locator('button[type="submit"]').click();
+  // Sign in through the API: the password never reaches a page, a trace or a report.
+  await signInWithApi(context, baseURL as string, EMAIL, PASSWORD);
+  await page.goto("/dashboard");
   // The path, not the URL: "/signin?next=/dashboard" also ends in "/dashboard".
   await expect(page).toHaveURL((u) => u.pathname === "/dashboard");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
