@@ -11,7 +11,9 @@ group: GitHub
 
 **You'll have:** pull requests graded with the right category and Plan, and approvals that count from GitHub or gittifacts.
 
-GitHub mode keeps your code on GitHub. The gittifacts App reads each pull request, runs the same evidence as native mode on a disposable mirror, and posts **one** check run, `gittifacts/lane`, on the pull request's head commit. Once someone links the installation, a pull request that needs a human also gets the tour as **one review** (one comment per stop) and **one summary comment** that is edited in place. Shadow mode never approves, blocks or merges.
+GitHub mode keeps your code on GitHub. The gittifacts App reads each pull request, runs the same evidence as native mode on a disposable mirror, and posts **one** check run, `gittifacts/lane`, on the pull request's head commit. The check run shows the lane as soon as it is computed, while the walkthrough is still being written.
+
+Once someone links the installation, a pull request that needs a human also gets **one summary comment**, edited in place: the lane and why, what a person does, and a link to the walkthrough, with the details folded. The few stops worth a look on the diff (at most three: risks, untested or unproven lines) come as **one review**. Shadow mode never approves, blocks or merges.
 
 Not installed yet? [Connect GitHub](/docs/get-started/github) takes three steps. Operators register the App once: [Register the GitHub App](/docs/guides/register-github-app).
 
@@ -27,7 +29,7 @@ Without an approved Plan there is no Lane 0. Changing the labels, the title, the
 
 ## 2. Review
 
-Approve the tour on gittifacts, approve the pull request on GitHub, or press **Approve tour** on the check run: it is the same approval. It counts from a human with write access who isn't the author, for the current head. **Request full review** on the check run shows on the summary. GitHub still merges.
+Approve the tour on gittifacts, approve the pull request on GitHub, or press **Approve change** on the check run: it is the same approval. It counts from a human with write access who isn't the author, for the current head. **Request full review** on the check run shows on the summary. GitHub still merges.
 
 Repo owners can turn the review and summary comment off for one repository on `/settings/github`; the check run stays.
 

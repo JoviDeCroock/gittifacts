@@ -38,14 +38,14 @@ Expected: within about two minutes, the pull request's **Checks** tab shows `git
 
 ## 3. Read why
 
-Open the check's summary. It lists the reasons for the lane, the evidence behind them, and a link to the Change on gittifacts.
+The check's title names the lane and the one reason that decided it, for example `Full review (Lane 2) · public API changed`. Open it for what a person does next and a link to the Change on gittifacts; every reason and the evidence are folded below.
 
-Expected: reason codes such as `plan.missing` (no approved Plan, so no Lane 0) or `sensitive.hit` (a sensitive path changed). [Lane reasons](/docs/reference/lane-reasons) explains each one. Policy always comes from the default branch, never from the pull request.
+Expected: reasons such as `plan.missing` (no approved Plan, so no Lane 0) or `sensitive.hit` (a sensitive path changed). [Lane reasons](/docs/reference/lane-reasons) explains each one. Policy always comes from the default branch, never from the pull request.
 
 <details>
 <summary>Which pull requests are graded</summary>
 
-Open pull requests against the default branch, not drafts (they're graded when marked ready). Each new head is graded again; a head replaced before its verdict shows as cancelled. Once someone links the installation, a pull request that needs a human also gets the tour as one review (one comment per stop) and one summary comment, edited in place.
+Open pull requests against the default branch, not drafts (they're graded when marked ready). Each new head is graded again; a head replaced before its verdict shows as cancelled. The lane shows on the check while the walkthrough is still being written. Once someone links the installation, a pull request that needs a human also gets one summary comment, edited in place, and at most three stops on the diff as one review.
 
 </details>
 
