@@ -427,6 +427,18 @@ export type Tour = z.infer<typeof Tour>;
 
 // ---------------------------------------------------------------- reviews & shadow
 
+/**
+ * An approval that no longer counts (the record stays: one record across GitHub, the platform UI
+ * and the API). `qa-failed`: a QA run on the same head failed a criterion after the approval.
+ */
+export const ReviewWithdrawal = z.object({
+  at: IsoDate,
+  reason: z.enum(["qa-failed"]),
+  /** What withdrew it (the QA run id). */
+  by: z.string().min(1).max(200),
+});
+export type ReviewWithdrawal = z.infer<typeof ReviewWithdrawal>;
+
 export const ReviewDecision = z.object({
   id: Id,
   changeId: Id,
@@ -443,6 +455,8 @@ export const ReviewDecision = z.object({
    */
   source: z.enum(["platform", "github-review", "github-check"]).optional(),
   createdAt: IsoDate,
+  /** Set when the approval was withdrawn (it no longer counts); absent or null: it stands. */
+  withdrawn: ReviewWithdrawal.nullable().optional(),
 });
 export type ReviewDecision = z.infer<typeof ReviewDecision>;
 

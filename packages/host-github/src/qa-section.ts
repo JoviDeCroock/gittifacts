@@ -27,6 +27,8 @@ export interface QaView {
   error: string | null;
   /** Who asked, as GitHub shows them ("@octocat") or the platform's name. */
   requestedBy: string | null;
+  /** Approvals this run withdrew (a failed criterion after approval): who had approved. */
+  withdrawn?: string[];
 }
 
 export const QA_TERMS = {
@@ -56,7 +58,8 @@ export function qaStatusLine(qa: QaView): string {
     return `testing \`${qa.headSha.slice(0, 7)}\` in a browser. ${report}`;
   if (qa.status === "failed")
     return `could not test this head${qa.error ? `: ${cut(oneLine(qa.error), 140)}` : ""}. ${report}`;
-  return `${counts(qa)} of ${plural(qa.criteria.length, "criterion", "criteria")} · ${report}`;
+  const withdrawn = (qa.withdrawn ?? []).length > 0 ? ` · approval by ${(qa.withdrawn ?? []).join(", ")} withdrawn: QA failed` : "";
+  return `${counts(qa)} of ${plural(qa.criteria.length, "criterion", "criteria")}${withdrawn} · ${report}`;
 }
 
 /** Thumbnails in one row, each a link to the report (GitHub renders HTML <img> through Camo). */

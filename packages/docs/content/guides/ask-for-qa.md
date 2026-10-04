@@ -13,7 +13,7 @@ group: Review
 
 QA runs only when someone asks. An agent opens the app built from the Change's current head in a real browser. It plans a short script for each acceptance criterion of the Plan, then runs it: it navigates, clicks, fills in fields and checks what the page shows. Without a Plan it checks that the affected pages load without errors.
 
-QA is evidence. A failed criterion raises the lane to full review (Lane 2). A criterion QA couldn't test raises it to at least quick review (Lane 1), because "couldn't test" is never a pass. QA never lowers a lane.
+QA is evidence. A failed criterion raises the lane to full review (Lane 2) and withdraws any approval of that head: the Change leaves the merge queue and needs a fresh approval. A criterion QA couldn't test raises the lane to at least quick review (Lane 1), because "couldn't test" is never a pass, but leaves approvals alone. QA never lowers a lane.
 
 ## 1. Ask
 

@@ -33,6 +33,25 @@ export function previewItem(outcome: PreviewOutcome): PreviewDeploy {
   };
 }
 
+/**
+ * A re-grade of the same head (a re-run, a Plan or label edit, an approval withdrawn by QA) makes a
+ * new bundle; QA ran on that head only on request, so its `qa-run` item is carried over from the
+ * head's previous bundle, but only when that bundle's signature still verifies (else it is dropped
+ * and the caller logs why).
+ */
+export async function carryQaRun(
+  ports: Pick<Ports, "signer" | "store">,
+  input: { changeId: string; headSha: string; items: EvidenceItem[] },
+): Promise<{ items: EvidenceItem[]; carried: number; dropped: string | null }> {
+  if (input.items.some((i) => i.kind === "qa-run")) return { items: input.items, carried: 0, dropped: null };
+  const prior = await ports.store.getEvidence(input.changeId, input.headSha);
+  const qa = prior?.items.filter((i) => i.kind === "qa-run") ?? [];
+  if (prior === null || qa.length === 0) return { items: input.items, carried: 0, dropped: null };
+  const check = await ports.signer.verifyEvidence(prior);
+  if (!check.ok) return { items: input.items, carried: 0, dropped: check.reason ?? "the previous bundle did not verify" };
+  return { items: [...input.items, ...qa], carried: qa.length, dropped: null };
+}
+
 /** Sign {changeId, headSha, items}, verify the attestation, store it, link it on the change. */
 export async function sealEvidence(
   ports: Pick<Ports, "signer" | "store" | "clock">,

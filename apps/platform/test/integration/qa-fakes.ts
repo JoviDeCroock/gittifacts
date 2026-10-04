@@ -16,6 +16,8 @@ export interface QaFakeState {
   opened: number;
   closed: number;
   failBrowser: boolean;
+  /** Changes whose app answers 500 to QA's browser (a failing smoke check). */
+  failChanges: Set<string>;
 }
 
 const KEY = "__gittifactsQaFakes";
@@ -35,6 +37,7 @@ export function resetQaFakes(responses: unknown[]): QaFakeState {
     opened: 0,
     closed: 0,
     failBrowser: false,
+    failChanges: new Set(),
   };
   (globalThis as unknown as Record<string, QaFakeState>)[KEY] = state;
   configureQaRuntime({
@@ -76,6 +79,10 @@ class HtmlBrowser implements OpenedBrowser {
   async goto(path: string): Promise<ActionOutcome> {
     this.used += 200;
     this.state.paths.push(path);
+    if ([...this.state.failChanges].some((id) => this.origin.includes(`q-${id}-`))) {
+      this.errors.network.push(`500 ${path}`);
+      return { ok: false, status: 500, detail: "HTTP 500" };
+    }
     const res = await this.app(new Request(`${this.origin}${path}`));
     this.html = await res.text();
     this.url = path;

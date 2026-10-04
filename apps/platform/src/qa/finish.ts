@@ -6,7 +6,7 @@
  * the row done and only recomputes what it returns).
  */
 import { raiseForQa } from "@app/classifier";
-import { persistClassification, resolveRuntime, sealEvidence } from "@app/coordinator";
+import { persistClassification, resolveRuntime, sealEvidence, withdrawApprovalsForQa } from "@app/coordinator";
 import { laneLabel } from "@app/domain/vocabulary";
 import type { QaRun } from "@app/evidence";
 import { routeVerdict } from "@app/host";
@@ -81,8 +81,20 @@ export async function finishQaRun(env: Bindings, runId: string, item: QaRun): Pr
       .recordSpend({ changeId: row.changeId, usd: item.usage.llmUsd })
       .catch(() => 0);
 
+  // A failed criterion withdraws the head's approvals (user decision); "couldn't test" and
+  // errored runs only raise the lane.
+  const failedTexts = item.status === "ok" ? item.criteria.filter((c) => c.verdict === "fail").map((c) => c.text) : [];
+  let withdrawn: Array<{ reviewId: string; reviewerId: string; name: string }> = [];
+  if (current && failedTexts.length > 0) {
+    const out = await withdrawApprovalsForQa(ports, bindings, { changeId: row.changeId, headSha: row.headSha, runId, failed: failedTexts });
+    withdrawn = await Promise.all(
+      out.withdrawn.map(async (r) => ({ reviewId: r.id, reviewerId: r.reviewerId, name: (await store.getPrincipal(r.reviewerId))?.name ?? r.reviewerId })),
+    );
+  }
+
   const now = new Date().toISOString();
   await qa.update(runId, {
+    withdrawn: withdrawn.length > 0 ? withdrawn : null,
     status: item.status === "ok" ? "done" : "failed",
     progress: null,
     item,

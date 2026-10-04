@@ -62,7 +62,7 @@ export async function signInContext(context: BrowserContext, baseURL: string, hu
   ]);
 }
 
-async function seedCall<T>(request: APIRequestContext, baseURL: string, path: string, data: unknown): Promise<T> {
+export async function seedCall<T>(request: APIRequestContext, baseURL: string, path: string, data: unknown): Promise<T> {
   const res = await request.post(`${baseURL}${path}`, { data, headers: { "x-e2e-seed": SEED_TOKEN } });
   if (res.status() >= 300) throw new Error(`${path}: ${res.status()} ${await res.text()}`);
   return (await res.json()) as T;

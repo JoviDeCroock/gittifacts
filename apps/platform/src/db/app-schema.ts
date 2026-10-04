@@ -347,6 +347,10 @@ export const reviews = sqliteTable(
     /** Where it was made (GitHub mode): platform (null), github-review, github-check. */
     source: text("source", { enum: ["platform", "github-review", "github-check"] }),
     createdAt: text("created_at").notNull(),
+    /** Withdrawn approvals no longer count (DECISIONS 2026-10-04: a QA failure withdraws it). */
+    withdrawnAt: text("withdrawn_at"),
+    withdrawnReason: text("withdrawn_reason", { enum: ["qa-failed"] }),
+    withdrawnBy: text("withdrawn_by"),
   },
   (t) => [
     index("reviews_change_id_idx").on(t.changeId, t.createdAt),

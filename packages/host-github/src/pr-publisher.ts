@@ -131,7 +131,7 @@ export class PrPublisher {
     };
     const atHead = reviews.filter((r) => r.headSha === head);
     const people = async (decision: "approve" | "request-changes") =>
-      Promise.all(atHead.filter((r) => r.decision === decision).map(async (r) => ({ by: await name(r.reviewerId), via: SOURCE_WORD[r.source ?? "platform"] })));
+      Promise.all(atHead.filter((r) => r.decision === decision && r.withdrawn == null).map(async (r) => ({ by: await name(r.reviewerId), via: SOURCE_WORD[r.source ?? "platform"] })));
     return {
       headSha: head,
       verdict:

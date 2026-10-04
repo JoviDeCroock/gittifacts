@@ -2598,8 +2598,21 @@ driver, request service, signed thumbnails), `packages/host-github/src/{qa-secti
   (fixed in b628304), so the instance ran in staging. Now a run still in flight 15 minutes after it was asked ends
   as failed ("never started" / "stopped without a result") through the 10-minute cron with a `qa-finished` notice,
   and asking again starts a fresh run. Closing a PR completes its head's in-progress lane run as cancelled.
-- **Not done / open.** `/gittifacts qa` needs the App's **Issue comment** event ticked (no new permission): GitHub
-  sent no delivery for a test comment on fixture-lib #21. A re-grade of
+- **A QA failure after approval withdraws the approval (user decision).** When a run fails a criterion on the
+  current head, every approval of that head is marked `withdrawn` (`reason: qa-failed`, `by: <run id>`) on the same
+  `ReviewDecision` record that GitHub reviews, the check-run button and the platform UI write, so it stops counting
+  everywhere. Each is audited as `approval.withdrawn`, and an `approval-withdrawn` notification names the approver
+  (notifications go to the repo's humans; there is no per-person inbox). Native: a queued Change leaves the merge
+  queue and its head is graded again, so the workflow waits for a fresh approval at the raised lane. GitHub: the
+  Change goes back to awaiting review; the summary comment, edited in place, drops the approval and its QA line says
+  whose was withdrawn. A GitHub review itself is not dismissed (that would be a new, notifying write). **Couldn't
+  test and errored runs never withdraw:** they only raise the lane.
+- **A re-grade of the same head keeps its QA result.** The new bundle carries the head's `qa-run` item, but only
+  when the previous bundle's signature still verifies (else it is dropped and logged as `change.qa-carried`).
+- **`/gittifacts qa` is live.** Once the App's Issue comment event was on, a comment on fixture-lib #21 got the App's
+  👀 in 12 s, and the summary comment was edited in place 85 s after the comment (QA 61 s in the workflow, 44 s in
+  the browser, $0.00046 model): Full review (Lane 2), "QA failed in a browser", 1 pass and 2 fails, four signed
+  thumbnails (200 signed, 404 tampered). There was still one App comment on the PR. A re-grade of
   the same head drops the `qa-run` item from the new bundle (the run stays in `qa_runs`). A failure after a human
   approved raises the lane and notifies but doesn't withdraw the approval.
 

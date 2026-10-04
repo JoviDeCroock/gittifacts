@@ -64,6 +64,7 @@ export function qaViewFor(
       reportUrl: `${origin}/changes/${encodeURIComponent(changeId)}#qa`,
       error: run.error,
       requestedBy,
+      withdrawn: run.withdrawn.map((w) => w.name.replace(/ \(GitHub\)$/, "")),
     };
   };
 }

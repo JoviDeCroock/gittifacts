@@ -269,6 +269,9 @@ export function reviewFromRow(r: ReviewRow): ReviewDecision {
       comment: r.comment,
       ...(r.source == null ? {} : { source: r.source }),
       createdAt: r.createdAt,
+      ...(r.withdrawnAt == null || r.withdrawnReason == null || r.withdrawnBy == null
+        ? {}
+        : { withdrawn: { at: r.withdrawnAt, reason: r.withdrawnReason, by: r.withdrawnBy } }),
     },
     `review ${r.id}`,
   );

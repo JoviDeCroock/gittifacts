@@ -45,7 +45,7 @@ import {
   ReviewEvent,
   type RolloutParams,
 } from "./events.js";
-import { previewItem, sealEvidence } from "./evidence.js";
+import { previewItem, carryQaRun, sealEvidence } from "./evidence.js";
 import { durableStages, persistClassification, persistTour, storeGradeData } from "./grading.js";
 import { changeSubject, ciRunIdFor, isBootstrapChange, rolloutWorkflowId } from "./ids.js";
 import { PUSHABLE_STATUSES, toCiStatus } from "./lifecycle.js";
@@ -666,7 +666,14 @@ export async function runChangeWorkflow(
     {
       stage: durableStages(step),
       evidence: { run: runCi },
-      sealer: { seal: (items) => sealEvidence(ports, { changeId, headSha, baseSha, items }) },
+      sealer: {
+        // A re-grade of this head keeps its on-request QA result (only from a bundle that verifies).
+        seal: async (items) => {
+          const qa = await carryQaRun(ports, { changeId, headSha, items });
+          if (qa.carried > 0 || qa.dropped !== null) await log("change.qa-carried", { carried: qa.carried, dropped: qa.dropped });
+          return sealEvidence(ports, { changeId, headSha, baseSha, items: qa.items });
+        },
+      },
       reviewer: ports.reviewer,
       budget: {
         spent: () => coordinator.spent(changeId),

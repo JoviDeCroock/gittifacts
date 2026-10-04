@@ -21,6 +21,8 @@ export interface QaRunView {
   costUsd: number | null;
   wallMs: number | null;
   error: string | null;
+  /** Approvals this run withdrew (a failed criterion after approval). */
+  withdrawn: Array<{ reviewId: string; reviewerId: string; name: string }>;
   createdAt: string;
   finishedAt: string | null;
   report: QaRun | null;
@@ -45,6 +47,9 @@ async function schema() {
       costUsd: z.number().nullable(),
       wallMs: z.number().nullable(),
       error: z.string().nullable(),
+      withdrawn: z
+        .array(z.object({ reviewId: z.string(), reviewerId: z.string(), name: z.string() }))
+        .default([]),
       createdAt: z.string(),
       finishedAt: z.string().nullable(),
       report: QaRun.nullable(),

@@ -689,6 +689,13 @@ export class D1Store implements Store {
     });
   }
 
+  async withdrawReview(id: string, w: NonNullable<ReviewDecision["withdrawn"]>): Promise<void> {
+    await this.db
+      .update(reviews)
+      .set({ withdrawnAt: w.at, withdrawnReason: w.reason, withdrawnBy: w.by })
+      .where(eq(reviews.id, id));
+  }
+
   async listReviews(changeId: string): Promise<ReviewDecision[]> {
     const rows = await this.db
       .select()

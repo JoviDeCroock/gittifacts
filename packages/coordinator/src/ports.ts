@@ -70,6 +70,8 @@ export interface Store {
   putTour(tour: Tour): Promise<void>;
 
   putReview(review: ReviewDecision): Promise<void>;
+  /** Mark an approval withdrawn: the record stays and no longer counts (optional). */
+  withdrawReview?(id: string, withdrawn: NonNullable<ReviewDecision["withdrawn"]>): Promise<void>;
   /** Reviews of a change, oldest first (GitHub mode's summary comment; optional). */
   listReviews?(changeId: string): Promise<ReviewDecision[]>;
   /** The tour for (change, head), if one was generated (GitHub mode publishes it; optional). */
@@ -516,7 +518,8 @@ export interface Notifier {
       | "reverted"
       | "failing"
       | "budget-exceeded"
-      | "qa-finished";
+      | "qa-finished"
+      | "approval-withdrawn";
     changeId: string;
     repoId: string;
     message: string;

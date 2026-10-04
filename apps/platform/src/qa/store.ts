@@ -20,6 +20,8 @@ export interface QaRunView {
   costUsd: number | null;
   wallMs: number | null;
   error: string | null;
+  /** Approvals this run withdrew (a failed criterion after approval). */
+  withdrawn: Array<{ reviewId: string; reviewerId: string; name: string }>;
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
@@ -48,6 +50,7 @@ export function viewOf(r: QaRunRow): QaRunView {
     costUsd: r.costUsd,
     wallMs: r.wallMs,
     error: r.error,
+    withdrawn: r.withdrawn ?? [],
     createdAt: r.createdAt,
     startedAt: r.startedAt,
     finishedAt: r.finishedAt,

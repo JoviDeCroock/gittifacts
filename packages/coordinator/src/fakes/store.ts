@@ -161,6 +161,10 @@ export class FakeStore implements Store {
   async putReview(review: ReviewDecision) {
     this.reviews.set(review.id, clone(review));
   }
+  async withdrawReview(id: string, withdrawn: NonNullable<ReviewDecision["withdrawn"]>) {
+    const r = this.reviews.get(id);
+    if (r !== undefined) this.reviews.set(id, { ...r, withdrawn: clone(withdrawn) });
+  }
   async listReviews(changeId: string) {
     return [...this.reviews.values()]
       .filter((r) => r.changeId === changeId)

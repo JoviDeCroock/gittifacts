@@ -41,7 +41,7 @@ const REVIEW = {
 };
 
 /** A repo, an approved Plan with two criteria, a Change pushed and graded (awaiting review). */
-async function gradedChange(app: TestApp) {
+async function gradedChange(app: TestApp, opts: { keep?: (wf: AsyncDisposable) => void } = {}) {
   const human = await signUpHuman(app);
   const agent = await createAgent(app, human.cookie);
   const created = await call(app, "POST", "/api/v1/repos", {
@@ -64,7 +64,10 @@ async function gradedChange(app: TestApp) {
   const forkName = `task-${change.id}`;
   const head = fakes.git.commit(forkName, "main", { "public/index.html": "<h1>Hello</h1>\n" });
   const instanceId = changeWorkflowId(change.id, head);
-  await using workflow = await introspectWorkflowInstance(env.CHANGE_WORKFLOW, instanceId);
+  // The ChangeWorkflow's introspector lives as long as the caller needs the instance (a review).
+  const workflow = await introspectWorkflowInstance(env.CHANGE_WORKFLOW, instanceId);
+  if (opts.keep) opts.keep(workflow);
+  await using _scope = opts.keep ? { [Symbol.asyncDispose]: async () => {} } : workflow;
   await workflow.modify(async (m) => {
     await m.disableSleeps();
     await m.disableRetryDelays();
@@ -231,6 +234,58 @@ describe("QA on request (workerd: real app, workflow, PreviewHost; fake browser 
       -1000,
     );
     expect((await fetchVia(app)(old)).status).toBe(410);
+  });
+
+  it("a QA failure after approval withdraws the approval, takes the Change out of the queue and asks again at the raised lane", async () => {
+    const app = platformApp();
+    let first: AsyncDisposable | null = null;
+    const { human, changeId, head, repo, mcp } = await gradedChange(app, { keep: (wf) => (first = wf) });
+    await using _first = first as unknown as AsyncDisposable;
+    const store = buildPorts(env, "default").store;
+    // Hold the queue so the approved Change waits in it (it would otherwise land before QA runs).
+    expect((await call(app, "POST", `/api/v1/repos/${repo.id}/queue/freeze`, { cookie: human.cookie, body: { reason: "QA test" } })).status).toBe(200);
+    expect((await call(app, "POST", `/api/v1/changes/${changeId}/review`, { cookie: human.cookie, body: { decision: "approve", headSha: head } })).status).toBe(200);
+    for (let i = 0; i < 100 && (await store.getChange(changeId))?.status !== "queued"; i++) await new Promise((r) => setTimeout(r, 50));
+    expect((await store.getChange(changeId))?.status).toBe("queued");
+
+    resetQaFakes([PLAN, REVIEW]);
+    await using wf = await qaWorkflow(changeId, head);
+    const regradeId = `${changeWorkflowId(changeId, head)}-r1`;
+    await using regrade = await introspectWorkflowInstance(env.CHANGE_WORKFLOW, regradeId);
+    await regrade.modify(async (m) => {
+      await m.disableSleeps();
+      await m.disableRetryDelays();
+    });
+    expect((await call(app, "POST", `/api/v1/changes/${changeId}/qa`, { cookie: human.cookie, body: {} })).status).toBe(202);
+    await wf.waitForStatus("complete");
+
+    // One record, withdrawn (not deleted); audited; the humans are told; the run says whose.
+    const reviews = (await store.listReviews?.(changeId) ?? []).filter((r) => r.decision === "approve");
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]?.withdrawn).toMatchObject({ reason: "qa-failed", by: qaRunId(changeId, head) });
+    const audit = await json<{ events: Array<{ action: string; payload?: unknown }> }>(
+      await call(app, "GET", `/api/v1/audit?subject=${encodeURIComponent(`change:${changeId}`)}&limit=200`, { cookie: human.cookie }),
+    );
+    expect(audit.events.map((e) => e.action)).toContain("approval.withdrawn");
+    const note = await env.DB.prepare("SELECT message FROM notifications WHERE kind = 'approval-withdrawn' AND change_id = ?").bind(changeId).first<{ message: string }>();
+    expect(note?.message).toContain("approval by");
+    const { runs } = await json<{ runs: Array<{ withdrawn: Array<{ reviewerId: string }> }> }>(await call(app, "GET", `/api/v1/changes/${changeId}/qa`, { cookie: human.cookie }));
+    expect(runs[0]?.withdrawn.map((w) => w.reviewerId)).toEqual([human.principal.id]);
+
+    // Out of the queue, and the head is graded again: the QA item rides along (verified), the lane is
+    // Full review with qa.failed, and the Change waits for a fresh approval.
+    const queue = await json<{ entries: Array<{ changeId: string; state: string }> }>(await call(app, "GET", `/api/v1/repos/${repo.id}/queue`, { cookie: human.cookie }));
+    expect(queue.entries.find((e) => e.changeId === changeId)?.state).toBe("dequeued");
+    await regrade.waitForStepResult({ name: "ci-start" });
+    await fakes.ci.finish(env, ciRunIdFor(regradeId));
+    await regrade.waitForStepResult({ name: "request-review" });
+    const after = await store.getChange(changeId);
+    expect(after).toMatchObject({ status: "awaiting-review", lane: 2 });
+    expect(after?.laneReasons.map((r) => r.code)).toContain("qa.failed");
+    const ev = await mcp.tools.get_evidence({ changeId });
+    if (ev.isError) throw new Error(JSON.stringify(ev.content));
+    expect(ev.structuredContent.verification).toMatchObject({ ok: true });
+    expect(JSON.stringify(ev.structuredContent)).toContain('"qa-run"');
   });
 
   it("refuses a caller without access (404), a head without green CI, and over the repo's rate limit", async () => {

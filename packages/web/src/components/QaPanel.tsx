@@ -141,6 +141,12 @@ function Summary({ run }: { run: QaRunView }) {
   return (
     <ul class="qa-facts">
       {parts.length > 0 ? <li>{parts.join(" · ")}</li> : null}
+      {run.withdrawn.length > 0 ? (
+        <li class="tone--danger" data-testid="qa-withdrawn">
+          <Icon name="undo" size={14} /> Approval by {run.withdrawn.map((w) => w.name).join(", ")}{" "}
+          withdrawn: QA failed. It needs a fresh approval.
+        </li>
+      ) : null}
       {raised ? (
         <li class="tone--danger">
           <Icon name="arrow-up-right" size={14} /> Lane raised to{" "}

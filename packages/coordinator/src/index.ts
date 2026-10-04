@@ -20,7 +20,7 @@ export {
   workflowHandle,
 } from "./cloudflare-bindings.js";
 export * from "./events.js";
-export { assembleEvidence, sealEvidence, touchedPaths } from "./evidence.js";
+export { assembleEvidence, carryQaRun, sealEvidence, touchedPaths } from "./evidence.js";
 export { changeFlagKey, changeFlags, type FlagshipLike, isChangeEnabled } from "./flags-helper.js";
 export {
   durableStages,
@@ -100,3 +100,4 @@ export {
   type StepConfig,
   type StepEvent,
 } from "./step.js";
+export { type WithdrawOutcome, withdrawApprovalsForQa } from "./withdraw.js";

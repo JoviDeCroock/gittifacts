@@ -27,6 +27,7 @@ import {
   uid,
 } from "./fixtures.js";
 import { type CiSinkEnv, integrationFakes, NAMESPACE } from "./integration/fakes.js";
+import { qaFakes } from "./integration/qa-fakes.js";
 
 const SeedInput = z.object({
   principalId: z.string().min(1),
@@ -103,6 +104,12 @@ const DEFAULT_FILES = {
  */
 async function pipeline(path: string, body: unknown): Promise<Response> {
   const fakes = integrationFakes();
+  if (path === "/__e2e/qa/fail") {
+    // QA's HTML browser answers 500 for this Change's app: the smoke check fails (qa-fakes.ts).
+    const { changeId } = z.object({ changeId: z.string().min(1) }).parse(body);
+    qaFakes().failChanges.add(changeId);
+    return Response.json({ ok: true }, { status: 201 });
+  }
   if (path === "/__e2e/git/seed") {
     const input = GitSeedInput.parse(body);
     const sha = fakes.git.seed(input.artifactsName, input.files ?? DEFAULT_FILES);
