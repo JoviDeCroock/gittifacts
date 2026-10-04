@@ -45,7 +45,7 @@ Expected: reasons such as `plan.missing` (no approved Plan, so no auto-merge) or
 <details>
 <summary>Which pull requests are graded</summary>
 
-Open pull requests against the default branch, not drafts (they're graded when marked ready). Each new head is graded again; a head replaced before its verdict shows as cancelled. The lane shows on the check while the walkthrough is still being written. Once someone links the installation, a pull request that needs a human also gets one summary comment, edited in place, and at most three stops on the diff as one review.
+Open pull requests against the default branch, not drafts (they're graded when marked ready). Each new head is graded again; a head replaced before its verdict shows as cancelled. The lane shows on the check while the walkthrough is still being written. Once someone links the installation, a pull request that needs a human also gets one summary comment, edited in place on every push; nothing else is posted unless someone asks for the stops on the diff.
 
 </details>
 

@@ -13,7 +13,9 @@ group: GitHub
 
 GitHub mode keeps your code on GitHub. The gittifacts App reads each pull request, runs the same evidence as native mode on a disposable mirror, and posts **one** check run, `gittifacts/lane`, on the pull request's head commit. The check run shows the lane as soon as it is computed, while the walkthrough is still being written.
 
-Once someone links the installation, a pull request that needs a human also gets **one summary comment**, edited in place: the lane and why, what a person does, and a link to the walkthrough, with the details folded. The few stops worth a look on the diff (at most three: risks, untested or unproven lines) come as **one review**. Report-only mode never approves, blocks or merges.
+Once someone links the installation, a pull request that needs a human also gets **one summary comment**, edited in place on every push: the lane and why, what a person does, and a link to the walkthrough, with the details folded. That is all gittifacts posts. Report-only mode never approves, blocks or merges.
+
+To see the stops worth a look as comments on the diff (at most three: risks, untested or unproven lines), add the `gittifacts:walkthrough` label to the pull request or press **Request full review** on the check run.
 
 Not installed yet? [Connect GitHub](/docs/get-started/github) takes three steps. Operators register the App once: [Register the GitHub App](/docs/guides/register-github-app).
 
@@ -31,7 +33,7 @@ Without an approved Plan there is no auto-merge. Changing the labels, the title,
 
 Approve the walkthrough on gittifacts, approve the pull request on GitHub, or press **Approve change** on the check run: it is the same approval. It counts from a human with write access who isn't the author, for the current head. **Request full review** on the check run shows on the summary. GitHub still merges.
 
-Repo owners can turn the review and summary comment off for one repository on `/settings/github`; the check run stays.
+Repo owners can turn the summary comment and requested reviews off for one repository on `/settings/github`; the check run stays.
 
 ## 3. Read the verdict from an agent
 
@@ -52,7 +54,7 @@ Expected: the Change that grades the pull request, with its lane and reasons. Th
 |---|---|
 | Metadata, contents, issues: read | Read the code (fork pull requests too, through `pull/<n>/head`) and linked issues |
 | Checks: write | Post `gittifacts/lane` |
-| Pull requests: read and write | The walkthrough as one review and one summary comment, once the installation is linked (repo owners can turn them off) |
+| Pull requests: read and write | One summary comment, and the walkthrough's flagged stops as one review when someone asks, once the installation is linked (repo owners can turn them off) |
 | Merge queues, deployments, commit statuses: read | `merge_group`, deployment signals and other CI results as extra evidence |
 
 Never requested: administration, workflows, commit statuses (write). Installation tokens are minted per job for one repository and are never given to the sandbox that runs pull request code.
