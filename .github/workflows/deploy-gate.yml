@@ -16,8 +16,10 @@ on:
         description: Commit to gate (must be on main)
         required: true
 
+# One gate at a time per ref: deploys from main queue up; a branch's rehearsal never replaces (and
+# so cancels) main's pending gate.
 concurrency:
-  group: deploy-gate
+  group: deploy-gate-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
