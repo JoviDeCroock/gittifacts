@@ -2412,6 +2412,13 @@ not-done lists; a summary comment with a table; every push rewrote the old revie
   old reviewer model): lane 105 s, graded 173 s. Not verified live: the `gittifacts:walkthrough` label and the
   Request full review path (the label doesn't exist on fixture-lib; a human presses buttons); both are tested on
   recorded fixtures.
+- **Follow-up decisions (coordinator, same day):** (1) **Report-only never shows a red ✕:** every report-only run
+  completes `neutral`, whatever the lane and also when blocked; the title carries the lane. `success` /
+  `neutral` / `action_required` by lane stay for a repo that opts into enforcing. The contract host now reads
+  the routed action from the run's verdict, not its conclusion. (2) No per-repo opt-in for inline stops: the
+  label and the button are enough. (4) **A completed run keeps its verdict** when a newer commit is pushed: only a
+  run still in progress for a replaced head is closed as cancelled (one GET to tell; one write fewer per push, so
+  a later push is 5 writes). The history stays honest.
 - **Words in one place** (`terms.ts`), per the user's terminology decision of today: "Auto-merge · Quick review ·
   Full review" with "(Lane N)" as a badge, "Report-only", "walkthrough", the button "Approve change" (id
   `approve_tour` and the `gittifacts/lane` name stay). Reason codes get short phrases there too.
