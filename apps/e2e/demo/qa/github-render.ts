@@ -49,27 +49,33 @@ const shoot = async (name: string, title: string, md: string, open: boolean) => 
 };
 if (summary) {
   await shoot(
-    "16-qa-github-summary",
+    `16-qa-github-summary${process.env.TAG ? `-${process.env.TAG}` : ""}`,
     `gittifacts commented (summary, edited ${summary.updated_at})`,
     summary.body,
     false,
   );
   await shoot(
-    "16-qa-github-summary-open",
+    `16-qa-github-summary-open${process.env.TAG ? `-${process.env.TAG}` : ""}`,
     "gittifacts summary comment, folds open",
     summary.body,
     true,
   );
-  writeFileSync(join(OUT, "16-qa-github-summary.md"), summary.body);
+  writeFileSync(
+    join(OUT, `16-qa-github-summary${process.env.TAG ? `-${process.env.TAG}` : ""}.md`),
+    summary.body,
+  );
 }
 if (run) {
   await shoot(
-    "16-qa-github-check",
+    `16-qa-github-check${process.env.TAG ? `-${process.env.TAG}` : ""}`,
     `gittifacts/lane: ${run.output.title} (${run.conclusion})`,
     `${run.output.summary}\n\n${run.output.text ?? ""}`,
     true,
   );
-  writeFileSync(join(OUT, "16-qa-github-check.json"), JSON.stringify(run, null, 2));
+  writeFileSync(
+    join(OUT, `16-qa-github-check${process.env.TAG ? `-${process.env.TAG}` : ""}.json`),
+    JSON.stringify(run, null, 2),
+  );
 }
 await browser.close();
 console.log(JSON.stringify({ summary: summary !== undefined, check: run?.output.title }));
