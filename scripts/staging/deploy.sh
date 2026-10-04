@@ -9,7 +9,8 @@ set -euo pipefail
 DIR="${1:?checkout dir}"; TAG="${2:?sha12}"; SMOKE="${3:---smoke=ci}"
 URL="https://gittifacts-staging.decroockjovi.workers.dev"
 cd "$DIR"
-CONFIG="$(pnpm exec tsx scripts/staging/config.ts)"
+# pnpm may print install notes before the path: keep the last line.
+CONFIG="$(pnpm exec tsx scripts/staging/config.ts | tail -1)"
 cd apps/platform
 CI=1 pnpm exec wrangler d1 migrations apply DB --remote --config "$CONFIG"
 CI=1 pnpm exec wrangler deploy --config "$CONFIG" --tag "$TAG" --message "staging $TAG"

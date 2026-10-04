@@ -22,7 +22,7 @@ $W r2 bucket create gittifacts-staging-blobs --jurisdiction eu 2>/dev/null || ec
 for q in gittifacts-staging-webhooks gittifacts-staging-webhooks-dlq gittifacts-staging-github-events gittifacts-staging-github-events-dlq; do
   $W queues create "$q" 2>/dev/null || echo "queue $q: exists"
 done
-CONFIG="$(cd "$ROOT" && pnpm exec tsx scripts/staging/config.ts --d1-id "$D1_ID")"
+CONFIG="$(cd "$ROOT" && pnpm exec tsx scripts/staging/config.ts --d1-id "$D1_ID" | tail -1)"
 $W d1 migrations apply DB --remote --config "$CONFIG"
 # Secrets: fresh values, never printed, never the production ones.
 KEY="$(cd "$ROOT" && node -e '

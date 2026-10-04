@@ -75,6 +75,12 @@ export function stagingConfig(prod: Json, d1Id: string): Json {
     producers: q.producers.map((p) => ({ ...p, queue: rename(p.queue) })),
     consumers: q.consumers.map((c) => ({ ...c, queue: rename(c.queue), dead_letter_queue: rename(c.dead_letter_queue) })),
   };
+  // Container application names are account-wide: production owns runner / preview / workspace.
+  const containerName = (n: unknown) => `${STAGING.name}-${String(n)}`;
+  cfg.containers = (cfg.containers as Json[]).map((c) => ({ ...c, name: containerName(c.name) }));
+  for (const entry of Object.values(cfg.exports as Record<string, Json>)) {
+    if (entry.container !== undefined) entry.container = containerName(entry.container);
+  }
   const triggers = cfg.triggers as { crons?: string[]; events?: Json[] };
   cfg.triggers = {
     crons: triggers.crons ?? [],
