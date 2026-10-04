@@ -23,7 +23,11 @@ function FirstGreen() {
         <span
           class="ttfg__range"
           data-ttfg-range=""
-          style={{ left: ttfgPct(p50Sec), width: ttfgPct(p90Sec - p50Sec) }}
+          style={{
+            left: ttfgPct(p50Sec),
+            // End minus start, both clamped to the axis: never past its right end.
+            width: `${Math.max(0, parseFloat(ttfgPct(p90Sec)) - parseFloat(ttfgPct(p50Sec)))}%`,
+          }}
         />
         <span class="ttfg__median" data-ttfg-median="" style={{ left: ttfgPct(p50Sec) }} />
         <span class="ttfg__target" style={{ left: ttfgPct(targetSec) }}>

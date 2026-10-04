@@ -85,6 +85,10 @@ describe("GitHub mode in workerd", () => {
       // The walkthrough label (stops on the diff only on request): not on this PR.
       [`GET ${API}/repos/acme/widgets/pulls/7`]: () => jsonRes({ number: 7, labels: [] }),
       [`POST ${API}/repos/acme/widgets/issues/7/comments`]: async (req) => (prWrites.push({ what: "summary", body: await req.json() }), jsonRes({ id: 88001 }, 201)),
+      // QA asked by someone GitHub says can only read: refused, 😕 on the command, reason in the summary.
+      [`GET ${API}/repos/acme/widgets/collaborators/octo-dev/permission`]: () => jsonRes({ permission: "read", role_name: "read" }),
+      [`POST ${API}/repos/acme/widgets/issues/comments/66001/reactions`]: async (req) => (prWrites.push({ what: "reaction", body: await req.json() }), jsonRes({ id: 1 }, 201)),
+      [`PATCH ${API}/repos/acme/widgets/issues/comments/88001`]: async (req) => (prWrites.push({ what: "summary-edit", body: await req.json() }), jsonRes({ id: 88001 })),
     });
     const changeId = `gh-${REPO.id}-7`;
     const instanceId = changeWorkflowId(changeId, head);
@@ -124,6 +128,26 @@ describe("GitHub mode in workerd", () => {
     expect(prWrites.find((w) => w.what === "review")).toBeUndefined();
     expect(String(prWrites.find((w) => w.what === "summary")?.body.body)).toContain("gittifacts:summary");
     expect(String(prWrites.find((w) => w.what === "summary")?.body.body)).toContain("Open the walkthrough on gittifacts");
+    // `/gittifacts qa` from someone without write access: no run, a 😕 reaction on the command, and
+    // the reason in the summary's QA line (edited in place; no new comment).
+    const comments = prWrites.filter((w) => w.what === "summary").length;
+    await handleGithubEvent({ db: store().db, blobs: env.BLOBS, now: () => new Date(), env: env as Bindings }, {
+      v: 1, deliveryId: crypto.randomUUID(), appId: APP_ID, event: "issue_comment", action: "created",
+      installationId: INSTALLATION, receivedAt: new Date().toISOString(),
+      payload: {
+        action: "created", installation: { id: INSTALLATION }, repository,
+        issue: { number: 7, pull_request: { url: "x" } },
+        comment: { id: 66001, body: "/gittifacts qa", user: { login: "octo-dev", id: 5150, type: "User" } },
+        sender: { login: "octo-dev", id: 5150, type: "User" },
+      },
+    });
+    expect(prWrites.find((w) => w.what === "reaction")?.body).toEqual({ content: "confused" });
+    const edit = String(prWrites.filter((w) => w.what === "summary-edit").at(-1)?.body.body);
+    expect(edit).toContain("**QA** · not run: octo-dev has no write access to the repository (asked by @\u200bocto-dev)");
+    expect(prWrites.filter((w) => w.what === "summary").length).toBe(comments);
+    const runs = await env.DB.prepare("SELECT count(*) AS n FROM qa_runs WHERE change_id = ?").bind(changeId).first<{ n: number }>();
+    expect(runs?.n).toBe(0);
+
     // Every token minted for a job was revoked.
     expect(tokens.minted).toBeGreaterThan(0);
     expect(tokens.revoked).toBe(tokens.minted);

@@ -291,3 +291,12 @@ describe("front door pages", () => {
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+describe("landing first-green bar geometry", () => {
+  it("never runs past the axis: end − start, both clamped (staging's 446 s p90 overflowed)", async () => {
+    const { rangeStyle } = await import("../src/routes/front-door.js");
+    expect(rangeStyle(40, 75)).toBe("left:44.4%;width:38.9%;");
+    expect(rangeStyle(60, 446)).toBe("left:66.7%;width:33.3%;");
+    expect(rangeStyle(120, 600)).toBe("left:100%;width:0%;");
+  });
+});

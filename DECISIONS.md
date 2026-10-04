@@ -2763,3 +2763,16 @@ account-wide (see the incident entry above).
 - First run: dcc09cf, 17 min end to end, all green. Production's Workflows were checked before and
   after, and stayed owned by `gittifacts`.
 
+
+## 2026-10-04 — Landing first-green bar stays on its axis; refused `/gittifacts qa` says why, quietly
+
+- **Landing.** The live median → p90 bar's width was `axisPct(p90 − p50)`, which clamps the *difference*, so a
+  p90 past the 90 s axis (staging: 446 s) put the bar's end at 168% and widened the page by 56 px at 390 px. The
+  staging smoke caught it and held a production deploy. Now both ends are clamped and the width is end − start
+  (`rangeStyle`, front-door.ts, and the same in the static figure); a p90 past the axis ends at the axis with an
+  open end (`data-past`); the axis clips horizontally as a backstop. A gate E2E seeds a long tail through the
+  real Worker's live rewrite and checks the bar ends on the axis and nothing scrolls sideways at 1280 and 390 px.
+- **A refused `/gittifacts qa`** (CI not green, rate-limited, not permitted) gets a 😕 reaction on the command,
+  and the summary comment's QA line says why ("QA · not run: … (asked by @…)"), edited in place, no new comment.
+  The newest refusal for a head shows until a run for that head exists (`qa_refusals`, migration 0019). The Run QA
+  button has no comment to react to; its refusals show in the same line.

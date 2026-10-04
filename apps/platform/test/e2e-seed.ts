@@ -12,6 +12,8 @@
 import { env } from "cloudflare:workers";
 import { FakeLlmClient } from "@app/tour";
 import { z } from "zod";
+import { projectOnboarding } from "../src/db/schema.js";
+import { resetFirstGreenMemo } from "../src/routes/stats.js";
 import {
   addMember,
   changeFixture,
@@ -105,6 +107,29 @@ const DEFAULT_FILES = {
  */
 async function pipeline(path: string, body: unknown): Promise<Response> {
   const fakes = integrationFakes();
+  if (path === "/__e2e/ttfg") {
+    // Live first-green numbers with a long tail (p90 past the landing figure's 90 s axis), the way
+    // staging's numbers looked when the figure overflowed the page at 390 px.
+    const at = new Date().toISOString();
+    const db = store().db;
+    for (const [i, ms] of [40_000, 52_000, 58_000, 61_000, 300_000, 446_000, 520_000].entries()) {
+      await db
+        .insert(projectOnboarding)
+        .values({
+          projectId: `ttfg-${Date.now().toString(36)}-${i}`,
+          template: "static-site",
+          source: "template",
+          principalId: "system",
+          createdAt: at,
+          outcome: "green",
+          msToGreen: ms,
+          msToPreview: ms,
+        })
+        .onConflictDoNothing();
+    }
+    resetFirstGreenMemo();
+    return Response.json({ ok: true }, { status: 201 });
+  }
   if (path === "/__e2e/qa/script") {
     // A Plan with these criteria on the Change, and the model's next answers for QA (qa-fakes.ts).
     const input = z

@@ -45,3 +45,21 @@ export const qaRuns = sqliteTable(
   ],
 );
 export type QaRunRow = typeof qaRuns.$inferSelect;
+
+/**
+ * A QA request that was refused (GitHub: CI not green, rate-limited, not permitted). The newest one
+ * for a head shows in the summary comment's QA line until a run for that head exists.
+ */
+export const qaRefusals = sqliteTable(
+  "qa_refusals",
+  {
+    id: text("id").primaryKey(),
+    changeId: text("change_id").notNull(),
+    headSha: text("head_sha").notNull(),
+    reason: text("reason").notNull(),
+    login: text("login"),
+    via: text("via", { enum: QA_TRIGGERS }).notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("qa_refusals_change_idx").on(t.changeId, t.createdAt)],
+);

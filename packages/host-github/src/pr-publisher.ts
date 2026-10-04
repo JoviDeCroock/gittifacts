@@ -187,7 +187,7 @@ export class PrPublisher {
   }
 
   /** A reaction on an issue/PR comment (a quiet acknowledgement; through the write gate). */
-  async react(commentId: number, content: "eyes" | "+1"): Promise<void> {
+  async react(commentId: number, content: "eyes" | "+1" | "confused"): Promise<void> {
     await this.d.api.write("POST", this.path(`/issues/comments/${commentId}/reactions`), { content });
   }
 

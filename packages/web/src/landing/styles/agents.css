@@ -116,9 +116,18 @@
 }
 .ttfg__axis {
   position: relative;
+  /* Belt and braces: nothing on the axis may widen the page, whatever the numbers. */
+  overflow-x: clip;
+  overflow-clip-margin: 1.5rem;
   block-size: 3.25rem;
   margin-inline: 0.75rem 1.5rem;
   border-block-end: 2px solid var(--text);
+}
+/* A p90 beyond the axis: the bar ends at the axis with an open end. */
+.ttfg__range[data-past] {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  background: linear-gradient(to right, var(--ok) 85%, transparent);
 }
 .ttfg__range {
   position: absolute;

@@ -60,7 +60,7 @@ describe("asking for QA from GitHub", () => {
     expect(host.gh.comments.size).toBe(1);
   });
 
-  it("/gittifacts qa: a writer's command is acknowledged with 👀, never a reply; others are ignored", async () => {
+  it("/gittifacts qa: 👀 for a writer, 😕 for a refusal, never a reply; non-commands are ignored", async () => {
     const { qa, asked } = port();
     const { host, changeId } = await lane1({ qa });
     const writes = host.gh.writes.length;
@@ -77,8 +77,9 @@ describe("asking for QA from GitHub", () => {
     );
     expect(out[0]).toMatchObject({ action: "recorded", changeId });
     expect(asked).toEqual([expect.objectContaining({ via: "github-comment", login: "maint-1" })]);
-    expect(host.gh.reactions).toEqual([expect.objectContaining({ content: "eyes" })]);
-    expect(host.gh.writes.slice(writes)).toEqual(["POST reaction"]);
+    // The reader's refused command gets 😕, the writer's 👀; nothing else is written.
+    expect(host.gh.reactions.map((r) => r.content)).toEqual(["confused", "eyes"]);
+    expect(host.gh.writes.slice(writes)).toEqual(["POST reaction", "POST reaction"]);
   });
 });
 

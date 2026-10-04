@@ -263,6 +263,18 @@ export function axisPct(sec: number): string {
   return `${Math.round((clamped / AXIS_MAX_SEC) * 1000) / 10}%`;
 }
 
+/**
+ * The median → p90 bar on the axis: both ends clamped to the axis, so the bar never runs past its
+ * right end whatever the numbers (a p90 beyond the axis ends at the axis and is marked "past"). The
+ * width is end − start, never the clamped difference (which overflowed with staging's 446 s p90).
+ */
+export function rangeStyle(p50Sec: number, p90Sec: number): string {
+  const start = Math.min(Math.max(p50Sec, 0), AXIS_MAX_SEC);
+  const end = Math.min(Math.max(p90Sec, start), AXIS_MAX_SEC);
+  const pct = (s: number) => `${Math.round((s / AXIS_MAX_SEC) * 1000) / 10}%`;
+  return `left:${pct(start)};width:${pct(end - start)};`;
+}
+
 export function liveCaption(live: LiveFirstGreen): string {
   return `Live: median ${secondsLabel(live.p50Ms)}, 9 in 10 projects within ${secondsLabel(live.p90Ms)}, over the last ${live.sinceDays} days (${live.green} projects reached first green).`;
 }
@@ -404,7 +416,8 @@ export function registerFrontDoorRoutes(app: ApiApp, openapi: () => unknown): vo
         })
         .on("[data-ttfg-range]", {
           element(el) {
-            el.setAttribute("style", `left:${axisPct(p50)};width:${axisPct(p90 - p50)};`);
+            el.setAttribute("style", rangeStyle(p50, p90));
+            if (p90 > AXIS_MAX_SEC) el.setAttribute("data-past", "");
           },
         })
         .on("[data-ttfg-median]", {

@@ -5,8 +5,10 @@
  * edited only when its text changes).
  */
 import { type GithubQaPort, type QaView, qaSummary, type SummaryQa } from "@app/host-github";
+import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import type { Bindings } from "../app-env.js";
+import { qaRefusals } from "../db/qa-schema.js";
 import { ApiError } from "../errors.js";
 import { platformOrigin } from "../integrations/runtime.js";
 import { D1Store } from "../store/d1-store.js";
@@ -21,6 +23,19 @@ export function qaSectionFor(
   const view = qaViewFor(env);
   return async (changeId, headSha) => {
     const v = await view(changeId, headSha);
+    // A refusal newer than the head's latest run (or with no run): say why, in the same line.
+    const refused = await drizzle(env.DB)
+      .select()
+      .from(qaRefusals)
+      .where(and(eq(qaRefusals.changeId, changeId), eq(qaRefusals.headSha, headSha)))
+      .orderBy(desc(qaRefusals.createdAt))
+      .get();
+    const runAt =
+      v === null ? null : ((await new QaStore(drizzle(env.DB)).get(v.runId))?.createdAt ?? null);
+    if (refused !== undefined && (runAt === null || refused.createdAt > runAt)) {
+      const who = refused.login === null ? "" : ` (asked by @${refused.login})`;
+      return { status: `not run: ${refused.reason.slice(0, 200)}${who}`, details: null };
+    }
     return v === null ? null : qaSummary(v);
   };
 }
@@ -86,6 +101,19 @@ export function githubQaPort(env: Bindings): GithubQaPort {
         if (e instanceof ApiError) return { refused: e.message };
         throw e;
       }
+    },
+    recordRefusal: async ({ changeId, headSha, reason, login, via }) => {
+      await drizzle(env.DB)
+        .insert(qaRefusals)
+        .values({
+          id: `qr_${crypto.randomUUID()}`,
+          changeId,
+          headSha,
+          reason: reason.slice(0, 500),
+          login,
+          via,
+          createdAt: new Date().toISOString(),
+        });
     },
   };
 }

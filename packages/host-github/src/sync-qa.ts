@@ -11,6 +11,7 @@ import { identityOf } from "./normalize.js";
 import { GithubAccount, type GithubDelivery, GithubRepo } from "./payloads.js";
 import { QA_TERMS } from "./qa-section.js";
 import type { GithubSyncDeps, SyncOutcome } from "./sync.js";
+import { refreshSummary } from "./sync-reviews.js";
 
 export type QaTrigger = "github-check" | "github-comment";
 
@@ -22,6 +23,14 @@ export interface GithubQaPort {
     login: string;
     via: QaTrigger;
   }): Promise<{ runId: string; reused: boolean } | { refused: string }>;
+  /** Remember why a request was refused (the summary's QA line says so until a run exists). */
+  recordRefusal?(input: {
+    changeId: string;
+    headSha: string;
+    reason: string;
+    login: string;
+    via: QaTrigger;
+  }): Promise<void>;
 }
 
 const Comment = z.object({
@@ -68,6 +77,21 @@ export async function askForQa(
       subject: `change:${input.changeId}`,
       payload: { reason, via: input.via, login: who.login },
     });
+    // The person learns why without a new comment: the summary's QA line says it (edited in place).
+    const change = await deps.ports.store.getChange(input.changeId);
+    if (deps.qa?.recordRefusal !== undefined && change?.host != null && change.headSha !== null) {
+      await deps.qa.recordRefusal({
+        changeId: input.changeId,
+        headSha: change.headSha,
+        reason,
+        login: who.login,
+        via: input.via,
+      });
+      const [owner = "", repo = ""] = change.host.url
+        .replace(/^https:\/\/github\.com\//, "")
+        .split("/");
+      await refreshSummary(deps, input.changeId, owner, repo, change.host.number);
+    }
     return { event: input.event, action: "ignored", detail: reason, changeId: input.changeId };
   };
   if (deps.qa === undefined) return refuse("QA is not available on this platform");
@@ -108,9 +132,11 @@ export async function onQaComment(
     account: p.data.comment.user,
     via: "github-comment",
   });
-  if (out.action === "recorded" && deps.host.publisher !== null) {
-    // A quiet acknowledgement instead of a reply: 👀 on the command (best effort).
-    await deps.host.publisher.react(p.data.comment.id, "eyes").catch(() => undefined);
+  // A quiet answer on the command: 👀 when QA starts, 😕 when it was refused (the summary says why).
+  if (deps.host.publisher !== null) {
+    await deps.host.publisher
+      .react(p.data.comment.id, out.action === "recorded" ? "eyes" : "confused")
+      .catch(() => undefined);
   }
   return out;
 }
