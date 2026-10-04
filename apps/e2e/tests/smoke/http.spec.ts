@@ -26,6 +26,6 @@ test("front door and docs: every URL agents read first", async ({ request, baseU
   expect(await checkFrontDoor(request, baseURL as string)).toEqual([]);
 });
 
-test("the GitHub webhook refuses a bad signature (401)", async ({ request, baseURL }) => {
+test("the GitHub webhook refuses a bad signature (401; 503 not-configured where GitHub mode is off)", async ({ request, baseURL }) => {
   await checkWebhookRejectsBadSignature(request, baseURL as string);
 });
