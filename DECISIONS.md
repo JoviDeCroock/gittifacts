@@ -2612,7 +2612,11 @@ driver, request service, signed thumbnails), `packages/host-github/src/{qa-secti
   at Full review (Lane 2) with `qa.failed`. The carried `qa-run` item verified, and the page said whose approval was
   withdrawn. The same run showed the planner checking criterion 1 ("lists three shares") against the total (criterion
   2's property). A false fail now withdraws an approval, so the planning prompt (qa/3) says each script checks only
-  its own criterion.
+  its own criterion. **Not enough:** on 62ec5f2 the planner still expected "€33.34" for "lists exactly three
+  shares", the value a correct split would show. A fail is never wrong about the page; it can be stricter than the
+  criterion's words. Open, for a decision: a counting step (`expect_count`) so "three shares" is checked as a count,
+  and/or letting the review mark a fail whose expectation the criterion doesn't imply as "couldn't test" (that would
+  let a model soften a fail, against "LLM judgments may only raise").
 - **A re-grade of the same head keeps its QA result.** The new bundle carries the head's `qa-run` item, but only
   when the previous bundle's signature still verifies (else it is dropped and logged as `change.qa-carried`).
 - **`/gittifacts qa` is live.** Once the App's Issue comment event was on, a comment on fixture-lib #21 got the App's
