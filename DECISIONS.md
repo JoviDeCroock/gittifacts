@@ -2354,32 +2354,36 @@ pushes to fixture-lib's main.
 - **The live contract run** needs an agent token of the human who linked the installation, to draft the six
   Plans; the CLI credentials on this machine belong to an unclaimed docs-audit agent scoped to another project.
 
-## 2026-10-04 — A calm pull request: one place to read, three stops at most, the lane before the walkthrough
+## 2026-10-04 — A quiet pull request: a check run and one comment; the lane before the walkthrough
 
-The user, after PR #2 on fixture-lib: "the UI looks very busy". Before: a check run with a 2-column table, ~20
-reason codes and a 12-row evidence table unfolded (545 words); a review per head with up to 20 inline stops
-(7 and 5 on #2) plus least-confident / not-done lists; a summary comment with a table; every push rewrote the
-old review and each of its stops to "Stale". Code: `packages/host-github/src/{terms,check-run,pr-writes,
-pr-publisher,adapter}.ts`, `@app/core` `laneKnown` hook, ChangeWorkflow step `publish-lane`.
+Supersedes the M3 entry's "the tour is one COMMENT review per head" and its staling (2026-10-03, "Two modes M3").
+The user, after PR #2 on fixture-lib: "the UI looks very busy", then "the amount of GitHub chatter going on in
+comments" bothers them. Before: a check run with a 2-column table, ~20 reason codes and a 12-row evidence table
+unfolded (545 words); a review per head with up to 20 inline stops (7 and 5 on #2) plus least-confident /
+not-done lists; a summary comment with a table; every push rewrote the old review and each of its stops to
+"Stale". Code: `packages/host-github/src/{terms,check-run,pr-writes,pr-publisher,adapter,sync,sync-reviews}.ts`,
+`@app/core` `laneKnown` hook, ChangeWorkflow step `publish-lane` (the summary is now written before the review).
 
+- **Default footprint: the `gittifacts/lane` check run and one summary comment, edited in place.** Nothing else.
+  A new push edits both and posts nothing new; nothing posts "something changed". Logins in the summary carry no
+  `@` (an edit that adds a mention notifies), and text written into it from elsewhere can't add one either.
 - **The summary comment is the one place a person reads.** 3–5 lines: the lane and its one reason, what a person
-  does, who approved / requested changes / asked for a full review (only when someone did), and the link to the
-  walkthrough with its stop count. Why (raised reasons), the Plan, approvals, the graded commit and the
-  report-only note fold under one `<details>`. No tables (they overflow a phone).
-- **At most 3 inline stops, only where they earn it:** risk first, then "not covered by tests", then "not
-  proven"; never the intent stop, never a proven one, never a stop without a line. The review body is one line
-  pointing at the full walkthrough. No flagged stop → no review at all (the summary links the walkthrough).
-  A one-line body beats an empty one: it says where the stops came from, and GitHub documents the body as
-  required for COMMENT reviews. Lane 0 still gets no review.
-- **Stale handling is quiet:** a newer head minimizes the old review and each of its stops (OUTDATED), without
-  rewriting any text. Minimizing the stops too keeps an old stop from looking current in Files changed when its
-  lines didn't move. Writes per push: before 1 + 1 (check) + 1 review + 1 body + ≤ 15 stop edits + 1 minimize +
-  1 summary (13 on #2, ≤ 21); after 1 + 2 (check, with the early lane) + ≤ 1 review + ≤ 3 stop minimizes (old
-  reviews keep their larger count once) + 1 minimize + 1 summary (≤ 9), plus one read for the stops' node ids.
+  does, who approved / requested changes / asked for a full review (only when someone did), the walkthrough link
+  with its stop count and how many are worth a look, and an optional QA line. Why (raised reasons), the Plan,
+  approvals, the graded commit, how to get the stops on the diff and the report-only note fold under one
+  `<details>`; QA details under a second. No tables (they overflow a phone). On-demand QA (another agent) writes
+  into this comment through `GitHubHostDeps.qa`, never a comment of its own.
+- **Inline stops only on request:** the PR's `gittifacts:walkthrough` label (every head while it is on), or
+  Request full review on the check run (that head). Then one COMMENT review with at most 3 stops where a person
+  should look (risk, then not covered by tests, then not proven; never intent, proven or line-less stops) and a
+  one-line body; none when nothing is flagged; never for Lane 0. A newer head minimizes that review and its stops
+  (OUTDATED) without rewriting text. Per repo opt-in is not built (open question).
 - **The check run is short:** title = lane and its one reason in ≤ 60 chars ("Full review (Lane 2) · public API
-  changed"; unknown says what didn't run: "coverage did not run"); summary = headline, the ask, the link, the
-  report-only note; reasons and evidence fold in `output.text`. Buttons stay. "Report-only" is not in the title
-  any more: it is a property of the repo, said once in the summary, and the title is the merge box's only line.
+  changed"; unknown says what didn't run: "coverage did not run"); the summary doesn't repeat the title GitHub
+  shows above it: the ask, the link, the report-only note (and the full reason when the title shortened it);
+  reasons and evidence fold in `output.text`. Buttons stay. A Full review is obvious from the check alone (title,
+  `action_required`) and from the summary's first line. "Report-only" is not in the title: it is a property of
+  the repo, said once in the summary; the title is the merge box's only line.
 - **The verdict for machines is a hidden comment** (`<!-- gittifacts:verdict {json} -->` in `output.text`), read
   by `readCheckRunVerdict` (zod-validated; malformed → no verdict). Runs written before today keep their table and
   are still read (`Shadow · ` or `Report-only · ` prefix, the `| Lane | **N** |` row). The hidden JSON carries
@@ -2389,8 +2393,15 @@ pr-publisher,adapter}.ts`, `@app/core` `laneKnown` hook, ChangeWorkflow step `pu
   run is updated in place: still `in_progress`, no conclusion, no buttons, title "Quick review (Lane 1) so far ·
   walkthrough coming" (Lane 2: "Full review (Lane 2) · walkthrough coming"; it can't rise). A Lane 0 (or blocked)
   classification is never shown early: the walkthrough can only raise the lane, so "success" waits for the
-  final verdict. One extra write per head, no comment. It is its own durable step after classify; a failure is
-  logged and never fails grading; a replaced head's run is never reopened.
+  final verdict. One extra write per head, no comment, no notification. Its own durable step after classify; a
+  failure is logged and never fails grading; a replaced head's run is never reopened.
+- **Writes and notifications per push** (PR subscribers; check-run notifications follow each person's GitHub
+  settings and are the same before and after). Before, first push: 2 notifications (summary comment + review),
+  ~4 writes; each later push: 1 notification (the new review), 13 writes on #2 (≤ 21: check ×2, review, stale
+  body, ≤ 15 stop edits, minimize, summary). After, first push: 1 notification (the summary comment), 4 writes
+  (check ×3, comment); each later push: 0 notifications, 6 writes (check ×3 incl. closing the replaced run,
+  summary ×2: "grading", then the verdict). With the label: +1 notification and ≤ 5 writes per push (review,
+  ≤ 3 stop minimizes, review minimize).
 - **Words in one place** (`terms.ts`), per the user's terminology decision of today: "Auto-merge · Quick review ·
   Full review" with "(Lane N)" as a badge, "Report-only", "walkthrough", the button "Approve change" (id
   `approve_tour` and the `gittifacts/lane` name stay). Reason codes get short phrases there too.
