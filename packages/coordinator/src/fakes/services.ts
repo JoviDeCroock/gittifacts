@@ -25,6 +25,7 @@ import type {
   Reviewer,
   Signer,
   Telemetry,
+  VerifiedFacts,
 } from "../ports.js";
 
 // ---------------------------------------------------------------- clock
@@ -287,7 +288,13 @@ export class FakeReviewer implements Reviewer {
     model?: string | undefined;
   }> = [];
 
-  async judge(input: { plan: Plan | null; diff: ChangeDiff; budget: Budget; model?: string }) {
+  async judge(input: {
+    plan: Plan | null;
+    diff: ChangeDiff;
+    budget: Budget;
+    model?: string;
+    facts?: VerifiedFacts;
+  }) {
     this.judgeCalls.push(structuredClone(input));
     if (this.judgeError !== null) throw this.judgeError;
     return {

@@ -7,6 +7,7 @@ import type { CiStatus, ClassifyResult, TourStatus } from "@app/classifier";
 import type { Change, ChangeDiff, ClaimedCategory, Plan, RepoPolicy, Tour } from "@app/domain";
 import type { EvidenceItem, EvidencePayload, LlmJudgment, SignedEvidence } from "@app/evidence";
 import type { HostCapabilities, LaneVerdict } from "@app/host";
+import type { JudgeFacts } from "@app/tour";
 import type { SealedEvidence } from "./evidence.js";
 import type { ResolvedPolicy } from "./policy.js";
 
@@ -78,7 +79,14 @@ export interface Budget {
 /** The reviewer agent (`@app/tour`), structurally the coordinator's `Reviewer` port. */
 export interface GradeReviewer {
   /** Model judgments about scope/conformance. Raise-only. Never sees the author's summary. */
-  judge(input: { plan: Plan | null; diff: ChangeDiff; budget: Budget; model?: string }): Promise<{
+  judge(input: {
+    plan: Plan | null;
+    diff: ChangeDiff;
+    budget: Budget;
+    model?: string;
+    /** The platform's own facts from the signed evidence (`judgeFactsFrom`). */
+    facts?: JudgeFacts;
+  }): Promise<{
     items: LlmJudgment[];
     costUsd: number;
     budgetExceeded: boolean;

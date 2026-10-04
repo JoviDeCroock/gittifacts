@@ -92,6 +92,17 @@ describe("gradeChange stages", () => {
     expect(out.status === "graded" && out.verdict.lane).toBeGreaterThan(0);
   });
 
+  it("the judge gets the signed evidence's facts: the verified transform and the public-API diff", async () => {
+    const s = SCENARIOS["codemod-rename"]({ lane0Enabled: true });
+    const { input, opts } = gradeSetup(s);
+    const r = reviewer();
+    const { deps } = memoryGradeDeps({ ...opts, reviewer: r });
+    await gradeChange(input, deps);
+    const facts = r.judged[0]?.facts;
+    expect(facts?.transforms.map((t) => t.files.length > 0)).toEqual([true]);
+    expect(facts?.publicApi).toBe("none");
+  });
+
   it("a failed tour reclassifies to Lane 2", async () => {
     const { input, opts } = gradeSetup(SCENARIOS["breaking-api"]());
     const { deps } = memoryGradeDeps({ ...opts, reviewer: reviewer({ tour: "failed" }) });

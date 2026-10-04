@@ -202,6 +202,7 @@ async function runCase(exec: ExecFile, c: CalibrationCase, run: number): Promise
   const out = await reviewer.judge({
     plan: calibrationPlan(c),
     diff: c.diff,
+    ...(c.facts === undefined ? {} : { facts: c.facts }),
     budget: { changeId: `calibration-${c.id}`, limitUsd: 1, spentUsd: 0 },
   });
   const outcomes: Record<string, JudgeOutcome> = {};
@@ -232,7 +233,7 @@ async function runCase(exec: ExecFile, c: CalibrationCase, run: number): Promise
     run,
     outcomes,
     worst,
-    pass: passes(c.expected, worst),
+    pass: passes(c.expected, worst, c.expectNoConcern),
     modelCitations,
     judged,
     downgraded,

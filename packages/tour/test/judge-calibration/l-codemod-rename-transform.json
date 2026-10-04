@@ -1,0 +1,323 @@
+{
+  "id": "codemod-rename-transform",
+  "title": "Rename requireCurrency to toCurrencyCode by running the reviewed codemod",
+  "expected": "in-scope",
+  "expectNoConcern": true,
+  "why": "Every changed file is reproduced byte for byte by the Plan's own codemod re-run on base in a clean sandbox, and the public-API diff found no change: the platform proved all three acceptance criteria. Live on GitHub (fixture-lib #16, 2026-10-04) the judge answered unsure because it was given neither fact.",
+  "plan": {
+    "title": "Rename requireCurrency to toCurrencyCode",
+    "intent": "requireCurrency reads like a guard but actually narrows and returns a CurrencyCode. Rename it to toCurrencyCode everywhere by running the already-reviewed rename-helper codemod, with no hand edits.",
+    "acceptanceCriteria": [
+      "Head equals the output of node .platform/transforms/rename-helper.mjs run on base, byte for byte",
+      "No occurrences of requireCurrency remain",
+      "The public API (dist/index.d.ts) is unchanged"
+    ],
+    "outOfScope": ["Any hand-written edits", "Renaming exported functions"],
+    "riskDeclarations": [],
+    "scopePaths": ["src/**"],
+    "affectedRoutes": []
+  },
+  "facts": {
+    "transforms": [
+      {
+        "name": "rename-helper.mjs",
+        "command": "node .platform/transforms/rename-helper.mjs",
+        "files": ["src/format.ts", "src/internal/currency.ts", "src/money.ts"]
+      }
+    ],
+    "publicApi": "none"
+  },
+  "diff": {
+    "baseSha": "1111111111111111111111111111111111111111",
+    "headSha": "2222222222222222222222222222222222222222",
+    "files": [
+      {
+        "path": "src/format.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 2,
+        "deletions": 2,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -1,4 +1,4 @@",
+            "oldStart": 1,
+            "oldLines": 4,
+            "newStart": 1,
+            "newLines": 4,
+            "lines": [
+              {
+                "kind": "del",
+                "oldNo": 1,
+                "newNo": null,
+                "text": "import { minorDigits, requireCurrency } from \"./internal/currency.js\";"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 1,
+                "text": "import { minorDigits, toCurrencyCode } from \"./internal/currency.js\";"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 2,
+                "newNo": 2,
+                "text": "import { type Money, money } from \"./money.js\";"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 3,
+                "newNo": 3,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 4,
+                "newNo": 4,
+                "text": "/**"
+              }
+            ]
+          },
+          {
+            "header": "@@ -27,7 +27,7 @@",
+            "oldStart": 27,
+            "oldLines": 7,
+            "newStart": 27,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 27,
+                "newNo": 27,
+                "text": "    throw new SyntaxError(`parseMoney: expected \"<amount> <CODE>\", got \"${input}\"`);"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 28,
+                "newNo": 28,
+                "text": "  }"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 29,
+                "newNo": 29,
+                "text": "  const [, minus = \"\", whole = \"\", fraction = \"\", code = \"\"] = match;"
+              },
+              {
+                "kind": "del",
+                "oldNo": 30,
+                "newNo": null,
+                "text": "  const currency = requireCurrency(code);"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 30,
+                "text": "  const currency = toCurrencyCode(code);"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 31,
+                "newNo": 31,
+                "text": "  const digits = minorDigits(currency);"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 32,
+                "newNo": 32,
+                "text": "  if (fraction.length > digits) {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 33,
+                "newNo": 33,
+                "text": "    throw new RangeError(`parseMoney: ${currency} has ${digits} decimal places, got \"${fraction}\"`);"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      },
+      {
+        "path": "src/internal/currency.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -11,7 +11,7 @@",
+            "oldStart": 11,
+            "oldLines": 7,
+            "newStart": 11,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 11,
+                "newNo": 11,
+                "text": "};"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 12,
+                "newNo": 12,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 13,
+                "newNo": 13,
+                "text": "/** Narrows an untrusted string to a supported currency code, or throws. */"
+              },
+              {
+                "kind": "del",
+                "oldNo": 14,
+                "newNo": null,
+                "text": "export function requireCurrency(code: string): CurrencyCode {"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 14,
+                "text": "export function toCurrencyCode(code: string): CurrencyCode {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 15,
+                "newNo": 15,
+                "text": "  if (!Object.hasOwn(MINOR_DIGITS, code)) {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 16,
+                "newNo": 16,
+                "text": "    throw new RangeError(`unsupported currency \"${code}\"`);"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 17,
+                "newNo": 17,
+                "text": "  }"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      },
+      {
+        "path": "src/money.ts",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 2,
+        "deletions": 2,
+        "binary": false,
+        "transformVerified": false,
+        "hunks": [
+          {
+            "header": "@@ -1,4 +1,4 @@",
+            "oldStart": 1,
+            "oldLines": 4,
+            "newStart": 1,
+            "newLines": 4,
+            "lines": [
+              {
+                "kind": "del",
+                "oldNo": 1,
+                "newNo": null,
+                "text": "import { assertSameCurrency, requireCurrency } from \"./internal/currency.js\";"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 1,
+                "text": "import { assertSameCurrency, toCurrencyCode } from \"./internal/currency.js\";"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 2,
+                "newNo": 2,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 3,
+                "newNo": 3,
+                "text": "/** ISO 4217 codes this library knows how to format and allocate. */"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 4,
+                "newNo": 4,
+                "text": "export type CurrencyCode = \"EUR\" | \"USD\" | \"GBP\" | \"JPY\";"
+              }
+            ]
+          },
+          {
+            "header": "@@ -17,7 +17,7 @@",
+            "oldStart": 17,
+            "oldLines": 7,
+            "newStart": 17,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "ctx",
+                "oldNo": 17,
+                "newNo": 17,
+                "text": "  if (!Number.isSafeInteger(amount)) {"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 18,
+                "newNo": 18,
+                "text": "    throw new RangeError(`money: amount must be an integer number of minor units, got ${amount}`);"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 19,
+                "newNo": 19,
+                "text": "  }"
+              },
+              {
+                "kind": "del",
+                "oldNo": 20,
+                "newNo": null,
+                "text": "  return { amount, currency: requireCurrency(currency) };"
+              },
+              {
+                "kind": "add",
+                "oldNo": null,
+                "newNo": 20,
+                "text": "  return { amount, currency: toCurrencyCode(currency) };"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 21,
+                "newNo": 21,
+                "text": "}"
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 22,
+                "newNo": 22,
+                "text": ""
+              },
+              {
+                "kind": "ctx",
+                "oldNo": 23,
+                "newNo": 23,
+                "text": "/** Adds two amounts of the same currency. */"
+              }
+            ]
+          }
+        ],
+        "truncated": false
+      }
+    ],
+    "additions": 5,
+    "deletions": 5
+  }
+}

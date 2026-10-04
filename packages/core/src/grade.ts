@@ -14,6 +14,7 @@ import { type ClassifyResult, classify, type TourStatus } from "@app/classifier"
 import { diffStatsOf, Tour } from "@app/domain";
 import type { EvidenceItem } from "@app/evidence";
 import { evidenceNoteDegradation, type LaneVerdict, routeVerdict } from "@app/host";
+import { judgeFactsFrom } from "@app/tour";
 import {
   assembleEvidence,
   erroredJudgment,
@@ -107,11 +108,17 @@ export async function gradeChange<R extends EvidenceReport>(
         if (spentUsd >= limitUsd) {
           return { sealed: null, budgetExceeded: true, costUsd: 0, judgments: 0 };
         }
-        const [plan, diff] = await Promise.all([data.plan(), data.diff()]);
+        const [plan, diff, evidence] = await Promise.all([
+          data.plan(),
+          data.diff(),
+          data.evidence(),
+        ]);
         if (diff === null) throw new Error("diff missing");
         const out = await deps.reviewer.judge({
           plan,
           diff,
+          // Only what the signed evidence proves (a verified transform, the public-API diff).
+          facts: judgeFactsFrom(evidence?.items ?? []),
           budget: { changeId, limitUsd, spentUsd },
           model: policy.ai.reviewerModel,
         });

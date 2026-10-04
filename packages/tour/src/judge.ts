@@ -21,6 +21,7 @@ import {
 } from "./budget.js";
 import { renderDiff } from "./diff.js";
 import { applyCitationRule } from "./judge-citations.js";
+import { type JudgeFacts, NO_FACTS } from "./judge-facts.js";
 import { type LlmClient, LlmError, type LlmResponse, parseJsonLoose } from "./llm.js";
 import { buildJudgeUserPrompt, JUDGE_PROMPT_VERSION, JUDGE_SYSTEM_PROMPT } from "./prompt.js";
 import { hasRisk, rankHunks } from "./rank.js";
@@ -36,6 +37,8 @@ export interface JudgeInput {
   plan: Plan | null;
   diff: ChangeDiff;
   budget: ReviewerBudget;
+  /** What the platform verified itself (judge-facts.ts); absent: nothing verified. */
+  facts?: JudgeFacts;
 }
 
 export interface CallRecord {
@@ -153,6 +156,8 @@ export function parseJudgments(
   return out;
 }
 
+const normalizeFactPath = (p: string) => p.replace(/^\.\//, "");
+
 export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<JudgeResult> {
   const { client } = deps;
   const tracker = new BudgetTracker(input.budget);
@@ -189,9 +194,16 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
     calls,
   });
 
-  // Files a verified transform reproduced are listed by path only.
-  const transformed = input.diff.files.filter((f) => f.transformVerified).map((f) => f.path);
-  const reviewDiff = { ...input.diff, files: input.diff.files.filter((f) => !f.transformVerified) };
+  // Files a verified transform reproduced are listed by path only: marked on the diff, or named
+  // by a verified transform in the facts (path or rename source, as the tour collapses them).
+  const facts = input.facts ?? NO_FACTS;
+  const byTransform = new Set(facts.transforms.flatMap((t) => t.files.map(normalizeFactPath)));
+  const reproduced = (f: ChangeDiff["files"][number]) =>
+    f.transformVerified ||
+    (byTransform.has(normalizeFactPath(f.path)) &&
+      (f.previousPath == null || byTransform.has(normalizeFactPath(f.previousPath))));
+  const transformed = input.diff.files.filter(reproduced).map((f) => f.path);
+  const reviewDiff = { ...input.diff, files: input.diff.files.filter((f) => !reproduced(f)) };
   const ranking = rankHunks({ diff: reviewDiff, evidence: [], plan: input.plan });
   const slots = ranking.map((r) => ({
     path: r.path,
@@ -208,7 +220,12 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
   const overhead =
     estimateTokens(
       JUDGE_SYSTEM_PROMPT +
-        buildJudgeUserPrompt({ plan: input.plan, diffText: transformedNote, questions: asked }),
+        buildJudgeUserPrompt({
+          plan: input.plan,
+          diffText: transformedNote,
+          questions: asked,
+          facts,
+        }),
     ) + ESTIMATE_PAD_TOKENS;
   const affordable = affordableInputTokens(
     tracker.remainingUsd,
@@ -229,6 +246,25 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
   let diffText = rendered.text + transformedNote;
   if (rendered.omitted.length > 0 || rendered.partial.length > 0) {
     diffText += `\n\n(${rendered.omitted.length + rendered.partial.length} hunk(s) were omitted or cut short to fit the budget; answer "unsure" where that matters.)`;
+  } else if (transformed.length > 0) {
+    // When the hand-written hunks fit whole and room is left, the transform's own output is shown
+    // too, for reference: criteria about its content ("no occurrence remains") can then be checked
+    // instead of left "unsure". Only whole: a partial reference would invite guesses. Citations
+    // still count only for hand-written hunks (a concern about the output becomes "unsure").
+    const outputDiff = { ...input.diff, files: input.diff.files.filter(reproduced) };
+    const outputSlots = rankHunks({ diff: outputDiff, evidence: [], plan: input.plan }).map(
+      (r) => ({
+        path: r.path,
+        hunkIndex: r.hunkIndex,
+        rank: r.rank,
+        hasRisk: hasRisk(r),
+      }),
+    );
+    const room = diffBudget - rendered.tokens;
+    const output = renderDiff(outputDiff, outputSlots, room);
+    if (output.omitted.length === 0 && output.partial.length === 0 && output.tokens <= room) {
+      diffText = `${rendered.text}\n\n(${transformed.length} file(s) below were reproduced byte-for-byte by a verified transform. They are the transform's output, shown for reference so you can check the plan's criteria about it; they are not hand-written hunks and cannot be cited.)\n\n${output.text}`;
+    }
   }
 
   const req = {
@@ -236,7 +272,7 @@ export async function runJudge(input: JudgeInput, deps: JudgeDeps): Promise<Judg
     messages: [
       {
         role: "user" as const,
-        content: buildJudgeUserPrompt({ plan: input.plan, diffText, questions: asked }),
+        content: buildJudgeUserPrompt({ plan: input.plan, diffText, questions: asked, facts }),
       },
     ],
     jsonSchema: { name: "judgments", schema: JUDGE_JSON_SCHEMA },

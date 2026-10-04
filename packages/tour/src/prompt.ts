@@ -8,6 +8,7 @@
  */
 import type { LaneReason, Plan } from "@app/domain";
 import { type EvidenceItem, stripAnsi } from "@app/evidence";
+import type { JudgeFacts } from "./judge-facts.js";
 import type { RankedHunk } from "./rank.js";
 import { JUDGE_JSON_SCHEMA, type JudgeQuestion, TOUR_JSON_SCHEMA } from "./schema.js";
 
@@ -355,11 +356,13 @@ export function buildRetryPrompt(problems: string): string {
  * from {@link PROMPT_VERSION} (the tour's) since 2026-10-02: the two prompts change independently.
  * Sent as the `prompt` gateway metadata of every judge call.
  */
-export const JUDGE_PROMPT_VERSION = "judge-2026-10-02.1";
+export const JUDGE_PROMPT_VERSION = "judge-2026-10-04.1";
 
 export interface JudgePromptInput {
   plan: Plan | null;
   diffText: string;
+  /** What the platform verified itself; rendered as <verified> when there is any. */
+  facts?: JudgeFacts;
   /** Questions to ask the model (without a plan only hidden-behavior-change is asked). */
   questions: readonly JudgeQuestion[];
 }
@@ -414,14 +417,49 @@ const PLANNED_CHECK =
 const PLANLESS_NOTE =
   'No plan is attached, so only hidden behavior is judged: any change to runtime behavior counts as not stated by a plan; pure refactors, renames, formatting, comments, tests and docs do not. A "concern" still needs a citation: file and hunk number from <diff>, planBasis "not-in-plan" and planQuote null.';
 
+const PUBLIC_API_FACT: Record<"none" | "additive" | "breaking", string> = {
+  none: "no exported declaration was added, removed or changed: the public API is unchanged.",
+  additive: "exported declarations were only added; none was removed or changed.",
+  breaking: "an exported declaration was removed or changed: the public API changed incompatibly.",
+};
+
+/**
+ * The platform's own facts (signed evidence, never the author's words). Only present facts are
+ * shown, so a change without any gets exactly the prompt it got before.
+ */
+function renderVerified(facts: JudgeFacts | undefined): string | null {
+  if (facts === undefined) return null;
+  const lines: string[] = [];
+  for (const t of facts.transforms) {
+    const files =
+      t.files.slice(0, 20).join(", ") +
+      (t.files.length > 20 ? `, and ${t.files.length - 20} more` : "");
+    lines.push(
+      `- Transform ${t.name} (\`${t.command}\`) was re-run on the base commit in a clean sandbox and reproduced these head files byte for byte: ${files}. The head of those files IS that transform's output.`,
+    );
+  }
+  if (facts.publicApi !== null) {
+    lines.push(
+      `- Public-API diff (the package's declarations compared at base and head): ${PUBLIC_API_FACT[facts.publicApi]}`,
+    );
+  }
+  if (lines.length === 0) return null;
+  return `<verified>
+The platform established these facts itself by running code; they are not the author's claims. An acceptance criterion that one of them proves is met: answer it as addressed, not "unsure". They prove only what they say: the transform proves where those files' content came from, not that the transform does what the plan intends, and they say nothing about other files.
+${neutralize(lines.join("\n"))}
+</verified>`;
+}
+
 export function buildJudgeUserPrompt(input: JudgePromptInput): string {
   const lead =
     input.plan === null
       ? "There is no approved plan for this change."
       : "The approved plan comes first. Read it before the diff: the diff is judged against it.";
+  const verified = renderVerified(input.facts);
   return [
     lead,
     renderPlan(input.plan),
+    ...(verified === null ? [] : [verified]),
     `<diff>\n${neutralize(input.diffText === "" ? "(no reviewable hunks)" : input.diffText)}\n</diff>`,
     `Questions (answer each exactly once):\n${input.questions.map((q) => `- ${QUESTION_TEXT[q]}`).join("\n")}`,
     input.plan === null ? PLANLESS_NOTE : PLANNED_CHECK,

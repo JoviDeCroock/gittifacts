@@ -1,6 +1,7 @@
-import { LlmJudgment } from "@app/evidence";
+import { type EvidenceItem, LlmJudgment } from "@app/evidence";
 import { describe, expect, it } from "vitest";
 import { judgmentId, parseJudgments } from "../src/judge.js";
+import { judgeFactsFrom } from "../src/judge-facts.js";
 import { FakeLlmClient, LlmError } from "../src/llm.js";
 import { JUDGE_PROMPT_VERSION } from "../src/prompt.js";
 import { createReviewer } from "../src/tour.js";
@@ -188,7 +189,7 @@ describe("reviewer.judge", () => {
     expect(limited.budgetExceeded).toBe(true);
   });
 
-  it("lists verified-transform files by path only", async () => {
+  it("shows verified-transform output after the hand-written hunks, labelled as reference", async () => {
     const client = new FakeLlmClient([{ json: { judgments: [] } }]);
     const diff = diffOf([
       file(
@@ -205,9 +206,196 @@ describe("reviewer.judge", () => {
     ]);
     await createReviewer(client).judge({ plan: plan(), diff, budget });
     const prompt = client.requests[0]!.messages[0]!.content;
-    expect(prompt).not.toContain("GENERATED");
-    expect(prompt).toContain("src/gen.ts");
+    // Hand-written hunks first; the transform's output after them, labelled, as reference.
     expect(prompt).toContain("export const real = 1;");
+    expect(prompt).toContain("reproduced byte-for-byte by a verified transform");
+    expect(prompt).toContain("cannot be cited");
+    expect(prompt.indexOf("export const real = 1;")).toBeLessThan(prompt.indexOf("GENERATED"));
+  });
+});
+
+describe("reviewer.judge with the platform's verified facts", () => {
+  const twoFiles = () =>
+    diffOf([
+      file("src/gen.ts", [
+        hunk(1, 1, [
+          ["-", "old GENERATED"],
+          ["+", "new GENERATED"],
+        ]),
+      ]),
+      file("src/real.ts", [hunk(1, 1, [["+", "export const real = 1;"]])]),
+    ]);
+
+  it("hides the files a verified transform reproduced and states both facts", async () => {
+    const client = new FakeLlmClient([{ json: { judgments: [] } }]);
+    await createReviewer(client).judge({
+      plan: plan(),
+      diff: twoFiles(),
+      budget,
+      facts: {
+        transforms: [
+          {
+            name: "gen.mjs",
+            command: "node .platform/transforms/gen.mjs",
+            files: ["./src/gen.ts"],
+          },
+        ],
+        publicApi: "none",
+      },
+    });
+    const prompt = client.requests[0]!.messages[0]!.content;
+    expect(prompt).toContain("export const real = 1;");
+    expect(prompt).toContain("they are not hand-written hunks and cannot be cited");
+    expect(prompt).toContain("<verified>");
+    expect(prompt).toMatch(
+      /Transform gen\.mjs .* reproduced these head files byte for byte: \.\/src\/gen\.ts/,
+    );
+    expect(prompt).toContain("the public API is unchanged");
+    expect(prompt).toContain("not the author's claims");
+  });
+
+  it("without facts (or with none) the prompt is the one it always was", async () => {
+    const a = new FakeLlmClient([{ json: { judgments: [] } }]);
+    const b = new FakeLlmClient([{ json: { judgments: [] } }]);
+    await createReviewer(a).judge({ plan: plan(), diff: twoFiles(), budget });
+    await createReviewer(b).judge({
+      plan: plan(),
+      diff: twoFiles(),
+      budget,
+      facts: { transforms: [], publicApi: null },
+    });
+    const pa = a.requests[0]!.messages[0]!.content;
+    expect(pa).not.toContain("<verified>");
+    expect(pa).toContain("GENERATED");
+    expect(b.requests[0]!.messages[0]!.content).toBe(pa);
+  });
+
+  it("a transform output that doesn't fit whole is listed by path only", async () => {
+    const client = new FakeLlmClient([{ json: { judgments: [] } }]);
+    const big = Array.from(
+      { length: 400 },
+      (_, i) => ["+", `export const GENERATED_${i} = ${i};`] as ["+", string],
+    );
+    const diff = diffOf([
+      file("src/gen.ts", [hunk(1, 1, big)]),
+      file("src/real.ts", [hunk(1, 1, [["+", "export const real = 1;"]])]),
+    ]);
+    await createReviewer(client, { diffTokenBudget: { judge: 600 } }).judge({
+      plan: plan(),
+      diff,
+      budget,
+      facts: {
+        transforms: [{ name: "gen", command: "node gen.mjs", files: ["src/gen.ts"] }],
+        publicApi: null,
+      },
+    });
+    const prompt = client.requests[0]!.messages[0]!.content;
+    expect(prompt).not.toContain("GENERATED_");
+    expect(prompt).toContain(
+      "reproduced byte-for-byte by a verified transform are not shown: src/gen.ts",
+    );
+  });
+
+  it("a concern citing only the transform's output is not a concern (it becomes unsure)", async () => {
+    const client = new FakeLlmClient([
+      {
+        json: {
+          judgments: [
+            {
+              question: "hidden-behavior-change",
+              outcome: "concern",
+              rationale: "gen.ts changes a constant.",
+              citations: [
+                {
+                  file: "src/gen.ts",
+                  hunk: 1,
+                  behavior: "changes a constant",
+                  planBasis: "not-in-plan",
+                  planQuote: null,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    const out = await createReviewer(client).judge({
+      plan: plan(),
+      diff: twoFiles(),
+      budget,
+      facts: {
+        transforms: [{ name: "gen", command: "node gen.mjs", files: ["src/gen.ts"] }],
+        publicApi: null,
+      },
+    });
+    expect(out.items.find((i) => i.question === "hidden-behavior-change")?.outcome).toBe("unsure");
+  });
+
+  it("a renamed file is hidden only when the transform also names its old path", async () => {
+    const client = new FakeLlmClient([{ json: { judgments: [] } }]);
+    const diff = diffOf([
+      file("src/new.ts", [hunk(1, 1, [["+", "RENAMED BODY"]])], { previousPath: "src/old.ts" }),
+    ]);
+    await createReviewer(client).judge({
+      plan: plan(),
+      diff,
+      budget,
+      facts: {
+        transforms: [{ name: "t", command: "node t.mjs", files: ["src/new.ts"] }],
+        publicApi: null,
+      },
+    });
+    expect(client.requests[0]!.messages[0]!.content).toContain("RENAMED BODY");
+  });
+});
+
+describe("judgeFactsFrom (signed evidence → facts)", () => {
+  const base = {
+    status: "ok" as const,
+    producer: "test",
+    producerVersion: "1",
+    subject: { sha: "b".repeat(40) },
+  };
+  it("keeps only verified, fully matching transforms and an ok public-API diff", () => {
+    const items = [
+      {
+        ...base,
+        id: "transform:a",
+        kind: "transform",
+        transform: "a",
+        command: "node a",
+        verified: true,
+        files: ["src/a.ts"],
+        mismatchedFiles: [],
+      },
+      {
+        ...base,
+        id: "transform:b",
+        kind: "transform",
+        transform: "b",
+        command: "node b",
+        verified: false,
+        files: ["src/b.ts"],
+        mismatchedFiles: [],
+      },
+      {
+        ...base,
+        id: "transform:c",
+        kind: "transform",
+        transform: "c",
+        command: "node c",
+        verified: true,
+        files: ["src/c.ts"],
+        mismatchedFiles: ["src/c.ts"],
+      },
+      { ...base, id: "public-api", kind: "public-api", classification: "none", packages: [] },
+    ] as unknown as EvidenceItem[];
+    expect(judgeFactsFrom(items)).toEqual({
+      transforms: [{ name: "a", command: "node a", files: ["src/a.ts"] }],
+      publicApi: "none",
+    });
+    const errored = items.map((i) => ({ ...i, status: "error" })) as unknown as EvidenceItem[];
+    expect(judgeFactsFrom(errored)).toEqual({ transforms: [], publicApi: null });
   });
 });
 

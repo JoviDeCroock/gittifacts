@@ -61,10 +61,12 @@ export function tourFor(changeId: string, headSha: string, evidence: SignedEvide
 
 export function reviewer(
   opts: { judgeError?: Error; tour?: "ok" | "failed" } = {},
-): GradeReviewer & { tours: number } {
+): GradeReviewer & { tours: number; judged: Parameters<GradeReviewer["judge"]>[0][] } {
   return {
     tours: 0,
-    async judge() {
+    judged: [],
+    async judge(input) {
+      this.judged.push(input);
       if (opts.judgeError !== undefined) throw opts.judgeError;
       return { items: [], costUsd: 0.01, budgetExceeded: false };
     },

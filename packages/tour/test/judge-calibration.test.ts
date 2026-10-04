@@ -43,6 +43,7 @@ async function judgeWith(c: CalibrationCase, answers: Partial<Record<JudgeQuesti
   const result = await createReviewer(client).judge({
     plan: calibrationPlan(c),
     diff: c.diff,
+    ...(c.facts === undefined ? {} : { facts: c.facts }),
     budget,
   });
   for (const item of result.items) expect(LlmJudgment.safeParse(item).success).toBe(true);

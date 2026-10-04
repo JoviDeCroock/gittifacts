@@ -318,9 +318,22 @@ export interface Budget {
  * The reviewer agent. `model` is the base policy's `ai.reviewerModel` ("auto" = the platform's
  * routing); implementations pick their model client by it.
  */
+/** What the platform verified itself, from signed evidence (structurally `@app/tour`'s JudgeFacts). */
+export interface VerifiedFacts {
+  transforms: { name: string; command: string; files: string[] }[];
+  publicApi: "none" | "additive" | "breaking" | null;
+}
+
 export interface Reviewer {
   /** Model judgments about scope/conformance. Raise-only signals. Never sees the author's summary. */
-  judge(input: { plan: Plan | null; diff: ChangeDiff; budget: Budget; model?: string }): Promise<{
+  judge(input: {
+    plan: Plan | null;
+    diff: ChangeDiff;
+    budget: Budget;
+    model?: string;
+    /** The platform's own facts the judge may rely on (never the author's claims). */
+    facts?: VerifiedFacts;
+  }): Promise<{
     items: LlmJudgment[];
     costUsd: number;
     budgetExceeded: boolean;

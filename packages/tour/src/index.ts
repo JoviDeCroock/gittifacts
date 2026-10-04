@@ -47,6 +47,7 @@ export {
   quoteInPlan,
   type RuledAnswer,
 } from "./judge-citations.js";
+export { JudgeFacts, judgeFactsFrom, NO_FACTS } from "./judge-facts.js";
 export {
   AiGatewayClient,
   type AiGatewayClientOptions,
