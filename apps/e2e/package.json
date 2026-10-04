@@ -9,7 +9,7 @@
     "serve": "tsx server/serve.ts",
     "gate": "playwright test -c playwright.gate.config.ts",
     "smoke": "playwright test -c playwright.smoke.config.ts",
-    "freshness": "tsx scripts/freshness.ts",
+    "freshness": "bash ../../scripts/check-generated.sh",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {

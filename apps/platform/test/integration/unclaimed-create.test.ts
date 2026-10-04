@@ -349,14 +349,24 @@ describe("per-token request limits (UNCLAIMED_TOKEN_LIMITER)", () => {
   it("the real binding (120/min per token) answers 429 once the minute's budget is spent", async () => {
     const app = platformApp();
     const p = await createUnclaimed(app);
-    let status = 200;
-    // Fixed one-minute window: a boundary mid-loop resets the count, so allow two windows' worth.
-    for (let i = 0; i < 250 && status === 200; i++) {
-      const res = await request(app, "GET", "/api/v1/me", { token: p.token as string });
-      status = res.status;
-      await res.body?.cancel();
+    // The binding counts in fixed one-minute windows, so a sequential loop that straddles a
+    // boundary sees its count reset (it flaked the deploy gate twice). Bursts of 130 concurrent
+    // requests each finish well inside one window; at most one burst can straddle a boundary, so
+    // three bursts always include one that exceeds 120 within a single window.
+    const statuses: number[] = [];
+    for (let burst = 0; burst < 3 && !statuses.includes(429); burst++) {
+      const responses = await Promise.all(
+        Array.from({ length: 130 }, () =>
+          request(app, "GET", "/api/v1/me", { token: p.token as string }),
+        ),
+      );
+      for (const res of responses) {
+        statuses.push(res.status);
+        await res.body?.cancel();
+      }
     }
-    expect(status).toBe(429);
+    expect(statuses).toContain(429);
+    expect(statuses.every((s) => s === 200 || s === 429)).toBe(true);
   });
 });
 
