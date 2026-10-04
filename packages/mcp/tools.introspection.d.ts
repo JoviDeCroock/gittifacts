@@ -565,13 +565,13 @@ export type introspection = {
       }
     },
     /**
-     * Create a project
-     * One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). Without credentials it creates an unclaimed project and returns its token. Reconnect with `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this project's tools are unavailable without it.
-     * @param args.name Project (and repo) name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>.
-     * @param args.template Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty project.
+     * Create a repo
+     * One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push token for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). Without credentials it creates an unclaimed repo and returns its token. Reconnect with `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this repo's tools are unavailable without it.
+     * @param args.name Repo name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>.
+     * @param args.template Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty repo.
      * @param args.from Import a public https git repository (e.g. GitHub) instead of a template.
-     * @param args.importMode Private repos: "push" creates an empty project whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in).
-     * @param args.description One line about the project.
+     * @param args.importMode Private repos: "push" creates an empty repo whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in).
+     * @param args.description One line about the repo.
      * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
      */
     "create_project": {
@@ -582,7 +582,7 @@ export type introspection = {
             "type": "string",
             "minLength": 1,
             "maxLength": 63,
-            "description": "Project (and repo) name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>."
+            "description": "Repo name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>."
           },
           "template": {
             "enum": [
@@ -591,7 +591,7 @@ export type introspection = {
               "ts-library",
               "static-site"
             ],
-            "description": "Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty project."
+            "description": "Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty repo."
           },
           "from": {
             "type": "string",
@@ -604,12 +604,12 @@ export type introspection = {
             "enum": [
               "push"
             ],
-            "description": "Private repos: \"push\" creates an empty project whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in)."
+            "description": "Private repos: \"push\" creates an empty repo whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in)."
           },
           "description": {
             "type": "string",
             "maxLength": 500,
-            "description": "One line about the project."
+            "description": "One line about the repo."
           },
           "idempotencyKey": {
             "type": "string",
@@ -623,9 +623,13 @@ export type introspection = {
       "outputSchema": {
         "type": "object",
         "properties": {
+          "repoId": {
+            "type": "string",
+            "description": "The repo id: pass it as repoId to every other tool."
+          },
           "projectId": {
             "type": "string",
-            "description": "The repo id: use it as repoId in every other tool."
+            "description": "Deprecated: the same value as repoId, kept for older clients."
           },
           "name": {
             "type": "string"
@@ -640,7 +644,7 @@ export type introspection = {
             "type": "string"
           },
           "remote": {
-            "description": "Push grant for your first Change's fork (changeId), at the initial commit: clone or push there right away. Null if the fork could not be made; call start_change.",
+            "description": "Push token for your first Change's fork (changeId), at the initial commit: clone or push there right away. Null if the fork could not be made; call start_change.",
             "anyOf": [
               {
                 "type": "null"
@@ -683,7 +687,7 @@ export type introspection = {
               "string",
               "null"
             ],
-            "description": "Bearer token for this project when you called without credentials (unclaimed projects); null when you are already authenticated. Reconnect with Authorization: Bearer <token> before any other call."
+            "description": "Bearer token for this repo when you called without credentials (unclaimed repos); null when you are already authenticated. Reconnect with Authorization: Bearer <token> before any other call."
           },
           "mcpUrl": {
             "type": "string"
@@ -693,7 +697,7 @@ export type introspection = {
               "string",
               "null"
             ],
-            "description": "Live preview of the main branch (serves a 'building' page until the first CI run is green). Null when the project has nothing to preview."
+            "description": "Live preview of the main branch (serves a 'building' page until the first CI run is green). Null when the repo has nothing to preview."
           },
           "claimUrl": {
             "type": [
@@ -1005,7 +1009,7 @@ export type introspection = {
     },
     /**
      * Enqueue a Change for merge
-     * Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode). It never skips review: an unapproved Change is registered and joins once approved (Lane 0 joins automatically). Returns position, track, ETA and the predicted pass probability.
+     * Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode). It never skips review: an unapproved Change is registered and joins once approved (an auto-merge Change, Lane 0, joins by itself). Returns position, track, ETA and the predicted pass probability.
      * @param args.priority Default normal (ranked by lane). incident needs a human or incidentPlanId.
      * @param args.dependsOn Changes this one is stacked on (they land first).
      * @param args.landTogether Plan-group members merge in one CAS or not at all.
@@ -1445,7 +1449,7 @@ export type introspection = {
               "string",
               "null"
             ],
-            "description": "The live preview of the current head once it answers (null before that, or when the project has no preview)."
+            "description": "The live preview of the current head once it answers (null before that, or when the repo has no preview)."
           },
           "nextSteps": {
             "type": "array",
@@ -1587,8 +1591,8 @@ export type introspection = {
       }
     },
     /**
-     * Get the review tour
-     * The reviewer agent's guided tour of the change (what a human will read): stops with verdicts, least-confident points and what was not done.
+     * Get the review walkthrough
+     * The walkthrough (the tour) a second reviewer agent wrote for the change, what a human will read: stops with verdicts, least-confident points and what was not done.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      */
     "get_tour": {
@@ -1710,7 +1714,7 @@ export type introspection = {
           },
           "stale": {
             "type": "boolean",
-            "description": "True when the tour was written for an older head; a new one follows the latest push."
+            "description": "True when the walkthrough was written for an older head; a new one follows the latest push."
           }
         },
         "required": [
@@ -1886,7 +1890,7 @@ export type introspection = {
     },
     /**
      * List repos
-     * Repos you can read, with open changes per lane and whether Lane 0 (auto-merge) is on.
+     * Repos you can read, with open changes per lane and whether auto-merge (Lane 0) is on or still calibrating.
      */
     "list_repos": {
       "inputSchema": {
@@ -3045,7 +3049,7 @@ export type introspection = {
     },
     /**
      * Refresh the push token
-     * A fresh short-lived push grant for your change's fork (author only). Use it when the old token expired.
+     * A fresh short-lived push token for your change's fork (author only). Use it when the old token expired.
      */
     "refresh_push_token": {
       "inputSchema": {
@@ -3067,7 +3071,7 @@ export type introspection = {
         "properties": {
           "remote": {
             "type": "object",
-            "description": "Push grant for the change's fork only. Short-lived; refresh with refresh_push_token.",
+            "description": "Push token for the change's fork only. Short-lived; refresh with refresh_push_token.",
             "properties": {
               "url": {
                 "type": "string"
@@ -3463,7 +3467,7 @@ export type introspection = {
     },
     /**
      * Re-run CI
-     * Repeats CI, evidence, the lane and the tour on the change's current head, without a push (a flaky step). Author, its owner or a maintainer; only while the change is running, failing or awaiting review.
+     * Repeats CI, evidence, the lane and the walkthrough on the change's current head, without a push (a flaky step). Author, its owner or a maintainer; only while the change is running, failing or awaiting review.
      * @param args.reason Why (recorded in the change's audit log).
      * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
      */
@@ -3730,10 +3734,10 @@ export type introspection = {
     },
     /**
      * Start a change
-     * Fork the repo for one change and get a short-lived push grant for that fork only. Push commits there; CI, evidence and the lane follow automatically.
+     * Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically.
      * @param args.planId The approved plan this change implements.
      * @param args.category Your claim; it can only raise risk, never lower it.
-     * @param args.idempotencyKey Optional. Retrying with the same key returns the same change with a fresh push grant.
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the same change with a fresh push token.
      */
     "start_change": {
       "inputSchema": {
@@ -3780,7 +3784,7 @@ export type introspection = {
             "type": "string",
             "minLength": 1,
             "maxLength": 200,
-            "description": "Optional. Retrying with the same key returns the same change with a fresh push grant."
+            "description": "Optional. Retrying with the same key returns the same change with a fresh push token."
           }
         },
         "required": [
@@ -3929,7 +3933,7 @@ export type introspection = {
           },
           "remote": {
             "type": "object",
-            "description": "Push grant for the change's fork only. Short-lived; refresh with refresh_push_token.",
+            "description": "Push token for the change's fork only. Short-lived; refresh with refresh_push_token.",
             "properties": {
               "url": {
                 "type": "string"
@@ -3994,7 +3998,7 @@ export type introspection = {
     },
     /**
      * Wait for a change
-     * Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a bootstrap Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the tour is written); tour_ready = the tour is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. On timeout call again, after retryAfterSec when it is set.
+     * Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. On timeout call again, after retryAfterSec when it is set.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      * @param args.timeoutSec Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached.
      */
@@ -4512,7 +4516,7 @@ export type introspection = {
     },
     /**
      * Who am I
-     * Your principal, scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.
+     * Who you are (your actor: principalId, kind, owner), scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.
      */
     "whoami": {
       "inputSchema": {
@@ -4657,7 +4661,7 @@ export type introspection = {
     },
     /**
      * Commit and push the workspace
-     * Commits every change in the workspace (as you) and pushes it to the Change's fork branch. That push starts CI, evidence, the lane and the tour, exactly like a git push.
+     * Commits every change in the workspace (as you) and pushes it to the Change's fork branch. That push starts CI, evidence, the lane and the walkthrough, exactly like a git push.
      * @param args.workspaceId From open_workspace.
      * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
      */
@@ -4867,7 +4871,7 @@ export type introspection = {
      * @param args.workspaceId From open_workspace.
      * @param args.command A shell command (sh -c), run as the unprivileged runner user.
      * @param args.cwd Working directory relative to the repository root.
-     * @param args.timeoutSec Default 120. Capped by the project's quota; keep it under your client's request timeout and background long jobs (nohup … &).
+     * @param args.timeoutSec Default 120. Capped by the repo's quota; keep it under your client's request timeout and background long jobs (nohup … &).
      * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
      */
     "ws_exec": {
@@ -4897,7 +4901,7 @@ export type introspection = {
             "type": "integer",
             "minimum": 1,
             "maximum": 1800,
-            "description": "Default 120. Capped by the project's quota; keep it under your client's request timeout and background long jobs (nohup … &)."
+            "description": "Default 120. Capped by the repo's quota; keep it under your client's request timeout and background long jobs (nohup … &)."
           },
           "idempotencyKey": {
             "type": "string",

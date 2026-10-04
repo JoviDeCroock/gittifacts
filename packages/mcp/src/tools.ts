@@ -188,7 +188,7 @@ export function changeNextSteps(c: Change, runs: readonly PipelineRun[] = []): N
       return [
         {
           title: "The first CI run failed: read the failing step",
-          why: "This is the project's own pipeline on its initial commit; fix it in a Change.",
+          why: "This is the repo's own pipeline on its initial commit; fix it in a Change.",
           call: `get_change_status({ changeId: "${id}" })`,
         },
         rerun,
@@ -206,7 +206,7 @@ export function changeNextSteps(c: Change, runs: readonly PipelineRun[] = []): N
       ];
     case "running":
       // Follow the milestones the current head has already passed.
-      if (c.lane !== null) return [wait("tour_ready", "Lane assigned: wait for the tour")];
+      if (c.lane !== null) return [wait("tour_ready", "Lane assigned: wait for the walkthrough")];
       if (c.evidenceId !== null) return [wait("lane_assigned", "Evidence sealed: wait for the lane")];
       return [wait("evidence_ready")];
     case "failing": {
@@ -229,7 +229,7 @@ export function changeNextSteps(c: Change, runs: readonly PipelineRun[] = []): N
     }
     case "awaiting-review":
       return [
-        { title: "Read the tour a human will review", call: `get_tour({ changeId: "${id}" })` },
+        { title: "Read the walkthrough a human will review", call: `get_tour({ changeId: "${id}" })` },
         { title: "Ask a human to review it", call: `request_review({ changeId: "${id}" })` },
       ];
     case "approved":
@@ -300,7 +300,7 @@ const CreateProjectArgs = z
     path: ["from"],
   })
   .refine((v) => v.importMode === undefined || (v.template ?? v.from) === undefined, {
-    message: "importMode push creates an empty project: no template or from",
+    message: "importMode push creates an empty repo: no template or from",
     path: ["importMode"],
   });
 
@@ -308,11 +308,11 @@ export function buildTools(backend: McpBackend) {
   return defineTools([
     {
       name: "create_project",
-      title: "Create a project",
+      title: "Create a repo",
       description:
-        "One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). " +
+        "One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push token for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). " +
         // Same sentence as @app/conventions ANONYMOUS_RECONNECT (tested there).
-        "Without credentials it creates an unclaimed project and returns its token. Reconnect with `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this project's tools are unavailable without it.",
+        "Without credentials it creates an unclaimed repo and returns its token. Reconnect with `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this repo's tools are unavailable without it.",
       inputSchema: CreateProjectInput,
       outputSchema: CreateProjectOutput,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -342,7 +342,7 @@ export function buildTools(backend: McpBackend) {
       name: "whoami",
       title: "Who am I",
       description:
-        "Your principal, scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.",
+        "Who you are (your actor: principalId, kind, owner), scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.",
       inputSchema: EmptyInput,
       outputSchema: WhoamiOutput,
       annotations: READ,
@@ -370,7 +370,7 @@ export function buildTools(backend: McpBackend) {
       name: "list_repos",
       title: "List repos",
       description:
-        "Repos you can read, with open changes per lane and whether Lane 0 (auto-merge) is on.",
+        "Repos you can read, with open changes per lane and whether auto-merge (Lane 0) is on or still calibrating.",
       inputSchema: EmptyInput,
       outputSchema: ListReposOutput,
       annotations: READ,
@@ -459,7 +459,7 @@ export function buildTools(backend: McpBackend) {
       name: "start_change",
       title: "Start a change",
       description:
-        "Fork the repo for one change and get a short-lived push grant for that fork only. Push commits there; CI, evidence and the lane follow automatically.",
+        "Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically.",
       inputSchema: StartChangeInputSchema,
       outputSchema: StartChangeOutput,
       annotations: WRITE,
@@ -560,9 +560,9 @@ export function buildTools(backend: McpBackend) {
     },
     {
       name: "get_tour",
-      title: "Get the review tour",
+      title: "Get the review walkthrough",
       description:
-        "The reviewer agent's guided tour of the change (what a human will read): stops with verdicts, least-confident points and what was not done.",
+        "The walkthrough (the tour) a second reviewer agent wrote for the change, what a human will read: stops with verdicts, least-confident points and what was not done.",
       inputSchema: ChangeRefInput,
       outputSchema: TourOutput,
       annotations: READ,
@@ -630,7 +630,7 @@ export function buildTools(backend: McpBackend) {
       name: "rerun_ci",
       title: "Re-run CI",
       description:
-        "Repeats CI, evidence, the lane and the tour on the change's current head, without a push (a flaky step). Author, its owner or a maintainer; only while the change is running, failing or awaiting review.",
+        "Repeats CI, evidence, the lane and the walkthrough on the change's current head, without a push (a flaky step). Author, its owner or a maintainer; only while the change is running, failing or awaiting review.",
       inputSchema: RerunCiInput,
       outputSchema: RerunCiOutput,
       annotations: WRITE,
@@ -715,7 +715,7 @@ export function buildTools(backend: McpBackend) {
       name: "refresh_push_token",
       title: "Refresh the push token",
       description:
-        "A fresh short-lived push grant for your change's fork (author only). Use it when the old token expired.",
+        "A fresh short-lived push token for your change's fork (author only). Use it when the old token expired.",
       inputSchema: RefreshPushTokenInput,
       outputSchema: RefreshPushTokenOutput,
       annotations: WRITE,
@@ -731,7 +731,7 @@ export function buildTools(backend: McpBackend) {
       name: "wait_for_change",
       title: "Wait for a change",
       description:
-        "Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a bootstrap Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the tour is written); tour_ready = the tour is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. On timeout call again, after retryAfterSec when it is set.",
+        "Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. On timeout call again, after retryAfterSec when it is set.",
       inputSchema: WaitForChangeInput,
       outputSchema: WaitForChangeOutput,
       annotations: READ,

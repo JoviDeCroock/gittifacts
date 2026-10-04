@@ -289,7 +289,7 @@ export const WsExecInput = {
       type: "integer",
       minimum: 1,
       maximum: WS_LIMITS.maxTimeoutSec,
-      description: `Default ${WS_LIMITS.defaultTimeoutSec}. Capped by the project's quota; keep it under your client's request timeout and background long jobs (nohup … &).`,
+      description: `Default ${WS_LIMITS.defaultTimeoutSec}. Capped by the repo's quota; keep it under your client's request timeout and background long jobs (nohup … &).`,
     },
     idempotencyKey,
   },
@@ -527,7 +527,7 @@ export function workspaceToolCalls(ws: Pick<WorkspaceView, "workspaceId">) {
       name: "ws_commit_push",
       call: `ws_commit_push({ workspaceId: ${id}, message: "<what and why>" })`,
       description:
-        "Commit everything and push to the Change's fork: CI, evidence and the tour follow.",
+        "Commit everything and push to the Change's fork: CI, evidence and the walkthrough follow.",
     },
     {
       name: "close_workspace",
@@ -579,7 +579,7 @@ function openNextSteps(v: WorkspaceView) {
       call: `ws_exec({ workspaceId: ${id}, command: "pnpm install --frozen-lockfile", timeoutSec: 300 })`,
       why:
         v.network === "registries-only"
-          ? "This project's sandbox can only reach package registries."
+          ? "This repo's sandbox can only reach package registries."
           : "restoredFrom says whether node_modules is already there.",
     },
     {
@@ -757,7 +757,7 @@ export function workspaceTools(backend: McpBackend, kit: ToolKit) {
       name: "ws_commit_push",
       title: "Commit and push the workspace",
       description:
-        "Commits every change in the workspace (as you) and pushes it to the Change's fork branch. That push starts CI, evidence, the lane and the tour, exactly like a git push.",
+        "Commits every change in the workspace (as you) and pushes it to the Change's fork branch. That push starts CI, evidence, the lane and the walkthrough, exactly like a git push.",
       inputSchema: WsCommitPushInput,
       outputSchema: WsCommitPushOutput,
       annotations: WRITE,
@@ -782,7 +782,7 @@ export function workspaceTools(backend: McpBackend, kit: ToolKit) {
               call: `wait_for_change({ changeId: ${q(r.changeId)}, until: "evidence_ready" })`,
             },
             {
-              title: "Then read the reviewer's tour",
+              title: "Then read the reviewer's walkthrough",
               call: `get_tour({ changeId: ${q(r.changeId)} })`,
             },
           ],

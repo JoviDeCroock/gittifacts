@@ -514,7 +514,7 @@ export function queueNextSteps(changeId: string, e: QueueEntry | null): NextStep
   if (e === null)
     return [
       {
-        title: "Not in the queue: it joins once approved (Lane 0 joins automatically)",
+        title: "Not in the queue: it joins once approved (auto-merge, Lane 0, joins by itself)",
         call: `wait_for_change({ changeId: ${q(changeId)}, until: "merged" })`,
       },
     ];
@@ -659,7 +659,7 @@ export function queueTools(backend: McpBackend, kit: ToolKit) {
       name: "enqueue",
       title: "Enqueue a Change for merge",
       description:
-        "Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode). It never skips review: an unapproved Change is registered and joins once approved (Lane 0 joins automatically). Returns position, track, ETA and the predicted pass probability.",
+        "Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode). It never skips review: an unapproved Change is registered and joins once approved (an auto-merge Change, Lane 0, joins by itself). Returns position, track, ETA and the predicted pass probability.",
       inputSchema: EnqueueInput,
       outputSchema: EnqueueOutput,
       annotations: WRITE,

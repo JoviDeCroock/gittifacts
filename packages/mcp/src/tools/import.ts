@@ -167,13 +167,13 @@ export function proposalNextSteps(p: ProposalView) {
   }
   const steps: Array<{ title: string; call?: string; why?: string }> = [
     {
-      title: "A human approves the Plan and reviews the Change (Lane 2: it changes .platform/**)",
+      title: "A human approves the Plan and reviews the Change (full review, Lane 2: it changes .platform/**)",
       why: "You can't approve either; the proposal lists every guess detection made as a risk.",
     },
   ];
   if (p.changeId !== null) {
     steps.push({
-      title: "Follow the proposal's CI run and tour",
+      title: "Follow the proposal's CI run and walkthrough",
       call: `wait_for_change({ changeId: ${q(p.changeId)}, until: "tour_ready" })`,
     });
   }

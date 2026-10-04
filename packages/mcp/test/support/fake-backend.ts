@@ -154,6 +154,7 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
     async createProject(_caller, input, opts) {
       calls.push(`createProject:${opts.idempotencyKey ?? "-"}`);
       return {
+        repoId: repo.id,
         projectId: repo.id,
         name: input.name ?? "app",
         template: input.template ?? null,

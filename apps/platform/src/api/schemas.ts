@@ -108,7 +108,7 @@ export const GitRemoteSchema = z
     expiresAt: z.string(),
     branch: z.string(),
   })
-  .meta({ id: "GitRemote", description: "Short-lived push grant for the change's fork only." });
+  .meta({ id: "GitRemote", description: "Short-lived push token for the change's fork only." });
 
 export const LaneCountsSchema = z
   .object({

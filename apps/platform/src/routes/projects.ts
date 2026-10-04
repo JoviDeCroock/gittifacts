@@ -29,7 +29,8 @@ const NextStepSchema = z.object({
 
 export const ProjectCreatedSchema = z
   .object({
-    projectId: z.string().describe("The repo id: use it as repoId everywhere else"),
+    repoId: z.string().optional().describe("The repo id: pass it as repoId everywhere else (always set since 2026-10-04)"),
+    projectId: z.string().describe("Deprecated: the same value as repoId, kept for older clients"),
     name: z.string(),
     template: z.string().nullable(),
     defaultBranch: z.string(),
@@ -43,7 +44,7 @@ export const ProjectCreatedSchema = z
         changeId: z.string(),
       })
       .nullable()
-      .describe("Push grant for your first Change's fork (at the initial commit)"),
+      .describe("Push token for your first Change's fork (at the initial commit)"),
     token: z
       .string()
       .nullable()

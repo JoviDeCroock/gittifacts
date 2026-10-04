@@ -241,6 +241,7 @@ export async function createProjectAs(
   );
 
   return {
+    repoId: repo.id,
     projectId: repo.id,
     name: repo.name,
     template,

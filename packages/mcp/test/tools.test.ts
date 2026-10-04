@@ -103,6 +103,7 @@ describe("gittifacts MCP tools", () => {
     if (r.isError) throw new Error(JSON.stringify(r.content));
     expectTypeOf(r.structuredContent.previewUrl).toEqualTypeOf<string | null>();
     expect(r.structuredContent).toMatchObject({
+      repoId: "repo_1",
       projectId: "repo_1",
       template: "workers-api",
       bootstrapChangeId: "bs-repo_1",

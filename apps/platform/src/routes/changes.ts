@@ -55,7 +55,7 @@ const start = createRoute({
   method: "post",
   path: "/api/v1/changes",
   tags: ["changes"],
-  summary: "Start a change: fork the repo and get a push grant for the fork only",
+  summary: "Start a change: fork the repo and get a push token for the fork only",
   security: SECURITY,
   // Not stored by the idempotency middleware: the response holds a push token. The key is
   // forwarded to the coordinator, whose startChange is idempotent per (actor, key) and returns

@@ -115,7 +115,7 @@ const ChangeBrief = {
 const GitRemote = {
   type: "object",
   description:
-    "Push grant for the change's fork only. Short-lived; refresh with refresh_push_token.",
+    "Push token for the change's fork only. Short-lived; refresh with refresh_push_token.",
   properties: { url: str, username: str, token: str, expiresAt: str, branch: str },
   required: ["url", "username", "token", "expiresAt", "branch"],
 } as const;
@@ -236,7 +236,7 @@ export const StartChangeInput = {
     idempotencyKey: {
       ...idempotencyKey,
       description:
-        "Optional. Retrying with the same key returns the same change with a fresh push grant.",
+        "Optional. Retrying with the same key returns the same change with a fresh push token.",
     },
   },
   required: ["repoId", "title", "category"],
@@ -251,12 +251,12 @@ export const CreateProjectInput = {
       minLength: 1,
       maxLength: 63,
       description:
-        "Project (and repo) name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>.",
+        "Repo name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>.",
     },
     template: {
       enum: TEMPLATES,
       description:
-        "Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty project.",
+        "Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty repo.",
     },
     from: {
       type: "string",
@@ -268,9 +268,9 @@ export const CreateProjectInput = {
     importMode: {
       enum: ["push"],
       description:
-        'Private repos: "push" creates an empty project whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in).',
+        'Private repos: "push" creates an empty repo whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in).',
     },
-    description: { type: "string", maxLength: 500, description: "One line about the project." },
+    description: { type: "string", maxLength: 500, description: "One line about the repo." },
     idempotencyKey,
   },
   additionalProperties: false,
@@ -446,13 +446,14 @@ export const CreatePlanOutput = {
 export const CreateProjectOutput = {
   type: "object",
   properties: {
-    projectId: { ...str, description: "The repo id: use it as repoId in every other tool." },
+    repoId: { ...str, description: "The repo id: pass it as repoId to every other tool." },
+    projectId: { ...str, description: "Deprecated: the same value as repoId, kept for older clients." },
     name: str,
     template: nullableStr,
     defaultBranch: str,
     remote: {
       description:
-        "Push grant for your first Change's fork (changeId), at the initial commit: clone or push there right away. Null if the fork could not be made; call start_change.",
+        "Push token for your first Change's fork (changeId), at the initial commit: clone or push there right away. Null if the fork could not be made; call start_change.",
       anyOf: [
         { type: "null" },
         {
@@ -472,13 +473,13 @@ export const CreateProjectOutput = {
     token: {
       ...nullableStr,
       description:
-        "Bearer token for this project when you called without credentials (unclaimed projects); null when you are already authenticated. Reconnect with Authorization: Bearer <token> before any other call.",
+        "Bearer token for this repo when you called without credentials (unclaimed repos); null when you are already authenticated. Reconnect with Authorization: Bearer <token> before any other call.",
     },
     mcpUrl: str,
     previewUrl: {
       ...nullableStr,
       description:
-        "Live preview of the main branch (serves a 'building' page until the first CI run is green). Null when the project has nothing to preview.",
+        "Live preview of the main branch (serves a 'building' page until the first CI run is green). Null when the repo has nothing to preview.",
     },
     claimUrl: nullableStr,
     bootstrapChangeId: {
@@ -559,7 +560,7 @@ export const ChangeStatusOutput = {
     previewUrl: {
       type: ["string", "null"],
       description:
-        "The live preview of the current head once it answers (null before that, or when the project has no preview).",
+        "The live preview of the current head once it answers (null before that, or when the repo has no preview).",
     },
     nextSteps: NextSteps,
   },
@@ -634,7 +635,7 @@ export const TourOutput = {
     stale: {
       type: "boolean",
       description:
-        "True when the tour was written for an older head; a new one follows the latest push.",
+        "True when the walkthrough was written for an older head; a new one follows the latest push.",
     },
   },
   required: ["tour", "stale"],

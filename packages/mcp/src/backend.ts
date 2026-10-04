@@ -102,6 +102,9 @@ export interface NextStepData {
 }
 
 export interface ProjectCreated {
+  /** The repo id: what every other tool calls `repoId`. */
+  repoId: string;
+  /** @deprecated The same value as `repoId`; kept for agents and CLIs that read it (2026-10-04). */
   projectId: string;
   name: string;
   template: string | null;

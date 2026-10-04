@@ -49,6 +49,7 @@ export async function createPushImportProject(
   const { grant } = await openImportGrant(grantDeps(svc), caller.principal, repo);
   const statusUrl = `${svc.origin}/api/v1/repos/${repo.id}/import-grant`;
   return {
+    repoId: repo.id,
     projectId: repo.id,
     name: repo.name,
     template: null,
