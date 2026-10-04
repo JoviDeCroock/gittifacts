@@ -12,6 +12,7 @@ import { createPlatformClient } from "@app/mcp/client";
 import { beforeEach, describe, expect, it } from "vitest";
 import { signedQaImageUrl } from "../../src/qa/images.js";
 import { qaRunId } from "../../src/qa/request.js";
+import { handlePreviewRequest } from "../../src/previews/gateway.js";
 import { buildPorts } from "../../src/runtime/ports.js";
 import { call, createAgent, json, ORIGIN, signUpHuman, type TestApp } from "../http.js";
 import { type IntegrationFakes, NAMESPACE, resetIntegrationFakes } from "./fakes.js";
@@ -149,7 +150,8 @@ describe("QA on request (workerd: real app, workflow, PreviewHost; fake browser 
       "SELECT count(*) AS n FROM previews WHERE id LIKE 'q-%'",
     ).first<{ n: number }>();
     expect(rows?.n).toBe(0);
-    const gateway = await fetchVia(app)(`${qaFakes().origins[0]}/`);
+    // The public preview gateway (the Worker's *-pv route) refuses the q- host: fail closed.
+    const gateway = await handlePreviewRequest(new Request(`${qaFakes().origins[0]}/`), env);
     expect(gateway.status).toBe(404);
 
     // The run: one pass, one fail, the lane raised (never lowered), costs recorded.

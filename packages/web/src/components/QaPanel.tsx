@@ -70,7 +70,7 @@ function stepLabel(s: QaCriterionResult["steps"][number]): string {
 function Criterion({ c, run }: { c: QaCriterionResult; run: QaRun }) {
   const v = VERDICT[c.verdict];
   return (
-    <li class={`qa-crit qa-crit--${c.verdict}`}>
+    <li class={`qa-crit qa-crit--${c.verdict}`} data-testid="qa-criterion" data-verdict={c.verdict}>
       <div class="qa-crit__head">
         <span class={`chip chip--${v.tone}`}>
           <Icon name={v.icon} size={14} />
@@ -193,7 +193,7 @@ export function QaPanel({ change }: { change: Change }) {
   const report = latest?.report ?? null;
 
   return (
-    <section class="qa" id="qa" aria-labelledby="qa-title">
+    <section class="qa" id="qa" aria-labelledby="qa-title" data-testid="qa" data-status={latest?.status ?? "none"}>
       <h2 class="qa__title" id="qa-title">
         <Icon name="monitor" size={20} /> QA in a browser
       </h2>
@@ -250,6 +250,7 @@ export function QaPanel({ change }: { change: Change }) {
             icon="monitor"
             busy={busy.value}
             busyLabel="Asking…"
+            data-testid="qa-run"
             onClick={() => void ask(current)}
           >
             {latest === null || !current ? "Run QA" : "Run QA again"}

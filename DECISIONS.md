@@ -2539,3 +2539,55 @@ E2E > integration >>> unit.
   checked by asserting there's no horizontal scroll at 390 px.
 - Unclaimed projects the smoke creates expire through the TTL cron. Projects the nightly suites create
   under the E2E account persist, because there's no delete API yet.
+
+## 2026-10-04 — Agentic QA on request: a browser against the Plan, the app never public
+
+Design: docs/research/agentic-qa.md. Code: `packages/qa` (the loop), `apps/platform/src/qa/` (workflow, Browser Run
+driver, request service, signed thumbnails), `packages/host-github/src/{qa-section,sync-qa}.ts`, `packages/web`
+`QaPanel`, MCP `request_qa` / `get_qa`, CLI `gittifacts qa`, evidence kind `qa-run`, classifier gate `qa`.
+
+- **On request only.** Change page (Run QA), MCP `request_qa`, CLI `gittifacts qa`, HTTP `POST /changes/{id}/qa`, and on
+  GitHub the check run's **Run QA** button (`run_qa`, the third of GitHub's three) or a PR comment whose first line is
+  `/gittifacts qa`. GitHub senders are re-checked with GitHub every time (human, write access; the author may ask, as for a
+  full review). Idempotent per head: the run id is `qa-<change>-<head10>` (`-r<n>` for `force`), so racing requests meet
+  on one row and one workflow instance. Needs green CI on the head. ≤ 6 runs/hour and 30/day per repo, one in flight per
+  Change (429 + Retry-After).
+- **Isolation (the brief's open question): Browser Run with request interception; the app is served by the Worker.**
+  The head boots in the same sandbox container a preview uses (`PreviewHost`, CI build snapshot, `enableInternet:
+  false`) under `q-<change>-<sha8>`, with no `previews` row, so the public gateway never routes to it. A real Chromium on
+  Browser Run (`@cloudflare/puppeteer` 1.4.0) opens `https://q-…-pv.resynapse.dev`; every request is paused over CDP and
+  answered by the Worker: app-origin requests from the PreviewHost DO over its binding, every other origin aborted and
+  listed in the report. If interception ever failed open, the gateway answers 404 for a `q-` label. No public URL, no
+  token to leak; fork PRs stay as sandboxed as CI. Verified live before building (wrangler dev with the remote browser
+  binding: the third-party script blocked, clicks and typing worked, console and 404s captured). Rejected: a Chromium in
+  the sandbox image (+~400 MB on the image CI shares), a token-gated public preview (tokens leak via Referer/logs), an
+  injected auth header (`setExtraHTTPHeaders` sends it to every origin).
+- **The loop.** Explore ≤ 4 routes (Plan's `affectedRoutes`, template routes, routes guessed from changed paths, `/`) into
+  compact page snapshots → one planning call (a script per criterion in a 10-action DSL, or "untestable") → each
+  criterion in a fresh browser context with a screenshot per step → ≤ 1 repair call per criterion when an *action* can't
+  find its target (a failed *expectation* is the answer, never repaired) → one review call that may only move verdicts
+  down (pass → couldn't test / fail). No Plan: a deterministic smoke check (routes load, no uncaught errors), no model.
+  Model: the reviewer's client and the platform default (`@cf/zai-org/glm-5.3-flash`, low reasoning), ≤ $0.05 a run,
+  charged to the Change's AI budget. Budgets: 5 min wall, 3 browser-min, 8 criteria, 10 steps, 60 screenshots.
+- **Replay as a GIF encoded in the browser.** Puppeteer's screencast needs ffmpeg; instead the step JPEGs are drawn on a
+  canvas in the same Chromium and encoded by a small GIF89a encoder (fixed 6×7×6 palette, LZW) evaluated as a plain-JS
+  string (wrangler's esbuild keeps names with `__name(...)`, which doesn't exist in the page).
+- **Evidence and the lane.** `qa-run` is a signed item resealed into the head's bundle (only while it is the current
+  head) with every artifact's SHA-256, so a swapped screenshot fails verification. New classifier gate `qa`:
+  `qa.failed` 2, `qa.couldnt-test` 1, `signal.error.qa` 1, `qa.passed` 0; no item raises nothing (QA is opt-in). A repo
+  with no app (a library) ends as a *skipped* item: nothing to test is not an unknown about the Change.
+  `raiseForQa(previous, item)` applies them to the stored classification without re-running the classifier: keep or
+  raise, ends shadow when it raises the computed lane, a later pass never undoes an earlier fail on the same head.
+- **GitHub, quietly.** No comment of its own: the result goes into the one summary comment through the PR-presentation
+  interface (`GitHubHostDeps.qa` → `SummaryQa`: a status line, details folded) and the same section folds into the
+  check run, re-completed with the (possibly raised) verdict. A `/gittifacts qa` comment gets an 👀 reaction instead of a
+  reply. Images: GitHub has no API for an App to upload attachments (the web upload needs a user session; `gh --attach`
+  takes a user OAuth token or classic PAT) and Camo must fetch images publicly, so only ≤ 400 px thumbnails get a URL,
+  `/qa-img/<run>/<name>?exp&sig`, HMAC under HKDF(`BETTER_AUTH_SECRET`, "gittifacts/qa-image/v1"), valid 72 h from the
+  run's finish (deterministic, so the summary's text is stable), then 410. Full-size steps and the replay stay behind
+  sign-in and repo access (`qa/<change>/…` blobs).
+- **Native.** The Change page's QA section (criteria, verdicts, step strips, replay) and a `qa-finished` notification
+  (saying when the lane was raised).
+- **Not done / open.** `/gittifacts qa` needs the App's **Issue comment** event ticked (no new permission). A re-grade of
+  the same head drops the `qa-run` item from the new bundle (the run stays in `qa_runs`). A failure after a human
+  approved raises the lane and notifies but doesn't withdraw the approval.

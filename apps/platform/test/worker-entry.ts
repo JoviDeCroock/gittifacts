@@ -18,6 +18,7 @@ import { withUnclaimedLimits } from "../src/limits/ci-quota.js";
 import { buildPorts } from "../src/runtime/ports.js";
 import { configureWorkspaceRuntime } from "../src/workspace/runtime.js";
 import { integrationFakes, integrationOverrides } from "./integration/fakes.js";
+import { installQaFakes } from "./integration/qa-fakes.js";
 import { fakeMachineFor } from "./integration/workspace-fakes.js";
 
 export * from "../src/index.js";
@@ -41,6 +42,9 @@ configureCoordinatorRuntime<Bindings>({
   // Like src/index.ts: GitHub PRs publish their verdict through a GitHub host.
   hosts: (env, ports) => ({ github: ({ repo }) => githubHostFor(env, ports, repo).host }),
 });
+
+// QA on request: an HTML-only browser over the real private-preview path, no model (qa-fakes.ts).
+installQaFakes();
 
 // Workspaces: the real Workspace DO over an in-memory machine (no containers in workerd).
 configureWorkspaceRuntime({ machine: (_ctx, name) => fakeMachineFor(name) });

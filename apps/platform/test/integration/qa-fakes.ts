@@ -138,3 +138,8 @@ class HtmlBrowser implements OpenedBrowser {
     this.state.closed++;
   }
 }
+
+/** The default under workerd tests and the E2E server: the HTML browser, no model answers. */
+export function installQaFakes(): void {
+  if ((globalThis as unknown as Record<string, unknown>)[KEY] === undefined) resetQaFakes([]);
+}
