@@ -44,13 +44,13 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `DELETE` | [`/api/v1/changes/{changeId}/queue`](/docs/reference/http-merge-queue) | Take a Change out of the merge queue (its stack dependents leave too) |
 | `GET` | [`/api/v1/changes/{changeId}/queue/wait`](/docs/reference/http-merge-queue) | Long-poll until the Change merges, is ejected or dequeued, or the queue freezes |
 | `POST` | [`/api/v1/changes/{changeId}/request-review`](/docs/reference/http-changes) | Ask for human attention on a change (author or its owner); notifies, never approves |
-| `POST` | [`/api/v1/changes/{changeId}/rerun`](/docs/reference/http-changes) | Re-run CI, evidence, lane and tour on the current head (author or maintainer) |
+| `POST` | [`/api/v1/changes/{changeId}/rerun`](/docs/reference/http-changes) | Re-run CI, evidence, lane and walkthrough on the current head (author or maintainer) |
 | `GET` | [`/api/v1/changes/{changeId}/resolution`](/docs/reference/http-changes) | The merge queue's conflict resolution of this change (null when it needed none): what lands, what each side had |
 | `POST` | [`/api/v1/changes/{changeId}/review`](/docs/reference/http-changes) | Review a change (human, change:review, not the author); binds to a head |
 | `GET` | [`/api/v1/changes/{changeId}/reviews`](/docs/reference/http-changes) | Human reviews of a change, oldest first (each bound to a head) |
 | `GET` | [`/api/v1/changes/{changeId}/rollout`](/docs/reference/http-changes) | Rollout state and the change's audit timeline |
 | `POST` | [`/api/v1/changes/{changeId}/token`](/docs/reference/http-changes) | Fresh short-lived push token for the change's fork (author only) |
-| `GET` | [`/api/v1/changes/{changeId}/tour`](/docs/reference/http-changes) | The reviewer agent's guided tour for the current head |
+| `GET` | [`/api/v1/changes/{changeId}/tour`](/docs/reference/http-changes) | The reviewer agent's walkthrough (tour) for the current head |
 | `GET` | [`/api/v1/claims/{token}`](/docs/reference/http-repos) | An unclaimed project behind a claim link: name, creator, expiry, what claiming does |
 | `POST` | [`/api/v1/claims/{token}`](/docs/reference/http-repos) | Claim an unclaimed project (signed-in human + Turnstile); single-use, idempotent |
 | `GET` | [`/api/v1/deployments/{deploymentId}`](/docs/reference/http-integrations) | A deployment with its status history |
@@ -58,7 +58,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `GET` | [`/api/v1/github`](/docs/reference/http-github) | GitHub mode: our GitHub App (or which config is missing) and the installations you linked |
 | `POST` | [`/api/v1/github/repos/{repoId}/backtests`](/docs/reference/http-github) | Repo owners: backtest the repository's merged PRs (lanes, later reverts and patches, calibration) |
 | `GET` | [`/api/v1/github/repos/{repoId}/backtests/latest`](/docs/reference/http-github) | The repository's latest backtest and its report |
-| `PUT` | [`/api/v1/github/repos/{repoId}/pr-writes`](/docs/reference/http-github) | Repo owners: turn the tour review and summary comment on GitHub PRs on or off |
+| `PUT` | [`/api/v1/github/repos/{repoId}/pr-writes`](/docs/reference/http-github) | Repo owners: turn the walkthrough review and summary comment on GitHub PRs on or off |
 | `GET` | [`/api/v1/installation`](/docs/reference/http-integrations) | Integration tokens: this installation, its account and its repositories (with clone URLs) |
 | `GET` | [`/api/v1/installations`](/docs/reference/http-integrations) | Integrations installed on your account: what each may do and on which repos |
 | `PATCH` | [`/api/v1/installations/{installationId}`](/docs/reference/http-integrations) | Change which repos an installed integration reaches |

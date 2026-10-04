@@ -107,7 +107,7 @@ Ask for human attention on a change (author or its owner); notifies, never appro
 
 ### `POST /api/v1/changes/{changeId}/rerun`
 
-Re-run CI, evidence, lane and tour on the current head (author or maintainer)
+Re-run CI, evidence, lane and walkthrough on the current head (author or maintainer)
 
 No push needed: a fresh workflow instance and CI run for the same head (a flaky step). Only while the change is running, failing or awaiting review; audited as `change.rerun-requested`.
 
@@ -168,7 +168,7 @@ Fresh short-lived push token for the change's fork (author only)
 
 ### `GET /api/v1/changes/{changeId}/tour`
 
-The reviewer agent's guided tour for the current head
+The reviewer agent's walkthrough (tour) for the current head
 
 - **Auth:** session cookie or bearer token
 - **Parameters:** `changeId` (path, required)

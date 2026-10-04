@@ -44,7 +44,7 @@ The repository's latest backtest and its report
 
 ### `PUT /api/v1/github/repos/{repoId}/pr-writes`
 
-Repo owners: turn the tour review and summary comment on GitHub PRs on or off
+Repo owners: turn the walkthrough review and summary comment on GitHub PRs on or off
 
 The gittifacts/lane check run is always posted. Off: nothing else is written to the repo's pull requests.
 
