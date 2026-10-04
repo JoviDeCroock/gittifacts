@@ -60,19 +60,22 @@ export function checkTitle(v: TitleInput): string {
   return cut(`${laneLabel(v.lane)} · ${laneWhy(v)}`, TITLE_MAX);
 }
 
-/** The headline sentence: "**Full review (Lane 2)** · possible hidden behavior change." */
-export function headline(v: TitleInput): string {
-  if (v.blocked) return `**${checkTitle(v)}.** Nothing can merge until it is fixed.`;
-  return `**${laneLabel(v.lane)}** · ${laneWhy(v, { long: true })}.`;
-}
+const sentence = (s: string) => `${s.charAt(0).toUpperCase()}${s.slice(1)}.`;
 
-/** A few lines: the lane and why, what a person does, the link. */
+/**
+ * A few lines under the title (GitHub shows the title right above, so the summary doesn't repeat
+ * it): the full reason when the title had to shorten it, what a person does, the link.
+ */
 export function checkSummary(v: LaneVerdict, ctx: CheckRunContext): string {
-  const lines = [headline(v)];
-  if (!v.blocked) {
+  const lines: string[] = [];
+  if (v.blocked) lines.push("Nothing can merge until it is fixed.");
+  else {
+    const long = laneWhy(v, { long: true });
+    if (long !== laneWhy(v) || checkTitle(v).endsWith("…")) lines.push(sentence(long));
     lines.push(v.lane === 0 && v.requiresHumanApproval ? TERMS.policyAsk : TERMS.laneAsk[v.lane]);
   }
-  lines.push("", `[${TERMS.openTour} on gittifacts](${ctx.detailsUrl})${ctx.shadow ? `\n\n${TERMS.reportOnlyNote}` : ""}`);
+  lines.push("", `[${TERMS.openTour} on gittifacts](${ctx.detailsUrl})`);
+  if (ctx.shadow) lines.push("", TERMS.reportOnlyNote);
   return lines.join("\n");
 }
 
@@ -147,10 +150,10 @@ export function laneRun(v: TitleInput & Pick<LaneVerdict, "requiresHumanApproval
     output: {
       title: `${laneLabel(v.lane)}${v.lane < 2 ? " so far" : ""} · ${TERMS.tour} coming`,
       summary: [
-        headline(v),
-        `The checks are done. The reviewer agent is writing the ${TERMS.tour}, usually in about a minute; it can only raise the lane.`,
+        `${sentence(laneWhy(v, { long: true }))} The checks are done. The reviewer agent is writing the ${TERMS.tour}, usually in about a minute; it can only raise the lane.`,
         "",
-        `[Follow it on gittifacts](${ctx.detailsUrl})${ctx.shadow ? `\n\n${TERMS.reportOnlyNote}` : ""}`,
+        `[Follow it on gittifacts](${ctx.detailsUrl})`,
+        ...(ctx.shadow ? ["", TERMS.reportOnlyNote] : []),
       ].join("\n"),
     },
   };

@@ -80,6 +80,9 @@ describe("gittifacts/lane check run", () => {
     expect(run.details_url).toBe("https://x/changes/gh-1-2");
     expect(run.output.summary.split("\n").filter((l) => l !== "").length).toBeLessThanOrEqual(4);
     expect(run.output.summary).toContain("Report-only");
+    // GitHub shows the title right above the summary: it isn't repeated, only lengthened.
+    expect(run.output.summary).not.toContain("Quick review (Lane 1)");
+    expect(run.output.summary.split("\n")[0]).toBe("The evidence says auto-merge, but auto-merge is still calibrating on this repo.");
     expect(run.output.summary).not.toMatch(/^\|/m);
     expect(run.output.text).toMatch(/^<details><summary>Why this lane: 1 raised, 0 passed<\/summary>/);
     expect(run.output.text).toContain("<details><summary>Evidence: 1 item, signed and verified</summary>");
