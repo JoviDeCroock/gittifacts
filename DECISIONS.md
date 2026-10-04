@@ -2703,3 +2703,29 @@ GLM-5.3-Flash with the old prompt (live: 1 of 1).
 - Signed-in smoke tests no longer exercise the sign-in form against production. The pre-deploy gate
   covers the form.
 
+## 2026-10-04 — Staging is live and runs before every production deploy
+
+**Context.** The staging resources were approved and created: D1 `860fe658…`, R2, queues and
+generated secrets. The first two staging deploys collided with production on names that are
+account-wide (see the incident entry above).
+
+**Decision.**
+- **Staging owns its names.** `gittifacts-staging` has its own Workflow names, container application
+  names, queues, D1, R2, rate-limit namespaces and Artifacts namespace. Its previews run on
+  `*-pvs.resynapse.dev`, a disjoint pattern on the same zone. `assertNothingShared` refuses any
+  config that reuses one of production's names.
+- **Staging has its own E2E account.** It was created through staging's sign-up, and its credentials
+  are the secrets `STAGING_E2E_EMAIL`, `STAGING_E2E_PASSWORD` and `STAGING_E2E_AGENT_TOKEN`. The
+  smoke and nightly workflows pick them by URL. GitHub mode stays off on staging, and the smoke
+  expects 503 `github-not-configured` from its webhook.
+- **`deploy-clean.sh` deploys staging first by default** (`--no-staging` skips it). It migrates
+  production's D1 only after staging passes, and it re-runs itself from the commit being deployed.
+- **The rollback stays local.** The owner declined a Cloudflare token for CI.
+
+**Consequences.**
+- Each deploy takes about 3 minutes longer, for the staging deploy and its smoke.
+- A container image that won't start, or a binding or migration that only fails remotely, now
+  stops before production.
+- First run: dcc09cf, 17 min end to end, all green. Production's Workflows were checked before and
+  after, and stayed owned by `gittifacts`.
+
