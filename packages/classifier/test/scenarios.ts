@@ -13,6 +13,7 @@
 import type { Lane, RepoPolicy } from "@app/domain";
 import type { EvidenceItem, RedGreenProof } from "@app/evidence";
 import type { ReasonCode } from "../src/index.js";
+import { FIXTURE_PLANS } from "./fixture-plans.js";
 import {
   BASE_SHA,
   type ClassifyInput,
@@ -118,17 +119,6 @@ function replacing(items: EvidenceItem[], ...replacements: EvidenceItem[]): Evid
 
 const NO_FLAGS = { blocked: false, requiresHumanApproval: false } as const;
 
-const ALLOCATE_PLAN = {
-  title: "Fix allocate() losing a minor unit on uneven splits",
-  intent:
-    "allocate() drops one minor unit when the total does not divide evenly. Hand out every leftover minor unit, first share first, and pin the behaviour with a regression test.",
-  outOfScope: [
-    "Switching to a largest-remainder distribution strategy",
-    "Changes to any module other than allocate",
-  ],
-  scopePaths: ["src/allocate.ts", "test/allocate.test.ts"],
-};
-
 /** fixtures/pure-bugfix-with-regression-test — the model Lane 0 change (computed 0). */
 export function pureBugfixWithRegressionTest(opts: ScenarioOptions = {}): Scenario {
   return {
@@ -146,7 +136,7 @@ export function pureBugfixWithRegressionTest(opts: ScenarioOptions = {}): Scenar
         ],
       },
       policy: fixturePolicy(opts),
-      plan: plan(ALLOCATE_PLAN),
+      plan: plan(FIXTURE_PLANS["pure-bugfix-with-regression-test"]),
       diffStats: diff([file("src/allocate.ts", 1, 1), file("test/allocate.test.ts", 19, 0)]),
       change: { category: "fix" },
       context: greenContext(),
@@ -175,7 +165,7 @@ export function bugfixWithoutTest(opts: ScenarioOptions = {}): Scenario {
     input: {
       evidence: { items: [...common(), redGreen("no-tests")] },
       policy: fixturePolicy(opts),
-      plan: plan(ALLOCATE_PLAN),
+      plan: plan(FIXTURE_PLANS["bugfix-without-test"]),
       diffStats: diff([file("src/allocate.ts", 1, 1)]),
       change: { category: "fix" },
       context: greenContext(),
@@ -220,15 +210,7 @@ export function additiveApi(opts: ScenarioOptions = {}): Scenario {
         ),
       },
       policy: fixturePolicy(opts),
-      plan: plan({
-        title: "Add multiply() for scaling money by a factor",
-        intent: "Add multiply(value, factor) that scales an amount and rounds half away from zero.",
-        outOfScope: [
-          "Changing add, subtract or any other existing export",
-          "Banker's rounding or configurable rounding modes",
-        ],
-        scopePaths: ["src/money.ts", "src/index.ts", "test/money.test.ts", "README.md"],
-      }),
+      plan: plan(FIXTURE_PLANS["additive-api"]),
       diffStats: diff([
         file("README.md", 1, 0),
         file("src/index.ts", 1, 1),
@@ -280,13 +262,7 @@ export function breakingApi(opts: ScenarioOptions = {}): Scenario {
         ),
       },
       policy: fixturePolicy(opts),
-      plan: plan({
-        title: "Let formatMoney() render currency symbols",
-        intent:
-          "Give formatMoney an options parameter with a required style and update every caller.",
-        outOfScope: ["Locale-aware formatting via Intl", "Parsing the symbol style"],
-        scopePaths: ["src/format.ts", "src/index.ts", "test/format.test.ts", "README.md"],
-      }),
+      plan: plan(FIXTURE_PLANS["breaking-api"]),
       diffStats: diff([
         file("README.md", 3, 2),
         file("src/format.ts", 27, 11),
@@ -309,7 +285,8 @@ export function breakingApi(opts: ScenarioOptions = {}): Scenario {
 export function newDependency(opts: ScenarioOptions = {}): Scenario {
   return {
     fixture: "new-dependency",
-    description: "Adds nanoid ^5.1.5 to package.json dependencies and the lockfile; nothing else changes.",
+    description:
+      "Adds nanoid ^5.1.5 to package.json dependencies and the lockfile; nothing else changes.",
     input: {
       evidence: {
         items: replacing(
@@ -324,12 +301,7 @@ export function newDependency(opts: ScenarioOptions = {}): Scenario {
         ),
       },
       policy: fixturePolicy(opts),
-      plan: plan({
-        title: "Add nanoid as a runtime dependency",
-        intent: "Transfers need short, URL-safe idempotency keys. Add nanoid now.",
-        outOfScope: ["Generating idempotency keys (follow-up change)"],
-        scopePaths: ["package.json", "pnpm-lock.yaml"],
-      }),
+      plan: plan(FIXTURE_PLANS["new-dependency"]),
       diffStats: diff([file("package.json", 3, 0), file("pnpm-lock.yaml", 11, 0)]),
       change: { category: "dependency" },
       context: greenContext(),
@@ -362,13 +334,7 @@ export function touchesAuth(opts: ScenarioOptions = {}): Scenario {
         ),
       },
       policy: fixturePolicy(opts),
-      plan: plan({
-        title: "Reject session tokens at their exact expiry second",
-        intent:
-          "verifyToken accepts a token during the second named by exp. Tighten the comparison.",
-        outOfScope: ["Clock-skew leeway", "Changing the token format or signing algorithm"],
-        scopePaths: ["src/auth/token.ts", "test/auth.test.ts"],
-      }),
+      plan: plan(FIXTURE_PLANS["touches-auth"]),
       diffStats: diff([file("src/auth/token.ts", 2, 1), file("test/auth.test.ts", 10, 0)]),
       change: { category: "fix" },
       context: greenContext(),
@@ -422,12 +388,7 @@ export function codemodRename(opts: CodemodOptions = {}): Scenario {
         ],
       },
       policy: fixturePolicy(opts),
-      plan: plan({
-        title: "Rename requireCurrency to toCurrencyCode",
-        intent: "Rename it everywhere by running the already-reviewed rename-helper codemod.",
-        outOfScope: ["Any hand-written edits", "Renaming exported functions"],
-        scopePaths: ["src/**"],
-      }),
+      plan: plan(FIXTURE_PLANS["codemod-rename"]),
       diffStats: diff(files),
       change: { category: "transform" },
       context: greenContext(),
@@ -463,12 +424,7 @@ export function policyChange(opts: ScenarioOptions = {}): Scenario {
         ),
       },
       policy: fixturePolicy(opts),
-      plan: plan({
-        title: "Lower the Lane 0 changed-line coverage threshold to 50%",
-        intent: "Lower thresholds.changedLineCoverage from 0.8 to 0.5 while tests are backfilled.",
-        outOfScope: ["Enabling Lane 0", "Changing the mutation score threshold"],
-        scopePaths: [".platform/policy.ts"],
-      }),
+      plan: plan(FIXTURE_PLANS["policy-change"]),
       diffStats: diff([file(".platform/policy.ts", 2, 1)]),
       change: { category: "chore" },
       context: greenContext(),
@@ -496,13 +452,7 @@ export function scopeDrift(opts: ScenarioOptions = {}): Scenario {
         ],
       },
       policy: fixturePolicy(opts),
-      plan: plan({
-        title: "parseMoney: accept comma-grouped thousands",
-        intent:
-          "Accept comma-grouped thousands in the whole part while rejecting malformed grouping.",
-        outOfScope: ["Other modules", "Locale-specific separators (e.g. 1.234,56)"],
-        scopePaths: ["src/format.ts", "test/format.test.ts"],
-      }),
+      plan: plan(FIXTURE_PLANS["scope-drift"]),
       diffStats: diff([
         file("src/format.ts", 8, 3),
         file("src/money.ts", 2, 1),

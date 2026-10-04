@@ -26,7 +26,7 @@
 import { execFileSync } from "node:child_process";
 import { CONTRACT_SCENARIO_NAMES, CONTRACT_SCENARIOS, type ContractScenario } from "../packages/host-contract/src/scenarios.js";
 import { type CheckRunVerdict as Verdict, readCheckRunVerdict } from "../packages/host-github/src/check-run.js";
-import { materializeFixture } from "./lib/fixtures.js";
+import { loadFixture, materializeFixture } from "./lib/fixtures.js";
 
 const env = process.env;
 const REPO = env.GITHUB_TEST_REPO ?? "";
@@ -107,9 +107,12 @@ async function planFor(s: ContractScenario, repoId: string): Promise<{ id: strin
     const { plan } = await api<{ plan: { status: string } }>("GET", `/api/v1/plans/${known}`);
     return { id: known, approved: plan.status === "approved" };
   }
+  // The fixture's own Plan (fixture.json), the one its change was written against: a live judge
+  // reads every criterion, so a scenario's unit-test Plan would be judged as unmet work.
+  const p = loadFixture(s.fixture).plan;
   const created = await mcp("create_plan", {
-    repoId, title: `[contract] ${s.name}`, intent: s.plan.intent, acceptanceCriteria: s.plan.acceptanceCriteria,
-    outOfScope: s.plan.outOfScope, scopePaths: s.plan.scopePaths,
+    repoId, title: `[contract] ${p.title}`, intent: p.intent, acceptanceCriteria: p.acceptanceCriteria,
+    outOfScope: p.outOfScope, riskDeclarations: p.riskDeclarations, scopePaths: p.scopePaths,
   });
   return { id: String((created.plan as { id: string }).id), approved: false };
 }

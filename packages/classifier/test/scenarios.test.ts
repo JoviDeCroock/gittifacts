@@ -70,7 +70,7 @@ describe("fixture scenario specifics", () => {
 describe("scenarios mirror fixtures/*/fixture.json", () => {
   interface FixtureJson {
     claim: { category: string };
-    plan: { scopePaths: string[] };
+    plan: Record<string, unknown> & { scopePaths: string[] };
     expected: {
       computedLane: number;
       laneWithShadow: number;
@@ -88,6 +88,17 @@ describe("scenarios mirror fixtures/*/fixture.json", () => {
     expect(s.expected.lane).toBe(fixture.expected.laneWithShadow);
     expect(s.input.change.category).toBe(fixture.claim.category);
     expect(s.input.plan?.scopePaths).toEqual(fixture.plan.scopePaths);
+    // The whole Plan text, not only its scope: a live judge reads every criterion, and the live
+    // contract run drafts its Plans from fixture.json (a placeholder criterion once leaked there).
+    for (const k of [
+      "title",
+      "intent",
+      "acceptanceCriteria",
+      "outOfScope",
+      "riskDeclarations",
+    ] as const) {
+      expect(s.input.plan?.[k], `${name} plan.${k}`).toEqual(fixture.plan[k]);
+    }
     expect(sortStrings(s.input.diffStats?.files.map((f) => f.path) ?? [])).toEqual(
       sortStrings(fixture.expected.evidence.changedFiles),
     );
