@@ -125,7 +125,7 @@ describe("bundled CLI against the real MCP server", () => {
     expect(r.stdout).toMatch(/Steps\n\s+STEP\s+KIND\s+STATUS\s+LOG\n\s+test\s+user\s+✓ passed/);
     expect(r.stdout).toMatch(/Raised by\n\s+LANE\s+CODE\s+WHY\n\s+1\s+size\.lane1\s+medium diff/);
     expect(r.stdout).toMatch(
-      /Next steps\n {2}1\. Read the tour a human will review\n {5}\$ gittifacts get-tour --change-id chg_1/,
+      /Next steps\n {2}1\. Read the walkthrough a human will review\n {5}\$ gittifacts get-tour --change-id chg_1/,
     );
     expect(r.stdout.includes("\u001b[")).toBe(false);
   });
