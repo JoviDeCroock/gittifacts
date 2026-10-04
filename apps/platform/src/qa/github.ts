@@ -4,7 +4,7 @@
  * the run's finish time, so the same run always renders the same text (the summary comment is
  * edited only when its text changes).
  */
-import type { GithubQaPort, QaView } from "@app/host-github";
+import { type GithubQaPort, type QaView, qaSummary, type SummaryQa } from "@app/host-github";
 import { drizzle } from "drizzle-orm/d1";
 import type { Bindings } from "../app-env.js";
 import { ApiError } from "../errors.js";
@@ -13,6 +13,17 @@ import { D1Store } from "../store/d1-store.js";
 import { signedQaImageUrl } from "./images.js";
 import { type QaEnv, requestQa } from "./request.js";
 import { QaStore, viewOf } from "./store.js";
+
+/** The summary comment's (and check run's) QA section for the head's latest run. */
+export function qaSectionFor(
+  env: Bindings,
+): (changeId: string, headSha: string) => Promise<SummaryQa | null> {
+  const view = qaViewFor(env);
+  return async (changeId, headSha) => {
+    const v = await view(changeId, headSha);
+    return v === null ? null : qaSummary(v);
+  };
+}
 
 export function qaViewFor(
   env: Bindings,
