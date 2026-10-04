@@ -47,12 +47,31 @@ check_cast() {
   ' "$@"
 }
 
+# m1 and remote-workspace work on "the first repo the agent may start changes on": make sure the
+# E2E account has one (a workers-api project named e2e-fixture-<random>), without printing the token.
+ensure_repo() {
+  need E2E_AGENT_TOKEN
+  node -e '
+    const H = process.argv[1], auth = { authorization: `Bearer ${process.env.E2E_AGENT_TOKEN}` };
+    (async () => {
+      const repos = (await (await fetch(`${H}/api/v1/repos`, { headers: auth })).json()).repos ?? [];
+      if (repos.length > 0) return console.log(`fixture repo: ${repos[0].id}`);
+      const name = `e2e-fixture-${Math.random().toString(36).slice(2, 8)}`;
+      const r = await fetch(`${H}/api/v1/projects`, { method: "POST",
+        headers: { ...auth, "content-type": "application/json", origin: H, "idempotency-key": crypto.randomUUID() },
+        body: JSON.stringify({ template: "workers-api", name }) });
+      const b = await r.json();
+      if (!r.ok) { console.error(`create fixture repo: HTTP ${r.status} ${b.error?.code ?? ""}`); process.exit(1); }
+      console.log(`fixture repo created: ${b.projectId}`);
+    })();' "$HOST"
+}
+
 case "$SUITE" in
   m1)
-    need E2E_AGENT_TOKEN
+    ensure_repo
     GITTIFACTS_URL="$HOST" GITTIFACTS_TOKEN="$E2E_AGENT_TOKEN" $T scripts/e2e/m1.ts --timeout-min 20 ;;
   remote-workspace)
-    need E2E_AGENT_TOKEN
+    ensure_repo
     GITTIFACTS_URL="$HOST" GITTIFACTS_TOKEN="$E2E_AGENT_TOKEN" $T scripts/e2e/remote-workspace.ts --timeout-min 20 ;;
   merge-queue)
     need E2E_AGENT_TOKEN E2E_EMAIL E2E_PASSWORD
