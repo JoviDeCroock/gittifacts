@@ -20,6 +20,7 @@ export {
   type ProposalView,
   proposalNextSteps,
 } from "./tools/import.js";
+export { type QaRunBrief, type QaToolsBackend, qaTools } from "./tools/qa.js";
 export {
   type EnqueueView,
   exampleCall,

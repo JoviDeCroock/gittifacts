@@ -1591,6 +1591,208 @@ export type introspection = {
       }
     },
     /**
+     * QA results
+     * The change's QA runs, newest first: status, verdict per criterion with the reason, the lane before and after, cost, and the screenshots' blob refs.
+     * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
+     */
+    "get_qa": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "github": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}#[0-9]{1,9}$",
+            "description": "GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "changeId": {
+                  "type": "string"
+                },
+                "headSha": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "queued",
+                    "running",
+                    "done",
+                    "failed"
+                  ]
+                },
+                "progress": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "summary": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "passed": {
+                      "type": "number"
+                    },
+                    "failed": {
+                      "type": "number"
+                    },
+                    "couldntTest": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "laneBefore": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "laneAfter": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "costUsd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "wallMs": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "criteria": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      },
+                      "verdict": {
+                        "enum": [
+                          "pass",
+                          "fail",
+                          "couldnt-test"
+                        ]
+                      },
+                      "reason": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "text",
+                      "verdict",
+                      "reason"
+                    ]
+                  }
+                },
+                "artifacts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "ref": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "ref",
+                      "role"
+                    ]
+                  }
+                },
+                "reportUrl": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "changeId",
+                "headSha",
+                "status",
+                "progress",
+                "summary",
+                "laneBefore",
+                "laneAfter",
+                "costUsd",
+                "wallMs",
+                "error",
+                "criteria",
+                "artifacts",
+                "reportUrl"
+              ]
+            }
+          },
+          "nextSteps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "runs",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
      * Get the review walkthrough
      * The walkthrough (the tour) a second reviewer agent wrote for the change, what a human will read: stops with verdicts, least-confident points and what was not done.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
@@ -3364,6 +3566,219 @@ export type introspection = {
         },
         "required": [
           "status"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Ask for QA in a browser
+     * On request only: an agent drives the app built from the change's current head in a real browser against the Plan's acceptance criteria (no Plan: a smoke check), with a screenshot per step, a replay GIF and a pass / fail / couldn't-test verdict per criterion, signed into the evidence. A failure raises the lane; nothing lowers it. Needs green CI on the head. Idempotent per head (force: run again); at most 6 runs an hour per repo.
+     * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
+     * @param args.force Run again although this head already has a finished run (counts against the repo's limit).
+     */
+    "request_qa": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "github": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}#[0-9]{1,9}$",
+            "description": "GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one)."
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Run again although this head already has a finished run (counts against the repo's limit)."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "run": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "changeId": {
+                "type": "string"
+              },
+              "headSha": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "queued",
+                  "running",
+                  "done",
+                  "failed"
+                ]
+              },
+              "progress": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "summary": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "passed": {
+                    "type": "number"
+                  },
+                  "failed": {
+                    "type": "number"
+                  },
+                  "couldntTest": {
+                    "type": "number"
+                  }
+                }
+              },
+              "laneBefore": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "laneAfter": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "costUsd": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "wallMs": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "criteria": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "verdict": {
+                      "enum": [
+                        "pass",
+                        "fail",
+                        "couldnt-test"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "verdict",
+                    "reason"
+                  ]
+                }
+              },
+              "artifacts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "ref",
+                    "role"
+                  ]
+                }
+              },
+              "reportUrl": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "changeId",
+              "headSha",
+              "status",
+              "progress",
+              "summary",
+              "laneBefore",
+              "laneAfter",
+              "costUsd",
+              "wallMs",
+              "error",
+              "criteria",
+              "artifacts",
+              "reportUrl"
+            ]
+          },
+          "reused": {
+            "type": "boolean"
+          },
+          "nextSteps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "run",
+          "reused",
+          "nextSteps"
         ]
       },
       "annotations": {

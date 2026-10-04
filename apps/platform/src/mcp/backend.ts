@@ -18,10 +18,11 @@ import type { Caller, Services } from "../app-env.js";
 import { anonymousWhoami } from "../claim/anonymous.js";
 import { createUnclaimedProject } from "../claim/create.js";
 import { toErrorResponse, unauthorized } from "../errors.js";
-import { runIdempotent } from "../idempotency.js";
 import { resolveGithubChangeId } from "../github/refs.js";
+import { runIdempotent } from "../idempotency.js";
 import { createImportMcpBackend } from "../import/mcp.js";
 import type { AnonymousClient } from "../limits/client.js";
+import { qaBrief } from "../qa/brief.js";
 import { createQueueMcpBackend } from "../queue/mcp.js";
 import { capabilities } from "../services/capabilities.js";
 import {
@@ -38,6 +39,7 @@ import {
 } from "../services/changes.js";
 import { createPlan } from "../services/plans.js";
 import { createProject } from "../services/projects.js";
+import { listQaRuns, requestQaFor } from "../services/qa.js";
 import { listRepoSummaries } from "../services/repos.js";
 import { createWorkspaceMcpBackend } from "../workspace/mcp.js";
 
@@ -219,8 +221,12 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
 
     async rerunCi(mc, changeId, reason, opts) {
       const caller = await scoped(mc, { changeId });
-      return idem(caller, "rerun_ci", opts.idempotencyKey, { changeId, reason: reason ?? null }, () =>
-        rerunChangeCi(svc, caller, changeId, reason),
+      return idem(
+        caller,
+        "rerun_ci",
+        opts.idempotencyKey,
+        { changeId, reason: reason ?? null },
+        () => rerunChangeCi(svc, caller, changeId, reason),
       );
     },
 
@@ -233,6 +239,27 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
         { changeId, reason: reason ?? null },
         () => closeChange(svc, caller, changeId, reason),
       );
+    },
+
+    async requestQa(mc, changeId, input, opts) {
+      const caller = await scoped(mc, { changeId }, "contribute");
+      const out = await idem(
+        caller,
+        "request_qa",
+        opts.idempotencyKey,
+        { changeId, force: input.force === true },
+        () =>
+          requestQaFor(svc, caller, changeId, {
+            trigger: "mcp",
+            ...(input.force === true ? { force: true } : {}),
+          }),
+      );
+      return { run: qaBrief(out.run, svc.origin), reused: out.reused };
+    },
+
+    async listQa(mc, changeId) {
+      const runs = await listQaRuns(svc, await scoped(mc, { changeId }), changeId);
+      return runs.slice(0, 5).map((r) => qaBrief(r, svc.origin));
     },
 
     async listIssuesForChange(mc, changeId) {

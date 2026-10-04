@@ -21,6 +21,7 @@ import type {
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import type { z } from "zod";
 import type { ImportToolsBackend } from "./tools/import.js";
+import type { QaToolsBackend } from "./tools/qa.js";
 import type { QueueToolsBackend } from "./tools/queue.js";
 import type { WorkspaceToolsBackend } from "./tools/workspace.js";
 
@@ -130,7 +131,11 @@ export interface MembersData {
 }
 
 /** Every tool family's backend: the core tools below, remote workspaces and import detection. */
-export interface McpBackend extends WorkspaceToolsBackend, ImportToolsBackend, QueueToolsBackend {
+export interface McpBackend
+  extends WorkspaceToolsBackend,
+    ImportToolsBackend,
+    QueueToolsBackend,
+    QaToolsBackend {
   whoami(caller: McpCaller): Promise<WhoamiData>;
   /** Repo (template / import / empty) + first CI + first preview + a first Change's fork. */
   createProject(

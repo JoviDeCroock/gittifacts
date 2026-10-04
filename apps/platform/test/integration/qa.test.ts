@@ -190,6 +190,16 @@ describe("QA on request (workerd: real app, workflow, PreviewHost; fake browser 
     expect(note?.message).toContain("1 passed, 1 failed");
     expect(note?.message).toContain("Full review (Lane 2)");
 
+    // Agents: get_qa reads the verdicts; request_qa on the same head is the same run.
+    const got = await mcp.tools.get_qa({ changeId });
+    if (got.isError) throw new Error(JSON.stringify(got.content));
+    expect(got.structuredContent.runs[0]).toMatchObject({ id: run.id, status: "done", laneAfter: 2 });
+    expect(got.structuredContent.runs[0]?.criteria.map((c) => c.verdict)).toEqual(["pass", "fail"]);
+    expect(got.structuredContent.nextSteps[0]?.title).toContain("Fix what QA found");
+    const asked = await mcp.tools.request_qa({ changeId });
+    if (asked.isError) throw new Error(JSON.stringify(asked.content));
+    expect(asked.structuredContent).toMatchObject({ reused: true, run: { id: run.id } });
+
     // Asking again for the same head is the same run; a thumbnail URL works signed, not tampered.
     const again = await json<{ run: { id: string }; reused: boolean }>(
       await call(app, "POST", `/api/v1/changes/${changeId}/qa`, { cookie: human.cookie, body: {} }),

@@ -51,6 +51,7 @@ import {
   WhoamiOutput,
 } from "./schemas.js";
 import { importTools } from "./tools/import.js";
+import { qaTools } from "./tools/qa.js";
 import { queueTools } from "./tools/queue.js";
 import { workspaceTools } from "./tools/workspace.js";
 
@@ -768,6 +769,8 @@ export function buildTools(backend: McpBackend) {
     ...workspaceTools(backend, { callerOf, requireScope, parse, run, failure }),
     ...importTools(backend, { callerOf, requireScope, parse, run, failure }),
     ...queueTools(backend, { callerOf, requireScope, parse, run, failure }),
+    // QA in a browser, on request.
+    ...qaTools(backend, { callerOf, requireScope, parse, run, failure }),
   ]);
 }
 
