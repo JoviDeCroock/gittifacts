@@ -3,7 +3,7 @@
  */
 import { BrandMark } from "../components/BrandMark.js";
 import { Icon, type IconId } from "../components/Icon.js";
-import { CopyLine, SessionLink } from "./Hero.js";
+import { CopyLine, SessionCta, SessionLink } from "./Hero.js";
 
 export function Close() {
   return (
@@ -14,9 +14,7 @@ export function Close() {
         </h2>
         <p class="l-lede">Approve a plan, read a walkthrough, or let an agent find its own way in.</p>
         <div class="close__actions">
-          <a class="btn btn--primary hero__cta" href="/signin?mode=signup">
-            Create an account
-          </a>
+          <SessionCta />
           <CopyLine id="agent-url-3" originPath="/start" label="Copy the start URL" />
         </div>
       </div>

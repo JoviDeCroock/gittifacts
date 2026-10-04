@@ -14,6 +14,16 @@ function all(re: RegExp): string[] {
 }
 
 describe("landing page", () => {
+  it("renders the primary CTAs for both states: sign up when signed out, the dashboard when signed in", () => {
+    const ctas = [...html.matchAll(/<a[^>]*data-session-cta[^>]*>(.*?)<\/a>/gs)];
+    expect(ctas.length).toBe(2);
+    for (const [tag, inner] of ctas) {
+      expect(tag).toContain('href="/signin?mode=signup"');
+      expect(inner).toMatch(/class="session-anon">Create an account</);
+      expect(inner).toMatch(/class="session-authed">Open dashboard</);
+    }
+  });
+
   it("has one h1 with the rule, then h2 sections and no skipped heading levels", () => {
     expect(all(/<h1[^>]*>/g)).toHaveLength(1);
     const h1 = /<h1[^>]*>(.*?)<\/h1>/.exec(html)?.[1] ?? "";

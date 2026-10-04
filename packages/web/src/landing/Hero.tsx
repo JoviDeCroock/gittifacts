@@ -67,6 +67,20 @@ export function SessionLink({ class: cls }: { class?: string }) {
   );
 }
 
+/**
+ * The primary call to action: "Create an account", or "Open dashboard" (→ /dashboard) when signed in.
+ * Same signal as SessionLink: the head script's hint before first paint, then client.ts's one
+ * session check fixes the href.
+ */
+export function SessionCta() {
+  return (
+    <a class="btn btn--primary hero__cta" href="/signin?mode=signup" data-session-cta>
+      <span class="session-anon">Create an account</span>
+      <span class="session-authed">Open dashboard</span>
+    </a>
+  );
+}
+
 /** A URL with <wbr> break points (the Worker and client.ts rewrite it the same way). */
 export function BreakableUrl({ url }: { url: string }) {
   return (
@@ -147,9 +161,7 @@ export function Hero() {
             after merge.
           </p>
           <div class="hero__actions">
-            <a class="btn btn--primary hero__cta" href="/signin?mode=signup">
-              Create an account
-            </a>
+            <SessionCta />
             <div class="hero__agent">
               <p class="hero__agent-label">Or point your agent at</p>
               <CopyLine id="agent-url" originPath="/start" label="Copy the start URL" />

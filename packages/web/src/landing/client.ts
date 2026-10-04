@@ -1,7 +1,7 @@
 /**
  * The landing page's only script: copy buttons, the theme switch (same storage key as the app),
  * the start URL on hosts the Worker did not rewrite (local preview), and the nav's "Sign in" /
- * "Open dashboard" link (one session check). The page works without it.
+ * "Open dashboard" link and the "Create an account" / "Open dashboard" CTAs (one session check). The page works without it.
  */
 const DEFAULT_ORIGIN = "https://gittifacts.decroockjovi.workers.dev";
 const THEME_KEY = "gf:theme";
@@ -131,13 +131,16 @@ function wireMenu(): void {
 
 const AUTHED_HINT = "gf:authed";
 
-/** Signed in: the nav's session links say "Open dashboard" and go to /dashboard. */
+/** Signed in: the nav's session links and the hero/closing CTAs say "Open dashboard" and go to /dashboard. */
 function showSession(authed: boolean): void {
   const root = document.documentElement;
   if (authed) root.setAttribute("data-authed", "");
   else root.removeAttribute("data-authed");
   for (const a of document.querySelectorAll<HTMLAnchorElement>("a[data-session-link]")) {
     a.setAttribute("href", authed ? "/dashboard" : "/signin");
+  }
+  for (const a of document.querySelectorAll<HTMLAnchorElement>("a[data-session-cta]")) {
+    a.setAttribute("href", authed ? "/dashboard" : "/signin?mode=signup");
   }
   try {
     if (authed) window.localStorage.setItem(AUTHED_HINT, "1");
