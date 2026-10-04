@@ -4,7 +4,7 @@
  */
 import type { PageSnapshot, QaCriterionInput } from "./types.js";
 
-export const PROMPT_VERSION = "qa/2";
+export const PROMPT_VERSION = "qa/3";
 
 const DSL = `Steps (JSON objects {action, target?, value?}):
 - goto: target = path on the app ("/settings")
@@ -26,6 +26,9 @@ Rules:
 - At most 10 steps per criterion. End with at least one expect_* step that checks the criterion itself.
 - Use only selectors and texts you can see in the page snapshots. Never invent ids.
 - Prefer short, exact expected texts that the criterion implies (e.g. a counter reading "1" after one click).
+- Each script checks only what its own criterion says. Never assert a property another criterion covers
+  (e.g. for "lists three shares", count the shares; don't check their total): a failure must point at the
+  criterion that is not met, because a failure withdraws approvals.
 - If a criterion can't be checked in this browser (it needs a login, outside services, email, a server log,
   or is not about something visible), set "untestable" to a one-sentence reason and give no steps.
 - Third-party requests are blocked during QA; criteria that depend on them are untestable.

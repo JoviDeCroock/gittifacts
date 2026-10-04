@@ -2607,6 +2607,12 @@ driver, request service, signed thumbnails), `packages/host-github/src/{qa-secti
   Change goes back to awaiting review; the summary comment, edited in place, drops the approval and its QA line says
   whose was withdrawn. A GitHub review itself is not dismissed (that would be a new, notifying write). **Couldn't
   test and errored runs never withdraw:** they only raise the lane.
+- **Live check (608e034).** The demo Change was approved with its queue frozen, then QA was run with `force`.
+  The approval was withdrawn and audited, the Change was dequeued and re-graded, and it came back awaiting review
+  at Full review (Lane 2) with `qa.failed`. The carried `qa-run` item verified, and the page said whose approval was
+  withdrawn. The same run showed the planner checking criterion 1 ("lists three shares") against the total (criterion
+  2's property). A false fail now withdraws an approval, so the planning prompt (qa/3) says each script checks only
+  its own criterion.
 - **A re-grade of the same head keeps its QA result.** The new bundle carries the head's `qa-run` item, but only
   when the previous bundle's signature still verifies (else it is dropped and logged as `change.qa-carried`).
 - **`/gittifacts qa` is live.** Once the App's Issue comment event was on, a comment on fixture-lib #21 got the App's

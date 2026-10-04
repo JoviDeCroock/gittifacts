@@ -205,3 +205,11 @@ describe("runQa without a Plan (smoke)", () => {
     expect(missing.item.criteria[0]?.reason).toContain("/gone");
   });
 });
+
+describe("planning prompt", () => {
+  it("asks for scripts that check only their own criterion (a failure withdraws approvals)", async () => {
+    const { PLAN_SYSTEM, PROMPT_VERSION } = await import("../src/index.js");
+    expect(PLAN_SYSTEM).toContain("Each script checks only what its own criterion says");
+    expect(PROMPT_VERSION).toBe("qa/3");
+  });
+});
