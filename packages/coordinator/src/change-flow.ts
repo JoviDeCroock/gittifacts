@@ -754,14 +754,15 @@ export async function runChangeWorkflow(
         });
       }
     };
-    await publishOnHost("publish-tour", async () => {
-      const tour = (await store.getTour?.(changeId, headSha)) ?? null;
-      if (tour !== null) await host.publishTour(ref, tour);
-    });
+    // The summary first: on a new PR it is the first thing in the timeline, the review below it.
     const publishSummary = host.publishSummary;
     if (publishSummary !== undefined) {
       await publishOnHost("publish-summary", () => publishSummary.call(host, ref));
     }
+    await publishOnHost("publish-tour", async () => {
+      const tour = (await store.getTour?.(changeId, headSha)) ?? null;
+      if (tour !== null) await host.publishTour(ref, tour);
+    });
   }
 
   // ------------------------------------------------------------ 9. route

@@ -93,10 +93,9 @@ export class PrPublisher {
     const change = await store.getChange(changeId);
     if (change?.headSha == null) return null;
     const head = change.headSha;
-    const [cls, tour, review, plan, reviews, full] = await Promise.all([
+    const [cls, tour, plan, reviews, full] = await Promise.all([
       store.getClassification(changeId, head),
       store.getTour?.(changeId, head) ?? Promise.resolve(null),
-      this.d.prs.review(changeId, head),
       change.planId === null ? Promise.resolve(null) : store.getPlan(change.planId),
       store.listReviews?.(changeId) ?? Promise.resolve([]),
       this.d.prs.fullReviews(changeId, head),
@@ -122,7 +121,8 @@ export class PrPublisher {
         : cls.lane === 0 || cls.blocked ? "not-needed"
         : "pending",
       stops: tour?.stops.length ?? 0,
-      flagged: review === null || tour === null ? 0 : flaggedStops(tour).length,
+      // What the review shows (or will: the summary is written first), not what it posted.
+      flagged: tour === null || cls === null || cls.lane === 0 || cls.blocked ? 0 : flaggedStops(tour).length,
       plan: plan === null ? null : { title: plan.title, approved: plan.status === "approved" },
       approvals: await people("approve"),
       changesRequested: await people("request-changes"),

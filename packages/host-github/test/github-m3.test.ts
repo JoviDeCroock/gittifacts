@@ -30,6 +30,9 @@ describe("the tour as one PR review per head", () => {
     expect(r.comments).toHaveLength(1);
     expect(r.comments[0]?.body).toMatch(/^\*\*Risk\*\* · Riskiest hunk/);
     expect(r.comments[0]?.body).toContain("Stop 2 of 2 in the [walkthrough](https://gittifacts.test/changes/gh-9001-1#stop-2)");
+    // The summary is written first, so it sits above the review in the timeline; the whole first
+    // push is two check-run updates beyond the opening, one comment and one review.
+    expect(host.gh.writes).toEqual(["POST check-runs", "PATCH check-runs", "PATCH check-runs", "POST issue comment", "POST reviews"]);
     // A one-line body that points at the tour.
     expect(r.body.split("\n")).toHaveLength(1);
     expect(r.body).toContain("1 spot worth a look");
