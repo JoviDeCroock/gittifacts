@@ -269,6 +269,13 @@
   min-inline-size: 0;
   font-size: var(--text-small);
 }
+/* A long author or approver name ellipsizes instead of pushing the page sideways (E2E caught it). */
+.signature__block .who {
+  max-inline-size: 100%;
+}
+.signature__block .who__name {
+  min-inline-size: 0;
+}
 .signature__sig {
   display: inline-flex;
   align-items: center;

@@ -1,4 +1,4 @@
-import { useEffect } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import { ErrorBoundary, LocationProvider, lazy, Route, Router, useLocation } from "preact-iso";
 import { AppErrorBoundary } from "./components/AppErrorBoundary.js";
 import { Shell } from "./components/Shell.js";
@@ -84,7 +84,12 @@ function AuthedApp() {
 /** Signed in on /signin: off to `next`, else the dashboard. */
 function RedirectHome() {
   const { route, query } = useLocation();
+  // Once: while the target's lazy chunk loads, this route stays mounted with the new location
+  // (no `next`), and a second run sent every printed link to the dashboard (E2E caught it).
+  const done = useRef(false);
   useEffect(() => {
+    if (done.current) return;
+    done.current = true;
     const next = postAuthTarget(query.next);
     // Server routes (GitHub App redirects, docs, /start) need a real navigation, not the SPA router.
     if (isServerPath(next)) window.location.replace(next);
