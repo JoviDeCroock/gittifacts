@@ -59,9 +59,10 @@ jobs:
         suite: ${{ fromJSON(needs.plan.outputs.suites) }}
     env:
       GF_HOST: ${{ inputs.url || 'https://gittifacts.decroockjovi.workers.dev' }}
-      E2E_AGENT_TOKEN: ${{ secrets.E2E_AGENT_TOKEN }}
-      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
-      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      # Against staging (url input), staging's own E2E account.
+      E2E_AGENT_TOKEN: ${{ contains(inputs.url, 'gittifacts-staging.') && secrets.STAGING_E2E_AGENT_TOKEN || secrets.E2E_AGENT_TOKEN }}
+      E2E_EMAIL: ${{ contains(inputs.url, 'gittifacts-staging.') && secrets.STAGING_E2E_EMAIL || secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ contains(inputs.url, 'gittifacts-staging.') && secrets.STAGING_E2E_PASSWORD || secrets.E2E_PASSWORD }}
       SUITE: ${{ matrix.suite }}
     steps:
       - uses: actions/checkout@v4
