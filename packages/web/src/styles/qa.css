@@ -137,3 +137,8 @@
   border-radius: var(--r-control);
   border: 1px solid var(--rule);
 }
+fieldset.qa-strip {
+  border: 0;
+  margin: 0;
+  padding-inline: 0;
+}

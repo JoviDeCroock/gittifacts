@@ -52,8 +52,10 @@ function counts(qa: QaView): string {
 /** The status line (the summary adds "**QA** · " in front of it). */
 export function qaStatusLine(qa: QaView): string {
   const report = `[QA report](${qa.reportUrl})`;
-  if (qa.status === "queued" || qa.status === "running") return `testing \`${qa.headSha.slice(0, 7)}\` in a browser. ${report}`;
-  if (qa.status === "failed") return `could not test this head${qa.error ? `: ${cut(oneLine(qa.error), 140)}` : ""}. ${report}`;
+  if (qa.status === "queued" || qa.status === "running")
+    return `testing \`${qa.headSha.slice(0, 7)}\` in a browser. ${report}`;
+  if (qa.status === "failed")
+    return `could not test this head${qa.error ? `: ${cut(oneLine(qa.error), 140)}` : ""}. ${report}`;
   return `${counts(qa)} of ${plural(qa.criteria.length, "criterion", "criteria")} · ${report}`;
 }
 
@@ -79,7 +81,10 @@ export function qaDetailsText(qa: QaView): string | null {
   }
   if (qa.criteria.length > 12) out.push(`- and ${qa.criteria.length - 12} more in the report`);
   if (qa.thumbs.length > 0) out.push("", qaThumbs(qa));
-  out.push("", `Screenshots of every step and a replay: [QA report on gittifacts](${qa.reportUrl}). Thumbnail links expire after 72 hours.`);
+  out.push(
+    "",
+    `Screenshots of every step and a replay: [QA report on gittifacts](${qa.reportUrl}). Thumbnail links expire after 72 hours.`,
+  );
   if (qa.requestedBy !== null) out.push("", `Requested by ${qa.requestedBy}.`);
   return out.join("\n");
 }
@@ -92,6 +97,14 @@ export function qaSummary(qa: QaView): SummaryQa {
 /** The QA fold in the check run's text: the same section as the summary comment's. */
 export function qaCheckText(qa: SummaryQa): string {
   const lines = [`**${QA_TERMS.name}** · ${qa.status}`, ""];
-  if (qa.details != null && qa.details !== "") lines.push(`<details><summary>${QA_TERMS.name} details</summary>`, "", qa.details, "", "</details>", "");
+  if (qa.details != null && qa.details !== "")
+    lines.push(
+      `<details><summary>${QA_TERMS.name} details</summary>`,
+      "",
+      qa.details,
+      "",
+      "</details>",
+      "",
+    );
   return lines.join("\n");
 }

@@ -34,7 +34,11 @@ function useBlob(ref: string | undefined) {
   const url = useSignal<string | null>(null);
   useEffect(() => {
     let live = true;
-    if (ref) void artifactUrl(ref).then((u) => live && (url.value = u || null));
+    if (ref) {
+      void artifactUrl(ref).then((u) => {
+        if (live) url.value = u || null;
+      });
+    }
     return () => {
       live = false;
     };
@@ -80,7 +84,7 @@ function Criterion({ c, run }: { c: QaCriterionResult; run: QaRun }) {
       </div>
       <p class="qa-crit__why">{c.reason}</p>
       {c.steps.length > 0 || c.before ? (
-        <div class="qa-strip" role="list" aria-label={`Screenshots of “${c.text}”`}>
+        <fieldset class="qa-strip" aria-label={`Screenshots of “${c.text}”`}>
           <Shot run={run} name={c.before} caption="Before" />
           {c.steps.map((s, i) => (
             <Shot
@@ -90,7 +94,7 @@ function Criterion({ c, run }: { c: QaCriterionResult; run: QaRun }) {
               caption={`${i + 1}. ${stepLabel(s)}${s.ok ? "" : " (failed)"}`}
             />
           ))}
-        </div>
+        </fieldset>
       ) : null}
       {c.consoleErrors + c.networkErrors > 0 ? (
         <p class="qa-dim">
@@ -160,8 +164,14 @@ export function QaPanel({ change }: { change: Change }) {
   useEffect(() => {
     let live = true;
     void fetchQaRuns(change.id).then(
-      (r) => live && ((runs.value = r), (error.value = null)),
-      (e: unknown) => live && (error.value = e instanceof Error ? e.message : String(e)),
+      (r) => {
+        if (!live) return;
+        runs.value = r;
+        error.value = null;
+      },
+      (e: unknown) => {
+        if (live) error.value = e instanceof Error ? e.message : String(e);
+      },
     );
     return () => {
       live = false;
@@ -193,7 +203,13 @@ export function QaPanel({ change }: { change: Change }) {
   const report = latest?.report ?? null;
 
   return (
-    <section class="qa" id="qa" aria-labelledby="qa-title" data-testid="qa" data-status={latest?.status ?? "none"}>
+    <section
+      class="qa"
+      id="qa"
+      aria-labelledby="qa-title"
+      data-testid="qa"
+      data-status={latest?.status ?? "none"}
+    >
       <h2 class="qa__title" id="qa-title">
         <Icon name="monitor" size={20} /> QA in a browser
       </h2>

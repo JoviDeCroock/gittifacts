@@ -126,7 +126,7 @@ export class BrowserRunQa implements QaBrowser {
       // A page that never goes network-idle still loaded if it has a body.
       const loaded = await this.p
         .evaluate(
-          "document.readyState !== 'loading' && location.href.startsWith(" + js(this.origin) + ")",
+          `document.readyState !== 'loading' && location.href.startsWith(${js(this.origin)})`,
         )
         .catch(() => false);
       return loaded
