@@ -2646,3 +2646,7 @@ GLM-5.3-Flash with the old prompt (live: 1 of 1).
   RUNS=2: 22/24 (request-logging 1 spurious concern with an unchanged prompt; codemod 1 unsure, before the output
   was shown), then 24/24 with the final prompt; request-logging alone 8/8. Hidden-behaviour and out-of-scope
   cases kept their concerns in every run.
+- **Live, after the deploy (f3bec618):** codemod-rename on fixture-lib (#20) passes the contract: computed Lane 0,
+  shown as Lane 1 by shadow mode (`shadow.lane0-disabled` the only raised reason), evidence kinds as native. Lane
+  at 125 s, graded at 140 s (CI 115 s of it this run, slower than the 54–86 s before). The live contract is now
+  6/6 against native.
