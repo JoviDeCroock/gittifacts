@@ -81,12 +81,42 @@ export function stagingConfig(prod: Json, d1Id: string): Json {
   for (const entry of Object.values(cfg.exports as Record<string, Json>)) {
     if (entry.container !== undefined) entry.container = containerName(entry.container);
   }
+  // Workflow names are account-wide too, and a deploy REASSIGNS an existing name to the deploying
+  // Worker: with production's names, the first staging deploys took production's Workflows over.
+  const workflowName = (n: unknown) => `${STAGING.name}-${String(n)}`;
+  cfg.workflows = (cfg.workflows as Json[]).map((w) => ({ ...w, name: workflowName(w.name) }));
   const triggers = cfg.triggers as { crons?: string[]; events?: Json[] };
   cfg.triggers = {
     crons: triggers.crons ?? [],
-    events: (triggers.events ?? []).map((e) => ({ ...e, filter: { namespace: STAGING.artifactsNamespace } })),
+    events: (triggers.events ?? []).map((e) => ({
+      ...e,
+      filter: { namespace: STAGING.artifactsNamespace },
+      targets: ((e.targets as Json[] | undefined) ?? []).map((t) =>
+        t.workflow_name === undefined ? t : { ...t, workflow_name: workflowName(t.workflow_name) },
+      ),
+    })),
   };
+  assertNothingShared(prod, cfg);
   return cfg;
+}
+
+/**
+ * Every account-wide name in the staging config must differ from production's: Workflows and
+ * container applications are reassigned or collide by name, queues and D1/R2 by name too.
+ */
+export function assertNothingShared(prod: Json, staging: Json): void {
+  const names = (c: Json): string[] => [
+    ...((c.workflows as Json[] | undefined) ?? []).map((w) => `workflow:${String(w.name)}`),
+    ...((c.containers as Json[] | undefined) ?? []).map((x) => `container:${String(x.name)}`),
+    ...((c.d1_databases as Json[] | undefined) ?? []).map((d) => `d1:${String(d.database_name)}`),
+    ...((c.r2_buckets as Json[] | undefined) ?? []).map((b) => `r2:${String(b.bucket_name)}`),
+    ...(((c.queues as { producers?: Json[] } | undefined)?.producers ?? []).map((q) => `queue:${String(q.queue)}`)),
+    ...((c.ratelimits as Json[] | undefined) ?? []).map((r) => `ratelimit:${String(r.namespace_id)}`),
+    `worker:${String(c.name)}`,
+  ];
+  const prodNames = new Set(names(prod));
+  const shared = names(staging).filter((n) => prodNames.has(n));
+  if (shared.length > 0) throw new Error(`staging config shares account-wide names with production: ${shared.join(", ")}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
