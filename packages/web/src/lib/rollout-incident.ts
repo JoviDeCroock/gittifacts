@@ -13,7 +13,7 @@ export const SIGNAL_LABEL: Record<DetectionSignal, string> = {
   "workers-logs": "the Workers Logs poll",
   "workers-issues": "Workers Issues",
   "health-check": "the rollout's health check",
-  person: "a person (kill switch)",
+  person: "a person (switch off)",
 };
 
 export interface IncidentStep {
@@ -124,7 +124,7 @@ const DETAIL_ACTIONS = new Set(["deploy.regression-attributed", "rollout.regress
 const REVERT_ACTIONS: Record<string, string> = {
   "change.merged": "Revert merged into main",
   "merge.completed": "Revert merged into main",
-  "rollout.via-train": "Revert rolling out on a deploy train",
+  "rollout.via-train": "Revert rolling out in a deploy batch",
   "rollout.stage": "Revert rollout stage started",
   "rollout.released": "Revert released",
 };
@@ -162,7 +162,7 @@ function capitalize(s: string): string {
 
 /** "The Workers Logs poll detected the regression 23.9 s after the first error." */
 export function detectionSentence(incident: Incident, span: (ms: number) => string): string {
-  if (incident.signal === "person") return "A person pulled the kill switch.";
+  if (incident.signal === "person") return "A person switched the change off.";
   const who = incident.signal ? capitalize(SIGNAL_LABEL[incident.signal]) : "Health monitoring";
   const when = incident.detectedAfterMs !== null ? ` ${span(incident.detectedAfterMs)} after the first error` : "";
   return `${who} detected the regression${when}.`;

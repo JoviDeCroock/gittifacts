@@ -43,7 +43,7 @@ function ExcerptView({ ex }: { ex: Excerpt }) {
         {ex.file.status !== "modified" ? <span class="excerpt__status">{ex.file.status}</span> : null}
       </figcaption>
       {ex.missing ? (
-        <p class="excerpt__missing">The cited lines are not part of this diff. Check the tour against the current head.</p>
+        <p class="excerpt__missing">The cited lines are not part of this diff. Check the walkthrough against the current head.</p>
       ) : (
         <div class="excerpt__code scroll-x" tabIndex={0} role="region" aria-label={`${ex.file.path} ${rangeLabel(ex.ref)}`}>
           <table class="diff">

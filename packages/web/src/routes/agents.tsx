@@ -27,7 +27,7 @@ const SCOPES: { id: Scope; label: string; hint: string }[] = [
     label: "Draft Plans",
     hint: "Propose Plans. Only a person can approve one.",
   },
-  { id: "repo:read", label: "Read", hint: "Clone and read code, Changes, tours and evidence." },
+  { id: "repo:read", label: "Read", hint: "Clone and read code, Changes, walkthroughs and evidence." },
 ];
 const NEVER_LINE = neverSentence(
   ["plan:approve", "change:review", "policy:admin", "repo:admin"],

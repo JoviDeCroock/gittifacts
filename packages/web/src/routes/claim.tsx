@@ -37,7 +37,7 @@ export function ClaimPage({ token }: { token: string }) {
     document.title =
       st.status === "ok"
         ? `Claim ${st.data.project.name} · gittifacts`
-        : "Claim a project · gittifacts";
+        : "Claim a repo · gittifacts";
   }, [res.state.value]);
 
   const st = res.state.value;
@@ -45,7 +45,7 @@ export function ClaimPage({ token }: { token: string }) {
   return (
     <ConsentFrame class="claim-frame">
       {st.status === "loading" || s.status === "loading" ? (
-        <Loading label="Loading the project" lines={8} />
+        <Loading label="Loading the repo" lines={8} />
       ) : null}
       {st.status === "error" ? <LoadFailed error={st.error} onRetry={res.reload} /> : null}
       {st.status === "ok" && s.status !== "loading" ? (
@@ -81,7 +81,7 @@ function LoadFailed({ error, onRetry }: { error: unknown; onRetry: () => void })
       </ConsentOutcome>
     );
   }
-  return <ErrorState error={error} what="this project" onRetry={onRetry} />;
+  return <ErrorState error={error} what="this repo" onRetry={onRetry} />;
 }
 
 function Claimed({
@@ -99,11 +99,11 @@ function Claimed({
       title={already ? `You already own ${name}` : `You own ${name} now`}
       action={
         <LinkButton href={repoPath} variant="primary" icon="arrow-up-right">
-          Open the project
+          Open the repo
         </LinkButton>
       }
     >
-      <p>It no longer expires, and its limits are lifted to those of any project you own.</p>
+      <p>It no longer expires, and its limits are lifted to those of any repo you own.</p>
       <p>
         The agent that made it keeps working on it, now accountable to you. You review its Changes;
         auto-merge stays off until you turn it on.
@@ -140,10 +140,10 @@ function ClaimStageView({
           {view.claimedAt
             ? ` ${relative(view.claimedAt, minuteClock.value)} (${formatDateTime(view.claimedAt)})`
             : ""}
-          . A project has one owner; claim links work once.
+          . A repo has one owner; claim links work once.
         </p>
         <p>
-          If you need access, ask its owner. If this was your agent's project, ask the agent to make
+          If you need access, ask its owner. If this was your agent's repo, ask the agent to make
           a new one.
         </p>
       </ConsentOutcome>
@@ -153,7 +153,7 @@ function ClaimStageView({
     return (
       <ConsentOutcome tone="neutral" title={`${name} expired`}>
         <p>Nobody claimed it in time, so it was deleted with its previews and history.</p>
-        <p>Ask the agent to create the project again and send you the new claim link right away.</p>
+        <p>Ask the agent to create the repo again and send you the new claim link right away.</p>
       </ConsentOutcome>
     );
   }
@@ -222,7 +222,7 @@ function ClaimForm({
             Claim {p.name}
           </h1>
           <p class="claim__meta">
-            {p.template ? `${p.template} template` : "Empty project"} · made{" "}
+            {p.template ? `${p.template} template` : "Empty repo"} · made{" "}
             {relative(p.createdAt, now)}
           </p>
           <div class="claim__who">
@@ -281,7 +281,7 @@ function ClaimForm({
           Become the owner
         </h2>
         <p class="claim__owner">
-          Claiming makes <b>you</b> the owner: you become accountable for this project and the agent
+          Claiming makes <b>you</b> the owner: you become accountable for this repo and the agent
           working on it. The claim is recorded in the audit log.
         </p>
 
@@ -330,7 +330,7 @@ function ClaimForm({
                 disabled={check.value === null}
                 aria-describedby={check.value === null ? "claim-missing" : undefined}
               >
-                Claim this project
+                Claim this repo
               </Button>
             ) : (
               <LinkButton href={signInHref(token)} variant="primary" icon="user">

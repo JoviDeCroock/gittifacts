@@ -56,15 +56,15 @@ function ChangeRow({ change, now, showStatus }: { change: ChangeSummary; now: nu
 }
 
 function groupTitle(group: LaneGroup<ChangeSummary>): { title: string; detail: string } {
-  if (group.lane === null) return { title: "Not routed yet", detail: "Checks are still running or failing, so there is no lane or tour yet." };
+  if (group.lane === null) return { title: "Not routed yet", detail: "Checks are still running or failing, so there is no lane or walkthrough yet." };
   const meta = LANES[group.lane];
   if (group.lane === 0 && group.shadow) {
     return {
-      title: `${meta.name} · Shadow`,
-      detail: "Evidence alone would auto-merge these. Shadow mode routes them to you, and your lane call trains agreement.",
+      title: `${meta.name} (${meta.badge}) · Calibrating`,
+      detail: "The evidence alone would auto-merge these. Auto-merge is calibrating, so they come to you, and your lane pick counts toward agreement.",
     };
   }
-  return { title: `${meta.name} · ${meta.short}`, detail: meta.description };
+  return { title: `${meta.name} (${meta.badge})`, detail: meta.description };
 }
 
 function LaneSection({ group, now, showStatus }: { group: LaneGroup<ChangeSummary>; now: number; showStatus: boolean }) {
@@ -136,30 +136,30 @@ function Lane0Control({ detail, onChange }: { detail: RepoDetail; onChange: (d: 
   return (
     <section class="lane0" aria-labelledby="lane0-title">
       <h2 id="lane0-title" class="sr-only">
-        Lane 0
+        Auto-merge (Lane 0)
       </h2>
       <ShadowLine repo={{ policy: detail.repo.policy, shadow: detail.shadow }} />
       {isAdmin && (eligible || enabled) ? (
         <div class="lane0__actions">
           {confirm.value ? (
-            <div class="lane0__confirm" role="group" aria-label="Confirm Lane 0 change">
+            <div class="lane0__confirm" role="group" aria-label="Confirm the auto-merge change">
               <p>
                 {enabled
-                  ? "Changes that compute Lane 0 will go back to a human glance. Nothing already merged changes."
-                  : "Changes that compute Lane 0 will merge without a human. Each still rolls out behind a flag with automatic revert."}
+                  ? "Changes the evidence would auto-merge will go back to a quick review by a person. Nothing already merged changes."
+                  : "Changes the evidence qualifies for auto-merge will merge without a person. Each still rolls out behind a flag with automatic revert."}
               </p>
               <div class="lane0__buttons">
                 <Button variant="secondary" size="sm" onClick={() => (confirm.value = false)} disabled={busy.value}>
                   Cancel
                 </Button>
                 <Button variant={enabled ? "danger-outline" : "primary"} size="sm" busy={busy.value} busyLabel="Saving…" onClick={() => apply(!enabled)}>
-                  {enabled ? "Return Lane 0 to shadow mode" : "Turn on Lane 0"}
+                  {enabled ? "Turn auto-merge off (calibrate again)" : "Turn on auto-merge"}
                 </Button>
               </div>
             </div>
           ) : (
             <Button variant={enabled ? "secondary" : "primary"} size="sm" icon={enabled ? "pause" : "power"} onClick={() => (confirm.value = true)}>
-              {enabled ? "Return to shadow mode" : "Turn on Lane 0"}
+              {enabled ? "Turn auto-merge off" : "Turn on auto-merge"}
             </Button>
           )}
           {error.value ? (
@@ -238,7 +238,7 @@ export function RepoChanges({ repoId }: { repoId: string }) {
             </span>
           ) : null}
           {repo.claim.status === "unclaimed" ? (
-            <span class="tone--warn">Unclaimed project: previews only, no production deploys, no Lane 0</span>
+            <span class="tone--warn">Unclaimed repo: previews only, no production deploys, no auto-merge</span>
           ) : null}
           {repo.policySha ? (
             <span title="Policy is read from the default branch">
@@ -280,7 +280,7 @@ export function RepoChanges({ repoId }: { repoId: string }) {
               <EmptyState icon="git-branch" title="No changes yet">
                 <p>
                   Agents start changes against an approved plan through the API or MCP (<code>POST /api/v1/changes</code>). Each one shows up here with its lane once
-                  its checks pass and the reviewer agent has written a tour.
+                  its checks pass and the reviewer agent has written a walkthrough.
                 </p>
               </EmptyState>
             ) : groups.length === 0 ? (

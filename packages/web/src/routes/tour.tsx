@@ -79,7 +79,7 @@ async function loadTour(changeId: string): Promise<TourData> {
 function StationStrip({ tour, current, onJump, resumeAt, onResume }: { tour: Tour; current: number; onJump: (i: number) => void; resumeAt: number | null; onResume: () => void }) {
   const n = tour.stops.length;
   return (
-    <nav class="stations" aria-label="Tour stops">
+    <nav class="stations" aria-label="Walkthrough stops">
       <div class="stations__inner">
         {resumeAt !== null ? (
           <button type="button" class="stations__resume" onClick={onResume}>
@@ -130,15 +130,15 @@ function LaneBlock({ change, open, rail = false }: { change: Change; open: boole
   }
   const routed = LANES[chart.routedLane];
   const why = chart.shadowRaised
-    ? `Evidence computes ${LANES[chart.computedLane].name}. Shadow mode routes it to a person.`
-    : (chart.rows.find((r) => r.decisive)?.reason.message ?? "Every signal allows this lane.");
+    ? `The evidence alone says ${LANES[chart.computedLane].name.toLowerCase()}. Auto-merge is calibrating on this repo, so a person approves it.`
+    : (chart.rows.find((r) => r.decisive)?.reason.message ?? "Every reason allows this lane.");
   return (
     <section class={`lane-block lane-block--l${chart.routedLane} ${rail ? "lane-block--rail" : ""}`} aria-labelledby={rail ? "lane-title-rail" : "lane-title"}>
       <div class="lane-block__head">
         <LaneTag lane={chart.routedLane} size="lg" />
         <div>
           <h2 class="lane-block__title" id={rail ? "lane-title-rail" : "lane-title"}>
-            {routed.name} · {routed.short}
+            {routed.name} <span class="lane-block__badge">({routed.badge})</span>
           </h2>
           <p class="lane-block__line lane-block__line--clamp" title={why.length > 160 ? why : undefined}>
             {why}
@@ -147,8 +147,8 @@ function LaneBlock({ change, open, rail = false }: { change: Change; open: boole
       </div>
       <details class="disclosure lane-block__why" open={open}>
         <summary>
-          Why {routed.name}
-          <span class="lane-block__n">{plural(chart.rows.length, "signal")}</span>
+          Why {routed.name.toLowerCase()}
+          <span class="lane-block__n">{plural(chart.rows.length, "reason")}</span>
           <Icon name="chevron-down" class="disclosure__chev" />
         </summary>
         <TriageChart reasons={change.laneReasons} computedLane={change.computedLane} lane={change.lane} changeId={change.id} />
@@ -381,8 +381,8 @@ function TourEnd({ tour, desktop, onGithub = false }: { tour: Tour; desktop: boo
   const tally = { proven: 0, unproven: 0, risk: 0 };
   for (const s of tour.stops) tally[s.verdict]++;
   return (
-    <section class="tour-end" aria-label="End of tour">
-      <p class="tour-end__title">End of the tour</p>
+    <section class="tour-end" aria-label="End of walkthrough">
+      <p class="tour-end__title">End of the walkthrough</p>
       <p class="tour-end__tally">
         {(["proven", "unproven", "risk"] as const)
           .filter((v) => tally[v] > 0)
@@ -611,7 +611,7 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
           {stale ? (
             <p class="tour__stale" role="alert">
               <Icon name="triangle-alert" size={18} />
-              This tour describes head <code>{shortSha(tour?.headSha)}</code>, but the change is now at <code>{shortSha(change.headSha)}</code>. The reviewer agent is rewriting it.
+              This walkthrough describes head <code>{shortSha(tour?.headSha)}</code>, but the change is now at <code>{shortSha(change.headSha)}</code>. The reviewer agent is rewriting it.
             </p>
           ) : null}
 
@@ -658,7 +658,7 @@ export function TourView({ changeId }: { changeId: string }) {
   if (st.status === "loading") {
     return (
       <Page title="Change" crumbs={crumbsBase} wide>
-        <Loading label="Loading the tour" lines={10} />
+        <Loading label="Loading the walkthrough" lines={10} />
       </Page>
     );
   }

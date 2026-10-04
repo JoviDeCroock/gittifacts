@@ -219,7 +219,7 @@ export function RepoPicker({
           <Icon name="info" size={16} />
           <span>
             You don't own or maintain any claimed repositories yet. Only claimed repositories you
-            own or maintain can be connected to an integration; unclaimed projects can't.
+            own or maintain can be connected to an integration; unclaimed repos can't.
           </span>
         </p>
       ) : selection === "selected" ? (

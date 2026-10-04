@@ -8,9 +8,9 @@ import type { HumanJourney } from "../lib/types.js";
 export const journey: HumanJourney = {
   number: "05",
   slug: "lane0-merged",
-  title: "A Lane 0 Change that merged with no human",
+  title: "An auto-merged Change (Lane 0): no human",
   subtitle:
-    "The platform's verified pure revert merged itself in Lane 0. What a person sees afterwards.",
+    "The platform's verified pure revert auto-merged itself (Lane 0). What a person sees afterwards.",
   signedIn: true,
   async run(j, state) {
     const p = j.page;
@@ -29,7 +29,7 @@ export const journey: HumanJourney = {
     await j.hold(2400);
     await j.snap("change-3");
 
-    await j.chapter("Why Lane 0", "Why Lane 0: the signals that allowed auto-merge");
+    await j.chapter("Why auto-merge", "Why auto-merge: the reasons that allowed it");
     const lane = p.locator("[id^='lane-title']").first();
     if ((await lane.count()) > 0) {
       await j.reveal(lane, true);

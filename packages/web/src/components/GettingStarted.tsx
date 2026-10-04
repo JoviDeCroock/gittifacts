@@ -120,7 +120,7 @@ function AgentBody({ state, primary }: { state: State; primary: boolean }) {
         <Command text={agentPrompt(window.location.origin)} />
       </div>
       <p class="gs-step__aside">
-        It reads the guide, then sends you a link to approve it or to claim its first project. Or{" "}
+        It reads the guide, then sends you a link to approve it or to claim its first repo. Or{" "}
         <a href="/agents">create a token</a> yourself.
       </p>
     </>
@@ -188,7 +188,7 @@ function TryBody({
       await gettingStartedApi.createProject({ template: template.value });
       onChanged();
     } catch (err) {
-      const copy = describeError(err, "the project");
+      const copy = describeError(err, "the repo");
       error.value = `${copy.title}. ${copy.detail}`;
     } finally {
       busy.value = false;
@@ -203,7 +203,7 @@ function TryBody({
         </p>
       ) : (
         <p class="gs-step__line">
-          Create a project from a template. Its first check runs and a live preview comes up.
+          Create a repo from a template. Its first check runs and a live preview comes up.
         </p>
       )}
       <form class="gs-try" onSubmit={create}>
@@ -228,7 +228,7 @@ function TryBody({
           busy={busy.value}
           busyLabel="Creating…"
         >
-          Create project
+          Create repo
         </Button>
       </form>
       {error.value ? (

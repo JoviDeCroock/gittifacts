@@ -27,7 +27,7 @@ const COPY: Record<ReviewDecisionKind, { title: string; confirm: string; busy: s
     confirm: "Send request",
     busy: "Sending…",
     done: "Sent. The author gets your comment and pushes a new head.",
-    consequence: "The author agent receives your comment, pushes a new head, and the reviewer agent rewrites the tour.",
+    consequence: "The author agent receives your comment, pushes a new head, and the reviewer agent rewrites the walkthrough.",
     variant: "secondary",
   },
   reject: {
@@ -58,7 +58,7 @@ function LanePick({ value, computed, onChange }: { value: Lane | null; computed:
           ) : (
             <>
               <LaneTag lane={l} size="sm" />
-              <span class="lane-pick__name">{LANES[l].short}</span>
+              <span class="lane-pick__name">{LANES[l].name}</span>
               {computed === l ? <span class="lane-pick__computed">computed</span> : null}
             </>
           )}
@@ -92,7 +92,7 @@ const RESOLUTION_APPROVE = {
 /** Why there is nothing to decide, for every status but awaiting-review. */
 const STATUS_NOTE: Partial<Record<Change["status"], string>> = {
   "awaiting-push": "Nothing to decide until the author pushes and the checks pass.",
-  running: "No decision until checks pass and the tour is written.",
+  running: "No decision until checks pass and the walkthrough is written.",
   failing: "Checks failed. The author has to push a fix before anyone can decide.",
   approved: "Approved. The merge queue lands it next.",
   queued: "Approved and waiting in the merge queue.",
@@ -224,7 +224,7 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
             <legend class="field__label">Which lane would you have picked?</legend>
             <p class="field__hint">
               {shadowCandidate
-                ? `Evidence computed Lane 0. Your call trains shadow mode${shadow ? ` (${shadow.agreed} of ${shadow.samples} agreed so far)` : ""}.`
+                ? `The evidence alone says auto-merge. Your pick calibrates auto-merge for this repo${shadow ? ` (${shadow.agreed} of ${shadow.samples} agreed so far)` : ""}.`
                 : "Optional. Disagreements help tune the classifier."}
             </p>
             <LanePick value={humanLane.value} computed={change.computedLane} onChange={(l) => (humanLane.value = l)} />

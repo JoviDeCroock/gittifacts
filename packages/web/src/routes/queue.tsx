@@ -250,8 +250,8 @@ function FlakyTests({ q }: { q: QueueOverviewView }) {
           Flaky tests
         </h2>
         <p class="q-section__lede">
-          A quarantined test never counts as passing: a change whose affected set includes one goes
-          to at least Lane 1.
+          A quarantined test never counts as passing: a change whose affected set includes one gets
+          at least a quick review (Lane 1).
         </p>
       </div>
       <ul class="q-flaky">

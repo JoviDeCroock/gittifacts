@@ -79,10 +79,10 @@ const TAG_SIZES = { sm: [31, 18], md: [37, 22], lg: [47, 28] } as const;
 
 interface LaneTagProps {
   lane: Lane | null;
-  /** Lane 0 computed while shadow mode routes it to a human: dashed outline. */
+  /** Auto-merge computed while calibration routes it to a human: dashed outline. */
   shadow?: boolean;
   size?: keyof typeof TAG_SIZES;
-  /** Show "Lane 1 · Glance" beside the tag. */
+  /** Show the lane's name ("Quick review") beside the tag. */
   label?: boolean | "name";
 }
 
@@ -94,7 +94,7 @@ export function LaneTag({ lane, shadow = false, size = "md", label = false }: La
   const [w, h] = TAG_SIZES[size];
   const variant = lane === null ? "none" : shadow ? "shadow" : `l${lane}`;
   const meta = lane === null ? null : LANES[lane];
-  const spoken = meta ? `${meta.name}, ${meta.short.toLowerCase()}${shadow ? ", shadow mode" : ""}` : "Not routed yet";
+  const spoken = meta ? `${meta.name} (${meta.badge})${shadow ? ", calibrating" : ""}` : "Not routed yet";
   const r = h / 2;
   const notch = h * 0.3;
   const holeR = Math.max(1.6, h * 0.1);
@@ -114,7 +114,7 @@ export function LaneTag({ lane, shadow = false, size = "md", label = false }: La
       {label && meta ? (
         <span class="lane-tag__label" aria-hidden="true">
           {meta.name}
-          {label === true ? <span class="lane-tag__short"> · {shadow ? "Shadow" : meta.short}</span> : null}
+          {label === true && shadow ? <span class="lane-tag__short"> · Calibrating</span> : null}
         </span>
       ) : null}
     </span>

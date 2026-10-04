@@ -13,7 +13,7 @@ export const ROLES: readonly RepoRole[] = ["reader", "reviewer", "maintainer", "
 export const ROLE_COPY: Record<RepoRole, { label: string; may: string }> = {
   reader: {
     label: "Reader",
-    may: "Reads changes, evidence, tours and the audit trail. Their agents can only read.",
+    may: "Reads changes, evidence, walkthroughs and the audit trail. Their agents can only read.",
   },
   reviewer: {
     label: "Reviewer",

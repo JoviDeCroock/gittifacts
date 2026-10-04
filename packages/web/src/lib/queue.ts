@@ -53,7 +53,7 @@ export const BATCH_KIND: Record<BatchKind, string> = {
 export const TRAIN_STATE: Record<TrainState, StatusMeta> = {
   deploying: { label: "Deploying", tone: "neutral", icon: "rocket" },
   watching: { label: "Watching", tone: "warn", icon: "eye" },
-  killing: { label: "Killing a flag", tone: "danger", icon: "flag" },
+  killing: { label: "Switching a flag off", tone: "danger", icon: "flag" },
   "rolling-back": { label: "Rolling back", tone: "danger", icon: "undo" },
   released: { label: "Released", tone: "ok", icon: "badge-check" },
   "rolled-back": { label: "Rolled back", tone: "danger", icon: "undo" },

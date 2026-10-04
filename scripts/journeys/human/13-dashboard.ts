@@ -36,7 +36,7 @@ export const journey: HumanJourney = {
     await j.snap("dashboard-new");
 
     await j.chapter("Try it now", "Try it now: a project from a template");
-    const create = p.getByRole("button", { name: "Create project" });
+    const create = p.getByRole("button", { name: "Create repo" });
     await j.reveal(create);
     const createAt = Date.now();
     await j.click(create);

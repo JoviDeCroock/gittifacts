@@ -71,7 +71,7 @@ export function SignIn() {
           {mode.value === "signin" ? "Sign in to review" : "Create your account"}
         </h1>
         <p class="signin__lede">
-          Approve plans, read tours, and watch rollouts for the changes your agents write.
+          Approve plans, read walkthroughs, and watch rollouts for the changes your agents write.
         </p>
 
         {notice ? (
@@ -191,7 +191,7 @@ export function SignIn() {
             />
           </div>
           <p class="signin__specimen-note">
-            Example from a synthetic breaking API change. Lane 2 means a person reads the diff.
+            Example from a synthetic breaking API change. A full review (Lane 2) means a person reads the diff.
           </p>
         </div>
       </aside>

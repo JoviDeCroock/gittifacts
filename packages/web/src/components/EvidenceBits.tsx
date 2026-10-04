@@ -44,7 +44,7 @@ export function EvidenceChip({ item, changeId }: { item: EvidenceItem; changeId:
 
 export function MissingChip({ id }: { id: string }) {
   return (
-    <span class="ev-chip ev-chip--danger" title="The tour cites evidence that is not in the signed bundle.">
+    <span class="ev-chip ev-chip--danger" title="The walkthrough cites evidence that is not in the signed bundle.">
       <Icon name="shield-alert" size={15} />
       <span class="ev-chip__label">{id}</span>
       <span class="ev-chip__value">Not in bundle</span>

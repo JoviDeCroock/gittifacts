@@ -8,9 +8,9 @@ import type { HumanJourney } from "../lib/types.js";
 export const journey: HumanJourney = {
   number: "04",
   slug: "review-change",
-  title: "Review a Change: tour, evidence, approve",
+  title: "Review a Change: walkthrough, evidence, approve",
   subtitle:
-    "An agent pushed a Change. The reviewer agent wrote a tour; the platform signed the evidence.",
+    "An agent pushed a Change. The reviewer agent wrote a walkthrough; the platform signed the evidence.",
   mobile: true,
   signedIn: true,
   async run(j, state, { mobile }) {
@@ -36,7 +36,7 @@ export const journey: HumanJourney = {
 
     await j.chapter(
       "What the reviewer agent is unsure about",
-      "The tour opens with what the reviewer agent is least sure of",
+      "The walkthrough opens with what the reviewer agent is least sure of",
     );
     const handover = p.locator("#handover-title");
     await j.reveal(handover, true);
@@ -47,7 +47,7 @@ export const journey: HumanJourney = {
     j.metrics.tourStops = n;
     for (let i = 0; i < n; i++) {
       const title = ((await stops.nth(i).textContent()) ?? "").trim();
-      await j.chapter(`Tour: ${title.replace(/^Stop \d+ of \d+:\s*/, "")}`.slice(0, 90), "");
+      await j.chapter(`Walkthrough: ${title.replace(/^Stop \d+ of \d+:\s*/, "")}`.slice(0, 90), "");
       await j.reveal(stops.nth(i), true);
       await j.hold(mobile ? 1800 : 2000);
       await j.snap(`stop-${i + 1}`);
@@ -119,7 +119,7 @@ export const journey: HumanJourney = {
     );
     const pick = p
       .locator(".lane-pick")
-      .getByRole("radio", { name: mobile ? /Full review/ : /Glance/ });
+      .getByRole("radio", { name: mobile ? /Full review/ : /Quick review/ });
     if ((await pick.count()) > 0) await j.click(pick.first());
     await j.snap("approve-form");
     const started = Date.now();

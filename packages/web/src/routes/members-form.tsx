@@ -120,7 +120,7 @@ export function RoleGuide() {
         ))}
       </dl>
       <p class="role-guide__note">
-        Nobody approves their own plan or change. An unclaimed project has no members until someone
+        Nobody approves their own plan or change. An unclaimed repo has no members until someone
         claims it.
       </p>
     </section>

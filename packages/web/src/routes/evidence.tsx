@@ -149,7 +149,7 @@ function CoverageBody({ item, policy }: { item: Item<"coverage">; policy: RepoPo
         <p>
           <b class="ev-big tnum">{pct(item.ratio)}</b> of changed lines covered ({item.coveredChangedLines} of {item.changedLines})
         </p>
-        <Meter value={item.ratio} threshold={t} thresholdLabel={`Lane 0 needs ${pct(t)}`} tone={item.ratio >= t ? "ok" : "warn"} label={`Coverage ${pct(item.ratio)}, policy ${pct(t)}`} />
+        <Meter value={item.ratio} threshold={t} thresholdLabel={`Auto-merge needs ${pct(t)}`} tone={item.ratio >= t ? "ok" : "warn"} label={`Coverage ${pct(item.ratio)}, policy ${pct(t)}`} />
       </div>
       <table class="ev-table">
         <thead>
@@ -200,7 +200,7 @@ function MutationBody({ item, policy }: { item: Item<"mutation">; policy: RepoPo
         <p>
           <b class="ev-big tnum">{pct(item.score)}</b> mutation score on changed lines ({item.tool})
         </p>
-        <Meter value={item.score} threshold={t} thresholdLabel={`Lane 0 needs ${pct(t)}`} tone={item.score >= t ? "ok" : "warn"} label={`Mutation score ${pct(item.score)}, policy ${pct(t)}`} />
+        <Meter value={item.score} threshold={t} thresholdLabel={`Auto-merge needs ${pct(t)}`} tone={item.score >= t ? "ok" : "warn"} label={`Mutation score ${pct(item.score)}, policy ${pct(t)}`} />
       </div>
       <p class="ev-stats tnum">
         <span>
@@ -414,7 +414,7 @@ function ItemBody({ item, policy }: { item: EvidenceItem; policy: RepoPolicy }) 
               </li>
             ))}
           </ul>
-          <p class="ev-sub">Sensitive paths always force at least Lane 2.</p>
+          <p class="ev-sub">Sensitive paths always get a full review (Lane 2).</p>
         </>
       );
     case "preview":

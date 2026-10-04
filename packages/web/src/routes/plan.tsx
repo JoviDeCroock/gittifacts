@@ -126,7 +126,7 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
       </h2>
       {mode.value === "approve" ? (
         <p class="signature__consequence">
-          Agents can then start changes inside {plural(plan.scopePaths.length, "scope path")}. Anything outside them is flagged as scope drift and goes to Lane 2.
+          Agents can then start changes inside {plural(plan.scopePaths.length, "scope path")}. Anything outside them is flagged as scope drift and gets a full review (Lane 2).
         </p>
       ) : (
         <p class="signature__consequence">The plan closes. Agents cannot start work on it, and the author has to draft a new one.</p>
@@ -253,7 +253,7 @@ function PlanDoc({ data }: { data: PlanData }) {
         <div>
           <h2>Scope paths</h2>
           {plan.scopePaths.length === 0 ? (
-            <p class="plan-sec__empty">Not declared. Every change under this plan counts as unknown scope, which blocks Lane 0.</p>
+            <p class="plan-sec__empty">Not declared. Every change under this plan counts as unknown scope, which rules out auto-merge.</p>
           ) : (
             <ul class="globs">
               {plan.scopePaths.map((g) => (

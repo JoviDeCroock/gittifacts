@@ -18,9 +18,9 @@ import { principal } from "../state/session.js";
 import "../styles/repos.css";
 
 function LaneCount({ lane, count, shadow = false }: { lane: Lane; count: number; shadow?: boolean }) {
-  const word = shadow ? "shadow" : LANES[lane].short.toLowerCase();
+  const word = shadow ? "calibrating" : LANES[lane].name.toLowerCase();
   return (
-    <span class={`lane-count ${count === 0 ? "is-zero" : ""}`} aria-label={`Lane ${lane}${shadow ? " (shadow)" : ""}: ${count} open`}>
+    <span class={`lane-count ${count === 0 ? "is-zero" : ""}`} aria-label={`${LANES[lane].name} (Lane ${lane})${shadow ? ", calibrating" : ""}: ${count} open`}>
       <LaneTag lane={lane} size="sm" shadow={shadow} />
       <span aria-hidden="true">
         <b class="tnum">{count}</b> {word}
@@ -45,7 +45,7 @@ export function ShadowLine({
     <div class={`shadow-line shadow-line--${enabled ? "on" : p.state}`}>
       <span class="shadow-line__head">
         {enabled ? <Icon name="check-circle" size={15} /> : <Icon name="circle-dashed" size={15} />}
-        {enabled ? "Lane 0 on" : "Lane 0 in shadow mode"}
+        {enabled ? "Auto-merge on" : "Auto-merge calibrating"}
       </span>
       <div class={`shadow-line__bar ${p.state === "collecting" && !enabled ? "" : "has-tick"}`}>
         <Meter
@@ -53,7 +53,7 @@ export function ShadowLine({
           threshold={p.state === "collecting" ? undefined : p.threshold}
           thresholdLabel={p.state === "collecting" ? undefined : `needs ${pct(p.threshold)}`}
           tone={enabled || p.state === "eligible" ? "ok" : p.state === "below" ? "warn" : "neutral"}
-          label={`${enabled ? "Lane 0 on" : "Shadow mode"}: ${p.headline}. ${p.detail}`}
+          label={`${enabled ? "Auto-merge on" : "Auto-merge calibrating"}: ${p.headline}. ${p.detail}`}
         />
         <span class="shadow-line__value tnum" aria-hidden="true">
           {value}
@@ -205,7 +205,7 @@ export function Repos() {
             <span>Repository</span>
             <span>Review</span>
             <span>Open by lane</span>
-            <span>Lane 0 agreement</span>
+            <span>Auto-merge agreement</span>
           </div>
           <ul class="rows repo-list">
             {repos.map((r) => (

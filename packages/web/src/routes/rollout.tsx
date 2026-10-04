@@ -127,7 +127,7 @@ function headline(r: RolloutState, policy: RolloutPolicy, now: number, incident:
 
 /** What happened, to the second: the first error, the detection, and each automatic step after it. */
 function IncidentFacts({ incident }: { incident: Incident }) {
-  const by = incident.signal === "person" ? "Killed by a person" : incident.signal ? `Detected by ${SIGNAL_LABEL[incident.signal]}` : "Regression detected";
+  const by = incident.signal === "person" ? "Switched off by a person" : incident.signal ? `Detected by ${SIGNAL_LABEL[incident.signal]}` : "Regression detected";
   return (
     <div class="incident">
       <ol class="incident__list" aria-label="What happened, to the second">
@@ -166,7 +166,7 @@ function IncidentFacts({ incident }: { incident: Incident }) {
 
 function stoppedNote(incident: Incident): string {
   const at = formatClock(incident.detectedAt);
-  if (incident.signal === "person") return `Killed by a person at ${at}. The rates below are from the last check that was kept.`;
+  if (incident.signal === "person") return `Switched off by a person at ${at}. The rates below are from the last check that was kept.`;
   const by = incident.signal ? ` by ${SIGNAL_LABEL[incident.signal]}` : "";
   return `Stopped at ${at}${by}. The rates below are from the last check that was kept.`;
 }
@@ -265,7 +265,7 @@ function KillSwitch({ change, onKilled }: { change: Change; onKilled: (c: Change
   return (
     <section class="kill" aria-labelledby="kill-title">
       <h2 id="kill-title" class="kill__title">
-        <Icon name="power" size={18} /> Kill switch
+        <Icon name="power" size={18} /> Switch off
       </h2>
       <p class="kill__line">
         Turns the flag off for everyone, sends all traffic back to {prev ? <code>{prev}</code> : "the previous version"}, and opens a revert change.
@@ -273,7 +273,7 @@ function KillSwitch({ change, onKilled }: { change: Change; onKilled: (c: Change
       {open.value ? (
         <form class="kill__form" onSubmit={kill}>
           <label class="field">
-            <span class="field__label">Why are you killing this rollout?</span>
+            <span class="field__label">Why are you switching this change off?</span>
             <textarea class="textarea" rows={2} value={reason.value} onInput={(e) => (reason.value = e.currentTarget.value)} aria-describedby={error.value ? "kill-error" : undefined} aria-invalid={error.value ? "true" : undefined} />
           </label>
           {error.value ? (
@@ -292,7 +292,7 @@ function KillSwitch({ change, onKilled }: { change: Change; onKilled: (c: Change
         </form>
       ) : (
         <Button variant="danger-outline" icon="power" onClick={() => (open.value = true)}>
-          Kill rollout…
+          Switch off…
         </Button>
       )}
     </section>
@@ -370,7 +370,7 @@ export function RolloutView({ changeId }: { changeId: string }) {
   if (!rollout) {
     return (
       <Page title="Rollout" crumbs={pageCrumbs} meta={<span>{change.title}</span>}>
-        <EmptyState icon="rocket" title="No rollout yet" action={<LinkButton href={`/changes/${change.id}`} icon="eye">Open the tour</LinkButton>}>
+        <EmptyState icon="rocket" title="No rollout yet" action={<LinkButton href={`/changes/${change.id}`} icon="eye">Open the walkthrough</LinkButton>}>
           <p>Rollouts start after a change merges. It goes to 5%, then 25%, then 100% behind its own flag, with a {policy.watchMinutes}-minute watch window and automatic revert.</p>
         </EmptyState>
       </Page>

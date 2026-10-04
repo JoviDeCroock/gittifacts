@@ -3,20 +3,19 @@
  * Pure functions only.
  */
 import type { Change, ChangeStatus, Lane, LaneReason } from "@app/domain";
+import { LANE_LABELS, laneLabel, type LaneLabel } from "@app/domain/vocabulary";
 import type { ShadowStats } from "../api/types.js";
 
-export interface LaneMeta {
-  lane: Lane;
-  name: string;
-  short: string;
-  description: string;
-}
+/** The lane's name ("Quick review"), its badge ("Lane 1") and one line on what a person does. */
+export type LaneMeta = LaneLabel;
 
-export const LANES: Record<Lane, LaneMeta> = {
-  0: { lane: 0, name: "Lane 0", short: "Auto-merge", description: "Merges on evidence alone." },
-  1: { lane: 1, name: "Lane 1", short: "Glance", description: "Approve the tour, usually in under three minutes." },
-  2: { lane: 2, name: "Lane 2", short: "Full review", description: "Read the diff with the tour as a guide." },
-};
+/** The app's only lane wording; it comes from `@app/domain`, shared with the CLI, `/start` and GitHub. */
+export const LANES: Record<Lane, LaneMeta> = LANE_LABELS;
+
+/** "Quick review (Lane 1)": the name first, the numeral as its badge. */
+export function laneTitle(lane: Lane): string {
+  return laneLabel(lane);
+}
 
 export const LANE_ORDER: Lane[] = [2, 1, 0];
 
@@ -100,7 +99,7 @@ export function matchesFilter(status: ChangeStatus, filter: ChangeFilter): boole
  */
 export function unroutedCopy(status: ChangeStatus, id: string): { title: string; line: string } {
   if (id.startsWith("bs-"))
-    return { title: "Not routed", line: "The platform's bootstrap change merges without review, so it has no lane." };
+    return { title: "Not routed", line: "The platform's first change merges without review, so it has no lane." };
   if (status === "failing")
     return { title: "Not routed yet", line: "The lane is computed once the author pushes a fix and checks pass." };
   if (status === "awaiting-push" || status === "running" || status === "awaiting-review")
@@ -118,23 +117,23 @@ export function noTourCopy(
 ): { title: string; body: string; showDiff: boolean } {
   const tourFailed = change.laneReasons.some((r) => r.code === "tour.failed");
   if (change.status === "awaiting-push")
-    return { title: "Waiting for the first push", body: "The author has not pushed a head yet. Checks, evidence and the tour follow the push.", showDiff: false };
+    return { title: "Waiting for the first push", body: "The author has not pushed a head yet. Checks, evidence and the walkthrough follow the push.", showDiff: false };
   if (change.status === "running" || runStatus === "running" || runStatus === "queued")
-    return { title: "The tour is not written yet", body: "The reviewer agent writes the tour once the checks pass and the evidence is signed. Nothing can be approved until then.", showDiff: false };
+    return { title: "The walkthrough is not written yet", body: "The reviewer agent writes the walkthrough once the checks pass and the evidence is signed. Nothing can be approved until then.", showDiff: false };
   if (change.status === "failing")
     // The chip and the decision bar already say "checks failed"; this section says what it holds.
     return { title: "What failed", body: "There is nothing to review until the author pushes a fix. The failing step is below.", showDiff: false };
   if (change.status === "awaiting-review")
     return tourFailed
-      ? { title: "No tour: the reviewer agent could not write one", body: "Review the change itself. Every changed file is below, the evidence is one step away, and the lane panel lists what was and was not measured.", showDiff: true }
-      : { title: "The reviewer agent is writing the tour", body: "You can already read the diff below and the signed evidence. The tour usually follows within a minute.", showDiff: true };
+      ? { title: "No walkthrough: the reviewer agent could not write one", body: "Review the change itself. Every changed file is below, the evidence is one step away, and the lane panel lists what was and was not measured.", showDiff: true }
+      : { title: "The reviewer agent is writing the walkthrough", body: "You can already read the diff below and the signed evidence. The walkthrough usually follows within a minute.", showDiff: true };
   if (change.id.startsWith("bs-"))
-    return { title: "No tour for the bootstrap change", body: "The platform's first commit sets up CI and the first preview. It merges without review, so no tour is written.", showDiff: false };
+    return { title: "No walkthrough for the first change", body: "The platform's first commit sets up CI and the first preview. It merges without review, so no walkthrough is written.", showDiff: false };
   if (change.lane === 0)
-    return { title: "No tour: this change merged in Lane 0", body: "In Lane 0 the evidence alone decides and nobody reviews, so no tour is written. The diff and the signed evidence are the record.", showDiff: true };
+    return { title: "No walkthrough: this change auto-merged", body: "In auto-merge (Lane 0) the evidence alone decides and nobody reviews, so no walkthrough is written. The diff and the signed evidence are the record.", showDiff: true };
   return {
-    title: tourFailed ? "No tour: the reviewer agent could not write one" : "No tour for this change",
-    body: "It was decided without a tour. The diff and the signed evidence are the record.",
+    title: tourFailed ? "No walkthrough: the reviewer agent could not write one" : "No walkthrough for this change",
+    body: "It was decided without a walkthrough. The diff and the signed evidence are the record.",
     showDiff: true,
   };
 }
@@ -183,12 +182,12 @@ const FAMILY_LABEL: Record<ReasonFamily, string> = {
   signature: "Signature",
   migration: "Migrations",
   budget: "Model budget",
-  tour: "Tour",
+  tour: "Walkthrough",
   informational: "Previews and traces",
   resolution: "Conflict resolution",
-  lane0: "Lane 0 setting",
-  missing: "Missing signal",
-  shadow: "Shadow mode",
+  lane0: "Auto-merge setting",
+  missing: "Missing measurement",
+  shadow: "Calibrating",
   other: "Other",
 };
 
@@ -375,7 +374,7 @@ export function shadowProgress(s: ShadowStats): ShadowProgress {
       ...base,
       state: "collecting",
       headline: `${s.samples} of ${s.samples + s.needed} reviews collected`,
-      detail: `Agreement counts after ${s.needed} more ${s.needed === 1 ? "review" : "reviews"} of Lane 0 candidates.`,
+      detail: `Agreement counts after ${s.needed} more ${s.needed === 1 ? "review" : "reviews"} of auto-merge candidates.`,
     };
   }
   if (s.eligibleToEnableLane0 || s.ratio >= s.threshold) {
@@ -383,7 +382,7 @@ export function shadowProgress(s: ShadowStats): ShadowProgress {
       ...base,
       state: "eligible",
       headline: `${pct(s.ratio, 1)} agreement`,
-      detail: `Meets the ${pct(s.threshold)} threshold over ${s.samples} reviews. Lane 0 can be turned on.`,
+      detail: `Meets the ${pct(s.threshold)} threshold over ${s.samples} reviews. Auto-merge can be turned on.`,
     };
   }
   const missing = Math.max(0, Math.ceil((s.threshold * s.samples - s.agreed) / (1 - s.threshold)));
@@ -399,7 +398,7 @@ export function shadowProgress(s: ShadowStats): ShadowProgress {
 export function topReason(reasons: LaneReason[], computed: Lane | null, routed: Lane | null): { label: string; message: string; shadow: boolean } | null {
   if (reasons.length === 0) return null;
   const chart = triageChart(reasons, computed, routed);
-  if (chart.shadowRaised) return { label: "Shadow mode", message: `Evidence computes ${LANES[chart.computedLane].name}; routed to you.`, shadow: true };
+  if (chart.shadowRaised) return { label: "Calibrating", message: `The evidence alone says ${LANES[chart.computedLane].name.toLowerCase()}; auto-merge is calibrating, so it is routed to you.`, shadow: true };
   const row = chart.rows.find((r) => r.decisive) ?? chart.rows[0];
   return row ? { label: row.label, message: row.reason.message, shadow: false } : null;
 }

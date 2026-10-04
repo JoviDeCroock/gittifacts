@@ -218,6 +218,10 @@
 .lane-block__title {
   font-size: var(--text-title);
 }
+.lane-block__badge {
+  font-weight: 400;
+  color: var(--text-2);
+}
 .lane-block__line {
   font-size: var(--text-small);
   color: var(--text-2);

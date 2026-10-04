@@ -30,7 +30,7 @@ const SCOPE_TEXT: Record<string, { label: string; hint: string }> = {
     hint: "Start Changes and push to their own forks. A person still reviews every one.",
   },
   "plan:create": { label: "Draft Plans", hint: "Propose Plans. Only a person can approve one." },
-  "repo:read": { label: "Read", hint: "Clone and read code, Changes, tours and evidence." },
+  "repo:read": { label: "Read", hint: "Clone and read code, Changes, walkthroughs and evidence." },
 };
 
 /** Most consequential first, matching the copy. */

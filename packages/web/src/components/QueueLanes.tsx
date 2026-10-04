@@ -186,15 +186,15 @@ export function DeployTrains({ q }: { q: QueueOverviewView }) {
     <section class="q-section" aria-labelledby="q-trains">
       <div class="q-section__head">
         <h2 id="q-trains" class="q-section__title">
-          Deploy trains <span class="q-count tnum">{q.trains.length}</span>
+          Deploy batches <span class="q-count tnum">{q.trains.length}</span>
         </h2>
         <p class="q-section__lede">
-          Merged changes deploy in trains. A Worker takes its next train only after the current
+          Merged changes deploy in batches. A Worker takes its next batch only after the current
           one's watch window closes.
         </p>
       </div>
       {q.trains.length === 0 ? (
-        <p class="q-quiet">No trains are deploying.</p>
+        <p class="q-quiet">No batches are deploying.</p>
       ) : (
         <ul class="q-trains">
           {q.trains.map((t) => (
@@ -217,7 +217,7 @@ export function DeployTrains({ q }: { q: QueueOverviewView }) {
                     {t.killed.includes(id) ? (
                       <span class="chip chip--danger">
                         <Icon name="flag" size={14} />
-                        Flag killed
+                        Flag switched off
                       </span>
                     ) : null}
                   </li>

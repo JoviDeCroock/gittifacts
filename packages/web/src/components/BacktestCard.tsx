@@ -40,7 +40,7 @@ function Report({ b, repoUrl }: { b: BacktestView; repoUrl: string }) {
       ) : null}
       <p class={`bt__cal ${r.calibration.eligible ? "bt__cal--ok" : ""}`}>
         <Icon name={r.calibration.eligible ? "check-circle" : "info"} size={16} />
-        <span>{r.calibration.eligible ? "Calibrated: Lane 0 can be turned on." : `Lane 0 stays off: ${r.calibration.reason}.`}</span>
+        <span>{r.calibration.eligible ? "Calibrated: auto-merge can be turned on." : `Auto-merge stays off: ${r.calibration.reason}.`}</span>
       </p>
     </>
   );

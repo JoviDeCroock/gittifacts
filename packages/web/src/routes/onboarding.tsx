@@ -104,7 +104,7 @@ function TemplateBars({ report }: { report: TtfgReport }) {
     <figure class="ttfg-bars">
       <figcaption class="sr-only">
         Median time to first green per template, with the 90th percentile and the target. The recent
-        projects table below lists every value.
+        repos table below lists every value.
       </figcaption>
       <div class="ttfg-bars__row ttfg-bars__row--head" aria-hidden="true">
         <span />
@@ -178,7 +178,7 @@ function RecentTable({ rows, targetMs }: { rows: TtfgProject[]; targetMs: number
       <table class="ttfg-table">
         <thead>
           <tr>
-            <th scope="col">Project</th>
+            <th scope="col">Repo</th>
             <th scope="col">Template</th>
             <th scope="col">Outcome</th>
             <th scope="col" class="num">
@@ -322,7 +322,7 @@ function Report({ report }: { report: TtfgReport }) {
   const o = report.overall;
   if (o.projects === 0) {
     return (
-      <EmptyState icon="timer" title="No projects yet">
+      <EmptyState icon="timer" title="No repos yet">
         Nothing was created with create_project in the last {report.sinceDays} days.
       </EmptyState>
     );
@@ -343,13 +343,13 @@ function Report({ report }: { report: TtfgReport }) {
             threshold={0.9}
             thresholdLabel="90%"
             tone={o.green === 0 ? "neutral" : share >= 0.9 ? "ok" : "warn"}
-            label={`${o.withinTarget} of ${o.green} green projects within the target`}
+            label={`${o.withinTarget} of ${o.green} green repos within the target`}
           />
           <p class="ttfg-tile__sub tnum">
-            {o.withinTarget} of {o.green} green projects
+            {o.withinTarget} of {o.green} green repos
           </p>
         </StatTile>
-        <StatTile label="Projects created" value={String(o.projects)}>
+        <StatTile label="Repos created" value={String(o.projects)}>
           <p class="ttfg-tile__sub tnum">
             {o.finished} finished · {o.green} green
           </p>
@@ -366,7 +366,7 @@ function Report({ report }: { report: TtfgReport }) {
 
       <section class="section">
         <div class="section-head">
-          <h2>Recent projects</h2>
+          <h2>Recent repos</h2>
           <span class="section-head__aside">
             {report.source === "analytics-engine" ? "From Analytics Engine" : "From D1"}
             {report.note ? ` · ${report.note}` : ""}

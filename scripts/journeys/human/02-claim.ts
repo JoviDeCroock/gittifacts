@@ -71,7 +71,7 @@ export const journey: HumanJourney = {
     await j.reveal(p.locator("#claim-decide"), true);
     await j.hold(800);
     // Turnstile usually passes on its own in a real browser; click its box if it asks.
-    const claimBtn = p.getByRole("button", { name: "Claim this project" });
+    const claimBtn = p.getByRole("button", { name: "Claim this repo" });
     const started = Date.now();
     for (let i = 0; i < 60 && (await claimBtn.isDisabled()); i++) {
       // The checkbox sits in a closed shadow root: click where it is drawn (left edge of the widget).

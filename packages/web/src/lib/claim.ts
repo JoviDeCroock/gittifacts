@@ -109,7 +109,7 @@ export function claimFailure(err: unknown): ClaimFailure {
   if (err.status === 403) {
     return {
       kind: "agent",
-      title: "Only a person can claim a project",
+      title: "Only a person can claim a repo",
       detail: fix ?? err.message,
     };
   }
@@ -120,7 +120,7 @@ export function claimFailure(err: unknown): ClaimFailure {
     return { kind: "taken", title: "Someone else claimed it first", detail: fix ?? err.message };
   }
   if (err.status === 410) {
-    return { kind: "expired", title: "This project expired", detail: fix ?? err.message };
+    return { kind: "expired", title: "This repo expired", detail: fix ?? err.message };
   }
   return {
     kind: "retry",

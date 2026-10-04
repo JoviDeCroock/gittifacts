@@ -5,12 +5,12 @@
  */
 import type { Lane, LaneReason } from "@app/domain";
 import { itemAnchor } from "../lib/evidence.js";
-import { LANES, type ChartRow, triageChart } from "../lib/lanes.js";
+import { LANES, type ChartRow, laneTitle, triageChart } from "../lib/lanes.js";
 import { LaneTag } from "./ui.js";
 import "../styles/triage.css";
 
 const COLS: Lane[] = [0, 1, 2];
-const COL_WORD: Record<Lane, string> = { 0: "auto", 1: "glance", 2: "full" };
+const COL_WORD: Record<Lane, string> = { 0: "auto", 1: "quick", 2: "full" };
 
 function Marker({ row }: { row: ChartRow }) {
   const cls = row.unknown ? "tm tm--unknown" : row.decisive ? `tm tm--decisive tm--l${row.lane}` : "tm tm--minor";
@@ -18,7 +18,7 @@ function Marker({ row }: { row: ChartRow }) {
     <span class={cls}>
       <span class="sr-only">
         {row.unknown ? "Not measured, escalates to " : "Forces at least "}
-        {LANES[row.lane].name}
+        {laneTitle(row.lane)}
       </span>
     </span>
   );
@@ -38,10 +38,10 @@ export function TriageChart({ reasons, computedLane, lane, changeId, caption }: 
   const routedMeta = LANES[chart.routedLane];
   return (
     <figure class="triage">
-      <div class="triage__grid" role="table" aria-label={caption ?? `Why this change is in ${routedMeta.name}`}>
+      <div class="triage__grid" role="table" aria-label={caption ?? `Why this change gets ${routedMeta.name.toLowerCase()} (${routedMeta.badge})`}>
         <div class="triage__row triage__row--head" role="row">
           <span class="triage__label" role="columnheader">
-            Signal
+            Reason
           </span>
           {COLS.map((l) => (
             <span key={l} class={`triage__cell triage__cell--l${l} triage__colhead`} role="columnheader">
@@ -74,7 +74,7 @@ export function TriageChart({ reasons, computedLane, lane, changeId, caption }: 
         <div class="triage__row triage__row--total" role="row">
           <div class="triage__label" role="rowheader">
             <span class="triage__family">Evidence computes</span>
-            <span class="triage__msg">The highest lane any signal forces.</span>
+            <span class="triage__msg">The highest lane any reason forces.</span>
           </div>
           {COLS.map((l) => (
             <span key={l} class={`triage__cell triage__cell--l${l}`} role="cell">
@@ -85,8 +85,8 @@ export function TriageChart({ reasons, computedLane, lane, changeId, caption }: 
         {chart.shadowRaised ? (
           <div class="triage__row triage__row--total triage__row--shadow" role="row">
             <div class="triage__label" role="rowheader">
-              <span class="triage__family">Shadow mode routes to</span>
-              <span class="triage__msg">{chart.shadowReason?.message ?? "Lane 0 is not enabled for this repo yet."}</span>
+              <span class="triage__family">Calibrating, so routed to</span>
+              <span class="triage__msg">{chart.shadowReason?.message ?? "Auto-merge is not on for this repo yet."}</span>
             </div>
             {COLS.map((l) => (
               <span key={l} class={`triage__cell triage__cell--l${l}`} role="cell">

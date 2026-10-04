@@ -28,8 +28,8 @@ function AppRow({ app }: { app: GithubApp }) {
         <p class="gh-shadow">
           <Icon name="eye" size={16} />
           <span>
-            Shadow mode: one <code>gittifacts/lane</code> check run per pull request head, and for a
-            linked installation the tour as one review plus a summary comment. It never blocks,
+            Report-only: one <code>gittifacts/lane</code> check run per pull request head, and for a
+            linked installation the walkthrough as one review plus a summary comment. It never blocks,
             approves or merges.
           </span>
         </p>
@@ -89,7 +89,7 @@ function RepoLine({ repo }: { repo: GithubInstallation["repos"][number] }) {
             disabled={busy.value}
             onChange={toggle}
           />
-          <span>Tour review and summary on PRs</span>
+          <span>Walkthrough review and summary on PRs</span>
         </label>
       ) : (
         <span class="gh-repo__wait">graded from its next pull request</span>
@@ -154,7 +154,7 @@ function Notice() {
     );
   }
   const msg = query.linked
-    ? "Installation linked. Its pull requests are graded in shadow mode from now on."
+    ? "Installation linked. Its pull requests are graded, report-only, from now on."
     : query.requested
       ? "GitHub sent your install request to the organization's owners. It shows up here once they approve and link it."
       : null;
@@ -174,7 +174,7 @@ export function GithubSettings() {
       title="GitHub"
       meta={
         <span>
-          Grade pull requests where your code already lives. Nothing moves; shadow mode never
+          Grade pull requests where your code already lives. Nothing moves; report-only mode never
           blocks, approves or merges.
         </span>
       }

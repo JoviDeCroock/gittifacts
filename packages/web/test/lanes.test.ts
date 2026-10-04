@@ -111,7 +111,7 @@ describe("triageChart", () => {
   it("labels a missing or failed measurement by what was not measured", () => {
     expect(familyLabel("signal.missing.test-run")).toBe("Test run missing");
     expect(familyLabel("signal.error.llm-judgment")).toBe("Model judgment failed");
-    expect(familyLabel("signal.error.something-new")).toBe("Missing signal");
+    expect(familyLabel("signal.error.something-new")).toBe("Missing measurement");
     const chart = triageChart([{ code: "signal.error.screenshots", lane: 1, message: "Screenshots errored." }], 1, 1);
     expect(chart.rows[0]?.label).toBe("Screenshots failed");
     expect(chart.rows[0]?.unknown).toBe(true);
@@ -156,7 +156,7 @@ describe("unroutedCopy", () => {
   });
   it("closed changes and the bootstrap are not routed, each with its own reason", () => {
     expect(unroutedCopy("abandoned", "chg_1")).toEqual({ title: "Not routed", line: "This change closed before a lane was computed." });
-    expect(unroutedCopy("merged", "bs-abc").line).toMatch(/bootstrap/);
+    expect(unroutedCopy("merged", "bs-abc").line).toMatch(/first change/);
   });
 });
 
@@ -176,27 +176,27 @@ describe("noTourCopy", () => {
   });
   it("follows the change and its latest run", () => {
     expect(noTourCopy(ch("awaiting-push")).title).toBe("Waiting for the first push");
-    expect(noTourCopy(ch("awaiting-review"), "queued").title).toBe("The tour is not written yet");
+    expect(noTourCopy(ch("awaiting-review"), "queued").title).toBe("The walkthrough is not written yet");
     expect(noTourCopy(ch("awaiting-review", { laneReasons: [{ code: "tour.failed" }] }), "passed").showDiff).toBe(true);
-    expect(noTourCopy(ch("merged", { id: "bs-abc" })).title).toMatch(/bootstrap/);
-    expect(noTourCopy(ch("merged", { lane: 0 })).title).toMatch(/Lane 0/);
+    expect(noTourCopy(ch("merged", { id: "bs-abc" })).title).toMatch(/first change/);
+    expect(noTourCopy(ch("merged", { lane: 0 })).title).toMatch(/auto-merged/);
   });
   it("covers every branch: running, review, the closed fallbacks", () => {
-    expect(noTourCopy(ch("running")).title).toBe("The tour is not written yet");
+    expect(noTourCopy(ch("running")).title).toBe("The walkthrough is not written yet");
     expect(noTourCopy(ch("awaiting-review"), "passed")).toMatchObject({
-      title: "The reviewer agent is writing the tour",
+      title: "The reviewer agent is writing the walkthrough",
       showDiff: true,
     });
     expect(noTourCopy(ch("awaiting-review", { laneReasons: [{ code: "tour.failed" }] })).title).toBe(
-      "No tour: the reviewer agent could not write one",
+      "No walkthrough: the reviewer agent could not write one",
     );
     expect(noTourCopy(ch("merged", { lane: 1 }))).toEqual({
-      title: "No tour for this change",
-      body: "It was decided without a tour. The diff and the signed evidence are the record.",
+      title: "No walkthrough for this change",
+      body: "It was decided without a walkthrough. The diff and the signed evidence are the record.",
       showDiff: true,
     });
     expect(noTourCopy(ch("merged", { lane: 2, laneReasons: [{ code: "tour.failed" }] })).title).toBe(
-      "No tour: the reviewer agent could not write one",
+      "No walkthrough: the reviewer agent could not write one",
     );
     expect(noTourCopy(ch("failing"), "failed").body).toMatch(/pushes a fix/);
   });

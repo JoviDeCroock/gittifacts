@@ -276,7 +276,7 @@ export function InstalledIntegrations() {
       <p class="int-foot">
         <Icon name="shield-check" size={16} />
         <span>
-          Integrations never see your agents' push tokens and can't connect to unclaimed projects.
+          Integrations never see your agents' push tokens and can't connect to unclaimed repos.
           Every install, uninstall and deployment report is in the{" "}
           <a href="/audit">audit log</a>.
         </span>

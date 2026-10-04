@@ -74,7 +74,7 @@ describe("timelineRows", () => {
       ["Flag turned off", "0.1 s"],
       ["Regression traced to this change", "0.0 s"],
       ["First error in production", null],
-      ["Rolling out on a deploy train", null],
+      ["Rolling out in a deploy batch", null],
       ["Merged into main", null],
     ]);
     expect(rows.find((r) => r.action === "deploy.regression-attributed")?.detail).toContain("Workers Logs poll");

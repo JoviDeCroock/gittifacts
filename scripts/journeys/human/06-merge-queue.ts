@@ -154,8 +154,8 @@ export const journey: HumanJourney = {
 
     if (state.trainsProjectId) {
       await j.chapter(
-        "Deploy trains",
-        "A project with a deploy target: merged Changes leave in deploy trains",
+        "Deploy batches",
+        "A repo with a deploy target: merged Changes leave in deploy batches",
       );
       await j.goto(`/repos/${state.trainsProjectId}/queue`, { waitFor: "h1", settleMs: 2000 });
       const trains = p.locator("#q-trains");
