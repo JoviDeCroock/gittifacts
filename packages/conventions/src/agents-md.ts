@@ -166,7 +166,7 @@ export function agentsMd(opts: AgentsMdOptions): string {
     '`reason: "timeout"` → call it again with the same arguments until `reached` is true.',
     '`reason: "unreachable"` → the Change ended; read `get_change_status`.',
     "",
-    "## After merge: rollout and the kill switch",
+    "## After merge: rollout and switching a Change off",
     "With a deploy target, a merged Change rolls out in stages (`rollout` in `.platform/policy.ts`) and is",
     "watched. Its flag `change-<changeId>` is on meanwhile; a regression switches it off, rolls the Worker",
     "back and opens a revert Change, with no human involved. Guard a risky new path with the flag so that",
