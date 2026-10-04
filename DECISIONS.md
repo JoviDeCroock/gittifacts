@@ -2394,3 +2394,38 @@ pr-publisher,adapter}.ts`, `@app/core` `laneKnown` hook, ChangeWorkflow step `pu
 - **Words in one place** (`terms.ts`), per the user's terminology decision of today: "Auto-merge · Quick review ·
   Full review" with "(Lane N)" as a badge, "Report-only", "walkthrough", the button "Approve change" (id
   `approve_tour` and the `gittifacts/lane` name stay). Reason codes get short phrases there too.
+
+## 2026-10-04 — User-facing terms (user decision)
+
+Proposal: docs/ux-review/terminology-2026-10-04.md. The user decided; labels change, machine names don't.
+
+| Concept | Say | Badge / note | Machine names that stay |
+|---|---|---|---|
+| Lane 0 / 1 / 2 | **Auto-merge**, **Quick review**, **Full review** | "(Lane N)" after the name: "Quick review (Lane 1)" | `lane`, `computedLane`, `laneReasons`, `lane_assigned`, `lane0Enabled`, `setLane0`, check `gittifacts/lane` |
+| Shadow mode on gittifacts | **Calibrating** (auto-merge is off until reviewers agree often enough) | "Auto-merge calibrating" on the repo | `shadow`, `shadow.*` reason codes, `shadow.agreementThreshold` |
+| Shadow mode in GitHub mode | **Report-only** (grades, never blocks, approves or merges) | applied in `host-github` by the PR-presentation work | `shadow` |
+| Tour | **Walkthrough**; a stop stays a stop | the GitHub button "Approve tour" is **Approve change** | `tour`, `get_tour`, `tour_ready`, `/changes/{id}/tour`, `approve_tour`, `Tour` schema |
+| project | **repo** | `create_project` also returns `repoId`; `projectId` is a deprecated alias (same value) | `create_project`, `projectId`, `/api/v1/projects`, `.gittifacts.json`'s `projectId`, docs URLs `*-project*` |
+| Change | kept; defined as **"like a pull request, plus its proof"** | | |
+| Plan | kept | | |
+| push grant | **push token** | import-by-push "grants" are a different thing and keep the word | `refresh_push_token` |
+| bootstrap Change | **first Change** | | `bootstrapChangeId`, `bs-` ids |
+| principal | **actor** (UI and guides) | the concept page is "Actors and scopes"; the API keeps `principalId` | `/api/v1/principals`, `principal:ID` audit subjects |
+| signal / gate | **reason** / **auto-merge checklist**; a missing input is a missing **measurement** | | reason codes, `checklist`, `signal.*` codes |
+| kill (one Change) | **Switch off** | "kill switch" stays for the operator's creation switch | `/changes/{id}/kill`, `change.killed` |
+| deploy train | **deploy batch** | | `trains` in the queue API |
+| claim (the author's category) | **category** | "claim" stays for taking ownership of an unclaimed repo | `change.claim.category` |
+
+- **One source per surface.** `@app/domain/vocabulary` exports `LANE_LABELS` and `laneLabel()` on a subpath
+  that imports no zod, so the web bundle and the CLI take it without the schemas. The web reads it only through
+  `lib/lanes.ts` (`LANES`, `laneTitle`); the CLI's `--human` lane line, the review-requested notification and
+  `host-github/src/terms.ts` say the same words.
+- **Docs check.** `BANNED_TERMS` in `packages/docs/src/check/style.ts` fails hand-written prose that says push
+  grant, bootstrap Change, (async) glance, shadow mode, tour(s), deploy train or unclaimed project. Generated
+  reference pages are exempt (their words come from code), and code spans are never prose.
+- **Not renamed:** reason codes and their messages (the classifier's), docs URLs
+  (`concepts/tours`, `concepts/unclaimed-projects`, `concepts/principals-and-scopes`, `guides/review-a-tour`,
+  `guides/create-a-project`, `guides/claim-a-project`: retitled, same paths), anchors other than
+  `write-a-policy#turn-on-auto-merge` (was `#turn-on-lane-0`; every link updated).
+- The preview banner now reads "Unclaimed repo — not verified"; the self-approval error says "nobody can approve
+  their own plan".
