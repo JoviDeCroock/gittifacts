@@ -20,10 +20,18 @@ const REVIEW_STATES: Record<string, "approve" | "request-changes"> = {
   changes_requested: "request-changes",
 };
 
-/** Who may approve: a human with write access who isn't the author. Null = may; else why not. */
-async function mayReview(host: GitHubHost, who: Identity & { login: string }, authorId: number): Promise<string | null> {
+/**
+ * Who may approve: a human with write access who isn't the author. Null = may; else why not.
+ * A full-review request only adds scrutiny, so the author may ask for one (`approving: false`).
+ */
+async function mayReview(
+  host: GitHubHost,
+  who: Identity & { login: string },
+  authorId: number,
+  approving = true,
+): Promise<string | null> {
   if (who.kind !== "human") return `${who.login} is ${who.kind === "agent" ? "a coding agent" : "a bot"}: only humans approve`;
-  if (Number(who.id) === authorId) return "the author can't approve their own pull request";
+  if (approving && Number(who.id) === authorId) return "the author can't approve their own pull request";
   if (host.publisher === null || !(await host.publisher.canWrite(who.login))) return `${who.login} has no write access to the repository`;
   return null;
 }
@@ -73,7 +81,8 @@ export async function onCheckAction(deps: GithubSyncDeps, delivery: GithubDelive
     return { event, action: "ignored", detail: "unknown change" };
   }
   const who = { ...identityOf(p.data.sender), login: p.data.sender.login };
-  const why = await mayReview(deps.host, who, change.host.author.id);
+  const approving = p.data.requested_action.identifier === "approve_tour";
+  const why = await mayReview(deps.host, who, change.host.author.id, approving);
   if (why !== null) return refused(deps, event, changeId, why);
   const head = p.data.check_run.head_sha;
   if (p.data.requested_action.identifier === "full_review") {

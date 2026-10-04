@@ -103,6 +103,22 @@ describe("approvals from GitHub map to the platform's record", () => {
     ]);
   });
 
+  it("the author may ask for a full review of their own PR (it only adds scrutiny), never approve it", async () => {
+    const { host, headSha, changeId } = await lane1();
+    const run = host.gh.laneRun(headSha)!;
+    const author = host.pull.user;
+    host.gh.permissions.set(author.login, "write");
+    await host.sync.handle(host.gh.buttonDelivery(run.id, "approve_tour", author));
+    expect([...host.env.ports.store.reviews.values()].filter((r) => r.changeId === changeId)).toEqual([]);
+    await host.sync.handle(host.gh.buttonDelivery(run.id, "full_review", author));
+    expect([...host.gh.comments.values()][0]?.body).toContain(`Full review requested by | @${author.login}`);
+    // A bot's press still records nothing.
+    const bot = { login: "dependabot[bot]", id: 49699333, type: "Bot" };
+    const before = [...host.gh.comments.values()][0]?.body;
+    await host.sync.handle(host.gh.buttonDelivery(run.id, "full_review", bot));
+    expect([...host.gh.comments.values()][0]?.body).toBe(before);
+  });
+
   it("an approval on gittifacts is the same record (no workflow to wake, nothing merges)", async () => {
     const { host, headSha, changeId } = await lane1();
     const human = host.env.ports.store.addPrincipal({ id: "hu_reviewer", kind: "human", name: "Rae", ownerId: null, keys: [], scopes: ["repo:read", "change:review"] });
