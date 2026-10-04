@@ -23,6 +23,7 @@ import { identityOf, normalizeGithubDelivery } from "./normalize.js";
 import { type GithubDelivery, type GithubRepo, IssueEvent, type PullRequest, PullRequestEvent, PushEvent } from "./payloads.js";
 import { PLAN_LABEL } from "./plans.js";
 import { resolvePlan } from "./sync-plans.js";
+import { type GithubQaPort, onQaComment } from "./sync-qa.js";
 import { onCheckAction, onReview, refreshSummary } from "./sync-reviews.js";
 
 /** A GitHub remote readable for one job; `release` revokes its token. */
@@ -48,6 +49,8 @@ export interface GithubSyncDeps {
   reviewerPrincipal?(identity: Identity & { login: string }): Promise<string>;
   /** Plans from issues and plan files (the platform signs approvals). Absent: no such plans. */
   plans?: { upsert(plan: Plan): Promise<Plan> };
+  /** QA in a browser on request (the Run QA button, `/gittifacts qa`). Absent: not offered. */
+  qa?: GithubQaPort;
 }
 
 export interface SyncOutcome {
@@ -73,6 +76,7 @@ export class GithubSync {
     // Not host events: approvals from the check run's buttons, and plan labels on issues.
     if (delivery.event === "check_run") return [await onCheckAction(this.deps, delivery)];
     if (delivery.event === "issues") return this.onIssue(delivery);
+    if (delivery.event === "issue_comment") return [await onQaComment(this.deps, delivery)];
     for (const ev of normalizeGithubDelivery(delivery)) {
       if (ev.type === "review.submitted") {
         out.push(await onReview(this.deps, delivery));

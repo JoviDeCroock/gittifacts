@@ -17,6 +17,8 @@ export * from "./payloads.js";
 export * from "./pr-index.js";
 export * from "./pr-publisher.js";
 export * from "./pr-writes.js";
+export * from "./qa-section.js";
+export * from "./sync-qa.js";
 export * from "./sync.js";
 export * from "./tokens.js";
 export { laneLabel, TERMS, WALKTHROUGH_LABEL } from "./terms.js";

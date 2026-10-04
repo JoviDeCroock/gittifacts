@@ -186,6 +186,11 @@ export class PrPublisher {
     await this.d.prs.addFullReview(changeId, headSha, login);
   }
 
+  /** A reaction on an issue/PR comment (a quiet acknowledgement; through the write gate). */
+  async react(commentId: number, content: "eyes" | "+1"): Promise<void> {
+    await this.d.api.write("POST", this.path(`/issues/comments/${commentId}/reactions`), { content });
+  }
+
   /** Write access (admin, maintain or write) on the repo, by GitHub's own answer. */
   async canWrite(login: string): Promise<boolean> {
     try {

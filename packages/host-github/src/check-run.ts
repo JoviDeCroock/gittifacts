@@ -14,6 +14,8 @@
  */
 import type { LaneVerdict } from "@app/host";
 import { z } from "zod";
+import type { SummaryQa } from "./pr-writes.js";
+import { QA_TERMS, qaCheckText } from "./qa-section.js";
 import { cut, laneLabel, laneWhy, plural, reasonPhrase, short, TERMS } from "./terms.js";
 
 export const CHECK_NAME = "gittifacts/lane";
@@ -34,12 +36,15 @@ export interface CheckRunContext {
   evidence: readonly EvidenceLine[];
   /** True while the platform runs GitHub mode in shadow. */
   shadow: boolean;
+  /** QA in a browser on this head, when someone asked (folded into the text). */
+  qa?: SummaryQa | null;
 }
 
 /** The ids are machine names and stay; the labels are the product's words (terms.ts). */
 export const CHECK_ACTIONS = {
   approve_tour: TERMS.approveButton,
   full_review: TERMS.fullReviewButton,
+  run_qa: QA_TERMS.button,
 } as const;
 export type CheckActionId = keyof typeof CHECK_ACTIONS;
 
@@ -93,6 +98,7 @@ export function checkText(v: LaneVerdict, ctx: CheckRunContext): string {
   const raised = v.reasons.filter((r) => r.lane > 0).sort((a, b) => b.lane - a.lane);
   const passed = v.reasons.filter((r) => r.lane === 0);
   const out: string[] = [];
+  if (ctx.qa != null) out.push(qaCheckText(ctx.qa));
   out.push(`<details><summary>Why this lane: ${raised.length} raised, ${passed.length} passed</summary>`, "");
   for (const r of raised.slice(0, 40)) out.push(`- **${TERMS.laneBadge(r.lane)}** · ${reasonPhrase(r)}: ${cut(oneLine(r.message), 400)}`);
   if (raised.length > 0 && passed.length > 0) out.push("");
@@ -132,7 +138,8 @@ function verdictComment(v: LaneVerdict, ctx: CheckRunContext): string {
 
 /** The PATCH body that completes the run with the verdict. */
 export function completedCheckRun(v: LaneVerdict, ctx: CheckRunContext, completedAt: string) {
-  const actions: CheckActionId[] = v.blocked ? [] : v.lane === 0 ? ["full_review"] : ["approve_tour", "full_review"];
+  // ≤ 3 buttons (GitHub's limit). Run QA asks for QA in a browser; never on a blocked head (no build).
+  const actions: CheckActionId[] = v.blocked ? [] : v.lane === 0 ? ["full_review", "run_qa"] : ["approve_tour", "full_review", "run_qa"];
   return {
     name: CHECK_NAME,
     status: "completed",

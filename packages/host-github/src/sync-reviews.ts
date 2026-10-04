@@ -13,6 +13,7 @@ import { changeIdFor } from "./ids.js";
 import { identityOf } from "./normalize.js";
 import { GithubAccount, GithubRepo, PullRequestReviewEvent } from "./payloads.js";
 import type { GithubDelivery } from "./payloads.js";
+import { askForQa } from "./sync-qa.js";
 import type { GithubSyncDeps, SyncOutcome } from "./sync.js";
 
 const REVIEW_STATES: Record<string, "approve" | "request-changes"> = {
@@ -66,7 +67,7 @@ const CheckAction = z.object({
   check_run: z
     .object({ id: z.number(), head_sha: z.string(), name: z.string(), external_id: z.string().nullable().optional() })
     .passthrough(),
-  requested_action: z.object({ identifier: z.enum(["approve_tour", "full_review"]) }),
+  requested_action: z.object({ identifier: z.enum(["approve_tour", "full_review", "run_qa"]) }),
   repository: GithubRepo,
   sender: GithubAccount,
 });
@@ -79,6 +80,10 @@ export async function onCheckAction(deps: GithubSyncDeps, delivery: GithubDelive
   const change = await deps.ports.store.getChange(changeId);
   if (change?.host == null || change.repoId !== `gh-${p.data.repository.id}`) {
     return { event, action: "ignored", detail: "unknown change" };
+  }
+  if (p.data.requested_action.identifier === "run_qa") {
+    if (change.headSha !== p.data.check_run.head_sha) return refused(deps, event, changeId, "the button is on an older head");
+    return askForQa(deps, { event, changeId, account: p.data.sender, via: "github-check" });
   }
   const who = { ...identityOf(p.data.sender), login: p.data.sender.login };
   const approving = p.data.requested_action.identifier === "approve_tour";

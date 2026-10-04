@@ -316,6 +316,8 @@ export class GitHubHost implements HostAdapter {
           note: typeof item.note === "string" ? item.note : null,
         };
       }),
+      // The QA section (same text as the summary's): on-demand QA folds into the run too.
+      qa: (await this.deps.qa?.(changeId, verdict.headSha)) ?? null,
     };
     const body = completedCheckRun(verdict, ctx, this.deps.ports.clock.now().toISOString());
     const id = await this.deps.checks.get(changeId, verdict.headSha);

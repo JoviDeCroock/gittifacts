@@ -72,6 +72,7 @@ export class FakeGithub {
   readonly checkRuns = new Map<number, FakeCheckRun>();
   readonly reviews = new Map<number, FakeReview>();
   readonly comments = new Map<number, { id: number; body: string; edits: number }>();
+  readonly reactions: { commentId: number; content: string }[] = [];
   readonly issues = new Map<number, FakeIssue>();
   /** Merged PRs (what GraphQL `pullRequests(states: MERGED)` answers; the backtest's listing). */
   readonly merged: {
@@ -261,6 +262,11 @@ export class FakeGithub {
       this.comments.set(id, { id, body: String((body as { body: string }).body), edits: 0 });
       return Response.json({ id }, { status: 201 });
     }
+    if (method === "POST" && (m = new RegExp(`^${repoPath}/issues/comments/(\\d+)/reactions$`).exec(path))) {
+      this.writes.push("POST reaction");
+      this.reactions.push({ commentId: Number(m[1]), content: String((body as { content: string }).content) });
+      return Response.json({ id: this.nextId++ }, { status: 201 });
+    }
     if (method === "PATCH" && (m = new RegExp(`^${repoPath}/issues/comments/(\\d+)$`).exec(path))) {
       this.writes.push("PATCH issue comment");
       const c = this.comments.get(Number(m[1]));
@@ -314,7 +320,7 @@ export class FakeGithub {
   }
 
   /** A `check_run` requested_action delivery: someone pressed a button on our run. */
-  buttonDelivery(runId: number, identifier: "approve_tour" | "full_review", sender: { login: string; id: number; type: string }) {
+  buttonDelivery(runId: number, identifier: "approve_tour" | "full_review" | "run_qa", sender: { login: string; id: number; type: string }) {
     const run = this.checkRuns.get(runId);
     return {
       event: "check_run",
@@ -327,6 +333,13 @@ export class FakeGithub {
         installation: { id: this.installationId },
       },
     };
+  }
+
+  /** `issue_comment` created on a pull request (or on a plain issue with `onIssue`). */
+  commentDelivery(pr: FakePull, user: { login: string; id: number; type: string }, body: string, opts: { onIssue?: boolean } = {}) {
+    const issue = { number: pr.number, ...(opts.onIssue ? {} : { pull_request: { url: "x" } }) };
+    const comment = { id: this.nextId++, body, user };
+    return { event: "issue_comment", payload: { action: "created", issue, comment, repository: this.repoJson(), sender: user, installation: { id: this.installationId } } };
   }
 
   /** `pull_request` edited / labeled delivery (the PR object is the current one). */

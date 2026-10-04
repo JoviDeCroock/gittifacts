@@ -90,8 +90,8 @@ describe("gittifacts/lane check run", () => {
     expect(run.output.summary).not.toMatch(/^\|/m);
     expect(run.output.text).toMatch(/^<details><summary>Why this lane: 1 raised, 0 passed<\/summary>/);
     expect(run.output.text).toContain("<details><summary>Evidence: 1 item, signed and verified</summary>");
-    expect(run.actions.map((a) => a.identifier)).toEqual(["approve_tour", "full_review"]);
-    expect(run.actions.map((a) => a.label)).toEqual(["Approve change", "Request full review"]);
+    expect(run.actions.map((a) => a.identifier)).toEqual(["approve_tour", "full_review", "run_qa"]);
+    expect(run.actions.map((a) => a.label)).toEqual(["Approve change", "Request full review", "Run QA"]);
     for (const a of Object.values(CHECK_ACTIONS)) {
       expect(a.label.length).toBeLessThanOrEqual(20);
       expect(a.description.length).toBeLessThanOrEqual(40);

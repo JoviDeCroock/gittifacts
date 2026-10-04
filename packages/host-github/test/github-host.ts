@@ -9,11 +9,12 @@ import type { GradeReviewer } from "@app/core";
 import { RepoPolicy } from "@app/domain";
 import { type ChangeRef, laneZeroAction, type LaneAction } from "@app/host";
 import type { ContractHost, ContractHostFactory, ContractReviewer, ContractScenario, Observed, OpenInput } from "@app/host-contract";
-import { memoryCheckRunIndex, GitHubHost } from "../src/adapter.js";
+import { memoryCheckRunIndex, GitHubHost, type GitHubHostDeps } from "../src/adapter.js";
 import { readCheckRunVerdict } from "../src/check-run.js";
 import { memoryPrIndex } from "../src/pr-index.js";
 import { GithubApi } from "../src/api.js";
 import { changeIdFor, principalIdFor } from "../src/ids.js";
+import type { GithubQaPort } from "../src/sync-qa.js";
 import { GithubSync } from "../src/sync.js";
 import { InstallationTokens, JobToken } from "../src/tokens.js";
 import { FakeGithub, type FakePull, gitName } from "./fake-github.js";
@@ -39,7 +40,7 @@ export class GithubContractHost implements ContractHost {
   /** The job token the adapter's API calls share (released after each delivery, like a queue job). */
   readonly job: JobToken;
 
-  constructor(reviewer: GradeReviewer, opts: { prWrites?: boolean } = {}) {
+  constructor(reviewer: GradeReviewer, opts: { prWrites?: boolean; qa?: GithubQaPort; qaView?: GitHubHostDeps["qa"] } = {}) {
     const { ports, bindings } = this.env;
     ports.reviewer.judge = (input) => reviewer.judge(input);
     ports.reviewer.tour = (input) => reviewer.tour(input);
@@ -62,6 +63,7 @@ export class GithubContractHost implements ContractHost {
       ports: githubPorts, checks: memoryCheckRunIndex(), origin: "https://gittifacts.test",
       // M3: the tour review and the summary comment (the installation is linked).
       prs: memoryPrIndex(), prWrites: async () => opts.prWrites ?? true,
+      ...(opts.qaView !== undefined ? { qa: opts.qaView } : {}),
     });
     for (const [login, p] of [["maint-1", "write"], ["octo-author", "write"], ["copilot-swe-agent[bot]", "write"]] as const) {
       this.gh.permissions.set(login, p);
@@ -81,6 +83,7 @@ export class GithubContractHost implements ContractHost {
           release: async () => void (await tokens.revoke(t)),
         };
       },
+      ...(opts.qa !== undefined ? { qa: opts.qa } : {}),
       plans: {
         upsert: async (plan) => {
           ports.store.addPlan(plan);
