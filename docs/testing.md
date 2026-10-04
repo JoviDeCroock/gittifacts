@@ -194,6 +194,33 @@ gh workflow run e2e-nightly.yml -f suites=m1,merge-queue
 - **Shared spies.** A `vi.spyOn(globalThis, "fetch")` stub sees other tests' background work. Assert
   only on calls your test owns (filter by its installation or repo id), and restore mocks `afterEach`.
 
+## Secrets in reports
+
+Reports, traces and logs leave the runner as artifacts, so no secret may ever reach them. On
+2026-10-04 the E2E account's password leaked into a smoke report's `error-context.md`, which held
+the aria snapshot of a sign-in form the test had filled in. Since then:
+
+- **Real accounts sign in through the API only.** `apps/e2e/lib/auth.ts` (`signInWithApi`) calls
+  better-auth's sign-in from a private, untraced request context, and only the session cookie
+  reaches the browser. No test types a real password into a form. The form itself is tested in the
+  gate, with throwaway local accounts.
+- **The smoke records no traces and no page snapshots.** It sets `trace: "off"` and
+  `PLAYWRIGHT_NO_COPY_PROMPT=1`. Failure screenshots stay: after an API sign-in, no page renders a
+  secret.
+- **Workflows mask every credential** with `::add-mask::` (smoke, nightly, the gate's canary).
+- **Every report is scanned before upload.** `scripts/check-report-secrets.mjs` searches every file
+  for each secret's value: raw, URL-encoded, JSON-escaped and base64. It also refuses trace archives
+  wherever real credentials ran. On a hit it names the file, deletes the report and fails the job, and
+  the upload step only runs after a clean scan.
+- **A canary proves it in every gate.** `tests/gate/secrets.spec.ts` signs up with a password that is
+  random and masked per run, signs in through `signInWithApi`, and attaches the page's aria snapshot,
+  HTML and a screenshot. The gate then scans its whole report for that password.
+- **If a secret ever leaks:**
+  1. Delete the artifacts.
+  2. Neutralise the account with its old credentials: revoke its agents' tokens and scramble its
+     password with a random value nobody keeps.
+  3. Create a new account through normal sign-up and `gh secret set` it without printing it.
+
 ## Staging (recommended; built, not yet created)
 
 A `gittifacts-staging` Worker in the same account, deployed first by `deploy-clean.sh --staging`. The

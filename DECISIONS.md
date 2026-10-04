@@ -2650,3 +2650,47 @@ GLM-5.3-Flash with the old prompt (live: 1 of 1).
   shown as Lane 1 by shadow mode (`shadow.lane0-disabled` the only raised reason), evidence kinds as native. Lane
   at 125 s, graded at 140 s (CI 115 s of it this run, slower than the 54–86 s before). The live contract is now
   6/6 against native.
+
+## 2026-10-04 — Two E2E incidents: a leaked test password, and staging taking over production's Workflows
+
+**Context.**
+- **The leak.** Run 37186222300's `smoke-report` artifact held the E2E account's password in
+  `error-context.md`. Playwright saves an aria snapshot of the page on failure, and the page was a
+  sign-in form the test had filled in.
+- **The hijack.** At 08:04:53 UTC a standalone staging deploy used production's Workflow names.
+  Workflow names are account-wide, and `wrangler deploy` reassigns an existing name to whichever
+  Worker deploys it; it only prints a warning. All eight of production's Workflows ran on staging's
+  code and empty D1 until production's next deploy. Seen during that window:
+  - pushes routed by staging's push-router;
+  - a fixture-lib PR graded in 1 s;
+  - three merge-queue CI runs that errored.
+
+  An earlier staging deploy (07:24) had already failed for the same reason on the container
+  application names, which are account-wide too.
+
+**Decision.**
+- **Leak:**
+  - All artifacts were deleted.
+  - Real accounts now sign in through the API only (`lib/auth.ts`).
+  - The smoke records no traces or page snapshots.
+  - Workflows mask credentials.
+  - `scripts/check-report-secrets.mjs` scans every report before upload and deletes it on a hit.
+  - A per-run canary in the gate proves the sign-in path leaks nothing.
+  - The leaked account was neutralised by a one-off job (run 37188415929, then deleted): its agent
+    token was revoked (now 401), and its password was replaced with a random value nobody kept
+    (sign-in with the leaked password is now 401).
+  - A new account and agent were created through normal sign-up, and the `E2E_*` secrets were rotated
+    without being printed. The smoke (37188471479) and m1 (37188473256) pass with them.
+- **Hijack:**
+  - Staging's config now derives its own names for Workflows, container applications, queues, D1, R2
+    and rate-limit namespaces.
+  - `assertNothingShared` refuses to write a staging config that shares any account-wide name with
+    production.
+  - Staging is deployed only from its own worktree, one deploy at a time.
+
+**Consequences.**
+- Any new account-wide resource kind added to `wrangler.jsonc` needs a rename in
+  `scripts/staging/config.ts`. The assert covers the kinds known today.
+- Signed-in smoke tests no longer exercise the sign-in form against production. The pre-deploy gate
+  covers the form.
+
