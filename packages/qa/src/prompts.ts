@@ -4,7 +4,7 @@
  */
 import type { PageSnapshot, QaCriterionInput } from "./types.js";
 
-export const PROMPT_VERSION = "qa/1";
+export const PROMPT_VERSION = "qa/2";
 
 const DSL = `Steps (JSON objects {action, target?, value?}):
 - goto: target = path on the app ("/settings")
@@ -43,7 +43,8 @@ and what the page showed at the end. Say whether the evidence shows the criterio
 - "pass": the steps exercised the criterion and its expectations held.
 - "fail": the evidence shows the criterion is NOT met (wrong text, an error, a broken page).
 - "couldnt-test": the steps don't really check the criterion, or the run could not get far enough.
-Be strict: if in doubt between pass and anything else, do not say pass.
+Judge each criterion only by its own wording: a problem that another criterion covers is that criterion's
+failure, not this one's. Be strict: if in doubt between pass and anything else, do not say pass.
 Answer with JSON only: {"verdicts":[{"index":0,"verdict":"pass","reason":"one sentence"}]}.`;
 
 export function renderSnapshot(s: PageSnapshot): string {

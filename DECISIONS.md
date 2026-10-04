@@ -2566,8 +2566,9 @@ driver, request service, signed thumbnails), `packages/host-github/src/{qa-secti
 - **The loop.** Explore ≤ 4 routes (Plan's `affectedRoutes`, template routes, routes guessed from changed paths, `/`) into
   compact page snapshots → one planning call (a script per criterion in a 10-action DSL, or "untestable") → each
   criterion in a fresh browser context with a screenshot per step → ≤ 1 repair call per criterion when an *action* can't
-  find its target (a failed *expectation* is the answer, never repaired) → one review call that may only move verdicts
-  down (pass → couldn't test / fail). No Plan: a deterministic smoke check (routes load, no uncaught errors), no model.
+  find its target (a failed *expectation* is the answer, never repaired) → one review call that may only cast doubt on a
+  pass (→ couldn't test). "Fail" always comes from a failed expectation in the browser: live, a review allowed to
+  say fail failed "lists exactly three shares" (which held) because of the next criterion's rounding bug (prompt qa/2). No Plan: a deterministic smoke check (routes load, no uncaught errors), no model.
   Model: the reviewer's client and the platform default (`@cf/zai-org/glm-5.3-flash`, low reasoning), ≤ $0.05 a run,
   charged to the Change's AI budget. Budgets: 5 min wall, 3 browser-min, 8 criteria, 10 steps, 60 screenshots.
 - **Replay as a GIF encoded in the browser.** Puppeteer's screencast needs ffmpeg; instead the step JPEGs are drawn on a

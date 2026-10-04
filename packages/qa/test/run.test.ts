@@ -100,7 +100,7 @@ describe("runQa", () => {
     expect(item.criteria[1]?.verdict).toBe("pass");
   });
 
-  it("the review may move a pass down (pass → couldn't test / fail), never up", async () => {
+  it("the review may cast doubt on a pass (→ couldn't test), never make a fail on its own, never raise", async () => {
     const review = {
       verdicts: [
         { index: 0, verdict: "couldnt-test", reason: "checks the wrong element" },
@@ -108,7 +108,8 @@ describe("runQa", () => {
       ],
     };
     const { verdicts, item } = await go([goodPlan, review]);
-    expect(verdicts).toEqual(["couldnt-test", "fail"]);
+    // A "fail" from the review alone is doubt, not a failure: the browser's expectations held.
+    expect(verdicts).toEqual(["couldnt-test", "couldnt-test"]);
     expect(item.criteria[1]?.reason).toContain("review: greeting is wrong");
   });
 

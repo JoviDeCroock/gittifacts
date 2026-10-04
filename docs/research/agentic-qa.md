@@ -72,8 +72,9 @@ small apps QA targets). The same path is used for native repos, so there is one 
    remaining steps from the current snapshot. A failed *expectation* is never repaired: it is the answer.
 7. **Verdict.** Deterministic first: a failed expectation → `fail`; an action still failing after repair, or
    no expectation at all → `couldnt-test`; otherwise `pass`. Then **one LLM review** of all criteria
-   (steps, results, final page text) may only move a verdict *down* (pass → couldn't test / fail; couldn't
-   test → fail); it can never turn a fail or a couldn't-test into a pass. Unknown output → no change.
+   (steps, results, final page text) may only cast doubt on a pass (pass → couldn't test): `fail` always
+   comes from a failed expectation in the browser, and nothing turns a fail or a couldn't-test into a pass.
+   (Live, an unrestricted review failed a criterion that held because of another criterion's bug.)
 8. **Replay.** The step screenshots (JPEG, half scale) become an animated GIF, encoded inside the same
    Chromium (canvas + a small GIF encoder evaluated in the page), so the Worker does no image work.
 

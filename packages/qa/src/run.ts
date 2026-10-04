@@ -1,7 +1,8 @@
 /**
  * `runQa`: explore the routes, plan a script per criterion (one model call), run each in a fresh
- * page with screenshots, repair at most once, then one model review that may only move verdicts
- * down (pass → couldn't test / fail). Returns the `qa-run` evidence item; the caller signs it.
+ * page with screenshots, repair at most once, then one model review that may only cast doubt on
+ * a pass (pass → couldn't test): "fail" always comes from a failed expectation in the browser.
+ * Returns the `qa-run` evidence item; the caller signs it.
  */
 import type { QaArtifact, QaCriterionResult, QaRun } from "@app/evidence";
 import { type CriterionRun, type RunContext, runScript, runSmoke } from "./criterion.js";
@@ -152,7 +153,10 @@ export async function runQa(input: QaRunInput, deps: QaDeps): Promise<QaRun> {
     for (const v of review?.verdicts ?? []) {
       const r = runs.get(v.index);
       if (r === undefined || r.steps.length === 0) continue;
-      const next = worse(r.verdict, v.verdict);
+      // The browser's evidence decides "fail" (a failed expectation); the review can only cast
+      // doubt on a pass (→ couldn't test). Seen live: a review failed a criterion that held
+      // because of another criterion's bug.
+      const next = worse(r.verdict, v.verdict === "fail" ? "couldnt-test" : v.verdict);
       if (next !== r.verdict)
         runs.set(v.index, {
           ...r,
