@@ -15,6 +15,7 @@ import { DiffExcerpt, WholeDiff } from "../components/DiffExcerpt.js";
 import { EvidenceChip, MissingChip, RedGreenList, ShotPair } from "../components/EvidenceBits.js";
 import { Icon } from "../components/Icon.js";
 import { Prose } from "../components/Prose.js";
+import { QaPanel } from "../components/QaPanel.js";
 import { ResolutionPanel } from "../components/ResolutionPanel.js";
 import { Page } from "../components/Shell.js";
 import { TriageChart } from "../components/TriageChart.js";
@@ -632,6 +633,8 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
           ) : (
             <NotReady data={data} />
           )}
+
+          <QaPanel change={change} />
 
           {!desktop ? <ContextLinks data={data} /> : null}
         </div>

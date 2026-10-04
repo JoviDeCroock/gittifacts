@@ -1,0 +1,139 @@
+/* ================================================================ QA in a browser (Change page) */
+.qa {
+  display: grid;
+  gap: var(--s-3);
+  margin-block: var(--s-6);
+  padding: var(--s-4);
+  border-radius: var(--r-panel);
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+  min-inline-size: 0;
+  scroll-margin-top: var(--s-8);
+}
+@media (min-width: 640px) {
+  .qa {
+    padding: var(--s-5);
+  }
+}
+.qa__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--text-title);
+  line-height: var(--leading-tight);
+}
+.qa__title .icon {
+  flex: none;
+  color: var(--text-2);
+}
+.qa__lede {
+  max-inline-size: var(--measure);
+  color: var(--text-2);
+}
+.qa__progress,
+.qa__error {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  overflow-wrap: anywhere;
+}
+.qa__error {
+  color: var(--danger);
+}
+.qa__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.qa-facts {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+  font-weight: var(--weight-medium);
+}
+.qa-facts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.qa-dim {
+  color: var(--text-3);
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+}
+.qa-crits {
+  list-style: none;
+  display: grid;
+  gap: var(--s-4);
+  min-inline-size: 0;
+}
+.qa-crit {
+  display: grid;
+  gap: var(--s-2);
+  min-inline-size: 0;
+  padding-block-start: var(--s-3);
+  border-block-start: 1px solid var(--rule);
+}
+.qa-crit--fail {
+  box-shadow: inset 3px 0 0 var(--danger);
+  padding-inline-start: var(--s-3);
+}
+.qa-crit__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.qa-crit__text {
+  flex: 1 1 16rem;
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+.qa-crit__why {
+  color: var(--text-2);
+  font-size: var(--text-small);
+  max-inline-size: var(--measure);
+  overflow-wrap: anywhere;
+}
+/* the step strip scrolls inside itself: never the page */
+.qa-strip {
+  display: flex;
+  gap: var(--s-2);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding-block-end: var(--s-2);
+  min-inline-size: 0;
+}
+.qa-shot {
+  flex: 0 0 auto;
+  inline-size: min(70vw, 16rem);
+  scroll-snap-align: start;
+  display: grid;
+  gap: var(--s-1);
+}
+.qa-shot img,
+.qa-shot__none {
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: top;
+  border-radius: var(--r-control);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+}
+.qa-shot figcaption {
+  font-size: var(--text-small);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.qa-replay img {
+  inline-size: 100%;
+  max-inline-size: 640px;
+  block-size: auto;
+  margin-block-start: var(--s-2);
+  border-radius: var(--r-control);
+  border: 1px solid var(--rule);
+}
