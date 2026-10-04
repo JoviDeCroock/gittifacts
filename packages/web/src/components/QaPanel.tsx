@@ -203,7 +203,8 @@ export function QaPanel({ change }: { change: Change }) {
       busy.value = false;
     }
   };
-  const canAsk = change.headSha !== null && CAN_ASK.has(change.status);
+  // No button until the runs have loaded: before that, "Run QA" would not know to ask for a re-run.
+  const canAsk = runs.value !== null && change.headSha !== null && CAN_ASK.has(change.status);
   const current = latest !== null && latest.headSha === change.headSha;
   const report = latest?.report ?? null;
 
