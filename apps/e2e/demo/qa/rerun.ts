@@ -46,13 +46,13 @@ for (const [name, viewport] of [
     console.log(`QA again: ${(Date.now() - t0) / 1000}s`);
   }
   await page.waitForTimeout(3000);
-  await qa.screenshot({ path: join(OUT, `16-qa-native-final-${name}.png`) });
+  await qa.screenshot({ path: join(OUT, `16-qa-native-${process.env.TAG ?? "final"}-${name}.png`) });
   if (name === "desktop") {
     await page.locator(".qa-replay summary").click();
     await page.waitForTimeout(3000);
-    await page.locator(".qa-replay").screenshot({ path: join(OUT, "16-qa-native-replay.png") });
+    await page.locator(".qa-replay").screenshot({ path: join(OUT, `16-qa-native-${process.env.TAG ?? "final"}-replay.png`) });
     const fail = page.locator('[data-verdict="fail"]').first();
-    await fail.screenshot({ path: join(OUT, "16-qa-native-fail-criterion.png") });
+    await fail.screenshot({ path: join(OUT, `16-qa-native-${process.env.TAG ?? "final"}-fail-criterion.png`) });
   }
   await ctx.close();
 }
