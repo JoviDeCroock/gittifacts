@@ -138,6 +138,8 @@ export class EngineShapedCi implements CiEngine {
     });
     run.status = {
       ...run.status,
+      // Like the engine's RunStatus: the passed steps' container snapshots (previews, QA).
+      ...({ snapshots: summary.snapshots } as Partial<CiRunStatus>),
       status: "passed",
       finishedAt: finished,
       steps: summary.steps.map((s) => ({
