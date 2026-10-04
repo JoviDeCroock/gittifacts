@@ -1,6 +1,9 @@
-# Deploy gate: the same checks scripts/deploy-clean.sh runs locally (full typecheck + the platform
-# test suite) on the exact commit about to be deployed, on a GitHub runner instead of the
-# developer machine. Dispatch-only, so it spends Actions minutes only when deploying:
+# Deploy gate (docs/testing.md, tier 1) on the exact commit about to be deployed, on GitHub runners
+# instead of the developer machine. Two jobs in parallel, both must pass:
+#   gate: generated artifacts fresh, full typecheck, the platform workerd suite;
+#   e2e:  browser + HTTP journeys (desktop 1280 and phone 390) against the real Worker served by
+#         `wrangler dev --local` with the integration fakes (apps/e2e).
+# Dispatch-only, so it spends Actions minutes only when deploying:
 #
 #   scripts/deploy-clean.sh --gate=ci            (dispatches this workflow, waits, then deploys)
 #   gh workflow run deploy-gate.yml -f sha=<sha> (manual)
@@ -38,6 +41,8 @@ jobs:
           pnpm --filter @app/web build
           pnpm --filter @app/docs build
           pnpm --filter gittifacts pack:assets
+      - name: Generated artifacts are fresh (docs references, MCP snapshot, templates, docs check)
+        run: scripts/check-generated.sh
       - name: Typecheck (every package)
         run: pnpm -r typecheck
       - name: Platform tests
@@ -45,3 +50,37 @@ jobs:
         env:
           CI: "1"
         run: pnpm exec vitest run --maxWorkers=2
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable corepack (pnpm from packageManager)
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build what the Worker serves (web, docs, CLI tarball, templates)
+        run: pnpm --filter @app/e2e prepare-assets
+      - name: Browser
+        run: pnpm --filter @app/e2e exec playwright install --with-deps chromium
+      - name: Pre-deploy E2E (desktop + phone)
+        env:
+          CI: "1"
+        run: pnpm --filter @app/e2e gate
+      - name: Summary
+        if: always()
+        run: node scripts/e2e-summary.mjs apps/e2e/test-results/gate.json "Pre-deploy E2E" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-gate-report
+          path: |
+            apps/e2e/playwright-report/gate
+            apps/e2e/test-results
+          retention-days: 14

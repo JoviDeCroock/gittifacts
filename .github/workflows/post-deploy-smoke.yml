@@ -1,0 +1,124 @@
+# Tier 2 (docs/testing.md): the post-deploy smoke against the DEPLOYED platform, off the deploy
+# machine. scripts/deploy-clean.sh dispatches it right after `wrangler deploy` and waits; a deploy
+# workflow can `uses:` it. ≤ 5 minutes: health + the deployed commit, front door and docs, the E2E
+# account signing in, the agent path (anonymous create_project → first green + preview < 120 s),
+# and the GitHub webhook refusing a bad signature.
+#
+# On failure: rolls the Worker back to `previous_version` (when CLOUDFLARE_API_TOKEN is set, else
+# deploy-clean.sh does it with the operator's wrangler login), fails the run, and opens an issue
+# labelled deploy-rollback.
+#
+# Secrets (optional; the matching checks skip and say so without them):
+#   E2E_EMAIL, E2E_PASSWORD                  the dedicated E2E account (never a person's account)
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID  Workers edit, for the rollback only
+name: post-deploy-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Deployed origin
+        default: https://gittifacts.decroockjovi.workers.dev
+      expect_commit:
+        description: The commit tag the live version must carry (12-char sha; empty = don't compare)
+        default: ""
+      deployed_version:
+        description: Worker version id just deployed (rollback target check)
+        default: ""
+      previous_version:
+        description: Worker version id to roll back to on failure (empty = no rollback)
+        default: ""
+  workflow_call:
+    inputs:
+      url: { type: string, default: "https://gittifacts.decroockjovi.workers.dev" }
+      expect_commit: { type: string, default: "" }
+      deployed_version: { type: string, default: "" }
+      previous_version: { type: string, default: "" }
+    secrets:
+      E2E_EMAIL: { required: false }
+      E2E_PASSWORD: { required: false }
+      CLOUDFLARE_API_TOKEN: { required: false }
+      CLOUDFLARE_ACCOUNT_ID: { required: false }
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: post-deploy-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      # Inputs pass through env, never interpolated into scripts (no injection).
+      SMOKE_BASE_URL: ${{ inputs.url }}
+      SMOKE_EXPECT_COMMIT: ${{ inputs.expect_commit }}
+      DEPLOYED_VERSION: ${{ inputs.deployed_version }}
+      PREVIOUS_VERSION: ${{ inputs.previous_version }}
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install (the e2e package only)
+        run: corepack enable && pnpm install --frozen-lockfile --filter "@app/e2e..."
+      - name: Browser
+        run: pnpm --filter @app/e2e exec playwright install --with-deps chromium
+      - name: Smoke
+        id: smoke
+        run: pnpm --filter @app/e2e smoke
+      - name: Report
+        if: always()
+        run: node scripts/e2e-summary.mjs apps/e2e/test-results/smoke.json "Post-deploy smoke" >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-report
+          path: |
+            apps/e2e/playwright-report/smoke
+            apps/e2e/test-results
+          retention-days: 14
+      - name: Roll back
+        id: rollback
+        if: failure() && env.PREVIOUS_VERSION != '' && env.DEPLOYED_VERSION != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "outcome=left-to-deploy-clean" >> "$GITHUB_OUTPUT"
+            echo "No CLOUDFLARE_API_TOKEN: scripts/deploy-clean.sh rolls back with the operator's login."
+            exit 0
+          fi
+          export WRANGLER="npx --yes wrangler@4.145.0"
+          if scripts/rollback.sh --url "$SMOKE_BASE_URL" --deployed "$DEPLOYED_VERSION" --to "$PREVIOUS_VERSION" \
+              --reason "post-deploy smoke failed for ${SMOKE_EXPECT_COMMIT:-unknown} (run $GITHUB_RUN_ID)"; then
+            echo "outcome=rolled-back" >> "$GITHUB_OUTPUT"
+          else
+            echo "outcome=rollback-failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+      - name: Open an issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ steps.rollback.outputs.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create deploy-rollback --color B60205 --description "A post-deploy smoke failed" 2>/dev/null || true
+          {
+            echo "The post-deploy smoke failed against $SMOKE_BASE_URL for commit \`${SMOKE_EXPECT_COMMIT:-?}\`."
+            echo
+            echo "- Deployed version: \`${DEPLOYED_VERSION:-?}\`"
+            echo "- Previous version: \`${PREVIOUS_VERSION:-none given}\`"
+            echo "- Rollback: **${OUTCOME:-not attempted}**"
+            echo "- Run: $RUN_URL (report artifact: smoke-report)"
+          } > issue.md
+          gh issue create --title "Post-deploy smoke failed: ${SMOKE_EXPECT_COMMIT:-unknown commit}" \
+            --label deploy-rollback --body-file issue.md
