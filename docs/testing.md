@@ -69,7 +69,8 @@ generated config.
 
 ### Tier 2: smoke, rollback, and where the rollback runs
 
-`deploy-clean.sh` deploys with `wrangler deploy --tag <sha12>`. `GET /api/v1/health` returns that tag
+`deploy-clean.sh` first re-runs itself from the commit it deploys, so a stale checkout or an
+edit in progress can't change what runs. It then deploys with `wrangler deploy --tag <sha12>`. `GET /api/v1/health` returns that tag
 as `commit`, and the smoke fails unless it equals the commit just deployed. A missing tag fails the
 same way a wrong one does.
 
@@ -77,12 +78,11 @@ Before deploying, the script records the version that was live. If the smoke fai
 `scripts/rollback.sh` rolls back to it, but only while the failed deploy is still the live version,
 so it never undoes someone's newer deploy. It then checks that the old version answers.
 
-**Where the rollback runs (decision, 2026-10-04):**
-
-- In the smoke workflow, when the repo has `CLOUDFLARE_API_TOKEN`. The rollback then happens even if
-  this machine dies mid-deploy.
-- Otherwise in `deploy-clean.sh`, with the operator's `wrangler login`. If the workflow already rolled
-  back, this step does nothing.
+**Where the rollback runs (decision, 2026-10-04):** in `deploy-clean.sh`, with the operator's
+`wrangler login`. The owner chose not to give CI a Cloudflare token. The smoke workflow can also roll
+back if a `CLOUDFLARE_API_TOKEN` secret is ever added; then the step in `deploy-clean.sh` does nothing,
+because the previous version is already live. The cost of this choice: if this machine dies between the
+deploy and the smoke's verdict, nobody rolls back. The issue still gets opened, so a person does it.
 
 Either way, the run fails and an issue labelled `deploy-rollback` is opened.
 
@@ -221,31 +221,54 @@ the aria snapshot of a sign-in form the test had filled in. Since then:
      password with a random value nobody keeps.
   3. Create a new account through normal sign-up and `gh secret set` it without printing it.
 
-## Staging (recommended; built, not yet created)
+## Staging
 
-A `gittifacts-staging` Worker in the same account, deployed first by `deploy-clean.sh --staging`. The
-smoke runs against it with real bindings (Artifacts, containers, Workflows, D1, R2, queues), and a
-failure there stops the production deploy. It catches what the hermetic E2E can't, such as a binding
-that only fails remotely or a container image that doesn't start, before any user sees it.
+`gittifacts-staging` (https://gittifacts-staging.decroockjovi.workers.dev) is a second Worker in the
+same account. `deploy-clean.sh` deploys every commit there first (`--staging` is the default;
+`--no-staging` skips it, and you say why). The post-deploy smoke runs against staging with real
+bindings: Artifacts, containers, Workflows, previews, D1, R2 and queues. If it fails, production is not
+touched, not even its migrations. Staging catches what the hermetic E2E can't: a binding that only
+fails remotely, a container image that doesn't start, or a migration that fails on a real D1.
 
 - **The config is derived, never hand-written.** `scripts/staging/config.ts` generates it from
-  `wrangler.jsonc`. Staging gets its own name, D1, R2 bucket, four queues, Artifacts namespace,
-  rate-limit namespaces and metrics dataset. It has no zone routes, so there are no previews on
-  `*-pv.resynapse.dev`. GitHub mode and the platform admins are off.
-- **Setup:** `scripts/staging/setup.sh --yes-i-have-approval` creates the resources once, with
-  generated secrets. **Per deploy:** `scripts/staging/deploy.sh`.
+  `wrangler.jsonc`. Staging gets its own:
+  - name, D1 (the id is in that file; it isn't a secret), R2 bucket and four queues;
+  - Artifacts namespace, rate-limit namespaces and metrics dataset;
+  - container application names (`gittifacts-staging-runner`, `-preview`, `-workspace`). These names
+    are account-wide.
+- **Previews** run on `p-…-pvs.resynapse.dev`. That's the same zone as production but a disjoint
+  first-level pattern, so Universal SSL covers it.
+- **GitHub mode and the platform admins are off.** The smoke expects the webhook to answer 503
+  `github-not-configured` there.
+- **The smoke account.** Staging's database is its own, so it has its own E2E account, created through
+  staging's normal sign-up. Its credentials are the secrets `STAGING_E2E_EMAIL`, `STAGING_E2E_PASSWORD`
+  and `STAGING_E2E_AGENT_TOKEN`. `post-deploy-smoke.yml` picks them, and `SMOKE_GITHUB=off`, whenever
+  the URL is staging.
+- **Workflow names are account-wide**, and a deploy reassigns them. So staging's Workflows are
+  `gittifacts-staging-*`, and `assertNothingShared` refuses any staging config that reuses one of
+  production's names. See the DECISIONS entry of 2026-10-04 for the incident behind this.
+- **Setup** (done 2026-10-04): `scripts/staging/setup.sh --yes-i-have-approval`.
+- **First end-to-end run** (2026-10-04, dcc09cf): `deploy-clean.sh --gate=ci --staging --smoke=ci`
+  took 17 minutes in all.
+  1. The gate took 11 min (run 37189534247).
+  2. Staging deployed, and its smoke passed. That included the anonymous agent path to first green
+     plus a preview on `-pvs`, in ≈ 1.5 min.
+  3. Production deployed with the tag `dcc09cf5dcd4`, and its smoke passed (run 37190322943,
+     2 min).
+
+  `wrangler workflows list` showed all of production's Workflows still owned by `gittifacts`, both
+  before and after.
+- **Per deploy:** `scripts/staging/deploy.sh <checkout> <sha12> [--smoke=ci|local|off]`. It needs
+  the assets that `deploy:prepare` builds.
 - **Cost:** no new plan. Everything is covered by the Workers Paid plan the account already has:
   - D1, Durable Objects, Workflows and Queues usage at staging volumes is a rounding error inside the
     included allowances.
   - R2 storage is cents.
-  - Containers bill only while a staging CI run or preview runs: the smoke's single first-green, about
-    1–2 container-minutes per deploy.
-  - Model calls through the AI Gateway: one walkthrough per smoke.
+  - Containers bill only while running, about 1–2 container-minutes per smoke.
+  - One walkthrough per smoke goes through the AI Gateway.
   - Estimate: well under $5 a month at 10–20 deploys a day.
-- **What it shares with production:** the Flagship app (flags are read-only from staging, but a
-  separate Flagship app would be cleaner), the AI Gateway, and the account's container registry.
-- **Status:** waiting for the owner to approve the resource list (2026-10-04). Until then,
-  `--staging` is off and the smoke runs only against production, with automatic rollback.
+- **What it shares with production:** the Flagship app (read-only use from staging), the AI Gateway,
+  the container image registry and the `resynapse.dev` zone.
 
 ## Dead weight (candidates, nothing deleted)
 

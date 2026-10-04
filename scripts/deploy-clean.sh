@@ -2,7 +2,7 @@
 # Deploy exactly what is pushed to origin/main, from a clean worktree, so in-progress local
 # edits (other agents, uncommitted work) never ship. Secrets are already set on the Worker.
 #
-#   scripts/deploy-clean.sh [worktree-dir] [--gate=local|ci] [--smoke=ci|local|off] [--staging] [--skip-tests]
+#   scripts/deploy-clean.sh [worktree-dir] [--gate=local|ci] [--smoke=ci|local|off] [--no-staging] [--skip-tests]
 #
 # Gate: `pnpm -r typecheck` and the platform test suite must pass on the exact commit being
 # deployed (a store bug that only showed up in workerd tests once reached production because
@@ -20,15 +20,15 @@
 # the workflow does it when it has CLOUDFLARE_API_TOKEN, else this script with your wrangler login)
 # and exits 1.
 #
-# --staging (docs/testing.md, "Staging"): deploy the same commit to the gittifacts-staging Worker
-# (its migrations first) and pass the smoke there before touching production.
+# Staging first (docs/testing.md, "Staging"): the same commit goes to the gittifacts-staging Worker
+# (its migrations, then the smoke there) before production is touched. --no-staging skips it (say why).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIR="${TMPDIR:-/tmp}/gittifacts-deploy"
 GATE=local
 SMOKE=ci
-STAGING=0
+STAGING=1
 SKIP_TESTS=0
 URL="https://gittifacts.decroockjovi.workers.dev"
 for arg in "$@"; do
@@ -40,17 +40,33 @@ for arg in "$@"; do
     --smoke=local) SMOKE=local ;;
     --smoke=off) SMOKE=off ;;
     --staging) STAGING=1 ;;
+    --no-staging) STAGING=0 ;;
     *) DIR="$arg" ;;
   esac
 done
 
-git -C "$ROOT" fetch -q origin
-SHA="$(git -C "$ROOT" rev-parse origin/main)"
-if [ -d "$DIR/.git" ] || [ -f "$DIR/.git" ]; then
+if [ -n "${DEPLOY_CLEAN_PINNED:-}" ]; then
+  # The re-run below: keep the commit the first run picked, even if main moved since.
+  SHA="$DEPLOY_CLEAN_PINNED"
+else
+  git -C "$ROOT" fetch -q origin
+  SHA="$(git -C "$ROOT" rev-parse origin/main)"
+fi
+if [ "$(git -C "$DIR" rev-parse HEAD 2>/dev/null || true)" = "$SHA" ]; then
+  : # already there (the re-run): don't touch the files of the script that is running
+elif [ -d "$DIR/.git" ] || [ -f "$DIR/.git" ]; then
   git -C "$DIR" checkout -q --detach "$SHA"
 else
   git -C "$ROOT" worktree prune
   git -C "$ROOT" worktree add -q --detach "$DIR" "$SHA"
+fi
+# Run the copy of this script that ships with the commit being deployed, never the caller's: a
+# stale checkout (the repo root lags origin/main) once deployed without the tag, staging or smoke,
+# and editing the running file mid-deploy broke bash ("line 98: i: command not found"). The
+# checkout at $DIR is pinned to $SHA, so nothing edits it while it runs.
+if [ "${DEPLOY_CLEAN_PINNED:-}" != "$SHA" ] && [ -f "$DIR/scripts/deploy-clean.sh" ]; then
+  echo "deploy-clean: re-running the script from $SHA"
+  DEPLOY_CLEAN_PINNED="$SHA" exec bash "$DIR/scripts/deploy-clean.sh" "$DIR" "$@"
 fi
 echo "deploying $(git -C "$DIR" log --oneline -1)"
 
