@@ -29,6 +29,9 @@ Agent-native git platform on Cloudflare. Product rule (drives every judgment cal
 - Policy is always read from the BASE (default branch), never from the change's head.
 - Imports inside packages use `.js` suffixes on relative paths (bundler resolution maps to .ts).
 - Tests: vitest 4 (`@cloudflare/vitest-pool-workers` for Worker code). Run `pnpm -r test`.
+- Testing priority: E2E > integration >>> unit. Every bug fix or feature lands with an E2E or integration
+  test that would have caught it (real Worker, real bindings, real journeys). Unit tests only for pure logic
+  (classifier, canonical JSON, …). See docs/testing.md.
 - Commit small and often with clear messages. Don't edit files owned by another in-flight agent.
 - Keep each Write/Edit under ~150 lines (skeleton first, then append sections): very large single writes
   stall the agent stream. Run anything slower than ~2 minutes in the background with output to a file.
