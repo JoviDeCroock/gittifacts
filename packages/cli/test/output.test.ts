@@ -59,6 +59,7 @@ describe("JSON output (default)", () => {
       "login",
       "logout",
       "wait",
+      "qa",
       "tools",
       "search-tools",
       "help",

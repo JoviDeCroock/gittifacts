@@ -29,6 +29,7 @@ describe("command table generated from the MCP tool definitions", () => {
       "enqueue",
       "get_change_status",
       "get_evidence",
+      "get_qa",
       "get_tour",
       "list_issues_for_change",
       "list_members",
@@ -39,6 +40,7 @@ describe("command table generated from the MCP tool definitions", () => {
       "queue_status",
       "refresh_push_token",
       "reprioritize",
+      "request_qa",
       "request_review",
       "rerun_ci",
       "search_tools",
@@ -100,6 +102,8 @@ describe("command table generated from the MCP tool definitions", () => {
       queue_overview: true,
       search_tools: true,
       list_members: true,
+      request_qa: true,
+      get_qa: true,
     };
     expect(new Set(names)).toEqual(new Set(Object.keys(all)));
   });

@@ -3,11 +3,13 @@
  * command per MCP tool from this build's table, then (for a tool newer than this build) the live
  * server's `tools/list`. Every failure ends as one `{ error }` document and an exit code.
  */
+
 import { parseCommandTokens, splitArgv } from "./args.js";
 import { login, logout } from "./commands/auth.js";
 import { type Builtin, bool, builtinSpec, int } from "./commands/builtin.js";
 import { commandHelp, listTools, searchTools, topHelp } from "./commands/help.js";
 import { init } from "./commands/init.js";
+import { qa } from "./commands/qa.js";
 import { resolveRemoteCommand, runToolCommand } from "./commands/tool.js";
 import { wait } from "./commands/wait.js";
 import { Ctx } from "./context.js";
@@ -86,7 +88,7 @@ const help: Builtin = {
   },
 };
 
-export const BUILTINS: readonly Builtin[] = [init, login, logout, wait, tools, search, help];
+export const BUILTINS: readonly Builtin[] = [init, login, logout, wait, qa, tools, search, help];
 
 function unknownCommand(name: string): CliError {
   const names = [
