@@ -453,6 +453,98 @@ export const Quarantine = z.object({
 });
 export type Quarantine = z.infer<typeof Quarantine>;
 
+/** What a QA run's verdict on one acceptance criterion can be. "couldnt-test" is never a pass. */
+export const QaVerdict = z.enum(["pass", "fail", "couldnt-test"]);
+export type QaVerdict = z.infer<typeof QaVerdict>;
+
+export const QA_ACTIONS = [
+  "goto",
+  "click",
+  "fill",
+  "press",
+  "select",
+  "wait",
+  "expect_text",
+  "expect_no_text",
+  "expect_visible",
+  "expect_url",
+] as const;
+export const QaAction = z.enum(QA_ACTIONS);
+export type QaAction = z.infer<typeof QaAction>;
+
+export const QaStepResult = z.object({
+  action: QaAction,
+  target: z.string().max(500).optional(),
+  value: z.string().max(500).optional(),
+  ok: z.boolean(),
+  /** Why it failed, or what was observed. */
+  detail: z.string().max(1000).optional(),
+  /** Name of the screenshot artifact taken after this step. */
+  shot: z.string().max(200).optional(),
+});
+export type QaStepResult = z.infer<typeof QaStepResult>;
+
+export const QaCriterionResult = z.object({
+  index: z.number().int().nonnegative(),
+  text: z.string().min(1).max(1000),
+  /** "plan": an acceptance criterion; "smoke": synthesized when the Change has no Plan. */
+  source: z.enum(["plan", "smoke"]),
+  verdict: QaVerdict,
+  reason: z.string().max(2000),
+  /** Screenshot artifact taken before the first step. */
+  before: z.string().max(200).optional(),
+  steps: z.array(QaStepResult).max(30),
+  consoleErrors: z.number().int().nonnegative(),
+  networkErrors: z.number().int().nonnegative(),
+});
+export type QaCriterionResult = z.infer<typeof QaCriterionResult>;
+
+export const QaArtifact = z.object({
+  name: z.string().min(1).max(200),
+  /** Opaque blob reference (an R2 key). */
+  ref: z.string().min(1).max(500),
+  /** Lowercase hex SHA-256 of the bytes: the signature covers the screenshots through this. */
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  bytes: z.number().int().nonnegative(),
+  contentType: z.string().min(1).max(100),
+  role: z.enum(["before", "step", "thumb", "recording", "log"]),
+});
+export type QaArtifact = z.infer<typeof QaArtifact>;
+
+/**
+ * An on-request QA run: an agent drove the app built from the head in a real browser against the
+ * Plan's acceptance criteria. Model-planned, but its verdicts only ever raise risk: a failed
+ * criterion raises the lane, "couldnt-test" is unknown (never a pass), and an absent item means QA
+ * was not requested (it lowers nothing and raises nothing).
+ */
+export const QaRun = z.object({
+  ...base,
+  kind: z.literal("qa-run"),
+  runId: z.string().min(1).max(200),
+  trigger: z.enum(["platform", "mcp", "cli", "github-check", "github-comment"]),
+  requestedBy: z.string().min(1).max(200),
+  app: z.object({
+    source: z.literal("private-preview"),
+    snapshotStep: z.enum(["build", "install"]),
+    origin: z.string().url().max(300),
+  }),
+  model: z.string().min(1).max(200),
+  promptVersion: z.string().min(1).max(100),
+  criteria: z.array(QaCriterionResult).max(50),
+  artifacts: z.array(QaArtifact).max(200),
+  /** Origins other than the app's that the page tried to reach (blocked during QA). */
+  blockedOrigins: z.array(z.string().max(300)).max(50),
+  usage: z.object({
+    wallMs: z.number().int().nonnegative(),
+    browserMs: z.number().int().nonnegative(),
+    llmCalls: z.number().int().nonnegative(),
+    inputTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+    llmUsd: z.number().nonnegative(),
+  }),
+});
+export type QaRun = z.infer<typeof QaRun>;
+
 export const EvidenceItem = z.discriminatedUnion("kind", [
   RedGreenProof,
   TestRun,
@@ -468,6 +560,7 @@ export const EvidenceItem = z.discriminatedUnion("kind", [
   LlmJudgment,
   ConflictResolution,
   Quarantine,
+  QaRun,
 ]);
 export type EvidenceItem = z.infer<typeof EvidenceItem>;
 export type EvidenceKind = EvidenceItem["kind"];

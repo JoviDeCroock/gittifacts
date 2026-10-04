@@ -22,6 +22,7 @@ export const KIND_LABEL: Record<EvidenceKind, string> = {
   "llm-judgment": "Model judgment",
   "conflict-resolution": "Conflict resolution",
   quarantine: "Quarantined tests",
+  "qa-run": "QA in a browser",
 };
 
 export interface ItemSummary {
@@ -119,6 +120,16 @@ export function summarize(item: EvidenceItem): ItemSummary {
         value: item.inAffectedSet.length > 0 ? `${item.inAffectedSet.length} in affected set` : `${item.tests.length} quarantined`,
         tone: item.inAffectedSet.length > 0 ? "warn" : "neutral",
       };
+    case "qa-run": {
+      const fail = item.criteria.filter((c) => c.verdict === "fail").length;
+      const unsure = item.criteria.filter((c) => c.verdict === "couldnt-test").length;
+      const pass = item.criteria.length - fail - unsure;
+      return {
+        label: "QA",
+        value: fail > 0 ? `${fail} failed` : unsure > 0 ? `${unsure} couldn't test` : `${pass} passed`,
+        tone: fail > 0 ? "danger" : unsure > 0 ? "warn" : "ok",
+      };
+    }
   }
 }
 

@@ -70,6 +70,10 @@ function body(item: EvidenceItem): string {
     }
     case "quarantine":
       return `${plural(item.tests.length, "quarantined test")}, ${item.inAffectedSet.length} in the affected set`;
+    case "qa-run": {
+      const n = (v: string) => item.criteria.filter((c) => c.verdict === v).length;
+      return `QA ${n("pass")} passed, ${n("fail")} failed, ${n("couldnt-test")} couldn't test (${plural(item.artifacts.length, "artifact")}, ${item.model})`;
+    }
   }
 }
 

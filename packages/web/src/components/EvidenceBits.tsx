@@ -27,6 +27,7 @@ const KIND_ICON: Record<EvidenceItem["kind"], IconId> = {
   "llm-judgment": "comment",
   "conflict-resolution": "git-merge",
   quarantine: "triangle-alert",
+  "qa-run": "monitor",
 };
 
 const TONE_MARK: Record<Tone, string> = { ok: "ok", warn: "warn", danger: "danger", neutral: "neutral", action: "neutral" };
