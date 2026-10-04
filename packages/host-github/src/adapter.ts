@@ -21,7 +21,7 @@ import {
 } from "@app/host";
 import type { GithubApi } from "./api.js";
 import { type GithubRepoSetup, githubCapabilities } from "./capabilities.js";
-import { type CheckRunContext, completedCheckRun, laneRun, startedCheckRun, supersededCheckRun } from "./check-run.js";
+import { type CheckRunContext, closedCheckRun, completedCheckRun, laneRun, startedCheckRun, supersededCheckRun } from "./check-run.js";
 import { changeIdFor } from "./ids.js";
 import { identityOf, normalizeGithubDelivery } from "./normalize.js";
 import type { PrIndex } from "./pr-index.js";
@@ -280,6 +280,19 @@ export class GitHubHost implements HostAdapter {
     if (run.status === "completed") return;
     const now = this.deps.ports.clock.now().toISOString();
     await this.deps.api.write("PATCH", this.path(`/check-runs/${id}`), supersededCheckRun(newHead, now));
+  }
+
+  /**
+   * The pull request closed (or merged) while its head's run was still in progress: the run is
+   * completed as cancelled, never left running. A completed run keeps its verdict.
+   */
+  async closeCheck(changeId: string, headSha: string, merged: boolean): Promise<"closed" | "none" | "completed"> {
+    const id = await this.deps.checks.get(changeId, headSha);
+    if (id === null) return "none";
+    const run = (await this.deps.api.get(this.path(`/check-runs/${id}`))) as { status?: string };
+    if (run.status === "completed") return "completed";
+    await this.deps.api.write("PATCH", this.path(`/check-runs/${id}`), closedCheckRun(merged, this.deps.ports.clock.now().toISOString()));
+    return "closed";
   }
 
   /**

@@ -17,6 +17,7 @@ import { withUnclaimedLimits } from "./limits/ci-quota.js";
 import { handlePreviewRequest } from "./previews/gateway.js";
 import { isPreviewHost, previewZone } from "./previews/ids.js";
 import { runSeedOnDeploy } from "./projects/seed-on-deploy.js";
+import { runQaSweep } from "./qa/sweep.js";
 import { runRetention } from "./retention.js";
 import { buildPorts } from "./runtime/ports.js";
 import { buildQueueRuntime } from "./runtime/queue.js";
@@ -78,6 +79,8 @@ export default {
     ctx.waitUntil(runGithubSweep(env));
     ctx.waitUntil(runGithubRedeliveries(env).then(() => undefined).catch(() => undefined));
     ctx.waitUntil(runRetention(env).then(() => undefined));
+    // QA runs whose workflow was lost end as failed, with a notice (src/qa/sweep.ts).
+    ctx.waitUntil(runQaSweep(env).then(() => undefined).catch(() => undefined));
     // Once per worker version: re-warm the templates' CI cache (src/projects/seed-on-deploy.ts).
     ctx.waitUntil(runSeedOnDeploy(env));
   },

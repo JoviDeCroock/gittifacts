@@ -202,6 +202,19 @@ export function supersededCheckRun(newHead: string, completedAt: string) {
   };
 }
 
+/** Closing a run still in progress when its pull request was closed or merged before grading ended. */
+export function closedCheckRun(merged: boolean, completedAt: string) {
+  return {
+    status: "completed",
+    conclusion: "cancelled" as const,
+    completed_at: completedAt,
+    output: {
+      title: merged ? "Merged before grading finished" : "Closed before grading finished",
+      summary: `The pull request was ${merged ? "merged" : "closed"} while this commit was being graded, so grading stopped here.`,
+    },
+  };
+}
+
 export interface CheckRunVerdict {
   lane: number;
   computedLane: number;

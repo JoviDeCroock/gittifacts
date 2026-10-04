@@ -10,10 +10,9 @@ import type { QaRunRow } from "../db/qa-schema.js";
 import { ApiError, conflict, notFound } from "../errors.js";
 import { D1Store } from "../store/d1-store.js";
 import { type QaRunView, QaStore, viewOf } from "./store.js";
+import { endLostRun, QA_STALE_MS } from "./sweep.js";
 
 export const QA_RATE = { perHour: 6, perDay: 30 } as const;
-/** A queued or running run older than this (without finishing) is considered lost. */
-export const QA_STALE_MS = 15 * 60_000;
 const CLOSED: ReadonlySet<Change["status"]> = new Set([
   "merged",
   "rolling-out",
@@ -88,19 +87,14 @@ export async function requestQa(
       "invalid-state",
     );
 
-  // A run with no progress for QA_STALE_MS lost its workflow (a deploy, a lost instance): it is
-  // marked failed and no longer blocks the head, so asking again starts a fresh run.
+  // A run still in flight QA_STALE_MS after it was asked lost its workflow (src/qa/sweep.ts): it
+  // ends as failed and no longer blocks the head, so asking again starts a fresh run.
   let lost = false;
   const flying = await qa.inFlight(req.changeId);
   if (flying !== null) {
-    const last = Date.parse(flying.startedAt ?? flying.createdAt);
-    if (now().getTime() - last < QA_STALE_MS) return { run: viewOf(flying), reused: true };
-    await qa.update(flying.id, {
-      status: "failed",
-      progress: null,
-      error: `the run was lost (no progress for ${QA_STALE_MS / 60_000} minutes); ask again`,
-      finishedAt: now().toISOString(),
-    });
+    if (now().getTime() - Date.parse(flying.createdAt) < QA_STALE_MS)
+      return { run: viewOf(flying), reused: true };
+    await endLostRun(env, flying, now());
     lost = flying.headSha === head;
   }
   const prior = await qa.forHead(req.changeId, head);

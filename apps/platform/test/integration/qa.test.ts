@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { handlePreviewRequest } from "../../src/previews/gateway.js";
 import { signedQaImageUrl } from "../../src/qa/images.js";
 import { qaRunId } from "../../src/qa/request.js";
+import { runQaSweep } from "../../src/qa/sweep.js";
 import { buildPorts } from "../../src/runtime/ports.js";
 import { call, createAgent, json, ORIGIN, signUpHuman, type TestApp } from "../http.js";
 import { type IntegrationFakes, NAMESPACE, resetIntegrationFakes } from "./fakes.js";
@@ -291,7 +292,44 @@ describe("QA on request (workerd: real app, workflow, PreviewHost; fake browser 
       [qaRunId(changeId, head, 2), "done"],
       [qaRunId(changeId, head), "failed"],
     ]);
-    expect(runs[1]?.error).toContain("lost");
+    expect(runs[1]?.error).toContain("never started");
+  });
+
+  it("the cron ends a run that never started: failed with the reason and a notification, never hanging", async () => {
+    const app = platformApp();
+    const { human, changeId, head } = await gradedChange(app);
+    const now = Date.now();
+    const insert = (id: string, minutesAgo: number, status: string) =>
+      env.DB.prepare(
+        "INSERT INTO qa_runs (id, change_id, repo_id, head_sha, status, trigger, requested_by, created_at) SELECT ?, ?, repo_id, ?, ?, 'platform', 'x', ? FROM changes WHERE id = ?",
+      )
+        .bind(
+          id,
+          changeId,
+          head,
+          status,
+          new Date(now - minutesAgo * 60_000).toISOString(),
+          changeId,
+        )
+        .run();
+    await insert("qa-stale-never", 20, "queued");
+    await insert("qa-fresh", 2, "queued");
+    expect(await runQaSweep(env, new Date(now))).toBe(1);
+    expect(await runQaSweep(env, new Date(now))).toBe(0); // idempotent
+    const { runs } = await json<{
+      runs: Array<{ id: string; status: string; error: string | null }>;
+    }>(await call(app, "GET", `/api/v1/changes/${changeId}/qa`, { cookie: human.cookie }));
+    expect(runs.find((r) => r.id === "qa-stale-never")).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining("never started"),
+    });
+    expect(runs.find((r) => r.id === "qa-fresh")?.status).toBe("queued");
+    const note = await env.DB.prepare(
+      "SELECT message FROM notifications WHERE kind = 'qa-finished' AND change_id = ?",
+    )
+      .bind(changeId)
+      .first<{ message: string }>();
+    expect(note?.message).toContain("never started");
   });
 
   it("a run that can't drive the app is an errored item: the lane goes up to at least 1, never down", async () => {

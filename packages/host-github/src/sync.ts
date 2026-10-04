@@ -361,7 +361,14 @@ export class GithubSync {
     const change = await store.getChange(changeId);
     if (change === null) return { event: delivery.event, action: "ignored", detail: "never graded", changeId };
     await store.updateChange(changeId, merged ? { status: "merged", mergedSha } : { status: "abandoned" });
-    await this.log(merged ? "github.pr-merged" : "github.pr-closed", `change:${changeId}`, { mergedSha });
+    // A run still in progress for the head (grading never finished) must not stay running.
+    let check: string = "none";
+    try {
+      check = await this.deps.host.closeCheck(changeId, p.data.pull_request.head.sha, merged);
+    } catch (e) {
+      check = `failed: ${(e as Error).message}`.slice(0, 300);
+    }
+    await this.log(merged ? "github.pr-merged" : "github.pr-closed", `change:${changeId}`, { mergedSha, check });
     return { event: delivery.event, action: "closed", detail: merged ? "merged on GitHub" : "closed", changeId };
   }
 
