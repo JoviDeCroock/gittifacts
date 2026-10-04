@@ -10,9 +10,9 @@ import { changeWorkflowId, ciRunIdFor } from "@app/coordinator";
 import type { QaRun } from "@app/evidence";
 import { createPlatformClient } from "@app/mcp/client";
 import { beforeEach, describe, expect, it } from "vitest";
+import { handlePreviewRequest } from "../../src/previews/gateway.js";
 import { signedQaImageUrl } from "../../src/qa/images.js";
 import { qaRunId } from "../../src/qa/request.js";
-import { handlePreviewRequest } from "../../src/previews/gateway.js";
 import { buildPorts } from "../../src/runtime/ports.js";
 import { call, createAgent, json, ORIGIN, signUpHuman, type TestApp } from "../http.js";
 import { type IntegrationFakes, NAMESPACE, resetIntegrationFakes } from "./fakes.js";
@@ -195,7 +195,11 @@ describe("QA on request (workerd: real app, workflow, PreviewHost; fake browser 
     // Agents: get_qa reads the verdicts; request_qa on the same head is the same run.
     const got = await mcp.tools.get_qa({ changeId });
     if (got.isError) throw new Error(JSON.stringify(got.content));
-    expect(got.structuredContent.runs[0]).toMatchObject({ id: run.id, status: "done", laneAfter: 2 });
+    expect(got.structuredContent.runs[0]).toMatchObject({
+      id: run.id,
+      status: "done",
+      laneAfter: 2,
+    });
     expect(got.structuredContent.runs[0]?.criteria.map((c) => c.verdict)).toEqual(["pass", "fail"]);
     expect(got.structuredContent.nextSteps[0]?.title).toContain("Fix what QA found");
     const asked = await mcp.tools.request_qa({ changeId });
@@ -255,6 +259,39 @@ describe("QA on request (workerd: real app, workflow, PreviewHost; fake browser 
     });
     expect(limited.status).toBe(429);
     expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
+  });
+
+  it("a run whose workflow was lost (queued > 15 min) no longer blocks the head: asking again starts a fresh run", async () => {
+    const app = platformApp();
+    const { human, changeId, head } = await gradedChange(app);
+    resetQaFakes([PLAN, REVIEW]);
+    const old = new Date(Date.now() - 20 * 60_000).toISOString();
+    await env.DB.prepare(
+      "INSERT INTO qa_runs (id, change_id, repo_id, head_sha, status, trigger, requested_by, created_at) SELECT ?, ?, repo_id, ?, 'queued', 'platform', 'x', ? FROM changes WHERE id = ?",
+    )
+      .bind(qaRunId(changeId, head), changeId, head, old, changeId)
+      .run();
+    await using wf = await introspectWorkflowInstance(
+      (env as unknown as { QA_WORKFLOW: Workflow }).QA_WORKFLOW,
+      qaRunId(changeId, head, 2),
+    );
+    await wf.modify(async (m) => {
+      await m.disableSleeps();
+      await m.disableRetryDelays();
+    });
+    const res = await json<{ run: { id: string }; reused: boolean }>(
+      await call(app, "POST", `/api/v1/changes/${changeId}/qa`, { cookie: human.cookie, body: {} }),
+    );
+    expect(res).toMatchObject({ reused: false, run: { id: qaRunId(changeId, head, 2) } });
+    await wf.waitForStatus("complete");
+    const { runs } = await json<{
+      runs: Array<{ id: string; status: string; error: string | null }>;
+    }>(await call(app, "GET", `/api/v1/changes/${changeId}/qa`, { cookie: human.cookie }));
+    expect(runs.map((r) => [r.id, r.status])).toEqual([
+      [qaRunId(changeId, head, 2), "done"],
+      [qaRunId(changeId, head), "failed"],
+    ]);
+    expect(runs[1]?.error).toContain("lost");
   });
 
   it("a run that can't drive the app is an errored item: the lane goes up to at least 1, never down", async () => {

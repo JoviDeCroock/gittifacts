@@ -17,6 +17,7 @@ import { Button } from "./ui.js";
 import "../styles/qa.css";
 
 const POLL_MS = 4_000;
+const STALE_MS = 15 * 60_000;
 const VERDICT = {
   pass: { label: "Pass", tone: "ok", icon: "check" },
   fail: { label: "Fail", tone: "danger", icon: "x" },
@@ -178,7 +179,11 @@ export function QaPanel({ change }: { change: Change }) {
     };
   }, [change.id, tick.value, runs, error]);
   const latest = runs.value?.find((r) => r.headSha === change.headSha) ?? runs.value?.[0] ?? null;
-  const flying = latest !== null && (latest.status === "queued" || latest.status === "running");
+  // A run with no result after 15 minutes lost its workflow: the platform lets you ask again.
+  const flying =
+    latest !== null &&
+    (latest.status === "queued" || latest.status === "running") &&
+    Date.now() - Date.parse(latest.createdAt) < STALE_MS;
   useEffect(() => {
     if (!flying) return;
     const t = setTimeout(() => (tick.value += 1), POLL_MS);
