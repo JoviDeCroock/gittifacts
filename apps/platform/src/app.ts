@@ -22,6 +22,7 @@ import { type ApiApp, newApiApp, SECURITY } from "./routes/common.js";
 import { registerDocsRoutes } from "./routes/docs.js";
 import { registerFrontDoorRoutes } from "./routes/front-door.js";
 import { registerGettingStartedRoutes } from "./routes/getting-started.js";
+import { registerHealthRoutes } from "./routes/health.js";
 import { registerIdentityRoutes } from "./routes/identity.js";
 import { registerPlanRoutes } from "./routes/plans.js";
 import { registerProjectRoutes } from "./routes/projects.js";
@@ -90,6 +91,8 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   app.on(["GET", "POST"], "/api/auth/*", (c) => authFor(c).handler(c.req.raw));
 
   registerFrontDoorRoutes(app, () => app.getOpenAPI31Document(OPENAPI_CONFIG));
+  // Liveness + the deployed commit (the post-deploy smoke checks it, docs/testing.md).
+  registerHealthRoutes(app);
   // Documentation (packages/docs build in the static assets): HTML, or markdown on request.
   registerDocsRoutes(app);
   // The CLI as an npm tarball (packages/cli pack:assets): npx -y <origin>/cli/gittifacts.tgz.

@@ -81,6 +81,14 @@ Time-to-first-green per project and template (Analytics Engine, else D1)
 
 ## Other
 
+### `GET /api/v1/health`
+
+Liveness and the deployed version and commit, no auth
+
+- **Auth:** none
+- **200:** `{ ok, version, commit, deployedAt, db }`
+- **Errors:** 503
+
 ### `GET /api/v1/stats/first-green`
 
 Live time-to-first-green: aggregates only (no project ids), no auth

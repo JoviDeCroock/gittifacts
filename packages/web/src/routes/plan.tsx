@@ -45,7 +45,7 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
 
   if (plan.status !== "draft") {
     return (
-      <section class="signature" aria-labelledby="sig-title">
+      <section class="signature" aria-labelledby="sig-title" data-testid="plan-decided" data-status={plan.status}>
         <h2 id="sig-title" class="signature__title">
           {plan.status === "approved" ? "Signed approval" : `Plan ${PLAN_STATUS[plan.status].label.toLowerCase()}`}
         </h2>
@@ -139,7 +139,7 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
       <form class="signature__form" onSubmit={submit}>
         {mode.value === "approve" ? (
           <label class="check signature__read">
-            <input type="checkbox" checked={read.value} onChange={(e) => (read.value = e.currentTarget.checked)} />
+            <input type="checkbox" checked={read.value} onChange={(e) => (read.value = e.currentTarget.checked)} data-testid="plan-read" />
             <span>I read the intent, the acceptance criteria and what is out of scope.</span>
           </label>
         ) : null}
@@ -163,7 +163,7 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
               <Button variant="secondary" onClick={() => ((mode.value = "reject"), (error.value = null), (intentKey.current = null))}>
                 Reject…
               </Button>
-              <Button type="submit" variant="primary" icon="signature" busy={busy.value} busyLabel="Signing…" disabled={!read.value} wide>
+              <Button type="submit" variant="primary" icon="signature" busy={busy.value} busyLabel="Signing…" disabled={!read.value} wide data-testid="plan-approve">
                 Sign and approve
               </Button>
             </>

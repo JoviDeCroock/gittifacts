@@ -49,7 +49,7 @@ export function GettingStarted({ state, view, onDismiss, onChanged }: Props) {
   const next = view.steps.find((s) => s.state !== "done")?.id;
   const stateOf = (id: StepId) => view.steps.find((s) => s.id === id)?.state ?? "todo";
   return (
-    <section class="gs" aria-labelledby="gs-title">
+    <section class="gs" aria-labelledby="gs-title" data-testid="first-run-checklist">
       <div class="gs__head">
         <h2 class="gs__title" id="gs-title">
           Get started

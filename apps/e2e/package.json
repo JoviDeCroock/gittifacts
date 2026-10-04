@@ -1,0 +1,22 @@
+{
+  "name": "@app/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end checks: the pre-deploy gate (browser + HTTP against the real Worker served locally) and the post-deploy smoke (against a deployed URL). See docs/testing.md.",
+  "scripts": {
+    "prepare-assets": "pnpm --filter @app/platform run bundle-templates && pnpm --filter @app/web build && pnpm --filter @app/docs build && pnpm --filter gittifacts pack:assets",
+    "serve": "tsx server/serve.ts",
+    "gate": "playwright test -c playwright.gate.config.ts",
+    "smoke": "playwright test -c playwright.smoke.config.ts",
+    "freshness": "tsx scripts/freshness.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@app/domain": "workspace:*",
+    "@app/mcp": "workspace:*",
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.10.0",
+    "zod": "^4.6.5"
+  }
+}

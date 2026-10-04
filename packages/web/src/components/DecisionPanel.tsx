@@ -119,7 +119,7 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
 
   if (done.value) {
     return (
-      <div class={`decision decision--${layout} decision--done decision--done-${done.value}`} role="status">
+      <div class={`decision decision--${layout} decision--done decision--done-${done.value}`} role="status" data-testid="decision-done" data-decision={done.value}>
         {done.value === "approve" ? (
           <svg class="seal" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
             <circle class="seal__ring" cx="20" cy="20" r="17" />
@@ -248,7 +248,7 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
             <Button variant="secondary" onClick={() => ((decision.value = null), (error.value = null), (intentKey.current = null))} disabled={busy.value}>
               Back
             </Button>
-            <Button type="submit" variant={copy.variant === "secondary" ? "primary" : copy.variant} busy={busy.value} busyLabel={copy.busy} wide>
+            <Button type="submit" variant={copy.variant === "secondary" ? "primary" : copy.variant} busy={busy.value} busyLabel={copy.busy} wide data-testid="decision-confirm">
               {copy.confirm}
             </Button>
           </div>
@@ -262,7 +262,7 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
           <Button variant="secondary" class="decision__changes" onClick={() => (decision.value = "request-changes")}>
             Request changes
           </Button>
-          <Button variant="primary" class="decision__approve" icon="check" onClick={() => (decision.value = "approve")}>
+          <Button variant="primary" class="decision__approve" icon="check" onClick={() => (decision.value = "approve")} data-testid="decision-approve">
             {resolving && layout === "rail" ? "Approve resolution" : "Approve"}
           </Button>
         </div>
