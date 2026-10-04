@@ -26,4 +26,5 @@ export {
   Step,
 } from "./script.js";
 export { ModelSpend } from "./spend.js";
+export { numbersIn, quotesIn, type Trace, traceStep, wordsIn } from "./trace.js";
 export * from "./types.js";

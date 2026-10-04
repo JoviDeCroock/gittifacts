@@ -10,6 +10,7 @@
  * tests never share data.
  */
 import { env } from "cloudflare:workers";
+import { FakeLlmClient } from "@app/tour";
 import { z } from "zod";
 import {
   addMember,
@@ -104,6 +105,31 @@ const DEFAULT_FILES = {
  */
 async function pipeline(path: string, body: unknown): Promise<Response> {
   const fakes = integrationFakes();
+  if (path === "/__e2e/qa/script") {
+    // A Plan with these criteria on the Change, and the model's next answers for QA (qa-fakes.ts).
+    const input = z
+      .object({
+        changeId: z.string().min(1),
+        criteria: z.array(z.string().min(1)).min(1),
+        responses: z.array(z.unknown()),
+      })
+      .parse(body);
+    const s = store();
+    const change = await s.getChange(input.changeId);
+    if (change === null) return Response.json({ error: "no such change" }, { status: 404 });
+    const plan = planFixture(change.repoId, change.authorId, {
+      acceptanceCriteria: input.criteria,
+      affectedRoutes: ["/"],
+      status: "approved",
+    });
+    await s.insertPlan(plan);
+    await s.updateChange(change.id, { planId: plan.id });
+    qaFakes().llm = new FakeLlmClient(
+      input.responses.map((json) => ({ json })),
+      { defaultCostUsd: 0.0005 },
+    );
+    return Response.json({ planId: plan.id }, { status: 201 });
+  }
   if (path === "/__e2e/qa/fail") {
     // QA's HTML browser answers 500 for this Change's app: the smoke check fails (qa-fakes.ts).
     const { changeId } = z.object({ changeId: z.string().min(1) }).parse(body);

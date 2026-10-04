@@ -15,6 +15,7 @@ import {
   type Step,
 } from "./script.js";
 import type { ModelSpend } from "./spend.js";
+import { traceStep } from "./trace.js";
 import type { QaBrowser, QaLimits } from "./types.js";
 
 export interface RunContext {
@@ -30,6 +31,7 @@ export interface RunContext {
 export interface CriterionRun {
   verdict: QaVerdict;
   reason: string;
+  notes?: string[];
   before?: string;
   steps: QaStepResult[];
   consoleErrors: string[];
@@ -65,9 +67,11 @@ export async function runScript(
   const open = await b.goto(script.start);
   const before = await ctx.shoot(`c${index}-before.jpg`, "before");
   drain();
+  const notes: string[] = [];
   const done = async (verdict: QaVerdict, reason: string): Promise<CriterionRun> => ({
     verdict,
     reason,
+    ...(notes.length > 0 ? { notes: notes.slice(0, 10) } : {}),
     ...(before !== undefined ? { before } : {}),
     steps,
     consoleErrors,
@@ -93,9 +97,24 @@ export async function runScript(
     const out = await executeStep(b, s, ctx.limits.stepTimeoutMs);
     const shot = await ctx.shoot(`c${index}-s${steps.length + 1}.jpg`, "step");
     drain();
-    steps.push(record(s, out.ok, out.detail, shot));
+    // Only expectations that trace to the criterion's own words decide (trace.ts, no model);
+    // an untraced one is still run and, when it doesn't hold, becomes an "also observed" note.
+    const trace = isExpectation(s) ? traceStep(text, s) : null;
+    steps.push({
+      ...record(s, out.ok, out.detail, shot),
+      ...(trace === null ? {} : { traced: trace.traced }),
+    });
     if (out.ok) {
-      if (isExpectation(s)) expectations++;
+      if (trace?.traced === true) expectations++;
+      continue;
+    }
+    if (trace !== null && !trace.traced) {
+      notes.push(
+        `also observed: ${describeStep(s)}: ${out.detail ?? "did not hold"} (not counted: ${trace.why ?? "it doesn't trace to the criterion"})`.slice(
+          0,
+          500,
+        ),
+      );
       continue;
     }
     if (isExpectation(s))
@@ -133,7 +152,10 @@ export async function runScript(
     return done("couldnt-test", `could not ${describeStep(s)}: ${out.detail ?? "it failed"}`);
   }
   if (expectations === 0)
-    return done("couldnt-test", "the script checked nothing (no expectation ran)");
+    return done(
+      "couldnt-test",
+      "no expectation that traces to the criterion's own words held or ran",
+    );
   return done("pass", `${expectations} expectation${expectations === 1 ? "" : "s"} held`);
 }
 

@@ -5,8 +5,8 @@ import { criteriaFor, type QaRunInput, runQa } from "../src/index.js";
 import { type FakeAppOptions, FakeBrowser, MemorySink } from "./fake-browser.js";
 
 const CRITERIA = [
-  "Clicking Increment raises the counter by one",
-  "Typing a name greets the person",
+  "Clicking Increment once raises the counter to 1",
+  'Typing "Ada" as the name shows "Hello Ada"',
 ];
 
 function input(over: Partial<QaRunInput> = {}): QaRunInput {
@@ -82,7 +82,7 @@ describe("runQa", () => {
     expect(item.blockedOrigins).toEqual(["https://fonts.example"]);
     // The planner saw the page and the criteria, never anything else about the change.
     expect(llm.requests[0]?.messages[0]?.content).toContain(
-      "Clicking Increment raises the counter",
+      "Clicking Increment once raises the counter",
     );
     expect(llm.requests[0]?.messages[0]?.content).toContain("#inc");
   });
@@ -155,7 +155,7 @@ describe("runQa", () => {
     const { verdicts, item } = await go([plan, { verdicts: [] }]);
     expect(verdicts).toEqual(["couldnt-test", "couldnt-test"]);
     expect(item.criteria[0]?.reason).toContain("needs a login");
-    expect(item.criteria[1]?.reason).toContain("checked nothing");
+    expect(item.criteria[1]?.reason).toContain("traces to the criterion");
     const failed = await go([new Error("gateway 503")]);
     expect(failed.verdicts).toEqual(["couldnt-test", "couldnt-test"]);
     expect(failed.item.criteria[0]?.reason).toContain("gateway 503");
@@ -210,6 +210,49 @@ describe("planning prompt", () => {
   it("asks for scripts that check only their own criterion (a failure withdraws approvals)", async () => {
     const { PLAN_SYSTEM, PROMPT_VERSION } = await import("../src/index.js");
     expect(PLAN_SYSTEM).toContain("Each script checks only what its own criterion says");
-    expect(PROMPT_VERSION).toBe("qa/3");
+    expect(PLAN_SYSTEM).toContain("expect_count");
+    expect(PROMPT_VERSION).toBe("qa/4");
+  });
+});
+
+describe("runQa: only expectations that trace to the criterion decide", () => {
+  it("an untraced expectation that fails is a note, never a fail; a traced one decides", async () => {
+    const criteria = criteriaFor({
+      acceptanceCriteria: ["The page has 2 buttons", "The page has 3 buttons"],
+    });
+    const plan = {
+      criteria: [
+        {
+          index: 0,
+          start: "/",
+          steps: [
+            { action: "expect_count", target: "button", value: "2" },
+            { action: "expect_text", value: "Goodbye 42" },
+          ],
+        },
+        { index: 1, start: "/", steps: [{ action: "expect_count", target: "button", value: "3" }] },
+      ],
+    };
+    const { item } = await go([plan, { verdicts: [] }], {}, { criteria });
+    expect(item.criteria[0]).toMatchObject({ verdict: "pass" });
+    expect(item.criteria[0]?.notes?.[0]).toContain('also observed: expect_text "Goodbye 42"');
+    expect(item.criteria[0]?.steps.map((s) => s.traced)).toEqual([true, false]);
+    expect(item.criteria[1]).toMatchObject({ verdict: "fail" });
+    expect(item.criteria[1]?.reason).toContain("expected 3 of button, saw 2");
+  });
+
+  it("a script whose only expectations don't trace couldn't test the criterion", async () => {
+    const plan = {
+      criteria: [
+        { index: 0, start: "/", steps: [{ action: "expect_text", target: "#n", value: "0" }] },
+      ],
+    };
+    const { item } = await go(
+      [plan, { verdicts: [] }],
+      {},
+      { criteria: criteriaFor({ acceptanceCriteria: ["Clicking Increment raises the counter"] }) },
+    );
+    expect(item.criteria[0]).toMatchObject({ verdict: "couldnt-test" });
+    expect(item.criteria[0]?.reason).toContain("traces to the criterion");
   });
 });

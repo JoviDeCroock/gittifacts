@@ -8,9 +8,11 @@ import { introspectWorkflowInstance } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { changeWorkflowId, ciRunIdFor } from "@app/coordinator";
 import type { QaRun } from "@app/evidence";
+import { type QaView, qaSummary } from "@app/host-github";
 import { createPlatformClient } from "@app/mcp/client";
 import { beforeEach, describe, expect, it } from "vitest";
 import { handlePreviewRequest } from "../../src/previews/gateway.js";
+import { qaViewFor } from "../../src/qa/github.js";
 import { signedQaImageUrl } from "../../src/qa/images.js";
 import { qaRunId } from "../../src/qa/request.js";
 import { runQaSweep } from "../../src/qa/sweep.js";
@@ -41,7 +43,10 @@ const REVIEW = {
 };
 
 /** A repo, an approved Plan with two criteria, a Change pushed and graded (awaiting review). */
-async function gradedChange(app: TestApp, opts: { keep?: (wf: AsyncDisposable) => void } = {}) {
+async function gradedChange(
+  app: TestApp,
+  opts: { keep?: (wf: AsyncDisposable) => void; criteria?: string[] } = {},
+) {
   const human = await signUpHuman(app);
   const agent = await createAgent(app, human.cookie);
   const created = await call(app, "POST", "/api/v1/repos", {
@@ -92,7 +97,7 @@ async function gradedChange(app: TestApp, opts: { keep?: (wf: AsyncDisposable) =
     repoId: repo.id,
     title: "Greet visitors",
     intent: "Say hello to whoever opens the site.",
-    acceptanceCriteria: ["The home page says hello", "The home page says goodbye"],
+    acceptanceCriteria: opts.criteria ?? ["The home page says hello", "The home page says goodbye"],
     outOfScope: [],
     riskDeclarations: [],
     scopePaths: [],
@@ -239,13 +244,30 @@ describe("QA on request (workerd: real app, workflow, PreviewHost; fake browser 
   it("a QA failure after approval withdraws the approval, takes the Change out of the queue and asks again at the raised lane", async () => {
     const app = platformApp();
     let first: AsyncDisposable | null = null;
-    const { human, changeId, head, repo, mcp } = await gradedChange(app, { keep: (wf) => (first = wf) });
+    const { human, changeId, head, repo, mcp } = await gradedChange(app, {
+      keep: (wf) => (first = wf),
+    });
     await using _first = first as unknown as AsyncDisposable;
     const store = buildPorts(env, "default").store;
     // Hold the queue so the approved Change waits in it (it would otherwise land before QA runs).
-    expect((await call(app, "POST", `/api/v1/repos/${repo.id}/queue/freeze`, { cookie: human.cookie, body: { reason: "QA test" } })).status).toBe(200);
-    expect((await call(app, "POST", `/api/v1/changes/${changeId}/review`, { cookie: human.cookie, body: { decision: "approve", headSha: head } })).status).toBe(200);
-    for (let i = 0; i < 100 && (await store.getChange(changeId))?.status !== "queued"; i++) await new Promise((r) => setTimeout(r, 50));
+    expect(
+      (
+        await call(app, "POST", `/api/v1/repos/${repo.id}/queue/freeze`, {
+          cookie: human.cookie,
+          body: { reason: "QA test" },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await call(app, "POST", `/api/v1/changes/${changeId}/review`, {
+          cookie: human.cookie,
+          body: { decision: "approve", headSha: head },
+        })
+      ).status,
+    ).toBe(200);
+    for (let i = 0; i < 100 && (await store.getChange(changeId))?.status !== "queued"; i++)
+      await new Promise((r) => setTimeout(r, 50));
     expect((await store.getChange(changeId))?.status).toBe("queued");
 
     resetQaFakes([PLAN, REVIEW]);
@@ -256,25 +278,50 @@ describe("QA on request (workerd: real app, workflow, PreviewHost; fake browser 
       await m.disableSleeps();
       await m.disableRetryDelays();
     });
-    expect((await call(app, "POST", `/api/v1/changes/${changeId}/qa`, { cookie: human.cookie, body: {} })).status).toBe(202);
+    expect(
+      (
+        await call(app, "POST", `/api/v1/changes/${changeId}/qa`, {
+          cookie: human.cookie,
+          body: {},
+        })
+      ).status,
+    ).toBe(202);
     await wf.waitForStatus("complete");
 
     // One record, withdrawn (not deleted); audited; the humans are told; the run says whose.
-    const reviews = (await store.listReviews?.(changeId) ?? []).filter((r) => r.decision === "approve");
+    const reviews = ((await store.listReviews?.(changeId)) ?? []).filter(
+      (r) => r.decision === "approve",
+    );
     expect(reviews).toHaveLength(1);
-    expect(reviews[0]?.withdrawn).toMatchObject({ reason: "qa-failed", by: qaRunId(changeId, head) });
+    expect(reviews[0]?.withdrawn).toMatchObject({
+      reason: "qa-failed",
+      by: qaRunId(changeId, head),
+    });
     const audit = await json<{ events: Array<{ action: string; payload?: unknown }> }>(
-      await call(app, "GET", `/api/v1/audit?subject=${encodeURIComponent(`change:${changeId}`)}&limit=200`, { cookie: human.cookie }),
+      await call(
+        app,
+        "GET",
+        `/api/v1/audit?subject=${encodeURIComponent(`change:${changeId}`)}&limit=200`,
+        { cookie: human.cookie },
+      ),
     );
     expect(audit.events.map((e) => e.action)).toContain("approval.withdrawn");
-    const note = await env.DB.prepare("SELECT message FROM notifications WHERE kind = 'approval-withdrawn' AND change_id = ?").bind(changeId).first<{ message: string }>();
+    const note = await env.DB.prepare(
+      "SELECT message FROM notifications WHERE kind = 'approval-withdrawn' AND change_id = ?",
+    )
+      .bind(changeId)
+      .first<{ message: string }>();
     expect(note?.message).toContain("approval by");
-    const { runs } = await json<{ runs: Array<{ withdrawn: Array<{ reviewerId: string }> }> }>(await call(app, "GET", `/api/v1/changes/${changeId}/qa`, { cookie: human.cookie }));
+    const { runs } = await json<{ runs: Array<{ withdrawn: Array<{ reviewerId: string }> }> }>(
+      await call(app, "GET", `/api/v1/changes/${changeId}/qa`, { cookie: human.cookie }),
+    );
     expect(runs[0]?.withdrawn.map((w) => w.reviewerId)).toEqual([human.principal.id]);
 
     // Out of the queue, and the head is graded again: the QA item rides along (verified), the lane is
     // Full review with qa.failed, and the Change waits for a fresh approval.
-    const queue = await json<{ entries: Array<{ changeId: string; state: string }> }>(await call(app, "GET", `/api/v1/repos/${repo.id}/queue`, { cookie: human.cookie }));
+    const queue = await json<{ entries: Array<{ changeId: string; state: string }> }>(
+      await call(app, "GET", `/api/v1/repos/${repo.id}/queue`, { cookie: human.cookie }),
+    );
     expect(queue.entries.find((e) => e.changeId === changeId)?.state).toBe("dequeued");
     await regrade.waitForStepResult({ name: "ci-start" });
     await fakes.ci.finish(env, ciRunIdFor(regradeId));
@@ -286,6 +333,55 @@ describe("QA on request (workerd: real app, workflow, PreviewHost; fake browser 
     if (ev.isError) throw new Error(JSON.stringify(ev.content));
     expect(ev.structuredContent.verification).toMatchObject({ ok: true });
     expect(JSON.stringify(ev.structuredContent)).toContain('"qa-run"');
+  });
+
+  it("only expectations that trace to the criterion decide: an untraced one that fails is a note, never a fail", async () => {
+    const app = platformApp();
+    const criteria = [
+      "The home page shows 1 h1 heading that says hello",
+      "The home page shows 2 h1 headings",
+    ];
+    const { human, changeId, head } = await gradedChange(app, { criteria });
+    resetQaFakes([
+      {
+        criteria: [
+          {
+            index: 0,
+            start: "/",
+            steps: [
+              { action: "expect_count", target: "h1", value: "1" },
+              { action: "expect_text", value: "Welcome back 42" },
+            ],
+          },
+          { index: 1, start: "/", steps: [{ action: "expect_count", target: "h1", value: "2" }] },
+        ],
+      },
+      { verdicts: [] },
+    ]);
+    await using wf = await qaWorkflow(changeId, head);
+    expect(
+      (
+        await call(app, "POST", `/api/v1/changes/${changeId}/qa`, {
+          cookie: human.cookie,
+          body: {},
+        })
+      ).status,
+    ).toBe(202);
+    await wf.waitForStatus("complete");
+    const { runs } = await json<{ runs: Array<{ summary: unknown; report: QaRun }> }>(
+      await call(app, "GET", `/api/v1/changes/${changeId}/qa`, { cookie: human.cookie }),
+    );
+    const [one, two] = runs[0]?.report.criteria ?? [];
+    expect(one).toMatchObject({ verdict: "pass" });
+    expect(one?.steps.map((s) => s.traced)).toEqual([true, false]);
+    expect(one?.notes?.[0]).toContain('also observed: expect_text "Welcome back 42"');
+    expect(one?.notes?.[0]).toContain("not in the criterion");
+    expect(two).toMatchObject({ verdict: "fail" });
+    expect(two?.reason).toContain("expected 2 of h1, saw 1");
+    expect(runs[0]?.summary).toEqual({ passed: 1, failed: 1, couldntTest: 0 });
+    // The note is in the signed item, and the GitHub section shows it, folded.
+    const section = await qaViewFor(env as never)(changeId, head);
+    expect(qaSummary(section as QaView).details).toContain("Also observed (not counted");
   });
 
   it("refuses a caller without access (404), a head without green CI, and over the repo's rate limit", async () => {

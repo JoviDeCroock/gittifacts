@@ -143,3 +143,13 @@ fieldset.qa-strip {
   margin: 0;
   padding-inline: 0;
 }
+.qa-notes {
+  list-style: none;
+  display: grid;
+  gap: var(--s-1);
+  padding-inline-start: var(--s-3);
+  border-inline-start: 2px solid var(--rule-strong);
+  color: var(--text-2);
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+}

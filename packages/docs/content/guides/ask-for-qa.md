@@ -30,6 +30,8 @@ Asking twice for the same head returns the same run. To run it again, pass `forc
 
 Each criterion shows its verdict and the reason. Under it, a strip of screenshots shows the page before the first step and after each step. Tap one to see it full size. The replay plays every step as an animated GIF.
 
+Only checks that use the criterion's own numbers, quoted text or words decide the verdict. Anything else the agent checked shows as "Also observed" and never fails a criterion.
+
 On GitHub nothing new is posted. The result goes into the one summary comment as a QA line, with the criteria and up to four thumbnails folded under it, and into the check run. A comment that asked for QA gets an 👀 reaction.
 
 <details>

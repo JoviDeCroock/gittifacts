@@ -4,7 +4,7 @@
  */
 import type { PageSnapshot, QaCriterionInput } from "./types.js";
 
-export const PROMPT_VERSION = "qa/3";
+export const PROMPT_VERSION = "qa/4";
 
 const DSL = `Steps (JSON objects {action, target?, value?}):
 - goto: target = path on the app ("/settings")
@@ -17,6 +17,7 @@ const DSL = `Steps (JSON objects {action, target?, value?}):
 - expect_no_text: value = text that must NOT appear; target optional
 - expect_visible: target = selector that must be visible
 - expect_url: value = path fragment the URL must contain
+- expect_count: target = selector, value = how many visible elements must match ("3")
 Selectors: copy one from the page's element list, or write text=<visible text> for a button or link.`;
 
 export const PLAN_SYSTEM = `You are a QA engineer testing a web app in a real browser against a Plan's acceptance criteria.
@@ -26,9 +27,9 @@ Rules:
 - At most 10 steps per criterion. End with at least one expect_* step that checks the criterion itself.
 - Use only selectors and texts you can see in the page snapshots. Never invent ids.
 - Prefer short, exact expected texts that the criterion implies (e.g. a counter reading "1" after one click).
-- Each script checks only what its own criterion says. Never assert a property another criterion covers
-  (e.g. for "lists three shares", count the shares; don't check their total): a failure must point at the
-  criterion that is not met, because a failure withdraws approvals.
+- Each script checks only what its own criterion says. Expected numbers and texts must come from the
+  criterion's own words (its numbers, quoted strings, nouns): for "lists three shares" use expect_count on the
+  shares with value "3", not a share's amount. Expectations that don't trace to the criterion are only notes.
 - If a criterion can't be checked in this browser (it needs a login, outside services, email, a server log,
   or is not about something visible), set "untestable" to a one-sentence reason and give no steps.
 - Third-party requests are blocked during QA; criteria that depend on them are untestable.

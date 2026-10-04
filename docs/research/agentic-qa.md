@@ -65,17 +65,22 @@ small apps QA targets). The same path is used for native repos, so there is one 
 4. **Plan the scripts (1 LLM call).** Input: criteria, route snapshots, changed file paths (never the
    author's summary). Output (json_schema, zod-validated): per criterion a start route and ≤ 10 steps,
    or `untestable` with a reason. Steps: `goto`, `click`, `fill`, `press`, `select`, `wait`, `expect_text`,
-   `expect_no_text`, `expect_visible`, `expect_url`.
+   `expect_no_text`, `expect_visible`, `expect_url`, `expect_count`.
 5. **Run.** Per criterion from a fresh page: a "before" screenshot, then each step (5 s timeout) with a
    screenshot after it. Console errors, page errors, and requests answered ≥ 400 or blocked are recorded.
 6. **Repair (≤ 1 LLM call per criterion).** An *action* that can't find its target gets one rewrite of the
    remaining steps from the current snapshot. A failed *expectation* is never repaired: it is the answer.
-7. **Verdict.** Deterministic first: a failed expectation → `fail`; an action still failing after repair, or
+7. **Traceability (no model).** Each expectation is checked against its criterion's own text
+   (`packages/qa/src/trace.ts`): every number it expects must appear in the criterion (as a value: `€100.00` =
+   `100`, "three" = `3`); expected text must be a quoted string of the criterion or use only its words; a
+   count must be one of its numbers; a selector or URL must name one of its words. Only traced expectations
+   decide; an untraced one still runs, and if it doesn't hold it becomes an "also observed" note.
+8. **Verdict.** Deterministic first: a failed expectation → `fail`; an action still failing after repair, or
    no expectation at all → `couldnt-test`; otherwise `pass`. Then **one LLM review** of all criteria
    (steps, results, final page text) may only cast doubt on a pass (pass → couldn't test): `fail` always
    comes from a failed expectation in the browser, and nothing turns a fail or a couldn't-test into a pass.
    (Live, an unrestricted review failed a criterion that held because of another criterion's bug.)
-8. **Replay.** The step screenshots (JPEG, half scale) become an animated GIF, encoded inside the same
+9. **Replay.** The step screenshots (JPEG, half scale) become an animated GIF, encoded inside the same
    Chromium (canvas + a small GIF encoder evaluated in the page), so the Worker does no image work.
 
 ## 4. Evidence: a signed `qa-run` item

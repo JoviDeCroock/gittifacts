@@ -10,6 +10,7 @@ import type { Browser, HTTPRequest, Page } from "@cloudflare/puppeteer";
 import {
   CLEAR_VALUE,
   CONTENT_BOX,
+  COUNT,
   IS_VISIBLE,
   SNAPSHOT,
   TAG_TARGET,
@@ -198,6 +199,10 @@ export class BrowserRunQa implements QaBrowser {
   async textOf(target?: string): Promise<string | null> {
     const out = await this.p.evaluate(`${TEXT_OF}(${js(target ?? null)})`).catch(() => null);
     return typeof out === "string" ? out : null;
+  }
+  async count(target: string): Promise<number> {
+    const n = await this.p.evaluate(`${COUNT}(${js(target)})`).catch(() => 0);
+    return typeof n === "number" ? n : 0;
   }
   async isVisible(target: string): Promise<boolean> {
     return (await this.p.evaluate(`${IS_VISIBLE}(${js(target)})`).catch(() => false)) === true;

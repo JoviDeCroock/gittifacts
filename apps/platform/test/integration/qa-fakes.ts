@@ -110,6 +110,10 @@ class HtmlBrowser implements OpenedBrowser {
   async textOf(target?: string) {
     return target === undefined ? text(this.html) : null;
   }
+  async count(target: string) {
+    // Tag selectors only (h1, li, …): enough for the fake pages.
+    return /^[a-z][a-z0-9]*$/.test(target) ? (this.html.match(new RegExp(`<${target}[\\s>]`, "g")) ?? []).length : 0;
+  }
   async isVisible(target: string) {
     return this.html.includes(`<${target}`);
   }

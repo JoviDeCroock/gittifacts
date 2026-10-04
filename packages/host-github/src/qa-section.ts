@@ -19,7 +19,7 @@ export interface QaView {
   passed: number;
   failed: number;
   couldntTest: number;
-  criteria: Array<{ text: string; verdict: QaVerdictWord; reason: string }>;
+  criteria: Array<{ text: string; verdict: QaVerdictWord; reason: string; notes?: string[] }>;
   /** ≤ 4 signed thumbnail URLs (expire), each with its alt text. */
   thumbs: Array<{ url: string; alt: string }>;
   /** The full report on gittifacts (sign-in required). */
@@ -83,6 +83,9 @@ export function qaDetailsText(qa: QaView): string | null {
     );
   }
   if (qa.criteria.length > 12) out.push(`- and ${qa.criteria.length - 12} more in the report`);
+  // Untraced expectations that didn't hold: shown, never counted (they don't decide a verdict).
+  const notes = qa.criteria.slice(0, 12).flatMap((c) => (c.notes ?? []).slice(0, 2));
+  if (notes.length > 0) out.push("", "Also observed (not counted; it isn't what a criterion says):", ...notes.slice(0, 6).map((n) => `- ${cut(oneLine(n.replace(/^also observed: /, "")), 240)}`));
   if (qa.thumbs.length > 0) out.push("", qaThumbs(qa));
   out.push(
     "",

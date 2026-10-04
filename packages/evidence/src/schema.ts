@@ -468,6 +468,7 @@ export const QA_ACTIONS = [
   "expect_no_text",
   "expect_visible",
   "expect_url",
+  "expect_count",
 ] as const;
 export const QaAction = z.enum(QA_ACTIONS);
 export type QaAction = z.infer<typeof QaAction>;
@@ -481,6 +482,11 @@ export const QaStepResult = z.object({
   detail: z.string().max(1000).optional(),
   /** Name of the screenshot artifact taken after this step. */
   shot: z.string().max(200).optional(),
+  /**
+   * Expectations only: whether it traces to the criterion's own words (rule in @app/qa trace.ts).
+   * An untraced expectation is run and reported as a note; it never decides the verdict.
+   */
+  traced: z.boolean().optional(),
 });
 export type QaStepResult = z.infer<typeof QaStepResult>;
 
@@ -496,6 +502,8 @@ export const QaCriterionResult = z.object({
   steps: z.array(QaStepResult).max(30),
   consoleErrors: z.number().int().nonnegative(),
   networkErrors: z.number().int().nonnegative(),
+  /** "Also observed": untraced expectations that did not hold (they never decide the verdict). */
+  notes: z.array(z.string().max(500)).max(10).optional(),
 });
 export type QaCriterionResult = z.infer<typeof QaCriterionResult>;
 

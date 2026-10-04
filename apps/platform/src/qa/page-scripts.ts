@@ -105,3 +105,12 @@ export const CONTENT_BOX = `(function () {
   }
   return { width: Math.ceil(w), height: Math.ceil(h) };
 })()`;
+
+/** `(selector) → number`: how many visible elements match (an invalid selector counts 0). */
+export const COUNT = `(function (sel) {
+  var visible = function (el) {
+    var s = getComputedStyle(el), r = el.getBoundingClientRect();
+    return s.visibility !== "hidden" && s.display !== "none" && r.width > 0 && r.height > 0;
+  };
+  try { return Array.prototype.slice.call(document.querySelectorAll(sel)).filter(visible).length; } catch (e) { return 0; }
+})`;

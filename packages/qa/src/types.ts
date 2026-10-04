@@ -42,6 +42,8 @@ export interface QaBrowser {
   /** Visible text of `target`, or of the whole page without one; null when the target is missing. */
   textOf(target?: string): Promise<string | null>;
   isVisible(target: string): Promise<boolean>;
+  /** How many visible elements match `target` (a CSS selector). */
+  count(target: string): Promise<number>;
   /** Path + search of the current page. */
   path(): Promise<string>;
   snapshot(): Promise<PageSnapshot>;

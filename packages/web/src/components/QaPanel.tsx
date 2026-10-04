@@ -84,6 +84,13 @@ function Criterion({ c, run }: { c: QaCriterionResult; run: QaRun }) {
         <p class="qa-crit__text">{c.text}</p>
       </div>
       <p class="qa-crit__why">{c.reason}</p>
+      {(c.notes ?? []).length > 0 ? (
+        <ul class="qa-notes" data-testid="qa-notes" aria-label="Also observed, not counted">
+          {(c.notes ?? []).map((n, i) => (
+            <li key={i}>{n.replace(/^also observed: /, "Also observed: ")}</li>
+          ))}
+        </ul>
+      ) : null}
       {c.steps.length > 0 || c.before ? (
         <fieldset class="qa-strip" aria-label={`Screenshots of “${c.text}”`}>
           <Shot run={run} name={c.before} caption="Before" />

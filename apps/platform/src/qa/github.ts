@@ -59,6 +59,7 @@ export function qaViewFor(
         text: c.text,
         verdict: c.verdict,
         reason: c.reason,
+        ...(c.notes !== undefined ? { notes: c.notes } : {}),
       })),
       thumbs,
       reportUrl: `${origin}/changes/${encodeURIComponent(changeId)}#qa`,

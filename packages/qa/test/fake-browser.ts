@@ -88,6 +88,11 @@ export class FakeBrowser implements QaBrowser {
     if (el === "inc") return "Increment";
     return null;
   }
+  async count(target: string) {
+    // "button" counts the page's two buttons in the fake app (Increment and the hidden Reset).
+    if (this.url !== "/") return 0;
+    return target === "button" ? 2 : this.find(target) === null ? 0 : 1;
+  }
   async isVisible(target: string) {
     return this.find(target) !== null;
   }

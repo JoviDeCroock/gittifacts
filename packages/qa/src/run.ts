@@ -219,6 +219,7 @@ function result(
     reason: r.reason.slice(0, 2000),
     ...(r.before !== undefined ? { before: r.before } : {}),
     steps: r.steps.slice(0, 30),
+    ...(r.notes !== undefined && r.notes.length > 0 ? { notes: r.notes.slice(0, 10) } : {}),
     consoleErrors: r.consoleErrors.length,
     networkErrors: r.networkErrors.length,
   };

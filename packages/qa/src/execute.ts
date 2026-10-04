@@ -93,6 +93,20 @@ export async function executeStep(
       const ok = await poll(b, timeoutMs, () => b.isVisible(target));
       return ok ? { ok } : { ok, detail: `${target} is not visible` };
     }
+    case "expect_count": {
+      if (s.target === undefined) return need("target");
+      const want = Number(s.value);
+      if (!Number.isInteger(want) || want < 0) return need("count (a whole number)");
+      const target = s.target;
+      let seen = 0;
+      const ok = await poll(b, timeoutMs, async () => {
+        seen = await b.count(target);
+        return seen === want;
+      });
+      return ok
+        ? { ok, detail: `${seen} of ${target}` }
+        : { ok, detail: `expected ${want} of ${target}, saw ${seen}` };
+    }
     case "expect_url": {
       const want = s.value ?? s.target;
       if (want === undefined) return need("value");
