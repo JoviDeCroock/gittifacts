@@ -7,20 +7,17 @@
  * Machine names stay (the `tour` field, the `approve_tour` action id, the `gittifacts/lane` name).
  */
 import type { Lane, LaneReason } from "@app/domain";
+import { LANE_LABELS, laneLabel as sharedLaneLabel } from "@app/domain/vocabulary";
 
 /** The PR label that asks for the walkthrough's flagged stops as review comments on the diff. */
 export const WALKTHROUGH_LABEL = "gittifacts:walkthrough";
 
 export const TERMS = {
   product: "gittifacts",
-  laneBadge: (n: Lane) => `Lane ${n}`,
-  laneName: { 0: "Auto-merge", 1: "Quick review", 2: "Full review" } as Record<Lane, string>,
-  /** What a person has to do, per lane. */
-  laneAsk: {
-    0: "Nothing for a person to do: the evidence decides.",
-    1: "A person reads the walkthrough and approves the change.",
-    2: "A person reads the diff, with the walkthrough as a guide.",
-  } as Record<Lane, string>,
+  /** Lane names, badges and what a person does: the shared table, so no surface drifts. */
+  laneBadge: (n: Lane) => LANE_LABELS[n].badge,
+  laneName: { 0: LANE_LABELS[0].name, 1: LANE_LABELS[1].name, 2: LANE_LABELS[2].name } as Record<Lane, string>,
+  laneAsk: { 0: LANE_LABELS[0].description, 1: LANE_LABELS[1].description, 2: LANE_LABELS[2].description } as Record<Lane, string>,
   /** A Lane 0 that still needs a person (it changes .platform/). */
   policyAsk: "A person who is not the author approves it (it changes gittifacts policy).",
   tour: "walkthrough",
@@ -43,8 +40,8 @@ export const TERMS = {
   fullReviewButton: { label: "Request full review", description: "Ask for a full human review" },
 } as const;
 
-/** "Full review (Lane 2)" */
-export const laneLabel = (lane: Lane): string => `${TERMS.laneName[lane]} (${TERMS.laneBadge(lane)})`;
+/** "Full review (Lane 2)" (the shared `@app/domain/vocabulary` label). */
+export const laneLabel = (lane: Lane): string => sharedLaneLabel(lane);
 
 const words = (s: string) => s.replace(/-/g, " ");
 
