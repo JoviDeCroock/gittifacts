@@ -30,6 +30,7 @@ import type {
   RepoPolicy,
   RolloutState,
 } from "@app/domain";
+import { LANE_LABELS } from "@app/domain/vocabulary";
 import { EVIDENCE_NOTES_REF, type EvidenceItem, encodeNote, type Screenshots } from "@app/evidence";
 import { type HostAdapter, type LaneVerdict, NATIVE_CAPABILITIES } from "@app/host";
 import { type CoordinatorBindings, createOrGet } from "./bindings.js";
@@ -843,7 +844,10 @@ export async function runChangeWorkflow(
         kind: "review-requested",
         changeId,
         repoId,
-        message: `${ctx.title} is Lane ${cls.lane}${cls.shadow ? " (Lane 0 in shadow mode)" : ""} and needs a review.`,
+        message:
+          cls.lane === 0
+            ? `${ctx.title} needs a person's approval (${LANE_LABELS[0].name}, ${LANE_LABELS[0].badge}).`
+            : `${ctx.title} needs a ${LANE_LABELS[cls.lane].name.toLowerCase()} (${LANE_LABELS[cls.lane].badge})${cls.shadow ? "; the evidence alone says auto-merge, but auto-merge is calibrating on this repo" : ""}.`,
       });
       await log("change.review-requested", { lane: cls.lane, shadow: cls.shadow });
       return true;

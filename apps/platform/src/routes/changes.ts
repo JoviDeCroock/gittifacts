@@ -135,7 +135,7 @@ const tour = createRoute({
   method: "get",
   path: "/api/v1/changes/{changeId}/tour",
   tags: ["changes"],
-  summary: "The reviewer agent's guided tour for the current head",
+  summary: "The reviewer agent's walkthrough (tour) for the current head",
   security: SECURITY,
   middleware: [read] as const,
   request: { params: ChangeIdParam },
@@ -145,7 +145,7 @@ const tour = createRoute({
         tour: TourSchema,
         stale: z
           .boolean()
-          .describe("The tour was generated for an older head than the change's current one"),
+          .describe("The walkthrough was generated for an older head than the change's current one"),
       }),
       "Tour",
     ),
@@ -261,7 +261,7 @@ const rerun = createRoute({
   method: "post",
   path: "/api/v1/changes/{changeId}/rerun",
   tags: ["changes"],
-  summary: "Re-run CI, evidence, lane and tour on the current head (author or maintainer)",
+  summary: "Re-run CI, evidence, lane and walkthrough on the current head (author or maintainer)",
   description:
     "No push needed: a fresh workflow instance and CI run for the same head (a flaky step). Only while the change is running, failing or awaiting review; audited as `change.rerun-requested`.",
   security: SECURITY,

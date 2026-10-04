@@ -439,7 +439,7 @@ export function createCoordinator(
       if (allowed) await assertAccess(actor, repo.id, "contribute", noRepo(repo.id));
       if (!allowed) {
         fail("forbidden", "only the repo's owner (or its agents) can bootstrap it", {
-          explanation: "The bootstrap Change runs once, when the project is created.",
+          explanation: "The first Change runs once, when the repo is created.",
           call: `get_change_status({ changeId: "${bootstrapChangeIdFor(repo.id)}" })`,
         });
       }
@@ -711,7 +711,7 @@ export function createCoordinator(
       if (actor.kind !== "human") {
         fail("forbidden", "only humans review changes; agents prove conformance", {
           explanation:
-            "Ask a human reviewer to look at the tour; agents can never approve a change.",
+            "Ask a human reviewer to look at the walkthrough; agents can never approve a change.",
           call: status(changeId),
         });
       }
@@ -991,7 +991,7 @@ export function createCoordinator(
         fail(
           "threshold-not-met",
           `shadow agreement ${(agreement.ratio * 100).toFixed(1)}% over ${agreement.samples} Lane-0 candidates (threshold ${(repo.policy.shadow.agreementThreshold * 100).toFixed(1)}%, min ${repo.policy.shadow.minSamples}); ${needed}`,
-          "Keep reviewing Lane-0 candidates in shadow mode until humans agree often enough.",
+          "Keep reviewing auto-merge candidates while the repo calibrates, until humans agree often enough.",
         );
       }
       const updated = await store.updateRepo(repoId, {

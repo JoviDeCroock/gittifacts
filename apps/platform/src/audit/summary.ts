@@ -74,10 +74,10 @@ const SUMMARIES: Record<string, (p: Payload) => string | null> = {
   "change.judge-failed": () => "Reviewer agent judgment failed (treated as unknown)",
   "change.tour-generated": (p) => {
     const n = num(p, "stops");
-    return n === null ? "Tour ready" : `Tour ready: ${n} stop${n === 1 ? "" : "s"}`;
+    return n === null ? "Walkthrough ready" : `Walkthrough ready: ${n} stop${n === 1 ? "" : "s"}`;
   },
   "change.tour-failed": (p) =>
-    str(p, "reason") ? `Tour failed: ${clip(str(p, "reason")!)}` : "Tour failed",
+    str(p, "reason") ? `Walkthrough failed: ${clip(str(p, "reason")!)}` : "Walkthrough failed",
   "change.budget-exceeded": () => "AI review budget exceeded",
   "change.blocked": (p) =>
     p.ciStatus === "failed" ? "Blocked: CI failed" : "Blocked: evidence could not be verified",

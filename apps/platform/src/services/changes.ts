@@ -206,7 +206,7 @@ export async function getChangeTour(
     (await svc.store.getTour(change.id, head)) ??
     current ??
     (await svc.store.getLatestTour(change.id));
-  if (!tour) throw notReady(change, "The tour", head);
+  if (!tour) throw notReady(change, "The walkthrough", head);
   return { tour, stale: tour.headSha !== head };
 }
 

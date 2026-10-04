@@ -195,7 +195,7 @@ export function buildProposal(input: {
       intent: intent.slice(0, 10_000),
       acceptanceCriteria: [
         `CI installs with \`${report.installCommand}\`${report.testCommand === null ? "" : ` and runs \`${report.testCommand}\``} from .platform/ci.ts`,
-        ".platform/policy.ts starts in shadow mode (Lane 0 off) with the default sensitive paths",
+        ".platform/policy.ts starts calibrating (auto-merge off) with the default sensitive paths",
         "AGENTS.md tells agents how to work here, with this repo's commands",
         mainCiCriterion(mainCi),
       ],
