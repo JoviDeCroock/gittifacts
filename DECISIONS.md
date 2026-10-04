@@ -2619,3 +2619,30 @@ Times are from the PR's creation (GitHub) to the audit events `change.lane-publi
   the tour). Previously 158–193 s graded.
 - **new-dependency's 4-minute CI gap** (306 s run whose steps sum to ~60 s, earlier run) did not recur (79 s).
   Unexplained: the per-step records (R2) and workflow instance timings that would show it weren't read.
+
+## 2026-10-04 — The judge sees what the platform verified (transforms, public-API diff); judge-2026-10-04.1
+
+Found by the live contract run (codemod-rename computed Lane 1: `llm.unsure`, plan conformance). Not a host
+difference: the judge never sees the host. Reproduced on the host-free calibration case: 1 of 8 runs unsure on
+GLM-5.3-Flash with the old prompt (live: 1 of 1).
+
+- **Cause.** The judge got the plan and the diff only. The diff's `transformVerified` flag that hid
+  transform-reproduced files was never set in production (`tree-diff`, sandbox diff: always false), so the
+  verified transform reached the judge as nothing at all; the public-API diff never reached it either. Criteria
+  like "head equals the codemod output" and "the public API is unchanged" can't be proven from a diff.
+- **Change.** `judgeFactsFrom(signed evidence)` (`@app/tour`, judge-facts.ts) → `facts` on the judge call
+  (core grade passes them; coordinator/core reviewer ports, platform pass-through): verified transforms (status
+  ok, verified, no mismatched files) and the public-API classification. The prompt gets a `<verified>` section,
+  "facts the platform established by running code, not the author's claims; a criterion one proves is met",
+  scoped to what each fact proves. Files a verified transform reproduced (path and rename source) leave the
+  hand-written diff; their output is shown after it, labelled reference-only, when it fits whole (else by path,
+  as before), so criteria about the output ("no occurrence remains") can be checked. Citations still count only
+  for hand-written hunks: a concern about transform output is downgraded to unsure (still raises).
+- **Raise-only kept.** Facts come from signed evidence, never the author; the judge's answers still only raise.
+  A change without facts gets a byte-identical prompt (checked for all 11 earlier calibration cases).
+- **Calibration** (`calibrate-judge.ts`, GLM-5.3-Flash, low effort): new case l-codemod-rename-transform
+  (`expectNoConcern`: only no-concern passes) 8/8 + 8/8 with the change (first version, transform output hidden:
+  8/8 then 1 unsure of 2: "can't confirm no occurrences remain", which led to showing the output). Full set
+  RUNS=2: 22/24 (request-logging 1 spurious concern with an unchanged prompt; codemod 1 unsure, before the output
+  was shown), then 24/24 with the final prompt; request-logging alone 8/8. Hidden-behaviour and out-of-scope
+  cases kept their concerns in every run.
