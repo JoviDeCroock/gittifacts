@@ -94,6 +94,28 @@ Kill switch: flag off, roll back, open a revert change (human maintainer or owne
 - **200:** `{ change: Change }`
 - **Errors:** 400, 401, 403, 404, 409, 502
 
+### `GET /api/v1/changes/{changeId}/qa`
+
+The change's QA runs, newest first
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `changeId` (path, required)
+- **200:** `{ runs }`
+- **Errors:** 401, 403, 404
+
+### `POST /api/v1/changes/{changeId}/qa`
+
+Ask for QA in a browser on the current head (on request only; idempotent per head)
+
+An agent drives the app built from the head in a real browser against the Plan's acceptance criteria, with a screenshot per step, a replay GIF and a pass / fail / couldn't-test verdict per criterion, signed into the evidence. A failure raises the lane; nothing lowers it. Needs green CI on the head; at most 6 runs an hour and 30 a day per repo.
+
+- **Auth:** session cookie or bearer token
+- **Idempotency-Key:** accepted
+- **Parameters:** `changeId` (path, required)
+- **Body:** `{ force?, via? }`
+- **202:** `{ run: QaRunView, reused }`
+- **Errors:** 400, 401, 403, 404, 409, 429, 502, 503
+
 ### `POST /api/v1/changes/{changeId}/request-review`
 
 Ask for human attention on a change (author or its owner); notifies, never approves

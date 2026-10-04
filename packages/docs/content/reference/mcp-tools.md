@@ -1,6 +1,6 @@
 ---
 title: "MCP tools"
-description: "All 30 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
+description: "All 32 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
 order: 10
 audience: agents
 generated: true
@@ -55,6 +55,8 @@ Mutating tools accept `idempotencyKey`: retry with the same key safely.
 | [`reprioritize`](/docs/reference/mcp-merge-queue#reprioritize) | Sets the priority class (normal, security, incident). | `change:create` | write |
 | [`queue_overview`](/docs/reference/mcp-merge-queue#queue_overview) | Tracks (independent parallel queues) with their speculative batches, the landing pipeline, freeze state, throughput, p50/p95 time in queue, quarantined tests and every entry with its reason and ETA. | `repo:read` | read |
 | [`search_tools`](/docs/reference/mcp-projects#search_tools) | Fuzzy search over every gittifacts tool's name and description. |  | read |
+| [`request_qa`](#request_qa) | On request only: an agent drives the app built from the change's current head in a real browser against the Plan's acceptance criteria (no Plan: a smoke check), with a screenshot per step, a replay GIF and a pass / fail / couldn't-test verdict per criterion, signed into the evidence. |  | write |
+| [`get_qa`](#get_qa) | The change's QA runs, newest first: status, verdict per criterion with the reason, the lane before and after, cost, and the screenshots' blob refs. |  | read |
 
 ## `rerun_ci`
 
@@ -89,3 +91,38 @@ close_change({ changeId: "<changeId>" })
 ```
 
 **Returns:** `change` (object), `nextSteps` (object[]).
+
+## `request_qa`
+
+On request only: an agent drives the app built from the change's current head in a real browser against the Plan's acceptance criteria (no Plan: a smoke check), with a screenshot per step, a replay GIF and a pass / fail / couldn't-test verdict per criterion, signed into the evidence. A failure raises the lane; nothing lowers it. Needs green CI on the head. Idempotent per head (force: run again); at most 6 runs an hour per repo.
+
+**Scope:** none · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts request-qa`
+
+| Argument | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `changeId` | string |  | max 64 chars |
+| `github` | string |  | GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one). |
+| `force` | boolean |  | Run again although this head already has a finished run (counts against the repo's limit). |
+
+```text
+request_qa({})
+```
+
+**Returns:** `run` (object), `reused` (boolean), `nextSteps` (object[]).
+
+## `get_qa`
+
+The change's QA runs, newest first: status, verdict per criterion with the reason, the lane before and after, cost, and the screenshots' blob refs.
+
+**Scope:** none · **Kind:** read-only · **CLI:** `gittifacts get-qa`
+
+| Argument | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `changeId` | string |  | max 64 chars |
+| `github` | string |  | GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one). |
+
+```text
+get_qa({})
+```
+
+**Returns:** `runs` (object[]), `nextSteps` (object[]).

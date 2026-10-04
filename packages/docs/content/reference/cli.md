@@ -117,6 +117,24 @@ gittifacts wait <changeId> --until <evidence_ready|lane_assigned|tour_ready|merg
 
 Examples: `gittifacts wait chg_123 --until evidence_ready`, `gittifacts wait chg_123 --until merged --timeout 1800 --human`.
 
+### `gittifacts qa`
+
+Ask an agent to test the app built from the change's head in a real browser against the Plan's acceptance criteria (screenshots, a replay, a verdict per criterion). Idempotent per head; --wait prints the verdicts when it finishes.
+
+```text
+gittifacts qa <changeId> [--github <string>] [--force] [--wait] [--timeout <integer>] [--idempotency-key <key>]
+```
+
+| Flag | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `--change-id` | string |  | Also the first positional argument. The change (or pass --github). |
+| `--github` | string |  | GitHub mode: the pull request as owner/repo#123. |
+| `--force` | boolean |  | Run again although this head already has a finished run. |
+| `--wait` | boolean |  | Wait for the run to finish and print the verdicts. |
+| `--timeout` | integer |  | With --wait: overall seconds (default 600). |
+
+Examples: `gittifacts qa chg_123 --wait`, `gittifacts qa --github acme/web#42 --wait --human`.
+
 ### `gittifacts tools`
 
 List the commands generated from MCP tools (bundled with this CLI, or --remote: what the live server offers now).
@@ -193,3 +211,5 @@ One per MCP tool. Arguments, scopes and outputs are in the [MCP tools](/docs/ref
 | `gittifacts reprioritize` | `reprioritize` | `gittifacts reprioritize <changeId> --priority <normal\|security\|incident> [--incident-plan-id <string>] [--idempotency-key <key>]` — Sets the priority class (normal, security, incident). |
 | `gittifacts queue-overview` | `queue_overview` | `gittifacts queue-overview <repoId>` — Tracks (independent parallel queues) with their speculative batches, the landing pipeline, freeze state, throughput, p50/p95 time in queue, quarantined tests and every entry with its reason and ETA. |
 | `gittifacts search-tools` | `search_tools` | `gittifacts search-tools <query>` — Fuzzy search over every gittifacts tool's name and description. |
+| `gittifacts request-qa` | `request_qa` | `gittifacts request-qa <changeId> [--github <string>] [--force] [--idempotency-key <key>]` — On request only: an agent drives the app built from the change's current head in a real browser against the Plan's acceptance criteria (no Plan: a smoke check), with a screenshot per step, a replay GIF and a pass / fail / couldn't-test verdict per criterion, signed into the evidence. |
+| `gittifacts get-qa` | `get_qa` | `gittifacts get-qa <changeId> [--github <string>]` — The change's QA runs, newest first: status, verdict per criterion with the reason, the lane before and after, cost, and the screenshots' blob refs. |
