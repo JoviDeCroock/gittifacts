@@ -222,7 +222,7 @@ export function createCoordinator(
   ): Promise<GitRemoteGrant> {
     // The token is for the fork ONLY; agents never get a token for the main repo.
     if (!isForkName(change.forkName))
-      fail("forbidden", "push grants are for change forks only", "Push to your change's fork.");
+      fail("forbidden", "push tokens are for change forks only", "Push to your change's fork.");
     const { token, expiresAt } = await upstream("mint a push token", () =>
       git.mintToken(change.forkName, "write", pushTtl),
     );
@@ -876,7 +876,7 @@ export function createCoordinator(
       const change = await requireChange(changeId);
       await assertAccess(actor, change.repoId, "approve", noChange(changeId));
       if (isBootstrapChange(change)) {
-        fail("invalid-state", "a bootstrap change has nothing to roll back", {
+        fail("invalid-state", "the first change has nothing to roll back", {
           explanation: "It only ran the first CI and preview of the initial commit.",
           call: status(changeId),
         });

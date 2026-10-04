@@ -20,8 +20,8 @@ Fields you leave out take their default. Nested objects are listed with dotted p
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `version` | 1 | `1` | Schema version. |
-| `lane0Enabled` | boolean | `false` | Shadow mode: Lane 0 starts disabled. The classifier still computes it and the platform records whether humans agreed. Owners flip this once trust is earned. |
-| `shadow` | { agreementThreshold, minSamples } |  | Shadow mode: when the UI offers to enable Lane 0. |
+| `lane0Enabled` | boolean | `false` | Calibrating: auto-merge (Lane 0) starts off. The classifier still computes it and the platform records whether humans agreed. Owners flip this once trust is earned. |
+| `shadow` | { agreementThreshold, minSamples } |  | Calibration: when the UI offers to turn on auto-merge (Lane 0). |
 | `shadow.agreementThreshold` | number (0–1) | `0.95` | Agreement ratio (0..1) needed before the UI offers to enable Lane 0. |
 | `shadow.minSamples` | integer (≥ 1) | `25` | Minimum number of human-reviewed Lane-0 candidates before the ratio counts. |
 | `sensitivePaths` | string[] | `["**/auth/**","**/payments/**","**/billing/**","**/migrations/**","**/*.sql",".platform/**",".github/workflows/**","**/wrangler.json","**/wrangler.jsonc","**/wrangler.toml","**/cloudflare.config.ts"]` | Globs. A Change touching any of them is Lane 2 (full human review). |
@@ -35,7 +35,7 @@ Fields you leave out take their default. Nested objects are listed with dotted p
 | `dependencies` | { allowPatchBumpsInLane0 } |  | Dependency changes allowed in Lane 0. |
 | `dependencies.allowPatchBumpsInLane0` | boolean | `true` | Lane 0 may include semver patch bumps of existing deps. Everything else blocks Lane 0. |
 | `planlessLane0` | ("dependency-patch" \| "pure-revert" \| "verified-transform")[] | `[]` | Categories that may reach Lane 0 without an approved Plan. |
-| `autoMergeVerifiedReverts` | boolean | `true` | A revert the platform has mechanically verified to be the exact inverse of a change it merged restores an already-approved state, so it may auto-merge even in shadow mode. |
+| `autoMergeVerifiedReverts` | boolean | `true` | A revert the platform has mechanically verified to be the exact inverse of a change it merged restores an already-approved state, so it may auto-merge even while the repo is calibrating. |
 | `rollout` | object |  | Gradual rollout of merged Changes to the repo's deploy target. |
 | `rollout.stages` | integer[] | `[5,25,100]` | Percent of traffic per stage; last stage must be 100. |
 | `rollout.stageMinutes` | integer (1–1440) | `10` | Minutes to hold each stage before advancing. |
@@ -61,11 +61,11 @@ Fields you leave out take their default. Nested objects are listed with dotted p
 
 export default {
   version: 1,
-  // Shadow mode: Lane 0 (auto-merge) starts off. The classifier still computes it and the platform
-  // records whether humans agree; the owner turns Lane 0 on in the repo settings once agreement
+  // Calibrating: auto-merge (Lane 0) starts off. The classifier still computes it and the platform
+  // records whether humans agree; the owner turns auto-merge on in the repo settings once agreement
   // passes these numbers. `lane0Enabled: false` here keeps it off whatever the owner sets.
   shadow: { agreementThreshold: 0.95, minSamples: 25 },
-  // Changes touching these paths are Lane 2 (full human review).
+  // Changes touching these paths get a full review (Lane 2).
   sensitivePaths: [
     "**/auth/**",
     "**/payments/**",
@@ -79,7 +79,7 @@ export default {
     "**/wrangler.toml",
     "**/cloudflare.config.ts",
   ],
-  // Lane 0 needs coverage/mutation at or above these on changed lines and a diff below the size limits.
+  // Auto-merge (Lane 0) needs coverage/mutation at or above these on changed lines and a diff below the size limits.
   thresholds: {
     changedLineCoverage: 0.8,
     mutationScore: 0.6,

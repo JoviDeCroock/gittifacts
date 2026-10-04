@@ -33,7 +33,7 @@ export type RolloutPolicy = z.infer<typeof RolloutPolicy>;
 export const RepoPolicy = z.object({
   version: z.literal(1).default(1),
   /**
-   * Shadow mode: Lane 0 starts disabled. The classifier still computes it and the
+   * Calibrating: auto-merge (Lane 0) starts off. The classifier still computes it and the
    * platform records whether humans agreed. Owners flip this once trust is earned.
    */
   lane0Enabled: z.boolean().default(false),
@@ -90,7 +90,7 @@ export const RepoPolicy = z.object({
   planlessLane0: z.array(PlanlessCategory).default([]),
   /**
    * A revert the platform has mechanically verified to be the exact inverse of a change it
-   * merged restores an already-approved state, so it may auto-merge even in shadow mode.
+   * merged restores an already-approved state, so it may auto-merge even while the repo is calibrating.
    */
   autoMergeVerifiedReverts: z.boolean().default(true),
   rollout: RolloutPolicy.default({

@@ -28,7 +28,7 @@ export async function onQueueEvent(ctx: QueueContext, event: QueueEvent): Promis
         kind: "regression-detected",
         changeId: change.id,
         repoId: change.repoId,
-        message: `Regression ${event.issueId} on ${event.worker}: ${change.title}'s flag ${event.flagKey} was switched off (deploy train ${event.trainId}).`,
+        message: `Regression ${event.issueId} on ${event.worker}: ${change.title}'s flag ${event.flagKey} was switched off (deploy batch ${event.trainId}).`,
       });
       return;
     }

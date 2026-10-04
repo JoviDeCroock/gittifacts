@@ -221,13 +221,13 @@ const OMITTED_POLICY_KEYS = new Set(["lane0Enabled"]);
 
 const POLICY_COMMENTS: Record<string, string[]> = {
   shadow: [
-    "Shadow mode: Lane 0 (auto-merge) starts off. The classifier still computes it and the platform",
-    "records whether humans agree; the owner turns Lane 0 on in the repo settings once agreement",
+    "Calibrating: auto-merge (Lane 0) starts off. The classifier still computes it and the platform",
+    "records whether humans agree; the owner turns auto-merge on in the repo settings once agreement",
     "passes these numbers. `lane0Enabled: false` here keeps it off whatever the owner sets.",
   ],
-  sensitivePaths: ["Changes touching these paths are Lane 2 (full human review)."],
+  sensitivePaths: ["Changes touching these paths get a full review (Lane 2)."],
   thresholds: [
-    "Lane 0 needs coverage/mutation at or above these on changed lines and a diff below the size limits.",
+    "Auto-merge needs coverage/mutation at or above these on changed lines and a diff below the size limits.",
   ],
   planlessLane0: ["Categories that may reach Lane 0 without an approved Plan (none by default)."],
   previewRoutes: [

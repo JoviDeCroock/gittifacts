@@ -6,11 +6,11 @@
 
 export default {
   version: 1,
-  // Shadow mode: Lane 0 (auto-merge) starts off. The classifier still computes it and the platform
-  // records whether humans agree; the owner turns Lane 0 on in the repo settings once agreement
+  // Calibrating: auto-merge (Lane 0) starts off. The classifier still computes it and the platform
+  // records whether humans agree; the owner turns auto-merge on in the repo settings once agreement
   // passes these numbers. `lane0Enabled: false` here keeps it off whatever the owner sets.
   shadow: { agreementThreshold: 0.95, minSamples: 25 },
-  // Changes touching these paths are Lane 2 (full human review).
+  // Changes touching these paths get a full review (Lane 2).
   sensitivePaths: [
     "**/auth/**",
     "**/payments/**",
@@ -24,7 +24,7 @@ export default {
     "**/wrangler.toml",
     "**/cloudflare.config.ts",
   ],
-  // Lane 0 needs coverage/mutation at or above these on changed lines and a diff below the size limits.
+  // Auto-merge needs coverage/mutation at or above these on changed lines and a diff below the size limits.
   thresholds: {
     changedLineCoverage: 0.8,
     mutationScore: 0.6,

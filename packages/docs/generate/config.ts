@@ -48,7 +48,7 @@ function flatten(s: JsonSchema, prefix = ""): Row[] {
 /** Words for fields whose schema has no doc comment yet (a doc comment in policy.ts wins). */
 const FALLBACK: Record<string, string> = {
   version: "Schema version.",
-  shadow: "Shadow mode: when the UI offers to enable Lane 0.",
+  shadow: "Calibration: when the UI offers to turn on auto-merge (Lane 0).",
   sensitivePaths: "Globs. A Change touching any of them is Lane 2 (full human review).",
   thresholds: "What a Change must meet for Lane 0, and the size above which it is Lane 2.",
   "thresholds.lane0MaxFiles": "Max files changed for Lane 0.",

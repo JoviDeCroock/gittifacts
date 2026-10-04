@@ -166,7 +166,7 @@ describe("defaultCiTs", () => {
 });
 
 describe("defaultPolicyTs", () => {
-  it("evaluates to a valid RepoPolicy in shadow mode with the given routes", async () => {
+  it("evaluates to a valid RepoPolicy, calibrating, with the given routes", async () => {
     const file = defaultPolicyTs({
       previewRoutes: ["/", "/about/"],
       extraSensitivePaths: ["src/secrets/**"],
@@ -182,7 +182,7 @@ describe("defaultPolicyTs", () => {
     expect(policy).toEqual(
       RepoPolicy.parse({ previewRoutes: ["/", "/about/"], sensitivePaths: policy.sensitivePaths }),
     );
-    expect(file.text).toContain("// Shadow mode");
+    expect(file.text).toContain("// Calibrating: auto-merge (Lane 0) starts off");
     for (const line of file.text.split("\n")) expect(line.length).toBeLessThanOrEqual(110);
   });
 
