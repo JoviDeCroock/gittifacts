@@ -2589,7 +2589,16 @@ driver, request service, signed thumbnails), `packages/host-github/src/{qa-secti
   sign-in and repo access (`qa/<change>/…` blobs).
 - **Native.** The Change page's QA section (criteria, verdicts, step strips, replay) and a `qa-finished` notification
   (saying when the lane was raised).
-- **Not done / open.** `/gittifacts qa` needs the App's **Issue comment** event ticked (no new permission). A re-grade of
+- **Measured live (2026-10-04).** Native: a static-site Change with a rounding bug against a 3-criterion Plan →
+  2 pass, 1 fail, 67 s from Run QA to the result (41 s of browser), 2 model calls, $0.00036 of model; Browser Run's
+  ~41 s is ≈ $0.001 past the included hours. The model's script per criterion was short and specific
+  (`fill #amount 100`, `fill #people 3`, `click #split`, `expect_text "€100.00"`).
+- **Never hangs.** The first live run sat `queued`: a staging deploy had taken over production's Workflow names
+  (fixed in b628304), so the instance ran in staging. Now a run still in flight 15 minutes after it was asked ends
+  as failed ("never started" / "stopped without a result") through the 10-minute cron with a `qa-finished` notice,
+  and asking again starts a fresh run. Closing a PR completes its head's in-progress lane run as cancelled.
+- **Not done / open.** `/gittifacts qa` needs the App's **Issue comment** event ticked (no new permission): GitHub
+  sent no delivery for a test comment on fixture-lib #21. A re-grade of
   the same head drops the `qa-run` item from the new bundle (the run stays in `qa_runs`). A failure after a human
   approved raises the lane and notifies but doesn't withdraw the approval.
 
