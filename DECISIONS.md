@@ -2402,6 +2402,16 @@ not-done lists; a summary comment with a table; every push rewrote the old revie
   (check ×3, comment); each later push: 0 notifications, 6 writes (check ×3 incl. closing the replaced run,
   summary ×2: "grading", then the verdict). With the label: +1 notification and ≤ 5 writes per push (review,
   ≤ 3 stop minimizes, review minimize).
+- **Measured live on fixture-lib** (0bc3081, the same bugfix fixture as #2; GitHub-like preview rendered with
+  GitHub's own markdown API, journey 15 screenshots at 1280 / 390). #2 before: 11 gittifacts things in the
+  conversation (summary comment, 2 reviews of which 1 minimized, 5 visible inline threads + 7 hidden), 557 words
+  unfolded there and 545 on the check page; 3,821 px tall at 390. #10 after: the summary comment and the check
+  run, 53 words unfolded in the conversation and 61 on the check page; 961 px at 390. First push: lane at 147 s,
+  graded at 164 s (the walkthrough took ~17 s with the new reviewer model); second push: lane 106 s, graded
+  124 s, no new comment or review, the summary edited in place. An earlier run (#8, before the quiet default,
+  old reviewer model): lane 105 s, graded 173 s. Not verified live: the `gittifacts:walkthrough` label and the
+  Request full review path (the label doesn't exist on fixture-lib; a human presses buttons); both are tested on
+  recorded fixtures.
 - **Words in one place** (`terms.ts`), per the user's terminology decision of today: "Auto-merge · Quick review ·
   Full review" with "(Lane N)" as a badge, "Report-only", "walkthrough", the button "Approve change" (id
   `approve_tour` and the `gittifacts/lane` name stay). Reason codes get short phrases there too.
