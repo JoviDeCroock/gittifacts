@@ -2409,9 +2409,10 @@ not-done lists; a summary comment with a table; every push rewrote the old revie
   run, 53 words unfolded in the conversation and 61 on the check page; 961 px at 390. First push: lane at 147 s,
   graded at 164 s (the walkthrough took ~17 s with the new reviewer model); second push: lane 106 s, graded
   124 s, no new comment or review, the summary edited in place. An earlier run (#8, before the quiet default,
-  old reviewer model): lane 105 s, graded 173 s. Not verified live: the `gittifacts:walkthrough` label and the
-  Request full review path (the label doesn't exist on fixture-lib; a human presses buttons); both are tested on
-  recorded fixtures.
+  old reviewer model): lane 105 s, graded 173 s. The `gittifacts:walkthrough` label, verified live on #14 (label created
+  on fixture-lib): the summary first, then one review 5 s later with 1 inline stop (the risk at
+  src/allocate.ts:26) out of 5, a one-line body, and the summary saying "(marked on the diff)"; lane 98 s,
+  graded 112 s. The Request full review button is left for a human; it is tested on recorded fixtures.
 - **Follow-up decisions (coordinator, same day):** (1) **Report-only never shows a red ✕:** every report-only run
   completes `neutral`, whatever the lane and also when blocked; the title carries the lane. `success` /
   `neutral` / `action_required` by lane stay for a repo that opts into enforcing. The contract host now reads
