@@ -82,6 +82,8 @@ describe("GitHub mode in workerd", () => {
       // M3 (the installation is linked, so PR writes are on): the tour review and the summary.
       [`POST ${API}/repos/acme/widgets/pulls/7/reviews`]: async (req) => (prWrites.push({ what: "review", body: await req.json() }), jsonRes({ id: 5501, node_id: "PRR_5501" })),
       [`GET ${API}/repos/acme/widgets/pulls/7/reviews/5501/comments`]: () => jsonRes([{ id: 77001 }]),
+      // The walkthrough label (stops on the diff only on request): not on this PR.
+      [`GET ${API}/repos/acme/widgets/pulls/7`]: () => jsonRes({ number: 7, labels: [] }),
       [`POST ${API}/repos/acme/widgets/issues/7/comments`]: async (req) => (prWrites.push({ what: "summary", body: await req.json() }), jsonRes({ id: 88001 }, 201)),
     });
     const changeId = `gh-${REPO.id}-7`;

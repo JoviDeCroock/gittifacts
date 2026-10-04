@@ -49,12 +49,12 @@ export class PrPublisher {
     if (!(await this.d.enabled())) return "skipped";
     const cls = await this.d.ports.store.getClassification(changeId, tour.headSha);
     if (cls === null || cls.lane === 0) return "skipped";
-    if (opts.requested !== true && !(await this.inlineRequested(changeId, number, tour.headSha))) return "skipped";
-    const prior = await this.d.prs.review(changeId, tour.headSha);
-    if (prior !== null && prior.staleAt === null) return "exists";
     const url = this.d.detailsUrl(changeId);
     const review = tourReview(tour, url);
     if (review === null) return "skipped";
+    if (opts.requested !== true && !(await this.inlineRequested(changeId, number, tour.headSha))) return "skipped";
+    const prior = await this.d.prs.review(changeId, tour.headSha);
+    if (prior !== null && prior.staleAt === null) return "exists";
     let posted: { id: number; node_id: string };
     try {
       posted = await this.d.api.write("POST", this.path(`/pulls/${number}/reviews`), review);
@@ -79,8 +79,13 @@ export class PrPublisher {
   /** Inline stops were asked for on this PR (label) or for this head (Request full review). */
   async inlineRequested(changeId: string, number: number, headSha: string): Promise<boolean> {
     if ((await this.d.prs.fullReviews(changeId, headSha)).length > 0) return true;
-    const pr = (await this.d.api.get(this.path(`/pulls/${number}`))) as { labels?: { name?: string }[] };
-    return (pr.labels ?? []).some((l) => l.name === WALKTHROUGH_LABEL);
+    try {
+      const pr = (await this.d.api.get(this.path(`/pulls/${number}`))) as { labels?: { name?: string }[] };
+      return (pr.labels ?? []).some((l) => l.name === WALKTHROUGH_LABEL);
+    } catch {
+      // Unknown → the quiet default (this only decides whether to post comments, never a lane).
+      return false;
+    }
   }
 
   /**
