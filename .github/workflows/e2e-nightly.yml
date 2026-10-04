@@ -1,0 +1,127 @@
+# Tier 3 (docs/testing.md): the full journeys against the live platform, as the dedicated E2E
+# account, reusing scripts/e2e/* and scripts/journeys/terminal/* (scripts/e2e/nightly.sh).
+#
+# Cost-aware: the cheap agent journeys nightly; m4 (deploys a Worker, drives traffic, rollout →
+# auto-revert) and the GitHub import weekly or on demand. The GitHub live contract on
+# ReSynapse/fixture-lib stays in github-live.yml (nightly at 03:17), not duplicated here.
+# Each suite is its own job (one failing doesn't hide the others); a summary job posts the table and
+# opens or comments on an `e2e-nightly` issue when anything failed.
+#
+# Secrets (the E2E account only, never a person's): E2E_AGENT_TOKEN, E2E_EMAIL, E2E_PASSWORD.
+# A suite whose secret is missing reports "skipped", not green.
+name: e2e-nightly
+
+on:
+  schedule:
+    - cron: "47 3 * * *"   # nightly suites
+    - cron: "23 4 * * 0"   # weekly suites (Sunday)
+  workflow_dispatch:
+    inputs:
+      suites:
+        description: "Comma-separated: m1,remote-workspace,merge-queue,cli-journey,mcp-journey,m4,import-journey"
+        default: "m1,remote-workspace,merge-queue,cli-journey,mcp-journey"
+      url:
+        description: Platform origin
+        default: https://gittifacts.decroockjovi.workers.dev
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: e2e-nightly
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      suites: ${{ steps.pick.outputs.suites }}
+    steps:
+      - id: pick
+        env:
+          INPUT: ${{ inputs.suites }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ -n "$INPUT" ]; then list="$INPUT"
+          elif [ "$SCHEDULE" = "23 4 * * 0" ]; then list="m4,import-journey"
+          else list="m1,remote-workspace,merge-queue,cli-journey,mcp-journey"; fi
+          echo "suites=$(node -e 'console.log(JSON.stringify(process.argv[1].split(",").map(s=>s.trim()).filter(Boolean)))' "$list")" >> "$GITHUB_OUTPUT"
+
+  suite:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        suite: ${{ fromJSON(needs.plan.outputs.suites) }}
+    env:
+      GF_HOST: ${{ inputs.url || 'https://gittifacts.decroockjovi.workers.dev' }}
+      E2E_AGENT_TOKEN: ${{ secrets.E2E_AGENT_TOKEN }}
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      SUITE: ${{ matrix.suite }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Run ${{ matrix.suite }}
+        id: run
+        run: |
+          set +e
+          start=$(date +%s)
+          scripts/e2e/nightly.sh "$SUITE" 2>&1 | tee suite.log
+          code=${PIPESTATUS[0]}
+          secs=$(( $(date +%s) - start ))
+          case "$code" in 0) result=passed ;; 78) result=skipped ;; *) result=failed ;; esac
+          mkdir -p out && printf '{"suite":"%s","result":"%s","seconds":%s}\n' "$SUITE" "$result" "$secs" > "out/$SUITE.json"
+          [ "$result" != failed ]
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-${{ matrix.suite }}
+          path: |
+            out
+            suite.log
+          retention-days: 14
+
+  summary:
+    needs: [plan, suite]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nightly-*
+          path: results
+      - name: Summary and issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "### E2E nightly"
+            echo
+            echo "| Suite | Result | Time |"
+            echo "|---|---|---|"
+            for f in results/*/out/*.json; do
+              [ -f "$f" ] || continue
+              node -e 'const r=require(process.argv[1]); console.log(`| ${r.suite} | ${r.result} | ${Math.round(r.seconds/60*10)/10} min |`)' "$(pwd)/$f"
+            done
+            echo
+            echo "GitHub live contract: see the latest github-live run."
+          } > summary.md
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+          if grep -q '| failed |' summary.md; then
+            gh label create e2e-nightly --color D93F0B --description "A nightly E2E suite failed" 2>/dev/null || true
+            open=$(gh issue list --label e2e-nightly --state open --json number --jq '.[0].number // empty')
+            printf '%s\n\nRun: %s\n' "$(cat summary.md)" "$RUN_URL" > body.md
+            if [ -n "$open" ]; then gh issue comment "$open" --body-file body.md
+            else gh issue create --title "E2E nightly failing" --label e2e-nightly --body-file body.md; fi
+          fi

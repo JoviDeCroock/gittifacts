@@ -18,3 +18,4 @@ fixtures/.materialized/
 .gstack/
 .cloudflare/
 apps/platform/wrangler.e2e.json
+apps/platform/wrangler.staging.json
