@@ -2592,3 +2592,30 @@ driver, request service, signed thumbnails), `packages/host-github/src/{qa-secti
 - **Not done / open.** `/gittifacts qa` needs the App's **Issue comment** event ticked (no new permission). A re-grade of
   the same head drops the `qa-run` item from the new bundle (the run stays in `qa_runs`). A failure after a human
   approved raises the lane and notifies but doesn't withdraw the approval.
+
+## 2026-10-04 — Live contract run on GitHub: 5/6 match native; codemod-rename's judge is unsure (stop-and-ask)
+
+Six grade scenarios on ReSynapse/fixture-lib (PRs #11–#17), Plans drafted from fixture.json and approved by a
+human, deployed 0bc3081 (judge and reviewer GLM-5.3-Flash, low effort), verdict read over MCP.
+
+| Scenario | Result | CI | Time to lane | Time to graded |
+|---|---|---|---|---|
+| pure-bugfix-with-regression-test | pass | 54 s | 95 s | 113 s |
+| breaking-api | pass | 79 s | 109 s | 142 s |
+| new-dependency | pass | 79 s | 113 s | 126 s |
+| touches-auth | pass | 86 s | 117 s | 131 s |
+| codemod-rename | **mismatch**: computed Lane 1, expected 0 (shadowed to 1) | 76 s | 116 s | 128 s |
+| scope-drift | pass | 69 s | 115 s | 130 s |
+
+Times are from the PR's creation (GitHub) to the audit events `change.lane-published` and
+`change.verdict-published`. Evidence kinds matched the recorded expectations in all six (judge items aside).
+
+- **codemod-rename**: the only raised reason is `llm.unsure` (plan conformance): the judge says it can't verify
+  "head equals the codemod output" and "dist/index.d.ts unchanged" from the diff, although the prompt tells it
+  which files a verified transform reproduced. Not a host difference (the judge never sees the host; the
+  transform evidence verified), but the model's calibration on transform Plans. LLM judgments only raise a lane,
+  so the error is in the safe direction. It is reported as a §9 stop-and-ask, not papered over.
+- **Time-to-grade now meets the target**: median 128 s graded, 95–117 s to the lane (the lane is published before
+  the tour). Previously 158–193 s graded.
+- **new-dependency's 4-minute CI gap** (306 s run whose steps sum to ~60 s, earlier run) did not recur (79 s).
+  Unexplained: the per-step records (R2) and workflow instance timings that would show it weren't read.
