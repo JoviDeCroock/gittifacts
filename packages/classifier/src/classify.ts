@@ -47,6 +47,7 @@ import {
   PLATFORM_GLOBS,
   sortStrings,
 } from "./paths.js";
+import { qaReasonInputs } from "./qa.js";
 import {
   formatReason,
   GATES,
@@ -879,6 +880,7 @@ function buildChecklist(
       return { gate, passed, detail: raised.map((r) => r.message).join(" ") };
     }
     const detail = mine.map((r) => r.message).join(" ");
+    if (gate === "qa" && detail === "") return { gate, passed: true, detail: "QA was not requested (optional)." };
     return { gate, passed: true, detail: detail || "No issues." };
   });
 }
@@ -954,6 +956,8 @@ export function classify(
 
   // Model judgments (raise only), informational signals, budget, tour.
   checkLlm(out, ofKind(items, "llm-judgment"));
+  // QA in a browser, on request only: absent raises nothing; a failure or "couldn't test" raises.
+  for (const r of qaReasonInputs(ofKind(items, "qa-run"))) out.add(r.code, r.params, r.evidenceRef);
   checkResolutions(out, ofKind(items, "conflict-resolution"));
   checkInformational(out, items);
   out.add(context.budgetExceeded ? "budget.exceeded" : "budget.ok");

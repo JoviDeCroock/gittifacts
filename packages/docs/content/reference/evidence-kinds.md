@@ -1,6 +1,6 @@
 ---
 title: "Evidence kinds"
-description: "The 14 evidence item kinds a signed evidence bundle can hold, with their fields."
+description: "The 15 evidence item kinds a signed evidence bundle can hold, with their fields."
 order: 51
 audience: both
 generated: true
@@ -125,6 +125,23 @@ Schema `PublicApiDiff`.
 | --- | --- | --- |
 | `classification` | "none" \| "additive" \| "breaking" |  |
 | `packages` | object[] |  |
+
+### `qa-run`
+
+Schema `QaRun`. An on-request QA run: an agent drove the app built from the head in a real browser against the Plan's acceptance criteria. Model-planned, but its verdicts only ever raise risk: a failed criterion raises the lane, "couldnt-test" is unknown (never a pass), and an absent item means QA was not requested (it lowers nothing and raises nothing).
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `runId` | string |  |
+| `trigger` | "platform" \| "mcp" \| "cli" \| "github-check" \| "github-comment" |  |
+| `requestedBy` | string |  |
+| `app` | { source, snapshotStep, origin } |  |
+| `model` | string |  |
+| `promptVersion` | string |  |
+| `criteria` | object[] |  |
+| `artifacts` | object[] |  |
+| `blockedOrigins` | string[] | Origins other than the app's that the page tried to reach (blocked during QA). |
+| `usage` | object |  |
 
 ### `quarantine`
 

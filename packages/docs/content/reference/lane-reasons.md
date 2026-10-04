@@ -1,7 +1,7 @@
 ---
 title: "Lane reason codes"
 nav: "Lane reasons"
-description: "All 106 reason codes the classifier can put on a Change: the lane each one forces, its gate and when it fires."
+description: "All 110 reason codes the classifier can put on a Change: the lane each one forces, its gate and when it fires."
 order: 52
 audience: both
 generated: true
@@ -15,7 +15,7 @@ A Change's lane is the highest lane over its reasons. Every reason has a stable 
 
 ## Lane-0 gates
 
-A Change is Lane 0 only when every gate passes. The checklist in `get_change_status` lists them in this order: `ci`, `evidence`, `tests`, `red-green`, `public-api`, `dependencies`, `sensitive-paths`, `migrations`, `policy-file`, `plan`, `scope`, `size`, `coverage`, `mutation`, `transform`, `llm-judgments`, `conflict-resolution`, `informational-signals`, `budget`, `tour`, `lane0-enabled`.
+A Change is Lane 0 only when every gate passes. The checklist in `get_change_status` lists them in this order: `ci`, `evidence`, `tests`, `red-green`, `public-api`, `dependencies`, `sensitive-paths`, `migrations`, `policy-file`, `plan`, `scope`, `size`, `coverage`, `mutation`, `transform`, `llm-judgments`, `qa`, `conflict-resolution`, `informational-signals`, `budget`, `tour`, `lane0-enabled`.
 
 ## Reasons
 
@@ -35,6 +35,7 @@ A Change is Lane 0 only when every gate passes. The checklist in `get_change_sta
 | `llm.concern` | 2 | fail | llm-judgments | An llm-judgment item has outcome "concern". |
 | `migration.touched` | 2 | fail | migrations | A changed path (or rename source) is under a migrations directory (**/migrations/**, **/migration/**). |
 | `policy.changed` | 2 | fail | policy-file | A changed path (or rename source) is under .platform/ (e.g. .platform/policy.ts). Also sets requiresHumanApproval. |
+| `qa.failed` | 2 | fail | qa | A qa-run item with status "ok" has at least one criterion "fail". |
 | `red-green.no-tests` | 2 | fail | red-green | Claimed fix and a red-green item has verdict "no-tests". |
 | `red-green.not-proven` | 2 | fail | red-green | Claimed fix and a red-green item has verdict "not-proven". |
 | `scope.drift` | 2 | fail | scope | Plan declares scopePaths and a changed path (or rename source) matches none of them. |
@@ -71,6 +72,7 @@ A Change is Lane 0 only when every gate passes. The checklist in `get_change_sta
 | `plan.missing` | 1 | fail | plan | plan is null and no planless category applies. |
 | `plan.not-approved` | 1 | fail | plan | Plan is draft/superseded/rejected, has no approver, or was approved by its own author; and no planless category applies. |
 | `plan.scope-undeclared` | 1 | unknown | scope | Plan is attached, scopePaths is empty and no planless category applies. |
+| `qa.couldnt-test` | 1 | unknown | qa | A qa-run item with status "ok" has a criterion "couldnt-test", or no criteria at all. |
 | `resolution.lane-kept` | 1 | fail | conflict-resolution | Added by neverLower when the merged tree's classification is below the Change's previous one. Its lane is the previous lane: 1 or 2. |
 | `resolution.outside-conflict` | 1 | fail | conflict-resolution | A conflict-resolution item with status "ok" has touchesOutsideConflictHunks, or edits with no conflict hunk. |
 | `resolution.semantic` | 1 | fail | conflict-resolution | A conflict-resolution item with status "ok" names semanticConflictWith. |
@@ -82,6 +84,7 @@ A Change is Lane 0 only when every gate passes. The checklist in `get_change_sta
 | `signal.error.llm-judgment` | 1 | unknown | llm-judgments | An llm-judgment item has status "error". |
 | `signal.error.mutation` | 1 | unknown | mutation | A mutation item has status "error". |
 | `signal.error.preview` | 1 | unknown | informational-signals | A preview item has status "error". |
+| `signal.error.qa` | 1 | unknown | qa | A qa-run item has status "error". |
 | `signal.error.quarantine` | 1 | unknown | tests | A quarantine item has status "error". |
 | `signal.error.screenshots` | 1 | unknown | informational-signals | A screenshots item has status "error". |
 | `signal.error.transform` | 1 | unknown | transform | A transform item has status "error". |
@@ -107,6 +110,7 @@ A Change is Lane 0 only when every gate passes. The checklist in `get_change_sta
 | `plan.approved` | 0 | pass | plan | Plan status is "approved", approvedBy is set and is not the plan author. |
 | `plan.planless` | 0 | pass | plan | No approved plan, but a category in policy.planlessLane0 is mechanically verified. |
 | `policy.unchanged` | 0 | pass | policy-file | No changed path is under .platform/. |
+| `qa.passed` | 0 | pass | qa | A qa-run item with status "ok" has every criterion "pass". QA is opt-in: no item raises nothing. |
 | `red-green.not-required` | 0 | pass | red-green | Claimed category is not fix. |
 | `red-green.proven` | 0 | pass | red-green | Claimed fix and every red-green item has verdict "proven". |
 | `resolution.within-conflict` | 0 | pass | conflict-resolution | A conflict-resolution item with status "ok" stays inside its conflict hunks (informational; the lane stays what the merged tree earns). |

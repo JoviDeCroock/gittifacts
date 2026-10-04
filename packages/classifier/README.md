@@ -80,6 +80,7 @@ cheapest way to reach Lane 0 would be to make a check fail quietly. So:
 | `transform` | optional | — (1 if claimed `transform`) | — (1 if claimed `transform`) | 1 |
 | `llm-judgment` | raise-only | — | — | 1 |
 | `quarantine` | raise-only (merge queue) | — | — | 1 |
+| `qa-run` | on request, raise-only | — | — | 1 (a failed criterion: 2; couldn't test: 1) |
 | `conflict-resolution` | raise-only (merge queue) | — | 1 | 2 |
 
 ## Decision table
@@ -235,6 +236,17 @@ table lists every code with its lane.
 | `tests.quarantined` | 1 | tests ? | A quarantine item with status "ok" lists tests in inAffectedSet (a quarantined test never silently counts as passing). |
 | `resolution.within-conflict` | 0 | conflict-resolution ✓ | A conflict-resolution item with status "ok" stays inside its conflict hunks (informational; the lane stays what the merged tree earns). |
 | `tests.quarantined-unaffected` | 0 | tests ✓ | A quarantine item with status "ok" lists quarantined tests, none of them in inAffectedSet. |
+
+### QA in a browser (on request)
+
+| Code | Lane | Checklist | Condition |
+|---|---|---|---|
+| `qa.failed` | 2 | qa ✗ | A qa-run item with status "ok" has at least one criterion "fail". |
+| `qa.couldnt-test` | 1 | qa ? | A qa-run item with status "ok" has a criterion "couldnt-test", or no criteria at all. |
+| `signal.error.qa` | 1 | qa ? | A qa-run item has status "error". |
+| `qa.passed` | 0 | qa ✓ | A qa-run item with status "ok" has every criterion "pass" (never lowers anything; no item: QA was not requested, nothing raised). |
+
+`raiseForQa(previous, item)` applies these to a stored classification after an on-request run: it only keeps or raises.
 
 ### Informational signals, budget, tour
 

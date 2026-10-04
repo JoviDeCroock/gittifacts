@@ -36,3 +36,4 @@ export {
   sampleAgrees,
   shadowAgreement,
 } from "./shadow.js";
+export { qaChecklistEntry, qaReasonInputs, raiseForQa } from "./qa.js";

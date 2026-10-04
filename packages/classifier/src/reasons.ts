@@ -21,6 +21,7 @@ export const GATES = [
   "mutation",
   "transform",
   "llm-judgments",
+  "qa",
   "conflict-resolution",
   "informational-signals",
   "budget",
@@ -667,6 +668,36 @@ export const REASON_CODES = {
     ["llm-judgments"],
     "A model judgment errored{detail}.",
     'An llm-judgment item has status "error".',
+  ),
+
+  // ------------------------------------------------------------------ QA in a browser (on request)
+  "qa.passed": spec(
+    0,
+    "pass",
+    ["qa"],
+    "QA passed all {count} acceptance criteria it tested in a browser. Never lowers anything.",
+    'A qa-run item with status "ok" has every criterion "pass". QA is opt-in: no item raises nothing.',
+  ),
+  "qa.failed": spec(
+    2,
+    "fail",
+    ["qa"],
+    "QA failed {count} acceptance criteria in a browser: {criteria}.",
+    'A qa-run item with status "ok" has at least one criterion "fail".',
+  ),
+  "qa.couldnt-test": spec(
+    1,
+    "unknown",
+    ["qa"],
+    "QA could not test {count} acceptance criteria: {criteria}.",
+    'A qa-run item with status "ok" has a criterion "couldnt-test", or no criteria at all.',
+  ),
+  "signal.error.qa": spec(
+    1,
+    "unknown",
+    ["qa"],
+    "The requested QA run errored{detail}.",
+    'A qa-run item has status "error".',
   ),
 
   // ------------------------------------------------------------------ quarantined tests (merge queue)
