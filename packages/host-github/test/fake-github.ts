@@ -290,6 +290,10 @@ export class FakeGithub {
       this.checkRuns.set(run.id, run);
       return Response.json(run, { status: 201 });
     }
+    if (method === "GET" && (m = new RegExp(`^${repoPath}/check-runs/(\\d+)$`).exec(path))) {
+      const run = this.checkRuns.get(Number(m[1]));
+      return run === undefined ? Response.json({ message: "Not Found" }, { status: 404 }) : Response.json(run);
+    }
     if (method === "PATCH" && (m = new RegExp(`^${repoPath}/check-runs/(\\d+)$`).exec(path))) {
       this.writes.push("PATCH check-runs");
       const run = this.checkRuns.get(Number(m[1]));

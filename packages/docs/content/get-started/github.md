@@ -28,13 +28,13 @@ Each platform has one gittifacts App, registered by whoever runs the platform an
 
 Push a branch and open a pull request against the default branch of an installed repository.
 
-Expected: within about two minutes, the pull request's **Checks** tab shows the `gittifacts/lane` check:
+Expected: within about two minutes, the pull request's **Checks** tab shows the `gittifacts/lane` check. In report-only mode it always finishes as `neutral` (never a red ✕); its title says the lane:
 
-| Conclusion | Lane | Means |
-|---|---|---|
-| `success` | Auto-merge (Lane 0) | could merge without a human (report-only mode merges nothing) |
-| `neutral` | Quick review (Lane 1) | a person reads the walkthrough and approves |
-| `action_required` | Full review (Lane 2) | a person reads the diff, with the walkthrough as a guide |
+| Title starts with | Means |
+|---|---|
+| Auto-merge (Lane 0) | could merge without a human (report-only mode merges nothing) |
+| Quick review (Lane 1) | a person reads the walkthrough and approves |
+| Full review (Lane 2) | a person reads the diff, with the walkthrough as a guide |
 
 ## 3. Read why
 

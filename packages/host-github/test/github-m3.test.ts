@@ -47,9 +47,11 @@ describe("what reaches the PR", () => {
     const path = "test/allocate.test.ts";
     const second = await host.push(ref, { [path]: `${fx.head[path] ?? ""}// again\n` }, { force: false });
     await host.settle();
-    // The new commit's run opens, the old one is closed as replaced, the summary says "grading"
-    // (an edit: no notification), the lane early, the verdict, the summary again.
-    expect(host.gh.writes.slice(before)).toEqual(["POST check-runs", "PATCH check-runs", "PATCH issue comment", "PATCH check-runs", "PATCH check-runs", "PATCH issue comment"]);
+    // The new commit's run opens, the summary says "grading" (an edit: no notification), the lane
+    // early, the verdict, the summary again. The old commit's completed run keeps its verdict.
+    expect(host.gh.writes.slice(before)).toEqual(["POST check-runs", "PATCH issue comment", "PATCH check-runs", "PATCH check-runs", "PATCH issue comment"]);
+    const runs = [...host.gh.checkRuns.values()];
+    expect(runs.map((r) => [r.status, r.conclusion])).toEqual([["completed", "neutral"], ["completed", "neutral"]]);
     expect(host.gh.comments.size).toBe(1);
     expect([...host.gh.comments.values()][0]?.body).toContain(second.slice(0, 7));
   });

@@ -269,10 +269,15 @@ export class GitHubHost implements HostAdapter {
     return run.id;
   }
 
-  /** A head replaced before it was graded: its run is closed as cancelled, never left running. */
+  /**
+   * A head replaced before it was graded: its run is closed as cancelled, never left running. A
+   * run that already completed keeps its verdict (the history stays honest; one write fewer).
+   */
   async supersedeCheck(changeId: string, oldHead: string, newHead: string): Promise<void> {
     const id = await this.deps.checks.get(changeId, oldHead);
     if (id === null) return;
+    const run = (await this.deps.api.get(this.path(`/check-runs/${id}`))) as { status?: string };
+    if (run.status === "completed") return;
     const now = this.deps.ports.clock.now().toISOString();
     await this.deps.api.write("PATCH", this.path(`/check-runs/${id}`), supersededCheckRun(newHead, now));
   }

@@ -71,6 +71,10 @@ describe("gittifacts/lane check run", () => {
     expect(conclusionOf({ lane: 1, blocked: false, action: "request-review" })).toBe("neutral");
     expect(conclusionOf({ lane: 2, blocked: false, action: "request-review" })).toBe("action_required");
     expect(conclusionOf({ lane: 0, blocked: true, action: "blocked" })).toBe("action_required");
+    // Report-only: never a red ✕ (or a green ✓ for something nobody enforces); the title says the lane.
+    for (const v of [{ lane: 0 as const, blocked: false, action: "label-ready" as const }, { lane: 2 as const, blocked: false, action: "request-review" as const }, { lane: 2 as const, blocked: true, action: "blocked" as const }]) {
+      expect(conclusionOf(v, { reportOnly: true })).toBe("neutral");
+    }
   });
 
   it("a short title (≤ 60), a few summary lines, detail folded in text; GitHub's button limits", () => {

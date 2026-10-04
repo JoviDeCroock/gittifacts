@@ -10,6 +10,7 @@ import { RepoPolicy } from "@app/domain";
 import { type ChangeRef, laneZeroAction, type LaneAction } from "@app/host";
 import type { ContractHost, ContractHostFactory, ContractReviewer, ContractScenario, Observed, OpenInput } from "@app/host-contract";
 import { memoryCheckRunIndex, GitHubHost } from "../src/adapter.js";
+import { readCheckRunVerdict } from "../src/check-run.js";
 import { memoryPrIndex } from "../src/pr-index.js";
 import { GithubApi } from "../src/api.js";
 import { changeIdFor, principalIdFor } from "../src/ids.js";
@@ -178,10 +179,13 @@ export class GithubContractHost implements ContractHost {
   /** What GitHub shows: the completed check run's conclusion, read back as a routing action. */
   private actionOf(headSha: string): LaneAction | null {
     const run = this.gh.laneRun(headSha);
-    if (run === null || run.status !== "completed") return null;
-    if ((run.output.title ?? "").includes("Blocked")) return "blocked";
-    if (run.conclusion === "success") return laneZeroAction(this.adapter.capabilities()).action;
-    return run.conclusion === "neutral" || run.conclusion === "action_required" ? "request-review" : null;
+    if (run === null || run.status !== "completed" || run.conclusion === "cancelled") return null;
+    // Report-only runs are all `neutral`: the verdict is read from the run itself.
+    const v = readCheckRunVerdict({ title: run.output.title ?? null, summary: run.output.summary ?? null, text: run.output.text ?? null }).verdict;
+    if (v === undefined) return null;
+    if (v.blocked) return "blocked";
+    if (v.lane === 0 && !v.requiresHumanApproval) return laneZeroAction(this.adapter.capabilities()).action;
+    return "request-review";
   }
 
   async observe(ref: ChangeRef, headSha: string): Promise<Observed> {

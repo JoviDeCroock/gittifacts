@@ -3,8 +3,9 @@
  * opened when grading starts, updated once with the lane while the tour is written (still in
  * progress, never `success`), and completed once with the verdict.
  *
- * Conclusions: `success` = Lane 0 eligible, `neutral` = Lane 1, `action_required` = Lane 2 (and
- * blocked). In shadow mode the check is never required, so none of them blocks a merge.
+ * Conclusions when enforcing: `success` = Lane 0 eligible, `neutral` = Lane 1, `action_required` =
+ * Lane 2 (and blocked). Report-only (GitHub mode's shadow): `neutral` for everything, never a red ✕;
+ * the title says the lane.
  *
  * What a person sees (DECISIONS 2026-10-04 "A calm pull request"): the title is the lane and the
  * one reason (≤ 60 chars, it is the merge box's line), the summary a few lines and the link, and
@@ -42,8 +43,14 @@ export const CHECK_ACTIONS = {
 } as const;
 export type CheckActionId = keyof typeof CHECK_ACTIONS;
 
-/** `success` only when nothing needs a human: Lane 0 that still needs an approval is `neutral`. */
-export function conclusionOf(v: Pick<LaneVerdict, "lane" | "blocked" | "action">): CheckConclusion {
+/**
+ * `success` only when nothing needs a human: Lane 0 that still needs an approval is `neutral`.
+ * Report-only (`reportOnly`, GitHub mode's shadow) is `neutral` for every lane and for blocked: the
+ * check never shows a red ✕ for something gittifacts doesn't enforce; the title carries the lane.
+ * `action_required` is for a repo that opts into enforcing.
+ */
+export function conclusionOf(v: Pick<LaneVerdict, "lane" | "blocked" | "action">, opts: { reportOnly?: boolean } = {}): CheckConclusion {
+  if (opts.reportOnly === true) return "neutral";
   if (v.blocked) return "action_required";
   if (v.lane === 0) return v.action === "merge" || v.action === "label-ready" ? "success" : "neutral";
   return v.lane === 1 ? "neutral" : "action_required";
@@ -129,7 +136,7 @@ export function completedCheckRun(v: LaneVerdict, ctx: CheckRunContext, complete
   return {
     name: CHECK_NAME,
     status: "completed",
-    conclusion: conclusionOf(v),
+    conclusion: conclusionOf(v, { reportOnly: ctx.shadow }),
     completed_at: completedAt,
     details_url: ctx.detailsUrl,
     external_id: ctx.changeId,
