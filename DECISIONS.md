@@ -2471,3 +2471,54 @@ Proposal: docs/ux-review/terminology-2026-10-04.md. The user decided; labels cha
 - **Partial live results before the fix** (the run was killed during touches-auth): breaking-api pass (190 s),
   new-dependency pass (400 s; its CI run took 306 s while its steps sum to about 60 s, so ~4 minutes went to
   scheduling a run whose lockfile changed; not yet explained).
+
+## 2026-10-04 — E2E regression testing in three tiers; rollback placement; staging proposed
+
+**Context.** Several regressions reached production: a `db.batch` bug that only workerd showed, deploys
+without Docker, a button that did nothing for the PR author, stale generated docs, and a fixed-window test
+that flaked the gate. The gate covered typecheck and the platform workerd suite. Nothing checked a
+browser before a deploy or the live site after one, and there's no staging. The owner's rule is
+E2E > integration >>> unit.
+
+**Decision.**
+1. **Pre-deploy E2E against the real Worker, served locally.** `wrangler dev --local` runs on a config
+   generated from `wrangler.jsonc` (main `test/e2e-entry.ts`: the production Worker plus the workerd
+   integration fakes for Artifacts, containers and the model; no remote bindings or containers).
+   - Playwright drives it at 1280 and 390 px, alongside the HTTP and MCP checks.
+   - `POST /__e2e/*` seeds data. It exists only in that entry and needs the run's secret. It plays
+     Artifacts and the CI container, so an agent's Change goes through the real PushRouter →
+     ChangeWorkflow → walkthrough pipeline.
+   - We chose this over the web app's mock mode because mock mode tests neither the Worker's routes
+     (landing, `/start`, docs, redirects) nor the real API contracts.
+   - `deploy-gate.yml` runs it as a second job, with `scripts/check-generated.sh` in the first.
+2. **Post-deploy smoke with automatic rollback.**
+   - `deploy-clean.sh` deploys with `--tag <sha12>`, and the new `GET /api/v1/health` returns it as
+     `commit`.
+   - The script then dispatches `post-deploy-smoke.yml` (off this machine) and waits. A failure rolls
+     back to the version recorded before the deploy, but only while the failed deploy is still live.
+   - **The rollback runs in the workflow when `CLOUDFLARE_API_TOKEN` is a repo secret** (it survives
+     this machine dying). Otherwise `deploy-clean.sh` runs it with the operator's wrangler login.
+   - Either way the run fails and a `deploy-rollback` issue is opened.
+3. **Nightly and weekly live journeys** reuse `scripts/e2e/*` and the terminal journeys
+   (`scripts/e2e/nightly.sh`) as a dedicated E2E account. That account was created through normal
+   sign-up; its credentials are kept for repo secrets only.
+   - The expensive m4 run (it deploys a Worker and drives traffic) and the GitHub import run weekly.
+   - The GitHub live contract stays in `github-live.yml`.
+4. **Flake discipline:** no fixed sleeps (`pollUntil` deadlines); at most one CI retry, reported as
+   flaky in the job summary; `apps/e2e/quarantine.json` entries need an owner and an expiry of at most
+   14 days and fail once expired; unique data per test. The fixed-window rate-limit test now sends
+   bursts, and the allowlist test asserts only on its own calls to the shared fetch spy.
+5. **Staging is recommended, built as scripts, and not yet created.** `scripts/staging/*` derives a
+   `gittifacts-staging` config and holds a one-time setup and a deploy-and-smoke step
+   (`deploy-clean.sh --staging`). Creating the D1, R2 and queues needs the owner's approval. The cost
+   is well under $5 a month on the existing Workers Paid plan.
+
+**Consequences.**
+- The first E2E run found two production bugs, both fixed:
+  - a printed `/changes/<id>` link that lost its target after sign-in;
+  - a plan card that overflowed the page with long names.
+- The first `check-generated.sh` run found `policy.md` stale on main.
+- Visual snapshots are deliberately not used: the terminology renames would churn them. Layout is
+  checked by asserting there's no horizontal scroll at 390 px.
+- Unclaimed projects the smoke creates expire through the TTL cron. Projects the nightly suites create
+  under the E2E account persist, because there's no delete API yet.

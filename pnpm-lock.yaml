@@ -47,6 +47,9 @@ importers:
       '@types/node':
         specifier: ^22.10.0
         version: 22.20.4
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
       zod:
         specifier: ^4.6.5
         version: 4.6.5

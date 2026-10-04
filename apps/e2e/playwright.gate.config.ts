@@ -44,7 +44,8 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: "tsx server/serve.ts",
+        // Not bare `tsx`: Playwright run directly (not via pnpm) has no node_modules/.bin on PATH.
+        command: "node node_modules/tsx/dist/cli.mjs server/serve.ts",
         url: `${baseURL}/start`,
         timeout: 180_000,
         reuseExistingServer: !CI,
