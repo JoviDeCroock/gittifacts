@@ -119,7 +119,7 @@ function LaneBlock({ change, open, rail = false }: { change: Change; open: boole
   if (change.lane === null) {
     const copy = unroutedCopy(change.status, change.id);
     return (
-      <section class="lane-block lane-block--none">
+      <section class="lane-block lane-block--none" data-testid="lane-block">
         <LaneTag lane={null} size="lg" />
         <div>
           <h2 class="lane-block__title">{copy.title}</h2>
@@ -133,7 +133,7 @@ function LaneBlock({ change, open, rail = false }: { change: Change; open: boole
     ? `The evidence alone says ${LANES[chart.computedLane].name.toLowerCase()}. Auto-merge is calibrating on this repo, so a person approves it.`
     : (chart.rows.find((r) => r.decisive)?.reason.message ?? "Every reason allows this lane.");
   return (
-    <section class={`lane-block lane-block--l${chart.routedLane} ${rail ? "lane-block--rail" : ""}`} aria-labelledby={rail ? "lane-title-rail" : "lane-title"}>
+    <section data-testid="lane-block" class={`lane-block lane-block--l${chart.routedLane} ${rail ? "lane-block--rail" : ""}`} aria-labelledby={rail ? "lane-title-rail" : "lane-title"}>
       <div class="lane-block__head">
         <LaneTag lane={chart.routedLane} size="lg" />
         <div>
