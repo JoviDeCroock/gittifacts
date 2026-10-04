@@ -14,6 +14,7 @@ import { RateLimited } from "./limits/creation.js";
 import { registerLimitRoutes } from "./limits/routes.js";
 import { handleMcp, MCP_PATH } from "./mcp/route.js";
 import { originOf } from "./oauth/context.js";
+import { QaRateLimited } from "./qa/request.js";
 import { registerQueueRoutes } from "./queue/routes.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerChangeRoutes } from "./routes/changes.js";
@@ -26,6 +27,7 @@ import { registerHealthRoutes } from "./routes/health.js";
 import { registerIdentityRoutes } from "./routes/identity.js";
 import { registerPlanRoutes } from "./routes/plans.js";
 import { registerProjectRoutes } from "./routes/projects.js";
+import { registerQaRoutes } from "./routes/qa.js";
 import { registerRepoRoutes } from "./routes/repos.js";
 import { registerStatsRoutes } from "./routes/stats.js";
 import { registerWellKnownRoutes } from "./routes/well-known.js";
@@ -67,7 +69,8 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
 
   app.onError((err, c) => {
     const r = toErrorResponse(err);
-    if (err instanceof RateLimited) c.header("retry-after", String(err.retryAfterSec));
+    if (err instanceof RateLimited || err instanceof QaRateLimited)
+      c.header("retry-after", String(err.retryAfterSec));
     return c.json(r.body, r.status);
   });
 
@@ -108,6 +111,8 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerQueueRoutes(app);
   registerPlanRoutes(app);
   registerChangeRoutes(app);
+  // QA in a browser, on request (src/qa/): ask, list, and signed thumbnails for GitHub.
+  registerQaRoutes(app);
   registerProjectRoutes(app);
   // Public aggregates the landing page quotes (live time to first green).
   registerStatsRoutes(app);

@@ -502,7 +502,8 @@ export interface Notifier {
       | "regression-detected"
       | "reverted"
       | "failing"
-      | "budget-exceeded";
+      | "budget-exceeded"
+      | "qa-finished";
     changeId: string;
     repoId: string;
     message: string;

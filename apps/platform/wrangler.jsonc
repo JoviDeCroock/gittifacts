@@ -267,7 +267,8 @@
       "name": "github-backtest-workflow",
       "binding": "GITHUB_BACKTEST_WORKFLOW",
       "class_name": "GithubBacktestWorkflow"
-    }
+    },
+    { "name": "qa-run-workflow", "binding": "QA_WORKFLOW", "class_name": "QaRunWorkflow" }
   ],
 
   // Every push in the namespace starts one PushRouter instance (artifacts.md §1, §6). The target

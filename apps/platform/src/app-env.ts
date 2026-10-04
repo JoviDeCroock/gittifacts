@@ -35,6 +35,8 @@ export type Bindings = Env & {
   /** Verified GitHub deliveries (queue `gittifacts-github-events`). */
   GITHUB_EVENTS?: import("./github/webhook.js").GithubEventsQueue;
   GITHUB_WEBHOOK_LIMITER?: { limit(input: { key: string }): Promise<{ success: boolean }> };
+  /** On-request QA runs (src/qa/workflow.ts), one instance per run id. */
+  QA_WORKFLOW?: { create(opts: { id: string; params: unknown }): Promise<unknown> };
 };
 
 /**

@@ -19,7 +19,7 @@ const REF_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._:\-/]{0,511}$/;
 
 const RULES: Array<{ re: RegExp; kind: "run" | "change" | "repo" }> = [
   { re: /^ci-(?:logs|runs|evidence)\/([^/]+)\//, kind: "run" },
-  { re: /^(?:diffs|evidence|screenshots|previews|changes)\/([^/]+)\//, kind: "change" },
+  { re: /^(?:diffs|evidence|screenshots|previews|changes|qa)\/([^/]+)\//, kind: "change" },
   { re: /^repos\/([^/]+)\//, kind: "repo" },
 ];
 

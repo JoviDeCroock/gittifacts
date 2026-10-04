@@ -172,6 +172,12 @@ export function lazyReviewer(
   };
 }
 
+/** The model a policy's `ai.reviewerModel` resolves to here ("auto": the platform default). */
+export function resolveReviewerModel(env: unknown, policyModel: string | undefined): string {
+  const m = policyModel?.trim() ?? "";
+  return m === "" || m === "auto" ? reviewerAutoModel(env) : m;
+}
+
 function reviewerAutoModel(env: unknown): string {
   if (typeof env === "object" && env !== null && "REVIEWER_MODEL" in env) {
     const v = (env as { REVIEWER_MODEL?: unknown }).REVIEWER_MODEL;

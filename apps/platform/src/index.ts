@@ -53,6 +53,7 @@ export { PlatformConfigWorkflow } from "./import/workflow.js";
 export { ChangeCoordinator } from "./limits/coordinator-do.js";
 export { AbuseLimiter } from "./limits/limiter-do.js";
 export { PreviewHost } from "./previews/preview-host.js";
+export { QaRunWorkflow } from "./qa/workflow.js";
 export { WorkspaceEgressGateway } from "./workspace/egress.js";
 export { ProjectLedger } from "./workspace/ledger-do.js";
 export { Workspace } from "./workspace/workspace-do.js";

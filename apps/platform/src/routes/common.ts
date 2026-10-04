@@ -13,7 +13,9 @@ const ERROR_DESCRIPTIONS = {
   404: "Not found",
   409: "Conflict with the current state",
   415: "Content-Type must be application/json",
+  429: "Rate limited (see retryAfterSec and the Retry-After header)",
   502: "Upstream (coordinator, Cloudflare) failed",
+  503: "Not available in this deployment",
 } as const;
 type ErrorStatus = keyof typeof ERROR_DESCRIPTIONS;
 
