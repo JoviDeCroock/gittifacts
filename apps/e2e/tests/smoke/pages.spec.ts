@@ -62,6 +62,8 @@ test("the E2E account's dashboard and newest Change page render", async ({ page 
     const body = await page.screenshot();
     await testInfo.attach(`${name}-${testInfo.project.name}.png`, { body, contentType: "image/png" });
   };
+  // Shoot the loaded dashboard, not its skeleton.
+  await expect(page.getByTestId("first-run-checklist").or(page.getByRole("main").getByRole("list")).first()).toBeVisible();
   await shot("dashboard");
 
   // Find a Change the way a person does: a link on the dashboard, else on the first repo's page.
