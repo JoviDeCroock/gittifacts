@@ -57,7 +57,7 @@ describe.each(
       "## Hard rules",
       "## Fixes need red/green proof",
       "## Lanes",
-      "## Reading a tour",
+      "## Reading a walkthrough",
       "## Waiting for results",
       "## Commands",
     ]) {
@@ -74,7 +74,7 @@ describe.each(
     expect(md).toMatch(/Never push to main/);
     expect(md).toMatch(/Agents never approve/);
     expect(md).toMatch(/fails on the base commit and passes/);
-    expect(md).toMatch(/shadow mode/i);
+    expect(md).toMatch(/calibrating/i);
     for (const until of WaitUntil.options) expect(md).toContain(`\`${until}\``);
     for (const lane of ["| 0 |", "| 1 |", "| 2 |"]) expect(md).toContain(lane);
   });

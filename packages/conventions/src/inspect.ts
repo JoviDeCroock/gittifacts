@@ -628,7 +628,7 @@ export function inspectRepo(tree: RepoTree, opts: { sha?: string | null } = {}):
     }
     if (buildScriptsNeedingApproval.length > 0) {
       uncertain.push(
-        `${BUILD_SCRIPTS_DOUBT} for: ${buildScriptsNeedingApproval.map((d) => d.name).join(", ")}. Each needs a decision in pnpm-workspace.yaml \`allowBuilds\`: true runs its install script, false skips it (the platform never approves build scripts on its own, and never for unclaimed projects).`,
+        `${BUILD_SCRIPTS_DOUBT} for: ${buildScriptsNeedingApproval.map((d) => d.name).join(", ")}. Each needs a decision in pnpm-workspace.yaml \`allowBuilds\`: true runs its install script, false skips it (the platform never approves build scripts on its own, and never for unclaimed repos).`,
       );
     }
     extraDoubts.push(

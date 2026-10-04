@@ -191,7 +191,7 @@ describe("unclaimed projects (O3)", () => {
     expect(concrete).toHaveLength(generic.length);
     const all = concrete.join("\n");
     for (const needle of [
-      "Unclaimed project — not verified",
+      "Unclaimed repo — not verified",
       "no secrets, no custom domains, no production deploys",
       "even for verified reverts",
       "60 minutes per day, at most 10 minutes per run",
@@ -210,7 +210,7 @@ describe("unclaimed projects (O3)", () => {
 
   it("explains what claiming does without promising approvals", () => {
     const lines = claimingLines().join("\n");
-    expect(lines).toMatch(/become the project's owner/);
+    expect(lines).toMatch(/become the repo's owner/);
     expect(lines).toMatch(/can never approve/);
     expect(lines).toMatch(/no longer expires/);
     expect(lines).toMatch(/audit log/);
@@ -225,7 +225,7 @@ describe("unclaimed projects (O3)", () => {
     expect(json.auth.anonymous.how).toMatch(/initialize, tools\/list, create_project and whoami/);
     expect(json.auth.anonymous.how).toMatch(/claimUrl/);
     expect(json.auth.anonymous.limits).toEqual(unclaimedLimitLines(QUOTAS));
-    expect(markdown).toContain("Unclaimed projects expire after 7 days unless a human claims them");
+    expect(markdown).toContain("Unclaimed repos expire after 7 days unless a human claims them");
     expect(markdown).toContain("  - CI: 60 minutes per day, at most 10 minutes per run");
     expect(markdown.split("\n").length).toBeLessThan(90);
   });
@@ -236,6 +236,6 @@ describe("unclaimed projects (O3)", () => {
       authHints: { ...opts.authHints, unclaimedProjects: false, unclaimedQuotas: QUOTAS },
     });
     expect(json.auth.anonymous.how).toMatch(/Disabled right now \(kill switch\)/);
-    expect(markdown).not.toContain("Unclaimed projects expire after");
+    expect(markdown).not.toContain("Unclaimed repos expire after");
   });
 });

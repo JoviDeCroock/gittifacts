@@ -25,7 +25,7 @@ export function escapeHtml(text: string): string {
 }
 
 /** What the banner says first on an unclaimed project's preview (onboarding §4). */
-export const UNCLAIMED_BANNER = "Unclaimed project — not verified";
+export const UNCLAIMED_BANNER = "Unclaimed repo — not verified";
 
 /**
  * `claimed: false` (an unclaimed project, or unknown) leads with "Unclaimed project — not

@@ -11,11 +11,11 @@ import { call } from "./calls.js";
  * (onboarding eval m-20261002-073146-qzvw). Also in the tool's description (@app/mcp).
  */
 export const ANONYMOUS_RECONNECT =
-  "Reconnect with `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this project's tools are unavailable without it.";
+  "Reconnect with `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this repo's tools are unavailable without it.";
 
 /** The same rule, said before the call (/start, /llms.txt). */
 export const ANONYMOUS_RECONNECT_BEFORE =
-  "After create_project without credentials, reconnect with `Authorization: Bearer <token>` (the `token` field in its response): every other tool needs it, and the project's tools are unavailable without it.";
+  "After create_project without credentials, reconnect with `Authorization: Bearer <token>` (the `token` field in its response): every other tool needs it, and the repo's tools are unavailable without it.";
 
 const PUSH = (remote: { url: string; branch: string }) =>
   `git -c http.extraHeader="Authorization: Bearer <remote.token>" push ${remote.url} HEAD:${remote.branch}`;
@@ -94,7 +94,7 @@ export function ciFailureHint(step: string, logTail = ""): string {
     if (/OUTDATED_LOCKFILE|frozen-lockfile|lockfile.*(not up to date|out of date)/i.test(logTail)) {
       return "The lockfile doesn't match package.json: run the install without --frozen-lockfile locally and commit the lockfile.";
     }
-    return "Dependencies failed to install: check package names and versions; unclaimed projects can only reach package registries.";
+    return "Dependencies failed to install: check package names and versions; unclaimed repos can only reach package registries.";
   }
   if (step === "lint") return "Lint failed: run the lint command locally and fix what it reports.";
   if (step === "typecheck")
@@ -126,15 +126,15 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
   if (c.lane === 0 && c.lane0Enabled) {
     return [
       {
-        title: "Lane 0: the merge queue merges it without a human",
-        why: "Every Lane 0 gate passed.",
+        title: "Auto-merge (Lane 0): the merge queue merges it without a human",
+        why: "Every item on the auto-merge checklist passed.",
         call: call("wait_for_change", { changeId, until: "merged", timeoutSec: 50 }),
       },
     ];
   }
   const review = [
     {
-      title: "Wait for the reviewer's tour",
+      title: "Wait for the reviewer's walkthrough",
       call: call("wait_for_change", { changeId, until: "tour_ready", timeoutSec: 50 }),
     },
     {
@@ -149,8 +149,8 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
   if (c.lane === 0) {
     return [
       {
-        title: "Lane 0 in shadow mode: a human still glances (handled like Lane 1)",
-        why: "Lane 0 is off until the repo owner enables it after enough agreement (unclaimed projects: always off). Your Change still counts towards that agreement.",
+        title: "Auto-merge is calibrating: a human still gives it a quick review (handled like Lane 1)",
+        why: "Auto-merge is off until the repo owner turns it on after enough agreement (unclaimed repos: always off). Your Change still counts towards that agreement.",
         call: call("wait_for_change", { changeId, until: "tour_ready", timeoutSec: 50 }),
       },
       ...review.slice(1),
@@ -160,7 +160,7 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
     return [
       {
         ...review[0]!,
-        title: "Lane 1 (async glance): wait for the tour",
+        title: "Quick review (Lane 1): wait for the walkthrough",
         ...(why === undefined ? {} : { why }),
       },
       ...review.slice(1),
@@ -168,8 +168,8 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
   }
   return [
     {
-      title: "Lane 2 (full review): read why, and lower it if you can",
-      why: why ?? "A human reviews the tour and the diff.",
+      title: "Full review (Lane 2): read why, and lower it if you can",
+      why: why ?? "A human reviews the walkthrough and the diff.",
       call: call("get_change_status", { changeId }),
     },
     {
@@ -214,7 +214,7 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
         steps.push({
           title: clip(`Reconnect to ${c.anonymous.mcpUrl} with Authorization: Bearer <token>`, 200),
           why: clip(
-            `${ANONYMOUS_RECONNECT} MCP server: ${c.anonymous.mcpUrl}. Then call whoami: it lists this project.`,
+            `${ANONYMOUS_RECONNECT} MCP server: ${c.anonymous.mcpUrl}. Then call whoami: it lists this repo.`,
             600,
           ),
           call: call("whoami", {}),
@@ -234,7 +234,7 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
       if (c.imported === true) {
         steps.push({
           title: "Let detection propose this repo's .platform/ci.ts, policy.ts and AGENTS.md",
-          why: "Detection reads the repo in a sandbox and proposes them as a Plan + Change a human approves (Lane 2: it changes .platform/**). Until it merges, CI runs the detected defaults. Returns within waitSec; call it again to follow the same proposal.",
+          why: "Detection reads the repo in a sandbox and proposes them as a Plan + Change a human approves (full review, Lane 2: it changes .platform/**). Until it merges, CI runs the detected defaults. Returns within waitSec; call it again to follow the same proposal.",
           call: call("propose_platform_config", { repoId: c.projectId, waitSec: 45 }),
         });
       }
@@ -279,17 +279,17 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
         }),
       });
       steps.push({
-        title: "Or start a Change right away (can't reach Lane 0 without an approved Plan)",
+        title: "Or start a Change right away (it can't auto-merge without an approved Plan)",
         call: call("start_change", { repoId: c.projectId, title: "<what>", category: "feature" }),
       });
       if (!c.claimed) {
         steps.push({
-          title: "Give the claim link to a human to keep this project",
+          title: "Give the claim link to a human to keep this repo",
           why: clip(
             `${c.claimUrl ? `Claim link: ${c.claimUrl}. ` : "The claimUrl is in the create_project response. "}` +
-              `${c.expiresAt ? `Unless a human claims it, this project is deleted at ${c.expiresAt}. ` : "Unclaimed projects expire unless a human claims them. "}` +
-              "Until then: previews only, no secrets, no production deploys, no Lane 0, tight quotas. " +
-              "The response's token is your Bearer token for this project only: send it as Authorization on every call. whoami shows the expiry and quotas.",
+              `${c.expiresAt ? `Unless a human claims it, this repo is deleted at ${c.expiresAt}. ` : "Unclaimed repos expire unless a human claims them. "}` +
+              "Until then: previews only, no secrets, no production deploys, no auto-merge, tight quotas. " +
+              "The response's token is your Bearer token for this repo only: send it as Authorization on every call. whoami shows the expiry and quotas.",
             600,
           ),
           call: call("whoami", {}),
@@ -395,7 +395,7 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
       const c = ctx as NextStepContexts["tour_ready"];
       return [
         {
-          title: "Read the tour; unproven stops are what a reviewer will question",
+          title: "Read the walkthrough; unproven stops are what a reviewer will question",
           call: call("get_tour", { changeId: c.changeId }),
         },
         {

@@ -85,7 +85,7 @@ describe("llmsTxt", () => {
     });
     expect(on).toContain("It expires after 7 days unless a human claims it.");
     expect(on).toContain("60 CI minutes/day, 250 MB storage");
-    expect(on).toContain("no Lane 0, registries-only egress");
+    expect(on).toContain("no auto-merge, registries-only egress");
     const off = llmsTxt({ ...base, unclaimed: { enabled: false } });
     expect(off).toContain("switched off right now");
     expect(off).not.toContain("No account is needed");

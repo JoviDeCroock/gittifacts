@@ -4,7 +4,7 @@
 This repo lives on **gittifacts**, an agent-native git platform. Humans approve intent (Plans),
 machines prove conformance (evidence), and every Change is routed to the cheapest safe review lane.
 
-- Project: `{{repoId}}` (template `workers-api`)
+- Repo: `{{repoId}}` (template `workers-api`)
 - MCP: {{mcpUrl}}
 - Guide: {{host}}/start · API: {{host}}/openapi.json
 - CLI (every MCP tool as a shell command, JSON output; not on npm yet, the platform serves it):
@@ -28,51 +28,51 @@ Every response has `nextSteps` and every error has `fix` (`call` / `command`). D
 5. **Read** CI, lane, reasons and the preview URL: `get_change_status({ changeId: "<changeId>" })`
 6. **Hand off** Lane 1/2 to a human: `request_review({ changeId: "<changeId>" })`, then wait for `merged`.
 
-No Plan yet? You may start a Change without `planId`; it can't reach Lane 0 and scope can't be checked.
+No Plan yet? You may start a Change without `planId`; it can't auto-merge and scope can't be checked.
 Pushing again to the fork restarts the pipeline for the new head; the old run is superseded.
 
 ## Hard rules
 - **Never push to main.** Only the merge queue writes the default branch. Push to your Change's fork.
 - **Agents never approve** a Plan or a Change, their own or anyone's. Ask with `request_review`.
 - One Change, one intent. Stay inside the Plan's `scopePaths`; other files are scope drift (higher lane).
-- Don't touch `.platform/**` unless the Plan says so: it is always Lane 2 and needs a human.
-- Never commit secrets or tokens. Unclaimed projects have no secrets at all.
+- Don't touch `.platform/**` unless the Plan says so: it always gets a full review (Lane 2) by a human.
+- Never commit secrets or tokens. Unclaimed repos have no secrets at all.
 - Retrying a create/mutate call? Send the same `Idempotency-Key`; a new request gets a new key.
 
 ## Fixes need red/green proof
 A Change with `category: "fix"` must add or change a test that **fails on the base commit and passes
 on your head**. The platform re-runs exactly the new/changed test files on base and on head and signs
-the result. A fix without that proof is Lane 2 and can never auto-merge.
+the result. A fix without that proof gets a full review (Lane 2) and can never auto-merge.
 1. Write the test first, under `test/`, reproducing the bug.
 2. Run it before fixing: `pnpm exec vitest run test/<name>.test.ts` must **fail** (red).
 3. Fix the code and run it again: it must **pass** (green). Push test + fix in the same Change.
 If the platform reports the test passes on base, it doesn't reproduce the bug: tighten it.
 
 ## Lanes
-| Lane | Meaning | What happens |
+| Lane | Name | What happens |
 |---|---|---|
-| 0 | Proven safe | Auto-merges through the merge queue. **Disabled in shadow mode** (every repo starts there) and for unclaimed projects: handled like Lane 1. |
-| 1 | Async glance | A human approves the tour, often on a phone. |
-| 2 | Full review | A human reads the tour and the diff before approving. |
+| 0 | Auto-merge | Merges through the merge queue with no review. **Off while the repo is calibrating** (every repo starts there) and for unclaimed repos: handled like a quick review. |
+| 1 | Quick review | A human reads the walkthrough and approves, often on a phone. |
+| 2 | Full review | A human reads the diff, with the walkthrough as a guide, before approving. |
 
-The lane is the maximum over objective signals; your claimed category is an input, never the decision.
+The lane is the maximum over its reasons; your category is an input, never the decision.
 Any one of these raises it:
-- No approved Plan → not Lane 0. Scope drift outside the Plan's `scopePaths` → raised.
+- No approved Plan → no auto-merge. Scope drift outside the Plan's `scopePaths` → raised.
 - Fix without red/green proof, breaking public API, new or major-bumped dependency → Lane 2.
 - Sensitive paths (auth, payments, migrations, `.platform/**`, wrangler config) → Lane 2.
 - Additive public API, low changed-line coverage or mutation score, large diff → Lane 1 (very large → 2).
-- A missing, skipped or errored signal → raised. Unknown never lowers a lane.
+- A missing, skipped or errored measurement → raised. Unknown never lowers a lane.
 
 Stay low: small Changes, a test for every changed line, no new dependencies, stay in scope.
 
-## Reading a tour
-For Lane ≥ 1 a separate reviewer agent writes a tour from the Plan, the diff and the evidence (never
+## Reading a walkthrough
+For Lane ≥ 1 a separate reviewer agent writes a walkthrough from the Plan, the diff and the evidence (never
 from your own summary): `get_tour({ changeId: "<changeId>" })`.
 - Stops go intent → behaviour → riskiest hunk → its proof → what isn't covered.
 - Each stop has a verdict: `proven` (backed by evidence), `unproven` (a claim with no evidence), `risk`.
 - `leastConfident` and `notDone` list what the reviewer doubts or didn't check.
-To improve it, turn `unproven` stops into `proven` ones (add tests or evidence) and push again; the tour
-is regenerated for the new head. Evidence details: `get_evidence({ changeId: "<changeId>" })`.
+To improve it, turn `unproven` stops into `proven` ones (add tests or evidence) and push again; the
+walkthrough is regenerated for the new head. Evidence details: `get_evidence({ changeId: "<changeId>" })`.
 
 ## Waiting for results
 `wait_for_change({ changeId: "<changeId>", until: "<until>", timeoutSec: 50 })` long-polls; it returns
@@ -81,7 +81,7 @@ is regenerated for the new head. Evidence details: `get_evidence({ changeId: "<c
 |---|---|
 | `evidence_ready` | CI finished (green or red) and the evidence is signed |
 | `lane_assigned` | the classifier has routed the Change |
-| `tour_ready` | the reviewer's tour exists (Lane ≥ 1) |
+| `tour_ready` | the reviewer's walkthrough exists (Lane ≥ 1) |
 | `merged` | the merge queue fast-forwarded main |
 | `reverted` | the Change was rolled back and a revert Change was opened |
 `reason: "timeout"` → call it again with the same arguments until `reached` is true.

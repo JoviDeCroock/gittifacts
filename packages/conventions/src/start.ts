@@ -17,7 +17,7 @@ export const MCP_PROTOCOL_VERSION = "2026-07-28";
 export const PLATFORM_SUMMARY =
   "gittifacts is a git platform for coding agents on Cloudflare. " +
   "Humans approve intent (Plans); machines prove conformance (CI evidence: tests, red/green proof, API and dependency diffs); " +
-  "every Change is routed to a risk lane: 0 auto-merge, 1 async glance, 2 full review. " +
+  "every Change is routed to a review lane: Auto-merge (Lane 0), Quick review (Lane 1) or Full review (Lane 2). " +
   "Agents work through MCP (or the HTTP API) and git, and can never approve their own work.";
 
 /** The numbers behind the unclaimed-project limits (the platform's configured values). */
@@ -39,9 +39,9 @@ export interface UnclaimedQuotaHints {
 export function unclaimedLimitLines(q?: UnclaimedQuotaHints): string[] {
   const n = (v: number, unit: string) => `${v} ${unit}`;
   return [
-    'previews only, on a separate clearly marked domain with an "Unclaimed project — not verified" banner',
+    'previews only, on a separate clearly marked domain with an "Unclaimed repo — not verified" banner',
     "no secrets, no custom domains, no production deploys",
-    "Lane 0 / auto-merge is off (even for verified reverts): a human reviews every Change",
+    "Auto-merge (Lane 0) is off (even for verified reverts): a human reviews every Change",
     q === undefined
       ? "tight CI-minute quota per day and per run"
       : `CI: ${n(q.ciMinutesPerDay, "minutes")} per day, at most ${n(q.ciMinutesPerRun, "minutes")} per run`,
@@ -55,7 +55,7 @@ export function unclaimedLimitLines(q?: UnclaimedQuotaHints): string[] {
     "sandbox, CI and workspace egress limited to package registries; previews have no internet",
     q === undefined
       ? "requests per token are rate limited"
-      : `${q.requestsPerMinute} requests per minute per project token`,
+      : `${q.requestsPerMinute} requests per minute per repo token`,
     q === undefined
       ? "creation is rate limited per IP, per network and globally"
       : `creation is rate limited per IP (${q.createsPerIpPerHour} per hour), per network and globally`,
@@ -68,11 +68,11 @@ export function unclaimedLimitLines(q?: UnclaimedQuotaHints): string[] {
 /** What claiming an unclaimed project does, in plain words (the claim page and /start). */
 export function claimingLines(): string[] {
   return [
-    "You (a logged-in human) become the project's owner.",
+    "You (a logged-in human) become the repo's owner.",
     "The agent that created it keeps working on it under your ownership, with the same scopes; it can never approve Plans or Changes.",
     "Quotas rise to the claimed tier, and sandbox egress follows the repo's policy.",
-    "The project no longer expires.",
-    "Lane 0 (auto-merge) stays off until an owner turns it on once shadow-mode agreement allows it.",
+    "The repo no longer expires.",
+    "Auto-merge (Lane 0) stays off while the repo calibrates; an owner turns it on once reviewers agree with the platform often enough.",
     "The claim is recorded in the audit log.",
   ];
 }
@@ -169,8 +169,8 @@ const CH = "<changeId>";
 
 /** /start "No account" when unclaimed creation is on. */
 export const ANONYMOUS_HOW =
-  "Call create_project with NO Authorization header (MCP initialize, tools/list, create_project and whoami work without credentials; so does POST /api/v1/projects). " +
-  "You get an unclaimed project, token (a Bearer token limited to that one project, valid until the project expires) and claimUrl: give claimUrl to a human, who logs in to claim it. " +
+  "Call create_project with NO Authorization header (MCP initialize, tools/list, create_project and whoami work without credentials; so does POST /api/v1/repos). " +
+  "You get an unclaimed repo, token (a Bearer token limited to that one repo, valid until the repo expires) and claimUrl: give claimUrl to a human, who logs in to claim it. " +
   ANONYMOUS_RECONNECT_BEFORE;
 
 /** /start "No account" when the kill switch is off. */
@@ -199,19 +199,19 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
   const ship: StartStep[] = [
     {
       step: 1,
-      title: "Create a project",
+      title: "Create a repo",
       why: "One call creates the repo from a template, writes .platform/ci.ts, .platform/policy.ts and AGENTS.md, runs the first CI and starts a preview. It returns at once.",
       call: call("create_project", { template: DEFAULT_TEMPLATE, name: "my-api" }),
       returns:
-        "{ projectId, remote, token, mcpUrl, previewUrl, claimUrl?, nextSteps }. remote is a push grant (url, token, branch) for your first Change's fork: push there right away. token is set only for unclaimed projects: use it as the Bearer token from then on. bootstrapChangeId is the Change running the first CI and preview.",
+        "{ repoId, projectId (deprecated, same value), remote, token, mcpUrl, previewUrl, claimUrl?, nextSteps }. remote is a push token (url, token, branch) for your first Change's fork: push there right away. token is set only for unclaimed repos: use it as the Bearer token from then on. bootstrapChangeId is the Change running the first CI and preview.",
     },
     {
       step: 2,
       title: "Wait for the first green",
-      why: "create_project already committed the template and started CI and the preview; the changeId is its bootstrapChangeId. Later edits go start_change, git push to the fork, then this same wait (see the loop below).",
+      why: "create_project already committed the template and started CI and the preview; the changeId is its bootstrapChangeId (the first Change). Later edits go start_change, git push to the fork, then this same wait (see the loop below).",
       call: call("wait_for_change", { changeId: CH, until: "evidence_ready", timeoutSec: 50 }),
       returns:
-        '{ change, reached, reason, retryAfterSec? } within 50 s (under the MCP client\'s 60 s request timeout). reached: the milestone holds now (bootstrap: CI done, status released or failing). reason "timeout": call it again (after retryAfterSec when set) while reason is "timeout".',
+        '{ change, reached, reason, retryAfterSec? } within 50 s (under the MCP client\'s 60 s request timeout). reached: the milestone holds now (the first Change: CI done, status released or failing). reason "timeout": call it again (after retryAfterSec when set) while reason is "timeout".',
     },
     {
       step: 3,
@@ -251,7 +251,7 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
       title: 'Wait for the lane (call again while reason is "timeout")',
       call: call("wait_for_change", { changeId: CH, until: "lane_assigned", timeoutSec: 50 }),
     },
-    { title: "Ask a human to review (Lane 1/2)", call: call("request_review", { changeId: CH }) },
+    { title: "Ask a human to review (quick or full review, Lane 1/2)", call: call("request_review", { changeId: CH }) },
     {
       title: 'Wait until merged (call again while reason is "timeout")',
       call: call("wait_for_change", { changeId: CH, until: "merged", timeoutSec: 50 }),
@@ -345,7 +345,7 @@ export function renderStartMarkdown(doc: StartDoc): string {
     `- **No account:** ${a.anonymous.how}`,
     ...(a.anonymous.available
       ? [
-          `  Unclaimed projects expire after ${a.anonymous.ttlDays} days unless a human claims them. Until then:`,
+          `  Unclaimed repos expire after ${a.anonymous.ttlDays} days unless a human claims them. Until then:`,
           ...a.anonymous.limits.map((l) => `  - ${l}`),
         ]
       : []),
@@ -392,7 +392,7 @@ export function renderStartMarkdown(doc: StartDoc): string {
     `- Docs: ${doc.links.docs} (guides and generated references; every page as markdown at ${doc.links.docsFull})`,
     `- [llms.txt](${doc.links.llmsTxt}) · [OpenAPI](${doc.links.openapi}) · [MCP server card](${doc.mcp.serverCard})`,
     ...(doc.auth.oauth.available ? [`- OAuth discovery: ${doc.auth.oauth.resourceMetadata}`] : []),
-    "- Each repo's AGENTS.md has the full conventions: lanes, red/green proof, tours.",
+    "- Each repo's AGENTS.md has the full conventions: lanes, red/green proof, walkthroughs.",
     "",
   );
   return lines.join("\n");

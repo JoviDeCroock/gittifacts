@@ -150,7 +150,7 @@ describe("nextStepsFor", () => {
     });
     const claim = steps.at(-1)?.why ?? "";
     expect(claim).toContain("deleted at 2026-10-09T00:00:00.000Z");
-    expect(claim).toContain("Bearer token for this project only");
+    expect(claim).toContain("Bearer token for this repo only");
   });
 
   it("tells an anonymous caller to reconnect with the token first (eval m-20261002-073146-qzvw)", () => {
@@ -247,7 +247,7 @@ describe("nextStepsFor", () => {
     const first = (lane: Lane, enabled: boolean) =>
       nextStepsFor("lane_assigned", { changeId: "c", lane, lane0Enabled: enabled })[0];
     expect(first(0, true)?.call).toContain('until: "merged"');
-    expect(first(0, false)?.title).toMatch(/shadow mode/);
+    expect(first(0, false)?.title).toMatch(/calibrating/);
     expect(first(1, false)?.call).toContain('until: "tour_ready"');
     expect(first(2, false)?.call).toContain("get_change_status");
     expect(

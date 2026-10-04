@@ -149,7 +149,7 @@ function redGreenFix(c: FixContext): ErrorFix {
     explanation:
       `${problem} Add a test under \`test/\` that fails on ${base} and passes on your head: write it first, ` +
       `run \`${runOne} ${target}\` before the fix (it must fail), fix, run it again (it must pass), then push both. ` +
-      "Without this proof a fix is Lane 2 and can't auto-merge.",
+      "Without this proof a fix gets a full review (Lane 2) and can't auto-merge.",
     command: `${runOne} ${target}`,
   };
 }
@@ -160,7 +160,7 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
     case "unauthorized":
       return {
         explanation:
-          "Send `Authorization: Bearer <token>`. No token? Call create_project without credentials to get an unclaimed project and a token, " +
+          "Send `Authorization: Bearer <token>`. No token? Call create_project without credentials to get an unclaimed repo and a token, " +
           `use MCP OAuth (discovered from the 401's resource_metadata), or ask a human for an agent token. ${host}/start explains each.`,
         command: `curl -s ${host}/start`,
       };
@@ -186,7 +186,7 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
     case "self-approval":
       return {
         explanation:
-          "No principal approves its own Plan or Change, and agents approve nothing. Ask a different human to review it.",
+          "Nobody approves their own Plan or Change, and agents approve nothing. Ask a different human to review it.",
         call: call("request_review", { changeId: P.change(c) }),
       };
     case "turnstile-failed":
@@ -213,7 +213,7 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
       return {
         explanation:
           `Plan ${P.plan(c)} is ${c.planStatus ?? "not approved"}; only a human can approve it (you can't). ` +
-          "Ask them to review it, or start the Change without planId: it runs CI but can't reach Lane 0.",
+          "Ask them to review it, or start the Change without planId: it runs CI but can't auto-merge.",
         call: call("start_change", { repoId: P.repo(c), title: "<what>", category: "feature" }),
       };
     case "stale-head":
@@ -234,7 +234,7 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
     case "threshold-not-met":
       return {
         explanation:
-          "Lane 0 unlocks only after enough human reviews agree with the classifier's Lane 0 calls (shadow mode). Keep shipping reviewed Changes; the repo shows how many are still needed.",
+          "Auto-merge unlocks only after enough human reviews agree with the classifier's auto-merge calls (the repo is calibrating). Keep shipping reviewed Changes; the repo shows how many are still needed.",
         call: call("whoami", {}),
       };
     case "quota-exceeded": {
@@ -246,22 +246,22 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
           `You hit ${what}${q?.resetsAt === undefined ? "" : `; it resets at ${q.resetsAt}`}. ` +
           "whoami shows your quotas and what is left. " +
           (c.claimUrl === undefined
-            ? "Unclaimed projects have tight quotas: a human claiming the project (its claimUrl from create_project) raises them."
-            : `A human can claim the project at ${c.claimUrl} to lift unclaimed limits.`),
+            ? "Unclaimed repos have tight quotas: a human claiming the repo (its claimUrl from create_project) raises them."
+            : `A human can claim the repo at ${c.claimUrl} to lift unclaimed limits.`),
         call: call("whoami", {}),
       };
     }
     case "unclaimed-limit":
       return {
         explanation:
-          `Unclaimed projects can't ${c.refused ?? "do this"} (no secrets, custom domains, production deploys or Lane 0). ` +
-          `A human must claim the project first${c.claimUrl === undefined ? " with the claimUrl from create_project" : `: ${c.claimUrl}`}.`,
+          `Unclaimed repos can't ${c.refused ?? "do this"} (no secrets, custom domains, production deploys or auto-merge). ` +
+          `A human must claim the repo first${c.claimUrl === undefined ? " with the claimUrl from create_project" : `: ${c.claimUrl}`}.`,
         call: call("whoami", {}),
       };
     case "creation-disabled":
       return {
         explanation:
-          "Creating unclaimed projects (no credentials) is switched off right now (kill switch). Authenticate with MCP OAuth (discovered from the MCP server's 401 resource_metadata) or an agent token from a human, then call create_project again: the project is created claimed.",
+          "Creating unclaimed repos (no credentials) is switched off right now (kill switch). Authenticate with MCP OAuth (discovered from the MCP server's 401 resource_metadata) or an agent token from a human, then call create_project again: the repo is created claimed.",
         command: `curl -s ${host}/start`,
       };
     case "rate-limited": {

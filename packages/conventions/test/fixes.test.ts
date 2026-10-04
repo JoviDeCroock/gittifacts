@@ -100,9 +100,9 @@ describe("fixFor", () => {
       claimUrl: "https://h/claim/gtc_x",
     });
     expect(quota.explanation).toContain(
-      "A human can claim the project at https://h/claim/gtc_x to lift unclaimed limits.",
+      "A human can claim the repo at https://h/claim/gtc_x to lift unclaimed limits.",
     );
-    expect(fixFor("quota-exceeded").explanation).toMatch(/claiming the project/);
+    expect(fixFor("quota-exceeded").explanation).toMatch(/claiming the repo/);
     const off = fixFor("creation-disabled", { host: HOST });
     expect(off.explanation).toMatch(/kill switch/);
     expect(off.explanation).toMatch(/MCP OAuth/);

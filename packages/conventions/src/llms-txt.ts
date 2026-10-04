@@ -25,7 +25,7 @@ export interface LlmsTxtOptions {
 /** The "No account" paragraph: how unclaimed projects work, or that they're switched off. */
 export function noAccountText(unclaimed: LlmsTxtOptions["unclaimed"]): string {
   if (unclaimed?.enabled === false) {
-    return "Creating projects without an account is switched off right now: authenticate with MCP OAuth (discovered from the MCP server's 401) or an agent token from a human.";
+    return "Creating repos without an account is switched off right now: authenticate with MCP OAuth (discovered from the MCP server's 401) or an agent token from a human.";
   }
   const q = unclaimed?.quotas;
   const expiry =
@@ -34,9 +34,9 @@ export function noAccountText(unclaimed: LlmsTxtOptions["unclaimed"]): string {
       : `It expires after ${q.ttlDays} days unless a human claims it.`;
   const limits =
     q === undefined
-      ? "Until then: previews only, no secrets, custom domains or production deploys, no Lane 0, registries-only egress, tight quotas."
-      : `Until then: previews only, no secrets, custom domains or production deploys, no Lane 0, registries-only egress, ${q.ciMinutesPerDay} CI minutes/day, ${q.storageMb} MB storage.`;
-  return `No account is needed: call create_project without credentials to get an unclaimed project, a Bearer token for it and a claimUrl for a human. ${expiry} ${limits}\n${ANONYMOUS_RECONNECT_BEFORE}`;
+      ? "Until then: previews only, no secrets, custom domains or production deploys, no auto-merge, registries-only egress, tight quotas."
+      : `Until then: previews only, no secrets, custom domains or production deploys, no auto-merge, registries-only egress, ${q.ciMinutesPerDay} CI minutes/day, ${q.storageMb} MB storage.`;
+  return `No account is needed: call create_project without credentials to get an unclaimed repo, a Bearer token for it and a claimUrl for a human. ${expiry} ${limits}\n${ANONYMOUS_RECONNECT_BEFORE}`;
 }
 
 export function llmsTxt(opts: LlmsTxtOptions): string {
@@ -49,7 +49,7 @@ export function llmsTxt(opts: LlmsTxtOptions): string {
     "",
     `> ${PLATFORM_SUMMARY}`,
     "",
-    `Start with ${join(host, "/start")}: it lists the three calls that create a project, run CI and return a live preview URL.`,
+    `Start with ${join(host, "/start")}: it lists the three calls that create a repo, run CI and return a live preview URL.`,
     noAccountText(opts.unclaimed),
     "",
     "## Start",
