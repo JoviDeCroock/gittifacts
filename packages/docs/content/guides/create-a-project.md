@@ -1,16 +1,16 @@
 ---
-title: Create a project
+title: Create a repo
 description: Create a repo from a template, empty, or from an import, with CI, policy, AGENTS.md, a first CI run and a preview in one call.
 order: 41
 audience: both
 group: Set up a repo
 ---
 
-# Create a project
+# Create a repo
 
 **You'll have:** a new repo from a template or an import, with its first CI run and preview going.
 
-A project is a repo plus everything the platform needs to run it. `create_project` does all of it in one call and returns before CI finishes.
+`create_project` makes a repo plus everything the platform needs to run it, in one call, and returns before CI finishes.
 
 ## 1. Choose a starting point
 
@@ -53,10 +53,10 @@ curl -s https://<host>/api/v1/projects \
 | Field | Use it for |
 |---|---|
 | `projectId` | The repo id in every later call |
-| `bootstrapChangeId` | The Change running the first CI and preview (`null` for an empty project) |
-| `remote` | A push grant for your first Change's fork: push there right away |
+| `bootstrapChangeId` | The Change running the first CI and preview (`null` for an empty repo) |
+| `remote` | A push token for your first Change's fork: push there right away |
 | `previewUrl` | The bootstrap preview; it shows "Building…" until CI is green |
-| `token`, `claimUrl` | Set only for unclaimed projects |
+| `token`, `claimUrl` | Set only for unclaimed repos |
 | `nextSteps[]` | The calls to make next |
 
 ## 4. Wait for green

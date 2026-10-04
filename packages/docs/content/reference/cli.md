@@ -49,7 +49,7 @@ These run in the CLI itself (some call one MCP tool on your behalf).
 
 ### `gittifacts init`
 
-Create a project in one call (create_project): repo from a template or a GitHub import, .platform/ci.ts, policy and AGENTS.md, first CI and preview. Writes .gittifacts.json (host, projectId, remote). No account needed: you get an unclaimed project and a claim URL for a human.
+Create a repo in one call (create_project): repo from a template or a GitHub import, .platform/ci.ts, policy and AGENTS.md, first CI and preview. Writes .gittifacts.json (host, projectId, remote). No account needed: you get an unclaimed repo and a claim URL for a human.
 
 ```text
 gittifacts init [--template <workers-api|preact-app|ts-library|static-site>] [--from <string>] [--name <string>] [--description <string>] [--clone] [--dir <string>] [--force] [--show-token] [--idempotency-key <key>]
@@ -59,12 +59,12 @@ gittifacts init [--template <workers-api|preact-app|ts-library|static-site>] [--
 | --- | --- | --- | --- |
 | `--template` | workers-api \| preact-app \| ts-library \| static-site |  | Start from a template. |
 | `--from` | string |  | Import a GitHub repository (https URL). |
-| `--name` | string |  | Project name. |
+| `--name` | string |  | Repo name. |
 | `--description` | string |  | One-line description. |
 | `--clone` | boolean |  | git clone the new repo (the token travels in git's environment, never in .git/config). |
 | `--dir` | string |  | Where to write .gittifacts.json (default: cwd), or clone to with --clone (default: ./<name>). |
 | `--force` | boolean |  | Overwrite an existing .gittifacts.json. |
-| `--show-token` | boolean |  | Include the project token in the output (it is stored either way). |
+| `--show-token` | boolean |  | Include the repo token in the output (it is stored either way). |
 
 Examples: `gittifacts init --template workers-api --name my-api`, `gittifacts init --template preact-app --name app --clone`, `gittifacts init --from https://github.com/org/repo`.
 
@@ -163,20 +163,20 @@ One per MCP tool. Arguments, scopes and outputs are in the [MCP tools](/docs/ref
 
 | Command | Tool | Usage |
 | --- | --- | --- |
-| `gittifacts create-project` | `create_project` | `gittifacts create-project [--name <string>] [--template <workers-api\|preact-app\|ts-library\|static-site>] [--from <string>] [--import-mode <push>] [--description <string>] [--idempotency-key <key>]` — One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). |
-| `gittifacts whoami` | `whoami` | `gittifacts whoami` — Your principal, scopes, the repos you can act on (with claim status and allowed actions) and quotas. |
-| `gittifacts list-repos` | `list_repos` | `gittifacts list-repos` — Repos you can read, with open changes per lane and whether Lane 0 (auto-merge) is on. |
+| `gittifacts create-project` | `create_project` | `gittifacts create-project [--name <string>] [--template <workers-api\|preact-app\|ts-library\|static-site>] [--from <string>] [--import-mode <push>] [--description <string>] [--idempotency-key <key>]` — One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push token for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). |
+| `gittifacts whoami` | `whoami` | `gittifacts whoami` — Who you are (your actor: principalId, kind, owner), scopes, the repos you can act on (with claim status and allowed actions) and quotas. |
+| `gittifacts list-repos` | `list_repos` | `gittifacts list-repos` — Repos you can read, with open changes per lane and whether auto-merge (Lane 0) is on or still calibrating. |
 | `gittifacts list-members` | `list_members` | `gittifacts list-members <repoId>` — A repo's human members and their roles (reader < reviewer < maintainer < owner), and your role (an agent acts with its owner's role: reviewer or above to draft plans and start changes). |
 | `gittifacts create-plan` | `create_plan` | `gittifacts create-plan --repo-id <string> --title <string> --intent <string> --acceptance-criteria <string>... [--out-of-scope <string>...] [--risk-declarations <json>] [--scope-paths <string>...] [--affected-routes <string>...] [--supersedes <string>] [--idempotency-key <key>]` — Draft a plan: intent, acceptance criteria and the paths you expect to touch. |
-| `gittifacts start-change` | `start_change` | `gittifacts start-change --repo-id <string> [--plan-id <string>] --title <string> --category <fix\|feature\|refactor\|dependency\|transform\|revert\|docs\|chore> [--summary <string>] [--agent-trace-id <string>] [--idempotency-key <key>]` — Fork the repo for one change and get a short-lived push grant for that fork only. |
+| `gittifacts start-change` | `start_change` | `gittifacts start-change --repo-id <string> [--plan-id <string>] --title <string> --category <fix\|feature\|refactor\|dependency\|transform\|revert\|docs\|chore> [--summary <string>] [--agent-trace-id <string>] [--idempotency-key <key>]` — Fork the repo for one change and get a short-lived push token for that fork only. |
 | `gittifacts get-change-status` | `get_change_status` | `gittifacts get-change-status <changeId> [--github <string>]` — A change's status, lane (and why), pipeline runs for each head, and what to do next. |
 | `gittifacts get-evidence` | `get_evidence` | `gittifacts get-evidence <changeId> [--github <string>]` — The signed evidence for the change's current head (tests, red/green proof, coverage, API diff, ...) and whether the signature verifies. |
-| `gittifacts get-tour` | `get_tour` | `gittifacts get-tour <changeId> [--github <string>]` — The reviewer agent's guided tour of the change (what a human will read): stops with verdicts, least-confident points and what was not done. |
+| `gittifacts get-tour` | `get_tour` | `gittifacts get-tour <changeId> [--github <string>]` — The walkthrough (the tour) a second reviewer agent wrote for the change, what a human will read: stops with verdicts, least-confident points and what was not done. |
 | `gittifacts request-review` | `request_review` | `gittifacts request-review <changeId> [--message <string>] [--idempotency-key <key>]` — Ask a human to look at your change (notifies them). |
-| `gittifacts rerun-ci` | `rerun_ci` | `gittifacts rerun-ci <changeId> [--reason <string>] [--idempotency-key <key>]` — Repeats CI, evidence, the lane and the tour on the change's current head, without a push (a flaky step). |
+| `gittifacts rerun-ci` | `rerun_ci` | `gittifacts rerun-ci <changeId> [--reason <string>] [--idempotency-key <key>]` — Repeats CI, evidence, the lane and the walkthrough on the change's current head, without a push (a flaky step). |
 | `gittifacts close-change` | `close_change` | `gittifacts close-change <changeId> [--reason <string>] [--idempotency-key <key>]` — Close (abandon) a change that won't merge: stops its CI, takes it out of the merge queue and deletes its fork later. |
 | `gittifacts list-issues-for-change` | `list_issues_for_change` | `gittifacts list-issues-for-change <changeId>` — Workers Issues attributed to the change or the version it rolled out (errors seen in production). |
-| `gittifacts refresh-push-token` | `refresh_push_token` | `gittifacts refresh-push-token <changeId> [--idempotency-key <key>]` — A fresh short-lived push grant for your change's fork (author only). |
+| `gittifacts refresh-push-token` | `refresh_push_token` | `gittifacts refresh-push-token <changeId> [--idempotency-key <key>]` — A fresh short-lived push token for your change's fork (author only). |
 | `gittifacts wait-for-change` | `wait_for_change` | `gittifacts wait-for-change <changeId> [--github <string>] --until <evidence_ready\|lane_assigned\|tour_ready\|merged\|reverted> [--timeout-sec <integer>]` — Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. |
 | `gittifacts open-workspace` | `open_workspace` | `gittifacts open-workspace <changeId> [--idempotency-key <key>]` — A sandbox with your Change's fork checked out at its head, for agents without a local shell or git. |
 | `gittifacts ws-exec` | `ws_exec` | `gittifacts ws-exec --workspace-id <string> --command <string> [--cwd <string>] [--timeout-sec <integer>] [--idempotency-key <key>]` — Runs `sh -c <command>` in the workspace checkout as the unprivileged runner user, with a hard timeout. |

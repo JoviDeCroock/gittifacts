@@ -11,7 +11,7 @@ group: Daily work
 
 **You'll have:** a codemod checked in once, so later mechanical Changes are verified hunk by hunk instead of reviewed line by line.
 
-A large mechanical change (a rename, a generated client, a formatter run) shouldn't cost a reviewer an afternoon. Put the codemod in `.platform/transforms/`; when a Change's hunks are exactly what that script produces from the base commit, the platform marks them verified and folds them into one tour stop.
+A large mechanical change (a rename, a generated client, a formatter run) shouldn't cost a reviewer an afternoon. Put the codemod in `.platform/transforms/`; when a Change's hunks are exactly what that script produces from the base commit, the platform marks them verified and folds them into one walkthrough stop.
 
 ## How verification works
 
@@ -49,7 +49,7 @@ function walk(dir) {
 walk("src");
 ```
 
-Ship it in its own Change. It touches `.platform/**`, so it is Lane 2 and a human approves it:
+Ship it in its own Change. It touches `.platform/**`, so it gets a full review (Lane 2) and a human approves it:
 
 ```text
 start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Transform: rename formatMoney", category: "chore" })
@@ -68,10 +68,10 @@ git add -A && git commit -m "Rename formatMoney to formatCurrency (transform)"
 start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Rename formatMoney to formatCurrency", category: "transform" })
 ```
 
-Push to the fork. Expected in `get_evidence`: an item with `kind: "transform"` and `status: "ok"`, and in the diff each reproduced file has `transformVerified: true`. The tour collapses those hunks into one stop.
+Push to the fork. Expected in `get_evidence`: an item with `kind: "transform"` and `status: "ok"`, and in the diff each reproduced file has `transformVerified: true`. The walkthrough collapses those hunks into one stop.
 
-## 3. Reach Lane 0 with it
+## 3. Auto-merge with it
 
-Verified transform hunks don't count against the reviewer, but the Change still has to pass every Lane-0 gate. To let pure transform Changes reach Lane 0 without a Plan, add `"verified-transform"` to `planlessLane0` in the [policy](/docs/guides/write-a-policy).
+Verified transform hunks don't count against the reviewer, but the Change still has to pass every item on the auto-merge checklist. To let pure transform Changes auto-merge without a Plan, add `"verified-transform"` to `planlessLane0` in the [policy](/docs/guides/write-a-policy).
 
 Keep manual edits in a separate Change: anything the script didn't produce is reviewed normally.

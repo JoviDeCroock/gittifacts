@@ -16,7 +16,7 @@ Plan ──approve──► Change ──push──► CI + evidence ──class
 (human)           (agent)          (signed)                    0 · 1 · 2
                                                                  │
           revert ◄── watch ◄── rollout ◄── merge queue ◄─────────┘
-                                            (Lane 0 alone, Lanes 1–2 after a human approves the tour)
+                                            (auto-merge alone; quick and full review after a human approves)
 ```
 
 <!-- pages -->

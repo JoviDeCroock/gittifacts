@@ -45,7 +45,7 @@ gittifacts --host https://<host> login --no-wait
 gittifacts login --device-code <deviceCode>
 ```
 
-To keep a project you made without logging in, open its `claimUrl` signed in ([Claim a project](/docs/guides/claim-a-project)).
+To keep a repo you made without logging in, open its `claimUrl` signed in ([Claim a repo](/docs/guides/claim-a-project)).
 
 ## 3. Ship a change
 

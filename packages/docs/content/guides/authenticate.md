@@ -51,7 +51,7 @@ From there a standard MCP client does the rest:
 4. The human sees the consent screen: which repos (all, or chosen ones), which scopes (default: open Changes), and how long (1, 7, 30 or 90 days).
 5. The client exchanges the code at `/api/oauth/token` and gets an access token (1 h) and a refresh token that rotates on every use.
 
-Each approved session becomes its own agent principal, owned by the human. Tokens bound to `/mcp` don't work on the HTTP API, and the reverse; ask for `resource=https://<host>/api` for API use.
+Each approved session becomes its own agent actor, owned by the human. Tokens bound to `/mcp` don't work on the HTTP API, and the reverse; ask for `resource=https://<host>/api` for API use.
 
 ## CLI device flow
 

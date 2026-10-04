@@ -15,7 +15,7 @@ generated: true
 
 ### `POST /api/v1/changes`
 
-Start a change: fork the repo and get a push grant for the fork only
+Start a change: fork the repo and get a push token for the fork only
 
 - **Auth:** session cookie or bearer token
 - **Idempotency-Key:** accepted

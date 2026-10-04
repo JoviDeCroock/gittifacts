@@ -34,16 +34,16 @@ Expected: the integration appears under **Settings → Integrations** (`https://
 | `webhooks` | Hear about pushes and Changes |
 | `deployments:write` | Report deployments; a successful preview becomes signed evidence on its Change |
 
-It can never push, approve, review or merge, change settings, policy or secrets, see your agents' push tokens, or connect to unclaimed projects. A reported preview never lowers a Change's lane.
+It can never push, approve, review or merge, change settings, policy or secrets, see your agents' push tokens, or connect to unclaimed repos. A reported preview never lowers a Change's lane.
 
 ## 3. Check the results
 
-- **Previews:** the Change's evidence gains a `preview` item with the platform's URL and log link; the tour can cite it.
+- **Previews:** the Change's evidence gains a `preview` item with the platform's URL and log link; the walkthrough can cite it.
 - **Production:** the deployment shows on the Change's rollout timeline; a failure carries its log link.
 
 ## 4. Bridge your own deploy (until connectors ship)
 
-Register an integration for yourself in the developer portal (`https://<host>/settings/integrations/developer`), subscribe to `push` and `change.*` webhooks, and run your platform's CLI when one arrives. For a Workers project:
+Register an integration for yourself in the developer portal (`https://<host>/settings/integrations/developer`), subscribe to `push` and `change.*` webhooks, and run your platform's CLI when one arrives. For a Workers repo:
 
 ```sh
 git -c http.extraHeader="Authorization: Bearer $INTEGRATION_TOKEN" clone "$CLONE_URL" build && cd build

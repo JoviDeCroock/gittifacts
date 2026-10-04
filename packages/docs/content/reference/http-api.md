@@ -30,7 +30,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `GET` | [`/api/v1/audit`](/docs/reference/http-changes) | Audit log, newest first, with hash-chain verification |
 | `GET` | [`/api/v1/blobs/{ref}`](/docs/reference/http-changes) | Raw bytes of an R2 reference (logRef, beforeRef, afterRef), authorized by the owning repo |
 | `GET` | [`/api/v1/capabilities`](/docs/reference/http-identity) | Who am I, what may I do, on which repos (with claim status), and my quotas |
-| `POST` | [`/api/v1/changes`](/docs/reference/http-changes) | Start a change: fork the repo and get a push grant for the fork only |
+| `POST` | [`/api/v1/changes`](/docs/reference/http-changes) | Start a change: fork the repo and get a push token for the fork only |
 | `GET` | [`/api/v1/changes/{changeId}`](/docs/reference/http-changes) | A change with its plan, pipeline runs and classification for the current head |
 | `POST` | [`/api/v1/changes/{changeId}/close`](/docs/reference/http-changes) | Close (abandon) a change that won't merge (author or maintainer) |
 | `GET` | [`/api/v1/changes/{changeId}/diff`](/docs/reference/http-changes) | Diff of the current head against the base |

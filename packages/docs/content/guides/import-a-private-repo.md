@@ -1,6 +1,6 @@
 ---
 title: Import a private repo
-description: A human owner creates an empty project and pushes the history once with a one-time grant. Detection then proposes the platform config, as for a public import.
+description: A human owner creates an empty repo and pushes the history once with a one-time grant. Detection then proposes the platform config, as for a public import.
 order: 43
 audience: humans
 group: Set up a repo
@@ -10,9 +10,9 @@ group: Set up a repo
 
 **You'll have:** a private repo's full history on gittifacts, and detection proposing its platform config.
 
-Public repos import with one command ([Move a repo from GitHub](/docs/get-started/from-github)). Imports with `from` take public `https://` URLs only, so a private repo comes in by push: a human owner creates an empty project and pushes the history once. Agents can't do this.
+Public repos import with one command ([Move a repo from GitHub](/docs/get-started/from-github)). Imports with `from` take public `https://` URLs only, so a private repo comes in by push: a human owner creates an empty repo and pushes the history once. Agents can't do this.
 
-## 1. Create an empty project
+## 1. Create an empty repo
 
 Signed in, with your browser session's cookies saved to `cookies.txt` (for example with your browser's cookie export):
 
@@ -25,7 +25,7 @@ Expected: `projectId` and an `importGrant` with `url`, `token`, `expiresAt` and 
 
 ## 2. Push the history, in one push
 
-The token writes the project's main repo, so treat it like a password: put it in an environment variable, never in the remote URL or git config.
+The token writes the repo's main repo, so treat it like a password: put it in an environment variable, never in the remote URL or git config.
 
 ```sh
 export GITTIFACTS_IMPORT_TOKEN='<importGrant.token>'

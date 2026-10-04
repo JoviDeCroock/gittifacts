@@ -25,6 +25,20 @@ export function visibleWords(x: Extracted): number {
 
 const FILLER = /\b(simply|just|easily|obviously|basically|of course|clearly)\b/i;
 
+/**
+ * Retired user-facing terms (DECISIONS 2026-10-04, "User-facing terms"): hand-written prose must use
+ * the replacement. Machine names in code spans (`tour_ready`, `get_tour`, `shadow`) are not prose.
+ */
+export const BANNED_TERMS: readonly { term: RegExp; use: string }[] = [
+  { term: /\bpush grants?\b/i, use: "push token" },
+  { term: /\bbootstrap Changes?\b/i, use: "first Change" },
+  { term: /\b(async )?glance\b/i, use: "quick review (Lane 1)" },
+  { term: /\bshadow[- ]mode\b/i, use: "calibrating (on gittifacts) or report-only (on GitHub)" },
+  { term: /\btours?\b/i, use: "walkthrough" },
+  { term: /\bdeploy trains?\b/i, use: "deploy batch" },
+  { term: /\bunclaimed projects?\b/i, use: "unclaimed repo" },
+];
+
 /** Sentences in plain prose. Abbreviations and versions don't end one; a capital or digit starts one. */
 export function sentences(text: string): string[] {
   const cleaned = text
@@ -62,6 +76,14 @@ export function checkStyle(page: Page, x: Extracted): Problem[] {
     }
   }
   for (const p of x.paragraphs) {
+    if (!page.fm.generated) {
+      for (const b of BANNED_TERMS) {
+        const hit = b.term.exec(p.text);
+        if (hit !== null) {
+          problems.push({ file: page.file, line: p.line, rule: "style", message: `retired term "${hit[0]}": say "${b.use}"` });
+        }
+      }
+    }
     const filler = FILLER.exec(p.text);
     if (filler !== null) {
       problems.push({

@@ -10,7 +10,7 @@ group: Daily work
 
 **You'll have:** an approved Plan, a Change with its evidence and lane, a human review where it's needed, and the Change merged.
 
-This is the loop for every piece of work. Each step names the call and what it returns. The example adds `GET /time` to a `workers-api` project `3fk2q8wz7m1x0c5v9nbd`.
+This is the loop for every piece of work. Each step names the call and what it returns. The example adds `GET /time` to a `workers-api` repo `3fk2q8wz7m1x0c5v9nbd`.
 
 ## 1. Draft a Plan
 
@@ -18,7 +18,7 @@ This is the loop for every piece of work. Each step names the call and what it r
 create_plan({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Add /time", intent: "Clients need the server time in ISO 8601 to schedule jobs.", acceptanceCriteria: ["GET /time returns { time } in ISO 8601", "Existing routes are unchanged"], scopePaths: ["src/**", "test/**"] })
 ```
 
-Expected: `plan.status` is `"draft"`. Send the human the Plan link (`https://<host>/plans/<planId>`) and wait for **Sign and approve**. Listing `scopePaths` matters: without them the Change can't reach Lane 0.
+Expected: `plan.status` is `"draft"`. Send the human the Plan link (`https://<host>/plans/<planId>`) and wait for **Sign and approve**. Listing `scopePaths` matters: without them the Change can't auto-merge.
 
 ## 2. Start the Change
 
@@ -60,7 +60,7 @@ get_change_status({ changeId: "7h2kd9x0qw3m5z8r1vtc" })
 |---|---|
 | `runs[0].status: "failed"` | Find the step with `status: "failed"`, fetch its `logRef` from `GET /api/v1/blobs/<ref>`, fix, push again. A new push starts a new run. A flaky step needs no push: `rerun_ci({ changeId: "7h2kd9x0qw3m5z8r1vtc", reason: "flaky" })` runs the same head again. |
 | `classification.lane: 1` or `2` | Read `classification.reasons[]`: each has a `code` and `message`. Fix what you can (a missing test, a sensitive path you didn't mean to touch), or ask for review. |
-| `classification.lane: 0`, `shadow: false` | Lane 0 is on and every gate passed: the Change merges by itself. Skip to step 7. |
+| `classification.lane: 0`, `shadow: false` | Auto-merge is on and every checklist item passed: the Change merges by itself. Skip to step 7. |
 
 ## 6. Ask a human to review
 
@@ -72,7 +72,7 @@ wait_for_change({ changeId: "7h2kd9x0qw3m5z8r1vtc", until: "tour_ready", timeout
 request_review({ changeId: "7h2kd9x0qw3m5z8r1vtc", message: "Adds GET /time per plan 4p8n2b7dq0x6w3k9m1zs; red/green not needed (feature)." })
 ```
 
-The reviewer agent has written a tour; `request_review` notifies the humans who can review. It never approves. A **Request changes** answer comes back on the Change: push a new head and the tour is rewritten.
+The reviewer agent has written a walkthrough; `request_review` notifies the humans who can review. It never approves. A **Request changes** answer comes back on the Change: push a new head and the walkthrough is rewritten.
 
 ## 7. Wait for the merge
 

@@ -12,7 +12,7 @@ audience: both
 
 You need Node 22 or later and git.
 
-## 1. Create a project
+## 1. Create a repo
 
 ```sh
 npx -y https://<host>/cli/gittifacts.tgz --host https://<host> init --template workers-api --name my-api --clone
@@ -36,11 +36,11 @@ The platform made a repo from the `workers-api` template and started its first C
 <details>
 <summary>What did that store, and why no login?</summary>
 
-Without a login you get an **unclaimed project**: it works now and is deleted after 7 days unless someone opens `claimUrl` and keeps it ([Unclaimed projects](/docs/concepts/unclaimed-projects)). The CLI stores the project's token in `~/.config/gittifacts/credentials.json` (mode 0600) and writes `.gittifacts.json` (`{ host, projectId, remote }`, no secrets) in the clone. The token reaches git through its environment, never argv or `.git/config`.
+Without a login you get an **unclaimed repo**: it works now and is deleted after 7 days unless someone opens `claimUrl` and keeps it ([Unclaimed repos](/docs/concepts/unclaimed-projects)). The CLI stores the repo's token in `~/.config/gittifacts/credentials.json` (mode 0600) and writes `.gittifacts.json` (`{ host, projectId, remote }`, no secrets) in the clone. The token reaches git through its environment, never argv or `.git/config`.
 
 The CLI is a thin wrapper over the MCP tools: every tool is a command, and output is one JSON document. Other templates: `preact-app`, `ts-library` (no preview), `static-site`.
 
-Without an account, each network address can create 3 projects an hour. Past that, `init` answers `rate-limited` and says how many seconds to wait; `--idempotency-key` with the printed key retries the same request.
+Without an account, each network address can create 3 repos an hour. Past that, `init` answers `rate-limited` and says how many seconds to wait; `--idempotency-key` with the printed key retries the same request.
 
 </details>
 
@@ -73,6 +73,6 @@ That's the loop's first half: code in, proof out. Next, change something.
 
 ## Next
 
-- Keep the project and use it under your own name: [Use the CLI](/docs/guides/use-the-cli) (log in, claim, everyday commands).
+- Keep the repo and use it under your own name: [Use the CLI](/docs/guides/use-the-cli) (log in, claim, everyday commands).
 - Change the code and ship it through review: [Make a Change](/docs/guides/make-a-change).
 - What "green" proves: [Evidence](/docs/concepts/evidence).

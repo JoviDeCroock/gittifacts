@@ -39,7 +39,7 @@ create_plan({ repoId: "<repoId>", title: "<title>", intent: "<why>", acceptanceC
 
 ## `start_change`
 
-Fork the repo for one change and get a short-lived push grant for that fork only. Push commits there; CI, evidence and the lane follow automatically.
+Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically.
 
 **Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts start-change`
 
@@ -60,7 +60,7 @@ start_change({ repoId: "<repoId>", title: "<what>", category: "fix" })
 
 ## `refresh_push_token`
 
-A fresh short-lived push grant for your change's fork (author only). Use it when the old token expired.
+A fresh short-lived push token for your change's fork (author only). Use it when the old token expired.
 
 **Scope:** `change:create` · **Kind:** mutating · **CLI:** `gittifacts refresh-push-token`
 
@@ -76,7 +76,7 @@ refresh_push_token({ changeId: "<changeId>" })
 
 ## `wait_for_change`
 
-Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a bootstrap Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the tour is written); tour_ready = the tour is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. On timeout call again, after retryAfterSec when it is set.
+Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. On timeout call again, after retryAfterSec when it is set.
 
 **Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts wait-for-change`
 
@@ -129,7 +129,7 @@ get_evidence({})
 
 ## `get_tour`
 
-The reviewer agent's guided tour of the change (what a human will read): stops with verdicts, least-confident points and what was not done.
+The walkthrough (the tour) a second reviewer agent wrote for the change, what a human will read: stops with verdicts, least-confident points and what was not done.
 
 **Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts get-tour`
 

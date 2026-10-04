@@ -13,27 +13,27 @@ generated: true
 
 ## `create_project`
 
-One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push grant for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). Without credentials it creates an unclaimed project and returns its token. Reconnect with `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this project's tools are unavailable without it.
+One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push token for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). Without credentials it creates an unclaimed repo and returns its token. Reconnect with `Authorization: Bearer <token>` (the `token` field in this response). Every other tool needs it, and this repo's tools are unavailable without it.
 
 **Scope:** `repo:read` + `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts create-project`
 
 | Argument | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `name` | string |  | Project (and repo) name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>. max 63 chars |
-| `template` | "workers-api" \| "preact-app" \| "ts-library" \| "static-site" |  | Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty project. |
+| `name` | string |  | Repo name, normalized to lowercase letters, digits and dashes. Default: <template>-<random>. max 63 chars |
+| `template` | "workers-api" \| "preact-app" \| "ts-library" \| "static-site" |  | Start from a template that passes CI and serves a preview at once. Omit both template and from for an empty repo. |
 | `from` | string |  | Import a public https git repository (e.g. GitHub) instead of a template. max 500 chars |
-| `importMode` | "push" |  | Private repos: "push" creates an empty project whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in). |
-| `description` | string |  | One line about the project. max 500 chars |
+| `importMode` | "push" |  | Private repos: "push" creates an empty repo whose HUMAN owner pushes the history with a one-time grant. Humans only (an agent gets human-required: ask your human to create it signed in). |
+| `description` | string |  | One line about the repo. max 500 chars |
 
 ```text
 create_project({ template: "workers-api" })
 ```
 
-**Returns:** `projectId` (string), `name` (string), `template` (string | null), `defaultBranch` (string), `remote` (null | object), `token` (string | null), `mcpUrl` (string), `previewUrl` (string | null), `claimUrl` (string | null), `bootstrapChangeId` (string | null), `nextSteps` (object[]).
+**Returns:** `repoId` (string), `projectId` (string), `name` (string), `template` (string | null), `defaultBranch` (string), `remote` (null | object), `token` (string | null), `mcpUrl` (string), `previewUrl` (string | null), `claimUrl` (string | null), `bootstrapChangeId` (string | null), `nextSteps` (object[]).
 
 ## `whoami`
 
-Your principal, scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.
+Who you are (your actor: principalId, kind, owner), scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.
 
 **Scope:** none · **Kind:** read-only · **CLI:** `gittifacts whoami`
 
@@ -47,7 +47,7 @@ whoami({})
 
 ## `list_repos`
 
-Repos you can read, with open changes per lane and whether Lane 0 (auto-merge) is on.
+Repos you can read, with open changes per lane and whether auto-merge (Lane 0) is on or still calibrating.
 
 **Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts list-repos`
 

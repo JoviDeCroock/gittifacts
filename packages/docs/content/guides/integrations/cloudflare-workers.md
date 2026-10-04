@@ -1,10 +1,10 @@
 ---
-title: "Example: connect a Cloudflare Workers project"
+title: "Example: connect a Cloudflare Workers repo"
 description: End to end — register a Workers Builds integration, install it on one repo, build previews per Change and production from the default branch, report back.
 order: 6
 ---
 
-# Example: connect a Cloudflare Workers project
+# Example: connect a Cloudflare Workers repo
 
 1. **Register** "Cloudflare Workers Builds" in the developer portal:
    - homepage `https://dash.cloudflare.com`;
@@ -13,7 +13,7 @@ order: 6
    - webhook URL `https://builds.example/webhooks/gittifacts`, with events `push`, `change.created`, `change.merged`, `installation.created` and `installation.deleted`.
 
    Store the client secret and webhook secret it shows once.
-2. **Connect**: in the Workers project's settings, choose "Connect to git", then gittifacts. That runs the [install flow](./oauth.md), and the person installs it on `acme/web` only. Keep the refresh token and `installation_id`.
+2. **Connect**: in the Workers repo's settings, choose "Connect to git", then gittifacts. That runs the [install flow](./oauth.md), and the person installs it on `acme/web` only. Keep the refresh token and `installation_id`.
 3. **Preview per Change**: on `push` with `kind: "change"`:
    1. clone `cloneUrl` at `sha` (Basic `x-access-token:<token>`);
    2. run `wrangler versions upload`, which gives a preview URL per version;

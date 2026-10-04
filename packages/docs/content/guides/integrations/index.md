@@ -11,7 +11,7 @@ gittifacts is a git provider that deploy platforms (Cloudflare Workers Builds, N
 An integration **reads code and reports what it deployed**:
 
 - it can never push, approve, review or merge, and never sees agents' push tokens;
-- it can't be connected to unclaimed projects;
+- it can't be connected to unclaimed repos;
 - deploy results come back as signed **evidence** on the Change.
 
 Examples use `https://<host>` for your gittifacts deployment.
@@ -51,7 +51,7 @@ A deploy platform needs `repo:read contents:read webhooks deployments:write`. Th
 - approval and admin scopes: `plan:approve`, `change:review`, `repo:admin`, `policy:admin`;
 - authoring scopes: `plan:create`, `change:create`.
 
-Next: [the install flow](./oauth.md), [git access](./git.md), [webhooks](./webhooks.md), [deployments](./deployments.md), and an end-to-end example: [connect a Cloudflare Workers project](./cloudflare-workers.md).
+Next: [the install flow](./oauth.md), [git access](./git.md), [webhooks](./webhooks.md), [deployments](./deployments.md), and an end-to-end example: [connect a Cloudflare Workers repo](./cloudflare-workers.md).
 
 ## Errors and limits
 

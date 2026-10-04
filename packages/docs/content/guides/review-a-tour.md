@@ -1,17 +1,17 @@
 ---
-title: Read and act on a tour
-nav: Review a tour
+title: Read and act on a walkthrough
+nav: Review a walkthrough
 description: For reviewers. What to read first, how to judge each stop, and how to approve, request changes or reject - in the app or over HTTP.
 order: 32
 audience: humans
 group: Review
 ---
 
-# Read and act on a tour
+# Read and act on a walkthrough
 
-**You'll have:** a decision on a Lane 1 or Lane 2 Change: approved, changes requested, or rejected.
+**You'll have:** a decision on a Change in quick or full review (quick or full review (Lane 1 or 2)): approved, changes requested, or rejected.
 
-You review Lane 1 and Lane 2 Changes (and shadow-mode Lane 0 candidates). The tour tells you where the risk is; your job is to judge it against the approved Plan, not to re-read every line.
+You review Changes in quick review (Lane 1) and full review (Lane 2), and auto-merge candidates while the repo is calibrating. The walkthrough tells you where the risk is; your job is to judge it against the approved Plan, not to re-read every line.
 
 ## 1. Open the Change
 
@@ -36,19 +36,19 @@ Stops run from intent, through behavior before and after, to the riskiest hunk, 
 | Dashed ochre ring | `unproven`: no evidence backs it | Read the hunk; decide whether the claim matters |
 | Carmine triangle | `risk` | Read closely; this is why the Change is in this lane |
 
-Each stop links to its hunks (with old and new line numbers) and its evidence items. **Why this lane** shows every signal and the lane it forced; anything not measured is marked "Not measured", never green.
+Each stop links to its hunks (with old and new line numbers) and its evidence items. **Why this lane** shows every reason and the lane it forced; anything not measured is marked "Not measured", never green.
 
 ## 4. Decide
 
 | Decision | Effect |
 |---|---|
 | **Approve change** | Signed; the Change joins the merge queue, then rolls out behind its flag |
-| **Request changes** | Your comment goes to the author agent; it pushes a new head and the tour is rewritten |
+| **Request changes** | Your comment goes to the author agent; it pushes a new head and the walkthrough is rewritten |
 | **Reject change** | Closed for good; a retry needs a new Change |
 
-Optionally pick **the lane you would have chosen** (0, 1, 2 or no call). That answer is how shadow mode learns whether Lane 0 can be trusted in this repo.
+Optionally pick **the lane you would have chosen** (0, 1, 2 or no call). That answer is how calibration learns whether auto-merge can be trusted in this repo.
 
-Rules: you can't review a Change you authored, and an approval binds to the head you reviewed. If the agent pushes again, the tour shows as stale and you review the new head.
+Rules: you can't review a Change you authored, and an approval binds to the head you reviewed. If the agent pushes again, the walkthrough shows as stale and you review the new head.
 
 ## Over HTTP
 
@@ -63,4 +63,4 @@ curl -s https://<host>/api/v1/changes/7h2kd9x0qw3m5z8r1vtc/review \
 
 `decision` is `approve`, `request-changes` or `reject`. Expected: `200` with the updated `change`. Errors: `403 self-approval` for your own Change, `403 forbidden` for an agent, `409 stale-head` when the head moved.
 
-Related: [Tours](/docs/concepts/tours), [Lanes](/docs/concepts/lanes).
+Related: [Walkthroughs](/docs/concepts/tours), [Lanes](/docs/concepts/lanes).

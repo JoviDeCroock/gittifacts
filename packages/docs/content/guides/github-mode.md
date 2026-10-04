@@ -1,7 +1,7 @@
 ---
 title: Grade pull requests on GitHub
 nav: Grade pull requests
-description: After the App is installed - say what a pull request is for, link a Plan, review from GitHub or gittifacts, and read the verdict from an agent. Shadow mode, one check run.
+description: After the App is installed - say what a pull request is for, link a Plan, review from GitHub or gittifacts, and read the verdict from an agent. Report-only, one check run.
 order: 61
 audience: humans
 group: GitHub
@@ -13,7 +13,7 @@ group: GitHub
 
 GitHub mode keeps your code on GitHub. The gittifacts App reads each pull request, runs the same evidence as native mode on a disposable mirror, and posts **one** check run, `gittifacts/lane`, on the pull request's head commit. The check run shows the lane as soon as it is computed, while the walkthrough is still being written.
 
-Once someone links the installation, a pull request that needs a human also gets **one summary comment**, edited in place: the lane and why, what a person does, and a link to the walkthrough, with the details folded. The few stops worth a look on the diff (at most three: risks, untested or unproven lines) come as **one review**. Shadow mode never approves, blocks or merges.
+Once someone links the installation, a pull request that needs a human also gets **one summary comment**, edited in place: the lane and why, what a person does, and a link to the walkthrough, with the details folded. The few stops worth a look on the diff (at most three: risks, untested or unproven lines) come as **one review**. Report-only mode never approves, blocks or merges.
 
 Not installed yet? [Connect GitHub](/docs/get-started/github) takes three steps. Operators register the App once: [Register the GitHub App](/docs/guides/register-github-app).
 
@@ -25,11 +25,11 @@ Not installed yet? [Connect GitHub](/docs/get-started/github) takes three steps.
 | A line `gittifacts-plan: <plan id>` in the description | Links a Plan approved on gittifacts, or a plan file `.platform/plans/<id>.md` on the default branch (approve it on gittifacts) |
 | `Closes #12`, where issue #12 has the label `gittifacts:plan` | The issue is the Plan. The label counts as approval only from someone with write access who wrote neither the issue nor the pull request |
 
-Without an approved Plan there is no Lane 0. Changing the labels, the title, the description or the issue's label grades the same head again.
+Without an approved Plan there is no auto-merge. Changing the labels, the title, the description or the issue's label grades the same head again.
 
 ## 2. Review
 
-Approve the tour on gittifacts, approve the pull request on GitHub, or press **Approve change** on the check run: it is the same approval. It counts from a human with write access who isn't the author, for the current head. **Request full review** on the check run shows on the summary. GitHub still merges.
+Approve the walkthrough on gittifacts, approve the pull request on GitHub, or press **Approve change** on the check run: it is the same approval. It counts from a human with write access who isn't the author, for the current head. **Request full review** on the check run shows on the summary. GitHub still merges.
 
 Repo owners can turn the review and summary comment off for one repository on `/settings/github`; the check run stays.
 
@@ -52,7 +52,7 @@ Expected: the Change that grades the pull request, with its lane and reasons. Th
 |---|---|
 | Metadata, contents, issues: read | Read the code (fork pull requests too, through `pull/<n>/head`) and linked issues |
 | Checks: write | Post `gittifacts/lane` |
-| Pull requests: read and write | The tour as one review and one summary comment, once the installation is linked (repo owners can turn them off) |
+| Pull requests: read and write | The walkthrough as one review and one summary comment, once the installation is linked (repo owners can turn them off) |
 | Merge queues, deployments, commit statuses: read | `merge_group`, deployment signals and other CI results as extra evidence |
 
 Never requested: administration, workflows, commit statuses (write). Installation tokens are minted per job for one repository and are never given to the sandbox that runs pull request code.
@@ -65,5 +65,5 @@ Never requested: administration, workflows, commit statuses (write). Installatio
 
 ## Next
 
-- How lanes are chosen and how Lane 0 is earned: [Lanes](/docs/concepts/lanes).
-- Plans, and why there's no Lane 0 without one: [Plans](/docs/concepts/plans).
+- How lanes are chosen and how auto-merge is earned: [Lanes](/docs/concepts/lanes).
+- Plans, and why there's no auto-merge without one: [Plans](/docs/concepts/plans).

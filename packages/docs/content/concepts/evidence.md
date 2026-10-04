@@ -1,6 +1,6 @@
 ---
 title: Evidence
-description: Signed, machine-checked facts about a Change's head commit. The classifier routes on them and tours cite them.
+description: Signed, machine-checked facts about a Change's head commit. The classifier routes on them and walkthroughs cite them.
 order: 3
 audience: both
 ---
@@ -41,7 +41,7 @@ The whole suite runs (`mode: "all"`) whenever the impact is unknown: a changed c
 
 A test that fails at head is compared with the base commit:
 
-- **Pre-existing:** it fails on base too, in two runs, with the same failure message. Listed in the item's `preExisting`, shown apart in evidence and the tour, and not counted against the Change (`tests.preexisting`, Lane 0).
+- **Pre-existing:** it fails on base too, in two runs, with the same failure message. Listed in the item's `preExisting`, shown apart in evidence and the walkthrough, and not counted against the Change (`tests.preexisting`, Lane 0).
 - **Counted:** it passes on base, fails differently there, failed only once there, or is new.
 - **No baseline:** when base can't be measured (it installs other dependencies, or the run failed), `baseline.status` is `unavailable` and every failure counts.
 
@@ -51,7 +51,7 @@ Base results are cached per Change and base commit, so a re-push doesn't measure
 
 ## Unknown is never green
 
-Every item has a `status`: `ok` (measured), `skipped` (not applicable) or `error` (tried and failed). A skipped or errored signal raises the lane; it never counts as a pass. A broken check can't become the cheapest route to Lane 0.
+Every item has a `status`: `ok` (measured), `skipped` (not applicable) or `error` (tried and failed). A skipped or errored measurement raises the lane; it never counts as a pass. A broken check can't become the cheapest route to Lane 0.
 
 ## Signed, and stored twice
 

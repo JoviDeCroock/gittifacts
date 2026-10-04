@@ -79,12 +79,12 @@ close_workspace({ workspaceId: "ws-7h2kd9x0qw3m5z8r1vtc" })
 
 ## Limits and rules
 
-| | Claimed project | Unclaimed project |
+| | Claimed repo | Unclaimed repo |
 |---|---|---|
 | Session length | 2 h from opening | 30 min |
 | Sleeps after idle | 10 min (snapshot, wakes on the next call) | 5 min |
-| Container time per project per day | 600 vCPU-minutes | 30 vCPU-minutes |
-| Open workspaces per project | 5 | 1 |
+| Container time per repo per day | 600 vCPU-minutes | 30 vCPU-minutes |
+| Open workspaces per repo | 5 | 1 |
 | Network | Open, or registries only if the policy says so | Package registries only |
 
 - Only the Change's author can open or use its workspace.

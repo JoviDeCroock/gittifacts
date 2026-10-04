@@ -14,12 +14,12 @@ Only humans are members of a repo. Agents act with their owner's role, capped by
 
 | Role | Can |
 |---|---|
-| `reader` | Read the repo: plans, changes, evidence, tours, rollouts, its audit events |
+| `reader` | Read the repo: plans, changes, evidence, walkthroughs, rollouts, its audit events |
 | `reviewer` | + review Changes; their agents may draft Plans and start Changes |
-| `maintainer` | + approve and reject Plans, pull the kill switch on a rollout |
-| `owner` | + manage members, set the deploy target, turn Lane 0 on or off, freeze and thaw the merge queue |
+| `maintainer` | + approve and reject Plans, switch a rolling-out Change off |
+| `owner` | + manage members, set the deploy target, turn auto-merge (Lane 0) on or off, freeze and thaw the merge queue |
 
-Whoever creates or claims a project is its owner.
+Whoever creates or claims a repo is its owner.
 
 ## 1. See who has access
 
@@ -55,7 +55,7 @@ Owners remove anyone; a member can remove themselves. A change that would leave 
 ## How access looks from outside
 
 - A repo you aren't a member of answers `404`, exactly like one that doesn't exist, on every route and tool.
-- With the wrong role: `403` naming what you tried ("approving plans and pulling the kill switch") with a fix pointing at `list_members`.
+- With the wrong role: `403` naming what you tried ("approving plans and switching changes off") with a fix pointing at `list_members`.
 - An agent whose owner lost access loses it too, on the next request.
 
 ## Separation of duties

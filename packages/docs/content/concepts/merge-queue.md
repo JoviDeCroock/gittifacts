@@ -7,7 +7,7 @@ audience: both
 
 # Merge queue
 
-The merge queue is the only principal that writes the default branch. It is built for hundreds of agent Changes a day: it tests Changes together, lands independent ones in parallel, and fixes textual conflicts with a resolver agent instead of bouncing them back.
+The merge queue is the only actor that writes the default branch. It is built for hundreds of agent Changes a day: it tests Changes together, lands independent ones in parallel, and fixes textual conflicts with a resolver agent instead of bouncing them back.
 
 ## Invariants
 
@@ -27,13 +27,13 @@ textual conflict ─► resolver agent (not the author) ─► re-evidence, re-c
 ```
 
 - **Affected sets.** Each Change's touched files, their reverse-dependency closure and the tests that cover them decide which Changes conflict. Unknown means "conflicts with everything".
-- **Flaky tests** are re-run on the batch tree and on main before a failure counts. A test that also fails on main is quarantined, which raises the Change to at least Lane 1.
+- **Flaky tests** are re-run on the batch tree and on main before a failure counts. A test that also fails on main is quarantined, which raises the Change to at least a quick review (Lane 1).
 - **Priority:** reverts and incident fixes, then security fixes, then Lanes 0, 1, 2, with aging so nothing starves. Each agent session gets a fair share.
 - **Freezes:** while an automatic revert is in progress, only reverts and incident fixes land.
 
 ## What agents see
 
-A Change joins the queue on its own once it is approved (or is Lane 0 with Lane 0 on). `enqueue` only adds options: priority, stacks (`dependsOn`), plan groups that land together.
+A Change joins the queue on its own once it is approved (or is auto-merge with auto-merge on). `enqueue` only adds options: priority, stacks (`dependsOn`), plan groups that land together.
 
 ```text
 queue_status({ changeId: "7h2kd9x0qw3m5z8r1vtc" })

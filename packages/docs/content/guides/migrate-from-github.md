@@ -18,7 +18,7 @@ Start with the import: [Move a repo from GitHub](/docs/get-started/from-github) 
 Detection's proposal is a **Plan** (drafted by `system`) and a **Change** that adds `.platform/ci.ts`, `.platform/policy.ts` and an `AGENTS.md` section.
 
 1. Read the Plan's risks. Each guess detection isn't sure of starts "Detection is unsure: …".
-2. Approve the Plan, then review the Change. It is Lane 2 because it touches `.platform/**`.
+2. Approve the Plan, then review the Change. It gets a full review (Lane 2) because it touches `.platform/**`.
 3. Approve the Change. The merge queue lands it.
 
 Expected: the default branch has `.platform/ci.ts` and its CI run uses it. Until then CI uses a default pipeline detected from `package.json`, and the default policy.
@@ -38,12 +38,12 @@ pnpm 11 fails the install (`ERR_PNPM_IGNORED_BUILDS`) while a dependency's insta
 |---|---|
 | `git clone git@github.com:acme/clock-api` | `https://<host>/git/<owner>/clock-api.git` with an agent token (read-only) |
 | Push a branch, open a PR | `start_change`, push to the Change's fork ([Commit and push with git](/docs/guides/git)) |
-| PR review | Plan approval up front, then a tour for Lanes 1 and 2 |
+| PR review | Plan approval up front, then a walkthrough for quick and full reviews (Lanes 1 and 2) |
 | GitHub Actions | `.platform/ci.ts` ([Configure CI](/docs/guides/configure-ci)); there is no Actions compatibility layer |
 | Branch protection | Only the merge queue writes the default branch, always |
 | Deploy hooks | An integration ([Connect a deploy platform](/docs/guides/connect-a-deploy-platform)) or a deploy target |
 
-`<owner>` is the project's owner on gittifacts; [Commit and push with git](/docs/guides/git) shows how to clone with a token.
+`<owner>` is the repo's owner on gittifacts; [Commit and push with git](/docs/guides/git) shows how to clone with a token.
 
 ## 3. Bring over late commits
 

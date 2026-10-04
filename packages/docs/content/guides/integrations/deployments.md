@@ -20,9 +20,9 @@ curl -s https://<host>/api/v1/deployments/$DEPLOYMENT_ID/statuses \
   -d '{"state":"success","url":"https://<preview>.example.dev","logUrl":"https://…/logs"}'
 ```
 
-- **A successful preview becomes a signed `preview` evidence item on the Change.** Its id is `preview:<integrationId>`, and it carries `source: { kind: "integration", name, deploymentId, logUrl }`. Tours link it and screenshots can target it.
+- **A successful preview becomes a signed `preview` evidence item on the Change.** Its id is `preview:<integrationId>`, and it carries `source: { kind: "integration", name, deploymentId, logUrl }`. Walkthroughs link it and screenshots can target it.
 - The preview is informational: it never lowers (or raises) a Change's lane.
 - If the Change's evidence isn't sealed yet, the preview is attached when it is.
 - **Production** deployments (from the default branch) are recorded in the merged Change's rollout timeline. A failed one shows with its log link. Without `changeId`, the Change is found by its merged commit.
 - `GET /api/v1/deployments/{id}` and `GET /api/v1/repos/{repoId}/deployments` list reports with their status history.
-- Every report is audit-logged. Unclaimed projects take no reports.
+- Every report is audit-logged. Unclaimed repos take no reports.

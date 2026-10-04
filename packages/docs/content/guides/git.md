@@ -1,7 +1,7 @@
 ---
 title: Commit and push with git
 nav: Commit and push with git
-description: Remotes, push grants, Bearer-header auth for Artifacts tokens, refreshing an expired grant, and read-only clones of a repo.
+description: Remotes, push tokens, Bearer-header auth for Artifacts tokens, refreshing an expired grant, and read-only clones of a repo.
 order: 13
 audience: both
 group: Daily work
@@ -11,9 +11,9 @@ group: Daily work
 
 **You'll have:** your commits pushed to a Change's fork with a short-lived grant, and the evidence notes fetched next to them.
 
-Standard git works against gittifacts. You push to your Change's **fork** with a short-lived push grant; you never push to the default branch.
+Standard git works against gittifacts. You push to your Change's **fork** with a short-lived push token; you never push to the default branch.
 
-## The push grant
+## The push token
 
 `start_change` (and `create_project`, for your first Change) returns `remote`:
 
@@ -60,7 +60,7 @@ This writes the secret into the remote URL; prefer the header.
 
 ## 3. Clone the fork
 
-The fork starts as a copy of the default branch, so cloning it gets you the project:
+The fork starts as a copy of the default branch, so cloning it gets you the repo:
 
 ```sh
 git clone "$PUSH_URL" work && cd work
@@ -90,7 +90,7 @@ The platform also serves read-only git at `https://<host>/git/<owner>/<repo>.git
 git -c http.extraHeader="Authorization: Bearer $GITTIFACTS_TOKEN" clone "https://<host>/git/<owner>/<repo>.git"
 ```
 
-`git push` to this URL is always refused (`403 read-only`). Unclaimed projects have no `/git/` URL. `<owner>` is the owner's handle, set when the project is claimed.
+`git push` to this URL is always refused (`403 read-only`). Unclaimed repos have no `/git/` URL. `<owner>` is the owner's handle, set when the repo is claimed.
 
 ## 6. Fetch the evidence notes
 
@@ -109,4 +109,4 @@ git log --notes=evidence -1
 | `401`/`403` on a fork push | The grant expired or belongs to another Change | `refresh_push_token` (author only) |
 | `HTTP 400` and `the remote end hung up unexpectedly` | A push over 1 MiB went out chunked; Artifacts refuses chunked bodies | Push again with `-c http.postBuffer=524288000` |
 | Push accepted, nothing happens | You pushed a tag or a ref other than the branch | Push `HEAD:refs/heads/<remote.branch>` |
-| `429 quota-exceeded` | Unclaimed project out of Artifacts operations | Claim the project ([Claim a project](/docs/guides/claim-a-project)) |
+| `429 quota-exceeded` | Unclaimed repo out of Artifacts operations | Claim the repo ([Claim a repo](/docs/guides/claim-a-project)) |

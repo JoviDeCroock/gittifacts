@@ -10,7 +10,7 @@ group: Daily work
 
 **You'll have:** the preview URL of a Change's head, the routes you want screenshotted, and what to do when a preview fails.
 
-Every Change gets a preview of its head: the project running in a container, behind the platform's preview gateway. Its screenshots become evidence, so a reviewer sees the UI without checking anything out.
+Every Change gets a preview of its head: the repo running in a container, behind the platform's preview gateway. Its screenshots become evidence, so a reviewer sees the UI without checking anything out.
 
 ## 1. Find the URL
 
@@ -19,7 +19,7 @@ Every Change gets a preview of its head: the project running in a container, beh
 | `https://p-<changeId>-pv.resynapse.dev` | The Change's latest head |
 | `https://p-<changeId>-<sha8>-pv.resynapse.dev` | One pinned head (first 8 characters of the commit) |
 
-`create_project` returns the bootstrap preview as `previewUrl`; `get_change_status` returns it for any Change. Expected: "Building…" until CI is green, then the app.
+`create_project` returns the first Change preview as `previewUrl`; `get_change_status` returns it for any Change. Expected: "Building…" until CI is green, then the app.
 
 ## 2. Know what serves it
 
@@ -27,7 +27,7 @@ The preview starts from the CI **build** step's snapshot, so it serves exactly w
 
 - **A Worker** (a `wrangler.jsonc`, `wrangler.json` or `wrangler.toml`): `wrangler dev`, local mode, against the build output when it is one module.
 - **A static site** (no wrangler config): the first of `dist/`, `build/`, `out/`, `public/`, `_site/`, `site/` with an `index.html`, served as static assets.
-- **No preview:** libraries (`ts-library`) and projects without a build step.
+- **No preview:** libraries (`ts-library`) and repos without a build step.
 
 Previews have no internet access and no secrets. They sleep after 10 idle minutes and wake on the next request ("Starting preview…" for pages, `503` with `Retry-After` for other requests).
 
@@ -45,14 +45,14 @@ Declare routes in the Plan when the Change touches specific pages:
 create_plan({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Redesign settings", intent: "Settings is hard to scan on phones; group it into sections.", acceptanceCriteria: ["Settings shows three sections on a 390px screen"], scopePaths: ["src/**"], affectedRoutes: ["/settings"] })
 ```
 
-The screenshots are `screenshots:<route>` evidence items; the tour links them. **Coming soon:** before/after pairs (today the platform captures the head only).
+The screenshots are `screenshots:<route>` evidence items; the walkthrough links them. **Coming soon:** before/after pairs (today the platform captures the head only).
 
 ## 4. Know the gateway's rules
 
-- Every HTML page gets a banner naming the Change; unclaimed projects' previews say "Unclaimed project — not verified".
+- Every HTML page gets a banner naming the Change; unclaimed repos' previews say "Unclaimed repo — not verified".
 - Responses carry `X-Robots-Tag: noindex` and can't be framed.
 - `/cdn-cgi/*` is blocked, and cookies scoped to another domain are dropped.
-- Only the 3 newest previews of an unclaimed project stay live.
+- Only the 3 newest previews of an unclaimed repo stay live.
 
 ## When a preview fails
 

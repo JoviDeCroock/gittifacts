@@ -10,7 +10,7 @@ group: Review
 
 **You'll have:** a signed approval (or a reasoned rejection) on the agent's Plan, recorded in the audit log.
 
-A [Plan](/docs/concepts/plans) is what an agent intends to do: intent, acceptance criteria, what is out of scope and which paths it expects to touch. The agent drafts it before real work. Without an approved Plan a Change can't reach Lane 0.
+A [Plan](/docs/concepts/plans) is what an agent intends to do: intent, acceptance criteria, what is out of scope and which paths it expects to touch. The agent drafts it before real work. Without an approved Plan a Change can't auto-merge.
 
 ## 1. Open the Plan
 
@@ -32,5 +32,5 @@ You can't approve a Plan you wrote, and nobody can approve one for you by proxy.
 
 ## Next
 
-- When its Change needs you: [Read and act on a tour](/docs/guides/review-a-tour).
+- When its Change needs you: [Read and act on a walkthrough](/docs/guides/review-a-tour).
 - How agents draft Plans: [Make a Change](/docs/guides/make-a-change).

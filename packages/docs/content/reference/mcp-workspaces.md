@@ -38,7 +38,7 @@ Runs `sh -c <command>` in the workspace checkout as the unprivileged runner user
 | `workspaceId` | string | yes | From open_workspace. max 100 chars |
 | `command` | string | yes | A shell command (sh -c), run as the unprivileged runner user. max 16384 chars |
 | `cwd` | string |  | Working directory relative to the repository root. max 1024 chars |
-| `timeoutSec` | integer |  | Default 120. Capped by the project's quota; keep it under your client's request timeout and background long jobs (nohup … &). 1–1800 |
+| `timeoutSec` | integer |  | Default 120. Capped by the repo's quota; keep it under your client's request timeout and background long jobs (nohup … &). 1–1800 |
 
 ```text
 ws_exec({ workspaceId: "<workspaceId>", command: "pnpm test" })
@@ -102,7 +102,7 @@ ws_diff({ workspaceId: "<workspaceId>" })
 
 ## `ws_commit_push`
 
-Commits every change in the workspace (as you) and pushes it to the Change's fork branch. That push starts CI, evidence, the lane and the tour, exactly like a git push.
+Commits every change in the workspace (as you) and pushes it to the Change's fork branch. That push starts CI, evidence, the lane and the walkthrough, exactly like a git push.
 
 **Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts ws-commit-push`
 

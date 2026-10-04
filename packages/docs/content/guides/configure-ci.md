@@ -53,7 +53,7 @@ install.runner({
 });
 ```
 
-Install-like root steps (`pnpm install`, `npm ci`) share their snapshot across repos with byte-identical inputs (`cacheScope: "global"`): that is why template projects install in seconds. Set `cacheScope: "repo"` to keep a snapshot to your repo.
+Install-like root steps (`pnpm install`, `npm ci`) share their snapshot across repos with byte-identical inputs (`cacheScope: "global"`): that is why template repos install in seconds. Set `cacheScope: "repo"` to keep a snapshot to your repo.
 
 ## 3. Keep build output (artifacts)
 
@@ -80,7 +80,7 @@ install.runner({
 });
 ```
 
-Steps never get secrets or platform tokens; `env` keys starting with `GITTIFACTS_`, `GIT_CONFIG_` or `ARTIFACTS_` are refused. Unclaimed projects reach package registries only and are capped at `standard-2`.
+Steps never get secrets or platform tokens; `env` keys starting with `GITTIFACTS_`, `GIT_CONFIG_` or `ARTIFACTS_` are refused. Unclaimed repos reach package registries only and are capped at `standard-2`.
 
 ## 5. Run only affected tests in the merge queue
 
@@ -94,7 +94,7 @@ Evidence steps choose their own tests: `test-run`, `red-green` and `coverage` ru
 
 ## 6. Ship the edit
 
-`.platform/**` is a sensitive path: the Change is Lane 2 and needs a human's approval. The pipeline is read from the Change's **base** commit, so your edit applies to Changes that start after it merges, not to the Change that makes it.
+`.platform/**` is a sensitive path: the Change gets a full review (Lane 2) and needs a human's approval. The pipeline is read from the Change's **base** commit, so your edit applies to Changes that start after it merges, not to the Change that makes it.
 
 ```text
 start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "CI: add e2e step", category: "chore" })
@@ -107,7 +107,7 @@ start_change({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "CI: add e2e step", catego
 | A warning or failure naming `.platform/ci.ts` | The file threw or exported no function in plan mode; the platform falls back to the default pipeline or fails the run with the message verbatim |
 | A step name is refused | Names are letters, digits, `.`, `_`, `-`; `prepare`, `plan` and `finalize` are reserved |
 | `install` fails with a lockfile error | Commit the lockfile that matches `package.json` |
-| A step named `unclaimed-limits` failed | An unclaimed project ran out of CI minutes: claim it |
+| A step named `unclaimed-limits` failed | An unclaimed repo ran out of CI minutes: claim it |
 
 Long steps are durable: each runs as a job on its runner, and the run checks on it with short calls. A dropped connection is retried, and a step attempt that dies re-attaches to the job that is still running instead of starting it again.
 

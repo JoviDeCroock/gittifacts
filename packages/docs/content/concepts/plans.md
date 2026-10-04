@@ -17,7 +17,7 @@ A **Plan** says what a change is for and how a reviewer will know it worked. An 
 | `acceptanceCriteria[]` | Observable results a reviewer can check ("GET /time returns ISO 8601"). |
 | `outOfScope[]` | What the change must not do. |
 | `riskDeclarations[]` | Known risks, `{ area, description }`. |
-| `scopePaths[]` | Globs of the paths the change will touch. A Change outside them raises its lane (scope drift); leaving them out blocks Lane 0. |
+| `scopePaths[]` | Globs of the paths the change will touch. A Change outside them raises its lane (scope drift); leaving them out rules out auto-merge. |
 | `affectedRoutes[]` | Routes to screenshot on the preview. |
 | `supersedes` | The Plan this one replaces. |
 
@@ -30,7 +30,7 @@ draft ──approve (human, not the author)──► approved ──► supersed
 
 - Approval is signed by the platform on the human's behalf and recorded in the audit log.
 - A Change that names an approved Plan (`planId`) is checked against it.
-- A Change without a Plan can reach Lane 1 or 2, never Lane 0, unless the repo's policy allows a planless category (`dependency-patch`, `pure-revert`, `verified-transform`).
+- A Change without a Plan can get a quick or full review, never auto-merge, unless the repo's policy allows a planless category (`dependency-patch`, `pure-revert`, `verified-transform`).
 
 ## Draft one
 

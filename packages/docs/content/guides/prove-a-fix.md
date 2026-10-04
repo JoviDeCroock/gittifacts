@@ -11,11 +11,11 @@ group: Daily work
 
 **You'll have:** a fix with a signed red/green proof: a test that fails on the base commit and passes on the head.
 
-A Change with `category: "fix"` must show a test that is **red on the base commit and green on the head**. Without that proof it can't reach Lane 0, and a missing proof on a claimed fix is Lane 2.
+A Change with `category: "fix"` must show a test that is **red on the base commit and green on the head**. Without that proof it can't auto-merge, and a missing proof on a claimed fix is Lane 2.
 
 ## 1. Reproduce the bug as a test first
 
-Write the test against the current code and watch it fail. In a `workers-api` project:
+Write the test against the current code and watch it fail. In a `workers-api` repo:
 
 ```ts
 // test/clock.test.ts
@@ -57,9 +57,9 @@ Expected: an item with `kind: "red-green"` and `verdict: "proven"`. Its `base.re
 
 | Verdict | Meaning | Lane effect |
 |---|---|---|
-| `proven` | At least one listed test is red on base, and every one is green on head | Lane 0 stays possible |
-| `not-proven` | Tests are listed but the fail-then-pass pattern doesn't hold | Lane 2 for a claimed fix |
-| `no-tests` | No new or changed test, and no test fails on base | Lane 2 for a claimed fix |
+| `proven` | At least one listed test is red on base, and every one is green on head | Auto-merge stays possible |
+| `not-proven` | Tests are listed but the fail-then-pass pattern doesn't hold | Full review (Lane 2) for a claimed fix |
+| `no-tests` | No new or changed test, and no test fails on base | Full review (Lane 2) for a claimed fix |
 
 ## What counts as a proving test
 

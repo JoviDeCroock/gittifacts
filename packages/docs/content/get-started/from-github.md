@@ -25,7 +25,7 @@ Expected, after about 30 seconds: `projectId`, `bootstrapChangeId` and `clonedTo
 
 `--from` takes public `https://` URLs only. A private repo comes in by push: [Import a private repo](/docs/guides/import-a-private-repo).
 
-Agents call the same thing over MCP: `create_project({ from: "https://github.com/acme/clock-api", name: "clock-api" })`. The import copies the repo and its history into an Artifacts repo in the EU jurisdiction. Without an account the project is unclaimed: it's deleted after 7 days unless a human opens `claimUrl` ([Unclaimed projects](/docs/concepts/unclaimed-projects)).
+Agents call the same thing over MCP: `create_project({ from: "https://github.com/acme/clock-api", name: "clock-api" })`. The import copies the repo and its history into an Artifacts repo in the EU jurisdiction. Without an account the repo is unclaimed: it's deleted after 7 days unless a human opens `claimUrl` ([Unclaimed repos](/docs/concepts/unclaimed-projects)).
 
 </details>
 

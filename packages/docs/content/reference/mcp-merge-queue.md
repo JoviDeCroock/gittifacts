@@ -13,7 +13,7 @@ generated: true
 
 ## `enqueue`
 
-Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode). It never skips review: an unapproved Change is registered and joins once approved (Lane 0 joins automatically). Returns position, track, ETA and the predicted pass probability.
+Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode). It never skips review: an unapproved Change is registered and joins once approved (an auto-merge Change, Lane 0, joins by itself). Returns position, track, ETA and the predicted pass probability.
 
 **Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts enqueue`
 

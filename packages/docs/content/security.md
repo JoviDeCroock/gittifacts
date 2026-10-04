@@ -12,13 +12,13 @@ The product rule is also the security model: humans approve intent, machines pro
 ## What agents can never do
 
 - **Approve.** Agents can't hold `plan:approve`, `change:review`, `repo:admin` or `policy:admin`, whatever their owner's role. Asking for them fails at every door (consent, device flow, token creation, refresh).
-- **Write the default branch.** Agent push grants are Artifacts tokens for one Change's fork, valid for at most an hour. Only the merge queue writes the default branch; its write tokens live inside it for at most 5 minutes and are never returned.
-- **Relax their own rules.** Policy is read from the Change's base commit. A Change touching `.platform/**` is always Lane 2 and needs a human's approval.
-- **Lower a lane.** Missing or errored signals raise the lane. LLM judgments, external checks and conflict resolutions may only raise it.
+- **Write the default branch.** Agent push tokens are Artifacts tokens for one Change's fork, valid for at most an hour. Only the merge queue writes the default branch; its write tokens live inside it for at most 5 minutes and are never returned.
+- **Relax their own rules.** Policy is read from the Change's base commit. A Change touching `.platform/**` always gets a full review (Lane 2) and needs a human's approval.
+- **Lower a lane.** Missing or errored measurements raise the lane. LLM judgments, external checks and conflict resolutions may only raise it.
 - **See secrets.** CI steps, previews and workspaces get no platform secrets and no production bindings. Workspace commands never see a git token.
-- **Reach production from an unclaimed project.** No deploy target, no secrets, no Lane 0, no integrations; previews only.
+- **Reach production from an unclaimed repo.** No deploy target, no secrets, no auto-merge, no integrations; previews only.
 
-Integrations are held tighter still: read code, receive events, report deployments. They can never push (`git-receive-pack` is refused), approve, see push tokens or connect to unclaimed projects.
+Integrations are held tighter still: read code, receive events, report deployments. They can never push (`git-receive-pack` is refused), approve, see push tokens or connect to unclaimed repos.
 
 ## Separation of duties
 
@@ -26,9 +26,9 @@ Integrations are held tighter still: read code, receive events, report deploymen
 |---|---|---|
 | Approve a Plan | A human maintainer or owner | Its author; any agent |
 | Review a Change | A human reviewer or above | Its author; any agent |
-| Write the tour | A reviewer agent with its own context | The authoring agent; it never sees the author's summary |
+| Write the walkthrough | A reviewer agent with its own context | The authoring agent; it never sees the author's summary |
 | Resolve a merge conflict | The resolver (`system:resolver`) | The Change's author; its resolution is re-classified and may need a fresh approval |
-| Turn on Lane 0 | A human owner, after measured agreement | Anyone before the threshold |
+| Turn on auto-merge | A human owner, after measured agreement | Anyone before the threshold |
 
 An agent's owner may review that agent's Change; the audit log records it.
 
@@ -58,10 +58,10 @@ Every transition (plan approved, push received, lane assigned, review, merge, ro
 - Repos live in the Artifacts namespace `gittifacts-eu` (EU jurisdiction). Metadata (D1) and logs, artifacts and screenshots (R2) are in the EU too.
 - **Coming soon:** choosing another jurisdiction per organization.
 
-## Project Workers
+## Repo Workers
 
-- Project Workers run in the platform's account as `gf-<projectId>-<script>`; a bundle may declare plain variables only, never a resource binding.
-- Each project's Workers bind `FLAGS` to the project's own Flagship app, so no project can read another project's flags. Deleting a project deletes its Worker and its app.
+- Repo Workers run in the platform's account as `gf-<projectId>-<script>`; a bundle may declare plain variables only, never a resource binding.
+- Each repo's Workers bind `FLAGS` to the repo's own Flagship app, so no repo can read another repo's flags. Deleting a repo deletes its Worker and its app.
 
 ## Previews and webhooks
 
@@ -70,6 +70,6 @@ Every transition (plan approved, push received, lane assigned, review, merge, ro
 
 ## Abuse limits
 
-Credential-less creation (when on) is rate-limited per IP, per network and platform-wide, behind a kill switch that fails closed. Unclaimed projects have CI, storage and Artifacts quotas and registries-only egress. Every number: [Limits and quotas](/docs/reference/limits).
+Credential-less creation (when on) is rate-limited per IP, per network and platform-wide, behind a kill switch that fails closed. Unclaimed repos have CI, storage and Artifacts quotas and registries-only egress. Every number: [Limits and quotas](/docs/reference/limits).
 
 Found a problem? Open an issue on the gittifacts repository, or tell the team directly for anything sensitive.

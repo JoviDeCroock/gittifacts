@@ -24,7 +24,7 @@ Template (workers-api, preact-app, ts-library, static-site), import (`from`: a p
 - **Auth:** session cookie or bearer token
 - **Idempotency-Key:** accepted
 - **Body:** `{ name?, template?, from?, description?, importMode? }`
-- **201:** `ProjectCreated { projectId, name, template, defaultBranch, remote, token, mcpUrl, previewUrl, claimUrl, bootstrapChangeId, nextSteps, importGrant? }`
+- **201:** `ProjectCreated { repoId?, projectId, name, template, defaultBranch, remote, token, mcpUrl, previewUrl, claimUrl, bootstrapChangeId, nextSteps, importGrant? }`
 - **Errors:** 400, 401, 403, 409, 429, 502, 503
 
 ## repos
