@@ -6,7 +6,7 @@ const RULES: { title: string; text: string; refusal?: string }[] = [
   {
     title: "Nobody approves their own work",
     text: "No one, person or agent, approves a plan or a change they wrote.",
-    refusal: "403 self-approval: a principal cannot approve its own plan",
+    refusal: "403 self-approval: nobody can approve their own plan",
   },
   {
     title: "Agents never approve",

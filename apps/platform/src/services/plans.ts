@@ -204,7 +204,7 @@ export async function approvePlan(
   // approves anything in an unclaimed project until it is claimed.
   const plan = await assertPlanAccess(svc, caller.principal, planId, "approve");
   if (plan.authorId === caller.principal.id) {
-    throw new ApiError(403, "self-approval", "a principal cannot approve its own plan", undefined, {
+    throw new ApiError(403, "self-approval", "nobody can approve their own plan", undefined, {
       explanation: `You wrote plan ${plan.id}, so someone else must approve it. Ask another human with plan:approve to review it.`,
     });
   }
