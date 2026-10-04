@@ -22,7 +22,12 @@ export interface QaReasonInput {
   evidenceRef: string;
 }
 
-const QA_CODES: ReadonlySet<string> = new Set(["qa.passed", "qa.failed", "qa.couldnt-test", "signal.error.qa"]);
+const QA_CODES: ReadonlySet<string> = new Set([
+  "qa.passed",
+  "qa.failed",
+  "qa.couldnt-test",
+  "signal.error.qa",
+]);
 const SHADOW = "shadow.lane0-disabled";
 
 function short(text: string, max = 80): string {
@@ -36,17 +41,38 @@ export function qaReasonInputs(items: readonly QaRun[]): QaReasonInput[] {
   for (const q of items) {
     if (q.status === "skipped") continue;
     if (q.status === "error") {
-      out.push({ code: "signal.error.qa", params: { detail: q.note ? `: ${short(q.note, 280)}` : "" }, evidenceRef: q.id });
+      out.push({
+        code: "signal.error.qa",
+        params: { detail: q.note ? `: ${short(q.note, 280)}` : "" },
+        evidenceRef: q.id,
+      });
       continue;
     }
     const failed = q.criteria.filter((c) => c.verdict === "fail");
     const unsure = q.criteria.filter((c) => c.verdict === "couldnt-test");
-    const list = (cs: typeof failed) => formatList(cs.map((c) => `"${short(c.text)}"`), 3);
-    if (failed.length > 0) out.push({ code: "qa.failed", params: { count: failed.length, criteria: list(failed) }, evidenceRef: q.id });
+    const list = (cs: typeof failed) =>
+      formatList(
+        cs.map((c) => `"${short(c.text)}"`),
+        3,
+      );
+    if (failed.length > 0)
+      out.push({
+        code: "qa.failed",
+        params: { count: failed.length, criteria: list(failed) },
+        evidenceRef: q.id,
+      });
     if (q.criteria.length === 0) {
-      out.push({ code: "qa.couldnt-test", params: { count: 0, criteria: "the run had no criteria to test" }, evidenceRef: q.id });
+      out.push({
+        code: "qa.couldnt-test",
+        params: { count: 0, criteria: "the run had no criteria to test" },
+        evidenceRef: q.id,
+      });
     } else if (unsure.length > 0) {
-      out.push({ code: "qa.couldnt-test", params: { count: unsure.length, criteria: list(unsure) }, evidenceRef: q.id });
+      out.push({
+        code: "qa.couldnt-test",
+        params: { count: unsure.length, criteria: list(unsure) },
+        evidenceRef: q.id,
+      });
     }
     if (failed.length === 0 && unsure.length === 0 && q.criteria.length > 0) {
       out.push({ code: "qa.passed", params: { count: q.criteria.length }, evidenceRef: q.id });
@@ -56,7 +82,12 @@ export function qaReasonInputs(items: readonly QaRun[]): QaReasonInput[] {
 }
 
 function toReason(r: QaReasonInput): LaneReason {
-  return { code: r.code, lane: REASON_CODES[r.code].lane, message: formatReason(r.code, r.params), evidenceRef: r.evidenceRef };
+  return {
+    code: r.code,
+    lane: REASON_CODES[r.code].lane,
+    message: formatReason(r.code, r.params),
+    evidenceRef: r.evidenceRef,
+  };
 }
 
 function compareReasons(a: LaneReason, b: LaneReason): number {
@@ -71,7 +102,11 @@ function qaEntry(reasons: readonly LaneReason[]): ChecklistEntry {
     return { gate: "qa", passed: true, detail: detail || "QA was not requested (optional)." };
   }
   const fail = raised.some((r) => REASON_CODES[r.code as ReasonCode]?.outcome === "fail");
-  return { gate: "qa", passed: fail ? false : null, detail: raised.map((r) => r.message).join(" ") };
+  return {
+    gate: "qa",
+    passed: fail ? false : null,
+    detail: raised.map((r) => r.message).join(" "),
+  };
 }
 
 /**
@@ -86,13 +121,24 @@ export function raiseForQa(previous: ClassifyResult, item: QaRun): ClassifyResul
   const addedMax = Math.max(0, ...added.map((r) => r.lane)) as Lane;
   const computedLane = Math.max(previous.computedLane, addedMax) as Lane;
   const endsShadow = previous.shadow && computedLane > 0;
-  const reasons = [...kept.filter((r) => !(endsShadow && r.code === SHADOW)), ...added].sort(compareReasons);
+  const reasons = [...kept.filter((r) => !(endsShadow && r.code === SHADOW)), ...added].sort(
+    compareReasons,
+  );
   const lane = Math.max(previous.lane, computedLane, ...reasons.map((r) => r.lane)) as Lane;
   const qaReasons = reasons.filter((r) => QA_CODES.has(r.code));
   const entry = qaEntry(qaReasons);
   const hasQa = previous.checklist.some((e) => e.gate === "qa");
-  const checklist = hasQa ? previous.checklist.map((e) => (e.gate === "qa" ? entry : e)) : [...previous.checklist, entry];
-  return { ...previous, lane, computedLane, reasons, shadow: endsShadow ? false : previous.shadow, checklist };
+  const checklist = hasQa
+    ? previous.checklist.map((e) => (e.gate === "qa" ? entry : e))
+    : [...previous.checklist, entry];
+  return {
+    ...previous,
+    lane,
+    computedLane,
+    reasons,
+    shadow: endsShadow ? false : previous.shadow,
+    checklist,
+  };
 }
 
 export { qaEntry as qaChecklistEntry };

@@ -11,7 +11,11 @@ function qa(verdicts: QaVerdict[], over: Partial<QaRun> = {}): QaRun {
     runId: "qa_1",
     trigger: "platform",
     requestedBy: "hu_1",
-    app: { source: "private-preview", snapshotStep: "build", origin: "https://q-c-01234567-pv.resynapse.dev" },
+    app: {
+      source: "private-preview",
+      snapshotStep: "build",
+      origin: "https://q-c-01234567-pv.resynapse.dev",
+    },
     model: "m",
     promptVersion: "qa/1",
     criteria: verdicts.map((verdict, index) => ({
@@ -31,14 +35,20 @@ function qa(verdicts: QaVerdict[], over: Partial<QaRun> = {}): QaRun {
   }) as QaRun;
 }
 
-const lane0 = () => mutate(green(), (d) => void (d.policy = policy({ lane0Enabled: true })));
+const lane0 = () =>
+  mutate(green(), (d) => {
+    d.policy = policy({ lane0Enabled: true });
+  });
 
 describe("qa-run in classify", () => {
   it("absent: QA was not requested, nothing raised, the gate passes", () => {
     const r = run(lane0());
     expect(r.lane).toBe(0);
     expect(codes(r).some((c) => c.startsWith("qa."))).toBe(false);
-    expect(gateOf(r, "qa")).toMatchObject({ passed: true, detail: "QA was not requested (optional)." });
+    expect(gateOf(r, "qa")).toMatchObject({
+      passed: true,
+      detail: "QA was not requested (optional).",
+    });
   });
 
   it("all pass: qa.passed at Lane 0 and the lane stays 0 (never lowers, never raises)", () => {
@@ -49,9 +59,13 @@ describe("qa-run in classify", () => {
 
   it("a failed criterion → Lane 2; couldn't test → Lane 1; errored → Lane 1", () => {
     expect(run(withItems(lane0(), qa(["pass", "fail"]))).lane).toBe(2);
-    expect(raisedCodes(run(withItems(lane0(), qa(["pass", "couldnt-test"]))))).toEqual(["qa.couldnt-test"]);
+    expect(raisedCodes(run(withItems(lane0(), qa(["pass", "couldnt-test"]))))).toEqual([
+      "qa.couldnt-test",
+    ]);
     expect(run(withItems(lane0(), qa([])))).toMatchObject({ lane: 1 });
-    const errored = run(withItems(lane0(), qa([], { status: "error", note: "Browser Run answered 503" })));
+    const errored = run(
+      withItems(lane0(), qa([], { status: "error", note: "Browser Run answered 503" })),
+    );
     expect(raisedCodes(errored)).toEqual(["signal.error.qa"]);
     expect(gateOf(errored, "qa").passed).toBeNull();
   });
@@ -70,11 +84,17 @@ describe("raiseForQa", () => {
     const lane2 = raiseForQa(run(lane0()), qa(["fail"]));
     const again = raiseForQa(lane2, qa(["pass"]));
     expect(again.lane).toBe(2);
-    expect(again.reasons.map((r) => r.code)).toEqual(expect.arrayContaining(["qa.failed", "qa.passed"]));
+    expect(again.reasons.map((r) => r.code)).toEqual(
+      expect.arrayContaining(["qa.failed", "qa.passed"]),
+    );
   });
 
   it("ends shadow mode when it raises the computed lane, and leaves it when everything passed", () => {
-    const shadowed = run(mutate(green(), (d) => void (d.policy = policy({ lane0Enabled: false })))); // computed 0, routed 1
+    const shadowed = run(
+      mutate(green(), (d) => {
+        d.policy = policy({ lane0Enabled: false });
+      }),
+    ); // computed 0, routed 1
     expect(shadowed.shadow).toBe(true);
     expect(raiseForQa(shadowed, qa(["pass"]))).toMatchObject({ lane: 1, shadow: true });
     const raised = raiseForQa(shadowed, qa(["couldnt-test"]));
@@ -85,6 +105,8 @@ describe("raiseForQa", () => {
   it("adds the qa gate to a classification stored before the gate existed", () => {
     const old = run(lane0());
     const legacy = { ...old, checklist: old.checklist.filter((e) => e.gate !== "qa") };
-    expect(raiseForQa(legacy, qa(["pass"])).checklist.filter((e) => e.gate === "qa")).toHaveLength(1);
+    expect(raiseForQa(legacy, qa(["pass"])).checklist.filter((e) => e.gate === "qa")).toHaveLength(
+      1,
+    );
   });
 });

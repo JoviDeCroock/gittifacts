@@ -17,7 +17,11 @@ export function sampleQaRun(over: Partial<QaRun> = {}): QaRun {
     runId: "qa_1",
     trigger: "mcp",
     requestedBy: "ag_1",
-    app: { source: "private-preview", snapshotStep: "build", origin: "https://q-c1-0123abcd-pv.resynapse.dev" },
+    app: {
+      source: "private-preview",
+      snapshotStep: "build",
+      origin: "https://q-c1-0123abcd-pv.resynapse.dev",
+    },
     model: "@cf/zai-org/glm-5.3-flash",
     promptVersion: "qa/1",
     criteria: [
@@ -37,10 +41,24 @@ export function sampleQaRun(over: Partial<QaRun> = {}): QaRun {
       },
     ],
     artifacts: [
-      { name: "c0-s1.jpg", ref: "qa/c1/qa_1/c0-s1.jpg", sha256: "a".repeat(64), bytes: 1200, contentType: "image/jpeg", role: "step" },
+      {
+        name: "c0-s1.jpg",
+        ref: "qa/c1/qa_1/c0-s1.jpg",
+        sha256: "a".repeat(64),
+        bytes: 1200,
+        contentType: "image/jpeg",
+        role: "step",
+      },
     ],
     blockedOrigins: ["https://fonts.googleapis.com"],
-    usage: { wallMs: 41_000, browserMs: 30_000, llmCalls: 3, inputTokens: 9000, outputTokens: 900, llmUsd: 0.0018 },
+    usage: {
+      wallMs: 41_000,
+      browserMs: 30_000,
+      llmCalls: 3,
+      inputTokens: 9000,
+      outputTokens: 900,
+      llmUsd: 0.0018,
+    },
     ...over,
   };
 }
@@ -54,7 +72,10 @@ describe("qa-run evidence", () => {
 
   it("rejects an artifact without a full SHA-256 and an unknown verdict", () => {
     const bad = sampleQaRun();
-    expect(EvidenceItem.safeParse({ ...bad, artifacts: [{ ...bad.artifacts[0], sha256: "abc" }] }).success).toBe(false);
+    expect(
+      EvidenceItem.safeParse({ ...bad, artifacts: [{ ...bad.artifacts[0], sha256: "abc" }] })
+        .success,
+    ).toBe(false);
     const c = { ...bad.criteria[0], verdict: "probably" };
     expect(EvidenceItem.safeParse({ ...bad, criteria: [c] }).success).toBe(false);
   });
@@ -62,7 +83,10 @@ describe("qa-run evidence", () => {
   it("is covered by the bundle signature: a changed screenshot hash no longer verifies", async () => {
     const k = await generateSigningKey();
     const signer = { privateKey: k.privateKey, publicKey: k.publicKey, name: "test" };
-    const signed = await signEvidence({ changeId: "c1", headSha: HEAD_SHA, items: [sampleQaRun()] }, signer);
+    const signed = await signEvidence(
+      { changeId: "c1", headSha: HEAD_SHA, items: [sampleQaRun()] },
+      signer,
+    );
     expect((await verifyEvidence(signed, k.publicKey)).ok).toBe(true);
     const tampered = structuredClone(signed);
     const qa = tampered.items[0] as QaRun;

@@ -1,0 +1,20 @@
+{
+  "name": "@app/qa",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "On-request QA in a browser: the agent loop (explore, plan, run, repair, review) over a QaBrowser port and the reviewer's LlmClient. No I/O of its own.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@app/evidence": "workspace:*",
+    "@app/tour": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {}
+}
