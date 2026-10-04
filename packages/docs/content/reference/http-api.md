@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 109 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 110 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -59,6 +59,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `POST` | [`/api/v1/github/repos/{repoId}/backtests`](/docs/reference/http-github) | Repo owners: backtest the repository's merged PRs (lanes, later reverts and patches, calibration) |
 | `GET` | [`/api/v1/github/repos/{repoId}/backtests/latest`](/docs/reference/http-github) | The repository's latest backtest and its report |
 | `PUT` | [`/api/v1/github/repos/{repoId}/pr-writes`](/docs/reference/http-github) | Repo owners: turn the walkthrough review and summary comment on GitHub PRs on or off |
+| `GET` | [`/api/v1/health`](/docs/reference/http-platform) | Liveness and the deployed version and commit, no auth |
 | `GET` | [`/api/v1/installation`](/docs/reference/http-integrations) | Integration tokens: this installation, its account and its repositories (with clone URLs) |
 | `GET` | [`/api/v1/installations`](/docs/reference/http-integrations) | Integrations installed on your account: what each may do and on which repos |
 | `PATCH` | [`/api/v1/installations/{installationId}`](/docs/reference/http-integrations) | Change which repos an installed integration reaches |

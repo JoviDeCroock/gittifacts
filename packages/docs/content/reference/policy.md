@@ -79,7 +79,7 @@ export default {
     "**/wrangler.toml",
     "**/cloudflare.config.ts",
   ],
-  // Auto-merge (Lane 0) needs coverage/mutation at or above these on changed lines and a diff below the size limits.
+  // Auto-merge needs coverage/mutation at or above these on changed lines and a diff below the size limits.
   thresholds: {
     changedLineCoverage: 0.8,
     mutationScore: 0.6,
