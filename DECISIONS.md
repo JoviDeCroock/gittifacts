@@ -2451,3 +2451,23 @@ Proposal: docs/ux-review/terminology-2026-10-04.md. The user decided; labels cha
   - `reasoning_effort: "low"`: **22/22**, 134–474 output tokens per call.
 - **Applied:** `DEFAULT_REASONING_EFFORT` in `packages/tour/src/binding.ts` sends `"low"` for GLM-5.3-Flash. It's overridable per
   client, and no other model is affected. Re-run the calibration whenever the default model or the prompt changes.
+
+## 2026-10-04 — GitHub mode live, part 3: check-run buttons, the author's full-review request, contract Plans
+
+- **Buttons verified on fixture-lib PR #2.** The author's "Approve tour" arrives (`check_run.requested_action`)
+  and is refused (`github.review-not-counted`, no review row, summary "Approved by: nobody yet").
+- **The author may request a full review** (e14dfbd). The author's "Request full review" was refused with
+  "the author can't approve their own pull request": both buttons shared the approval gate. Asking for more
+  review only adds scrutiny, so only `approve_tour` refuses the author; `full_review` still needs a human with
+  write access (bots and readers stay refused). Re-pressed after the deploy: recorded
+  (`github_full_reviews`) and shown in the summary ("Full review requested by @JoviDeCroock").
+- **Contract Plans come from the fixtures** (c339194). The first live contract run drafted its Plans from the
+  classifier scenarios, whose `plan()` helper defaults the acceptance criteria to a placeholder
+  ("slugify('Café') returns 'cafe'"). The live judge rightly called that criterion unmet (`llm.unsure`), so
+  pure-bugfix computed Lane 1 instead of 0: a test-input mismatch, not a host one. The script now drafts each
+  Plan from `fixture.json` (with risk declarations); the scenarios use the same Plans
+  (`packages/classifier/test/fixture-plans.ts`) and the mirror test compares the whole Plan. The classifier
+  ignores Plan text, so no expectation moved. The recorded suites never saw this: they have no live judge.
+- **Partial live results before the fix** (the run was killed during touches-auth): breaking-api pass (190 s),
+  new-dependency pass (400 s; its CI run took 306 s while its steps sum to about 60 s, so ~4 minutes went to
+  scheduling a run whose lockfile changed; not yet explained).
