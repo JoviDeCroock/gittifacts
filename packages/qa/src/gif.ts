@@ -69,12 +69,16 @@ export const REPLAY_PAGE_SCRIPT = String.raw`async function (frames, width, dela
   for (var i = 0; i < frames.length; i++) {
     var img = new Image(); img.src = "data:image/jpeg;base64," + frames[i]; await img.decode(); imgs.push(img);
   }
-  var w = Math.min(width, imgs[0].naturalWidth), h = Math.round(imgs[0].naturalHeight * w / imgs[0].naturalWidth);
+  // Frames can differ in size (screenshots are cropped to content): each is drawn top-left,
+  // scaled to fit a 16:10 canvas, on white.
+  var w = width, h = Math.round(width * 10 / 16);
   var canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
   var c2d = canvas.getContext("2d", { willReadFrequently: true });
   var out = [];
   for (var j = 0; j < imgs.length; j++) {
-    c2d.fillStyle = "#fff"; c2d.fillRect(0, 0, w, h); c2d.drawImage(imgs[j], 0, 0, w, h);
+    var k = Math.min(w / imgs[j].naturalWidth, h / imgs[j].naturalHeight);
+    c2d.fillStyle = "#fff"; c2d.fillRect(0, 0, w, h);
+    c2d.drawImage(imgs[j], 0, 0, Math.round(imgs[j].naturalWidth * k), Math.round(imgs[j].naturalHeight * k));
     out.push({ rgba: c2d.getImageData(0, 0, w, h).data });
   }
   var gif = gifEncode(out, w, h, Math.max(2, Math.round(delayMs / 10)));

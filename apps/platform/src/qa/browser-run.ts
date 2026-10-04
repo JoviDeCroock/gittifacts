@@ -7,7 +7,14 @@
 import type { ActionOutcome, PageSnapshot, QaBrowser } from "@app/qa";
 import { REPLAY_PAGE_SCRIPT } from "@app/qa";
 import type { Browser, HTTPRequest, Page } from "@cloudflare/puppeteer";
-import { CLEAR_VALUE, IS_VISIBLE, SNAPSHOT, TAG_TARGET, TEXT_OF } from "./page-scripts.js";
+import {
+  CLEAR_VALUE,
+  CONTENT_BOX,
+  IS_VISIBLE,
+  SNAPSHOT,
+  TAG_TARGET,
+  TEXT_OF,
+} from "./page-scripts.js";
 
 const VIEWPORT = { width: 1280, height: 800 };
 const NAV_TIMEOUT_MS = 20_000;
@@ -212,12 +219,22 @@ export class BrowserRunQa implements QaBrowser {
     };
   }
   async screenshot(opts: { thumb?: boolean } = {}): Promise<Uint8Array | null> {
-    const scale = opts.thumb ? 400 / VIEWPORT.width : 1;
+    // Crop to the content (at least 640×400, 16:10, never past the viewport), top-left anchored.
+    const box = (await this.p.evaluate(CONTENT_BOX).catch(() => null)) as {
+      width: number;
+      height: number;
+    } | null;
+    const width = Math.min(VIEWPORT.width, Math.max(640, (box?.width ?? VIEWPORT.width) + 32));
+    const height = Math.min(
+      VIEWPORT.height,
+      Math.max(Math.round((width * 10) / 16), (box?.height ?? VIEWPORT.height) + 32),
+    );
+    const scale = opts.thumb ? Math.min(1, 400 / width) : 1;
     const shot = await this.p
       .screenshot({
         type: "jpeg",
         quality: opts.thumb ? 60 : 70,
-        clip: { x: 0, y: 0, ...VIEWPORT, scale },
+        clip: { x: 0, y: 0, width, height, scale },
       })
       .catch(() => null);
     return shot === null ? null : new Uint8Array(shot);

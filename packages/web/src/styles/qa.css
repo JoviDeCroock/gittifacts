@@ -107,8 +107,9 @@
   min-inline-size: 0;
 }
 .qa-shot {
+  margin: 0;
   flex: 0 0 auto;
-  inline-size: min(70vw, 16rem);
+  inline-size: min(78vw, 20rem);
   scroll-snap-align: start;
   display: grid;
   gap: var(--s-1);
@@ -118,8 +119,8 @@
   inline-size: 100%;
   block-size: auto;
   aspect-ratio: 16 / 10;
-  object-fit: cover;
-  object-position: top;
+  object-fit: contain;
+  object-position: top left;
   border-radius: var(--r-control);
   border: 1px solid var(--rule);
   background: var(--surface);

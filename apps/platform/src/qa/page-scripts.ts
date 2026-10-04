@@ -88,3 +88,20 @@ export const CLEAR_VALUE = String.raw`(function (tag) {
   var el = document.querySelector('[data-gf-qa="' + tag + '"]');
   if (el && "value" in el) { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); }
 })`;
+
+/**
+ * `() → { width, height }`: how far the visible content reaches (text and controls, not the
+ * full-width blocks around them), so a screenshot of a small page isn't mostly empty.
+ */
+export const CONTENT_BOX = `(function () {
+  var w = 0, h = 0;
+  var grow = function (b) { if (b.width > 0 && b.height > 0) { w = Math.max(w, b.right); h = Math.max(h, b.bottom); } };
+  if (document.body) {
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    var n, range = document.createRange();
+    while ((n = walker.nextNode())) { if (n.textContent.trim() !== "") { range.selectNodeContents(n); grow(range.getBoundingClientRect()); } }
+    var els = document.body.querySelectorAll("input, button, select, textarea, img, svg, canvas, video, iframe, hr");
+    for (var i = 0; i < els.length; i++) grow(els[i].getBoundingClientRect());
+  }
+  return { width: Math.ceil(w), height: Math.ceil(h) };
+})()`;
