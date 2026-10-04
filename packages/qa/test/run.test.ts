@@ -256,3 +256,30 @@ describe("runQa: only expectations that trace to the criterion decide", () => {
     expect(item.criteria[0]?.reason).toContain("traces to the criterion");
   });
 });
+
+describe("expect_count on a selector that names nothing", () => {
+  it("is not a fail: it gets the one repair (then counts for real); a missing item in an existing container is a fail", async () => {
+    const criteria = criteriaFor({
+      acceptanceCriteria: ["The page has 2 buttons", "The counter has 2 items"],
+    });
+    const plan = {
+      criteria: [
+        {
+          index: 0,
+          start: "/",
+          steps: [{ action: "expect_count", target: "#nope li", value: "2" }],
+        },
+        { index: 1, start: "/", steps: [{ action: "expect_count", target: "#n li", value: "2" }] },
+      ],
+    };
+    const repair = { steps: [{ action: "expect_count", target: "button", value: "2" }] };
+    const { item } = await go([plan, repair, { verdicts: [] }], {}, { criteria });
+    expect(item.criteria[0]).toMatchObject({ verdict: "pass" });
+    expect(item.criteria[0]?.steps.map((s) => [s.target, s.ok])).toEqual([
+      ["#nope li", false],
+      ["button", true],
+    ]);
+    expect(item.criteria[1]).toMatchObject({ verdict: "fail" });
+    expect(item.criteria[1]?.reason).toContain("expected 2 of #n li, saw 0");
+  });
+});

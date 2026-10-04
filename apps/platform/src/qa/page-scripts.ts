@@ -79,6 +79,15 @@ export const SNAPSHOT = String.raw`(function () {${HELPERS}
     if ((tag === "input" || tag === "textarea" || tag === "select") && el.value) item.value = (el.value + "").slice(0, 60);
     return item;
   });
+  // Structure the planner can count or read: lists (with how many items now) and headings.
+  var structure = Array.prototype.slice.call(document.querySelectorAll("ol[id], ul[id], table[id], [data-testid]:not(button):not(a):not(input)")).slice(0, 10).map(function (el) {
+    var tag = el.tagName.toLowerCase();
+    var base = el.id && css(el.id) ? "#" + el.id : "[data-testid=" + q(el.getAttribute("data-testid")) + "]";
+    var item = tag === "ol" || tag === "ul" ? " > li" : tag === "table" ? " tr" : "";
+    var n = item ? el.querySelectorAll(item.replace(" > ", ":scope > ").trim()).length : 0;
+    return { selector: base + item, role: item ? "items" : tag, name: item ? (tag === "table" ? "rows" : "items") + " of " + base + " (" + n + " now)" : (el.innerText || "").replace(/\s+/g, " ").trim().slice(0, 60) };
+  });
+  out = structure.concat(out).slice(0, 45);
   var text = (document.body ? document.body.innerText : "").replace(/\s+/g, " ").trim().slice(0, 1500);
   return { title: document.title.slice(0, 120), text: text, elements: out };
 })`;

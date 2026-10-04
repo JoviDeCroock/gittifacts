@@ -103,9 +103,20 @@ export async function executeStep(
         seen = await b.count(target);
         return seen === want;
       });
-      return ok
-        ? { ok, detail: `${seen} of ${target}` }
-        : { ok, detail: `expected ${want} of ${target}, saw ${seen}` };
+      if (ok) return { ok, detail: `${seen} of ${target}` };
+      // Nothing matches and neither does its container ("#shares" of "#shares > li"): the selector
+      // names nothing on this page, so the count can't be read (repair, else couldn't test). An
+      // existing container with too few items is a real answer.
+      if (seen === 0) {
+        const parts = target
+          .trim()
+          .split(/\s*>\s*|\s+/)
+          .filter(Boolean);
+        const container = parts.length > 1 ? await b.count(parts[0] as string) : 0;
+        if (container === 0)
+          return { ok, notFound: true, detail: `nothing on the page matches ${target}` };
+      }
+      return { ok, detail: `expected ${want} of ${target}, saw ${seen}` };
     }
     case "expect_url": {
       const want = s.value ?? s.target;

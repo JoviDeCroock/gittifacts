@@ -117,7 +117,9 @@ export async function runScript(
       );
       continue;
     }
-    if (isExpectation(s))
+    // An expectation that could be read and didn't hold is the answer. One whose target names
+    // nothing on the page (notFound) couldn't be read: like an action, it gets one repair.
+    if (isExpectation(s) && out.notFound !== true)
       return done("fail", `${describeStep(s)}: ${out.detail ?? "did not hold"}`);
     if (out.notFound && repairs > 0 && ctx.spend.available) {
       repairs--;

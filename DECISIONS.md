@@ -2622,7 +2622,11 @@ driver, request service, signed thumbnails), `packages/host-github/src/{qa-secti
   "couldn't test"). An untraced expectation is still run; when it doesn't hold it is reported as an "also observed"
   note (in the signed item, on the Change page, in the GitHub summary's QA details), never a fail. Each step records
   `traced`. The model's review can still only cast doubt on a pass. Prompt qa/4 asks for `expect_count` and for values
-  taken from the criterion.
+  taken from the criterion. Live (3784bb5), the planner then counted `.share`, a class the page doesn't have (its list
+  is `#shares`), so "three shares" failed on a selector, not on the app. Two more deterministic rules: the page
+  snapshot lists lists and headings with real selectors (`#shares > li`, "items of #shares (0 now)"); and an
+  `expect_count` whose selector matches nothing and whose container doesn't exist either couldn't be read: it gets
+  the one repair, else "couldn't test", never "fail". An existing container with too few items is still a fail.
 - **A re-grade of the same head keeps its QA result.** The new bundle carries the head's `qa-run` item, but only
   when the previous bundle's signature still verifies (else it is dropped and logged as `change.qa-carried`).
 - **`/gittifacts qa` is live.** Once the App's Issue comment event was on, a comment on fixture-lib #21 got the App's
