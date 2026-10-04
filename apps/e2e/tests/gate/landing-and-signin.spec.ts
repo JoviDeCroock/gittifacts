@@ -27,7 +27,7 @@ test.describe("landing /", () => {
     const links = page.locator("a[data-session-link]");
     await expect(links.first()).toHaveAttribute("href", "/dashboard");
     await page.goto((await links.first().getAttribute("href")) as string);
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL((u) => u.pathname === "/dashboard"); // the path: "?next=/dashboard" also ends in /dashboard
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 });
@@ -38,7 +38,7 @@ test.describe("redirects", () => {
     // The dashboard is where sign-in lands anyway, so it needs no `next`.
     await expect(page).toHaveURL(/\/signin(\?next=%2Fdashboard)?$/);
     await signInThroughForm(page, human.email, human.password);
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL((u) => u.pathname === "/dashboard"); // the path: "?next=/dashboard" also ends in /dashboard
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 
@@ -54,7 +54,7 @@ test.describe("redirects", () => {
     await page.goto(`/signin?next=${encodeURIComponent(`/plans/${world.planId}`)}`);
     await expect(page).toHaveURL(new RegExp(`/plans/${world.planId}$`));
     await page.goto(`/signin?next=${encodeURIComponent("//evil.example/x")}`);
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL((u) => u.pathname === "/dashboard"); // the path: "?next=/dashboard" also ends in /dashboard
   });
 
   test("an unknown claim link is a page, not a crash", async ({ page }) => {

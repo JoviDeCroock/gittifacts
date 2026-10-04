@@ -28,7 +28,7 @@ test("the E2E account signs in and sees its dashboard", async ({ page }) => {
   await form.locator('input[type="email"]').fill(EMAIL);
   await form.locator('input[type="password"]').fill(PASSWORD);
   await form.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL((u) => u.pathname === "/dashboard"); // the path: "?next=/dashboard" also ends in /dashboard
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   // Real data: the dashboard's own API answers for this account, and the page shows its name.
   const me = await page.request.get("/api/v1/me");
