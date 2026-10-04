@@ -2353,3 +2353,44 @@ pushes to fixture-lib's main.
   be shown before its tour (it can only rise afterwards, so never as `success`) is the user's call.
 - **The live contract run** needs an agent token of the human who linked the installation, to draft the six
   Plans; the CLI credentials on this machine belong to an unclaimed docs-audit agent scoped to another project.
+
+## 2026-10-04 — A calm pull request: one place to read, three stops at most, the lane before the walkthrough
+
+The user, after PR #2 on fixture-lib: "the UI looks very busy". Before: a check run with a 2-column table, ~20
+reason codes and a 12-row evidence table unfolded (545 words); a review per head with up to 20 inline stops
+(7 and 5 on #2) plus least-confident / not-done lists; a summary comment with a table; every push rewrote the
+old review and each of its stops to "Stale". Code: `packages/host-github/src/{terms,check-run,pr-writes,
+pr-publisher,adapter}.ts`, `@app/core` `laneKnown` hook, ChangeWorkflow step `publish-lane`.
+
+- **The summary comment is the one place a person reads.** 3–5 lines: the lane and its one reason, what a person
+  does, who approved / requested changes / asked for a full review (only when someone did), and the link to the
+  walkthrough with its stop count. Why (raised reasons), the Plan, approvals, the graded commit and the
+  report-only note fold under one `<details>`. No tables (they overflow a phone).
+- **At most 3 inline stops, only where they earn it:** risk first, then "not covered by tests", then "not
+  proven"; never the intent stop, never a proven one, never a stop without a line. The review body is one line
+  pointing at the full walkthrough. No flagged stop → no review at all (the summary links the walkthrough).
+  A one-line body beats an empty one: it says where the stops came from, and GitHub documents the body as
+  required for COMMENT reviews. Lane 0 still gets no review.
+- **Stale handling is quiet:** a newer head minimizes the old review and each of its stops (OUTDATED), without
+  rewriting any text. Minimizing the stops too keeps an old stop from looking current in Files changed when its
+  lines didn't move. Writes per push: before 1 + 1 (check) + 1 review + 1 body + ≤ 15 stop edits + 1 minimize +
+  1 summary (13 on #2, ≤ 21); after 1 + 2 (check, with the early lane) + ≤ 1 review + ≤ 3 stop minimizes (old
+  reviews keep their larger count once) + 1 minimize + 1 summary (≤ 9), plus one read for the stops' node ids.
+- **The check run is short:** title = lane and its one reason in ≤ 60 chars ("Full review (Lane 2) · public API
+  changed"; unknown says what didn't run: "coverage did not run"); summary = headline, the ask, the link, the
+  report-only note; reasons and evidence fold in `output.text`. Buttons stay. "Report-only" is not in the title
+  any more: it is a property of the repo, said once in the summary, and the title is the merge box's only line.
+- **The verdict for machines is a hidden comment** (`<!-- gittifacts:verdict {json} -->` in `output.text`), read
+  by `readCheckRunVerdict` (zod-validated; malformed → no verdict). Runs written before today keep their table and
+  are still read (`Shadow · ` or `Report-only · ` prefix, the `| Lane | **N** |` row). The hidden JSON carries
+  the classifier's own `shadow`; the old reader took the platform's mode from the title, which disagreed with the
+  contract's expectation for Lane 2 scenarios.
+- **The lane is published early ("three": yes, quietly).** After classify, when a walkthrough follows, the open
+  run is updated in place: still `in_progress`, no conclusion, no buttons, title "Quick review (Lane 1) so far ·
+  walkthrough coming" (Lane 2: "Full review (Lane 2) · walkthrough coming"; it can't rise). A Lane 0 (or blocked)
+  classification is never shown early: the walkthrough can only raise the lane, so "success" waits for the
+  final verdict. One extra write per head, no comment. It is its own durable step after classify; a failure is
+  logged and never fails grading; a replaced head's run is never reopened.
+- **Words in one place** (`terms.ts`), per the user's terminology decision of today: "Auto-merge · Quick review ·
+  Full review" with "(Lane N)" as a badge, "Report-only", "walkthrough", the button "Approve change" (id
+  `approve_tour` and the `gittifacts/lane` name stay). Reason codes get short phrases there too.
