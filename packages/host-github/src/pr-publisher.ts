@@ -8,7 +8,7 @@ import type { Ports } from "@app/coordinator";
 import type { Tour } from "@app/domain";
 import { type GithubApi, GithubHttpError } from "./api.js";
 import type { PrIndex } from "./pr-index.js";
-import { bodyHash, staleReviewBody, staleStopBody, summaryBody, tourReview, type SummaryState } from "./pr-writes.js";
+import { bodyHash, flaggedStops, summaryBody, tourReview, type SummaryState } from "./pr-writes.js";
 
 export interface PrPublisherDeps {
   api: GithubApi;
@@ -32,7 +32,10 @@ export class PrPublisher {
     return `/repos/${this.d.owner}/${this.d.repo}${suffix}`;
   }
 
-  /** Post the tour as the head's one review (nothing for Lane 0); idempotent per head. */
+  /**
+   * Post the head's one review: the tour's flagged stops inline (≤ 3). Nothing for Lane 0, and
+   * nothing when no stop needs a person's eye (the summary links the tour). Idempotent per head.
+   */
   async publishTour(changeId: string, number: number, tour: Tour): Promise<"posted" | "exists" | "skipped"> {
     if (!(await this.d.enabled())) return "skipped";
     const cls = await this.d.ports.store.getClassification(changeId, tour.headSha);
@@ -40,14 +43,16 @@ export class PrPublisher {
     const prior = await this.d.prs.review(changeId, tour.headSha);
     if (prior !== null && prior.staleAt === null) return "exists";
     const url = this.d.detailsUrl(changeId);
+    const review = tourReview(tour, url);
+    if (review === null) return "skipped";
     let posted: { id: number; node_id: string };
     try {
-      posted = await this.d.api.write("POST", this.path(`/pulls/${number}/reviews`), tourReview(tour, cls, url));
+      posted = await this.d.api.write("POST", this.path(`/pulls/${number}/reviews`), review);
     } catch (e) {
       // A stop GitHub won't anchor (outside the diff it shows) fails the whole review: post the
-      // stops in the body instead, rather than no tour at all.
+      // stops in the body instead, rather than no review at all.
       if (!(e instanceof GithubHttpError) || e.status !== 422) throw e;
-      posted = await this.d.api.write("POST", this.path(`/pulls/${number}/reviews`), tourReview(tour, cls, url, { inline: false }));
+      posted = await this.d.api.write("POST", this.path(`/pulls/${number}/reviews`), tourReview(tour, url, { inline: false }));
     }
     const comments = (await this.d.api.get(this.path(`/pulls/${number}/reviews/${posted.id}/comments?per_page=100`))) as { id: number }[];
     await this.d.prs.putReview({
@@ -61,16 +66,20 @@ export class PrPublisher {
     return "posted";
   }
 
-  /** Older heads' reviews: body and stops say "stale", and the review is minimized. */
+  /**
+   * Older heads' reviews are minimized as outdated, with each of their stops, so they fold away in
+   * the conversation and in Files changed. No text is rewritten (fewer writes, less noise).
+   */
   async staleOlder(changeId: string, number: number, newHead: string, opts: { sameHeadToo?: boolean } = {}): Promise<number> {
     if (!(await this.d.enabled())) return 0;
     let n = 0;
     for (const r of await this.d.prs.reviews(changeId)) {
       if ((r.headSha === newHead && opts.sameHeadToo !== true) || r.staleAt !== null) continue;
-      const url = this.d.detailsUrl(changeId);
-      await this.d.api.write("PUT", this.path(`/pulls/${number}/reviews/${r.reviewId}`), { body: staleReviewBody(r.headSha, newHead, url) });
-      for (const id of r.commentIds) {
-        await this.d.api.write("PATCH", this.path(`/pulls/comments/${id}`), { body: staleStopBody(r.headSha) });
+      const stops = r.commentIds.length === 0
+        ? []
+        : ((await this.d.api.get(this.path(`/pulls/${number}/reviews/${r.reviewId}/comments?per_page=100`))) as { node_id?: string }[]);
+      for (const c of stops) {
+        if (typeof c.node_id === "string") await this.d.api.write("POST", "/graphql", { query: MINIMIZE, variables: { id: c.node_id } });
       }
       await this.d.api.write("POST", "/graphql", { query: MINIMIZE, variables: { id: r.nodeId } });
       await this.d.prs.markStale(changeId, r.headSha, this.d.ports.clock.now().toISOString());
@@ -102,9 +111,18 @@ export class PrPublisher {
       Promise.all(atHead.filter((r) => r.decision === decision).map(async (r) => ({ by: await name(r.reviewerId), via: SOURCE_WORD[r.source ?? "platform"] })));
     return {
       headSha: head,
-      verdict: cls === null ? null : { lane: cls.lane, shadow: cls.shadow, blocked: cls.blocked },
-      tour: review !== null ? "posted" : cls === null ? "pending" : cls.lane === 0 ? "not-needed" : tour === null ? "pending" : "pending",
+      verdict:
+        cls === null
+          ? null
+          : { lane: cls.lane, computedLane: cls.computedLane, shadow: cls.shadow, blocked: cls.blocked, requiresHumanApproval: cls.requiresHumanApproval, reasons: cls.reasons },
+      tour:
+        tour !== null ? "ready"
+        : cls === null ? "pending"
+        : cls.reasons.some((r) => r.code === "tour.failed") ? "failed"
+        : cls.lane === 0 || cls.blocked ? "not-needed"
+        : "pending",
       stops: tour?.stops.length ?? 0,
+      flagged: review === null || tour === null ? 0 : flaggedStops(tour).length,
       plan: plan === null ? null : { title: plan.title, approved: plan.status === "approved" },
       approvals: await people("approve"),
       changesRequested: await people("request-changes"),

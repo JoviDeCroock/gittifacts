@@ -38,9 +38,11 @@ export interface FakeCheckRun {
   name: string;
   status: string;
   conclusion: string | null;
-  output: { title?: string; summary?: string };
+  output: { title?: string; summary?: string; text?: string };
   actions?: unknown[];
   updates: number;
+  /** Every state the run showed, in order (status, conclusion, title). */
+  history: { status: string; conclusion: string | null; title: string | null }[];
 }
 
 const fullName = (r: FakeRepo) => `${r.owner}/${r.name}`;
@@ -52,7 +54,7 @@ export interface FakeReview {
   commit_id: string;
   body: string;
   event: string;
-  comments: { id: number; path: string; line: number; side: string; body: string }[];
+  comments: { id: number; node_id: string; path: string; line: number; side: string; body: string; minimized: boolean }[];
   minimized: boolean;
 }
 
@@ -203,7 +205,10 @@ export class FakeGithub {
       if (pr === undefined || b.comments.some((c) => c.line < 1)) return Response.json({ message: "Unprocessable" }, { status: 422 });
       const id = this.nextId++;
       const review: FakeReview = { id, node_id: `PRR_${id}`, commit_id: b.commit_id, body: b.body, event: b.event, minimized: false,
-        comments: b.comments.map((c) => ({ ...c, id: this.nextId++ })) };
+        comments: b.comments.map((c) => {
+          const cid = this.nextId++;
+          return { ...c, id: cid, node_id: `PRRC_${cid}`, minimized: false };
+        }) };
       this.reviews.set(id, review);
       return Response.json({ ...clone(load("rest", "pull-request")), id, node_id: review.node_id, body: b.body, commit_id: b.commit_id, state: "COMMENTED" });
     }
@@ -244,7 +249,10 @@ export class FakeGithub {
     if (method === "POST" && path === "/graphql") {
       this.writes.push("POST graphql");
       const id = (body as { variables: { id: string } }).variables.id;
-      for (const r of this.reviews.values()) if (r.node_id === id) r.minimized = true;
+      for (const r of this.reviews.values()) {
+        if (r.node_id === id) r.minimized = true;
+        for (const c of r.comments) if (c.node_id === id) c.minimized = true;
+      }
       return Response.json({ data: { minimizeComment: { minimizedComment: { isMinimized: true } } } });
     }
     if (method === "POST" && (m = new RegExp(`^${repoPath}/issues/\\d+/comments$`).exec(path))) {
@@ -276,7 +284,9 @@ export class FakeGithub {
     if (method === "POST" && path === `${repoPath}/check-runs`) {
       this.writes.push("POST check-runs");
       const run: FakeCheckRun = { ...(clone(load("rest", "check-run")) as object), ...(body as object), id: this.nextId++, updates: 0 } as FakeCheckRun;
-      run.conclusion ??= null;
+      // The recorded run is a completed one: a run created without a conclusion has none.
+      run.conclusion = (body as { conclusion?: string }).conclusion ?? null;
+      run.history = [{ status: run.status, conclusion: run.conclusion, title: run.output.title ?? null }];
       this.checkRuns.set(run.id, run);
       return Response.json(run, { status: 201 });
     }
@@ -285,6 +295,7 @@ export class FakeGithub {
       const run = this.checkRuns.get(Number(m[1]));
       if (run === undefined) return Response.json({ message: "Not Found" }, { status: 404 });
       Object.assign(run, body, { updates: run.updates + 1 });
+      run.history.push({ status: run.status, conclusion: run.conclusion ?? null, title: run.output.title ?? null });
       return Response.json(run);
     }
     return Response.json({ message: `fake GitHub has no ${method} ${path}` }, { status: 404 });

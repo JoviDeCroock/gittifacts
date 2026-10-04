@@ -104,18 +104,24 @@ describe("GitHub mode in workerd", () => {
     await workflow.waitForStepResult({ name: "graded-on-host" });
     await workflow.waitForStepResult({ name: "publish-summary" });
 
-    const patch = checks.find((c) => c.method === "PATCH");
+    // The lane goes into the open run while the tour is written (still in progress), then the run completes.
+    const patches = checks.filter((c) => c.method === "PATCH");
+    expect(patches[0]?.body).toMatchObject({ status: "in_progress", output: { title: "Quick review (Lane 1) so far · walkthrough coming" } });
+    expect(patches[0]?.body).not.toHaveProperty("conclusion");
+    const patch = patches.find((c) => c.body.status === "completed");
     expect(patch?.body).toMatchObject({ status: "completed", details_url: `http://localhost/changes/${changeId}` });
     expect(["success", "neutral", "action_required"]).toContain(patch?.body.conclusion);
-    expect(String((patch?.body.output as { title: string }).title)).toMatch(/^Shadow · /);
+    expect(String((patch?.body.output as { title: string }).title)).toMatch(/^Quick review \(Lane 1\) · /);
     const change = await store().getChange(changeId);
     expect(change).toMatchObject({ status: "awaiting-review", forkName: `ghm-${REPO.id}`, host: { kind: "github", number: 7, fork: false } });
     expect(change?.lane).not.toBeNull();
-    // The tour as one COMMENT review on the graded head, and the summary comment (lane ≥ 1).
-    // Lane 0 is in shadow mode by default, so this PR is Lane 1 and gets a tour.
+    // The summary comment (lane ≥ 1). Lane 0 is in shadow mode by default, so this PR is Lane 1 and
+    // gets a tour; the fake tour has one intent stop and nothing a person must look at on the diff,
+    // so no review is posted (the summary links the tour).
     expect(change?.lane).toBe(1);
-    expect(prWrites.find((w) => w.what === "review")?.body).toMatchObject({ commit_id: head, event: "COMMENT" });
+    expect(prWrites.find((w) => w.what === "review")).toBeUndefined();
     expect(String(prWrites.find((w) => w.what === "summary")?.body.body)).toContain("gittifacts:summary");
+    expect(String(prWrites.find((w) => w.what === "summary")?.body.body)).toContain("Open the walkthrough on gittifacts");
     // Every token minted for a job was revoked.
     expect(tokens.minted).toBeGreaterThan(0);
     expect(tokens.revoked).toBe(tokens.minted);

@@ -4,7 +4,8 @@
  * lane, evidence and tour on either host.
  *
  *   evidence run → [host items] → evidence (assemble + seal) → [host steps] → judge →
- *   [evidence on the host] → classify → tour (lane ≥ 1 or shadowed Lane 0) → reclassify → verdict
+ *   [evidence on the host] → classify → [lane on the host] → tour (lane ≥ 1 or shadowed Lane 0) →
+ *   reclassify → verdict
  *
  * Stage names, retry classes and stage results are a contract with the durable runner: in-flight
  * native workflows replay against them. Change them only together with a migration note.
@@ -225,6 +226,7 @@ export async function gradeChange<R extends EvidenceReport>(
   const needsTour = (c: Pick<Classified, "blocked" | "lane" | "shadow">) =>
     input.skipTour !== true && !c.blocked && (c.lane >= 1 || c.shadow);
   let cls = await classifyStage("classify", "not-generated", budgetExceeded, sealed, needsTour);
+  if (needsTour(cls) && hooks?.laneKnown !== undefined) await hooks.laneKnown(cls);
 
   // ------------------------------------------------------------ tour (lane ≥ 1, and shadowed lane 0)
   let tour: TourRun | null = null;

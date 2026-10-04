@@ -18,14 +18,18 @@ async function graded(name: keyof typeof CONTRACT_SCENARIOS, opts: { prWrites?: 
 }
 
 describe("GitHub shadow mode (recorded fixtures)", () => {
-  it("one gittifacts/lane run per head: created in progress, completed once, saying shadow", async () => {
+  it("one gittifacts/lane run per head: created in progress, the lane early, completed once, saying report-only", async () => {
     const { host, headSha } = await graded("pure-bugfix-with-regression-test", { prWrites: false });
     const runs = [...host.gh.checkRuns.values()];
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
-    expect(run).toMatchObject({ head_sha: headSha, name: "gittifacts/lane", status: "completed", updates: 1 });
-    expect(run.output.title).toMatch(/^Shadow · /);
-    expect(run.output.summary).toContain("Shadow mode");
+    expect(run).toMatchObject({ head_sha: headSha, name: "gittifacts/lane", status: "completed", updates: 2 });
+    // Opened while grading, the classifier's lane while the tour is written (still in progress,
+    // no conclusion), then the verdict. Never success before the tour.
+    expect(run.history.map((h) => [h.status, h.conclusion])).toEqual([["in_progress", null], ["in_progress", null], ["completed", "neutral"]]);
+    expect(run.history[1]?.title).toBe("Quick review (Lane 1) so far · walkthrough coming");
+    expect(run.output.title).toBe("Quick review (Lane 1) · auto-merge is calibrating");
+    expect(run.output.summary).toContain("Report-only");
     expect(run).toMatchObject({ details_url: "https://gittifacts.test/changes/gh-9001-1" });
     // With PR writes off, nothing but check runs reaches the PR.
     expect(new Set(host.gh.writes)).toEqual(new Set(["POST check-runs", "PATCH check-runs"]));
@@ -50,7 +54,9 @@ describe("GitHub shadow mode (recorded fixtures)", () => {
     await host.holdRuns(false);
     await host.settle();
     expect(host.gh.laneRun(opened.headSha)).toMatchObject({ status: "completed", conclusion: "cancelled" });
-    expect(host.gh.laneRun(head)).toMatchObject({ status: "completed", updates: 1 });
+    expect(host.gh.laneRun(head)).toMatchObject({ status: "completed", updates: 2 });
+    // The replaced head's run was never reopened by an early lane.
+    expect(host.gh.laneRun(opened.headSha)?.history.at(-1)).toMatchObject({ status: "completed", conclusion: "cancelled" });
   });
 
   it("fork PRs: untrusted code runs with registries-only egress, read from the base repo", async () => {

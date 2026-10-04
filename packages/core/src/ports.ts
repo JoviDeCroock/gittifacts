@@ -148,6 +148,12 @@ export interface GradeHooks<R extends EvidenceReport> {
   afterEvidence?(input: { ci: R; sealed: SealedEvidence }): Promise<AfterEvidence>;
   /** Write the evidence to the host (native: `refs/notes/evidence`); only with `supportsNotes`. */
   publishEvidence?(): Promise<void>;
+  /**
+   * The classifier's lane is known and a tour follows (GitHub: show the lane in the open check run
+   * while the tour is written). Never called when no tour follows: the final verdict is next.
+   * Failures must not fail grading; the hook runs its own durable step.
+   */
+  laneKnown?(classified: Classified): Promise<void>;
 }
 
 export interface GradeDeps<R extends EvidenceReport = EvidenceReport> {

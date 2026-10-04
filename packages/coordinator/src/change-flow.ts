@@ -610,6 +610,37 @@ export async function runChangeWorkflow(
     await store.putEvidence({ ...evidence, notesWritten: true });
   };
 
+  // ------------------------------------------------------------ 7b. the lane on the host, early
+  // GitHub: the classifier's lane goes into the open check run (still in progress) while the tour
+  // is written. Its own durable step; a failure is logged and never fails grading.
+  const publishLane = async (): Promise<void> => {
+    if (host === null || ctx.host == null || backtest) return;
+    const ref = { host: "github" as const, owner: ctx.host.repo.owner, repo: ctx.host.repo.repo, number: ctx.host.change.number };
+    try {
+      await step.do("publish-lane", RETRY.remote, async () => {
+        const stored = await store.getClassification(changeId, headSha);
+        if (stored === null) throw new Error("classification missing");
+        await host.publishVerdict(ref, {
+          ...stored,
+          headSha,
+          action: "request-review",
+          degradations: [],
+          tourStatus: "not-generated",
+          preliminary: true,
+          evidence: null,
+        });
+        await log("change.lane-published", { host: "github", headSha, lane: stored.lane, preliminary: true });
+        return true;
+      });
+    } catch (e) {
+      const reason = errorMessage(e);
+      await step.do("publish-lane-failed", RETRY.quick, async () => {
+        await log("change.host-publish-failed", { host: "github", what: "publish-lane", headSha, error: reason });
+        return true;
+      });
+    }
+  };
+
   // ------------------------------------------------------------ 5–8. grade (@app/core)
   // evidence (signed) → judge → evidence note → classify → tour → reclassify: the same pipeline
   // a GitHub PR goes through, with each stage a durable step of this workflow.
@@ -648,7 +679,7 @@ export async function runChangeWorkflow(
       log: async (action, payload) => {
         await log(action, payload);
       },
-      hooks: { workerItems: startPreview, afterEvidence, publishEvidence: writeEvidenceNote },
+      hooks: { workerItems: startPreview, afterEvidence, publishEvidence: writeEvidenceNote, laneKnown: publishLane },
     },
   );
   if (graded.status === "stopped") {

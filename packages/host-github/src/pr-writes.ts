@@ -1,19 +1,22 @@
 /**
  * What gittifacts writes on a pull request besides the check run (spec §3.4, research §1.1 and
- * §9.7–9.8): one COMMENT review per head carrying the tour (≤ 20 inline stops anchored to their
- * hunks; least-confident and not-done in the body), and one summary comment edited in place.
- * Reviews can't be deleted or moved, so a newer head stales the older review (body and stops say
- * "stale") and minimizes it. Nothing here approves or blocks.
+ * §9.7–9.8), kept quiet on purpose (DECISIONS 2026-10-04 "A calm pull request"):
+ *
+ * - the summary comment is the one place a person reads: a few lines up top (lane and why, what a
+ *   person does, the tour link), everything else folded in `<details>`;
+ * - one COMMENT review per head, with at most 3 inline stops, only where a person should look
+ *   (risk, not covered by tests, not proven), and a one-line body; no review when no stop needs it;
+ * - a newer head minimizes the older review and its stops (no text rewrites).
+ *
+ * Nothing here approves or blocks. Words come from `terms.ts`.
  */
 import type { LaneVerdict } from "@app/host";
-import type { Tour, TourStop } from "@app/domain";
+import type { LaneReason, Tour, TourStop } from "@app/domain";
+import { cut, laneLabel, laneWhy, plural, reasonPhrase, short, TERMS } from "./terms.js";
 
-export const MAX_INLINE_STOPS = 20;
+export const MAX_INLINE_STOPS = 3;
 export const BODY_MAX = 60_000;
 export const SUMMARY_MARKER = "<!-- gittifacts:summary -->";
-
-const VERDICT_WORD = { proven: "Proven", unproven: "Unproven", risk: "Risk" } as const;
-const LANE_WORD = { 0: "Lane 0: no review needed", 1: "Lane 1: a quick look with a guided tour", 2: "Lane 2: full review" } as const;
 
 export interface ReviewComment {
   path: string;
@@ -24,12 +27,33 @@ export interface ReviewComment {
   start_side?: "RIGHT" | "LEFT";
 }
 
-const short = (sha: string) => sha.slice(0, 7);
-const cut = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1)}…`);
+/** Why a stop earns a place on the diff (lower is more urgent), or null when it stays in the tour. */
+function urgency(stop: TourStop): number | null {
+  if (stop.kind === "intent" || stop.hunkRefs.length === 0) return null;
+  if (stop.verdict === "risk" || stop.kind === "risk") return 0;
+  if (stop.kind === "uncovered") return 1;
+  if (stop.verdict === "unproven") return 2;
+  return null;
+}
 
-function stopBody(stop: TourStop, i: number, n: number): string {
-  const evidence = stop.evidenceRefs.length > 0 ? `\n\nEvidence: ${stop.evidenceRefs.map((e) => `\`${e}\``).join(", ")}` : "";
-  return `**Stop ${i + 1} of ${n} · ${VERDICT_WORD[stop.verdict]} · ${stop.kind}**: ${stop.title}\n\n${cut(stop.why, 1200)}${evidence}`;
+/** The stops shown inline: risk first, then not covered, then not proven; tour order within; ≤ 3. */
+export function flaggedStops(tour: Pick<Tour, "stops">): { stop: TourStop; index: number }[] {
+  return tour.stops
+    .map((stop, index) => ({ stop, index, u: urgency(stop) }))
+    .filter((x): x is { stop: TourStop; index: number; u: number } => x.u !== null)
+    .sort((a, b) => a.u - b.u || a.index - b.index)
+    .slice(0, MAX_INLINE_STOPS)
+    .map(({ stop, index }) => ({ stop, index }));
+}
+
+function label(stop: TourStop): string {
+  if (stop.verdict === "risk" || stop.kind === "risk") return TERMS.verdict.risk;
+  if (stop.kind === "uncovered") return TERMS.uncovered;
+  return TERMS.verdict[stop.verdict];
+}
+
+function stopBody(stop: TourStop, i: number, n: number, url: string): string {
+  return `**${label(stop)}** · ${stop.title}\n\n${cut(stop.why, 600)}\n\n<sub>Stop ${i + 1} of ${n} in the [${TERMS.tour}](${url}#stop-${i + 1})</sub>`;
 }
 
 function anchor(stop: TourStop): Omit<ReviewComment, "body"> | null {
@@ -40,51 +64,39 @@ function anchor(stop: TourStop): Omit<ReviewComment, "body"> | null {
   return h.startLine < h.endLine ? { ...base, start_line: h.startLine, start_side: side } : base;
 }
 
-/** The review for one head: `POST /pulls/{n}/reviews`, event COMMENT, pinned to the graded commit. */
-export function tourReview(tour: Tour, verdict: Pick<LaneVerdict, "lane" | "shadow">, detailsUrl: string, opts: { inline?: boolean } = {}) {
+/**
+ * The review for one head (`POST /pulls/{n}/reviews`, event COMMENT, pinned to the graded commit),
+ * or null when no stop needs a person's eye on the diff (the summary links the tour). With
+ * `inline: false` (GitHub refused an anchor) the same stops go in the body instead.
+ */
+export function tourReview(tour: Tour, detailsUrl: string, opts: { inline?: boolean } = {}) {
+  const flagged = flaggedStops(tour);
+  if (flagged.length === 0) return null;
   const n = tour.stops.length;
+  const lead = `${plural(flagged.length, "spot")} worth a look, from the ${TERMS.tour} of \`${short(tour.headSha)}\`. [All ${plural(n, TERMS.stop)} on gittifacts](${detailsUrl})`;
+  if (opts.inline === false) {
+    const quoted = flagged.map(({ stop, index }) => {
+      const h = stop.hunkRefs[0];
+      const where = h === undefined ? "" : `\`${h.file}:${h.endLine}\` · `;
+      return `> ${where}${stopBody(stop, index, n, detailsUrl).replace(/\n/g, "\n> ")}`;
+    });
+    return { commit_id: tour.headSha, event: "COMMENT" as const, body: cut([lead, "", ...quoted].join("\n\n"), BODY_MAX), comments: [] as ReviewComment[] };
+  }
   const comments: ReviewComment[] = [];
-  const unanchored: string[] = [];
-  tour.stops.forEach((stop, i) => {
-    const a = opts.inline === false || comments.length >= MAX_INLINE_STOPS ? null : anchor(stop);
-    if (a === null) unanchored.push(stopBody(stop, i, n));
-    else comments.push({ ...a, body: stopBody(stop, i, n) });
-  });
-  const lines = [
-    `### gittifacts tour · ${LANE_WORD[verdict.lane]}${verdict.shadow ? " (shadow)" : ""}`,
-    "",
-    `${n} stop${n === 1 ? "" : "s"} for \`${short(tour.headSha)}\`, riskiest first. [The tour with its evidence on gittifacts](${detailsUrl})`,
-    "",
-    "**Least confident**",
-    ...tour.leastConfident.map((x) => `- ${x}`),
-    "",
-    "**Not done**",
-    ...tour.notDone.map((x) => `- ${x}`),
-  ];
-  if (unanchored.length > 0) lines.push("", "**Stops without a line in the diff**", "", ...unanchored.map((b) => `> ${b.replace(/\n/g, "\n> ")}\n`));
-  lines.push("", "_This review only comments. It never approves, requests changes or blocks a merge._");
-  return {
-    commit_id: tour.headSha,
-    event: "COMMENT" as const,
-    body: cut(lines.join("\n"), BODY_MAX),
-    comments,
-  };
-}
-
-/** A review whose head was replaced: its body says so (the stops say so too, one by one). */
-export function staleReviewBody(oldHead: string, newHead: string, detailsUrl: string): string {
-  return `### gittifacts tour · stale\n\nThis tour was for \`${short(oldHead)}\`. A newer head (\`${short(newHead)}\`) was pushed; its tour replaces this one. [Current tour on gittifacts](${detailsUrl})`;
-}
-
-export function staleStopBody(oldHead: string): string {
-  return `**Stale.** This stop belonged to the tour of \`${short(oldHead)}\`; a newer head was pushed.`;
+  for (const { stop, index } of flagged) {
+    const a = anchor(stop);
+    if (a !== null) comments.push({ ...a, body: stopBody(stop, index, n, detailsUrl) });
+  }
+  return { commit_id: tour.headSha, event: "COMMENT" as const, body: lead, comments };
 }
 
 export interface SummaryState {
   headSha: string;
-  verdict: Pick<LaneVerdict, "lane" | "shadow" | "blocked"> | null;
-  tour: "posted" | "pending" | "not-needed" | "failed";
+  verdict: (Pick<LaneVerdict, "lane" | "computedLane" | "shadow" | "blocked" | "requiresHumanApproval"> & { reasons: LaneReason[] }) | null;
+  tour: "ready" | "pending" | "not-needed" | "failed";
   stops: number;
+  /** Stops shown on the diff (the review's inline comments). */
+  flagged: number;
   plan: { title: string; approved: boolean } | null;
   approvals: { by: string; via: string }[];
   changesRequested: { by: string; via: string }[];
@@ -93,31 +105,52 @@ export interface SummaryState {
   shadow: boolean;
 }
 
+const who = (xs: { by: string; via?: string }[]) => xs.map((x) => (x.via === undefined ? x.by : `${x.by} (${x.via})`)).join(", ");
+
+/** The 3–5 lines a reader sees without opening anything. */
+function headlineLines(s: SummaryState): string[] {
+  const url = s.detailsUrl;
+  const v = s.verdict;
+  if (v === null) return [`**${TERMS.product}** is grading \`${short(s.headSha)}\`. The lane follows in about two minutes. [Follow it on gittifacts](${url})`];
+  const out: string[] = [];
+  if (v.blocked) {
+    const why = v.reasons.find((r) => r.code === "ci.failed" || r.code === "evidence.unverified");
+    out.push(`**Blocked: ${why === undefined ? TERMS.blockedWhy : reasonPhrase(why)}.** Nothing can merge until it is fixed.`);
+  } else {
+    out.push(`**${laneLabel(v.lane)}** · ${laneWhy(v, { long: true })}.`);
+    out.push(v.lane === 0 && v.requiresHumanApproval ? TERMS.policyAsk : TERMS.laneAsk[v.lane]);
+  }
+  const status: string[] = [];
+  if (s.approvals.length > 0) status.push(`Approved by ${who(s.approvals)}.`);
+  if (s.changesRequested.length > 0) status.push(`Changes requested by ${who(s.changesRequested)}.`);
+  if (s.fullReview.length > 0) status.push(`Full review requested by ${who(s.fullReview)}.`);
+  if (status.length > 0) out.push(status.join(" "));
+  const tour = {
+    ready: `[${TERMS.openTour} on gittifacts](${url}): ${plural(s.stops, TERMS.stop)}${s.flagged > 0 ? `, ${s.flagged} marked on the diff` : ""}.`,
+    pending: `The ${TERMS.tour} is being written. [Follow it on gittifacts](${url})`,
+    "not-needed": `[Details on gittifacts](${url})`,
+    failed: `No ${TERMS.tour} could be written, so this needs a full review. [Details on gittifacts](${url})`,
+  }[s.tour];
+  out.push(tour);
+  return out;
+}
+
 /** The one summary comment (`issues/{n}/comments`), edited in place only when this text changes. */
 export function summaryBody(s: SummaryState): string {
-  const head = s.verdict === null ? "grading" : s.verdict.blocked ? "Blocked: CI failed or the evidence did not verify" : LANE_WORD[s.verdict.lane];
-  const tour = { posted: `${s.stops} stop${s.stops === 1 ? "" : "s"} in the review below`, pending: "being written", "not-needed": "not needed", failed: "could not be written (counted as Lane 2)" }[s.tour];
-  const who = (xs: { by: string; via: string }[]) => xs.map((x) => `${x.by} (${x.via})`).join(", ");
-  const rows = [
-    `| Head | \`${short(s.headSha)}\` |`,
-    `| Tour | ${tour} |`,
-    `| Plan | ${s.plan === null ? "none linked" : `${cut(s.plan.title, 120)} (${s.plan.approved ? "approved" : "not approved yet"})`} |`,
-    `| Approved by | ${s.approvals.length === 0 ? "nobody yet" : who(s.approvals)} |`,
-  ];
-  if (s.changesRequested.length > 0) rows.push(`| Changes requested by | ${who(s.changesRequested)} |`);
-  if (s.fullReview.length > 0) rows.push(`| Full review requested by | ${s.fullReview.map((x) => x.by).join(", ")} |`);
-  return [
-    SUMMARY_MARKER,
-    `### gittifacts · ${head}`,
-    "",
-    s.shadow ? "Shadow mode: graded here, merged on GitHub. Nothing here blocks a merge." : "",
-    "",
-    "| | |",
-    "|---|---|",
-    ...rows,
-    "",
-    `[Tour, evidence and attestation on gittifacts](${s.detailsUrl})`,
-  ].join("\n");
+  const lines = [SUMMARY_MARKER, ...headlineLines(s).map((l, i, a) => (i < a.length - 1 ? `${l}  ` : l))];
+  const details: string[] = [];
+  const raised = s.verdict?.reasons.filter((r) => r.lane > 0 && !r.code.startsWith("shadow.")) ?? [];
+  if (raised.length > 0) {
+    details.push("**Why this lane**", ...raised.slice(0, 12).map((r) => `- ${TERMS.laneBadge(r.lane)} · ${reasonPhrase(r)}`));
+    if (raised.length > 12) details.push(`- and ${raised.length - 12} more on gittifacts`);
+    details.push("");
+  }
+  details.push(`**${TERMS.plan}**: ${s.plan === null ? "none linked" : `${cut(s.plan.title, 120)} (${s.plan.approved ? "approved" : "not approved yet"})`}  `);
+  details.push(`**Approved by**: ${s.approvals.length === 0 ? "nobody yet" : who(s.approvals)}  `);
+  details.push(`**Graded commit**: \`${short(s.headSha)}\``);
+  if (s.shadow) details.push("", TERMS.reportOnlyNote);
+  lines.push("", "<details><summary>Why, Plan and approvals</summary>", "", ...details, "", "</details>");
+  return lines.join("\n");
 }
 
 /** SHA-256 hex of a body (what "changed" means for the summary comment). */

@@ -3,7 +3,7 @@ import type { LaneVerdict } from "@app/host";
 import { describe, expect, it } from "vitest";
 import { claimedCategoryOf } from "../src/adapter.js";
 import { githubCapabilities } from "../src/capabilities.js";
-import { CHECK_ACTIONS, completedCheckRun, conclusionOf, readCheckRunVerdict, SUMMARY_MAX } from "../src/check-run.js";
+import { CHECK_ACTIONS, checkTitle, completedCheckRun, conclusionOf, laneRun, readCheckRunVerdict, SUMMARY_MAX } from "../src/check-run.js";
 import { classifyAuthor } from "../src/identity.js";
 import { mergeGroupPrNumbers, normalizeGithubDelivery } from "../src/normalize.js";
 
@@ -73,13 +73,18 @@ describe("gittifacts/lane check run", () => {
     expect(conclusionOf({ lane: 0, blocked: true, action: "blocked" })).toBe("action_required");
   });
 
-  it("says shadow, links the change, stays under 60 KB and GitHub's button limits", () => {
+  it("a short title (≤ 60), a few summary lines, detail folded in text; GitHub's button limits", () => {
     const ctx = { changeId: "gh-1-2", detailsUrl: "https://x/changes/gh-1-2", shadow: true, evidence: [{ kind: "red-green", status: "proven" }] };
     const run = completedCheckRun(verdict(), ctx, "2026-10-03T12:00:00Z");
-    expect(run.output.title).toMatch(/^Shadow · Lane 1/);
+    expect(run.output.title).toBe("Quick review (Lane 1) · auto-merge is calibrating");
     expect(run.details_url).toBe("https://x/changes/gh-1-2");
-    expect(run.output.summary).toContain("shadow.lane0-disabled");
+    expect(run.output.summary.split("\n").filter((l) => l !== "").length).toBeLessThanOrEqual(4);
+    expect(run.output.summary).toContain("Report-only");
+    expect(run.output.summary).not.toMatch(/^\|/m);
+    expect(run.output.text).toMatch(/^<details><summary>Why this lane: 1 raised, 0 passed<\/summary>/);
+    expect(run.output.text).toContain("<details><summary>Evidence: 1 item, signed and verified</summary>");
     expect(run.actions.map((a) => a.identifier)).toEqual(["approve_tour", "full_review"]);
+    expect(run.actions.map((a) => a.label)).toEqual(["Approve change", "Request full review"]);
     for (const a of Object.values(CHECK_ACTIONS)) {
       expect(a.label.length).toBeLessThanOrEqual(20);
       expect(a.description.length).toBeLessThanOrEqual(40);
@@ -87,7 +92,31 @@ describe("gittifacts/lane check run", () => {
     const huge = verdict({ reasons: Array.from({ length: 40 }, (_, i) => ({ code: `c${i}`, lane: 2 as const, message: "x".repeat(4000) })) });
     const big = completedCheckRun(huge, { ...ctx, evidence: Array.from({ length: 60 }, () => ({ kind: "k", status: "s", note: "n".repeat(300) })) }, "t");
     expect(big.output.summary.length).toBeLessThanOrEqual(SUMMARY_MAX);
+    expect(big.output.text.length).toBeLessThanOrEqual(SUMMARY_MAX);
     expect(big.output.summary).toContain("https://x/changes/gh-1-2");
+  });
+
+  it("titles name the lane and the one reason that decided it", () => {
+    const t = (over: Partial<LaneVerdict>) => checkTitle(verdict(over));
+    expect(t({ lane: 2, computedLane: 2, shadow: false, reasons: [{ code: "api.additive", lane: 2, message: "m" }, { code: "plan.missing", lane: 1, message: "m" }] }))
+      .toBe("Full review (Lane 2) · public API changed");
+    expect(t({ lane: 2, computedLane: 2, shadow: false, reasons: [{ code: "llm.concern", lane: 2, message: "Model judgment on hidden-behavior-change raised a concern: x" }] }))
+      .toBe("Full review (Lane 2) · possible hidden behavior change");
+    // Unknown escalates, and the title says what was not measured.
+    expect(t({ lane: 1, computedLane: 1, shadow: false, reasons: [{ code: "signal.missing.coverage", lane: 1, message: "m" }] }))
+      .toBe("Quick review (Lane 1) · coverage did not run");
+    expect(t({ lane: 0, computedLane: 0, shadow: false, reasons: [{ code: "ci.passed", lane: 0, message: "m" }] })).toBe("Auto-merge (Lane 0) · all checks passed");
+    expect(t({ lane: 2, computedLane: 2, blocked: true, reasons: [{ code: "ci.failed", lane: 2, message: "m" }] })).toBe("Blocked: CI failed");
+    expect(t({ lane: 2, computedLane: 2, shadow: false, reasons: [{ code: "x".repeat(90), lane: 2, message: "m" }] }).length).toBeLessThanOrEqual(60);
+  });
+
+  it("the early lane stays in progress, says 'so far' below Lane 2, and is never Lane 0 or blocked", () => {
+    const ctx = { detailsUrl: "https://x/changes/gh-1-2", shadow: true };
+    expect(laneRun(verdict(), ctx)).toMatchObject({ status: "in_progress", output: { title: "Quick review (Lane 1) so far · walkthrough coming" } });
+    expect(laneRun(verdict(), ctx)).not.toHaveProperty("conclusion");
+    expect(laneRun(verdict({ lane: 2, computedLane: 2, shadow: false }), ctx)?.output.title).toBe("Full review (Lane 2) · walkthrough coming");
+    expect(laneRun(verdict({ lane: 0, computedLane: 0, shadow: false }), ctx)).toBeNull();
+    expect(laneRun(verdict({ lane: 2, blocked: true }), ctx)).toBeNull();
   });
 
   it("shadow capabilities never merge and degrade Lane 0 to label-ready", () => {
@@ -112,20 +141,48 @@ describe("reading a completed gittifacts/lane run back (live contract run)", () 
       ],
     });
     expect(read(v)).toEqual({
-      verdict: { lane: 1, computedLane: 0, shadow: true, blocked: false, requiresHumanApproval: true, reasons: [{ code: "plan.missing" }, { code: "shadow.lane0-disabled" }] },
+      verdict: { lane: 1, computedLane: 0, shadow: true, blocked: false, requiresHumanApproval: true, reasons: [{ code: "shadow.lane0-disabled" }, { code: "plan.missing" }] },
       kinds: ["api-diff", "red-green"],
     });
   });
 
-  it("reads blocked, an unraised lane, no approval and no shadow", () => {
-    const v = verdict({ lane: 2, computedLane: 2, blocked: true, requiresHumanApproval: false, reasons: [], action: "blocked" });
-    expect(read(v, { ...ctx, shadow: false, evidence: [] })).toEqual({
+  it("reads blocked, an unraised lane, no approval and the verdict's own shadow (not the platform's mode)", () => {
+    const v = verdict({ lane: 2, computedLane: 2, shadow: false, blocked: true, requiresHumanApproval: false, reasons: [], action: "blocked" });
+    expect(read(v, { ...ctx, evidence: [] })).toEqual({
       verdict: { lane: 2, computedLane: 2, shadow: false, blocked: true, requiresHumanApproval: false, reasons: [] },
       kinds: [],
     });
   });
 
+  // Runs written before 2026-10-04 keep their text on GitHub forever.
+  const legacy = {
+    title: "Shadow · Lane 1: a quick look with a guided tour",
+    summary: [
+      "**Shadow mode.** gittifacts graded this head.", "", "| | |", "|---|---|", "| Lane | **1** |",
+      "| Computed lane | 0 (raised by policy) |", "| Head | `bbbb` |", "| Human approval | required |", "", "### Why", "",
+      "- `shadow.lane0-disabled` (lane 1): Lane 0 is in shadow mode.", "- `ci.passed` (lane 0): CI passed.", "", "### Evidence", "",
+      "| Kind | Status | Note |", "|---|---|---|", "| red-green | ok |  |", "| coverage | ok | x |", "", "[The tour](https://x)",
+    ].join("\n"),
+  };
+
+  it("reads the old format: the 'Shadow · ' title, the | Lane | **N** | row, Why and Evidence", () => {
+    expect(readCheckRunVerdict(legacy)).toEqual({
+      verdict: { lane: 1, computedLane: 0, shadow: true, blocked: false, requiresHumanApproval: true, reasons: [{ code: "shadow.lane0-disabled" }, { code: "ci.passed" }] },
+      kinds: ["coverage", "red-green"],
+    });
+    // Same table with a "Report-only · " title (the renamed prefix) and with text: null.
+    expect(readCheckRunVerdict({ ...legacy, title: "Report-only · Quick review (Lane 1)", text: null }).verdict?.shadow).toBe(true);
+    expect(readCheckRunVerdict({ ...legacy, title: "Blocked: CI failed or the evidence did not verify" }).verdict).toMatchObject({ shadow: false, blocked: true });
+  });
+
+  it("a malformed hidden verdict is no verdict (never a guessed lane)", () => {
+    expect(readCheckRunVerdict({ title: "t", summary: "s", text: '<!-- gittifacts:verdict {"lane":7} -->' }).verdict).toBeUndefined();
+    expect(readCheckRunVerdict({ title: "t", summary: "s", text: "<!-- gittifacts:verdict {nope} -->" }).verdict).toBeUndefined();
+  });
+
   it("an in-progress run has no verdict", () => {
     expect(readCheckRunVerdict({ title: "Shadow · grading", summary: "gittifacts is running the evidence" }).verdict).toBeUndefined();
+    const early = laneRun(verdict(), { detailsUrl: "https://x", shadow: true });
+    expect(readCheckRunVerdict({ ...early!.output, text: null }).verdict).toBeUndefined();
   });
 });

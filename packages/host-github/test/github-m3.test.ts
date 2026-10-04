@@ -20,20 +20,30 @@ async function lane1() {
 }
 
 describe("the tour as one PR review per head", () => {
-  it("posts one COMMENT review with inline stops (≤ 20) and one summary comment", async () => {
+  it("posts one COMMENT review with only the flagged stops inline (≤ 3) and one summary comment", async () => {
     const { host, headSha } = await lane1();
     const reviews = [...host.gh.reviews.values()];
     expect(reviews).toHaveLength(1);
     const r = reviews[0]!;
     expect(r).toMatchObject({ commit_id: headSha, event: "COMMENT", minimized: false });
-    expect(r.comments.length).toBeGreaterThan(0);
-    expect(r.comments.length).toBeLessThanOrEqual(20);
-    expect(r.body).toContain("Least confident");
-    expect(r.body).toContain("never approves");
+    // The contract tour has an intent stop (no line) and a risk stop: only the risk goes inline.
+    expect(r.comments).toHaveLength(1);
+    expect(r.comments[0]?.body).toMatch(/^\*\*Risk\*\* · Riskiest hunk/);
+    expect(r.comments[0]?.body).toContain("Stop 2 of 2 in the [walkthrough](https://gittifacts.test/changes/gh-9001-1#stop-2)");
+    // A one-line body that points at the tour.
+    expect(r.body.split("\n")).toHaveLength(1);
+    expect(r.body).toContain("1 spot worth a look");
     const comments = [...host.gh.comments.values()];
     expect(comments).toHaveLength(1);
-    expect(comments[0]?.body).toMatch(/Lane 1/);
-    expect(comments[0]?.body).toContain("in the review below");
+    const body = comments[0]?.body ?? "";
+    // The headline: lane and why, what a person does, the tour; the rest folded.
+    const top = body.split("<details>")[0]!.trim().split("\n").slice(1);
+    expect(top.length).toBeLessThanOrEqual(5);
+    expect(top[0]).toBe("**Quick review (Lane 1)** · the evidence says auto-merge, but auto-merge is still calibrating on this repo.  ");
+    expect(top.at(-1)).toBe("[Open the walkthrough on gittifacts](https://gittifacts.test/changes/gh-9001-1): 2 stops, 1 marked on the diff.");
+    expect(body).toMatch(/<details><summary>Why, Plan and approvals<\/summary>[\s\S]*\*\*Plan\*\*: Fix allocate[\s\S]*Report-only[\s\S]*<\/details>$/);
+    // No tables (they overflow a phone).
+    expect(body).not.toMatch(/^\|/m);
   });
 
   it("a new head stales and minimizes the old review, posts a new one, and edits the summary in place", async () => {
@@ -42,9 +52,11 @@ describe("the tour as one PR review per head", () => {
     const second = await host.push(ref, { [path]: `${fx.head[path] ?? ""}// again\n` }, { force: false });
     await host.settle();
     const [old, fresh] = [...host.gh.reviews.values()];
+    // The old review and its stops are minimized as outdated; no text is rewritten.
     expect(old).toMatchObject({ commit_id: first, minimized: true });
-    expect(old?.body).toContain("stale");
-    expect(old?.comments.every((c) => c.body.startsWith("**Stale.**"))).toBe(true);
+    expect(old?.body).toContain("1 spot worth a look");
+    expect(old?.comments.every((c) => c.minimized && c.body.startsWith("**Risk**"))).toBe(true);
+    expect(host.gh.writes.filter((w) => w === "PUT review" || w === "PATCH review comment")).toEqual([]);
     expect(fresh).toMatchObject({ commit_id: second, minimized: false });
     const summary = [...host.gh.comments.values()];
     expect(summary).toHaveLength(1);
@@ -96,7 +108,7 @@ describe("approvals from GitHub map to the platform's record", () => {
     await host.sync.handle(host.gh.buttonDelivery(run.id, "approve_tour", { login: "reader-1", id: 6002, type: "User" }));
     expect([...host.env.ports.store.reviews.values()].filter((r) => r.changeId === changeId)).toEqual([]);
     await host.sync.handle(host.gh.buttonDelivery(run.id, "full_review", MAINT));
-    expect([...host.gh.comments.values()][0]?.body).toContain("Full review requested by | @maint-1");
+    expect([...host.gh.comments.values()][0]?.body).toContain("Full review requested by @maint-1.");
     await host.sync.handle(host.gh.buttonDelivery(run.id, "approve_tour", MAINT));
     expect([...host.env.ports.store.reviews.values()].filter((r) => r.changeId === changeId)).toEqual([
       expect.objectContaining({ decision: "approve", source: "github-check", headSha }),
@@ -111,7 +123,7 @@ describe("approvals from GitHub map to the platform's record", () => {
     await host.sync.handle(host.gh.buttonDelivery(run.id, "approve_tour", author));
     expect([...host.env.ports.store.reviews.values()].filter((r) => r.changeId === changeId)).toEqual([]);
     await host.sync.handle(host.gh.buttonDelivery(run.id, "full_review", author));
-    expect([...host.gh.comments.values()][0]?.body).toContain(`Full review requested by | @${author.login}`);
+    expect([...host.gh.comments.values()][0]?.body).toContain(`Full review requested by @${author.login}.`);
     // A bot's press still records nothing.
     const bot = { login: "dependabot[bot]", id: 49699333, type: "Bot" };
     const before = [...host.gh.comments.values()][0]?.body;

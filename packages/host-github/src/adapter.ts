@@ -21,7 +21,7 @@ import {
 } from "@app/host";
 import type { GithubApi } from "./api.js";
 import { type GithubRepoSetup, githubCapabilities } from "./capabilities.js";
-import { type CheckRunContext, completedCheckRun, startedCheckRun, supersededCheckRun } from "./check-run.js";
+import { type CheckRunContext, completedCheckRun, laneRun, startedCheckRun, supersededCheckRun } from "./check-run.js";
 import { changeIdFor } from "./ids.js";
 import { identityOf, normalizeGithubDelivery } from "./normalize.js";
 import type { PrIndex } from "./pr-index.js";
@@ -274,10 +274,24 @@ export class GitHubHost implements HostAdapter {
     await this.deps.api.write("PATCH", this.path(`/check-runs/${id}`), supersededCheckRun(newHead, now));
   }
 
+  /**
+   * A preliminary verdict (the classifier's lane, the tour still to come) updates the open run in
+   * place and keeps it in progress; Lane 0 is never shown early (the tour can only raise it). The
+   * final verdict completes the run.
+   */
   async publishVerdict(ref: ChangeRef, verdict: LaneVerdict): Promise<void> {
-    // Only the final verdict for a head reaches GitHub: the run is updated once.
-    if (verdict.preliminary) return;
-    await this.job(() => this.completeCheck(this.changeId(ref), verdict));
+    const changeId = this.changeId(ref);
+    if (verdict.preliminary) {
+      const body = laneRun(verdict, { detailsUrl: this.detailsUrl(changeId), shadow: this.deps.shadow ?? true });
+      if (body === null) return;
+      const id = await this.deps.checks.get(changeId, verdict.headSha);
+      // No open run (GitHub was down when grading started): the final verdict creates it. A head
+      // already replaced keeps its "replaced" run: an early lane never reopens it.
+      if (id === null || (await this.deps.ports.store.getChange(changeId))?.headSha !== verdict.headSha) return;
+      await this.job(() => this.deps.api.write("PATCH", this.path(`/check-runs/${id}`), body));
+      return;
+    }
+    await this.job(() => this.completeCheck(changeId, verdict));
   }
 
   private async completeCheck(changeId: string, verdict: LaneVerdict): Promise<void> {
