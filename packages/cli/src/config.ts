@@ -72,7 +72,7 @@ export function resolveHost(
 export function noHostError() {
   return cliError("no-host", "no platform host configured", {
     explanation:
-      "Tell the CLI which platform to use: pass --host <origin>, set GITTIFACTS_HOST, run it inside a project with .gittifacts.json, or log in once with --host.",
+      "Tell the CLI which platform to use: pass --host <origin>, set GITTIFACTS_HOST, run it inside a repo with .gittifacts.json, or log in once with --host.",
     command: "gittifacts login --host https://<host>",
   });
 }

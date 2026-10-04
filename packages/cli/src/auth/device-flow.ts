@@ -156,7 +156,7 @@ function unavailable(host: string, url: string, status: number) {
     `${host} does not offer the OAuth device flow at ${url} (HTTP ${status})`,
     {
       explanation:
-        "Use an agent token a human created for you (export GITTIFACTS_TOKEN=...), or create an unclaimed project without an account with `gittifacts init`. If the platform documents other endpoints, pass --device-code-url and --token-url.",
+        "Use an agent token a human created for you (export GITTIFACTS_TOKEN=...), or create an unclaimed repo without an account with `gittifacts init`. If the platform documents other endpoints, pass --device-code-url and --token-url.",
       command: `curl -sS -H 'accept: application/json' ${host}/start`,
     },
   );

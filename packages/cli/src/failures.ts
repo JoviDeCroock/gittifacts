@@ -30,7 +30,7 @@ export function unauthorized(ctx: FailureContext, detail?: string): CliError {
     {
       explanation: had
         ? "The token is invalid, expired or revoked. Log in again (OAuth device flow), or set GITTIFACTS_TOKEN to an agent token a human created for you."
-        : "Log in (OAuth device flow), or set GITTIFACTS_TOKEN to an agent token a human created for you. No account? `gittifacts init` creates an unclaimed project with its own token.",
+        : "Log in (OAuth device flow), or set GITTIFACTS_TOKEN to an agent token a human created for you. No account? `gittifacts init` creates an unclaimed repo with its own token.",
       command: `gittifacts login --host ${ctx.host}`,
     },
   );

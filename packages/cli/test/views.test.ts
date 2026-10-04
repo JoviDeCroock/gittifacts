@@ -46,7 +46,7 @@ describe("get-change-status --human", () => {
   it("a green bootstrap: status, no lane by design, the preview, and the steps as a table", () => {
     const text = renderHuman(changeStatusView(status()), { style: makeStyle(false), width: 100 });
     expect(text).toMatch(/Status: +released \(the first CI run passed\)/);
-    expect(text).toMatch(/Lane: +none \(a bootstrap Change is never classified\)/);
+    expect(text).toMatch(/Lane: +none \(the first Change is never classified\)/);
     expect(text).toMatch(/Preview: +https:\/\/p-bs-cughqreo8qybycwotaah-pv\.resynapse\.dev/);
     expect(text).toMatch(/STEP\s+KIND\s+STATUS\s+LOG/);
     expect(text).toMatch(/install\s+user\s+✓ passed\s+ci-logs\/r\/install\.log/);
@@ -76,7 +76,7 @@ describe("get-change-status --human", () => {
     );
     expect(view).toMatchObject({
       status: "awaiting-review (waiting for a human review)",
-      lane: "2 (full review, Lane 0 in shadow mode)",
+      lane: "Full review (Lane 2); auto-merge is calibrating on this repo",
       preview: "not up yet",
       plan: "plan_1",
       raisedBy: [{ lane: 2, code: "policy.changed", why: ".platform/** changed" }],

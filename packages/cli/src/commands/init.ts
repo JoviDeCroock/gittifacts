@@ -23,14 +23,14 @@ export const TEMPLATES = ["workers-api", "preact-app", "ts-library", "static-sit
 const spec = builtinSpec({
   command: "init",
   tool: "create_project",
-  title: "Create a project",
+  title: "Create a repo",
   description:
-    "Create a project in one call (create_project): repo from a template or a GitHub import, .platform/ci.ts, policy and AGENTS.md, first CI and preview. Writes .gittifacts.json (host, projectId, remote). No account needed: you get an unclaimed project and a claim URL for a human.",
+    "Create a repo in one call (create_project): repo from a template or a GitHub import, .platform/ci.ts, policy and AGENTS.md, first CI and preview. Writes .gittifacts.json (host, projectId, remote). No account needed: you get an unclaimed repo and a claim URL for a human.",
   mutating: true,
   properties: {
     template: { enum: [...TEMPLATES], description: "Start from a template." },
     from: { type: "string", description: "Import a GitHub repository (https URL)." },
-    name: { type: "string", description: "Project name." },
+    name: { type: "string", description: "Repo name." },
     description: { type: "string", description: "One-line description." },
     clone: {
       type: "boolean",
@@ -45,7 +45,7 @@ const spec = builtinSpec({
     force: { type: "boolean", description: "Overwrite an existing .gittifacts.json." },
     showToken: {
       type: "boolean",
-      description: "Include the project token in the output (it is stored either way).",
+      description: "Include the repo token in the output (it is stored either way).",
     },
   },
 });
@@ -166,7 +166,7 @@ export const init: Builtin = {
       if (existsSync(configPath) && !bool(parsed, "force")) {
         throw cliError("already-initialized", `${configPath} already exists`, {
           explanation:
-            "This directory already belongs to a project. Use it as-is, or pass --force to create a new project and overwrite the file.",
+            "This directory already belongs to a repo. Use it as-is, or pass --force to create a new repo and overwrite the file.",
           command: "gittifacts whoami",
         });
       }
@@ -236,7 +236,7 @@ export const init: Builtin = {
           "clone-failed",
           "create_project returned no git remote to clone",
           {
-            explanation: `The project ${project.projectId} was created; clone it later once the platform reports a remote.`,
+            explanation: `The repo ${project.projectId} was created; clone it later once the platform reports a remote.`,
             command: "gittifacts whoami",
           },
           { details: redact(doc, false) },
@@ -256,7 +256,7 @@ export const init: Builtin = {
           "clone-failed",
           `git clone failed (exit ${res.code}): ${res.stderr.trim().split("\n").at(-1) ?? ""}`,
           {
-            explanation: `The project ${project.projectId} was created and its token stored; only the clone failed. Clone it yourself (the token goes in a header, not the URL).`,
+            explanation: `The repo ${project.projectId} was created and its token stored; only the clone failed. Clone it yourself (the token goes in a header, not the URL).`,
             command: `git -c http.extraHeader="Authorization: Bearer <token>" clone ${project.remoteUrl} ${dir}`,
           },
           { details: redact(doc, false) },
@@ -286,7 +286,7 @@ export const init: Builtin = {
         },
         bundledCommands(),
       ),
-      { title: `Project ${project.projectId} created` },
+      { title: `Repo ${project.projectId} created` },
     );
     return EXIT.ok;
   },

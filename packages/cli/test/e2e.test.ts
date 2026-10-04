@@ -121,7 +121,7 @@ describe("bundled CLI against the real MCP server", () => {
     expect(r.stdout).toMatch(/^Get change status\n/);
     // A readable summary (src/views.ts), not the raw document.
     expect(r.stdout).toMatch(/Status: +awaiting-review \(waiting for a human review\)/);
-    expect(r.stdout).toMatch(/Lane: +1 \(async glance\)/);
+    expect(r.stdout).toMatch(/Lane: +Quick review \(Lane 1\)/);
     expect(r.stdout).toMatch(/Steps\n\s+STEP\s+KIND\s+STATUS\s+LOG\n\s+test\s+user\s+✓ passed/);
     expect(r.stdout).toMatch(/Raised by\n\s+LANE\s+CODE\s+WHY\n\s+1\s+size\.lane1\s+medium diff/);
     expect(r.stdout).toMatch(

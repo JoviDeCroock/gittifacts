@@ -4,6 +4,7 @@
  * column of JSON and no preview URL (journey 10). Here it is a summary, the latest run's steps
  * as a table, the reasons for the lane, and the next steps.
  */
+import { LANE_LABELS } from "@app/domain/vocabulary";
 import { isRecord } from "./tools/schema.js";
 
 type Doc = Record<string, unknown>;
@@ -48,16 +49,19 @@ function statusLine(change: Doc, bootstrap: boolean): string {
 }
 
 function laneLine(change: Doc, classification: Doc | null, bootstrap: boolean): string {
-  if (bootstrap) return "none (a bootstrap Change is never classified)";
+  if (bootstrap) return "none (the first Change is never classified)";
   const lane = change.lane ?? classification?.lane;
   if (typeof lane !== "number") {
     return change.status === "running" ? "not yet (assigned after the evidence)" : "-";
   }
-  const meaning = ["auto-merge", "async glance", "full review"][lane] ?? "";
+  const label = lane === 0 || lane === 1 || lane === 2 ? LANE_LABELS[lane] : null;
   const computed = change.computedLane ?? classification?.computedLane;
-  const shadow = classification?.shadow === true ? ", Lane 0 in shadow mode" : "";
-  const extra = typeof computed === "number" && computed !== lane ? `, computed ${computed}` : "";
-  return `${lane} (${meaning}${extra}${shadow})`;
+  const shadow = classification?.shadow === true ? "; auto-merge is calibrating on this repo" : "";
+  const extra =
+    typeof computed === "number" && computed !== lane
+      ? `; the evidence alone says ${(computed === 0 || computed === 1 || computed === 2 ? LANE_LABELS[computed].name : String(computed)).toLowerCase()}`
+      : "";
+  return label ? `${label.name} (${label.badge})${extra}${shadow}` : `Lane ${lane}${extra}${shadow}`;
 }
 
 /** `get_change_status` for people. */

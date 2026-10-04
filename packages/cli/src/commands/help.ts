@@ -37,8 +37,8 @@ export const QUICKSTART = [
   "gittifacts init --template workers-api --name my-api --clone",
   "gittifacts wait <changeId> --until evidence_ready",
   "gittifacts get-change-status <changeId> --human",
-  "gittifacts create-plan --repo-id <projectId> --title ... --intent ... --acceptance-criteria ...",
-  "gittifacts start-change --repo-id <projectId> --plan-id <planId> --title ... --category feature",
+  "gittifacts create-plan --repo-id <repoId> --title ... --intent ... --acceptance-criteria ...",
+  "gittifacts start-change --repo-id <repoId> --plan-id <planId> --title ... --category feature",
 ];
 
 function flagDoc(spec: CommandSpec) {
