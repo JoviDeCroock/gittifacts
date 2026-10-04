@@ -88,6 +88,12 @@ export async function onCheckAction(deps: GithubSyncDeps, delivery: GithubDelive
   if (p.data.requested_action.identifier === "full_review") {
     if (change.headSha !== head) return refused(deps, event, changeId, "the button is on an older head");
     await deps.host.publisher?.recordFullReview(changeId, head, who.login);
+    // A full review asked for: the walkthrough's flagged stops go on the diff for this head.
+    try {
+      await deps.host.publishRequestedTour(changeId, change.host.number);
+    } catch (e) {
+      await deps.ports.audit.append({ principalId: "system", action: "github.review-post-failed", subject: `change:${changeId}`, payload: { error: (e as Error).message } });
+    }
     await deps.ports.audit.append({
       principalId: await (deps.reviewerPrincipal ?? deps.authorPrincipal)(who),
       action: "change.full-review-requested",

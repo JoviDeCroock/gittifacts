@@ -88,7 +88,8 @@ describe("re-grading the same head", () => {
       h.prLabels = [];
     });
     expect((await host.env.ports.store.getChange(changeId))?.claim.category).toBe("feature");
-    host.pull.labels = ["gittifacts:fix"];
+    // The walkthrough label too, so the head's review is posted (then staled by the re-grade).
+    host.pull.labels = ["gittifacts:fix", "gittifacts:walkthrough"];
     await host.sync.handle(host.gh.editDelivery(host.pull, "labeled"));
     await host.settle();
     expect((await host.env.ports.store.getChange(changeId))?.claim.category).toBe("fix");

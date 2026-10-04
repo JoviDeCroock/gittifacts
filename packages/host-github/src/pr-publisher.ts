@@ -8,7 +8,8 @@ import type { Ports } from "@app/coordinator";
 import type { Tour } from "@app/domain";
 import { type GithubApi, GithubHttpError } from "./api.js";
 import type { PrIndex } from "./pr-index.js";
-import { bodyHash, flaggedStops, summaryBody, tourReview, type SummaryState } from "./pr-writes.js";
+import { bodyHash, flaggedStops, summaryBody, type SummaryQa, tourReview, type SummaryState } from "./pr-writes.js";
+import { WALKTHROUGH_LABEL } from "./terms.js";
 
 export interface PrPublisherDeps {
   api: GithubApi;
@@ -20,6 +21,11 @@ export interface PrPublisherDeps {
   enabled(): Promise<boolean>;
   detailsUrl(changeId: string): string;
   shadow: boolean;
+  /**
+   * The optional QA section of the summary comment (on-demand agentic QA writes into the summary,
+   * never a comment of its own). Null or absent: no QA section.
+   */
+  qa?(changeId: string, headSha: string): Promise<SummaryQa | null>;
 }
 
 const MINIMIZE = "mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: OUTDATED}) { minimizedComment { isMinimized } } }";
@@ -33,13 +39,17 @@ export class PrPublisher {
   }
 
   /**
-   * Post the head's one review: the tour's flagged stops inline (≤ 3). Nothing for Lane 0, and
-   * nothing when no stop needs a person's eye (the summary links the tour). Idempotent per head.
+   * The walkthrough's flagged stops (≤ 3) as one review on the diff, only on request: the PR has
+   * the `gittifacts:walkthrough` label, someone pressed Request full review for this head, or the
+   * caller says it was asked for (`requested`). By default nothing but the check run and the
+   * summary comment reach the PR (DECISIONS 2026-10-04). Never for Lane 0; nothing when no stop
+   * is flagged. Idempotent per head.
    */
-  async publishTour(changeId: string, number: number, tour: Tour): Promise<"posted" | "exists" | "skipped"> {
+  async publishTour(changeId: string, number: number, tour: Tour, opts: { requested?: boolean } = {}): Promise<"posted" | "exists" | "skipped"> {
     if (!(await this.d.enabled())) return "skipped";
     const cls = await this.d.ports.store.getClassification(changeId, tour.headSha);
     if (cls === null || cls.lane === 0) return "skipped";
+    if (opts.requested !== true && !(await this.inlineRequested(changeId, number, tour.headSha))) return "skipped";
     const prior = await this.d.prs.review(changeId, tour.headSha);
     if (prior !== null && prior.staleAt === null) return "exists";
     const url = this.d.detailsUrl(changeId);
@@ -66,6 +76,13 @@ export class PrPublisher {
     return "posted";
   }
 
+  /** Inline stops were asked for on this PR (label) or for this head (Request full review). */
+  async inlineRequested(changeId: string, number: number, headSha: string): Promise<boolean> {
+    if ((await this.d.prs.fullReviews(changeId, headSha)).length > 0) return true;
+    const pr = (await this.d.api.get(this.path(`/pulls/${number}`))) as { labels?: { name?: string }[] };
+    return (pr.labels ?? []).some((l) => l.name === WALKTHROUGH_LABEL);
+  }
+
   /**
    * Older heads' reviews are minimized as outdated, with each of their stops, so they fold away in
    * the conversation and in Files changed. No text is rewritten (fewer writes, less noise).
@@ -88,14 +105,15 @@ export class PrPublisher {
     return n;
   }
 
-  private async state(changeId: string): Promise<SummaryState | null> {
+  private async state(changeId: string, number: number): Promise<SummaryState | null> {
     const { store } = this.d.ports;
     const change = await store.getChange(changeId);
     if (change?.headSha == null) return null;
     const head = change.headSha;
-    const [cls, tour, plan, reviews, full] = await Promise.all([
+    const [cls, tour, review, plan, reviews, full] = await Promise.all([
       store.getClassification(changeId, head),
       store.getTour?.(changeId, head) ?? Promise.resolve(null),
+      this.d.prs.review(changeId, head),
       change.planId === null ? Promise.resolve(null) : store.getPlan(change.planId),
       store.listReviews?.(changeId) ?? Promise.resolve([]),
       this.d.prs.fullReviews(changeId, head),
@@ -103,7 +121,8 @@ export class PrPublisher {
     const name = async (id: string) => {
       const p = await store.getPrincipal(id);
       const n = p?.name ?? id;
-      return n.endsWith(" (GitHub)") ? `@${n.slice(0, -" (GitHub)".length)}` : n;
+      // A GitHub login without "@": an edit that adds a mention would notify that person.
+      return n.endsWith(" (GitHub)") ? n.slice(0, -" (GitHub)".length) : n;
     };
     const atHead = reviews.filter((r) => r.headSha === head);
     const people = async (decision: "approve" | "request-changes") =>
@@ -121,12 +140,16 @@ export class PrPublisher {
         : cls.lane === 0 || cls.blocked ? "not-needed"
         : "pending",
       stops: tour?.stops.length ?? 0,
-      // What the review shows (or will: the summary is written first), not what it posted.
       flagged: tour === null || cls === null || cls.lane === 0 || cls.blocked ? 0 : flaggedStops(tour).length,
       plan: plan === null ? null : { title: plan.title, approved: plan.status === "approved" },
       approvals: await people("approve"),
       changesRequested: await people("request-changes"),
-      fullReview: full.map((f) => ({ by: `@${f.by}` })),
+      fullReview: full.map((f) => ({ by: f.by })),
+      // Shown on the diff: posted for this head, or about to be (the summary is written first).
+      inline:
+        (review !== null && review.staleAt === null) ||
+        (tour !== null && cls !== null && cls.lane > 0 && !cls.blocked && flaggedStops(tour).length > 0 && (await this.inlineRequested(changeId, number, head))),
+      qa: (await this.d.qa?.(changeId, head)) ?? null,
       detailsUrl: this.d.detailsUrl(changeId),
       shadow: this.d.shadow,
     };
@@ -135,7 +158,7 @@ export class PrPublisher {
   /** The summary comment: created once something needs a human, then edited only when it changes. */
   async publishSummary(changeId: string, number: number): Promise<"created" | "edited" | "unchanged" | "skipped"> {
     if (!(await this.d.enabled())) return "skipped";
-    const state = await this.state(changeId);
+    const state = await this.state(changeId, number);
     if (state === null) return "skipped";
     const existing = await this.d.prs.summary(changeId);
     // Lane 0 gets only the check run (spec §3.4), unless a summary already exists to keep current.

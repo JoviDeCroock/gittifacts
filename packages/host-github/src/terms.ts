@@ -8,6 +8,9 @@
  */
 import type { Lane, LaneReason } from "@app/domain";
 
+/** The PR label that asks for the walkthrough's flagged stops as review comments on the diff. */
+export const WALKTHROUGH_LABEL = "gittifacts:walkthrough";
+
 export const TERMS = {
   product: "gittifacts",
   laneBadge: (n: Lane) => `Lane ${n}`,
@@ -33,6 +36,9 @@ export const TERMS = {
   verdict: { proven: "Proven", unproven: "Not proven", risk: "Risk" },
   uncovered: "Not covered by tests",
   openTour: "Open the walkthrough",
+  /** How to get the flagged stops on the diff (they aren't posted by default). */
+  inlineHow: `To see them as comments on the diff, add the \`${WALKTHROUGH_LABEL}\` label or press Request full review on the check.`,
+  qa: "QA",
   approveButton: { label: "Approve change", description: "Approve this change on gittifacts" },
   fullReviewButton: { label: "Request full review", description: "Ask for a full human review" },
 } as const;

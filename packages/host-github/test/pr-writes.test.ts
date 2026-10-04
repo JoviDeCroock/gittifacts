@@ -45,7 +45,7 @@ describe("summary comment", () => {
       { code: "api.breaking", lane: 2, message: "Public API has breaking changes: f." },
       { code: "plan.missing", lane: 1, message: "No plan is attached to this change." },
     ] },
-    tour: "ready", stops: 5, flagged: 2, plan: null, approvals: [], changesRequested: [], fullReview: [],
+    tour: "ready", stops: 5, flagged: 2, inline: false, qa: null, plan: null, approvals: [], changesRequested: [], fullReview: [],
     detailsUrl: "https://x/changes/gh-1-2", shadow: true,
   };
   const headline = (s: SummaryState) => summaryBody(s).split("<details>")[0]!.trim().split("\n").slice(1);
@@ -54,15 +54,26 @@ describe("summary comment", () => {
     expect(headline(base)).toEqual([
       "**Full review (Lane 2)** · breaking public API change.  ",
       "A person reads the diff, with the walkthrough as a guide.  ",
-      "[Open the walkthrough on gittifacts](https://x/changes/gh-1-2): 5 stops, 2 marked on the diff.",
+      "[Open the walkthrough on gittifacts](https://x/changes/gh-1-2): 5 stops, 2 worth a look.",
     ]);
     expect(summaryBody(base)).toContain("- Lane 1 · no Plan linked");
   });
 
   it("approvals, changes requested and full-review requests make one status line", () => {
-    const s = { ...base, approvals: [{ by: "@a", via: "GitHub review" }], fullReview: [{ by: "@b" }] };
-    expect(headline(s)[2]).toBe("Approved by @a (GitHub review). Full review requested by @b.  ");
+    const s = { ...base, approvals: [{ by: "a", via: "GitHub review" }], fullReview: [{ by: "b" }] };
+    expect(headline(s)[2]).toBe("Approved by a (GitHub review). Full review requested by b.  ");
     expect(headline(s).length).toBeLessThanOrEqual(5);
+  });
+
+  it("an optional QA section: one line up top, details folded, never a mention or a fake marker", () => {
+    const s = { ...base, qa: { status: "3 screens checked, 1 looks off\n(@octo please look)", details: "![home](https://x/a.png) <!-- gittifacts:summary --> cc @octo" } };
+    const top = headline(s);
+    expect(top.length).toBeLessThanOrEqual(5);
+    expect(top.at(-1)).toBe("**QA** · 3 screens checked, 1 looks off (@\u200bocto please look)");
+    const body = summaryBody(s);
+    expect(body.match(/<!-- gittifacts:summary -->/g)).toHaveLength(1);
+    expect(body).toMatch(/<details><summary>QA details<\/summary>\n\n!\[home\]\(https:\/\/x\/a.png\) &lt;!-- gittifacts:summary --> cc @\u200bocto\n\n<\/details>$/);
+    expect(summaryBody({ ...base, qa: null })).not.toContain("QA");
   });
 
   it("grading, blocked and a failed walkthrough say so plainly", () => {

@@ -19,3 +19,4 @@ export * from "./pr-publisher.js";
 export * from "./pr-writes.js";
 export * from "./sync.js";
 export * from "./tokens.js";
+export { laneLabel, TERMS, WALKTHROUGH_LABEL } from "./terms.js";

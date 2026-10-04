@@ -18,6 +18,7 @@ import { type Change, defaultPolicy, type GithubChangeHost, type Plan, type Repo
 import type { Identity } from "@app/host";
 import { claimedCategoryOf, type GitHubHost } from "./adapter.js";
 import { changeIdFor, headBranchFor, mirrorNameFor, repoIdFor } from "./ids.js";
+import { WALKTHROUGH_LABEL } from "./terms.js";
 import { identityOf, normalizeGithubDelivery } from "./normalize.js";
 import { type GithubDelivery, type GithubRepo, IssueEvent, type PullRequest, PullRequestEvent, PushEvent } from "./payloads.js";
 import { PLAN_LABEL } from "./plans.js";
@@ -278,7 +279,18 @@ export class GithubSync {
     const p = PullRequestEvent.safeParse(delivery.payload);
     if (!p.success) return { event, action: "ignored", detail: "unreadable payload" };
     const { pull_request: pr, repository: r } = p.data;
-    return this.reconsider(event, changeIdFor(r.id, pr.number), pr, "the title, description or labels changed");
+    const changeId = changeIdFor(r.id, pr.number);
+    // The walkthrough label asks for the flagged stops on the diff (idempotent per head).
+    if (pr.labels.some((l) => l.name === WALKTHROUGH_LABEL)) {
+      try {
+        if ((await this.deps.host.publishRequestedTour(changeId, pr.number)) === "posted") {
+          await this.deps.host.publishSummary({ host: "github", owner: r.owner.login, repo: r.name, number: pr.number });
+        }
+      } catch (e) {
+        await this.log("github.review-post-failed", `change:${changeId}`, { error: (e as Error).message });
+      }
+    }
+    return this.reconsider(event, changeId, pr, "the title, description or labels changed");
   }
 
   /** A plan label or issue text changed: PRs closing that issue may have another Plan now. */

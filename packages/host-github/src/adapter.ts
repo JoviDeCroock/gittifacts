@@ -25,7 +25,7 @@ import { type CheckRunContext, completedCheckRun, laneRun, startedCheckRun, supe
 import { changeIdFor } from "./ids.js";
 import { identityOf, normalizeGithubDelivery } from "./normalize.js";
 import type { PrIndex } from "./pr-index.js";
-import { PrPublisher } from "./pr-publisher.js";
+import { PrPublisher, type PrPublisherDeps } from "./pr-publisher.js";
 import { type GithubDelivery, PullRequest } from "./payloads.js";
 
 /** Check run ids per (change, head): created when grading starts, completed once. */
@@ -62,6 +62,8 @@ export interface GitHubHostDeps {
   /** PR writes beyond the check run (M3): where they are recorded, and whether they're on. */
   prs?: PrIndex;
   prWrites?(): Promise<boolean>;
+  /** The summary comment's optional QA section (on-demand QA writes there, not a comment of its own). */
+  qa?: PrPublisherDeps["qa"];
 }
 
 const CATEGORIES: readonly ClaimedCategory[] = ["fix", "feature", "refactor", "dependency", "transform", "revert", "docs", "chore"];
@@ -109,6 +111,7 @@ export class GitHubHost implements HostAdapter {
             enabled: deps.prWrites ?? (async () => false),
             detailsUrl: (id) => this.detailsUrl(id),
             shadow: deps.shadow ?? true,
+            ...(deps.qa === undefined ? {} : { qa: deps.qa }),
           });
   }
 
@@ -329,6 +332,20 @@ export class GitHubHost implements HostAdapter {
     const p = this.publisher;
     if (p === null) return;
     await this.job(() => p.publishTour(this.changeId(r), r.number, tour));
+  }
+
+  /**
+   * The flagged stops on the diff for the current head, because someone asked (the walkthrough
+   * label, or Request full review): one review, idempotent per head; then the summary says so.
+   */
+  async publishRequestedTour(changeId: string, number: number): Promise<"posted" | "exists" | "skipped"> {
+    const p = this.publisher;
+    if (p === null) return "skipped";
+    const change = await this.deps.ports.store.getChange(changeId);
+    if (change?.headSha == null) return "skipped";
+    const tour = (await this.deps.ports.store.getTour?.(changeId, change.headSha)) ?? null;
+    if (tour === null) return "skipped";
+    return this.job(() => p.publishTour(changeId, number, tour, { requested: true }));
   }
 
   /** The summary comment, edited in place only when its text changes. */

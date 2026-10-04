@@ -165,10 +165,14 @@ export class GithubContractHost implements ContractHost {
     await this.job.release();
   }
 
-  /** The tour as GitHub shows it: the head's (latest, not minimized) review and its inline stops. */
+  /**
+   * The tour as GitHub shows it, when it does: the head's (latest, not minimized) review and its
+   * inline stops. By default GitHub shows no review (only on request, DECISIONS 2026-10-04), so
+   * there is nothing to compare: undefined.
+   */
   private publishedTour(headSha: string): Observed["publishedTour"] {
     const r = [...this.gh.reviews.values()].filter((x) => x.commit_id === headSha && !x.minimized).at(-1);
-    return r === undefined ? null : { stops: r.comments.length, riskiestFile: r.comments[0]?.path ?? null };
+    return r === undefined ? undefined : { stops: r.comments.length, riskiestFile: r.comments[0]?.path ?? null };
   }
 
   /** What GitHub shows: the completed check run's conclusion, read back as a routing action. */
