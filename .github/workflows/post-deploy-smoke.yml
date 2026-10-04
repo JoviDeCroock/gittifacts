@@ -10,6 +10,7 @@
 #
 # Secrets (optional; the matching checks skip and say so without them):
 #   E2E_EMAIL, E2E_PASSWORD                  the dedicated E2E account (never a person's account)
+#   STAGING_E2E_EMAIL, STAGING_E2E_PASSWORD  its twin on staging (picked when the URL is staging)
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID  Workers edit, for the rollback only
 name: post-deploy-smoke
 
@@ -42,6 +43,8 @@ on:
     secrets:
       E2E_EMAIL: { required: false }
       E2E_PASSWORD: { required: false }
+      STAGING_E2E_EMAIL: { required: false }
+      STAGING_E2E_PASSWORD: { required: false }
       CLOUDFLARE_API_TOKEN: { required: false }
       CLOUDFLARE_ACCOUNT_ID: { required: false }
 
@@ -64,8 +67,10 @@ jobs:
       DEPLOYED_VERSION: ${{ inputs.deployed_version }}
       PREVIOUS_VERSION: ${{ inputs.previous_version }}
       ROLLBACK_DRY_RUN: ${{ inputs.rollback_dry_run && '1' || '' }}
-      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
-      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      # Staging has its own database, so its own E2E account; GitHub mode is off there.
+      E2E_EMAIL: ${{ contains(inputs.url, 'gittifacts-staging.') && secrets.STAGING_E2E_EMAIL || secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ contains(inputs.url, 'gittifacts-staging.') && secrets.STAGING_E2E_PASSWORD || secrets.E2E_PASSWORD }}
+      SMOKE_GITHUB: ${{ contains(inputs.url, 'gittifacts-staging.') && 'off' || 'on' }}
       CI: "1"
     steps:
       - uses: actions/checkout@v4

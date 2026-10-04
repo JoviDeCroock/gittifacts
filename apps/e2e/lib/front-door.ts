@@ -96,7 +96,10 @@ export async function checkListedUrls(request: APIRequestContext, origin: string
   return failures;
 }
 
-/** A GitHub delivery with a wrong signature is refused before anything is queued. */
+/**
+ * A GitHub delivery with a wrong signature is refused before anything is queued: 401. Where GitHub
+ * mode is deliberately off (staging, `SMOKE_GITHUB=off`), the refusal is 503 github-not-configured.
+ */
 export async function checkWebhookRejectsBadSignature(request: APIRequestContext, origin: string): Promise<void> {
   const res = await request.post(`${origin}/github/webhooks`, {
     headers: {
@@ -107,5 +110,10 @@ export async function checkWebhookRejectsBadSignature(request: APIRequestContext
     },
     data: { zen: "e2e" },
   });
-  expect(res.status()).toBe(401);
+  if (process.env.SMOKE_GITHUB === "off") {
+    expect(res.status()).toBe(503);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("github-not-configured");
+  } else {
+    expect(res.status()).toBe(401);
+  }
 }

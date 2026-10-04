@@ -3,11 +3,11 @@
  * apps/platform/wrangler.jsonc so staging never drifts from production's bindings. Written next to
  * it as wrangler.staging.json (gitignored).
  *
- *   pnpm tsx scripts/staging/config.ts [--d1-id <uuid>]   # prints the path
+ *   pnpm tsx scripts/staging/config.ts [--d1-id <uuid>]   # prints the path (default: STAGING.d1Id)
  *
  * Differences from production: its own name, D1, R2 bucket, queues, Artifacts namespace,
- * rate-limit namespaces and metrics dataset; workers.dev only (no zone routes, so no previews on
- * *-pv.resynapse.dev); GitHub mode and platform admins off; the Artifacts push event filtered to the
+ * rate-limit namespaces and metrics dataset; previews on `*-pvs.resynapse.dev` (production:
+ * `*-pv.resynapse.dev`); GitHub mode and platform admins off; the Artifacts push event filtered to the
  * staging namespace.
  */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -19,6 +19,14 @@ export const STAGING = {
   name: "gittifacts-staging",
   url: "https://gittifacts-staging.decroockjovi.workers.dev",
   d1: "gittifacts-staging",
+  /** Created by scripts/staging/setup.sh on 2026-10-04 (not a secret). */
+  d1Id: "860fe658-cc60-45d0-9dbe-adf80e65207b",
+  /**
+   * Previews on the same zone as production, a disjoint first-level pattern (`p-…-pvs.resynapse.dev`,
+   * covered by Universal SSL; production owns `*-pv.resynapse.dev`).
+   */
+  previewSuffix: "-pvs.resynapse.dev",
+  zone: "resynapse.dev",
   bucket: "gittifacts-staging-blobs",
   artifactsNamespace: "gittifacts-staging-eu",
   queues: {
@@ -37,11 +45,12 @@ type Json = Record<string, unknown>;
 export function stagingConfig(prod: Json, d1Id: string): Json {
   const cfg = structuredClone(prod);
   cfg.name = STAGING.name;
-  delete cfg.routes;
+  cfg.routes = [{ pattern: `*${STAGING.previewSuffix}/*`, zone_name: STAGING.zone }];
   cfg.workers_dev = true;
   cfg.vars = {
     ...(cfg.vars as Json),
     ARTIFACTS_NAMESPACE: STAGING.artifactsNamespace,
+    PREVIEW_HOST_SUFFIX: STAGING.previewSuffix,
     BETTER_AUTH_URL: STAGING.url,
     METRICS_DATASET: STAGING.metricsDataset,
     PLATFORM_ADMINS: "",
@@ -76,8 +85,7 @@ export function stagingConfig(prod: Json, d1Id: string): Json {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { values } = parseArgs({ options: { "d1-id": { type: "string" } } });
-  const d1Id = values["d1-id"] ?? process.env.STAGING_D1_ID ?? "";
-  if (d1Id === "") throw new Error("pass --d1-id (wrangler d1 create gittifacts-staging prints it) or STAGING_D1_ID");
+  const d1Id = values["d1-id"] ?? process.env.STAGING_D1_ID ?? STAGING.d1Id;
   const platform = resolve(import.meta.dirname, "../../apps/platform");
   const prod = JSON.parse(stripJsonc(readFileSync(join(platform, "wrangler.jsonc"), "utf8"))) as Json;
   const out = join(platform, "wrangler.staging.json");
