@@ -71,7 +71,7 @@ describe("landing page", () => {
     expect(html).toContain(EXAMPLE.id);
     expect(html).toContain("First green in about a minute");
     expect(html).toContain(
-      `Median ${FIRST_GREEN.p50Sec}\u00a0s, 9 in 10 projects within ${FIRST_GREEN.p90Sec}\u00a0s`,
+      `Median ${FIRST_GREEN.p50Sec}\u00a0s, 9 in 10 repos within ${FIRST_GREEN.p90Sec}\u00a0s`,
     );
     expect(html).toContain(MEASURED.pushToEvidence);
     expect(html).toContain(MEASURED.tourCost);

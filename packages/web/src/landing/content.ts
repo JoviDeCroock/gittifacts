@@ -91,7 +91,7 @@ export const SHIFTS: { before: string; after: string; detail: string }[] = [
   },
   {
     before: "Merge button",
-    after: "Risk lane and merge queue",
+    after: "Review lane and merge queue",
     detail: "Evidence decides who looks; the queue keeps main green.",
   },
   {

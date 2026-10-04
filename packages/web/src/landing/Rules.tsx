@@ -19,7 +19,7 @@ const RULES: { title: string; text: string; refusal?: string }[] = [
   },
   {
     title: "Unknown escalates",
-    text: "A signal that is missing or failed to run can only raise the lane, never lower it.",
+    text: "A measurement that is missing or failed to run can only raise the lane, never lower it.",
   },
   {
     title: "Evidence is signed and portable",

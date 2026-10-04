@@ -91,13 +91,13 @@ export function LaneArtifact() {
         reasons={FX_REASONS}
         computedLane={1}
         lane={1}
-        caption={`Why ${EXAMPLE.id} is in Lane 1`}
+        caption={`Why ${EXAMPLE.id} gets a quick review (Lane 1)`}
       />
       <p class="art-lanes__shadow">
         <LaneTag lane={0} shadow size="sm" />
         <span>
-          Lane 0 starts in shadow mode: computed on every change while a person still glances, until
-          reviewers have agreed with it on 95% of at least 25 changes.
+          Auto-merge starts out calibrating: computed on every change while a person still reviews,
+          until reviewers have agreed with it on 95% of at least 25 changes.
         </span>
       </p>
     </div>

@@ -65,27 +65,27 @@ const STATIONS: Station[] = [
     id: "lane",
     name: "Lane",
     lead: "The evidence decides who looks.",
-    body: "The lane comes from the evidence, never from the author's description of its own work. Each signal forces a minimum lane and the highest one wins. A missing or failed signal can only raise it, and so can a model's judgment: here it is the only reason a person looks at all.",
+    body: "The lane comes from the evidence, never from the author's description of its own work. Each reason forces a minimum lane and the highest one wins. A missing or failed measurement can only raise it, and so can a model's judgment: here it is the only reason a person looks at all.",
     art: <LaneArtifact />,
   },
   {
     id: "tour",
-    name: "Tour",
+    name: "Walkthrough",
     lead: "A second agent explains the change, riskiest part first.",
-    body: "The reviewer is a separate agent from the author. Every stop is tied to evidence, and the tour has to say what it is least sure about and what it did not do. A Lane 1 tour is written to be read on a phone in under three minutes.",
+    body: "The reviewer is a separate agent from the author. Every stop is tied to evidence, and the walkthrough has to say what it is least sure about and what it did not do. A quick-review walkthrough is written to be read on a phone in under three minutes.",
     measured: { figure: MEASURED.tourCost, text: "per change for the reviewer agent" },
     art: (
       <div class="phones">
         <div class="phone">
           <Shot
             name="tour-fx-top"
-            alt={`The tour for ${EXAMPLE.id} on a phone: Lane 1, glance, because totals can use a rate up to 60 seconds old; the reviewer agent is least confident that cache hit rates in production will match tests, and did not add a hit-rate metric.`}
+            alt={`The walkthrough for ${EXAMPLE.id} on a phone: quick review (Lane 1), because totals can use a rate up to 60 seconds old; the reviewer agent is least confident that cache hit rates in production will match tests, and did not add a hit-rate metric.`}
           />
         </div>
         <div class="phone">
           <Shot
             name="tour-fx-risk"
-            alt="The tour's riskiest stop: totals can use a rate up to 60 seconds old, unproven, accepted in the plan as a trade-off, with the model's hidden-behavior-change concern as its evidence."
+            alt="The walkthrough's riskiest stop: totals can use a rate up to 60 seconds old, unproven, accepted in the plan as a trade-off, with the model's hidden-behavior-change concern as its evidence."
           />
         </div>
       </div>
