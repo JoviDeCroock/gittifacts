@@ -64,10 +64,10 @@ export const DEFAULT_REVIEWER_MODEL = "auto";
  * What a policy's `ai.reviewerModel: "auto"` resolves to on this platform: a Workers AI model,
  * routed through AI Gateway by the AI binding (no third-party key or credits needed). Live
  * dogfooding showed third-party ids fail through the binding without Unified Billing credits
- * (7003), and that Kimi K2.7 Code returns valid structured JSON in ~4 s (DECISIONS.md 2026-10-02).
- * Override with the `REVIEWER_MODEL` var.
+ * (7003). Kimi K2.7 Code was the first default (DECISIONS.md 2026-10-02); GLM-5.3-Flash replaced it
+ * to cut cost ~7-10x (owner's call, DECISIONS.md 2026-10-04). Override with the `REVIEWER_MODEL` var.
  */
-export const PLATFORM_AUTO_REVIEWER_MODEL = "@cf/moonshotai/kimi-k2.7-code";
+export const PLATFORM_AUTO_REVIEWER_MODEL = "@cf/zai-org/glm-5.3-flash";
 
 /**
  * Conservative per-token estimates for Workers AI models (billed in neurons; measured: Kimi
@@ -75,6 +75,7 @@ export const PLATFORM_AUTO_REVIEWER_MODEL = "@cf/moonshotai/kimi-k2.7-code";
  * the per-change budget escalate sooner, never later.
  */
 export const WORKERS_AI_PRICES: PriceTable = {
+  "@cf/zai-org/glm-5.3-flash": { inputPerMTok: 0.15, outputPerMTok: 0.5 },
   "@cf/moonshotai/kimi-k2.7-code": { inputPerMTok: 1, outputPerMTok: 5 },
   "@cf/openai/gpt-oss-120b": { inputPerMTok: 0.5, outputPerMTok: 2 },
   "@cf/deepseek-ai/deepseek-v4-pro-0813": { inputPerMTok: 2, outputPerMTok: 8 },

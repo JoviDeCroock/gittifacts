@@ -97,12 +97,26 @@ export interface AiBindingClientOptions {
   prices?: PriceTable;
   jsonMode?: BindingJsonMode;
   maxTokensField?: "max_tokens" | "max_completion_tokens";
+  /**
+   * `reasoning_effort` for reasoning models. Default: {@link DEFAULT_REASONING_EFFORT} for the model,
+   * else not sent (the model's own default).
+   */
+  reasoningEffort?: "low" | "high" | "max";
   /** Gateway-side timeout and the local abort, in ms. Default 120 000. */
   requestTimeoutMs?: number;
   maxAttempts?: 1 | 2 | 3 | 4 | 5;
   skipCache?: boolean;
   collectLog?: boolean;
 }
+
+/**
+ * Per-model reasoning defaults. GLM-5.3-Flash defaults to "max", which spent the whole output budget
+ * on reasoning in 3 of 22 judge calibration calls (no JSON left, so `unsure`); "low" keeps it inside
+ * the budget (DECISIONS.md 2026-10-04).
+ */
+export const DEFAULT_REASONING_EFFORT: Readonly<Record<string, "low" | "high" | "max">> = {
+  "@cf/zai-org/glm-5.3-flash": "low",
+};
 
 const LegacyWorkersAiResponse = z.object({
   response: z
@@ -235,6 +249,8 @@ export class AiBindingClient implements LlmClient {
       ],
       [this.opts.maxTokensField ?? "max_tokens"]: req.maxTokens,
     };
+    const effort = this.opts.reasoningEffort ?? DEFAULT_REASONING_EFFORT[this.sentModel];
+    if (effort !== undefined) inputs.reasoning_effort = effort;
     const mode = this.opts.jsonMode ?? "openai";
     if (req.jsonSchema && mode === "openai") {
       inputs.response_format = {
@@ -354,7 +370,7 @@ export interface ReviewerLlmOptions {
   /** Binding-only options. */
   binding?: Pick<
     AiBindingClientOptions,
-    "jsonMode" | "maxTokensField" | "maxAttempts" | "skipCache" | "collectLog"
+    "jsonMode" | "maxTokensField" | "reasoningEffort" | "maxAttempts" | "skipCache" | "collectLog"
   >;
   /** HTTP-only options. */
   http?: Omit<

@@ -12,7 +12,7 @@
  *   with Wrangler's OAuth token (`wrangler auth token`), held in memory only, never printed.
  *
  * Env:
- *   JUDGE_MODEL   default @cf/moonshotai/kimi-k2.7-code (the platform's "auto" reviewer model)
+ *   JUDGE_MODEL   default @cf/zai-org/glm-5.3-flash (the platform's "auto" reviewer model)
  *   RUNS          runs per case (default 1): the model samples, so repeat to see variance
  *   CONCURRENCY   cases in flight (default 3)
  *   OUT           write the full results as JSON to this path
@@ -37,7 +37,7 @@ const runtime = globalThis as {
 const env: Env = runtime.process?.env ?? {};
 const argv = runtime.process?.argv.slice(2) ?? [];
 
-const MODEL = env.JUDGE_MODEL ?? "@cf/moonshotai/kimi-k2.7-code";
+const MODEL = env.JUDGE_MODEL ?? "@cf/zai-org/glm-5.3-flash";
 const RUNS = Math.max(1, Number(env.RUNS ?? "1") || 1);
 const CONCURRENCY = Math.max(1, Number(env.CONCURRENCY ?? "3") || 3);
 const MAX_TOKENS = env.MAX_TOKENS ? Number(env.MAX_TOKENS) : undefined;

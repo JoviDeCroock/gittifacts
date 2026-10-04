@@ -201,7 +201,7 @@ describe("lazyReviewer", () => {
     await reviewer.judge({ ...input, model: "auto" });
     await reviewer.judge(input);
     // "auto" (explicit or by default) resolves to the platform's Workers AI model.
-    expect(built).toEqual(["small", "@cf/moonshotai/kimi-k2.7-code"]);
+    expect(built).toEqual(["small", "@cf/zai-org/glm-5.3-flash"]);
     expect(seen.every((i) => typeof i === "object" && i !== null && !("model" in i))).toBe(true);
   });
 

@@ -2429,3 +2429,14 @@ Proposal: docs/ux-review/terminology-2026-10-04.md. The user decided; labels cha
   `write-a-policy#turn-on-auto-merge` (was `#turn-on-lane-0`; every link updated).
 - The preview banner now reads "Unclaimed repo — not verified"; the self-approval error says "nobody can approve
   their own plan".
+
+## 2026-10-04 — Platform reviewer model: GLM-5.3-Flash (low reasoning) replaces Kimi K2.7 Code
+- **Decision (owner):** `ai.reviewerModel: "auto"` now resolves to `@cf/zai-org/glm-5.3-flash` to cut model cost. It covers the
+  judge, tours and the merge-queue resolver. Price $0.15/M input and $0.50/M output, against Kimi's $1/$5. The `REVIEWER_MODEL` var
+  still overrides it, and Kimi stays in the price table.
+- **Calibration (packages/tour/scripts/calibrate-judge.ts, 11 cases × 2 runs, real Workers AI):**
+  - Default `reasoning_effort: "max"`: 19/22. The 3 misses spent the whole output budget on reasoning, left no JSON and read as
+    `unsure`. That is safe, since it only raises the lane, but noisy.
+  - `reasoning_effort: "low"`: **22/22**, 134–474 output tokens per call.
+- **Applied:** `DEFAULT_REASONING_EFFORT` in `packages/tour/src/binding.ts` sends `"low"` for GLM-5.3-Flash. It's overridable per
+  client, and no other model is affected. Re-run the calibration whenever the default model or the prompt changes.

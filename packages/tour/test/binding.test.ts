@@ -127,6 +127,20 @@ describe("AiBindingClient", () => {
     expect(client.allowedModels).toHaveLength(2);
   });
 
+  it("sends GLM-5.3-Flash a low reasoning effort by default, overridable, and nothing for other models", () => {
+    const glm = (reasoningEffort?: "low" | "high" | "max") =>
+      new AiBindingClient({
+        ai: new FakeAi([]),
+        gatewayId: "gw",
+        model: "@cf/zai-org/glm-5.3-flash",
+        ...(reasoningEffort ? { reasoningEffort } : {}),
+      }).buildRun(REQ).inputs;
+    expect(glm().reasoning_effort).toBe("low");
+    expect(glm("high").reasoning_effort).toBe("high");
+    const kimi = new AiBindingClient({ ai: new FakeAi([]), gatewayId: "gw", model: "@cf/moonshotai/kimi-k2.7-code" });
+    expect(kimi.buildRun(REQ).inputs).not.toHaveProperty("reasoning_effort");
+  });
+
   it("supports older @cf models: their JSON mode and { response } output", async () => {
     const ai = new FakeAi([
       {
