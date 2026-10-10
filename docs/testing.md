@@ -8,7 +8,9 @@ add to it. Owner's rule, 2026-10-04: **E2E > integration >>> unit.**
 - Every bug fix and every feature lands with an **E2E or integration test that would have caught it**:
   a real journey through the real Worker (browser or agent), or a workerd test with real bindings.
 - **Unit tests are for pure logic only**: the classifier, canonical JSON and attestation, diff and
-  prose helpers, policy evaluation, and similar. Don't add a unit test for behaviour an integration or E2E
+  prose helpers, policy evaluation, and similar. One kind of static check sits with them: the web
+  design rules (`packages/web/test/design-rules.test.ts`), which read the stylesheets and fail on a
+  broken DESIGN.md rule. Don't add a unit test for behaviour an integration or E2E
   test already covers.
 - **Deploys gate on E2E and integration first.** Typecheck and the generated-artifacts check run
   alongside them.
@@ -38,7 +40,7 @@ On its first run, the new E2E found two production bugs. Both are fixed in `bb4d
 
 | Tier | Where it runs | When | What | Runtime |
 |---|---|---|---|---|
-| **1. Pre-deploy gate** | GitHub Actions, `deploy-gate.yml` | Every deploy (`deploy-clean.sh --gate=ci`), on the exact commit | Job `gate`: generated artifacts fresh, `pnpm -r typecheck`, the platform workerd suite (58 files, 315 tests). Job `e2e`: the browser and HTTP journeys at 1280 and 390 px against the real Worker served locally | `gate` ≈ 8–10 min; `e2e` ≈ 2 min (42 tests in 39 s on a runner, server start included; run 37183803438). The two jobs run in parallel |
+| **1. Pre-deploy gate** | GitHub Actions, `deploy-gate.yml` | Every deploy (`deploy-clean.sh --gate=ci`), on the exact commit | Job `gate`: generated artifacts fresh, `pnpm -r typecheck`, the web design rules and unit tests (`pnpm --filter @app/web test`: DESIGN.md's named rules and the palette's agent twins against the MCP contract), the platform workerd suite (58 files, 315 tests). Job `e2e`: the browser and HTTP journeys at 1280 and 390 px against the real Worker served locally | `gate` ≈ 8–10 min; `e2e` ≈ 2 min (42 tests in 39 s on a runner, server start included; run 37183803438). The two jobs run in parallel |
 | **2. Post-deploy smoke** | GitHub Actions, `post-deploy-smoke.yml` | Right after every `wrangler deploy` (`deploy-clean.sh`), or on demand | Against the live URL: health and the deployed commit, the front door and docs, the E2E account signing in, anonymous `create_project` to first green and a preview within 120 s, the webhook's 401 | ≈ 2–3 min (the agent path takes ≈ 45–80 s) |
 | **3. Nightly / weekly** | GitHub Actions, `e2e-nightly.yml` (and `github-live.yml`) | Nightly at 03:47 UTC; weekly on Sunday; on demand | Full live journeys as the E2E account: m1, remote workspace, merge queue with the resolver, the CLI and MCP agent journeys; weekly m4 (rollout regression → auto-revert) and the GitHub import. The GitHub live contract on ReSynapse/fixture-lib (`github-live.yml`, 03:17) | 5–40 min per suite, three in parallel |
 | Contract | GitHub Actions, `host-contract.yml` | Every push that can change a lane | Native and GitHub hosts give the same lane, evidence and walkthrough | ≈ 2 min |

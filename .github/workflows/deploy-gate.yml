@@ -1,6 +1,6 @@
 # Deploy gate (docs/testing.md, tier 1) on the exact commit about to be deployed, on GitHub runners
 # instead of the developer machine. Two jobs in parallel, both must pass:
-#   gate: generated artifacts fresh, full typecheck, the platform workerd suite;
+#   gate: generated artifacts fresh, full typecheck, the web design rules, the platform workerd suite;
 #   e2e:  browser + HTTP journeys (desktop 1280 and phone 390) against the real Worker served by
 #         `wrangler dev --local` with the integration fakes (apps/e2e).
 # Dispatch-only, so it spends Actions minutes only when deploying:
@@ -47,6 +47,8 @@ jobs:
         run: scripts/check-generated.sh
       - name: Typecheck (every package)
         run: pnpm -r typecheck
+      - name: Web design rules and unit tests (DESIGN.md named rules, palette twins vs the MCP contract)
+        run: pnpm --filter @app/web test
       - name: Platform tests
         working-directory: apps/platform
         env:

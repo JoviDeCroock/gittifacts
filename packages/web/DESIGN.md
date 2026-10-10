@@ -204,6 +204,10 @@ Every change arrives tagged like a triage case. The visual world borrows the gra
 
 The ground is cool form paper under ink-navy text, quiet enough to read for three minutes on a phone in daylight. Color is reserved for three jobs: the one action ink (scrub teal) on the primary action, focus and selection; the triage bands on lane tags and their tints; and verdict and state (proven, unproven, risk). Everything else is ink, hairline and space. Density is Operate density on lists and Read comfort inside the tour: 65 to 70 characters of prose, real code excerpts, real numbers.
 
+Agents are first-class actors in this world, not credentials. They appear where the work is (the dashboard's agent band, bylines as squares beside people's circles), and every command a person can run has its agent twin one keystroke away: the palette prints the MCP call and CLI command that do the same thing, and names the acts a product rule keeps human instead of pretending an agent could do them. The boundary between a person's hand and an agent's is shown, never implied.
+
+Chrome that floats over the chart is acetate: the clear sleeve a ward clips over its observation chart. You can still see the chart through it, faintly, so you never lose your place; everything you read or sign sits on paper.
+
 Dark mode is composed for the on-call reviewer at night: a deep navy-black ground, lighter surfaces for elevation, desaturated bands, a brighter teal, and slightly wider tracking and leading for light-on-dark text.
 
 The marketing landing is a Persuade surface inside this world, not a second brand. It loads the app's tokens, base, components and triage styles unchanged and adds only a page type scale, a page layout and three landing components: the lane tag set at poster scale as a case tag, the station strip turned into a vertical spine, and a copy line for values a reader will paste. Product screens appear as themselves, at 1:1.
@@ -214,6 +218,8 @@ The marketing landing is a Persuade surface inside this world, not a second bran
 - Three verdict shapes: filled disc with check, dashed ring, triangle.
 - One family (Atkinson Hyperlegible Next) for all UI; its Mono sibling only for code, hashes and data.
 - Hairline-separated rows instead of cards; panels only where a block is one decision.
+- Acetate chrome (top bar, station strip, bottom bars, palette) over a paper chart; never acetate under text you read or a form you sign.
+- Every command has an agent twin or a stated human-only rule (the palette's two hands).
 - On the landing, the same world at poster scale: a case tag whose signed evidence tears off the review it proves.
 
 ## Colors
@@ -292,11 +298,26 @@ From 64em the hero splits into the text and a 28rem tag column, 64px apart, and 
 
 ## Elevation & Depth
 
-Mostly flat and tonal. Depth comes from the surface ladder (paper, sheet, panel) and hairlines. Two soft shadows exist and both mean something: a raise for the selected segment, the active nav item and decision panels, and a sheet shadow for anything fixed to the bottom of the screen. Dark mode uses lighter surfaces, not shadows, for elevation.
+Flat and tonal on the page; one material above it. Depth on the page comes from the surface ladder (paper, sheet, panel) and hairlines. Above the page sits acetate, the only translucent material, worn only by chrome that floats over a scrolling chart. Shadows are few and each means something (below). Dark mode uses lighter surfaces, not shadows, for elevation on the page.
+
+### Acetate (the one material)
+Tokens in `tokens.css`: `--acetate` (canvas at 74%) for chrome at the top, `--acetate-strong` (surface at 84%) for chrome at the bottom and the palette, `--acetate-filter` (`blur(18px) saturate(1.6)`), `--acetate-rim` (a 1px inner highlight on the top edge: white at 60% by day, 7% at night) and `--acetate-edge` (rule-strong at 70%).
+
+Worn by exactly these surfaces, and listed in `packages/web/test/design-rules.test.ts` (`ACETATE_SURFACES`), which fails the build for any other:
+- **Top bar** (`.topbar`): part of the page at rest (no edge); gains its edge, rim and float shadow once the chart scrolls under it (`data-scrolled`, 200ms).
+- **Station strip** (`.stations`): sticky under the top bar.
+- **Decision bar** (`.tour__bar`), **plan bar** (`.plan-bar`), **switch-off bar** (`.kill-bar`): fixed in the thumb zone on phones.
+- **Palette** (`.palette`): a sheet lifted over the page.
+
+Scrims (`::backdrop`) may blur up to 4px so the page recedes behind a dialog; nothing else blurs.
+
+**The Acetate Rule.** Acetate is chrome over a chart, never a reading or signing surface. Prose, code, the triage chart, tables, cards and forms sit on paper. When a bottom bar opens a form (a review comment), it turns solid (`.tour__bar:has(.is-open)`). Under `prefers-reduced-transparency`, `prefers-contrast: more` or without `backdrop-filter`, acetate becomes the solid ground it sits on. To add a surface: add it here, to `ACETATE_SURFACES`, and to DECISIONS.md, in that order.
 
 ### Shadow Vocabulary
 - **Raise** (`0 1px 2px ink/6%, 0 4px 14px ink/6%`): selected segment, current nav item, decision and signing panels.
-- **Sheet** (`0 -6px 28px ink/14%`): the fixed decision bar and the plan signing bar on phones; the nav drawer.
+- **Sheet** (`0 -6px 28px ink/14%`): the fixed decision bar, the plan signing bar and the switch-off bar on phones; the nav drawer.
+- **Float** (`--shadow-float`, `0 6px 18px -12px ink/35%`): under the top bar once the chart scrolls beneath it. A fall-off below an edge, never a halo.
+- **Lift** (`--shadow-lift`, `0 24px 64px -24px ink/45%`): the palette, the one sheet lifted over the whole page.
 - **Tag lift** (landing only; `drop-shadow(0 1px 1px ink/10%) drop-shadow(0 10px 22px ink/10%)`, at night `drop-shadow(0 12px 28px black/45%)`): the case tag, the one object lifted off the hero band. A drop shadow, so it follows the die-cut silhouette rather than a box.
 - **Eyelet** (landing only; `inset 0 2px 3px ink/30%`): falls inside the case tag's punched hole, so the hole reads as punched rather than printed.
 
@@ -308,6 +329,30 @@ Mostly flat and tonal. Depth comes from the surface ladder (paper, sheet, panel)
 Small, functional radii: tick marks 2px, tags and inline code 3px, chips and agent avatars 6px, controls 8px, panels and code blocks 12px, sheets 18px, and fully round pills only for count badges. Circles mean people (avatars) and stops (station numbers); squares mean agents and the platform. The lane tag is the one custom silhouette: a rectangle with a chamfered left end and a punched hole, drawn as an SVG path with an even-odd hole so it reads on any ground.
 
 On the landing the same silhouette turns portrait at poster scale as the case tag: both top corners chamfered (2.25rem), a hole (9px radius) punched through at center 30px from the top and ringed by a 5px panel-strong eyelet. Tear-off strips hang below it; a strip's perforation is a 2px dashed rule between 6px punched notches, and a torn strip trades the perforation for a toothed torn edge (10px teeth).
+
+## Motion
+
+Motion explains state, place and consequence; it never decorates. Subtle by default: short distances (6 to 8px, a 1.5% scale), decelerating curves, exits faster than entrances. One focal moment per surface: the approval seal in the app, the torn strip on the landing.
+
+### Tokens (all in `tokens.css`)
+- **Curves:** `--ease-out` (routine state), `--ease-expo` (`cubic-bezier(0.16, 1, 0.3, 1)`, arrivals that settle: views, sheets, the palette), `--ease-in` (exits).
+- **Routine durations:** `--dur-feedback` 120ms (hover, press, selection), `--dur-state` 200ms (a state change), `--dur-exit` 180ms (leaving), `--dur-view` 280ms (arriving on a screen, the palette), `--dur-sheet` 320ms (a sheet rising).
+- **Authored moments, each named:** `--dur-fill` 640ms (a meter fills once on arrival), `--dur-signed` 700ms (the decision settles into its signed ground), `--dur-seal-ring` 520ms and `--dur-seal-check` 320ms, `--dur-trace` 2400ms (one lap of a working agent's trace), `--dur-spin` 900ms, `--dur-shimmer` 1400ms, and on the landing `--dur-case-mark` 420ms and `--dur-case-tear` 1100ms.
+
+### Vocabulary
+- **Arriving on a screen:** the heading settles 6px (`view-rise`) and the content fades in 40ms later (`view-fade`). Only the head moves: a transform on the content would capture the fixed bars inside it.
+- **Chrome reacting to scroll:** the top bar's edge and float shadow fade in (`--dur-state`).
+- **Sheets and dialogs:** the drawer slides 24px in from the edge and back out; the palette drops 6px and grows from 98.5%; the decision sheet rises 16px. Scrims fade. Exits use `--dur-exit` and `--ease-in`.
+- **Measures:** meters fill by `transform: scaleX` once, on arrival (`@starting-style`), and move by transform when the value changes. Never width.
+- **Disclosures:** `details` open and close by height where the browser can animate to `auto` (`interpolate-size`), and snap elsewhere.
+- **Feedback:** a pressed button moves 1px; hover and selection change colour in `--dur-feedback`.
+- **After the decision:** the seal draws (60ms + 520ms ring, check to 780ms), then the next change rises 8px in at 820ms, so the seal stays the moment.
+- **Live work:** a working agent's row carries a soft trace along its hairline (`fleet-trace`), the app's one live signal. It runs only while the row is on screen.
+
+### Named Rules
+**The Token Time Rule.** Every transition and animation is timed by a `--dur-*` token; a literal may only be a delay inside a choreography or `0s`. Endless loops exist only for loading feedback (`spin`, `shimmer`) and the agent trace (`fleet-trace`). `design-rules.test.ts` fails the build otherwise.
+
+**The Reduced Motion Rule.** Under `prefers-reduced-motion: reduce`, travel goes and state stays: `base.css` clamps every animation to an instant and keeps colour and opacity transitions at 80ms, the seal appears drawn, the trace, view rise and next-up rise do not run, and smooth scrolling becomes a jump. New motion that moves things goes inside `@media (prefers-reduced-motion: no-preference)`.
 
 ## Components
 
@@ -330,7 +375,7 @@ The die-cut tag at 31×18, 37×22 or 47×28. Lane 2 carmine with sheet numeral, 
 Proven is a filled green disc with a check; unproven a dashed ochre ring with a dash; risk a carmine triangle with an exclamation. Always paired with the word. The tour's station numbers echo them: green outline, dashed ochre, filled carmine.
 
 ### Station Strip
-Sticky under the top bar: "Stop 2 of 5" and a line of verdict marks; the current station gets a teal underline and a larger mark. Offers "Resume at stop N" (a neutral pill) when you return to a tour you left mid-way. The stop in view owns attention: the other stops recede through colour steps that stay AA (titles to ink-2, station numbers to a neutral outline, chip and code borders to hairline). Verdict marks and words never fade.
+Sticky under the top bar, on acetate: "Stop 2 of 5" and a line of verdict marks (44px targets, shrinking toward 36px only when a long walkthrough needs the room); the current station gets a teal underline and a larger mark. The current stop is the last one whose top has passed a reading line near the top of the view (30% of the height, at most 280px), so a stop whose tail still shows above the next is not current; jumping to a stop (a station, J/K, Resume) keeps it current until you scroll again. Offers "Resume at stop N" (a neutral pill) when you return to a tour you left mid-way. The stop in view owns attention: the other stops recede through colour steps that stay AA (titles to ink-2, station numbers to a neutral outline, chip and code borders to hairline). Verdict marks and words never fade.
 
 ### Chips
 - **Status chip:** icon plus label on a tone tint (6px radius, 24px tall).
@@ -340,7 +385,7 @@ Sticky under the top bar: "Stop 2 of 5" and a line of verdict marks; the current
 Visible labels above, 44px minimum, 16px text, ink-4 boundary; 2px teal focus ring with 1px offset; carmine boundary and an inline message below on error.
 
 ### Navigation
-Sidebar links are 40px rows; the current one is a raised sheet with a teal icon. The phone drawer repeats the same list at 44px.
+Sidebar links are 40px rows; the current one is a raised sheet with a teal icon. Agents use the bot icon (they are actors, not keys). Under the wordmark a "Search or act" field with its ⌘K hint opens the palette; on phones a search button sits beside the menu in the top bar. The phone drawer repeats the same list at 44px and slides out as well as in.
 
 On the landing, a sticky 64px top bar on the page ground with a hairline below holds the wordmark, the section anchors (ink-2, 44px targets, panel on hover) from 900px, and a secondary Sign in. Below 900px the anchors sit behind a disclosure menu that needs no script, in a raised sheet.
 
@@ -351,7 +396,27 @@ A bordered code block (12px radius) with a sheet header (path in mono with the d
 Before, after and a computed difference, registered at one scale (frames 250px wide on phones, three 200px columns from 640px). On phones a Before / After / Difference segmented control swaps frames in place, which is itself the registered comparison. The difference frame fades the "after" capture to grey and marks changed pixels in carmine, computed in the browser from the two captures.
 
 ### Approval Seal
-The system's one authored motion moment in the app. When the server confirms an approval, a ring and check draw themselves (520ms then 320ms, ease-out) on a panel that settles into the green tint. Reduced motion shows the finished seal without drawing. The landing has one moment of its own, on the case tag.
+The app's focal motion moment. When the server confirms an approval, a ring and check draw themselves (`--dur-seal-ring` then `--dur-seal-check`, ease-out) on a panel that settles into the green tint. Reduced motion shows the finished seal without drawing. The landing has one moment of its own, on the case tag.
+
+**Next up.** After any decision the panel offers the next change waiting in the same repo (never one the viewer wrote) as a 44px row with its title and how many wait, or says nothing else waits; after an approval it adds "Watch it land in the merge queue". It rises in once the seal has drawn.
+
+### Palette (agent twins)
+One palette for going, acting and delegating: ⌘K or Ctrl+K anywhere, `/` outside a text field, or the "Search or act" field in the sidebar and the search button in the phone top bar. Acetate sheet, 640px wide, 12vh from the top on desktop and under the safe area on phones. Commands come from the screen in view (`lib/commands.ts`): this change, plan or repo first, then places, then preferences.
+
+Two hands, as a radio pair under the query: **Myself** runs the command (Enter); **An agent** copies its twin, the MCP call (Enter) or the CLI command (Shift+Enter), shown in mono in a pane under the list with copy buttons. Cmd/Ctrl+Enter hands any command off without switching. The mode is remembered.
+
+**The Twin Rule.** Every command either has an agent twin, an MCP tool and its arguments that the server's contract accepts, or a `personOnly` reason naming the product rule that keeps it human (approve, request changes, reject, plan approval, the switch-off). In agent mode person-only rows stay listed with a lock and "Only a person", so the boundary is visible, never hidden. Agent-only commands (re-run CI, wait until it merges, draft a plan, start a change) appear only in agent mode. `test/commands.test.ts` checks every twin against `packages/mcp/tools.introspection.d.ts`: the tool exists, every argument is one it takes, every required argument is given.
+
+### Keyboard
+Single keys act on the screen in view and never fire while typing, with a modifier held, or under an open dialog. No key signs anything: A opens the decision, it never approves. Each key and its palette row run the same handler (`state/keys.ts`, `gf:command`), so they cannot drift.
+- Anywhere: ⌘K / Ctrl+K, `/` (palette).
+- Walkthrough: J next stop, K previous stop, A open the decision, E evidence.
+
+### Agent Band (dashboard)
+"Your agents", above the repositories: each agent with an audit event this week, read from the signed audit log (`lib/fleet.ts`). A row is a 36px square avatar with initials (agents are squares; people are circles), the agent and its accountable person, its last act in words with its age, and its state in words: **Needs review** / **Plan needs approval** (its next move is a person's; ink, a teal person icon), **Failing** (carmine, a state), **Working** (an event in the last 15 minutes; the trace), **Quiet** (muted). Ordered by that state, then recency; the row opens what the agent acted on. It never says "waits on you": the viewer may not be an eligible reviewer. Loading and errors stay silent: the band adds to the dashboard, it never blocks it.
+
+### Switch-off Bar (rollout, phones)
+Below 1100px, a fixed acetate bar carries the current error rate, the rate that reverts ("0.42% errors · reverts at 1.4%") and a danger-outline "Switch off…" that opens the same form as the side column (scrolled into view, reason focused). It steps aside (slides down, `--dur-exit`) while the Switch off section itself is on screen: one control at a time.
 
 ### Case Tag (landing signature)
 One change at poster scale: the lane tag's die-cut read as a case record, on a sheet ground (the strongest night panel in dark mode), up to 28rem wide, with the hole and eyelet at the top (see Shapes). Inside: the repository, a "Demo data" chip and the change id in mono; the change title; the authoring agent with its square avatar; then evidence rows under a 2px ink rule, separated by hairlines. Each row is a label (ink-3) and a value with its verdict mark at the end. A row that holds the lane up takes its lane's tint and ends in the small lane tag instead of a verdict mark. Below 480px each label sits above its value. A meta-size signature line names the key and the git ref.
@@ -381,11 +446,16 @@ Screens from the product appear without browser or device chrome, at 1:1: each c
 - **Do** keep primary phone actions in the bottom bar with `env(safe-area-inset-bottom)` padding.
 - **Do** show product screens on the landing at 1:1 with light, dark and phone-width captures, and label demo data where it is seen.
 - **Do** make every landing copy control work without script: the value is selectable text first, the copy button an enhancement.
+- **Do** give every new command an agent twin or a person-only rule (the Twin Rule), and add it to the palette when it gets a screen.
+- **Do** time motion with tokens and let reduced motion keep the state change (the Token Time and Reduced Motion Rules).
+- **Do** keep agents visible as actors where the work is: squares with a name and an accountable person, and what they did last.
 
 ### Don't:
 - **Don't** encode a lane as a colored side stripe on a card or row; use the tag and the tinted group band.
 - **Don't** use monospace for names, labels or prose ids.
 - **Don't** put a kicker or tracked uppercase label above a heading.
-- **Don't** show a pulsing live dot; live data is shown as a ticking countdown or a "checked N seconds ago" line.
+- **Don't** show a pulsing live dot; live data is shown as a ticking countdown or a "checked N seconds ago" line, and live agent work as the trace.
+- **Don't** put acetate under text you read or a form you sign, or blur anything that isn't a listed surface or a scrim (the Acetate Rule).
+- **Don't** offer an agent twin for an act a product rule keeps human, and don't hide those acts from the agent view either.
 - **Don't** let anything but code blocks and rails scroll horizontally.
-- **Don't** spend motion anywhere except state feedback and the approval seal (on the landing, the case tag's one load moment).
+- **Don't** animate for decoration: motion answers what changed, where you are or what happens next (Motion, Vocabulary). One focal moment per surface: the approval seal in the app, the torn strip on the landing.
