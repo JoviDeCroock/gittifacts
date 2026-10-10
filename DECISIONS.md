@@ -2821,3 +2821,68 @@ minimum bar is multiple agents working on changes concurrently. Two of those had
 - `verify-attestation` checks evidence notes only. A CLI check for why notes is a follow-up.
 - README now has try, run-locally and deploy sections. The contest also requires a
   permissive license and a public repo. Both are the owner's call and are not done.
+
+## 2026-10-10 — AX/UI/UX audit: agents close the review loop; acetate, motion and the palette
+
+**Context.** The owner asked for an agent-experience and UI/UX audit with four directions: agents
+are first-class and can do everything; the UI is novel and impeccable; glassy effects; subtle
+animation. Three independent passes ran on 1d29abf: a design review (Nielsen 26/40; the tour and
+landing are product-specific, the rest generic admin), a detector and technical pass (16/20, no P0),
+and a parity matrix of UI × HTTP × MCP × CLI. Findings that drove the work:
+- **P0, agents.** When a human requested changes, the author agent never learned it:
+  `get_change_status` said "Nothing has been pushed yet", `wait_for_change(merged)` never settled,
+  and no MCP output carried the comment, while the UI promised "the author agent receives your
+  comment".
+- Plans were write-only for agents (no read, no list, no withdraw, though DECISIONS' role table
+  grants "withdraw own plan"); a repo's changes could not be listed over MCP; outputs had no link a
+  human could open; human-only 403s gave a generic fix.
+- In the UI agents existed only as credentials; there was no keyboard path (36 Tabs to Approve);
+  Switch off sat below the fold on phones; the top bar ignored the notch; the existing blur sat on a
+  94% ground and read as opaque; no `prefers-reduced-transparency` handling.
+
+**Decision.**
+- **Agents can do what a person does, except what the product forbids** (approving Plans and
+  Changes, the switch-off, policy, membership; only the merge queue writes main). Added
+  `get_plan`, `list_plans`, `withdraw_plan` (author only, drafts only; also
+  `POST /api/v1/plans/{id}/withdraw`) and `list_changes`. `get_change_status` returns `reviews`
+  (decision, comment, reviewer, head, withdrawn and why), and its next steps quote the comment.
+  `wait_for_change` settles with `changes-requested`, `rejected` (was `unreachable`) or
+  `approval-withdrawn`; clients treat any reason but `timeout` as final (the CLI does). Plan and
+  Change outputs carry a `url`; human-only 403s name the page and the next call. `search_tools`
+  returns the best 10.
+- **Every human command shows its agent twin.** The palette (⌘K / Ctrl+K / `/`) has two hands:
+  Myself runs a command, An agent copies its MCP call or CLI command; person-only acts stay listed
+  with the rule that keeps them human. Single keys (J/K/A/E on a walkthrough) run the same handlers
+  as their palette rows; no key signs anything.
+- **Agents are visible actors.** The dashboard's agent band reads the signed audit log: each agent
+  active this week, its last act, and whether its next move is a person's. It never says "waits on
+  you", because the viewer may not be an eligible reviewer.
+- **Glass is one material, acetate, on six listed surfaces** (top bar, station strip, decision,
+  plan and switch-off bars, palette). It is never under reading or signing; a bar turns solid when it
+  opens a form; it falls back to solid ground under reduced transparency, raised contrast or no
+  `backdrop-filter`. This supersedes DESIGN.md's "mostly flat".
+- **Motion is subtle and token-timed.** This replaces "no motion except the seal" (the owner asked
+  for subtle animation). Screens arrive (the head settles 6px), the top bar's edge follows scroll,
+  sheets and the drawer leave as well as arrive, meters fill once by transform, details open by
+  height, and the next change rises after the approval seal. The seal stays the focal moment.
+  Reduced motion keeps every state change and drops the travel.
+- **Rules are enforced, not only written.** `packages/web/test/design-rules.test.ts` (acetate
+  surfaces and fallbacks, `--dur-*` tokens only, endless loops only for loading and the agent
+  trace, the reduced-motion clamp, colour only in tokens.css) and `test/commands.test.ts` (every
+  twin accepted by the MCP contract snapshot; person-only acts never have one) run in the deploy
+  gate. CLAUDE.md says to change DESIGN.md and this file before a rule's test.
+
+**Consequences.**
+- A rejection's wait reason changed from `unreachable` to `rejected`. `scripts/e2e/*` still check
+  `unreachable`, but only on happy paths.
+- `approval-withdrawn` has only a unit test, no end-to-end one. `changes-requested` is inferred from
+  "awaiting a push with a head", which a reopened GitHub PR passes through briefly.
+- `CONVENTIONS_VERSION` is not bumped, so existing repos keep the old AGENTS.md (no get_plan step)
+  until it is.
+- The agent band only sees the last 100 audit events the viewer can read. A busy org needs an
+  agents endpoint.
+- The web unit tests now gate deploys. They also caught a landing test that had been failing on
+  main since e0f9537 (a float width), fixed here.
+- Still open from the audit: the queue has no human controls (dequeue, reprioritize), the audit
+  filter can't filter by actor, the notifier writes rows nothing reads (`request_review` says
+  `notified: true`), and there is no agent pause.
