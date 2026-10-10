@@ -199,7 +199,11 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
     return (
       <div class={`decision decision--${layout} decision--status`}>
         <StatusChip meta={CHANGE_STATUS[change.status]} />
-        <span class="decision__fine">{STATUS_NOTE[change.status] ?? "This change is past review."}</span>
+        <span class="decision__fine">
+          {change.status === "awaiting-push" && change.headSha
+            ? "Changes requested. The author has your comment and pushes a new head next."
+            : (STATUS_NOTE[change.status] ?? "This change is past review.")}
+        </span>
         {rolling ? (
           <LinkButton href={`/changes/${change.id}/rollout`} size="sm" variant="secondary" icon="rocket">
             Rollout

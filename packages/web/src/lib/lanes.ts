@@ -112,10 +112,14 @@ export function unroutedCopy(status: ChangeStatus, id: string): { title: string;
  * (`runStatus`: the latest pipeline run's status, if any).
  */
 export function noTourCopy(
-  change: { id: string; status: ChangeStatus; lane: Lane | null; laneReasons: readonly { code: string }[] },
+  change: { id: string; status: ChangeStatus; lane: Lane | null; laneReasons: readonly { code: string }[]; headSha?: string | null },
   runStatus?: string,
 ): { title: string; body: string; showDiff: boolean } {
   const tourFailed = change.laneReasons.some((r) => r.code === "tour.failed");
+  // Awaiting a push with a head already there: a reviewer sent it back (the agent reads the comment
+  // with get_change_status and its wait answers changes-requested).
+  if (change.status === "awaiting-push" && change.headSha)
+    return { title: "Sent back to the author", body: "A reviewer requested changes on this head. The author has the comment and pushes a new head; checks, evidence and a new walkthrough follow.", showDiff: true };
   if (change.status === "awaiting-push")
     return { title: "Waiting for the first push", body: "The author has not pushed a head yet. Checks, evidence and the walkthrough follow the push.", showDiff: false };
   if (change.status === "running" || runStatus === "running" || runStatus === "queued")
