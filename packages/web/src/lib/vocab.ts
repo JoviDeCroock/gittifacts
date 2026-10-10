@@ -20,7 +20,8 @@ export const CHANGE_STATUS: Record<ChangeStatus, StatusMeta> = {
   approved: { label: "Approved", tone: "ok", icon: "check-circle" },
   queued: { label: "In merge queue", tone: "neutral", icon: "list-ordered" },
   merged: { label: "Merged", tone: "ok", icon: "git-merge" },
-  "rolling-out": { label: "Rolling out", tone: "warn", icon: "rocket" },
+  // Rolling out and watching are progress, not a warning: ink, never a band (DESIGN.md, Band Means Lane).
+  "rolling-out": { label: "Rolling out", tone: "neutral", icon: "rocket" },
   released: { label: "Released", tone: "ok", icon: "badge-check" },
   reverted: { label: "Reverted", tone: "danger", icon: "undo" },
   rejected: { label: "Rejected", tone: "neutral", icon: "ban" },
@@ -36,8 +37,8 @@ export const PLAN_STATUS: Record<PlanStatus, StatusMeta> = {
 
 export const ROLLOUT_STATUS: Record<RolloutState["status"], StatusMeta> = {
   pending: { label: "Pending", tone: "neutral", icon: "pause" },
-  rolling: { label: "Rolling out", tone: "warn", icon: "rocket" },
-  watching: { label: "Watching", tone: "warn", icon: "eye" },
+  rolling: { label: "Rolling out", tone: "neutral", icon: "rocket" },
+  watching: { label: "Watching", tone: "neutral", icon: "eye" },
   released: { label: "Released", tone: "ok", icon: "badge-check" },
   "rolling-back": { label: "Rolling back", tone: "danger", icon: "undo" },
   "rolled-back": { label: "Rolled back", tone: "danger", icon: "undo" },
