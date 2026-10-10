@@ -15,3 +15,47 @@ cheapest review that is still safe, and makes changes easy to undo after merge.
 - Merged changes roll out gradually behind a per-change flag and revert themselves on regressions.
 
 See `STATUS.md` for what works today and `DECISIONS.md` for why things are the way they are.
+
+## Try it
+
+On the hosted platform (https://gittifacts.decroockjovi.workers.dev), with Node 22+ and git and no
+account. This creates a repo, runs its first CI and starts a preview:
+
+```sh
+npx -y https://gittifacts.decroockjovi.workers.dev/cli/gittifacts.tgz \
+  --host https://gittifacts.decroockjovi.workers.dev init --template workers-api --name my-api --clone
+```
+
+Agents start at `/start` (or MCP at `/mcp`); docs are at `/docs`.
+
+## Run it locally
+
+No Cloudflare account needed: the real platform Worker runs under `wrangler dev --local`, with
+in-memory fakes for the three things that have no local equivalent (Artifacts, containers and
+the model).
+
+```sh
+pnpm install --frozen-lockfile
+pnpm --filter @app/e2e prepare-assets   # web app, docs and CLI the Worker serves
+pnpm --filter @app/e2e serve            # http://127.0.0.1:8799
+```
+
+Tests (targeted; `docs/testing.md` has the tiers):
+
+```sh
+cd apps/platform && pnpm exec vitest run test/integration/many-agents.test.ts --maxWorkers=1
+pnpm --filter @sim/merge-queue gates    # the merge queue on a simulated 600-Change workload
+```
+
+## Deploy your own
+
+`docs/deploy.md` is the runbook for the reference deployment: a Workers Paid account with
+Artifacts (an EU namespace), D1, R2, Queues, Workflows, Containers (Docker builds the image), AI
+Gateway and Flagship, plus the secrets it lists. Account ids, routes and hosts in
+`apps/platform/wrangler.jsonc` are that deployment's; change them to yours.
+
+## See many agents at once
+
+`scripts/e2e/many-agents.ts` registers N agents that start, push and enqueue Changes on one repo
+concurrently against a deployed platform, then prints a timeline. `docs/demo.md` is a 10-minute
+demo built around it.

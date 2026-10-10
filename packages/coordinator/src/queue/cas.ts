@@ -2,7 +2,8 @@
  * `Cas`: compare-and-swap the default branch from `expectedOld` to `newSha` (receive-pack
  * old-oid; Artifacts answers a stale old-oid with `ng <ref> stale ref`, verified live). On ok:
  * re-sign each entry's evidence for the tree that landed (with the queue's verdict), write the
- * evidence notes on the entries' commits, record lane raises, audit `change.merged`.
+ * evidence notes on the entries' commits, record lane raises, write each entry's why note
+ * (`refs/notes/why`: plan, author, approvals), audit `change.merged`.
  *
  * Idempotent: a re-run after a crash finds main already at `newSha` (stale, actual = newSha) and
  * treats it as the success it was. Anything after the ref update is best effort (audited), so a
@@ -21,6 +22,7 @@ import { changeSubject } from "../ids.js";
 import { errorMessage } from "../policy.js";
 import { SYSTEM_PRINCIPAL_ID } from "../ports.js";
 import type { QueueContext } from "./context.js";
+import { writeWhyNote } from "./why-note.js";
 
 type Emit = (event: CoreEventInput) => Promise<void>;
 
@@ -146,6 +148,15 @@ async function landEvidence(ctx: QueueContext, cmd: CommandOf<"Cas">): Promise<v
     const target = commitOf.get(change.id) ?? cmd.newSha;
     if (evidence !== null) await writeMergedNote(ctx, evidence, target);
     await recordLaneRaise(ctx, change, cmd);
+    // After the lane raise, so the note shows the lane it landed on.
+    await writeWhyNote(ctx, {
+      change,
+      headSha: entry.headSha,
+      target,
+      evidenceId: sealed.evidenceId,
+      items,
+      at,
+    });
   }
 }
 

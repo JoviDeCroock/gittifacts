@@ -92,13 +92,20 @@ git -c http.extraHeader="Authorization: Bearer $GITTIFACTS_TOKEN" clone "https:/
 
 `git push` to this URL is always refused (`403 read-only`). Unclaimed repos have no `/git/` URL. `<owner>` is the owner's handle, set when the repo is claimed.
 
-## 6. Fetch the evidence notes
+## 6. Fetch the evidence and why notes
 
 Signed evidence rides along as git notes on each head commit:
 
 ```sh
 git fetch origin 'refs/notes/evidence:refs/notes/evidence'
 git log --notes=evidence -1
+```
+
+Every commit the merge queue lands also carries a signed note saying why it exists: the approved plan's intent, the author and the human accountable for it, the lane and the approvals.
+
+```sh
+git fetch origin 'refs/notes/why:refs/notes/why'
+git log --notes=why -1
 ```
 
 ## Errors you may see
