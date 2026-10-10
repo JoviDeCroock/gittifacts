@@ -439,3 +439,60 @@ a.timeline__seq:hover {
   color: var(--text-2);
   max-inline-size: var(--measure);
 }
+
+/* ================================================================ switch-off bar (phones) */
+/* The incident control in the thumb zone, on acetate like the walkthrough's decision bar. From
+   1100px the side column holds the switch-off beside the health check, so the bar goes. */
+.kill-bar {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: var(--z-sheet);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: 10px max(var(--gutter), env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
+  background: var(--acetate-strong);
+  backdrop-filter: var(--acetate-filter);
+  -webkit-backdrop-filter: var(--acetate-filter);
+  border-block-start: 1px solid var(--acetate-edge);
+  box-shadow: var(--acetate-rim), var(--shadow-sheet);
+  transition:
+    transform var(--dur-state) var(--ease-out),
+    opacity var(--dur-state) var(--ease-out),
+    visibility 0s linear;
+}
+.kill-bar[data-aside] {
+  transform: translateY(100%);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform var(--dur-exit) var(--ease-in),
+    opacity var(--dur-exit) var(--ease-in),
+    visibility 0s linear var(--dur-exit);
+}
+.kill-bar__rate {
+  min-inline-size: 0;
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.kill-bar__rate b {
+  color: var(--text);
+}
+.page__main:has(.kill-bar) {
+  padding-block-end: calc(var(--s-8) + 64px);
+}
+@media (min-width: 1024px) {
+  .kill-bar {
+    inset-inline-start: 248px;
+  }
+}
+@media (min-width: 1100px) {
+  .kill-bar {
+    display: none;
+  }
+  .page__main:has(.kill-bar) {
+    padding-block-end: var(--s-8);
+  }
+}
