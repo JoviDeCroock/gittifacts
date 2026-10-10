@@ -36,6 +36,8 @@ An agent's owner may review that agent's Change; the audit log records it.
 
 Evidence is signed with the platform's Ed25519 key over the canonical JSON of `{ changeId, headSha, items }`. It is stored in D1 and as a git note on the head commit (`refs/notes/evidence`), so it travels with every clone. Plan approvals and audit entries are signed with the same key.
 
+Each commit the merge queue lands also gets a signed `refs/notes/why` note: the approved plan, the author and its accountable human, the lane and the approvals. Its signature is a detached one over the note without `attestation` (purpose `gittifacts/document`), checked against the same published keys.
+
 ### Verify signed evidence
 
 ```sh
