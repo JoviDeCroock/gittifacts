@@ -20,7 +20,9 @@ import type {
 } from "@app/domain";
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import type { z } from "zod";
+import type { ChangeListToolsBackend } from "./tools/changes.js";
 import type { ImportToolsBackend } from "./tools/import.js";
+import type { PlanToolsBackend } from "./tools/plans.js";
 import type { QaToolsBackend } from "./tools/qa.js";
 import type { QueueToolsBackend } from "./tools/queue.js";
 import type { WorkspaceToolsBackend } from "./tools/workspace.js";
@@ -31,6 +33,18 @@ export interface McpCaller {
   scopes: readonly string[];
   authInfo: AuthInfo;
 }
+
+/**
+ * Why `wait_for_change` answered. Besides reached / timeout / unreachable (the change ended), a
+ * human may have sent it back: changes-requested, rejected or approval-withdrawn.
+ */
+export type WaitReasonData =
+  | "reached"
+  | "timeout"
+  | "unreachable"
+  | "changes-requested"
+  | "rejected"
+  | "approval-withdrawn";
 
 export interface GitRemote {
   url: string;
@@ -130,12 +144,32 @@ export interface MembersData {
   viewerRole: RepoRoleData | null;
 }
 
+/** A human review of a change, as agents read it (`get_change_status.reviews`). */
+export interface ChangeReviewData {
+  id: string;
+  decision: "approve" | "request-changes" | "reject";
+  comment: string | null;
+  /** The head it was given for (a review binds to one head). */
+  headSha: string;
+  reviewer: { id: string; name: string; kind: "human" | "agent" | "system" | "integration" };
+  at: string;
+  /** Set when the approval stopped counting (e.g. "qa-failed"). */
+  withdrawn: { at: string; reason: string } | null;
+}
+
+/** A platform page a person can open: a plan or a change. */
+export type WebPage = { planId: string } | { changeId: string };
+
 /** Every tool family's backend: the core tools below, remote workspaces and import detection. */
 export interface McpBackend
   extends WorkspaceToolsBackend,
     ImportToolsBackend,
     QueueToolsBackend,
-    QaToolsBackend {
+    QaToolsBackend,
+    PlanToolsBackend,
+    ChangeListToolsBackend {
+  /** The absolute URL of `page` on the platform, to hand to a person. */
+  webUrl(page: WebPage): string;
   whoami(caller: McpCaller): Promise<WhoamiData>;
   /** Repo (template / import / empty) + first CI + first preview + a first Change's fork. */
   createProject(
@@ -165,6 +199,8 @@ export interface McpBackend
     classification: ClassificationSummary | null;
     /** The current head's preview once it answered (from its evidence); absent = unknown. */
     previewUrl?: string | null;
+    /** Human reviews of every head, oldest first. */
+    reviews: ChangeReviewData[];
   }>;
   getEvidence(
     caller: McpCaller,
@@ -211,7 +247,7 @@ export interface McpBackend
   ): Promise<{
     change: Change;
     reached: boolean;
-    reason: "reached" | "timeout" | "unreachable";
+    reason: WaitReasonData;
     /** With "timeout": seconds before calling again (the platform was interrupted when > 0). */
     retryAfterSec?: number;
   }>;

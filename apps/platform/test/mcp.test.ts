@@ -4,7 +4,16 @@ import { parseToolError } from "@app/mcp";
 import { createPlatformClient } from "@app/mcp/client";
 import { describe, expect, it } from "vitest";
 import { changeFixture, classificationFixture, HEAD_SHA, repoFixture, store } from "./fixtures.js";
-import { call, createAgent, json, makeApp, ORIGIN, signUpHuman, type TestApp } from "./http.js";
+import {
+  call,
+  createAgent,
+  expectError,
+  json,
+  makeApp,
+  ORIGIN,
+  signUpHuman,
+  type TestApp,
+} from "./http.js";
 
 function fetchVia(app: TestApp) {
   return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -64,6 +73,9 @@ describe("POST /mcp", () => {
         blocked: false,
       });
       expect(r.structuredContent.nextSteps.length).toBeGreaterThan(0);
+      // The page to hand a person, and the reviews (none yet).
+      expect(r.structuredContent.url).toBe(`${ORIGIN}/changes/${change.id}`);
+      expect(r.structuredContent.reviews).toEqual([]);
     } finally {
       await mcp.client.close();
     }
@@ -185,5 +197,200 @@ describe("POST /mcp", () => {
     });
     expect(foreign.status).toBe(403);
     await foreign.text();
+  });
+});
+
+describe("list_changes over MCP", () => {
+  it("lists a repo's changes with their pages, by status and only the caller's", async () => {
+    const { app, human, agent, repo, change, mcp } = await setup();
+    const other = await createAgent(app, human.cookie);
+    const otherMcp = await createPlatformClient(`${ORIGIN}/mcp`, other.token, {
+      fetch: fetchVia(app),
+    });
+    try {
+      const all = await mcp.tools.list_changes({ repoId: repo.id });
+      if (all.isError) throw new Error(JSON.stringify(all.content));
+      expect(all.structuredContent.changes).toEqual([
+        expect.objectContaining({
+          id: change.id,
+          status: "awaiting-review",
+          lane: 1,
+          authorId: agent.principal.id,
+          authorKind: "agent",
+          url: `${ORIGIN}/changes/${change.id}`,
+        }),
+      ]);
+      const ids = async (
+        client: typeof mcp,
+        args: Parameters<typeof mcp.tools.list_changes>[0],
+      ) => {
+        const r = await client.tools.list_changes(args);
+        if (r.isError) throw new Error(JSON.stringify(r.content));
+        return r.structuredContent.changes.map((c) => c.id);
+      };
+      expect([
+        await ids(mcp, { repoId: repo.id, status: "awaiting-review" }),
+        await ids(mcp, { repoId: repo.id, status: "merged" }),
+        await ids(mcp, { repoId: repo.id, mine: true }),
+        await ids(otherMcp, { repoId: repo.id, mine: true }),
+      ]).toEqual([[change.id], [], [change.id], []]);
+      // A repo the caller cannot see answers like one that does not exist.
+      const unknown = errorOf(await mcp.tools.list_changes({ repoId: "repo_nope" }));
+      expect(unknown?.error.code).toBe("not-found");
+    } finally {
+      await mcp.client.close();
+      await otherMcp.client.close();
+    }
+  });
+});
+
+describe("plans over MCP: get_plan, list_plans, withdraw_plan", () => {
+  const draft = (repoId: string, title: string) => ({
+    repoId,
+    title,
+    intent: "Return the current time as JSON for the status page.",
+    acceptanceCriteria: ["GET /time returns { now: <ISO> }"],
+    scopePaths: ["src/**"],
+  });
+
+  it("an agent drafts a plan, a human approves it over HTTP, the agent sees it approved", async () => {
+    const { app, human, agent, repo, mcp } = await setup();
+    try {
+      const created = await mcp.tools.create_plan(draft(repo.id, "Add /time endpoint"));
+      if (created.isError) throw new Error(JSON.stringify(created.content));
+      const planId = created.structuredContent.plan.id;
+      const page = `${ORIGIN}/plans/${planId}`;
+      expect(created.structuredContent.url).toBe(page);
+      expect(created.structuredContent.nextSteps[0]?.title).toContain(page);
+
+      const drafted = await mcp.tools.get_plan({ planId });
+      if (drafted.isError) throw new Error(JSON.stringify(drafted.content));
+      expect(drafted.structuredContent).toMatchObject({
+        plan: { id: planId, status: "draft", scopePaths: ["src/**"], url: page },
+        author: { id: agent.principal.id, kind: "agent" },
+        approver: null,
+        changes: [],
+        url: page,
+      });
+      expect(drafted.structuredContent.nextSteps.map((n) => n.call?.split("(")[0])).toEqual([
+        undefined,
+        "get_plan",
+        "withdraw_plan",
+      ]);
+
+      // The agent can't approve its plan; the refusal names the page where a person does.
+      const refused = await expectError(
+        await call(app, "POST", `/api/v1/plans/${planId}/approve`, {
+          token: agent.token,
+          body: {},
+        }),
+        403,
+        "forbidden",
+      );
+      expect(refused.error.fix.call).toBe(`get_plan({ planId: "${planId}" })`);
+      expect(refused.error.fix.explanation).toContain(page);
+
+      const approved = await call(app, "POST", `/api/v1/plans/${planId}/approve`, {
+        cookie: human.cookie,
+        body: {},
+      });
+      expect(approved.status).toBe(200);
+      const after = await mcp.tools.get_plan({ planId });
+      if (after.isError) throw new Error(JSON.stringify(after.content));
+      expect(after.structuredContent.plan.status).toBe("approved");
+      expect(after.structuredContent.approver).toMatchObject({
+        id: human.principal.id,
+        kind: "human",
+      });
+      expect(after.structuredContent.nextSteps[0]?.call).toBe(
+        `start_change({ repoId: "${repo.id}", planId: "${planId}", title: "Add /time endpoint", category: "feature" })`,
+      );
+
+      const approvedOnly = await mcp.tools.list_plans({ repoId: repo.id, status: "approved" });
+      if (approvedOnly.isError) throw new Error(JSON.stringify(approvedOnly.content));
+      expect(approvedOnly.structuredContent.plans).toEqual([
+        expect.objectContaining({ id: planId, status: "approved", url: page }),
+      ]);
+      const drafts = await mcp.tools.list_plans({ repoId: repo.id, status: "draft" });
+      if (drafts.isError) throw new Error(JSON.stringify(drafts.content));
+      expect(drafts.structuredContent.plans).toEqual([]);
+    } finally {
+      await mcp.client.close();
+    }
+  });
+
+  it("an agent withdraws its own draft, never another principal's", async () => {
+    const { app, human, agent, repo, mcp } = await setup();
+    const other = await createAgent(app, human.cookie);
+    const otherMcp = await createPlatformClient(`${ORIGIN}/mcp`, other.token, {
+      fetch: fetchVia(app),
+    });
+    try {
+      const created = await mcp.tools.create_plan(draft(repo.id, "Add /time endpoint"));
+      if (created.isError) throw new Error(JSON.stringify(created.content));
+      const planId = created.structuredContent.plan.id;
+
+      // Another agent (same owner, same role) can't withdraw it: not over MCP, not over HTTP.
+      const viaMcp = errorOf(await otherMcp.tools.withdraw_plan({ planId, reason: "mine now" }));
+      expect(viaMcp?.error.code).toBe("forbidden");
+      await expectError(
+        await call(app, "POST", `/api/v1/plans/${planId}/withdraw`, {
+          token: other.token,
+          body: {},
+        }),
+        403,
+        "forbidden",
+      );
+      // Nor reject it: that is a person's call; the refusal offers withdraw for one's own drafts.
+      const reject = await expectError(
+        await call(app, "POST", `/api/v1/plans/${planId}/reject`, {
+          token: other.token,
+          body: { comment: "no" },
+        }),
+        403,
+        "forbidden",
+      );
+      expect(reject.error.fix.call).toBe(`withdraw_plan({ planId: "${planId}", reason: "<why>" })`);
+      const mine = await otherMcp.tools.list_plans({ repoId: repo.id, mine: true });
+      if (mine.isError) throw new Error(JSON.stringify(mine.content));
+      expect(mine.structuredContent.plans).toEqual([]);
+
+      // Its author can, once.
+      const withdrawn = await mcp.tools.withdraw_plan({
+        planId,
+        reason: "superseded by a smaller one",
+      });
+      if (withdrawn.isError) throw new Error(JSON.stringify(withdrawn.content));
+      expect(withdrawn.structuredContent.plan).toMatchObject({
+        id: planId,
+        status: "rejected",
+        rejectionReason: "superseded by a smaller one",
+      });
+      expect(withdrawn.structuredContent.nextSteps[0]?.title).toMatch(/^Withdrawn by its author/);
+      const again = errorOf(await mcp.tools.withdraw_plan({ planId }));
+      expect(again?.error.code).toBe("invalid-state");
+      const read = await json<{ plan: { status: string; rejectedBy: string } }>(
+        await call(app, "GET", `/api/v1/plans/${planId}`, { cookie: human.cookie }),
+      );
+      expect(read.plan).toMatchObject({ status: "rejected", rejectedBy: agent.principal.id });
+
+      // Over HTTP too: an agent author withdraws its draft with POST /withdraw (200).
+      const second = await mcp.tools.create_plan(draft(repo.id, "Add /date endpoint"));
+      if (second.isError) throw new Error(JSON.stringify(second.content));
+      const res = await call(
+        app,
+        "POST",
+        `/api/v1/plans/${second.structuredContent.plan.id}/withdraw`,
+        {
+          token: agent.token,
+          body: { reason: "not needed" },
+        },
+      );
+      expect(res.status).toBe(200);
+      expect((await json<{ plan: { status: string } }>(res)).plan.status).toBe("rejected");
+    } finally {
+      await mcp.client.close();
+      await otherMcp.client.close();
+    }
   });
 });

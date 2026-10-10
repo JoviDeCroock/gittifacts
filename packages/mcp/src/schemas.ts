@@ -74,7 +74,7 @@ const LaneReason = {
   required: ["code", "lane", "message"],
 } as const;
 
-const ChangeBrief = {
+export const ChangeBrief = {
   type: "object",
   properties: {
     id: str,
@@ -109,6 +109,60 @@ const ChangeBrief = {
     "mergedSha",
     "revertOf",
     "updatedAt",
+  ],
+} as const;
+
+/** Pages on the platform a person can open (absolute URLs). */
+const changeUrl = {
+  type: "string",
+  description: "The change's page on the platform: hand it to the person who reviews it.",
+} as const;
+const planUrl = {
+  type: "string",
+  description: "The plan's page on the platform: hand it to the person who approves it.",
+} as const;
+
+/**
+ * Why wait_for_change answered. Must cover @app/coordinator's WaitReason: the platform's backend
+ * returns the coordinator's answer as `WaitReasonData`, so its typecheck fails on a missing one.
+ */
+export const WAIT_REASONS = [
+  "reached",
+  "timeout",
+  "unreachable",
+  "changes-requested",
+  "rejected",
+  "approval-withdrawn",
+] as const;
+
+const Review = {
+  type: "object",
+  description: "A human review; it binds to one head (current: the change's head now).",
+  properties: {
+    id: str,
+    decision: { enum: ["approve", "request-changes", "reject"] },
+    comment: nullableStr,
+    headSha: str,
+    current: bool,
+    reviewer: {
+      type: "object",
+      properties: { id: str, name: str, kind: { enum: ["human", "agent", "system", "integration"] } },
+      required: ["id", "name", "kind"],
+    },
+    at: str,
+    withdrawn: { type: "boolean", description: "The approval no longer counts." },
+    withdrawnReason: { ...nullableStr, description: 'Why it was withdrawn (e.g. "qa-failed").' },
+  },
+  required: [
+    "id",
+    "decision",
+    "comment",
+    "headSha",
+    "current",
+    "reviewer",
+    "at",
+    "withdrawn",
+    "withdrawnReason",
   ],
 } as const;
 
@@ -438,9 +492,10 @@ export const CreatePlanOutput = {
         "createdAt",
       ],
     },
+    url: planUrl,
     nextSteps: NextSteps,
   },
-  required: ["plan", "nextSteps"],
+  required: ["plan", "url", "nextSteps"],
 } as const;
 
 export const CreateProjectOutput = {
@@ -505,14 +560,21 @@ export const CreateProjectOutput = {
 
 export const StartChangeOutput = {
   type: "object",
-  properties: { change: ChangeBrief, remote: GitRemote, nextSteps: NextSteps },
-  required: ["change", "remote", "nextSteps"],
+  properties: { change: ChangeBrief, remote: GitRemote, url: changeUrl, nextSteps: NextSteps },
+  required: ["change", "remote", "url", "nextSteps"],
 } as const;
 
 export const ChangeStatusOutput = {
   type: "object",
   properties: {
     change: ChangeBrief,
+    url: changeUrl,
+    reviews: {
+      type: "array",
+      items: Review,
+      description:
+        "Human reviews of every head, oldest first. After changes were requested, the newest current one says what to fix.",
+    },
     runs: {
       type: "array",
       items: {
@@ -564,7 +626,7 @@ export const ChangeStatusOutput = {
     },
     nextSteps: NextSteps,
   },
-  required: ["change", "runs", "classification", "previewUrl", "nextSteps"],
+  required: ["change", "url", "reviews", "runs", "classification", "previewUrl", "nextSteps"],
 } as const;
 
 export const EvidenceOutput = {
@@ -647,9 +709,10 @@ export const RequestReviewOutput = {
     changeId: str,
     status: { enum: CHANGE_STATUSES },
     notified: bool,
+    url: changeUrl,
     nextSteps: NextSteps,
   },
-  required: ["changeId", "status", "notified", "nextSteps"],
+  required: ["changeId", "status", "notified", "url", "nextSteps"],
 } as const;
 
 export const RerunCiOutput = {
@@ -705,7 +768,11 @@ export const WaitForChangeOutput = {
       description:
         "True when the milestone holds for the change's current head at the moment of this answer (each milestone is defined in the tool description).",
     },
-    reason: { enum: ["reached", "timeout", "unreachable"] },
+    reason: {
+      enum: WAIT_REASONS,
+      description:
+        "reached; timeout (call again); unreachable (the change ended); or a human sent it back first: changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review).",
+    },
     retryAfterSec: {
       type: "integer",
       minimum: 0,

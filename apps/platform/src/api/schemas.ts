@@ -235,6 +235,7 @@ export const DeployTargetBody = z.object({
 export const PlanDraftBody = PlanDraftInput.meta({ id: "PlanDraftInput" });
 export const ApprovePlanBody = z.object({ comment: z.string().max(10_000).optional() });
 export const RejectPlanBody = z.object({ comment: z.string().min(1).max(10_000) });
+export const WithdrawPlanBody = z.object({ reason: z.string().max(2000).optional() });
 
 export const StartChangeBody = StartChangeInput.meta({ id: "StartChangeInput" });
 export const ReviewBody = z.object({

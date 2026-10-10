@@ -1,4 +1,4 @@
-import type { Scope } from "@app/domain";
+import type { ErrorFix, Scope } from "@app/domain";
 import type { Context, MiddlewareHandler } from "hono";
 import { needForScopes, type RepoNeed } from "../access/roles.js";
 import { assertRouteAccess } from "../access/route.js";
@@ -111,6 +111,19 @@ export function assertScopes(caller: Caller, scopes: readonly Scope[]): void {
 }
 
 /**
+ * What an agent that reached a human-only route should do instead: a route names the person's
+ * next step (e.g. "ask a person to approve it at <the plan's page>"). `origin` is the platform's.
+ */
+export type HumanOnlyFix = (c: Context<AppEnv>, origin: string) => Partial<ErrorFix>;
+
+/** The default for human-only routes that name no better step. */
+const HUMAN_ONLY_FIX: Partial<ErrorFix> = {
+  explanation:
+    "Only a person signed in on the platform may do this; agents never can. Hand this step to the human who owns you (whoami shows your owner).",
+  call: "whoami({})",
+};
+
+/**
  * Route guard: 401 without a principal, 403 when a scope is missing (code `insufficient-scope`),
  * when `humanOnly` and the caller is an agent, or when a repo-restricted agent names a repo,
  * plan or change outside its grant (code `repo-not-granted`). Then repo access (src/access/):
@@ -119,13 +132,17 @@ export function assertScopes(caller: Caller, scopes: readonly Scope[]): void {
  */
 export function requirePrincipal(
   scopes: readonly Scope[] = [],
-  opts: { humanOnly?: boolean; need?: RepoNeed } = {},
+  opts: { humanOnly?: boolean | HumanOnlyFix; need?: RepoNeed } = {},
 ): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const caller = await resolveCaller(c);
     if (!caller) throw unauthorized();
     if (opts.humanOnly && caller.principal.kind !== "human") {
-      throw forbidden("only a human may do this", { kind: caller.principal.kind });
+      const fix =
+        typeof opts.humanOnly === "function"
+          ? opts.humanOnly(c, c.get("services").origin)
+          : HUMAN_ONLY_FIX;
+      throw forbidden("only a human may do this", { kind: caller.principal.kind }, fix);
     }
     assertScopes(caller, scopes);
     await assertRouteAccess(c, caller, opts.need ?? needForScopes(scopes));

@@ -8,8 +8,9 @@
  * grant), and every mutation (they all run through `idem`) needs `contribute` on the repo its
  * `scoped` call named, so a reader's agent can read and nothing else. The services re-check.
  */
-import { type Change, Principal } from "@app/domain";
-import type { McpBackend, McpCaller } from "@app/mcp";
+import { pageUrl } from "@app/conventions";
+import { type Change, Principal, type ReviewDecision } from "@app/domain";
+import type { ChangeReviewData, McpBackend, McpCaller } from "@app/mcp";
 import { z } from "zod";
 import { type AccessTarget, assertTargetAccess } from "../access/access.js";
 import { listMembers } from "../access/members.js";
@@ -31,16 +32,19 @@ import {
   getChangeEvidence,
   getChangeTour,
   listChangeIssues,
+  listChangeReviews,
+  listChangeSummaries,
   refreshPushGrant,
   requestReview,
   requireChange,
   rerunChangeCi,
   startChange,
 } from "../services/changes.js";
-import { createPlan } from "../services/plans.js";
+import { createPlan, getPlanDetail, listPlans, withdrawPlan } from "../services/plans.js";
 import { createProject } from "../services/projects.js";
 import { listQaRuns, requestQaFor } from "../services/qa.js";
 import { listRepoSummaries } from "../services/repos.js";
+import type { PrincipalRef } from "../store/d1-store.js";
 import { createWorkspaceMcpBackend } from "../workspace/mcp.js";
 
 /** `authInfo.clientId` of a caller without credentials (src/mcp/route.ts). */
@@ -71,6 +75,20 @@ function callerFrom(c: McpCaller): Caller {
     user: null,
     via: "agent-token",
     expiresAtSec: c.authInfo.expiresAt,
+  };
+}
+
+/** A review as agents read it, with the reviewer's name and kind. */
+function reviewData(r: ReviewDecision, principals: Record<string, PrincipalRef>): ChangeReviewData {
+  const who = principals[r.reviewerId];
+  return {
+    id: r.id,
+    decision: r.decision,
+    comment: r.comment,
+    headSha: r.headSha,
+    reviewer: { id: r.reviewerId, name: who?.name ?? r.reviewerId, kind: who?.kind ?? "human" },
+    at: r.createdAt,
+    withdrawn: r.withdrawn == null ? null : { at: r.withdrawn.at, reason: r.withdrawn.reason },
   };
 }
 
@@ -157,6 +175,37 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
       return listRepoSummaries(svc, callerFrom(mc));
     },
 
+    webUrl(page) {
+      return pageUrl(svc.origin, page);
+    },
+
+    async getPlan(mc, planId) {
+      return getPlanDetail(svc, await scoped(mc, { planId }), planId);
+    },
+
+    async listChanges(mc, repoId, filter) {
+      const caller = await scoped(mc, { repoId });
+      const { changes } = await listChangeSummaries(svc, caller, repoId, {
+        statuses: filter.status === undefined ? undefined : [filter.status],
+      });
+      return changes;
+    },
+
+    async listPlans(mc, repoId) {
+      return listPlans(svc, await scoped(mc, { repoId }), repoId);
+    },
+
+    async withdrawPlan(mc, planId, reason, opts) {
+      const caller = await scoped(mc, { planId });
+      return idem(
+        caller,
+        "withdraw_plan",
+        opts.idempotencyKey,
+        { planId, reason: reason ?? null },
+        () => withdrawPlan(svc, caller, planId, { reason }),
+      );
+    },
+
     async createPlan(mc, input, opts) {
       const caller = await scoped(mc, { repoId: input.repoId }, "contribute");
       return idem(caller, "create_plan", opts.idempotencyKey, input, () =>
@@ -182,9 +231,14 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     },
 
     async getChangeStatus(mc, changeId) {
-      const d = await getChangeDetail(svc, await scoped(mc, { changeId }), changeId);
+      const caller = await scoped(mc, { changeId });
+      const [d, r] = await Promise.all([
+        getChangeDetail(svc, caller, changeId),
+        listChangeReviews(svc, caller, changeId),
+      ]);
       return {
         previewUrl: await previewUrlOf(svc, d.change),
+        reviews: r.reviews.map((x) => reviewData(x, r.principals)),
         change: d.change,
         runs: d.runs,
         classification: d.classification

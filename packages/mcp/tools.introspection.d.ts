@@ -365,7 +365,7 @@ export type introspection = {
     },
     /**
      * Create a plan
-     * Draft a plan: intent, acceptance criteria and the paths you expect to touch. A human other than you approves it before you start a change. Returns the plan id.
+     * Draft a plan: intent, acceptance criteria and the paths you expect to touch. A human other than you approves it before you start a change. Returns the plan id and its page (url) to hand that person; get_plan shows when it is approved.
      * @param args.intent Why: the problem and the intended outcome.
      * @param args.acceptanceCriteria Observable results a reviewer can check.
      * @param args.scopePaths Globs of the paths the change will touch, like "docs/*.md". Leaving them out blocks Lane 0.
@@ -528,6 +528,10 @@ export type introspection = {
               "createdAt"
             ]
           },
+          "url": {
+            "type": "string",
+            "description": "The plan's page on the platform: hand it to the person who approves it."
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
@@ -555,6 +559,7 @@ export type introspection = {
         },
         "required": [
           "plan",
+          "url",
           "nextSteps"
         ]
       },
@@ -1166,7 +1171,7 @@ export type introspection = {
     },
     /**
      * Get change status
-     * A change's status, lane (and why), pipeline runs for each head, and what to do next.
+     * A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), its page (url) to hand a person, and what to do next.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      */
     "get_change_status": {
@@ -1323,6 +1328,91 @@ export type introspection = {
               "updatedAt"
             ]
           },
+          "url": {
+            "type": "string",
+            "description": "The change's page on the platform: hand it to the person who reviews it."
+          },
+          "reviews": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "A human review; it binds to one head (current: the change's head now).",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "decision": {
+                  "enum": [
+                    "approve",
+                    "request-changes",
+                    "reject"
+                  ]
+                },
+                "comment": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "headSha": {
+                  "type": "string"
+                },
+                "current": {
+                  "type": "boolean"
+                },
+                "reviewer": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "human",
+                        "agent",
+                        "system",
+                        "integration"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "kind"
+                  ]
+                },
+                "at": {
+                  "type": "string"
+                },
+                "withdrawn": {
+                  "type": "boolean",
+                  "description": "The approval no longer counts."
+                },
+                "withdrawnReason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Why it was withdrawn (e.g. \"qa-failed\")."
+                }
+              },
+              "required": [
+                "id",
+                "decision",
+                "comment",
+                "headSha",
+                "current",
+                "reviewer",
+                "at",
+                "withdrawn",
+                "withdrawnReason"
+              ]
+            },
+            "description": "Human reviews of every head, oldest first. After changes were requested, the newest current one says what to fix."
+          },
           "runs": {
             "type": "array",
             "items": {
@@ -1478,6 +1568,8 @@ export type introspection = {
         },
         "required": [
           "change",
+          "url",
+          "reviews",
           "runs",
           "classification",
           "previewUrl",
@@ -1582,6 +1674,397 @@ export type introspection = {
           "signedAt",
           "keyId",
           "items"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Get a plan
+     * A plan: its intent, acceptance criteria and scope, its status (draft until a person approves it; agents never can), who drafted and approved it, the changes started from it, its page (url) to hand a person, and what to do next. Call it to see whether your draft was approved.
+     */
+    "get_plan": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "planId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "repoId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "draft",
+                  "approved",
+                  "superseded",
+                  "rejected"
+                ]
+              },
+              "authorId": {
+                "type": "string"
+              },
+              "approvedBy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "approvedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rejectionReason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "scopePaths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "supersedes": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "description": "The plan's page on the platform: hand it to the person who approves it."
+              },
+              "intent": {
+                "type": "string"
+              },
+              "acceptanceCriteria": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "outOfScope": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "riskDeclarations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "area": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "area",
+                    "description"
+                  ]
+                }
+              },
+              "affectedRoutes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rejectedBy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rejectedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "repoId",
+              "title",
+              "status",
+              "authorId",
+              "approvedBy",
+              "approvedAt",
+              "rejectionReason",
+              "scopePaths",
+              "supersedes",
+              "createdAt",
+              "url",
+              "intent",
+              "acceptanceCriteria",
+              "outOfScope",
+              "riskDeclarations",
+              "affectedRoutes",
+              "rejectedBy",
+              "rejectedAt"
+            ]
+          },
+          "author": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "human",
+                  "agent",
+                  "system",
+                  "integration"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "kind"
+            ],
+            "description": "Who drafted it."
+          },
+          "approver": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "human",
+                  "agent",
+                  "system",
+                  "integration"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "kind"
+            ],
+            "description": "The person who approved it (null until then)."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "repoId": {
+                  "type": "string"
+                },
+                "planId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "category": {
+                  "enum": [
+                    "fix",
+                    "feature",
+                    "refactor",
+                    "dependency",
+                    "transform",
+                    "revert",
+                    "docs",
+                    "chore"
+                  ]
+                },
+                "status": {
+                  "enum": [
+                    "awaiting-push",
+                    "running",
+                    "failing",
+                    "awaiting-review",
+                    "approved",
+                    "queued",
+                    "merged",
+                    "rolling-out",
+                    "released",
+                    "reverted",
+                    "rejected",
+                    "abandoned"
+                  ]
+                },
+                "lane": {
+                  "enum": [
+                    0,
+                    1,
+                    2,
+                    null
+                  ]
+                },
+                "computedLane": {
+                  "enum": [
+                    0,
+                    1,
+                    2,
+                    null
+                  ]
+                },
+                "laneReasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "lane": {
+                        "enum": [
+                          0,
+                          1,
+                          2
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "lane",
+                      "message"
+                    ]
+                  }
+                },
+                "baseSha": {
+                  "type": "string"
+                },
+                "headSha": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "forkName": {
+                  "type": "string"
+                },
+                "mergedSha": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "revertOf": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "repoId",
+                "planId",
+                "title",
+                "category",
+                "status",
+                "lane",
+                "computedLane",
+                "laneReasons",
+                "baseSha",
+                "headSha",
+                "forkName",
+                "mergedSha",
+                "revertOf",
+                "updatedAt"
+              ]
+            },
+            "description": "Changes started from this plan."
+          },
+          "url": {
+            "type": "string",
+            "description": "The plan's page on the platform: hand it to the person who approves it."
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "plan",
+          "author",
+          "approver",
+          "changes",
+          "url",
+          "nextSteps"
         ]
       },
       "annotations": {
@@ -1931,6 +2414,230 @@ export type introspection = {
       }
     },
     /**
+     * List changes
+     * A repo's changes, most recently updated first (up to 200): status, lane, plan, who started it and its page (url). Filter by status (e.g. awaiting-review) or to the changes you started (mine: true). get_change_status has one change's details.
+     * @param args.repoId The repo.
+     * @param args.status Only changes with this status.
+     * @param args.mine Only changes you started.
+     */
+    "list_changes": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "The repo."
+          },
+          "status": {
+            "enum": [
+              "awaiting-push",
+              "running",
+              "failing",
+              "awaiting-review",
+              "approved",
+              "queued",
+              "merged",
+              "rolling-out",
+              "released",
+              "reverted",
+              "rejected",
+              "abandoned"
+            ],
+            "description": "Only changes with this status."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "Only changes you started."
+          }
+        },
+        "required": [
+          "repoId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "repoId": {
+                  "type": "string"
+                },
+                "planId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "category": {
+                  "enum": [
+                    "fix",
+                    "feature",
+                    "refactor",
+                    "dependency",
+                    "transform",
+                    "revert",
+                    "docs",
+                    "chore"
+                  ]
+                },
+                "status": {
+                  "enum": [
+                    "awaiting-push",
+                    "running",
+                    "failing",
+                    "awaiting-review",
+                    "approved",
+                    "queued",
+                    "merged",
+                    "rolling-out",
+                    "released",
+                    "reverted",
+                    "rejected",
+                    "abandoned"
+                  ]
+                },
+                "lane": {
+                  "enum": [
+                    0,
+                    1,
+                    2,
+                    null
+                  ]
+                },
+                "computedLane": {
+                  "enum": [
+                    0,
+                    1,
+                    2,
+                    null
+                  ]
+                },
+                "laneReasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "lane": {
+                        "enum": [
+                          0,
+                          1,
+                          2
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "lane",
+                      "message"
+                    ]
+                  }
+                },
+                "baseSha": {
+                  "type": "string"
+                },
+                "headSha": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "forkName": {
+                  "type": "string"
+                },
+                "mergedSha": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "revertOf": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "updatedAt": {
+                  "type": "string"
+                },
+                "authorId": {
+                  "type": "string"
+                },
+                "authorName": {
+                  "type": "string"
+                },
+                "authorKind": {
+                  "enum": [
+                    "human",
+                    "agent",
+                    "system",
+                    "integration"
+                  ]
+                },
+                "planTitle": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The change's page on the platform: hand it to the person who reviews it."
+                }
+              },
+              "required": [
+                "id",
+                "repoId",
+                "planId",
+                "title",
+                "category",
+                "status",
+                "lane",
+                "computedLane",
+                "laneReasons",
+                "baseSha",
+                "headSha",
+                "forkName",
+                "mergedSha",
+                "revertOf",
+                "updatedAt",
+                "authorId",
+                "authorName",
+                "authorKind",
+                "planTitle",
+                "url"
+              ]
+            }
+          }
+        },
+        "required": [
+          "changes"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
      * List production issues for a change
      * Workers Issues attributed to the change or the version it rolled out (errors seen in production).
      */
@@ -2082,6 +2789,133 @@ export type introspection = {
           "repoId",
           "members",
           "yourRole"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * List plans
+     * A repo's plans, newest first, each with its status and page (url). Filter by status (draft, approved, superseded, rejected) or to the plans you drafted (mine: true).
+     * @param args.status Only plans with this status.
+     * @param args.mine Only plans you drafted.
+     */
+    "list_plans": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "approved",
+              "superseded",
+              "rejected"
+            ],
+            "description": "Only plans with this status."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "Only plans you drafted."
+          }
+        },
+        "required": [
+          "repoId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "plans": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "repoId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "draft",
+                    "approved",
+                    "superseded",
+                    "rejected"
+                  ]
+                },
+                "authorId": {
+                  "type": "string"
+                },
+                "approvedBy": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "approvedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "rejectionReason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "scopePaths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "supersedes": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The plan's page on the platform: hand it to the person who approves it."
+                }
+              },
+              "required": [
+                "id",
+                "repoId",
+                "title",
+                "status",
+                "authorId",
+                "approvedBy",
+                "approvedAt",
+                "rejectionReason",
+                "scopePaths",
+                "supersedes",
+                "createdAt",
+                "url"
+              ]
+            }
+          }
+        },
+        "required": [
+          "plans"
         ]
       },
       "annotations": {
@@ -3789,7 +4623,7 @@ export type introspection = {
     },
     /**
      * Request a human review
-     * Ask a human to look at your change (notifies them). This never approves anything: agents cannot approve plans or changes.
+     * Ask a human to look at your change (notifies them; url is its page, to share). This never approves anything: agents cannot approve plans or changes.
      * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
      */
     "request_review": {
@@ -3842,6 +4676,10 @@ export type introspection = {
           "notified": {
             "type": "boolean"
           },
+          "url": {
+            "type": "string",
+            "description": "The change's page on the platform: hand it to the person who reviews it."
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
@@ -3871,6 +4709,7 @@ export type introspection = {
           "changeId",
           "status",
           "notified",
+          "url",
           "nextSteps"
         ]
       },
@@ -4374,6 +5213,10 @@ export type introspection = {
               "branch"
             ]
           },
+          "url": {
+            "type": "string",
+            "description": "The change's page on the platform: hand it to the person who reviews it."
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
@@ -4402,6 +5245,7 @@ export type introspection = {
         "required": [
           "change",
           "remote",
+          "url",
           "nextSteps"
         ]
       },
@@ -4413,7 +5257,7 @@ export type introspection = {
     },
     /**
      * Wait for a change
-     * Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. On timeout call again, after retryAfterSec when it is set.
+     * Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first: reason changes-requested (push a new head), rejected (it ended) or approval-withdrawn (it needs a fresh review); read get_change_status for the review. On timeout call again, after retryAfterSec when it is set.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      * @param args.timeoutSec Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached.
      */
@@ -4463,8 +5307,12 @@ export type introspection = {
             "enum": [
               "reached",
               "timeout",
-              "unreachable"
-            ]
+              "unreachable",
+              "changes-requested",
+              "rejected",
+              "approval-withdrawn"
+            ],
+            "description": "reached; timeout (call again); unreachable (the change ended); or a human sent it back first: changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review)."
           },
           "retryAfterSec": {
             "type": "integer",
@@ -5071,6 +5919,150 @@ export type introspection = {
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Withdraw your plan
+     * Withdraw a draft plan you drafted yourself (it ends as rejected, withdrawn by its author; the reason is audited). Only the author, and only a draft: approving or rejecting anyone's plan stays with people.
+     * @param args.reason Why (recorded in the plan's audit log).
+     * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
+     */
+    "withdraw_plan": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Why (recorded in the plan's audit log)."
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional. Retrying with the same key returns the first result instead of acting twice."
+          }
+        },
+        "required": [
+          "planId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "repoId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "draft",
+                  "approved",
+                  "superseded",
+                  "rejected"
+                ]
+              },
+              "authorId": {
+                "type": "string"
+              },
+              "approvedBy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "approvedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rejectionReason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "scopePaths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "supersedes": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "description": "The plan's page on the platform: hand it to the person who approves it."
+              }
+            },
+            "required": [
+              "id",
+              "repoId",
+              "title",
+              "status",
+              "authorId",
+              "approvedBy",
+              "approvedAt",
+              "rejectionReason",
+              "scopePaths",
+              "supersedes",
+              "createdAt",
+              "url"
+            ]
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "plan",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
         "openWorldHint": false
       }
     },
