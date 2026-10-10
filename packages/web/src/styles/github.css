@@ -99,6 +99,13 @@
   align-items: center;
   min-inline-size: 0;
 }
+/* Touch: a 44px target without growing the row. */
+@media (pointer: coarse) {
+  .gh-repo__name a {
+    padding-block: 12px;
+    margin-block: -12px;
+  }
+}
 .gh-repo__switch {
   display: inline-flex;
   gap: var(--s-2);
