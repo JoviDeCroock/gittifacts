@@ -7,9 +7,10 @@ import type { Change, Lane, Principal } from "@app/domain";
 import { useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
-import type { ReviewDecisionKind, ShadowStats } from "../api/types.js";
+import type { ChangeSummary, ReviewDecisionKind, ShadowStats } from "../api/types.js";
 import { LANES } from "../lib/lanes.js";
-import { CHANGE_STATUS, shortSha } from "../lib/vocab.js";
+import { CHANGE_STATUS, plural, shortSha } from "../lib/vocab.js";
+import { usePageCommands } from "../state/keys.js";
 import { Icon } from "./Icon.js";
 import { Button, LaneTag, LinkButton, StatusChip } from "./ui.js";
 
@@ -100,6 +101,49 @@ const STATUS_NOTE: Partial<Record<Change["status"], string>> = {
   abandoned: "Closed by its author. Nothing to decide.",
 };
 
+/**
+ * After a decision: the next change waiting in this repo (never one you wrote), and for an
+ * approval, where to watch it land. It rises in after the seal has drawn (tour.css).
+ */
+function NextUp({ change, me, approved }: { change: Change; me: Principal | null; approved: boolean }) {
+  const next = useSignal<{ first: ChangeSummary; left: number } | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    api.changes(change.repoId, { status: "awaiting-review" }).then(
+      (r) => {
+        if (!live) return;
+        const waiting = r.changes.filter((c) => c.id !== change.id && c.status === "awaiting-review" && c.authorId !== me?.id);
+        next.value = waiting[0] ? { first: waiting[0], left: waiting.length } : null;
+      },
+      () => {
+        if (live) next.value = null;
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [change.id, change.repoId, me?.id]);
+  if (next.value === undefined) return null;
+  return (
+    <div class="decision__next" data-testid="next-up">
+      {next.value ? (
+        <a class="next-up" href={`/changes/${encodeURIComponent(next.value.first.id)}`}>
+          <span class="next-up__label">Next · {plural(next.value.left, "change")} waiting</span>
+          <span class="next-up__title">{next.value.first.title}</span>
+          <Icon name="chevron-right" size={18} />
+        </a>
+      ) : (
+        <p class="decision__fine">Nothing else in this repo waits for you.</p>
+      )}
+      {approved ? (
+        <a class="decision__watch" href={`/repos/${encodeURIComponent(change.repoId)}/queue`}>
+          <Icon name="git-merge" size={15} /> Watch it land in the merge queue
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
 export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, layout, resolvedHead = null, onDecided }: DecisionPanelProps) {
   const decision = useSignal<ReviewDecisionKind | null>(null);
   const comment = useSignal("");
@@ -110,10 +154,23 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
   const formRef = useRef<HTMLFormElement>(null);
   /** One key per decision attempt; a retry after a network error reuses it. */
   const intentKey = useRef<string | null>(null);
+  /** Opened from a key or the palette: the comment field takes focus in either layout. */
+  const fromCommand = useRef(false);
 
   useEffect(() => {
-    if (decision.value && layout === "bar") formRef.current?.querySelector<HTMLElement>("textarea")?.focus({ preventScroll: true });
+    if (decision.value && (layout === "bar" || fromCommand.current)) formRef.current?.querySelector<HTMLElement>("textarea")?.focus({ preventScroll: layout === "bar" });
+    fromCommand.current = false;
   }, [decision.value, layout]);
+
+  // A, or the palette's Approve/Request changes/Reject, open the same sheet the buttons do. Nothing signs
+  // until the person confirms; the author's own change and a decided change ignore them.
+  const open = (d: ReviewDecisionKind) => {
+    if (change.status !== "awaiting-review" || done.value || busy.value) return;
+    if (me && change.authorId === me.id) return;
+    fromCommand.current = true;
+    decision.value = d;
+  };
+  usePageCommands({ approve: () => open("approve"), "request-changes": () => open("request-changes"), reject: () => open("reject") });
 
   const shadowCandidate = change.computedLane === 0 && !lane0Enabled;
 
@@ -131,6 +188,7 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
         <div>
           <p class="decision__done">{done.value === "approve" && resolvedHead ? RESOLUTION_APPROVE.done : COPY[done.value].done}</p>
           <p class="decision__fine">Signed as {me?.name ?? "you"} and recorded in the audit log.</p>
+          <NextUp change={change} me={me} approved={done.value === "approve"} />
         </div>
       </div>
     );
