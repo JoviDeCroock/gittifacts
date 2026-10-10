@@ -93,7 +93,7 @@
 }
 .consent__code-value {
   font-family: var(--font-code);
-  font-size: 1.25rem;
+  font-size: var(--text-title);
   font-weight: var(--weight-bold);
   letter-spacing: 0.08em;
   color: var(--text);
@@ -336,7 +336,7 @@
 }
 .device-entry__input {
   font-family: var(--font-code);
-  font-size: 1.375rem;
+  font-size: var(--text-heading);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   text-align: center;
