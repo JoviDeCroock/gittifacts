@@ -86,15 +86,16 @@
 /* ================================================================ station strip */
 .stations {
   position: sticky;
-  inset-block-start: 56px;
+  /* Under the top bar, which is 56px below the notch (layout.css). */
+  inset-block-start: calc(56px + env(safe-area-inset-top));
   z-index: calc(var(--z-sticky) - 1);
   margin-inline: calc(var(--gutter) * -1);
   margin-block-end: var(--s-4);
   padding-inline: var(--gutter);
-  background: color-mix(in oklch, var(--canvas) 94%, transparent);
-  backdrop-filter: saturate(1.4) blur(10px);
-  -webkit-backdrop-filter: saturate(1.4) blur(10px);
-  border-block-end: 1px solid var(--rule);
+  background: var(--acetate);
+  backdrop-filter: var(--acetate-filter);
+  -webkit-backdrop-filter: var(--acetate-filter);
+  border-block-end: 1px solid var(--acetate-edge);
 }
 @media (min-width: 1024px) {
   .stations {
@@ -158,7 +159,9 @@
   position: relative;
   display: grid;
   place-items: center;
-  inline-size: 36px;
+  /* 44px targets where the strip has room; long walkthroughs shrink toward 36px. */
+  flex: 0 1 44px;
+  min-inline-size: 36px;
   block-size: 44px;
   padding: 0;
   border: 0;
@@ -542,7 +545,7 @@
   padding-inline: 6px 6px;
   border-inline-end: 1px solid var(--rule);
   background: var(--code-bg);
-  color: var(--text-4);
+  color: var(--text-3);
   text-align: end;
   user-select: none;
   vertical-align: top;
@@ -755,10 +758,17 @@ a.ctx-link:hover .ctx-link__value {
   inset-inline: 0;
   inset-block-end: 0;
   z-index: var(--z-sheet);
-  padding: 10px var(--gutter) max(10px, env(safe-area-inset-bottom));
+  padding: 10px max(var(--gutter), env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
+  background: var(--acetate-strong);
+  backdrop-filter: var(--acetate-filter);
+  -webkit-backdrop-filter: var(--acetate-filter);
+  border-block-start: 1px solid var(--acetate-edge);
+  box-shadow: var(--acetate-rim), var(--shadow-sheet);
+  transition: background-color var(--dur-state) var(--ease-out);
+}
+/* A form never sits on acetate: once the sheet opens for a comment, the bar turns solid. */
+.tour__bar:has(.is-open, .decision--done) {
   background: var(--surface);
-  border-block-start: 1px solid var(--rule-strong);
-  box-shadow: var(--shadow-sheet);
 }
 @media (min-width: 1024px) {
   .tour__bar {
@@ -768,7 +778,7 @@ a.ctx-link:hover .ctx-link__value {
 .decision--bar.is-open {
   max-block-size: min(78dvh, 640px);
   overflow-y: auto;
-  animation: sheet-up var(--dur-sheet) var(--ease-out);
+  animation: sheet-up var(--dur-sheet) var(--ease-expo);
 }
 @keyframes sheet-up {
   from {
@@ -863,8 +873,8 @@ a.ctx-link:hover .ctx-link__value {
   margin-block-start: 2px;
 }
 .decision--done {
-  align-items: center;
-  animation: signed-ground 700ms var(--ease-out) both;
+  align-items: flex-start;
+  animation: signed-ground var(--dur-signed) var(--ease-out) both;
 }
 .decision--done-approve {
   background: var(--ok-tint);
@@ -889,13 +899,13 @@ a.ctx-link:hover .ctx-link__value {
   stroke-width: 2.5;
   stroke-dasharray: 107;
   stroke-dashoffset: 107;
-  animation: seal-draw 520ms var(--ease-out) 60ms forwards;
+  animation: seal-draw var(--dur-seal-ring) var(--ease-out) 60ms forwards;
 }
 .seal__check {
   stroke-width: 3;
   stroke-dasharray: 26;
   stroke-dashoffset: 26;
-  animation: seal-draw 320ms var(--ease-out) 460ms forwards;
+  animation: seal-draw var(--dur-seal-check) var(--ease-out) 460ms forwards;
 }
 @keyframes seal-draw {
   to {
@@ -911,6 +921,66 @@ a.ctx-link:hover .ctx-link__value {
 }
 .decision__done {
   font-weight: var(--weight-bold);
+}
+
+/* After the decision: the next change and, for an approval, where it lands. It rises in once the
+   seal has drawn (60ms + 520ms ring, then the check to 780ms), so the seal stays the moment. */
+.decision__next {
+  display: grid;
+  gap: var(--s-2);
+  margin-block-start: var(--s-3);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .decision__next {
+    animation: next-rise var(--dur-view) var(--ease-expo) 820ms backwards;
+  }
+}
+@keyframes next-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.next-up {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px var(--s-2);
+  min-block-size: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color var(--dur-feedback) var(--ease-out);
+}
+.next-up:hover {
+  border-color: var(--control-border);
+  text-decoration: none;
+}
+.next-up > .icon {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  color: var(--action-ink);
+}
+.next-up__label {
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.next-up__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-medium);
+}
+.decision__watch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: var(--tap);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
 }
 
 .lane-pick {
@@ -967,7 +1037,7 @@ a.ctx-link:hover .ctx-link__value {
 }
 .not-ready__run > summary .disclosure__chev {
   margin-inline-start: auto;
-  transition: transform 180ms var(--ease-out, cubic-bezier(0.25, 1, 0.5, 1));
+  transition: transform var(--dur-state) var(--ease-out);
 }
 .not-ready__run[open] > summary .disclosure__chev {
   transform: rotate(180deg);

@@ -104,10 +104,36 @@
 
   /* ---------------------------------------------------------------- motion */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Arrivals that settle: views, sheets, the palette. */
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
   --dur-feedback: 120ms;
   --dur-state: 200ms;
+  --dur-exit: 180ms;
+  --dur-view: 280ms;
   --dur-sheet: 320ms;
+  /* Authored moments, each named so it can't drift (DESIGN.md, Motion). */
+  --dur-fill: 640ms; /* a meter fills once on arrival */
+  --dur-signed: 700ms; /* the decision settles into its signed ground */
+  --dur-seal-ring: 520ms; /* the approval seal: ring, then check */
+  --dur-seal-check: 320ms;
+  --dur-trace: 2400ms; /* one lap of a working agent's trace */
+  --dur-spin: 900ms; /* busy spinner */
+  --dur-shimmer: 1400ms; /* loading skeleton */
+  --dur-case-mark: 420ms; /* landing: verdict marks settle on the case tag */
+  --dur-case-tear: 1100ms; /* landing: the torn strip falls */
+
+  /*
+   * Acetate: the clear sleeve a ward clips over its chart. Only chrome that floats over a
+   * scrolling chart wears it (top bar, station strip, decision bar, palette, switch-off bar);
+   * reading surfaces, code and forms never do. Derived from the theme's canvas and surface, so
+   * it follows the theme; solid where blur is unsupported or transparency is reduced.
+   */
+  --acetate: color-mix(in oklch, var(--canvas) 74%, transparent);
+  --acetate-strong: color-mix(in oklch, var(--surface) 84%, transparent);
+  --acetate-filter: blur(18px) saturate(1.6);
+  --acetate-rim: inset 0 1px 0 oklch(100% 0 0 / 0.6);
+  --acetate-edge: color-mix(in oklch, var(--rule-strong) 70%, transparent);
 
   /* ---------------------------------------------------------------- layers */
   --z-sticky: 200;
@@ -173,6 +199,10 @@
 
   --shadow-raise: 0 1px 2px oklch(23% 0.035 262 / 0.06), 0 4px 14px oklch(23% 0.035 262 / 0.06);
   --shadow-sheet: 0 -6px 28px oklch(23% 0.035 262 / 0.14);
+  /* Under floating acetate: a soft fall-off below the edge, never a halo. */
+  --shadow-float: 0 6px 18px -12px oklch(23% 0.035 262 / 0.35);
+  /* A sheet lifted over the page (the palette). */
+  --shadow-lift: 0 24px 64px -24px oklch(23% 0.035 262 / 0.45);
   --backdrop: oklch(23% 0.035 262 / 0.38);
 }
 
@@ -225,12 +255,15 @@
     --diff-del: oklch(27% 0.045 25);
     --diff-del-strong: oklch(33% 0.08 25);
     --code-bg: var(--p-night-2);
-    --code-comment: var(--p-night-ink-4);
+    --code-comment: var(--p-night-ink-3);
+    --acetate-rim: inset 0 1px 0 oklch(100% 0 0 / 0.07);
     --code-string: oklch(80% 0.1 152);
     --code-keyword: oklch(80% 0.08 262);
     --code-number: oklch(80% 0.1 50);
     --shadow-raise: 0 1px 2px oklch(0% 0 0 / 0.3), 0 6px 18px oklch(0% 0 0 / 0.25);
     --shadow-sheet: 0 -8px 32px oklch(0% 0 0 / 0.45);
+    --shadow-float: 0 8px 22px -12px oklch(0% 0 0 / 0.7);
+    --shadow-lift: 0 24px 64px -20px oklch(0% 0 0 / 0.75);
     --backdrop: oklch(10% 0.01 258 / 0.6);
   }
 }
@@ -282,13 +315,31 @@
   --diff-del: oklch(27% 0.045 25);
   --diff-del-strong: oklch(33% 0.08 25);
   --code-bg: var(--p-night-2);
-  --code-comment: var(--p-night-ink-4);
+  --code-comment: var(--p-night-ink-3);
+  --acetate-rim: inset 0 1px 0 oklch(100% 0 0 / 0.07);
   --code-string: oklch(80% 0.1 152);
   --code-keyword: oklch(80% 0.08 262);
   --code-number: oklch(80% 0.1 50);
   --shadow-raise: 0 1px 2px oklch(0% 0 0 / 0.3), 0 6px 18px oklch(0% 0 0 / 0.25);
   --shadow-sheet: 0 -8px 32px oklch(0% 0 0 / 0.45);
+  --shadow-float: 0 8px 22px -12px oklch(0% 0 0 / 0.7);
+  --shadow-lift: 0 24px 64px -20px oklch(0% 0 0 / 0.75);
   --backdrop: oklch(10% 0.01 258 / 0.6);
+}
+
+/* Acetate falls back to the solid ground it sits on. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --acetate: var(--canvas);
+    --acetate-strong: var(--surface);
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root {
+    --acetate: var(--canvas);
+    --acetate-strong: var(--surface);
+    --acetate-filter: none;
+  }
 }
 
 @media (min-width: 640px) {

@@ -293,9 +293,11 @@
   justify-content: space-between;
   gap: var(--s-3);
   padding: 10px var(--gutter) max(10px, env(safe-area-inset-bottom));
-  background: var(--surface);
-  border-block-start: 1px solid var(--rule-strong);
-  box-shadow: var(--shadow-sheet);
+  background: var(--acetate-strong);
+  backdrop-filter: var(--acetate-filter);
+  -webkit-backdrop-filter: var(--acetate-filter);
+  border-block-start: 1px solid var(--acetate-edge);
+  box-shadow: var(--acetate-rim), var(--shadow-sheet);
 }
 @media (min-width: 1024px) {
   .plan-bar {

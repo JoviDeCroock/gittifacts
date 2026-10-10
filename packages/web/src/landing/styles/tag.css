@@ -241,11 +241,11 @@
 /* ---------------------------------------------------------------- the one authored moment */
 @media (prefers-reduced-motion: no-preference) {
   .case__mark {
-    animation: case-mark 420ms var(--ease-out) backwards;
+    animation: case-mark var(--dur-case-mark) var(--ease-out) backwards;
     animation-delay: calc(260ms + var(--i, 0) * 90ms);
   }
   .case__strip--2 {
-    animation: case-tear 1100ms cubic-bezier(0.16, 1, 0.3, 1) 1050ms backwards;
+    animation: case-tear var(--dur-case-tear) var(--ease-expo) 1050ms backwards;
   }
 }
 @keyframes case-mark {
