@@ -10,7 +10,7 @@
   min-inline-size: 22px;
   block-size: 22px;
   padding-inline: 5px;
-  border-radius: 5px;
+  border-radius: var(--r-tag);
   background: var(--surface);
   color: var(--text-2);
   box-shadow: inset 0 0 0 1px var(--rule-strong), 0 1px 0 var(--rule-strong);
