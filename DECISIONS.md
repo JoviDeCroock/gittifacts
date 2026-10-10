@@ -2776,3 +2776,48 @@ account-wide (see the incident entry above).
   and the summary comment's QA line says why ("QA · not run: … (asked by @…)"), edited in place, no new comment.
   The newest refusal for a head shows until a run for that head exists (`qa_refusals`, migration 0019). The Run QA
   button has no comment to react to; its refusals show in the same line.
+
+
+## 2026-10-10 — Cloudflare's "next Git platform" brief: many agents at once, and why in git
+
+**Context.** Cloudflare's post "We want you to build the next Git platform on Cloudflare"
+(2026-10-01, [B2] in `docs/research/artifacts.md`) asks how agents coordinate, how conflicting
+changes are handled, how agents' work gets reviewed, and how to record why a change was made. Its
+minimum bar is multiple agents working on changes concurrently. Two of those had gaps here:
+- Nothing ran several agent principals concurrently on one repo. `scripts/e2e/merge-queue.ts`
+  opens three Changes one after another with a single token, and the workerd merge-queue test
+  lands one Change.
+- "Why" lived off-git. The Plan, its signed approval and the review decisions are in D1 and the
+  audit log. The only note on a landed commit, `refs/notes/evidence`, says what was proven, not
+  what was intended or who answered for it.
+
+**Decision.**
+- **Many agents, tested where it runs.** `apps/platform/test/integration/many-agents.test.ts`
+  runs on the deploy gate's workerd suite (real DOs and Workflows). Four agent principals start,
+  push and enqueue at once, and no agent can approve its own Change or another's. A human
+  approves, and the queue lands all four (two rebased). Each Change keeps its author, and each
+  agent sees its own merge. `scripts/e2e/many-agents.ts` is the live counterpart: N agents and a
+  conflicting pair, for the demo (`docs/demo.md`). It has not been run against a deployment yet.
+- **`refs/notes/why`, signed, on every commit the queue lands.** The format is `gittifacts.why/v1`
+  in `@app/evidence/why.ts`, kept standalone. The note carries:
+  - the approved Plan (intent, acceptance criteria, out of scope, approver and its approval
+    signature);
+  - the author, and for an agent the human accountable for it;
+  - the lane and its reasons, and the approvals that stood;
+  - the agent trace, and the evidence id.
+  It is written after any lane raise, so it shows the lane the Change landed on.
+- **The author's summary is left out.** It is the author's claim and is kept from the reviewer
+  agent. The why note records the intent a human approved. A Change without a Plan says
+  `plan: null`; that absence is itself the answer.
+- **Signing reuses `Signer.signDocument`** (purpose `gittifacts/document`, exported as
+  `WHY_SIGNATURE_PURPOSE`). Readers verify it with the published keys. The integration test
+  verifies it with the platform signer and fails if the purpose drifts.
+- **Best effort, like the evidence note.** A failure is audited (`merge-queue.why-note-failed`)
+  and never undoes a landing.
+
+**Consequences.**
+- One more note write per landed Change (a receive-pack to main, inside the queue's write window).
+- Commits that landed before this deploy have no why note. Nothing backfills them.
+- `verify-attestation` checks evidence notes only. A CLI check for why notes is a follow-up.
+- README now has try, run-locally and deploy sections. The contest also requires a
+  permissive license and a public repo. Both are the owner's call and are not done.
