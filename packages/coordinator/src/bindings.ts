@@ -5,6 +5,7 @@
  */
 import type { Change, WaitUntil } from "@app/domain";
 import type { ChangeWorkflowParams, RolloutParams } from "./events.js";
+import type { WaitReason } from "./milestones.js";
 
 // ---------------------------------------------------------------- workflows
 
@@ -92,7 +93,7 @@ export interface ChangeCoordinatorClient {
   waitFor(input: { changeId: string; until: WaitUntil; timeoutMs: number }): Promise<{
     change: Change | null;
     reached: boolean;
-    reason: "reached" | "timeout" | "unreachable";
+    reason: WaitReason;
   }>;
   /** Long-poll until the change's version (`changeVersion`) differs from `since`. */
   watch(input: { changeId: string; since: string | null; timeoutMs: number }): Promise<{

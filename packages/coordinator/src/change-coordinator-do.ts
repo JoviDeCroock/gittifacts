@@ -12,6 +12,7 @@ import type {
   PushOutcome,
 } from "./bindings.js";
 import { ChangeCoordinatorCore } from "./change-coordinator.js";
+import type { WaitReason } from "./milestones.js";
 import type { RunSink } from "./ports.js";
 import { createRunSink, type SinkOutcome } from "./run-sink.js";
 import { resolveRuntime } from "./runtime.js";
@@ -82,7 +83,7 @@ export class ChangeCoordinator
   waitFor(input: { changeId: string; until: WaitUntil; timeoutMs: number }): Promise<{
     change: Change | null;
     reached: boolean;
-    reason: "reached" | "timeout" | "unreachable";
+    reason: WaitReason;
   }> {
     return this.core.waitFor(input);
   }
