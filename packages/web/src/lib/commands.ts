@@ -88,7 +88,7 @@ function changeCommands(id: string, sub: "" | "evidence" | "rollout"): Command[]
   out.push(
     { id: "change.qa", label: "Run QA in a browser", group: "This change", icon: "test-tube", act: { kind: "go", href: `/changes/${enc}#qa` }, twin: twin("request_qa"), words: "test browser criteria" },
     { id: "change.rerun", label: "Re-run CI", group: "This change", icon: "redo", act: null, twin: twin("rerun_ci"), words: "retry checks pipeline" },
-    { id: "change.wait", label: "Wait until it settles", group: "This change", icon: "timer", act: null, twin: twin("wait_for_change"), words: "merged block poll" },
+    { id: "change.wait", label: "Wait until it merges", group: "This change", icon: "timer", act: null, twin: { tool: "wait_for_change", args: { changeId: id, until: "merged" }, positional: "changeId" }, words: "merged block poll settle" },
   );
   if (sub === "rollout") {
     out.push({ id: "change.kill", label: "Switch off…", group: "This change", icon: "power", act: { kind: "go", href: `/changes/${enc}/rollout#switch-off` }, twin: null, personOnly: KILL_RULE, words: "kill stop flag revert" });
@@ -101,6 +101,7 @@ function planCommands(id: string): Command[] {
   return [
     { id: "plan.status", label: "Plan and its approval", group: "This plan", icon: "list-checks", act: { kind: "go", href: `/plans/${encodeURIComponent(id)}` }, twin, words: "intent criteria" },
     { id: "plan.approve", label: "Approve the plan…", group: "This plan", icon: "signature", act: null, twin: null, personOnly: "Only a person approves a plan, and never its author.", words: "sign intent" },
+    { id: "plan.withdraw", label: "Withdraw your draft plan", group: "This plan", icon: "undo", act: null, twin: { tool: "withdraw_plan", args: { planId: id }, positional: "planId" }, words: "cancel retract author" },
   ];
 }
 
@@ -123,7 +124,7 @@ const NAV: Command[] = [
   { id: "go.agents", label: "Agents", group: "Go to", icon: "bot", act: { kind: "go", href: "/agents" }, twin: { tool: "whoami", args: {} }, words: "tokens sessions fleet" },
   { id: "go.integrations", label: "Integrations", group: "Go to", icon: "plug", act: { kind: "go", href: "/settings/integrations" }, twin: null, words: "deploy webhooks" },
   { id: "go.github", label: "GitHub", group: "Go to", icon: "git-branch", act: { kind: "go", href: "/settings/github" }, twin: null, words: "app install" },
-  { id: "go.docs", label: "Docs", group: "Go to", icon: "file-text", act: { kind: "go", href: "/docs", server: true }, twin: { tool: "search_tools", args: {} }, words: "help guide" },
+  { id: "go.docs", label: "Docs", group: "Go to", icon: "file-text", act: { kind: "go", href: "/docs", server: true }, twin: { tool: "search_tools", args: {}, fill: ["query"] }, words: "help guide" },
 ];
 
 const PREFS: Command[] = (["system", "light", "dark"] as const).map((value) => ({
