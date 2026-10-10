@@ -27,6 +27,7 @@ import { DEPLOY_SCOPES, hostOf, lines, redirectUrisProblem, urlProblem } from ".
 import { relative } from "../lib/time.js";
 import { plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
+import { prefersReducedMotion } from "../state/media.js";
 import { useResource } from "../state/resource.js";
 import "../styles/integrations.css";
 
@@ -349,7 +350,7 @@ export function IntegrationsDeveloper() {
             onCreated={(r) => {
               created.value = r;
               res.reload();
-              window.scrollTo({ top: 0, behavior: "smooth" });
+              window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
             }}
           />
         </aside>

@@ -10,7 +10,7 @@ import { Button, ErrorState, Hash, LaneTag, Loading, StatusChip, Who } from "../
 import { formatDateTime, relative } from "../lib/time.js";
 import { CHANGE_STATUS, PLAN_STATUS, plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
-import { useMedia } from "../state/media.js";
+import { prefersReducedMotion, useMedia } from "../state/media.js";
 import { useResource } from "../state/resource.js";
 import { principal } from "../state/session.js";
 import "../styles/plan.css";
@@ -353,7 +353,8 @@ export function PlanView({ planId }: { planId: string }) {
           <Button
             variant="primary"
             icon="signature"
-            onClick={() => document.getElementById("sign")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            data-testid="plan-jump-to-sign"
+            onClick={() => document.getElementById("sign")?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" })}
           >
             Review and sign
           </Button>

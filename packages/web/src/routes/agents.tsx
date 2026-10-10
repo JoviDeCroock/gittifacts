@@ -11,6 +11,7 @@ import { neverSentence, sessionLine } from "../lib/consent-copy.js";
 import { relative } from "../lib/time.js";
 import { plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
+import { prefersReducedMotion } from "../state/media.js";
 import { useResource } from "../state/resource.js";
 import { principal } from "../state/session.js";
 import "../styles/agents.css";
@@ -42,7 +43,7 @@ const FLOW: Record<AgentSession["flow"], { label: string; icon: "route" | "monit
 
 function TokenReveal({ created, onDone }: { created: CreateAgentResponse; onDone: () => void }) {
   return (
-    <section class="token" aria-labelledby="token-title" role="status">
+    <section class="token" aria-labelledby="token-title" role="status" data-testid="agent-token">
       <h2 id="token-title" class="token__title">
         <Icon name="key" size={18} /> Token for {created.principal.name}
       </h2>
@@ -104,7 +105,7 @@ function CreateAgent({ onCreated }: { onCreated: (r: CreateAgentResponse) => voi
   }
 
   return (
-    <form class="create-agent" onSubmit={submit} aria-labelledby="create-title">
+    <form class="create-agent" onSubmit={submit} aria-labelledby="create-title" data-testid="create-agent">
       <h2 id="create-title" class="create-agent__title">
         Add an agent by hand
       </h2>
@@ -205,7 +206,7 @@ function SessionRow({ s, onRevoked }: { s: AgentSession; onRevoked: (s: AgentSes
       <div class="agent__main">
         <p class="agent__name">
           {s.name}
-          <span class={`agent__status agent__status--${s.status}`}>
+          <span class={`agent__status agent__status--${s.status}`} data-testid="agent-status" data-status={s.status}>
             {s.status === "active" ? "Active" : s.status === "expired" ? "Ended" : "Revoked"}
           </span>
         </p>
@@ -383,7 +384,7 @@ export function AgentsView() {
             onCreated={(r) => {
               created.value = r;
               res.reload();
-              window.scrollTo({ top: 0, behavior: "smooth" });
+              window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
             }}
           />
         </aside>
