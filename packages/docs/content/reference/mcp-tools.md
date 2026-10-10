@@ -1,6 +1,6 @@
 ---
 title: "MCP tools"
-description: "All 32 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
+description: "All 36 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
 order: 10
 audience: agents
 generated: true
@@ -30,11 +30,15 @@ Mutating tools accept `idempotencyKey`: retry with the same key safely.
 | [`list_repos`](/docs/reference/mcp-projects#list_repos) | Repos you can read, with open changes per lane and whether auto-merge (Lane 0) is on or still calibrating. | `repo:read` | read |
 | [`list_members`](/docs/reference/mcp-projects#list_members) | A repo's human members and their roles (reader < reviewer < maintainer < owner), and your role (an agent acts with its owner's role: reviewer or above to draft plans and start changes). | `repo:read` | read |
 | [`create_plan`](/docs/reference/mcp-changes#create_plan) | Draft a plan: intent, acceptance criteria and the paths you expect to touch. | `plan:create` | write |
+| [`get_plan`](/docs/reference/mcp-changes#get_plan) | A plan: its intent, acceptance criteria and scope, its status (draft until a person approves it; agents never can), who drafted and approved it, the changes started from it, its page (url) to hand a person, and what to do next. | `repo:read` | read |
+| [`list_plans`](/docs/reference/mcp-changes#list_plans) | A repo's plans, newest first, each with its status and page (url). | `repo:read` | read |
+| [`withdraw_plan`](/docs/reference/mcp-changes#withdraw_plan) | Withdraw a draft plan you drafted yourself (it ends as rejected, withdrawn by its author; the reason is audited). | `plan:create` | write |
 | [`start_change`](/docs/reference/mcp-changes#start_change) | Fork the repo for one change and get a short-lived push token for that fork only. | `change:create` | write |
-| [`get_change_status`](/docs/reference/mcp-changes#get_change_status) | A change's status, lane (and why), pipeline runs for each head, and what to do next. | `repo:read` | read |
+| [`list_changes`](/docs/reference/mcp-changes#list_changes) | A repo's changes, most recently updated first (up to 200): status, lane, plan, who started it and its page (url). | `repo:read` | read |
+| [`get_change_status`](/docs/reference/mcp-changes#get_change_status) | A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), its page (url) to hand a person, and what to do next. | `repo:read` | read |
 | [`get_evidence`](/docs/reference/mcp-changes#get_evidence) | The signed evidence for the change's current head (tests, red/green proof, coverage, API diff, ...) and whether the signature verifies. | `repo:read` | read |
 | [`get_tour`](/docs/reference/mcp-changes#get_tour) | The walkthrough (the tour) a second reviewer agent wrote for the change, what a human will read: stops with verdicts, least-confident points and what was not done. | `repo:read` | read |
-| [`request_review`](/docs/reference/mcp-changes#request_review) | Ask a human to look at your change (notifies them). | `change:create` | write |
+| [`request_review`](/docs/reference/mcp-changes#request_review) | Ask a human to look at your change (notifies them; url is its page, to share). | `change:create` | write |
 | [`rerun_ci`](#rerun_ci) | Repeats CI, evidence, the lane and the walkthrough on the change's current head, without a push (a flaky step). | `change:create` | write |
 | [`close_change`](#close_change) | Close (abandon) a change that won't merge: stops its CI, takes it out of the merge queue and deletes its fork later. | `change:create` | write |
 | [`list_issues_for_change`](/docs/reference/mcp-changes#list_issues_for_change) | Workers Issues attributed to the change or the version it rolled out (errors seen in production). | `repo:read` | read |

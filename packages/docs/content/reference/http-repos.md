@@ -212,6 +212,17 @@ Reject a draft plan (human maintainer or owner; the author may withdraw)
 - **200:** `{ plan: Plan }`
 - **Errors:** 400, 401, 403, 404, 409
 
+### `POST /api/v1/plans/{planId}/withdraw`
+
+Withdraw a draft plan you drafted (its author only, agents included)
+
+- **Auth:** session cookie or bearer token
+- **Idempotency-Key:** accepted
+- **Parameters:** `planId` (path, required)
+- **Body:** `{ reason? }`
+- **200:** `{ plan: Plan }`
+- **Errors:** 400, 401, 403, 404, 409
+
 ### `GET /api/v1/repos/{repoId}/plans`
 
 Plans of a repo, newest first

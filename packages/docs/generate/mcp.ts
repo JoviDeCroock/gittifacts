@@ -23,9 +23,14 @@ import { fieldRows, type JsonSchema, typeOf } from "./lib/schema.js";
 import { mcpTools, type ToolDef } from "./lib/tools.js";
 
 const REPO = join(import.meta.dirname, "..", "..", "..");
-const TOOL_SOURCES = ["tools.ts", "tools/workspace.ts", "tools/import.ts", "tools/queue.ts"].map(
-  (f) => join(REPO, "packages/mcp/src", f),
-);
+const TOOL_SOURCES = [
+  "tools.ts",
+  "tools/plans.ts",
+  "tools/changes.ts",
+  "tools/workspace.ts",
+  "tools/import.ts",
+  "tools/queue.ts",
+].map((f) => join(REPO, "packages/mcp/src", f));
 
 /** Scopes each tool's handler checks, in source order. */
 export function toolScopes(): Map<string, string[]> {
@@ -73,10 +78,14 @@ export const FAMILIES: readonly {
     title: "MCP tools: plans and changes",
     nav: "MCP: plans and changes",
     description:
-      "create_plan, start_change, wait_for_change and the read tools for status, evidence, tours and issues: arguments, scopes, examples and outputs.",
+      "create_plan, get_plan, list_plans, withdraw_plan, start_change, list_changes, wait_for_change and the read tools for status, evidence, tours and issues: arguments, scopes, examples and outputs.",
     tools: [
       "create_plan",
+      "get_plan",
+      "list_plans",
+      "withdraw_plan",
       "start_change",
+      "list_changes",
       "refresh_push_token",
       "wait_for_change",
       "get_change_status",

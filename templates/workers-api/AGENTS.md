@@ -19,6 +19,7 @@ Every response has `nextSteps` and every error has `fix` (`call` / `command`). D
 ## The loop
 1. **Plan.** Describe the intent; a human approves it (you never can):
    `create_plan({ repoId: "{{repoId}}", title: "Add GET /version", intent: "Expose the deployed version so clients can check it.", acceptanceCriteria: ["GET /version returns { version }"], scopePaths: ["src/**", "test/**"] })`
+   Hand a person its `url`; `get_plan({ planId: "<planId>" })` shows when it is `approved`.
 2. **Change.** Open one Change per intent. It returns `change.id` and a `remote` for **your fork only**:
    `start_change({ repoId: "{{repoId}}", planId: "<planId>", title: "Add GET /version", category: "feature" })`
 3. **Push** your commits to the fork:
@@ -27,6 +28,7 @@ Every response has `nextSteps` and every error has `fix` (`call` / `command`). D
    `wait_for_change({ changeId: "<changeId>", until: "evidence_ready", timeoutSec: 50 })`
 5. **Read** CI, lane, reasons and the preview URL: `get_change_status({ changeId: "<changeId>" })`
 6. **Hand off** Lane 1/2 to a human: `request_review({ changeId: "<changeId>" })`, then wait for `merged`.
+   Changes requested? The wait says `changes-requested`; `get_change_status` has the comment: push again.
 
 No Plan yet? You may start a Change without `planId`; it can't auto-merge and scope can't be checked.
 Pushing again to the fork restarts the pipeline for the new head; the old run is superseded.
@@ -85,7 +87,9 @@ walkthrough is regenerated for the new head. Evidence details: `get_evidence({ c
 | `merged` | the merge queue fast-forwarded main |
 | `reverted` | the Change was rolled back and a revert Change was opened |
 `reason: "timeout"` → call it again with the same arguments until `reached` is true.
-`reason: "unreachable"` → the Change ended; read `get_change_status`.
+`reason: "unreachable"` or `"rejected"` → the Change ended; read `get_change_status`.
+`"changes-requested"` → read the review in `get_change_status`, push a new head, `request_review` again.
+`"approval-withdrawn"` → the approval stopped counting (e.g. QA failed): fix and push, or ask again.
 
 ## After merge: rollout and switching a Change off
 With a deploy target, a merged Change rolls out in stages (`rollout` in `.platform/policy.ts`) and is
