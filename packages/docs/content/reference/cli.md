@@ -103,7 +103,7 @@ gittifacts logout [--all]
 
 ### `gittifacts wait`
 
-Wait until a change reaches a milestone, re-issuing the wait_for_change long-poll until --timeout. Exit 0 when reached, 3 when it timed out or can no longer be reached.
+Wait until a change reaches a milestone, re-issuing the wait_for_change long-poll until --timeout. Exit 0 when reached, 3 when it timed out, can no longer be reached, or a human sent it back (changes requested, rejected, approval withdrawn).
 
 ```text
 gittifacts wait <changeId> --until <evidence_ready|lane_assigned|tour_ready|merged|reverted> [--timeout <integer>]
@@ -186,11 +186,15 @@ One per MCP tool. Arguments, scopes and outputs are in the [MCP tools](/docs/ref
 | `gittifacts list-repos` | `list_repos` | `gittifacts list-repos` — Repos you can read, with open changes per lane and whether auto-merge (Lane 0) is on or still calibrating. |
 | `gittifacts list-members` | `list_members` | `gittifacts list-members <repoId>` — A repo's human members and their roles (reader < reviewer < maintainer < owner), and your role (an agent acts with its owner's role: reviewer or above to draft plans and start changes). |
 | `gittifacts create-plan` | `create_plan` | `gittifacts create-plan --repo-id <string> --title <string> --intent <string> --acceptance-criteria <string>... [--out-of-scope <string>...] [--risk-declarations <json>] [--scope-paths <string>...] [--affected-routes <string>...] [--supersedes <string>] [--idempotency-key <key>]` — Draft a plan: intent, acceptance criteria and the paths you expect to touch. |
+| `gittifacts get-plan` | `get_plan` | `gittifacts get-plan <planId>` — A plan: its intent, acceptance criteria and scope, its status (draft until a person approves it; agents never can), who drafted and approved it, the changes started from it, its page (url) to hand a person, and what to do next. |
+| `gittifacts list-plans` | `list_plans` | `gittifacts list-plans <repoId> [--status <draft\|approved\|superseded\|rejected>] [--mine]` — A repo's plans, newest first, each with its status and page (url). |
+| `gittifacts withdraw-plan` | `withdraw_plan` | `gittifacts withdraw-plan <planId> [--reason <string>] [--idempotency-key <key>]` — Withdraw a draft plan you drafted yourself (it ends as rejected, withdrawn by its author; the reason is audited). |
 | `gittifacts start-change` | `start_change` | `gittifacts start-change --repo-id <string> [--plan-id <string>] --title <string> --category <fix\|feature\|refactor\|dependency\|transform\|revert\|docs\|chore> [--summary <string>] [--agent-trace-id <string>] [--idempotency-key <key>]` — Fork the repo for one change and get a short-lived push token for that fork only. |
-| `gittifacts get-change-status` | `get_change_status` | `gittifacts get-change-status <changeId> [--github <string>]` — A change's status, lane (and why), pipeline runs for each head, and what to do next. |
+| `gittifacts list-changes` | `list_changes` | `gittifacts list-changes <repoId> [--status <awaiting-push\|running\|failing\|awaiting-review\|approved\|queued\|merged\|rolling-out\|released\|reverted\|rejected\|abandoned>] [--mine]` — A repo's changes, most recently updated first (up to 200): status, lane, plan, who started it and its page (url). |
+| `gittifacts get-change-status` | `get_change_status` | `gittifacts get-change-status <changeId> [--github <string>]` — A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), its page (url) to hand a person, and what to do next. |
 | `gittifacts get-evidence` | `get_evidence` | `gittifacts get-evidence <changeId> [--github <string>]` — The signed evidence for the change's current head (tests, red/green proof, coverage, API diff, ...) and whether the signature verifies. |
 | `gittifacts get-tour` | `get_tour` | `gittifacts get-tour <changeId> [--github <string>]` — The walkthrough (the tour) a second reviewer agent wrote for the change, what a human will read: stops with verdicts, least-confident points and what was not done. |
-| `gittifacts request-review` | `request_review` | `gittifacts request-review <changeId> [--message <string>] [--idempotency-key <key>]` — Ask a human to look at your change (notifies them). |
+| `gittifacts request-review` | `request_review` | `gittifacts request-review <changeId> [--message <string>] [--idempotency-key <key>]` — Ask a human to look at your change (notifies them; url is its page, to share). |
 | `gittifacts rerun-ci` | `rerun_ci` | `gittifacts rerun-ci <changeId> [--reason <string>] [--idempotency-key <key>]` — Repeats CI, evidence, the lane and the walkthrough on the change's current head, without a push (a flaky step). |
 | `gittifacts close-change` | `close_change` | `gittifacts close-change <changeId> [--reason <string>] [--idempotency-key <key>]` — Close (abandon) a change that won't merge: stops its CI, takes it out of the merge queue and deletes its fork later. |
 | `gittifacts list-issues-for-change` | `list_issues_for_change` | `gittifacts list-issues-for-change <changeId>` — Workers Issues attributed to the change or the version it rolled out (errors seen in production). |

@@ -1,3 +1,4 @@
+import { pageUrl } from "@app/conventions";
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 import {
@@ -9,11 +10,36 @@ import {
   PlanSchema,
   PrincipalsMapSchema,
   RejectPlanBody,
+  WithdrawPlanBody,
 } from "../api/schemas.js";
-import { callerOf, requirePrincipal } from "../auth/middleware.js";
+import { callerOf, type HumanOnlyFix, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
-import { approvePlan, createPlan, getPlanDetail, rejectPlan } from "../services/plans.js";
+import {
+  approvePlan,
+  createPlan,
+  getPlanDetail,
+  rejectPlan,
+  withdrawPlan,
+} from "../services/plans.js";
 import { type ApiApp, body, errors, json, SECURITY } from "./common.js";
+
+/** An agent at approve: a person approves the plan on its page; the agent checks with get_plan. */
+const askToApprove: HumanOnlyFix = (c, origin) => {
+  const planId = c.req.param("planId") ?? "<planId>";
+  return {
+    explanation: `Only a person approves a plan; agents never can (their own or anyone's). Ask a person to approve it at ${pageUrl(origin, { planId })}, then check its status with get_plan.`,
+    call: `get_plan({ planId: "${planId}" })`,
+  };
+};
+
+/** An agent at reject: its own draft it withdraws; anyone else's a person rejects. */
+const withdrawOrAsk: HumanOnlyFix = (c, origin) => {
+  const planId = c.req.param("planId") ?? "<planId>";
+  return {
+    explanation: `Only a person rejects a plan. If you drafted it, withdraw it yourself (POST /api/v1/plans/${planId}/withdraw or the call below); otherwise ask a person at ${pageUrl(origin, { planId })}.`,
+    call: `withdraw_plan({ planId: "${planId}", reason: "<why>" })`,
+  };
+};
 
 const create = createRoute({
   method: "post",
@@ -56,7 +82,10 @@ const approve = createRoute({
   tags: ["plans"],
   summary: "Approve a draft plan (human, plan:approve, not the author); signs the approval",
   security: SECURITY,
-  middleware: [requirePrincipal(["plan:approve"], { humanOnly: true }), idempotent()] as const,
+  middleware: [
+    requirePrincipal(["plan:approve"], { humanOnly: askToApprove }),
+    idempotent(),
+  ] as const,
   request: { headers: IdempotencyHeaders, params: PlanIdParam, body: body(ApprovePlanBody) },
   responses: {
     200: json(z.object({ plan: PlanSchema }), "Approved"),
@@ -72,12 +101,27 @@ const reject = createRoute({
   security: SECURITY,
   // `read` here: rejectPlan decides (approve, or contribute for the author's own draft).
   middleware: [
-    requirePrincipal(["plan:approve"], { humanOnly: true, need: "read" }),
+    requirePrincipal(["plan:approve"], { humanOnly: withdrawOrAsk, need: "read" }),
     idempotent(),
   ] as const,
   request: { headers: IdempotencyHeaders, params: PlanIdParam, body: body(RejectPlanBody) },
   responses: {
     200: json(z.object({ plan: PlanSchema }), "Rejected"),
+    ...errors(400, 401, 403, 404, 409),
+  },
+});
+
+const withdraw = createRoute({
+  method: "post",
+  path: "/api/v1/plans/{planId}/withdraw",
+  tags: ["plans"],
+  summary: "Withdraw a draft plan you drafted (its author only, agents included)",
+  security: SECURITY,
+  // `read` here: withdrawPlan checks the author, then contribute on the plan's repo.
+  middleware: [requirePrincipal(["plan:create"], { need: "read" }), idempotent()] as const,
+  request: { headers: IdempotencyHeaders, params: PlanIdParam, body: body(WithdrawPlanBody) },
+  responses: {
+    200: json(z.object({ plan: PlanSchema }), "Withdrawn"),
     ...errors(400, 401, 403, 404, 409),
   },
 });
@@ -92,6 +136,15 @@ export function registerPlanRoutes(app: ApiApp): void {
   );
   app.openapi(approve, async (c) => {
     const plan = await approvePlan(
+      c.get("services"),
+      callerOf(c),
+      c.req.valid("param").planId,
+      c.req.valid("json"),
+    );
+    return c.json({ plan }, 200);
+  });
+  app.openapi(withdraw, async (c) => {
+    const plan = await withdrawPlan(
       c.get("services"),
       callerOf(c),
       c.req.valid("param").planId,

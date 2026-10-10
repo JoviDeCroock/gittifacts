@@ -1,6 +1,6 @@
 import type { ApiError, Change, Plan, Repo, Tour } from "@app/domain";
 import { defaultPolicy } from "@app/domain";
-import type { McpBackend, QueueEntry, WorkspaceView } from "../../src/index.js";
+import type { McpBackend, PlanData, QueueEntry, WorkspaceView } from "../../src/index.js";
 
 export const SHA = "a".repeat(40);
 export const HEAD = "b".repeat(40);
@@ -127,7 +127,50 @@ export function queueEntry(over: Partial<QueueEntry> = {}): QueueEntry {
 /** In-memory McpBackend; records calls. */
 export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { calls: string[] } {
   const calls: string[] = [];
+  const plans = new Map<string, PlanData>();
   const base: McpBackend = {
+    webUrl(page) {
+      return "planId" in page
+        ? `https://gittifacts.test/plans/${page.planId}`
+        : `https://gittifacts.test/changes/${page.changeId}`;
+    },
+    async getPlan(_caller, planId) {
+      calls.push(`getPlan:${planId}`);
+      const plan = plans.get(planId);
+      if (plan === undefined) throw new NotFound(`plan ${planId}`);
+      return { plan, changes: [], principals: {} };
+    },
+    async listChanges(_caller, repoId, filter) {
+      calls.push(`listChanges:${repoId}:${filter.status ?? "-"}`);
+      const rows = [
+        change(),
+        change({ id: "chg_2", authorId: "ag_2", status: "running", title: "Cache sessions" }),
+      ].filter((c) => c.repoId === repoId && (filter.status === undefined || c.status === filter.status));
+      return rows.map((c) => ({
+        ...c,
+        planTitle: c.planId === null ? null : "Rate limit logins",
+        authorName: c.authorId === "ag_1" ? "bot" : "other-bot",
+        authorKind: "agent" as const,
+      }));
+    },
+    async listPlans(_caller, repoId) {
+      calls.push(`listPlans:${repoId}`);
+      return { plans: [...plans.values()].filter((p) => p.repoId === repoId), principals: {} };
+    },
+    async withdrawPlan(caller, planId, reason) {
+      calls.push(`withdrawPlan:${planId}`);
+      const plan = plans.get(planId);
+      if (plan === undefined) throw new NotFound(`plan ${planId}`);
+      const withdrawn: PlanData = {
+        ...plan,
+        status: "rejected",
+        rejectedBy: caller.principalId,
+        rejectedAt: "2026-10-01T00:05:00.000Z",
+        rejectionReason: reason ?? "withdrawn by its author",
+      };
+      plans.set(planId, withdrawn);
+      return withdrawn;
+    },
     async whoami(caller) {
       calls.push("whoami");
       return {
@@ -213,6 +256,7 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
         approvalSignature: null,
         createdAt: "2026-10-01T00:00:00.000Z",
       };
+      plans.set(plan.id, { ...plan, rejectedBy: null, rejectedAt: null, rejectionReason: null });
       return plan;
     },
     async startChange(_caller, input) {
@@ -239,6 +283,7 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
       if (changeId !== "chg_1") throw new NotFound(`change ${changeId}`);
       return {
         change: change(),
+        reviews: [],
         runs: [
           {
             id: "run_1",

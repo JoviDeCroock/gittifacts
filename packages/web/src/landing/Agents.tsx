@@ -26,7 +26,8 @@ function FirstGreen() {
           style={{
             left: ttfgPct(p50Sec),
             // End minus start, both clamped to the axis: never past its right end.
-            width: `${Math.max(0, parseFloat(ttfgPct(p90Sec)) - parseFloat(ttfgPct(p50Sec)))}%`,
+            // Rounded like ttfgPct: 70.0 − 63.3 printed 25.60000000000001%.
+            width: `${Math.max(0, Number((parseFloat(ttfgPct(p90Sec)) - parseFloat(ttfgPct(p50Sec))).toFixed(1)))}%`,
           }}
         />
         <span class="ttfg__median" data-ttfg-median="" style={{ left: ttfgPct(p50Sec) }} />

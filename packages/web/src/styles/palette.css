@@ -1,0 +1,291 @@
+/*
+ * The palette (components/Palette.tsx). Acetate over the page: it floats above the chart you
+ * were reading, so the chart stays faintly visible behind it (DESIGN.md, the Acetate Rule).
+ * Two hands: "Myself" is ink and teal like the rest of the app; "An agent" shows each row's twin
+ * in mono, because the twin is code an agent runs (the Mono Is Data Rule).
+ */
+.kbd {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 22px;
+  block-size: 22px;
+  padding-inline: 5px;
+  border-radius: var(--r-tag);
+  background: var(--surface);
+  color: var(--text-2);
+  box-shadow: inset 0 0 0 1px var(--rule-strong), 0 1px 0 var(--rule-strong);
+  font: var(--weight-medium) var(--text-meta) / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ================================================================ trigger (sidebar) */
+.palette-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  inline-size: 100%;
+  min-block-size: 40px;
+  padding-inline: var(--s-3) 6px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--text-3);
+  font-size: var(--text-small);
+  text-align: start;
+  transition: border-color var(--dur-feedback) var(--ease-out), color var(--dur-feedback) var(--ease-out);
+}
+.palette-trigger:hover {
+  border-color: var(--control-border);
+  color: var(--text);
+}
+.palette-trigger__label {
+  flex: 1;
+}
+
+/* ================================================================ dialog */
+.palette {
+  inline-size: min(640px, calc(100vw - 24px));
+  max-inline-size: none;
+  max-block-size: min(72dvh, 620px);
+  margin: max(12px, env(safe-area-inset-top)) auto auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--acetate-edge);
+  border-radius: var(--r-sheet);
+  background: var(--acetate-strong);
+  backdrop-filter: var(--acetate-filter);
+  -webkit-backdrop-filter: var(--acetate-filter);
+  color: var(--text);
+  box-shadow: var(--acetate-rim), var(--shadow-lift);
+}
+.palette[open] {
+  display: flex;
+  flex-direction: column;
+  animation: palette-in var(--dur-view) var(--ease-expo);
+}
+.palette::backdrop {
+  background: color-mix(in oklch, var(--backdrop) 60%, transparent);
+}
+.palette[open]::backdrop {
+  animation: scrim-in var(--dur-view) var(--ease-out);
+}
+.palette[open].is-closing {
+  animation: palette-out var(--dur-exit) var(--ease-in) forwards;
+}
+.palette[open].is-closing::backdrop {
+  animation: scrim-out var(--dur-exit) var(--ease-in) forwards;
+}
+@media (min-width: 640px) {
+  .palette {
+    margin-block-start: 12vh;
+  }
+}
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+}
+@keyframes palette-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+}
+
+/* ================================================================ head: query + who does it */
+.palette__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4);
+  border-block-end: 1px solid var(--acetate-edge);
+  color: var(--text-3);
+}
+.palette__input {
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 1.0625rem; /* the Reading size: a query is read back while typed */
+  outline: none;
+}
+.palette__input::placeholder {
+  color: var(--text-3);
+}
+.palette__modes {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  justify-self: start;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-control);
+  background: var(--panel-strong);
+}
+@media (min-width: 640px) {
+  .palette__head {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .palette__modes {
+    grid-column: auto;
+  }
+}
+.palette__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 32px;
+  padding-inline: 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  transition: background-color var(--dur-feedback) var(--ease-out), color var(--dur-feedback) var(--ease-out), box-shadow var(--dur-feedback) var(--ease-out);
+}
+@media (pointer: coarse) {
+  .palette__mode {
+    min-block-size: var(--tap);
+  }
+}
+.palette__mode[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-raise);
+}
+.palette__mode[aria-checked="true"] .icon {
+  color: var(--action-ink);
+}
+
+/* ================================================================ list */
+.palette__list {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--s-2);
+  list-style: none;
+  scroll-padding-block: var(--s-6);
+}
+.palette__group {
+  padding: var(--s-3) var(--s-3) var(--s-1);
+  color: var(--text-3);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+}
+.palette__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-block-size: var(--tap);
+  padding-inline: var(--s-3);
+  border-radius: var(--r-control);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background-color var(--dur-feedback) var(--ease-out), color var(--dur-feedback) var(--ease-out);
+}
+.palette__item.is-active {
+  background: var(--action-tint);
+  color: var(--text);
+}
+.palette__item.is-active > .icon {
+  color: var(--action-ink);
+}
+.palette__item.is-locked {
+  cursor: default;
+}
+.palette__item.is-locked.is-active {
+  background: var(--panel-strong);
+}
+.palette__label {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette__tool {
+  flex: none;
+  max-inline-size: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-3);
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+}
+.palette__person,
+.palette__keys {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.palette__empty {
+  padding: var(--s-5) var(--s-3);
+  color: var(--text-3);
+}
+/* The query field shows focus on its row's edge (the field itself has no box to ring). */
+.palette__head:has(.palette__input:focus-visible) {
+  border-block-end-color: var(--focus);
+  box-shadow: inset 0 -1px 0 var(--focus);
+}
+
+/* ================================================================ twin: what the agent runs */
+.palette__twin {
+  display: grid;
+  gap: 2px;
+  padding: var(--s-2) var(--s-3);
+  border-block-start: 1px solid var(--acetate-edge);
+  background: color-mix(in oklch, var(--panel) 70%, transparent);
+}
+.palette__twinrow {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-2);
+}
+.palette__twinlabel {
+  color: var(--text-3);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+}
+.palette__code {
+  overflow-x: auto;
+  padding-block: 6px;
+  color: var(--text);
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  white-space: nowrap;
+  scrollbar-width: none;
+  user-select: all;
+}
+.palette__twin--person {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s-2);
+  padding-block: var(--s-3);
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.palette__twin--person .icon {
+  margin-block-start: 2px;
+  color: var(--text-3);
+}
+.palette__foot {
+  padding: var(--s-2) var(--s-4) max(var(--s-2), env(safe-area-inset-bottom));
+  border-block-start: 1px solid var(--acetate-edge);
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+@media (pointer: coarse) {
+  /* Key hints mean nothing to a thumb; the status line still shows. */
+  .palette__foot:not(:has([role="status"]:not(:empty))) {
+    display: none;
+  }
+}

@@ -18,7 +18,7 @@ This is the loop for every piece of work. Each step names the call and what it r
 create_plan({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Add /time", intent: "Clients need the server time in ISO 8601 to schedule jobs.", acceptanceCriteria: ["GET /time returns { time } in ISO 8601", "Existing routes are unchanged"], scopePaths: ["src/**", "test/**"] })
 ```
 
-Expected: `plan.status` is `"draft"`. Send the human the Plan link (`https://<host>/plans/<planId>`) and wait for **Sign and approve**. Listing `scopePaths` matters: without them the Change can't auto-merge.
+Expected: `plan.status` is `"draft"` and `url` is the Plan's page (`https://<host>/plans/<planId>`). Send the human that link and wait for **Sign and approve**; `get_plan({ planId: "4p8n2b7dq0x6w3k9m1zs" })` shows `plan.status: "approved"` once they have. Listing `scopePaths` matters: without them the Change can't auto-merge. A draft you no longer want: `withdraw_plan({ planId: "4p8n2b7dq0x6w3k9m1zs", reason: "superseded" })` (yours only).
 
 ## 2. Start the Change
 
@@ -72,7 +72,7 @@ wait_for_change({ changeId: "7h2kd9x0qw3m5z8r1vtc", until: "tour_ready", timeout
 request_review({ changeId: "7h2kd9x0qw3m5z8r1vtc", message: "Adds GET /time per plan 4p8n2b7dq0x6w3k9m1zs; red/green not needed (feature)." })
 ```
 
-The reviewer agent has written a walkthrough; `request_review` notifies the humans who can review. It never approves. A **Request changes** answer comes back on the Change: push a new head and the walkthrough is rewritten.
+The reviewer agent has written a walkthrough; `request_review` notifies the humans who can review and returns the Change's page (`url`) to share. It never approves. A **Request changes** answer comes back on the Change: the wait in step 7 answers `reason: "changes-requested"`, `get_change_status` lists the review under `reviews` (decision, comment, reviewer, head), and its `nextSteps` say what to do: push a new head (the walkthrough is rewritten), then `request_review` again. `"rejected"` means the Change ended; `"approval-withdrawn"` means an approval stopped counting (a failed QA run, say) and it needs a fresh review.
 
 ## 7. Wait for the merge
 

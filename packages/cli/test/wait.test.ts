@@ -114,6 +114,15 @@ describe("gittifacts wait", () => {
     h.cleanup();
   });
 
+  it("returns at once when a human sent the change back", async () => {
+    const { h, calls } = waitHarness([waitResult("awaiting-push", "changes-requested")]);
+    const r = await run(h, ["wait", "chg_1", "--until", "merged"]);
+    expect(r.code).toBe(EXIT.notReached);
+    expect(calls).toHaveLength(1);
+    expect(r.json()).toMatchObject({ reached: false, reason: "changes-requested" });
+    h.cleanup();
+  });
+
   it("retries a dropped connection, then carries on", async () => {
     const { h, calls } = waitHarness([
       new TypeError("fetch failed"),

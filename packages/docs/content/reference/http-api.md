@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 112 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 113 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -93,6 +93,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `GET` | [`/api/v1/plans/{planId}`](/docs/reference/http-repos) | A plan and the changes that implement it |
 | `POST` | [`/api/v1/plans/{planId}/approve`](/docs/reference/http-repos) | Approve a draft plan (human, plan:approve, not the author); signs the approval |
 | `POST` | [`/api/v1/plans/{planId}/reject`](/docs/reference/http-repos) | Reject a draft plan (human maintainer or owner; the author may withdraw) |
+| `POST` | [`/api/v1/plans/{planId}/withdraw`](/docs/reference/http-repos) | Withdraw a draft plan you drafted (its author only, agents included) |
 | `GET` | [`/api/v1/principals`](/docs/reference/http-identity) | The caller and the agents it owns |
 | `POST` | [`/api/v1/principals/agents`](/docs/reference/http-identity) | Register an agent principal owned by the caller; returns its bearer token once |
 | `GET` | [`/api/v1/principals/{id}`](/docs/reference/http-identity) | A principal by id (agents include their owner's name) |

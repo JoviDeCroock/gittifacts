@@ -13,6 +13,8 @@ import { principal, session, signOut } from "../state/session.js";
 import { type ThemePref, themePref } from "../state/prefs.js";
 import { BrandMark } from "./BrandMark.js";
 import { Icon, type IconId } from "./Icon.js";
+import { Palette, PaletteButton, paletteRepos, usePaletteShortcut } from "./Palette.js";
+import "../styles/palette.css";
 import { Who } from "./ui.js";
 
 export { BrandMark };
@@ -21,7 +23,7 @@ export { BrandMark };
 const NAV: { href: string; label: string; icon: IconId; match: (path: string) => boolean; server?: boolean }[] = [
   { href: "/dashboard", label: "Dashboard", icon: "layers", match: (p) => p === "/dashboard" || p.startsWith("/repos") || p.startsWith("/changes") || p.startsWith("/plans") },
   { href: "/audit", label: "Audit log", icon: "scroll-text", match: (p) => p.startsWith("/audit") },
-  { href: "/agents", label: "Agents", icon: "key", match: (p) => p.startsWith("/agents") },
+  { href: "/agents", label: "Agents", icon: "bot", match: (p) => p.startsWith("/agents") },
   { href: "/settings/integrations", label: "Integrations", icon: "plug", match: (p) => p.startsWith("/settings/integrations") },
   { href: "/settings/github", label: "GitHub", icon: "git-branch", match: (p) => p.startsWith("/settings/github") },
   { href: "/docs", label: "Docs", icon: "file-text", match: () => false, server: true },
@@ -75,6 +77,7 @@ function Sidebar() {
     api.repos().then(
       (r) => {
         sidebarRepos.value = r.repos;
+        paletteRepos.value = r.repos.map((x) => ({ id: x.id, name: x.name }));
         if (live) repos.value = r.repos;
       },
       () => {},
@@ -91,6 +94,7 @@ function Sidebar() {
         <BrandMark />
         <span class="brand__word">gittifacts</span>
       </a>
+      <PaletteButton />
       <nav class="sidebar__nav">
         <ul>
           {NAV.map((n) => (
@@ -140,14 +144,36 @@ function Sidebar() {
 function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const { path } = useLocation();
+  /** Closing because the page changed: focus belongs to the new page, not back on the menu button. */
+  const navClose = useRef(false);
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
+    if (open && !d.open) {
+      d.classList.remove("is-closing");
+      d.showModal();
+    }
+    if (!open && d.open && !d.classList.contains("is-closing")) {
+      // Slide out first (layout.css drawer-out); a timer covers browsers that skip the animation.
+      d.classList.add("is-closing");
+      const done = () => {
+        window.clearTimeout(t);
+        d.classList.remove("is-closing");
+        if (d.open) d.close();
+        if (navClose.current) {
+          navClose.current = false;
+          document.getElementById("main")?.focus({ preventScroll: true });
+        }
+      };
+      const t = window.setTimeout(done, 260);
+      d.addEventListener("animationend", done, { once: true });
+    }
   }, [open]);
   useEffect(() => {
-    if (open) onClose();
+    if (open) {
+      navClose.current = true;
+      onClose();
+    }
     // close on navigation
     // biome-ignore lint/correctness/useExhaustiveDependencies: only on path change
   }, [path]);
@@ -158,6 +184,10 @@ function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
       ref={ref}
       class="drawer"
       aria-label="Menu"
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
       onClose={onClose}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
@@ -260,6 +290,7 @@ export function Page({ title, crumbs = [], actions, meta, children, wide, barTit
         <div class="topbar__title" aria-hidden={barTitle ? undefined : "true"}>
           {barTitle ?? <span class="topbar__text">{title}</span>}
         </div>
+        <PaletteButton compact />
         <button type="button" class="icon-btn" aria-label="Open menu" aria-haspopup="dialog" onClick={() => (drawer.value = true)}>
           <Icon name="menu" size={22} />
         </button>
@@ -293,6 +324,7 @@ export function Page({ title, crumbs = [], actions, meta, children, wide, barTit
 }
 
 export function Shell({ children }: { children: ComponentChildren }) {
+  usePaletteShortcut();
   return (
     <div class="shell">
       <a href="#main" class="skip-link">
@@ -300,6 +332,7 @@ export function Shell({ children }: { children: ComponentChildren }) {
       </a>
       <Sidebar />
       <div class="shell__content">{children}</div>
+      <Palette />
     </div>
   );
 }

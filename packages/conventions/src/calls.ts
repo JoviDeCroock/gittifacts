@@ -13,7 +13,11 @@ export const TOOL_NAMES = [
   "list_members",
   // plans and changes
   "create_plan",
+  "get_plan",
+  "list_plans",
+  "withdraw_plan",
   "start_change",
+  "list_changes",
   "refresh_push_token",
   "wait_for_change",
   "get_change_status",

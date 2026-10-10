@@ -19,7 +19,7 @@ import {
 } from "@app/domain";
 import { defineTools, type IntrospectionOf, type ToolExtra } from "mcp-tada-server";
 import { z } from "zod";
-import type { McpBackend, McpCaller } from "./backend.js";
+import type { ChangeReviewData, McpBackend, McpCaller } from "./backend.js";
 import {
   ChangeIdInput,
   ChangeRefInput,
@@ -50,7 +50,9 @@ import {
   WaitForChangeOutput,
   WhoamiOutput,
 } from "./schemas.js";
+import { changeListTools } from "./tools/changes.js";
 import { importTools } from "./tools/import.js";
+import { planTools } from "./tools/plans.js";
 import { qaTools } from "./tools/qa.js";
 import { queueTools } from "./tools/queue.js";
 import { workspaceTools } from "./tools/workspace.js";
@@ -158,13 +160,73 @@ export function changeBrief(c: Change) {
 
 type NextStep = { title: string; call?: string; why?: string };
 
+/** What next steps read of a review (`get_change_status` passes them; `wait_for_change` doesn't). */
+export type ReviewBrief = Pick<
+  ChangeReviewData,
+  "decision" | "comment" | "headSha" | "reviewer" | "withdrawn"
+>;
+
+const clip = (s: string, n = 600) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/** The newest review of `headSha` with `decision`, if any (reviews come oldest first). */
+function newest(
+  reviews: readonly ReviewBrief[],
+  decision: ReviewBrief["decision"],
+  headSha: string | null,
+): ReviewBrief | undefined {
+  for (let i = reviews.length - 1; i >= 0; i--) {
+    const r = reviews[i];
+    if (r?.decision === decision && (headSha === null || r.headSha === headSha)) return r;
+  }
+  return undefined;
+}
+
+/** A reviewer sent the pushed head back: address it, push a new head, ask again. */
+function changesRequestedSteps(c: Change, reviews: readonly ReviewBrief[]): NextStep[] {
+  const id = c.id;
+  const sha = (c.headSha ?? "").slice(0, 7);
+  const r = newest(reviews, "request-changes", c.headSha);
+  const by = r === undefined ? "" : ` by ${r.reviewer.name}`;
+  const read: NextStep =
+    r === undefined
+      ? {
+          title: `Changes requested on ${sha}: read the reviewer's comment (reviews)`,
+          call: `get_change_status({ changeId: "${id}" })`,
+        }
+      : r.comment
+        ? { title: `Changes requested on ${sha}${by}: address the comment`, why: clip(r.comment) }
+        : {
+            title: `Changes requested on ${sha}${by} (no comment): read the walkthrough again`,
+            call: `get_tour({ changeId: "${id}" })`,
+          };
+  return [
+    read,
+    {
+      title: `Push a new head to branch ${c.forkName} of the fork`,
+      why: "CI, evidence, the lane and the walkthrough run again for it; the old head's review no longer counts.",
+      call: `refresh_push_token({ changeId: "${id}" })`,
+    },
+    {
+      title: "Once it is graded, ask for the review again",
+      call: `request_review({ changeId: "${id}" })`,
+    },
+  ];
+}
+
 /** The platform-authored bootstrap Change of a project (first CI + preview; @app/coordinator ids). */
 export function isBootstrap(c: Pick<Change, "id" | "authorId">): boolean {
   return c.id.startsWith("bs-") && c.authorId === "system";
 }
 
-/** What an agent should do next for a change in its current state. */
-export function changeNextSteps(c: Change, runs: readonly PipelineRun[] = []): NextStep[] {
+/**
+ * What an agent should do next for a change in its current state. With `reviews` (oldest first)
+ * the steps quote what a reviewer said; without them they point at get_change_status.
+ */
+export function changeNextSteps(
+  c: Change,
+  runs: readonly PipelineRun[] = [],
+  reviews: readonly ReviewBrief[] = [],
+): NextStep[] {
   const id = c.id;
   const wait = (until: string, title?: string): NextStep => ({
     title: title ?? `Wait for ${until.replace("_", " ")}`,
@@ -198,6 +260,8 @@ export function changeNextSteps(c: Change, runs: readonly PipelineRun[] = []): N
   }
   switch (c.status) {
     case "awaiting-push":
+      // A head was pushed and graded, then sent back by a reviewer.
+      if (c.headSha !== null) return changesRequestedSteps(c, reviews);
       return [
         {
           title: `Push your commits to branch ${c.forkName} of the fork`,
@@ -228,11 +292,28 @@ export function changeNextSteps(c: Change, runs: readonly PipelineRun[] = []): N
         },
       ];
     }
-    case "awaiting-review":
+    case "awaiting-review": {
+      const lost = reviews.find(
+        (r) => r.decision === "approve" && r.headSha === c.headSha && r.withdrawn !== null,
+      );
+      const withdrawn: NextStep[] =
+        lost === undefined
+          ? []
+          : [
+              {
+                title: `The approval by ${lost.reviewer.name} was withdrawn (${lost.withdrawn?.reason ?? "withdrawn"}): it needs a fresh review`,
+                why: "Fix what failed and push a new head, or ask a person to review this head again.",
+                ...(lost.withdrawn?.reason === "qa-failed"
+                  ? { call: `get_qa({ changeId: "${id}" })` }
+                  : {}),
+              },
+            ];
       return [
+        ...withdrawn,
         { title: "Read the walkthrough a human will review", call: `get_tour({ changeId: "${id}" })` },
         { title: "Ask a human to review it", call: `request_review({ changeId: "${id}" })` },
       ];
+    }
     case "approved":
     case "queued":
       return [wait("merged")];
@@ -244,6 +325,16 @@ export function changeNextSteps(c: Change, runs: readonly PipelineRun[] = []): N
           call: `list_issues_for_change({ changeId: "${id}" })`,
         },
       ];
+    case "rejected": {
+      const r = newest(reviews, "reject", null);
+      return [
+        {
+          title: `Rejected${r === undefined ? "" : ` by ${r.reviewer.name}`}: this change ended`,
+          ...(r?.comment ? { why: clip(r.comment) } : {}),
+          call: `start_change({ repoId: "${c.repoId}", title: "<title>", category: "${c.claim.category}" })`,
+        },
+      ];
+    }
     case "reverted":
       return [
         { title: "See what broke", call: `list_issues_for_change({ changeId: "${id}" })` },
@@ -306,6 +397,7 @@ const CreateProjectArgs = z
   });
 
 export function buildTools(backend: McpBackend) {
+  const kit = { callerOf, requireScope, parse, run, failure };
   return defineTools([
     {
       name: "create_project",
@@ -420,7 +512,7 @@ export function buildTools(backend: McpBackend) {
       name: "create_plan",
       title: "Create a plan",
       description:
-        "Draft a plan: intent, acceptance criteria and the paths you expect to touch. A human other than you approves it before you start a change. Returns the plan id.",
+        "Draft a plan: intent, acceptance criteria and the paths you expect to touch. A human other than you approves it before you start a change. Returns the plan id and its page (url) to hand that person; get_plan shows when it is approved.",
       inputSchema: CreatePlanInput,
       outputSchema: CreatePlanOutput,
       annotations: WRITE,
@@ -432,7 +524,9 @@ export function buildTools(backend: McpBackend) {
         const plan = await run(backend, () =>
           backend.createPlan(caller, input, { idempotencyKey }),
         );
+        const url = backend.webUrl({ planId: plan.id });
         return {
+          url,
           plan: {
             id: plan.id,
             repoId: plan.repoId,
@@ -445,8 +539,12 @@ export function buildTools(backend: McpBackend) {
           },
           nextSteps: [
             {
-              title: "Ask a human to approve the plan",
-              why: "Humans approve intent; you cannot approve your own plan.",
+              title: `Ask a person to approve the plan at ${url}`,
+              why: "Humans approve intent; you cannot approve your own plan (no agent can).",
+            },
+            {
+              title: "Check whether it was approved",
+              call: `get_plan({ planId: "${plan.id}" })`,
             },
             {
               title: "Then start the change",
@@ -456,6 +554,8 @@ export function buildTools(backend: McpBackend) {
         };
       },
     },
+    // Reading and withdrawing plans (approving them stays with people).
+    ...planTools(backend, kit),
     {
       name: "start_change",
       title: "Start a change",
@@ -475,6 +575,7 @@ export function buildTools(backend: McpBackend) {
         return {
           change: changeBrief(change),
           remote,
+          url: backend.webUrl({ changeId: change.id }),
           nextSteps: [
             {
               title: `Push your work to ${remote.branch}`,
@@ -489,11 +590,13 @@ export function buildTools(backend: McpBackend) {
         };
       },
     },
+    // A repo's changes (by status, or only yours).
+    ...changeListTools(backend, kit),
     {
       name: "get_change_status",
       title: "Get change status",
       description:
-        "A change's status, lane (and why), pipeline runs for each head, and what to do next.",
+        "A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), its page (url) to hand a person, and what to do next.",
       inputSchema: ChangeRefInput,
       outputSchema: ChangeStatusOutput,
       annotations: READ,
@@ -504,6 +607,18 @@ export function buildTools(backend: McpBackend) {
         const s = await run(backend, () => backend.getChangeStatus(caller, changeId));
         return {
           change: changeBrief(s.change),
+          url: backend.webUrl({ changeId: s.change.id }),
+          reviews: s.reviews.map((r) => ({
+            id: r.id,
+            decision: r.decision,
+            comment: r.comment,
+            headSha: r.headSha,
+            current: r.headSha === s.change.headSha,
+            reviewer: { id: r.reviewer.id, name: r.reviewer.name, kind: r.reviewer.kind },
+            at: r.at,
+            withdrawn: r.withdrawn !== null,
+            withdrawnReason: r.withdrawn?.reason ?? null,
+          })),
           runs: s.runs.map((r) => ({
             id: r.id,
             headSha: r.headSha,
@@ -530,7 +645,7 @@ export function buildTools(backend: McpBackend) {
               }
             : null,
           previewUrl: s.previewUrl ?? null,
-          nextSteps: changeNextSteps(s.change, s.runs),
+          nextSteps: changeNextSteps(s.change, s.runs, s.reviews),
         };
       },
     },
@@ -600,7 +715,7 @@ export function buildTools(backend: McpBackend) {
       name: "request_review",
       title: "Request a human review",
       description:
-        "Ask a human to look at your change (notifies them). This never approves anything: agents cannot approve plans or changes.",
+        "Ask a human to look at your change (notifies them; url is its page, to share). This never approves anything: agents cannot approve plans or changes.",
       inputSchema: RequestReviewInput,
       outputSchema: RequestReviewOutput,
       annotations: WRITE,
@@ -618,9 +733,11 @@ export function buildTools(backend: McpBackend) {
           changeId: r.change.id,
           status: r.change.status,
           notified: r.notified,
+          url: backend.webUrl({ changeId: r.change.id }),
           nextSteps: [
             {
               title: "Wait for the review",
+              why: 'It answers early when a reviewer sends the change back (reason "changes-requested", "rejected" or "approval-withdrawn"): then read the reviews in get_change_status.',
               call: `wait_for_change({ changeId: "${r.change.id}", until: "merged" })`,
             },
           ],
@@ -732,7 +849,7 @@ export function buildTools(backend: McpBackend) {
       name: "wait_for_change",
       title: "Wait for a change",
       description:
-        "Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. On timeout call again, after retryAfterSec when it is set.",
+        "Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first: reason changes-requested (push a new head), rejected (it ended) or approval-withdrawn (it needs a fresh review); read get_change_status for the review. On timeout call again, after retryAfterSec when it is set.",
       inputSchema: WaitForChangeInput,
       outputSchema: WaitForChangeOutput,
       annotations: READ,
@@ -766,11 +883,11 @@ export function buildTools(backend: McpBackend) {
       },
     },
     // Remote workspaces and import detection (one file per tool family, sharing these helpers).
-    ...workspaceTools(backend, { callerOf, requireScope, parse, run, failure }),
-    ...importTools(backend, { callerOf, requireScope, parse, run, failure }),
-    ...queueTools(backend, { callerOf, requireScope, parse, run, failure }),
+    ...workspaceTools(backend, kit),
+    ...importTools(backend, kit),
+    ...queueTools(backend, kit),
     // QA in a browser, on request.
-    ...qaTools(backend, { callerOf, requireScope, parse, run, failure }),
+    ...qaTools(backend, kit),
   ]);
 }
 

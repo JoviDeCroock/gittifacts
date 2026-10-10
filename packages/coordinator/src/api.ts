@@ -12,6 +12,7 @@ import type {
   Repo,
   WaitUntil,
 } from "@app/domain";
+import type { WaitReason } from "./milestones.js";
 
 export interface GitRemoteGrant {
   url: string;
@@ -49,8 +50,11 @@ export class CoordinatorError extends Error {
 export interface WaitResult {
   change: Change;
   reached: boolean;
-  /** reached | timeout | unreachable (the change ended without reaching the milestone). */
-  reason: "reached" | "timeout" | "unreachable";
+  /**
+   * reached | timeout | unreachable (the change ended without reaching the milestone) |
+   * changes-requested | rejected | approval-withdrawn (a human sent it back: see `SentBack`).
+   */
+  reason: WaitReason;
   /**
    * With "timeout": seconds before asking again. Set only when the long-poll was interrupted
    * (its Durable Object reset by a deploy, say) and answered from the store instead.

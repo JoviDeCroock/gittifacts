@@ -213,8 +213,30 @@ describe("milestones", () => {
     ["merged", { status: "abandoned" }, "unreachable"],
     ["reverted", { status: "reverted" }, "reached"],
     ["reverted", { status: "released", mergedSha: SHA_B }, "pending"],
+    // Sent back by a human: the wait settles instead of running into its timeout.
+    ["merged", { status: "rejected", lane: 1 }, "rejected"],
+    ["merged", { status: "awaiting-push", lane: 1, evidenceId: "ev" }, "changes-requested"],
+    ["tour_ready", { status: "awaiting-push", lane: 1 }, "changes-requested"],
+    ["evidence_ready", { status: "awaiting-push", evidenceId: "ev" }, "reached"],
+    // Nothing pushed yet is not a request for changes.
+    ["merged", { status: "awaiting-push", headSha: null }, "pending"],
   ] as const)("%s with %j → %s", (until, patch, expected) => {
     expect(milestoneState({ ...base, ...patch } as Change, until)).toBe(expected);
+  });
+  it("an approval that stops counting while a merged wait holds settles it", () => {
+    const approved = { ...base, status: "queued", lane: 1 } as Change;
+    for (const status of ["running", "awaiting-review"] as const) {
+      expect(milestoneState({ ...approved, status }, "merged", approved)).toBe(
+        "approval-withdrawn",
+      );
+      // Without the starting snapshot it is an ordinary wait for a review.
+      expect(milestoneState({ ...approved, status }, "merged")).toBe("pending");
+      // A new head is a new round, not a withdrawal.
+      expect(milestoneState({ ...approved, status, headSha: SHA_A }, "merged", approved)).toBe(
+        "pending",
+      );
+    }
+    expect(milestoneState({ ...approved, status: "approved" }, "merged", approved)).toBe("pending");
   });
   it("versions change with any field", () => {
     expect(changeVersion(base)).toBe(changeVersion({ ...base }));

@@ -3,7 +3,7 @@
   flex: none;
 }
 .spin {
-  animation: spin 900ms linear infinite;
+  animation: spin var(--dur-spin) linear infinite;
 }
 @keyframes spin {
   to {
@@ -395,11 +395,22 @@ a.btn:hover {
   background: var(--panel-strong);
   box-shadow: inset 0 0 0 1px var(--rule);
 }
+/* Filled by transform, not width: `--v` (0 to 1) is set inline. It fills once on arrival. */
 .meter__fill {
   block-size: 100%;
   border-radius: 3px;
   background: var(--text-3);
-  transition: inline-size var(--dur-state) var(--ease-out);
+  transform: scaleX(var(--v, 0));
+  transform-origin: left center;
+  transition: transform var(--dur-fill) var(--ease-expo);
+}
+.meter__fill:dir(rtl) {
+  transform-origin: right center;
+}
+@starting-style {
+  .meter__fill {
+    transform: scaleX(0);
+  }
 }
 .meter--ok .meter__fill {
   background: var(--ok);
@@ -444,7 +455,7 @@ a.btn:hover {
   border-radius: 3px;
   background: linear-gradient(90deg, var(--panel) 0%, var(--panel-strong) 50%, var(--panel) 100%);
   background-size: 200% 100%;
-  animation: shimmer 1400ms ease-in-out infinite;
+  animation: shimmer var(--dur-shimmer) ease-in-out infinite;
 }
 @keyframes shimmer {
   from {
@@ -658,4 +669,23 @@ a.btn:hover {
 /* Code that wraps at "/" before it ever breaks inside a word. */
 .breakable {
   overflow-wrap: break-word;
+}
+
+/* ================================================================ disclosures */
+/* Details open and close by height where the browser can animate to `auto`; elsewhere they snap. */
+@media (prefers-reduced-motion: no-preference) {
+  :root {
+    interpolate-size: allow-keywords;
+  }
+  details::details-content {
+    block-size: 0;
+    overflow-y: clip;
+    overflow-clip-margin: 4px;
+    transition:
+      block-size var(--dur-state) var(--ease-out),
+      content-visibility var(--dur-state) allow-discrete;
+  }
+  details[open]::details-content {
+    block-size: auto;
+  }
 }

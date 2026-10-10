@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "preact/hooks";
+import { useCallback, useEffect, useRef } from "preact/hooks";
 import { ErrorBoundary, LocationProvider, lazy, Route, Router, useLocation } from "preact-iso";
 import { AppErrorBoundary } from "./components/AppErrorBoundary.js";
 import { Shell } from "./components/Shell.js";
@@ -39,8 +39,32 @@ const PUBLIC = /^\/claim\/[^/]+\/?$/;
  * the landing page); everywhere else the Worker serves `/` as the marketing page. */
 const BOOT_PATH = typeof window === "undefined" ? "" : window.location.pathname;
 
+/** Leaving one of these is still the first load: they only redirect (`/` in dev, `/signin` once signed in). */
+const REDIRECTS = new Set(["/", "/signin"]);
+
+const pathOf = (url: string) => new URL(url, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+
+/**
+ * After an in-app navigation the new page's `<main id="main">` takes focus (without scrolling), so a
+ * screen reader announces the new page and the next Tab starts inside it instead of on <body>; the
+ * page starts at the top unless the URL names a fragment. preact-iso calls this once the new route
+ * has rendered (after its lazy chunk), never on the first render. A page that restores a position
+ * of its own (a walkthrough's stop) does so later, from its data, and wins.
+ */
+function useRouteFocus(): (url: string) => void {
+  const shown = useRef(typeof window === "undefined" ? "" : pathOf(window.location.href));
+  return useCallback((url: string) => {
+    const from = shown.current;
+    shown.current = pathOf(url);
+    if (REDIRECTS.has(from)) return;
+    if (!window.location.hash) window.scrollTo(0, 0);
+    document.getElementById("main")?.focus({ preventScroll: true });
+  }, []);
+}
+
 function AuthedApp() {
   const { path } = useLocation();
+  const onRouteChange = useRouteFocus();
   if (FOCUSED.test(path)) {
     return (
       <ErrorBoundary>
@@ -55,7 +79,7 @@ function AuthedApp() {
   return (
     <Shell>
       <AppErrorBoundary>
-        <Router>
+        <Router onRouteChange={onRouteChange}>
           <Route path="/" component={MarketingHome} />
           <Route path="/dashboard" component={Repos} />
           <Route path="/repos/:repoId" component={RepoChanges} />

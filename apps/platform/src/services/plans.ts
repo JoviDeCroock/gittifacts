@@ -6,6 +6,7 @@
  * `contentHash` = b64url(SHA-256(canonical(planContent(plan)))). Anyone holding the published
  * key set can re-derive both and verify.
  */
+import { pageUrl } from "@app/conventions";
 import { type Change, type Plan, PlanDraftInput, type Principal } from "@app/domain";
 import { canonicalBytes, sha256Base64url } from "@app/evidence";
 import { assertPlanAccess, assertRepoAccess } from "../access/access.js";
@@ -294,24 +295,58 @@ export async function rejectPlan(
   planId: string,
   input: { comment: string },
 ): Promise<PlanView> {
-  assertHumanApprover(caller);
-  // Maintainers reject; the author withdraws its own draft with contributor access.
+  // The author withdraws its own draft (agents too); everyone else is a human maintainer or owner.
   const visible = await assertPlanAccess(svc, caller.principal, planId, "read");
-  const plan = await assertPlanAccess(
-    svc,
-    caller.principal,
-    planId,
-    visible.authorId === caller.principal.id ? "contribute" : "approve",
-  );
+  if (visible.authorId === caller.principal.id) {
+    return withdrawPlan(svc, caller, planId, { reason: input.comment });
+  }
+  assertHumanApprover(caller);
+  const plan = await assertPlanAccess(svc, caller.principal, planId, "approve");
+  return closeDraft(svc, caller, plan, input.comment, "reject");
+}
+
+/**
+ * The author withdraws its own draft: "withdraw own plan" is `contribute` (DECISIONS role table),
+ * so an agent may withdraw what it drafted, never anyone else's. It ends as rejected, audited as
+ * withdrawn by its author.
+ */
+export async function withdrawPlan(
+  svc: Services,
+  caller: Caller,
+  planId: string,
+  input: { reason?: string | undefined },
+): Promise<PlanView> {
+  const visible = await assertPlanAccess(svc, caller.principal, planId, "read");
+  if (visible.authorId !== caller.principal.id) {
+    throw forbidden("only the plan's author may withdraw it", undefined, {
+      explanation: `You did not draft plan ${planId}, so you cannot withdraw it. A person who maintains the repo rejects it at ${pageUrl(svc.origin, { planId })}.`,
+      call: `get_plan({ planId: "${planId}" })`,
+    });
+  }
+  const plan = await assertPlanAccess(svc, caller.principal, planId, "contribute");
+  const reason = input.reason?.trim() || "withdrawn by its author";
+  return closeDraft(svc, caller, plan, reason, "withdraw");
+}
+
+/** Ends a draft as rejected (a maintainer's rejection or its author's withdrawal). */
+async function closeDraft(
+  svc: Services,
+  caller: Caller,
+  plan: Plan,
+  comment: string,
+  how: "reject" | "withdraw",
+): Promise<PlanView> {
   if (plan.status !== "draft") {
-    throw conflict(`plan is ${plan.status}, only a draft can be rejected`, "invalid-state", {
-      explanation: `Plan ${plan.id} is already ${plan.status}; only drafts can be rejected.`,
+    const verb = how === "reject" ? "rejected" : "withdrawn";
+    throw conflict(`plan is ${plan.status}, only a draft can be ${verb}`, "invalid-state", {
+      explanation: `Plan ${plan.id} is already ${plan.status}; only drafts can be ${verb}.`,
+      call: `get_plan({ planId: "${plan.id}" })`,
     });
   }
   const rejected: Plan = { ...plan, status: "rejected" };
   const at = svc.clock.now().toISOString();
   await svc.store.updatePlanStatement(rejected, {
-    decisionComment: input.comment,
+    decisionComment: comment,
     decidedBy: caller.principal.id,
     decidedAt: at,
   });
@@ -319,7 +354,7 @@ export async function rejectPlan(
     principalId: caller.principal.id,
     action: "plan.rejected",
     subject: `plan:${plan.id}`,
-    payload: { comment: input.comment, withdrawnByAuthor: plan.authorId === caller.principal.id },
+    payload: { comment, withdrawnByAuthor: plan.authorId === caller.principal.id },
   });
-  return view(rejected, { by: caller.principal.id, at, reason: input.comment });
+  return view(rejected, { by: caller.principal.id, at, reason: comment });
 }

@@ -3,6 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- The canvas (tokens.css --p-paper-1 and --p-night-0) in sRGB, for the browser chrome. -->
+    <meta name="theme-color" content="#f7fafc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0c1118" media="(prefers-color-scheme: dark)" />
+    <!-- Before the stylesheet arrives, so a cold load in dark mode never flashes white. Zero
+         specificity: base.css (html { background: var(--canvas) }) wins once it loads. -->
+    <style>
+      :where(html) { background: #f7fafc; }
+      @media (prefers-color-scheme: dark) { :where(html) { background: #0c1118; } }
+    </style>
     <title>gittifacts</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />

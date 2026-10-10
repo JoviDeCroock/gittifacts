@@ -30,3 +30,13 @@ export function pathOf(url: string): string {
 export function join(origin: string, path: string): string {
   return `${normalizeOrigin(origin)}${path.startsWith("/") ? path : `/${path}`}`;
 }
+
+/**
+ * The page a person opens for a plan or a change (the web app's `/plans/:id` and `/changes/:id`):
+ * what agents hand a human to approve, review or look at.
+ */
+export function pageUrl(origin: string, page: { planId: string } | { changeId: string }): string {
+  return "planId" in page
+    ? join(origin, `/plans/${encodeURIComponent(page.planId)}`)
+    : join(origin, `/changes/${encodeURIComponent(page.changeId)}`);
+}

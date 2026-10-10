@@ -14,7 +14,8 @@ Agent-native git platform on Cloudflare. Product rule (drives every judgment cal
 - `packages/coordinator` — Durable Objects (change coordinator, merge queue) + Workflows.
 - `packages/tour` — reviewer agent (separate from the author), tour schema validation.
 - `packages/mcp` — MCP tools for agents.
-- `packages/web` — Preact + @preact/signals UI (mobile-first). Design rules: docs/research/design-impeccable.md.
+- `packages/web` — Preact + @preact/signals UI (mobile-first). Design system: `packages/web/DESIGN.md` (named rules;
+  background in docs/research/design-impeccable.md).
 - `apps/platform` — the Worker: Hono API (+OpenAPI), better-auth, Drizzle/D1, bindings, static assets.
 - `apps/sandbox` — container image used for CI steps / evidence tools.
 - `fixtures/` — fixture repos used by integration tests.
@@ -27,6 +28,12 @@ Agent-native git platform on Cloudflare. Product rule (drives every judgment cal
 - LLM judgments may only raise a lane.
 - No principal approves its own Plan or Change. Only the merge queue writes the default branch.
 - Policy is always read from the BASE (default branch), never from the change's head.
+- UI work follows `packages/web/DESIGN.md`. Its named rules are enforced by `packages/web/test/design-rules.test.ts`
+  (acetate surfaces, token-timed motion, endless loops, colour only in tokens.css) and `test/commands.test.ts` (every
+  palette command has an MCP twin the contract accepts, or a human-only rule). To bend a rule, change DESIGN.md and add a
+  DECISIONS.md entry first, then the test's list; never loosen a test to land a stylesheet.
+- Agents are first-class: a capability a person has in the UI gets an MCP tool (and so a CLI command) unless a product
+  rule keeps it human, and the palette shows its twin.
 - Imports inside packages use `.js` suffixes on relative paths (bundler resolution maps to .ts).
 - Tests: vitest 4 (`@cloudflare/vitest-pool-workers` for Worker code). Run `pnpm -r test`.
 - Testing priority: E2E > integration >>> unit. Every bug fix or feature lands with an E2E or integration

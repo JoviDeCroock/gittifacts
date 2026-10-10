@@ -6,6 +6,7 @@ import { gettingStartedApi } from "../api/getting-started.js";
 import type { RepoSummary } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { GettingStarted } from "../components/GettingStarted.js";
+import { Fleet } from "../components/Fleet.js";
 import { Page } from "../components/Shell.js";
 import { EmptyState, ErrorState, LaneTag, Loading, Meter } from "../components/ui.js";
 import { checklistView, POLL_MS, readDismissed, writeDismissed } from "../lib/getting-started.js";
@@ -189,6 +190,7 @@ export function Repos() {
       }
     >
       {gsState && view ? <GettingStarted state={gsState} view={view} onDismiss={onDismiss} onChanged={onChanged} /> : null}
+      <Fleet />
       {st.status === "loading" ? <Loading label="Loading repositories" lines={6} /> : null}
       {st.status === "error" ? <ErrorState error={st.error} what="your repositories" onRetry={res.reload} /> : null}
       {st.status === "ok" && repos.length === 0 && view?.mode !== "full" ? (

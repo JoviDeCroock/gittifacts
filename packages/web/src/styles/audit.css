@@ -115,6 +115,11 @@ a.audit__subject {
   cursor: pointer;
   list-style: none;
 }
+@media (pointer: coarse) {
+  .audit__hash > summary {
+    min-block-size: var(--tap);
+  }
+}
 .audit__hash > summary::-webkit-details-marker {
   display: none;
 }

@@ -6,6 +6,7 @@
 import type { Change, Tour, TourStop } from "@app/domain";
 import type { EvidenceItem } from "@app/evidence";
 import { useSignal } from "@preact/signals";
+import { useLocation } from "preact-iso";
 import { useEffect, useRef } from "preact/hooks";
 import { ApiError, api } from "../api/client.js";
 import { describesResolution, fetchResolution, type ResolutionView } from "../api/resolution.js";
@@ -28,6 +29,7 @@ import { minuteClock } from "../state/clock.js";
 import { prefersReducedMotion, useMedia } from "../state/media.js";
 import { readTourProgress, writeTourProgress } from "../state/prefs.js";
 import { useResource } from "../state/resource.js";
+import { usePageCommands } from "../state/keys.js";
 import { principal } from "../state/session.js";
 import "../styles/tour.css";
 
@@ -499,28 +501,43 @@ function useStopTracking(tour: Tour | null, changeId: string) {
   const resumeAt = useSignal<number | null>(saved && tour && saved.headSha === tour.headSha && saved.stop > 0 && saved.stop < tour.stops.length ? saved.stop : null);
   const listRef = useRef<HTMLOListElement>(null);
 
+  /** Set by `jump`: the stop it scrolls to stays current until the scroll settles. */
+  const pinned = useRef<number | null>(null);
   useEffect(() => {
     const list = listRef.current;
-    if (!tour || !list || typeof IntersectionObserver === "undefined") return;
-    const visible = new Set<number>();
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          const i = Number((e.target as HTMLElement).dataset.stop);
-          if (e.isIntersecting) visible.add(i);
-          else visible.delete(i);
-        }
-        if (visible.size > 0) {
-          const i = Math.min(...visible);
-          current.value = i;
-          if (resumeAt.value !== null && i >= resumeAt.value) resumeAt.value = null;
-          writeTourProgress(changeId, { stop: i, headSha: tour.headSha });
-        }
-      },
-      { rootMargin: "-130px 0px -45% 0px" },
-    );
-    for (const el of list.querySelectorAll("[data-stop]")) io.observe(el);
-    return () => io.disconnect();
+    if (!tour || !list) return;
+    // The current stop is the last one whose top has passed a reading line near the top of the
+    // view. (The old visible-band rule kept stop 1 current while only its tail showed above stop 2.)
+    let frame = 0;
+    const settle = () => {
+      frame = 0;
+      const line = Math.min(window.innerHeight * 0.3, 280);
+      let i = 0;
+      for (const el of list.querySelectorAll<HTMLElement>("[data-stop]")) {
+        if (el.getBoundingClientRect().top <= line) i = Number(el.dataset.stop);
+        else break;
+      }
+      if (pinned.current !== null) return;
+      if (i === current.value) return;
+      current.value = i;
+      if (resumeAt.value !== null && i >= resumeAt.value) resumeAt.value = null;
+      writeTourProgress(changeId, { stop: i, headSha: tour.headSha });
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(settle);
+    };
+    // After a jump lands, the target stays current until the reader scrolls again.
+    const onEnd = () => {
+      pinned.current = null;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("scrollend", onEnd);
+    settle();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scrollend", onEnd);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
   }, [tour, changeId, current, resumeAt]);
 
   const jump = (i: number) => {
@@ -528,6 +545,14 @@ function useStopTracking(tour: Tour | null, changeId: string) {
     if (!el) return;
     const details = el.querySelector("details");
     if (details) details.open = true;
+    current.value = i;
+    if (resumeAt.value !== null && i >= resumeAt.value) resumeAt.value = null;
+    if (tour) writeTourProgress(changeId, { stop: i, headSha: tour.headSha });
+    // Hold the target while the scroll runs; a stop too short to reach the line stays current.
+    pinned.current = i;
+    window.setTimeout(() => {
+      if (pinned.current === i) pinned.current = null;
+    }, 1200);
     el.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
     el.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
   };
@@ -543,6 +568,15 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
   const resolutionItem = data.resolution?.item ?? null;
   const items = resolutionItem && !own.some((i) => i.id === resolutionItem.id) ? [...own, resolutionItem] : own;
   const { current, resumeAt, listRef, jump } = useStopTracking(tour, change.id);
+  const { route } = useLocation();
+  const stops = tour?.stops.length ?? 0;
+  usePageCommands(
+    {
+      "next-stop": () => stops > 0 && jump(Math.min(current.value + 1, stops - 1)),
+      "prev-stop": () => stops > 0 && jump(Math.max(current.value - 1, 0)),
+    },
+    { j: "next-stop", k: "prev-stop", a: "approve", e: () => route(`/changes/${encodeURIComponent(change.id)}/evidence`) },
+  );
   const now = minuteClock.value;
   const stale = tour && change.headSha && tour.headSha !== change.headSha && !describesResolution(tour.headSha, data.resolution);
   const authorName = author?.name ?? "the author";

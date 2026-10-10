@@ -29,10 +29,13 @@ describe("command table generated from the MCP tool definitions", () => {
       "enqueue",
       "get_change_status",
       "get_evidence",
+      "get_plan",
       "get_qa",
       "get_tour",
+      "list_changes",
       "list_issues_for_change",
       "list_members",
+      "list_plans",
       "list_repos",
       "open_workspace",
       "propose_platform_config",
@@ -48,6 +51,7 @@ describe("command table generated from the MCP tool definitions", () => {
       "wait_for_change",
       "wait_for_merge",
       "whoami",
+      "withdraw_plan",
       "ws_commit_push",
       "ws_diff",
       "ws_exec",
@@ -104,8 +108,23 @@ describe("command table generated from the MCP tool definitions", () => {
       list_members: true,
       request_qa: true,
       get_qa: true,
+      get_plan: true,
+      list_plans: true,
+      withdraw_plan: true,
+      list_changes: true,
     };
     expect(new Set(names)).toEqual(new Set(Object.keys(all)));
+  });
+
+  it("plans and change lists take their id as the positional argument", () => {
+    expect(byName("list-changes")).toMatchObject({ positional: "repoId", mutating: false });
+    expect(byName("list-plans")).toMatchObject({ positional: "repoId", mutating: false });
+    expect(byName("get-plan")).toMatchObject({ positional: "planId", mutating: false });
+    expect(byName("withdraw-plan")).toMatchObject({
+      positional: "planId",
+      mutating: true,
+      idempotencyArg: true,
+    });
   });
 
   it("derives flags from top-level input properties", () => {

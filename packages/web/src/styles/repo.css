@@ -71,6 +71,14 @@
 .plan-mini a:hover {
   text-decoration: underline;
 }
+/* Touch: a 44px target around the title without moving the list (it reaches over the status line). */
+@media (pointer: coarse) {
+  .plan-mini a {
+    position: relative;
+    padding-block: 12px;
+    margin-block: -12px;
+  }
+}
 .plan-mini .tone {
   font-size: var(--text-meta);
 }

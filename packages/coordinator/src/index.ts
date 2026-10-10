@@ -56,6 +56,9 @@ export {
   MAX_WAIT_MS,
   type MilestoneState,
   milestoneState,
+  type SentBack,
+  WAIT_REASONS,
+  type WaitReason,
   withChangeNotifications,
 } from "./milestones.js";
 export {

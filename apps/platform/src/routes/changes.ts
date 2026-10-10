@@ -1,3 +1,4 @@
+import { pageUrl } from "@app/conventions";
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 import { assertChangeAccess } from "../access/access.js";
@@ -27,7 +28,7 @@ import {
   TourSchema,
   VerificationSchema,
 } from "../api/schemas.js";
-import { callerOf, requirePrincipal } from "../auth/middleware.js";
+import { callerOf, type HumanOnlyFix, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
 import {
   closeChange,
@@ -153,13 +154,34 @@ const tour = createRoute({
   },
 });
 
+/** An agent at review: a person reviews the change on its page; the agent asks for it. */
+const askForReview: HumanOnlyFix = (c, origin) => {
+  const changeId = c.req.param("changeId") ?? "<changeId>";
+  return {
+    explanation: `Only a person reviews a change; agents never approve one (their own or another's). Ask for a review: a person reviews it at ${pageUrl(origin, { changeId })}.`,
+    call: `request_review({ changeId: "${changeId}" })`,
+  };
+};
+
+/** An agent at the kill switch: a person uses it; an unmerged change the agent can close. */
+const askToKill: HumanOnlyFix = (c, origin) => {
+  const changeId = c.req.param("changeId") ?? "<changeId>";
+  return {
+    explanation: `Only a person uses the kill switch on a merged change; ask one at ${pageUrl(origin, { changeId })}. A change that has not merged you can close yourself.`,
+    call: `close_change({ changeId: "${changeId}", reason: "<why>" })`,
+  };
+};
+
 const review = createRoute({
   method: "post",
   path: "/api/v1/changes/{changeId}/review",
   tags: ["changes"],
   summary: "Review a change (human, change:review, not the author); binds to a head",
   security: SECURITY,
-  middleware: [requirePrincipal(["change:review"], { humanOnly: true }), idempotent()] as const,
+  middleware: [
+    requirePrincipal(["change:review"], { humanOnly: askForReview }),
+    idempotent(),
+  ] as const,
   request: { headers: IdempotencyHeaders, params: ChangeIdParam, body: body(ReviewBody) },
   responses: {
     200: json(z.object({ change: ChangeSchema }), "Reviewed"),
@@ -245,7 +267,7 @@ const kill = createRoute({
   summary: "Kill switch: flag off, roll back, open a revert change (human maintainer or owner)",
   security: SECURITY,
   middleware: [
-    requirePrincipal(["change:review"], { humanOnly: true, need: "approve" }),
+    requirePrincipal(["change:review"], { humanOnly: askToKill, need: "approve" }),
     idempotent(),
   ] as const,
   request: { headers: IdempotencyHeaders, params: ChangeIdParam, body: body(KillBody) },

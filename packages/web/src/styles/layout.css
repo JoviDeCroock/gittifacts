@@ -196,13 +196,41 @@
 }
 .drawer::backdrop {
   background: var(--backdrop);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
 .drawer[open] {
-  animation: drawer-in var(--dur-sheet) var(--ease-out);
+  animation: drawer-in var(--dur-sheet) var(--ease-expo);
+}
+.drawer[open]::backdrop {
+  animation: scrim-in var(--dur-sheet) var(--ease-out);
+}
+/* Leaving is quicker than arriving; Shell waits for this before it closes the dialog. */
+.drawer[open].is-closing {
+  animation: drawer-out var(--dur-exit) var(--ease-in) forwards;
+}
+.drawer[open].is-closing::backdrop {
+  animation: scrim-out var(--dur-exit) var(--ease-in) forwards;
 }
 @keyframes drawer-in {
   from {
     transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@keyframes drawer-out {
+  to {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes scrim-out {
+  to {
     opacity: 0;
   }
 }
@@ -229,16 +257,23 @@
   inset-block-start: 0;
   z-index: var(--z-sticky);
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--s-1);
-  block-size: 56px;
-  padding-inline: 4px;
+  /* The bar is 56px under the notch, not 56px including it (home-screen apps). */
+  block-size: calc(56px + env(safe-area-inset-top));
+  padding-inline: max(4px, env(safe-area-inset-left)) max(4px, env(safe-area-inset-right));
   padding-block-start: env(safe-area-inset-top);
-  background: color-mix(in oklch, var(--canvas) 94%, transparent);
-  backdrop-filter: saturate(1.4) blur(10px);
-  -webkit-backdrop-filter: saturate(1.4) blur(10px);
-  border-block-end: 1px solid var(--rule);
+  background: var(--acetate);
+  backdrop-filter: var(--acetate-filter);
+  -webkit-backdrop-filter: var(--acetate-filter);
+  border-block-end: 1px solid transparent;
+  transition: border-color var(--dur-state) var(--ease-out), box-shadow var(--dur-state) var(--ease-out);
+}
+/* At the top the bar is part of the page; once the chart scrolls under it, it gains an edge. */
+.topbar[data-scrolled="true"] {
+  border-block-end-color: var(--acetate-edge);
+  box-shadow: var(--acetate-rim), var(--shadow-float);
 }
 @media (min-width: 1024px) {
   .topbar {
@@ -324,6 +359,29 @@
 }
 .page__main:focus {
   outline: none;
+}
+/*
+ * Arriving on a screen: the heading settles 6px, the content fades in a beat later. Only the
+ * head moves; a transform on the content would capture the fixed decision bars inside it.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .page__head {
+    animation: view-rise var(--dur-view) var(--ease-expo);
+  }
+  .page__main > :not(.page__head) {
+    animation: view-fade var(--dur-view) var(--ease-out) 40ms backwards;
+  }
+}
+@keyframes view-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes view-fade {
+  from {
+    opacity: 0;
+  }
 }
 .page--wide .page__main {
   max-inline-size: 1240px;

@@ -176,6 +176,9 @@ describe("noTourCopy", () => {
   });
   it("follows the change and its latest run", () => {
     expect(noTourCopy(ch("awaiting-push")).title).toBe("Waiting for the first push");
+    // Sent back by a reviewer: there is a head, and the author is pushing a new one.
+    expect(noTourCopy(ch("awaiting-push", { headSha: "abc1234" })).body).not.toMatch(/not pushed/);
+    expect(noTourCopy(ch("awaiting-push", { headSha: "abc1234" })).showDiff).toBe(true);
     expect(noTourCopy(ch("awaiting-review"), "queued").title).toBe("The walkthrough is not written yet");
     expect(noTourCopy(ch("awaiting-review", { laneReasons: [{ code: "tour.failed" }] }), "passed").showDiff).toBe(true);
     expect(noTourCopy(ch("merged", { id: "bs-abc" })).title).toMatch(/first change/);

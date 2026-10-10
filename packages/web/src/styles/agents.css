@@ -200,9 +200,9 @@
   background: var(--panel-strong);
   color: var(--text-2);
 }
+/* Active is the normal state, not a verdict: ink on the neutral chip, never green. */
 .agent__status--active {
-  background: var(--ok-tint);
-  color: var(--ok);
+  color: var(--text);
 }
 .agent__status--revoked {
   background: var(--danger-tint);

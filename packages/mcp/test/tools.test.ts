@@ -37,10 +37,13 @@ describe("gittifacts MCP tools", () => {
       "enqueue",
       "get_change_status",
       "get_evidence",
+      "get_plan",
       "get_qa",
       "get_tour",
+      "list_changes",
       "list_issues_for_change",
       "list_members",
+      "list_plans",
       "list_repos",
       "open_workspace",
       "propose_platform_config",
@@ -56,6 +59,7 @@ describe("gittifacts MCP tools", () => {
       "wait_for_change",
       "wait_for_merge",
       "whoami",
+      "withdraw_plan",
       "ws_commit_push",
       "ws_diff",
       "ws_exec",
@@ -146,7 +150,10 @@ describe("gittifacts MCP tools", () => {
       scopePaths: [],
     });
     expect(backend.calls).toContain("createPlan:k1");
-    expect(r.structuredContent.nextSteps[1]?.call).toMatch(/^start_change\(/);
+    expect(r.structuredContent.url).toBe("https://gittifacts.test/plans/plan_1");
+    expect(r.structuredContent.nextSteps[0]?.title).toContain(r.structuredContent.url);
+    expect(r.structuredContent.nextSteps[1]?.call).toBe('get_plan({ planId: "plan_1" })');
+    expect(r.structuredContent.nextSteps[2]?.call).toMatch(/^start_change\(/);
   });
 
   it("returns the platform error envelope (with fix) as JSON in an isError result", async () => {

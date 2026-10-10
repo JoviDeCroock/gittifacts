@@ -7,9 +7,34 @@ import type { CoordinatorBindings } from "./bindings.js";
 import { isBootstrapChange } from "./ids.js";
 import type { Ports, Store } from "./ports.js";
 
-export type MilestoneState = "reached" | "pending" | "unreachable";
+/**
+ * A human sent the change back before the milestone, so waiting longer is pointless until the
+ * author acts: `changes-requested` (a review asked for changes on the current head: push a new
+ * one), `rejected` (a review rejected it: it ended), `approval-withdrawn` (the approval of the
+ * current head stopped counting, e.g. a QA failure or a lane the merge queue raised: it waits for
+ * a fresh review).
+ */
+export type SentBack = "changes-requested" | "rejected" | "approval-withdrawn";
+
+export type MilestoneState = "reached" | "pending" | "unreachable" | SentBack;
+
+/** Why `wait_for_change` answered: a settled milestone state, or the timeout. */
+export type WaitReason = Exclude<MilestoneState, "pending"> | "timeout";
+
+export const WAIT_REASONS = [
+  "reached",
+  "timeout",
+  "unreachable",
+  "changes-requested",
+  "rejected",
+  "approval-withdrawn",
+] as const satisfies readonly WaitReason[];
 
 const ENDED: ReadonlySet<Change["status"]> = new Set(["abandoned", "rejected"]);
+/** Approved for its head and on the way to the default branch. */
+const CLEARED: ReadonlySet<Change["status"]> = new Set(["approved", "queued"]);
+/** Back in front of the classifier or a reviewer. */
+const REGRADED: ReadonlySet<Change["status"]> = new Set(["running", "awaiting-review"]);
 /** Past review/routing: a change here that has no tour will not get one for this head. */
 const ROUTED: ReadonlySet<Change["status"]> = new Set([
   "approved",
@@ -29,8 +54,18 @@ const ROUTED: ReadonlySet<Change["status"]> = new Set([
  * - lane_assigned: the head has a lane (the status stays "running" while the tour is written).
  * - tour_ready: the head has a tour and the change was routed (no longer "running").
  * - merged / reverted: on the default branch / reverted.
+ *
+ * Not reached and sent back by a human (see `SentBack`): `rejected` when a review rejected it;
+ * `changes-requested` when the head that was pushed is awaiting a new push again (a review asked
+ * for changes); `approval-withdrawn` when `since` (the snapshot the wait started from) was
+ * approved or queued and the same head is back to running or awaiting review (merged/reverted
+ * waits only: the approval was what they were waiting on).
  */
-export function milestoneState(change: Change, until: WaitUntil): MilestoneState {
+export function milestoneState(
+  change: Change,
+  until: WaitUntil,
+  since: Change | null = null,
+): MilestoneState {
   const bootstrap = isBootstrapChange(change);
   // A bootstrap Change is never classified: no lane, no tour.
   if (bootstrap && (until === "lane_assigned" || until === "tour_ready")) {
@@ -63,7 +98,21 @@ export function milestoneState(change: Change, until: WaitUntil): MilestoneState
       break;
   }
   if (reached) return "reached";
-  return ENDED.has(change.status) ? "unreachable" : "pending";
+  if (change.status === "rejected") return "rejected";
+  if (ENDED.has(change.status)) return "unreachable";
+  if (!bootstrap && change.status === "awaiting-push" && change.headSha !== null) {
+    return "changes-requested";
+  }
+  if (
+    (until === "merged" || until === "reverted") &&
+    since !== null &&
+    CLEARED.has(since.status) &&
+    REGRADED.has(change.status) &&
+    since.headSha === change.headSha
+  ) {
+    return "approval-withdrawn";
+  }
+  return "pending";
 }
 
 /**

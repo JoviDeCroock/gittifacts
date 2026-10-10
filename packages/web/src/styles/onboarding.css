@@ -38,7 +38,7 @@
   color: var(--text-2);
 }
 .ttfg-tile__value {
-  font-size: 2.25rem;
+  font-size: var(--text-display);
   font-weight: var(--weight-bold);
   line-height: 1.1;
   color: var(--text);
@@ -93,7 +93,7 @@
   inset-inline-start: 0;
   min-inline-size: 2px;
   background: var(--text-3);
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 var(--r-tag) var(--r-tag) 0;
 }
 .ttfg-bars__row:hover .ttfg-bars__bar,
 .ttfg-bars__row:focus-visible .ttfg-bars__bar {

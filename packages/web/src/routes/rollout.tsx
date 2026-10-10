@@ -1,6 +1,6 @@
 import type { Change, RolloutPolicy, RolloutState } from "@app/domain";
-import { useSignal } from "@preact/signals";
-import { useRef } from "preact/hooks";
+import { type Signal, useSignal } from "@preact/signals";
+import { useEffect, useRef } from "preact/hooks";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { LinkedIssue, RepoDetail, TimelineEvent } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
@@ -10,6 +10,7 @@ import { detectionSentence, findIncident, healthGapCopy, type Incident, SIGNAL_L
 import { addMinutes, countdown, countdownWords, formatClock, formatTime, formatWhenPrecise, relative, spanLabel } from "../lib/time.js";
 import { CHANGE_STATUS, ROLLOUT_STATUS, num, plural } from "../lib/vocab.js";
 import { useTick } from "../state/clock.js";
+import { prefersReducedMotion } from "../state/media.js";
 import { useResource } from "../state/resource.js";
 import "../styles/rollout.css";
 
@@ -235,13 +236,57 @@ function Health({ r, policy, now, incident }: { r: RolloutState; policy: Rollout
   );
 }
 
-function KillSwitch({ change, onKilled }: { change: Change; onKilled: (c: Change) => void }) {
-  const open = useSignal(false);
+/**
+ * Phones: the switch-off control and the rate it guards stay in the thumb zone while you read the
+ * timeline (below 1100px the side column stacks under everything). It opens the same form.
+ */
+function KillBar({ r, policy, onOpen }: { r: RolloutState; policy: RolloutPolicy; onOpen: () => void }) {
+  const c = r.lastCheck;
+  const limit = c?.baselineErrorRate != null ? c.baselineErrorRate + policy.maxErrorRateIncrease : null;
+  const p = (x: number) => `${(x * 100).toFixed(x < 0.01 ? 2 : 1)}%`;
+  // While the Switch off section itself is on screen, the bar steps aside: one control at a time.
+  const bar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const target = document.getElementById("switch-off");
+    const el = bar.current;
+    if (!target || !el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => el.toggleAttribute("data-aside", !!e?.isIntersecting));
+    io.observe(target);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div class="kill-bar" data-testid="kill-bar" ref={bar}>
+      <p class="kill-bar__rate tnum">
+        {c?.errorRate != null ? (
+          <>
+            <b>{p(c.errorRate)}</b> errors{limit !== null ? ` · reverts at ${p(limit)}` : ""}
+          </>
+        ) : (
+          "No health check yet"
+        )}
+      </p>
+      <Button variant="danger-outline" icon="power" onClick={onOpen}>
+        Switch off…
+      </Button>
+    </div>
+  );
+}
+
+function KillSwitch({ change, onKilled, open }: { change: Change; onKilled: (c: Change) => void; open: Signal<boolean> }) {
   const reason = useSignal("");
   const busy = useSignal(false);
   const error = useSignal<string | null>(null);
   const prev = change.rolloutState?.previousVersionId;
   const intentKey = useRef<string | null>(null);
+  const form = useRef<HTMLFormElement>(null);
+  // Opened from the phone bar: bring the form into view and put the cursor in the reason.
+  useEffect(() => {
+    if (!open.value) return;
+    const f = form.current;
+    if (!f) return;
+    f.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center" });
+    f.querySelector<HTMLElement>("textarea")?.focus({ preventScroll: true });
+  }, [open.value]);
 
   async function kill(e: Event) {
     e.preventDefault();
@@ -263,7 +308,7 @@ function KillSwitch({ change, onKilled }: { change: Change; onKilled: (c: Change
   }
 
   return (
-    <section class="kill" aria-labelledby="kill-title">
+    <section class="kill" id="switch-off" aria-labelledby="kill-title">
       <h2 id="kill-title" class="kill__title">
         <Icon name="power" size={18} /> Switch off
       </h2>
@@ -271,7 +316,7 @@ function KillSwitch({ change, onKilled }: { change: Change; onKilled: (c: Change
         Turns the flag off for everyone, sends all traffic back to {prev ? <code>{prev}</code> : "the previous version"}, and opens a revert change.
       </p>
       {open.value ? (
-        <form class="kill__form" onSubmit={kill}>
+        <form class="kill__form" onSubmit={kill} ref={form}>
           <label class="field">
             <span class="field__label">Why are you switching this change off?</span>
             <textarea class="textarea" rows={2} value={reason.value} onInput={(e) => (reason.value = e.currentTarget.value)} aria-describedby={error.value ? "kill-error" : undefined} aria-invalid={error.value ? "true" : undefined} />
@@ -346,6 +391,7 @@ function Timeline({ rows, now, revertId }: { rows: TimelineRow[]; now: number; r
 export function RolloutView({ changeId }: { changeId: string }) {
   const res = useResource(() => loadRollout(changeId), [changeId]);
   const tick = useTick(1000);
+  const killOpen = useSignal(false);
   const st = res.state.value;
   const crumbs = [{ href: "/dashboard", label: "Dashboard" }];
   if (st.status === "loading") {
@@ -453,7 +499,7 @@ export function RolloutView({ changeId }: { changeId: string }) {
 
         <aside class="rollout-side">
           {live ? (
-            <KillSwitch change={change} onKilled={(c) => res.set({ ...st.data, change: c, rollout: c.rolloutState })} />
+            <KillSwitch change={change} open={killOpen} onKilled={(c) => res.set({ ...st.data, change: c, rollout: c.rolloutState })} />
           ) : change.revertedBy ? (
             <section class="revert-note">
               <Icon name="undo" size={18} />
@@ -478,6 +524,7 @@ export function RolloutView({ changeId }: { changeId: string }) {
           <Timeline rows={timelineRows(timeline, revertTimeline, incident)} now={now} revertId={change.revertedBy} />
         </aside>
       </div>
+      {live && !killOpen.value ? <KillBar r={rollout} policy={policy} onOpen={() => (killOpen.value = true)} /> : null}
     </Page>
   );
 }

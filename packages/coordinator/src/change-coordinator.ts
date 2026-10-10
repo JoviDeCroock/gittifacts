@@ -27,7 +27,13 @@ import {
   PUSHABLE_STATUSES,
   titleFromCommitMessage,
 } from "./lifecycle.js";
-import { changeVersion, clampWait, type MilestoneState, milestoneState } from "./milestones.js";
+import {
+  changeVersion,
+  clampWait,
+  type MilestoneState,
+  milestoneState,
+  type WaitReason,
+} from "./milestones.js";
 import { errorMessage } from "./policy.js";
 import { type Ports, SYSTEM_PRINCIPAL_ID } from "./ports.js";
 
@@ -46,7 +52,7 @@ const KEY_PREFIX = "idem:";
 
 interface Waiter {
   changeId: string;
-  /** "reached"/"unreachable" settles the waiter; "pending" keeps it. */
+  /** Anything but "pending" settles the waiter. */
   test(change: Change | null): MilestoneState;
   settle(change: Change | null, state: MilestoneState | "timeout"): void;
 }
@@ -272,11 +278,12 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
   async waitFor(input: { changeId: string; until: WaitUntil; timeoutMs: number }): Promise<{
     change: Change | null;
     reached: boolean;
-    reason: "reached" | "timeout" | "unreachable";
+    reason: WaitReason;
   }> {
-    const test = (change: Change | null): MilestoneState =>
-      change === null ? "unreachable" : milestoneState(change, input.until);
     const now = await this.deps.ports.store.getChange(input.changeId);
+    // `now` is where the wait started: an approval that stops counting meanwhile settles it.
+    const test = (change: Change | null): MilestoneState =>
+      change === null ? "unreachable" : milestoneState(change, input.until, now);
     let result: { change: Change | null; state: MilestoneState | "timeout" } = {
       change: now,
       state: test(now),

@@ -1,0 +1,162 @@
+/*
+ * Your agents (components/Fleet.tsx). Hairline rows like every list; agents are squares. State is
+ * a word with an icon: "Waits on you" in ink (it's your move, not an alarm), "Failing" in carmine
+ * (a state, per the Band Means Lane Rule), "Working" with the trace, "Quiet" in muted ink.
+ */
+.fleet {
+  margin-block-end: var(--s-6);
+}
+.fleet__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title manage" "sum sum";
+  align-items: center;
+  gap: 0 var(--s-3);
+  margin-block-end: var(--s-2);
+}
+@media (min-width: 768px) {
+  .fleet__head {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "title sum manage";
+    align-items: baseline;
+  }
+}
+.fleet__title {
+  grid-area: title;
+  font-size: var(--text-title);
+}
+.fleet__sum {
+  grid-area: sum;
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.fleet__sum b {
+  color: var(--text);
+}
+.fleet__manage {
+  grid-area: manage;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+}
+.fleet__list {
+  list-style: none;
+  border-block-start: 1px solid var(--rule);
+}
+.fleet__row {
+  position: relative;
+  overflow: clip;
+  border-block-end: 1px solid var(--rule);
+}
+.fleet__link {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  grid-template-areas: "avatar who state" "avatar last last";
+  align-items: center;
+  gap: 2px var(--s-3);
+  min-block-size: 64px;
+  padding: var(--s-3) var(--s-2);
+  color: var(--text);
+  text-decoration: none;
+  transition: background-color var(--dur-feedback) var(--ease-out);
+}
+a.fleet__link:hover {
+  background: var(--panel);
+  text-decoration: none;
+}
+@media (min-width: 768px) {
+  .fleet__link {
+    grid-template-columns: 2.25rem minmax(10rem, 1fr) minmax(0, 1.4fr) 9.5rem;
+    grid-template-areas: "avatar who last state";
+  }
+}
+.fleet__avatar {
+  grid-area: avatar;
+  display: grid;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: 6px;
+  background: var(--text);
+  color: var(--canvas);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.02em;
+}
+.fleet__who {
+  grid-area: who;
+  display: grid;
+  min-inline-size: 0;
+}
+.fleet__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-medium);
+}
+.fleet__owner,
+.fleet__when {
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.fleet__last {
+  grid-area: last;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s-2);
+  min-inline-size: 0;
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.fleet__state {
+  grid-area: state;
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+.fleet__state--waiting {
+  color: var(--text);
+}
+.fleet__state--waiting .icon {
+  color: var(--action-ink);
+}
+.fleet__state--failing {
+  color: var(--danger);
+}
+.fleet__state--quiet {
+  color: var(--text-3);
+  font-weight: var(--weight-regular);
+}
+
+/* The trace: a soft segment running along a working agent's hairline. Compositor-only
+   (transform), on screen only, never under reduced motion. */
+.fleet__row--working::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: -1px;
+  block-size: 2px;
+  background: linear-gradient(90deg, transparent 0 38%, var(--text-2) 50%, transparent 62% 100%);
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fleet__row--working[data-onscreen]::after {
+    opacity: 0.7;
+    animation: fleet-trace var(--dur-trace) linear infinite;
+  }
+}
+@keyframes fleet-trace {
+  to {
+    transform: translateX(100%);
+  }
+}

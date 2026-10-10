@@ -611,7 +611,7 @@ function subsequence(needle: string, hay: string): boolean {
   return i === needle.length;
 }
 
-/** Fuzzy rank of tools for a query: names first, then descriptions; best 8. */
+/** Fuzzy rank of tools for a query: names first, then descriptions; best 10 (of 30-odd tools). */
 export function searchTools(query: string, tools: readonly ToolSummary[]): ToolSummary[] {
   const terms = words(query);
   const compact = query.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -635,7 +635,7 @@ export function searchTools(query: string, tools: readonly ToolSummary[]): ToolS
   return scored
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score || (a.t.name < b.t.name ? -1 : 1))
-    .slice(0, 8)
+    .slice(0, 10)
     .map((s) => s.t);
 }
 

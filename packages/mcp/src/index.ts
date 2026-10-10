@@ -1,4 +1,5 @@
 export type {
+  ChangeReviewData,
   ClassificationSummary,
   CreateProjectArgs,
   GitRemote,
@@ -11,8 +12,24 @@ export type {
   NextStepData,
   ProjectCreated,
   RepoRoleData,
+  WaitReasonData,
+  WebPage,
   WhoamiData,
 } from "./backend.js";
+export { WAIT_REASONS } from "./schemas.js";
+export {
+  type ChangeListItem,
+  type ChangeListToolsBackend,
+  changeListTools,
+} from "./tools/changes.js";
+export {
+  PLAN_STATUSES,
+  type PlanData,
+  type PlanToolsBackend,
+  planBrief,
+  planNextSteps,
+  type PrincipalRefData,
+} from "./tools/plans.js";
 export { createMcpServer, INSTRUCTIONS, SERVER_INFO } from "./server.js";
 export {
   type ImportToolsBackend,
@@ -52,6 +69,7 @@ export {
   type PlatformIntrospection,
   type PlatformTools,
   parseToolError,
+  type ReviewBrief,
   ToolFailure,
   type ToolName,
 } from "./tools.js";

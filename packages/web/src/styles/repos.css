@@ -99,7 +99,8 @@
   align-items: center;
   gap: 4px;
   font-size: var(--text-small);
-  color: var(--warn);
+  /* A rollout in flight is progress, not a warning: ink, never a band. Failing stays carmine. */
+  color: var(--text-2);
   font-weight: var(--weight-medium);
 }
 .flight--danger {
@@ -124,7 +125,7 @@
   color: var(--text);
 }
 .lane-count.is-zero b {
-  color: var(--text-4);
+  color: var(--text-3);
   font-weight: var(--weight-regular);
 }
 .repo-row__shadow {

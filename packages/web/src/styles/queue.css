@@ -162,6 +162,13 @@ a.q-stat__sub {
   justify-self: start;
   color: var(--action-ink);
 }
+/* Touch: a 44px target without growing the tile. */
+@media (pointer: coarse) {
+  a.q-stat__sub {
+    padding-block: 13.5px;
+    margin-block: -13.5px;
+  }
+}
 .q-stat__nm {
   font-size: var(--text-body);
 }
@@ -371,6 +378,19 @@ a.q-stat__sub {
 .q-batch__members a:hover {
   text-decoration: underline;
 }
+/*
+ * Touch: 44px targets. Transparent borders, not padding, add the height: the line clamp clips at
+ * the padding box, so padding would show the top of a third line.
+ */
+@media (pointer: coarse) {
+  .q-batch__members a {
+    min-block-size: var(--tap);
+    border-block: 4px solid transparent;
+  }
+  .q-batch__members .lane-tag {
+    margin-block-start: 5px;
+  }
+}
 .q-batch__targets {
   list-style: none;
   display: grid;
@@ -425,6 +445,14 @@ a.q-stat__sub {
 }
 .q-entry__title:hover {
   text-decoration: underline;
+}
+/* Touch: a 44px target without moving the row (it reaches over the id line under it). */
+@media (pointer: coarse) {
+  .q-entry__title {
+    position: relative;
+    padding-block: 12px;
+    margin-block: -12px;
+  }
 }
 .q-entry__id {
   margin-block-start: -6px;
