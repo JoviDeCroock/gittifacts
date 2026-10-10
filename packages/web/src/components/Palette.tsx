@@ -10,6 +10,7 @@ import { useLocation } from "preact-iso";
 import { useEffect, useRef } from "preact/hooks";
 import { cliCommand } from "../lib/cli.js";
 import { type Command, cliArgs, commandsFor, forMode, match, mcpText, type Mode, type RepoRef } from "../lib/commands.js";
+import { prefersReducedMotion } from "../state/media.js";
 import { themePref } from "../state/prefs.js";
 import { Icon } from "./Icon.js";
 
@@ -74,6 +75,16 @@ export function PaletteButton({ compact = false }: { compact?: boolean }) {
   );
 }
 
+/** The router ignores fragments: bring `#id` into view once the (possibly lazy) page renders it. */
+function revealWhenRendered(id: string, tries = 20): void {
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+    return;
+  }
+  if (tries > 0) window.setTimeout(() => revealWhenRendered(id, tries - 1), 100);
+}
+
 async function copy(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
@@ -125,6 +136,8 @@ export function Palette() {
   const copied = useSignal<"mcp" | "cli" | null>(null);
   const status = useSignal("");
   const closing = useSignal(false);
+  /** Closing because a command navigated: focus goes to the new page, not back to the trigger. */
+  const focusMain = useRef(false);
 
   const list = useComputed(() => match(forMode(commandsFor(path, paletteRepos.value), mode.value, path), query.value));
   const items = list.value;
@@ -145,6 +158,10 @@ export function Palette() {
       const done = () => {
         closing.value = false;
         d.close();
+        if (focusMain.current) {
+          focusMain.current = false;
+          document.getElementById("main")?.focus({ preventScroll: true });
+        }
       };
       // Leave with the exit animation when there is one; a fallback timer when it never fires.
       const t = window.setTimeout(done, 260);
@@ -152,8 +169,10 @@ export function Palette() {
     }
   }, [paletteOpen.value]);
 
-  // Close on navigation.
+  // Close on navigation (Back, a link elsewhere).
   useEffect(() => {
+    if (!paletteOpen.value) return;
+    focusMain.current = true;
     paletteOpen.value = false;
   }, [path]);
 
@@ -176,10 +195,15 @@ export function Palette() {
     }
     const act = cmd.act;
     if (!act) return;
+    if (act.kind === "go") focusMain.current = true;
     close();
     if (act.kind === "go") {
       if (act.server) window.location.assign(act.href);
-      else route(act.href);
+      else {
+        route(act.href);
+        const hash = act.href.split("#")[1];
+        if (hash) revealWhenRendered(hash);
+      }
     } else if (act.kind === "theme") {
       themePref.value = act.value;
     } else {

@@ -144,6 +144,8 @@ function Sidebar() {
 function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const { path } = useLocation();
+  /** Closing because the page changed: focus belongs to the new page, not back on the menu button. */
+  const navClose = useRef(false);
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
@@ -158,13 +160,20 @@ function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
         window.clearTimeout(t);
         d.classList.remove("is-closing");
         if (d.open) d.close();
+        if (navClose.current) {
+          navClose.current = false;
+          document.getElementById("main")?.focus({ preventScroll: true });
+        }
       };
       const t = window.setTimeout(done, 260);
       d.addEventListener("animationend", done, { once: true });
     }
   }, [open]);
   useEffect(() => {
-    if (open) onClose();
+    if (open) {
+      navClose.current = true;
+      onClose();
+    }
     // close on navigation
     // biome-ignore lint/correctness/useExhaustiveDependencies: only on path change
   }, [path]);
