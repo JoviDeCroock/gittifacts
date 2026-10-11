@@ -1,7 +1,12 @@
 /**
- * The CI port for unclaimed projects (onboarding §4): every CI run of an unclaimed project goes
- * through here, whoever starts it (ChangeWorkflow, bootstrap, merge-queue re-check), because it
- * wraps the coordinator's `ci` port at the runtime seam (src/index.ts).
+ * The CI port's gate: every CI run goes through here, whoever starts it (ChangeWorkflow,
+ * bootstrap, merge-queue re-check), because it wraps the coordinator's `ci` port at the runtime
+ * seam (src/index.ts).
+ *
+ * Every project: while the spend breaker is tripped (src/spend/breaker.ts) no run starts, except
+ * the merge queue's (approved Changes still land). Claimed projects: the plan's CI quota
+ * (src/limits/plans.ts), container-minutes per day per project and per account, a per-run cap and
+ * an instance ceiling. Unclaimed projects (onboarding §4), below:
  *
  * Before a run starts it must pass the project's expiry, storage, Artifacts-operation and CI-minute
  * quotas (project and per-IP). A run that passes is clamped: `limits.maxMinutes` = the minutes
@@ -17,25 +22,24 @@ import {
   type CiEngine,
   type CiRunRequest,
   type Ports,
+  type PortsRole,
   SYSTEM_PRINCIPAL_ID,
 } from "@app/coordinator";
 import type { Repo } from "@app/domain";
 import { ApiError } from "../errors.js";
+import { spendPaused } from "../spend/breaker.js";
 import { D1Store } from "../store/d1-store.js";
 import type { ProjectLedger } from "../workspace/ledger-do.js";
 import { type LimitsEnv, type UnclaimedLimits, unclaimedLimits } from "./config.js";
-import {
-  chargeArtifactsOps,
-  GLOBAL_LEDGER,
-  ledgersFor,
-  type QuotaEnv,
-  quotaExceeded,
-  usageOf,
-} from "./quotas.js";
+import { type PlanGateEnv, planQuotaError } from "./plan-gate.js";
+import { type PlanLimits, planLedgers, planLimits, planOf } from "./plans.js";
+import { chargeArtifactsOps, GLOBAL_LEDGER, ledgersFor, quotaExceeded, usageOf } from "./quotas.js";
 
 export const LIMIT_STEP = "unclaimed-limits";
+/** The refused run's step for claimed projects (plan quota) and for the spend breaker. */
+export const PLAN_STEP = "plan-limits";
 
-export interface CiQuotaEnv extends QuotaEnv, LimitsEnv {
+export interface CiQuotaEnv extends LimitsEnv, PlanGateEnv {
   DB: D1Database;
   BLOBS: R2Bucket;
   CI_BUCKET: R2Bucket;
@@ -163,9 +167,14 @@ export function clampRequest(req: CiRunRequest, minutes: number, l: UnclaimedLim
   } as CiRunRequest;
 }
 
-async function reportRefused(env: CiQuotaEnv, req: CiRunRequest, message: string): Promise<void> {
+async function reportRefused(
+  env: CiQuotaEnv,
+  req: CiRunRequest,
+  message: string,
+  step = LIMIT_STEP,
+): Promise<void> {
   const at = new Date().toISOString();
-  const logRef = `ci-logs/${req.runId}/${LIMIT_STEP}.log`;
+  const logRef = `ci-logs/${req.runId}/${step}.log`;
   await env.CI_BUCKET.put(logRef, `${message}\n`, {
     httpMetadata: { contentType: "text/plain; charset=utf-8" },
   });
@@ -180,7 +189,7 @@ async function reportRefused(env: CiQuotaEnv, req: CiRunRequest, message: string
     finishedAt: at,
     steps: [
       {
-        name: LIMIT_STEP,
+        name: step,
         kind: "user",
         status: "failed",
         durationMs: 0,
@@ -195,38 +204,101 @@ async function reportRefused(env: CiQuotaEnv, req: CiRunRequest, message: string
   });
 }
 
-export function unclaimedCi(inner: CiEngine, env: CiQuotaEnv, audit?: Ports["audit"]): CiEngine {
+/**
+ * Admit a claimed project's run against its plan: refused once today's container-minutes of the
+ * project or its account reach the plan's day; otherwise its budget is the per-run cap, at most
+ * what is left of either day. Nothing is held while it runs (concurrent runs don't refuse each
+ * other); the run's container-minutes are added when it finishes (./coordinator-do.ts).
+ */
+async function planVerdict(
+  env: CiQuotaEnv,
+  repo: Repo,
+  req: CiRunRequest,
+  l: PlanLimits,
+  atMs: number,
+): Promise<{ refused: string } | { minutes: number }> {
+  const { project, account } = await planLedgers(env, repo.id);
+  const over = (scope: "project" | "account", used: number, limit: number) => {
+    const e = planQuotaError(repo.id, "ci-minutes", scope, used, limit, atMs);
+    return { refused: `${e.message}. ${e.fix.explanation}` };
+  };
+  const p = await project.admitCi({ runId: req.runId, perDay: l.ci.minutesPerDay, atMs });
+  if (!p.ok) return over("project", p.usedMinutes, l.ci.minutesPerDay);
+  let minutes = Math.min(l.ci.minutesPerRun, Math.ceil(p.minutesLeft));
+  if (account !== null) {
+    const perDay = l.ci.minutesPerDay * l.accountMultiplier;
+    const a = await account.admitCi({ runId: req.runId, perDay, atMs });
+    if (!a.ok) {
+      await project.settleCi({ runId: req.runId, actualMinutes: 0 });
+      return over("account", a.usedMinutes, perDay);
+    }
+    minutes = Math.min(minutes, Math.ceil(a.minutesLeft));
+  }
+  return { minutes };
+}
+
+/** A claimed project's run: the plan's minutes and instance ceiling; egress and cache as asked. */
+export function clampPlanRequest(req: CiRunRequest, minutes: number, l: PlanLimits): CiRunRequest {
+  const { budget: _budget, ...rest } = req;
+  const asked = req.limits?.maxMinutes ?? req.budget?.maxMinutes ?? minutes;
+  return {
+    ...rest,
+    limits: {
+      ...(req.limits ?? {}),
+      maxMinutes: Math.max(1, Math.min(asked, minutes)),
+      instance: l.ci.instance,
+    },
+  } as CiRunRequest;
+}
+
+export function unclaimedCi(
+  inner: CiEngine,
+  env: CiQuotaEnv,
+  audit?: Ports["audit"],
+  role: PortsRole = "default",
+): CiEngine {
   const store = () => new D1Store(env.DB, env.BLOBS);
+  const refuse = async (repo: Repo, req: CiRunRequest, detail: string, step: string) => {
+    await audit
+      ?.append({
+        principalId: SYSTEM_PRINCIPAL_ID,
+        action: "limit.hit",
+        subject: `repo:${repo.id}`,
+        payload: { limit: "ci", runId: req.runId, changeId: req.changeId, detail },
+      })
+      .catch(() => undefined);
+    await reportRefused(env, req, detail, step);
+    return { runId: req.runId };
+  };
   return {
     async start(req) {
       const s = store();
       const change = await s.getChange(req.changeId);
       const repo = change === null ? null : await s.getRepo(change.repoId);
-      if (repo === null || repo.claim.status === "claimed") return inner.start(req);
-      const l = unclaimedLimits(env);
-      const verdict = await refusal(env, s, repo, req, l, Date.now());
-      if ("refused" in verdict) {
-        await audit
-          ?.append({
-            principalId: SYSTEM_PRINCIPAL_ID,
-            action: "limit.hit",
-            subject: `repo:${repo.id}`,
-            payload: {
-              limit: "ci",
-              runId: req.runId,
-              changeId: req.changeId,
-              detail: verdict.refused,
-            },
-          })
-          .catch(() => undefined);
-        await reportRefused(env, req, verdict.refused);
-        return { runId: req.runId };
+      if (repo === null) return inner.start(req);
+      const atMs = Date.now();
+      // The merge queue lands approved Changes even while the breaker is tripped.
+      if (role !== "merge-queue") {
+        const paused = await spendPaused(env, atMs);
+        if (paused !== null) return refuse(repo, req, paused, PLAN_STEP);
       }
+      if (repo.claim.status === "claimed") {
+        const pl = planLimits(env, planOf(repo));
+        const v = await planVerdict(env, repo, req, pl, atMs);
+        if ("refused" in v) return refuse(repo, req, v.refused, PLAN_STEP);
+        return inner.start(clampPlanRequest(req, v.minutes, pl));
+      }
+      const l = unclaimedLimits(env);
+      const verdict = await refusal(env, s, repo, req, l, atMs);
+      if ("refused" in verdict) return refuse(repo, req, verdict.refused, LIMIT_STEP);
       return inner.start(clampRequest(req, verdict.minutes, l));
     },
     async status(runId) {
       const run = await store().getRun(runId);
-      if (run?.status === "failed" && run.steps.some((st) => st.name === LIMIT_STEP)) {
+      if (
+        run?.status === "failed" &&
+        run.steps.some((st) => st.name === LIMIT_STEP || st.name === PLAN_STEP)
+      ) {
         return {
           id: run.id,
           changeId: run.changeId,
@@ -246,10 +318,11 @@ export function unclaimedCi(inner: CiEngine, env: CiQuotaEnv, audit?: Ports["aud
   };
 }
 
-/** Wrap a Ports' CI engine (every role) with the unclaimed-project gate. */
+/** Wrap a Ports' CI engine (every role) with the gate: spend breaker, plan, unclaimed quotas. */
 export function withUnclaimedLimits<P extends Pick<Ports, "ci" | "audit">>(
   ports: P,
   env: CiQuotaEnv,
+  role: PortsRole = "default",
 ): P {
-  return { ...ports, ci: unclaimedCi(ports.ci, env, ports.audit) };
+  return { ...ports, ci: unclaimedCi(ports.ci, env, ports.audit, role) };
 }

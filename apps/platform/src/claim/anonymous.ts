@@ -9,7 +9,7 @@ import { unclaimedCreationState } from "../limits/kill-switch.js";
 
 export async function anonymousWhoami(svc: Services): Promise<WhoamiData> {
   const l = unclaimedLimits(svc.env);
-  const state = await unclaimedCreationState(svc.store, svc.env.FLAGS);
+  const state = await unclaimedCreationState(svc.store, svc.env.FLAGS, svc.env);
   return {
     principal: {
       id: "anonymous",

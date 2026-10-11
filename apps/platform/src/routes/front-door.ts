@@ -54,7 +54,7 @@ export interface UnclaimedHints {
 }
 
 export async function unclaimedHints(c: Context<AppEnv>): Promise<UnclaimedHints> {
-  const state = await unclaimedCreationState(c.get("services").store, c.env.FLAGS);
+  const state = await unclaimedCreationState(c.get("services").store, c.env.FLAGS, c.env);
   const ws = limitsFor(
     { claim: { status: "unclaimed", ownerId: null, expiresAt: null }, policy: defaultPolicy() },
     c.env as unknown as WorkspaceConfigVars,

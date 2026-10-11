@@ -55,6 +55,7 @@ export type PortsEnv = Pick<
   | "PREVIEW_HOST"
   | "PREVIEW_HOST_SUFFIX"
   | "METRICS"
+  | "PROJECT_LEDGER"
 > & { AI?: Ai; AI_GATEWAY_TOKEN?: string; BROWSER?: BrowserRun };
 
 /** The reviewer model when the repo policy does not override it (policy default is "auto"). */

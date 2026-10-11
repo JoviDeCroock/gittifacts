@@ -98,7 +98,11 @@ describe("workspace lifecycle", () => {
 
   it("expires at its hard TTL and says how to start again", async () => {
     const { mcp, changeId, workspaceId } = await setup();
-    clock += 2 * 60 * 60_000 + 1000;
+    // Idle: it sleeps after 10 minutes (so it uses 11 of the free plan's 60 vCPU-minutes), then
+    // reaches its 1-hour TTL.
+    clock += 11 * 60_000;
+    await runDurableObjectAlarm(env.WORKSPACE.getByName(workspaceId));
+    clock += 50 * 60_000;
     await runDurableObjectAlarm(env.WORKSPACE.getByName(workspaceId));
     const r = await mcp.tools.ws_exec({ workspaceId, command: "ls" });
     expect(codeOf(r)).toBe("invalid-state");

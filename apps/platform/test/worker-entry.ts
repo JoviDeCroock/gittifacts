@@ -29,7 +29,11 @@ export { TestPreviewHost as PreviewHost } from "./integration/preview-fakes.js";
 configureCoordinatorRuntime<Bindings>({
   // Like src/index.ts: every role's CI port goes through the unclaimed-project gate.
   ports: (env, role) =>
-    withUnclaimedLimits(buildPorts(env, role, { overrides: integrationOverrides(role, env) }), env),
+    withUnclaimedLimits(
+      buildPorts(env, role, { overrides: integrationOverrides(role, env) }),
+      env,
+      role,
+    ),
   coordinatorOptions: COORDINATOR_OPTIONS,
   // The real MergeQueue DO and BatchRunWorkflow; its sandbox jobs replay on FakeGitHost files.
   mergeQueue: (env) => ({

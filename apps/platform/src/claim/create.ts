@@ -114,7 +114,7 @@ export async function createUnclaimedProject(
 ): Promise<ProjectCreated> {
   const input = CreateProjectInput.parse(raw);
   refuseAnonymousPushImport(input);
-  const state = await unclaimedCreationState(svc.store, svc.env.FLAGS);
+  const state = await unclaimedCreationState(svc.store, svc.env.FLAGS, svc.env);
   if (!state.enabled) throw creationDisabled(svc.origin);
   const limits = unclaimedLimits(svc.env);
   const now = svc.clock.now();

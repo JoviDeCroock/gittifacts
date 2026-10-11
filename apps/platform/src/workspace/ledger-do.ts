@@ -194,12 +194,43 @@ export class ProjectLedger extends DurableObject<unknown> {
     return { ok: true, minutes };
   }
 
-  /** Replace a run's reservation with what it actually used (capped at the grant). Once. */
-  async settleCi(input: { runId: string; actualMinutes: number }): Promise<boolean> {
+  /**
+   * Admit one run while today's settled CI minutes are under `perDay` (idempotent per run id):
+   * nothing is held while it runs, so concurrent runs don't refuse each other; `settleCi` adds
+   * what it used. Returns the minutes left today (the caller caps the run's budget with them).
+   */
+  async admitCi(input: {
+    runId: string;
+    perDay: number;
+    atMs: number;
+  }): Promise<{ ok: true; minutesLeft: number } | { ok: false; usedMinutes: number }> {
+    const used = await this.counter(this.counterKey("ci-minutes", "day", input.atMs));
+    const prev = CiReservation.safeParse(await this.ctx.storage.get(`ci:${input.runId}`));
+    if (!prev.success) {
+      if (used >= input.perDay) return { ok: false, usedMinutes: used };
+      await this.ctx.storage.put(`ci:${input.runId}`, {
+        minutes: 0,
+        day: dayOf(input.atMs),
+        settled: false,
+      } satisfies CiReservation);
+    }
+    return { ok: true, minutesLeft: Math.max(1, input.perDay - used) };
+  }
+
+  /**
+   * Replace a run's reservation with what it actually used, once. Capped at the grant unless
+   * `capped: false` (container-minutes: parallel steps can use more than the run's wall budget).
+   */
+  async settleCi(input: {
+    runId: string;
+    actualMinutes: number;
+    capped?: boolean;
+  }): Promise<boolean> {
     const parsed = CiReservation.safeParse(await this.ctx.storage.get(`ci:${input.runId}`));
     if (!parsed.success || parsed.data.settled) return false;
     const r = parsed.data;
-    const actual = Math.min(r.minutes, Math.max(0, input.actualMinutes));
+    const used = Math.max(0, input.actualMinutes);
+    const actual = input.capped === false ? used : Math.min(r.minutes, used);
     const key = `q:${r.day}:ci-minutes`;
     await this.ctx.storage.put(key, Math.max(0, (await this.counter(key)) - r.minutes + actual));
     await this.ctx.storage.put(`ci:${input.runId}`, { ...r, settled: true });

@@ -23,6 +23,9 @@ import { DurableObject } from "cloudflare:workers";
 import { REGISTRY_HOSTS } from "@app/ci-engine";
 import { isForkName, resolveRuntime, SYSTEM_PRINCIPAL_ID } from "@app/coordinator";
 import { DoAudit } from "../audit/audit.js";
+import { addPlanUsage, type PlanGateEnv, WORKSPACE_CPU_SECONDS } from "../limits/plan-gate.js";
+import { recordSpend, type SpendEnv } from "../spend/meter.js";
+import { containerUsd } from "../spend/prices.js";
 import {
   type BootFrom,
   type CommitPushOutcome,
@@ -245,6 +248,21 @@ export class Workspace extends DurableObject<Env> {
         workspaceId: s.workspaceId,
         containerSeconds: delta / 1000,
         cpuSeconds: (delta / 1000) * INSTANCE_VCPU[s.instance],
+        atMs: now,
+      });
+      // The account's share of the plan's workspace quota (the project's is recordUsage above).
+      await addPlanUsage(
+        this.env as unknown as PlanGateEnv,
+        s.repoId,
+        WORKSPACE_CPU_SECONDS,
+        (delta / 1000) * INSTANCE_VCPU[s.instance],
+        now,
+      ).catch((e: unknown) => console.warn(`workspace ${s.workspaceId}: account usage`, e));
+      await recordSpend(this.env as unknown as SpendEnv, {
+        source: "workspace",
+        usd: containerUsd(s.instance, delta),
+        repoId: s.repoId,
+        ref: s.workspaceId,
         atMs: now,
       });
       await this.patch({ reportedMs: total });

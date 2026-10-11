@@ -60,8 +60,16 @@ describe("limitsFor", () => {
     });
   });
 
-  it("gives claimed projects open egress and 2 hours, unless their policy says registries-only", () => {
-    expect(limitsFor(claimed)).toMatchObject({ network: "open", ttlMs: 2 * 60 * 60_000 });
+  it("gives claimed projects open egress and the free plan (1 hour, 60 vCPU-minutes, 1 open), unless their policy says registries-only", () => {
+    expect(limitsFor(claimed)).toMatchObject({
+      network: "open",
+      ttlMs: 60 * 60_000,
+      cpuSecondsPerDay: 60 * 60,
+      maxOpen: 1,
+    });
+    expect(
+      limitsFor(claimed, { FREE_LIMITS: JSON.stringify({ workspace: { maxOpen: 3 } }) }),
+    ).toMatchObject({ maxOpen: 3, ttlMs: 60 * 60_000 });
     const strict = {
       ...claimed,
       policy: { ...defaultPolicy(), sandbox: { network: "registries-only" as const } },

@@ -9,6 +9,7 @@ import { allows, type RepoRole } from "../access/roles.js";
 import type { Caller, Services } from "../app-env.js";
 import type { SessionUser } from "../auth/principals.js";
 import { unclaimedLimits } from "../limits/config.js";
+import { type PlanEnv, planLimits } from "../limits/plans.js";
 import { usageOf } from "../limits/quotas.js";
 import { isUnclaimedAgent } from "../limits/request-limit.js";
 
@@ -113,12 +114,29 @@ export async function capabilities(svc: Services, caller: Caller): Promise<Capab
 }
 
 /**
- * An unclaimed project's agent sees its project's hard limits and today's use (O3); everyone
- * else is not metered here (null = no platform quota).
+ * An unclaimed project's agent sees its project's hard limits and today's use (O3). Everyone else
+ * sees the free plan's CI quota of their account (a human, or an agent's owner) and today's use
+ * across its projects (src/limits/plans.ts); null = no platform quota (no accountable human).
  */
 async function quotasFor(svc: Services, principal: Principal, repos: Repo[]): Promise<Quotas> {
   const project = repos.find((r) => r.claim.status !== "claimed");
   if (!isUnclaimedAgent(principal) || project === undefined) {
+    const owner = principal.kind === "human" ? principal.id : principal.ownerId;
+    if (owner !== null) {
+      const plan = planLimits(svc.env as PlanEnv);
+      const metric = "ci-minutes";
+      const used = await svc.env.PROJECT_LEDGER.getByName(`account:${owner}`).counters({
+        metrics: [{ metric, period: "day" }],
+        atMs: svc.clock.now().getTime(),
+      });
+      return {
+        enforced: true,
+        ciMinutesPerDay: plan.ci.minutesPerDay * plan.accountMultiplier,
+        ciMinutesUsedToday: Math.ceil(used[metric] ?? 0),
+        artifactsOpsPerDay: null,
+        storageBytes: null,
+      };
+    }
     return {
       enforced: false,
       ciMinutesPerDay: null,

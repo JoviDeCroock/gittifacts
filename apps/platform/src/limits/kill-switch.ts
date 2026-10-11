@@ -14,6 +14,7 @@
  */
 import { eq } from "drizzle-orm";
 import { platformSettings } from "../db/schema.js";
+import { type BreakerEnv, spendPaused } from "../spend/breaker.js";
 import type { D1Store } from "../store/d1-store.js";
 
 export const UNCLAIMED_CREATION_FLAG = "unclaimed-creation-enabled";
@@ -23,8 +24,8 @@ export type CreationOverride = "on" | "off";
 
 export interface CreationState {
   enabled: boolean;
-  /** Why: the admin override, the flag, or the flag failing (closed). */
-  source: "override" | "flag" | "flag-unavailable";
+  /** Why: the admin override, the flag, the flag failing (closed), or the spend breaker. */
+  source: "override" | "flag" | "flag-unavailable" | "spend-breaker";
   override: CreationOverride | null;
   /** The flag's value, or null when it could not be evaluated. */
   flag: boolean | null;
@@ -90,7 +91,17 @@ async function evaluateFlag(flags: FlagReader | undefined): Promise<{
 export async function unclaimedCreationState(
   store: D1Store,
   flags: FlagReader | undefined,
+  breaker?: BreakerEnv,
 ): Promise<CreationState> {
+  const state = await switchState(store, flags);
+  // The spend breaker (src/spend/breaker.ts) also stops creation while it is tripped.
+  const paused = state.enabled && breaker !== undefined ? await spendPaused(breaker) : null;
+  return paused === null
+    ? state
+    : { ...state, enabled: false, source: "spend-breaker", detail: paused };
+}
+
+async function switchState(store: D1Store, flags: FlagReader | undefined): Promise<CreationState> {
   let override: CreationOverride | null = null;
   try {
     override = await readOverride(store);

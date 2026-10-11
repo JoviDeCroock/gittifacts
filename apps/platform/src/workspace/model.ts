@@ -6,6 +6,7 @@
 import type { InstanceType } from "@app/ci-engine";
 import type { Repo } from "@app/domain";
 import { z } from "zod";
+import { planLimits, planOf } from "../limits/plans.js";
 
 // ---------------------------------------------------------------- ids
 
@@ -57,15 +58,18 @@ export interface WorkspaceConfigVars {
   WORKSPACE_IDLE_MIN?: string;
   WORKSPACE_CPU_MIN_PER_DAY_CLAIMED?: string;
   WORKSPACE_CPU_MIN_PER_DAY_UNCLAIMED?: string;
+  /** The free plan's overrides (src/limits/plans.ts): claimed projects' TTL, quota, open count. */
+  FREE_LIMITS?: string;
 }
 
 export const DEFAULT_LIMITS = {
+  // The free plan (src/limits/plans.ts FREE_PLAN.workspace); FREE_LIMITS overrides it.
   claimed: {
-    ttlMs: 2 * 60 * 60_000,
+    ttlMs: 60 * 60_000,
     idleMs: 10 * 60_000,
     instance: "standard-2",
-    cpuSecondsPerDay: 600 * 60,
-    maxOpen: 5,
+    cpuSecondsPerDay: 60 * 60,
+    maxOpen: 1,
     maxExecTimeoutSec: 1800,
     maxOutputBytes: 64 * 1024,
   },
@@ -105,12 +109,14 @@ export function limitsFor(
     };
   }
   const d = DEFAULT_LIMITS.claimed;
+  const plan = planLimits(vars, planOf(repo)).workspace;
   return {
     ...d,
-    ttlMs: minutes(vars.WORKSPACE_TTL_CLAIMED_MIN, d.ttlMs),
+    maxOpen: plan.maxOpen,
+    ttlMs: minutes(vars.WORKSPACE_TTL_CLAIMED_MIN, plan.ttlMinutes * 60_000),
     idleMs: minutes(vars.WORKSPACE_IDLE_MIN, d.idleMs),
     cpuSecondsPerDay:
-      minutes(vars.WORKSPACE_CPU_MIN_PER_DAY_CLAIMED, d.cpuSecondsPerDay * 1000) / 1000,
+      minutes(vars.WORKSPACE_CPU_MIN_PER_DAY_CLAIMED, plan.cpuMinutesPerDay * 60_000) / 1000,
     network: repo.policy.sandbox?.network === "registries-only" ? "registries-only" : "open",
   };
 }

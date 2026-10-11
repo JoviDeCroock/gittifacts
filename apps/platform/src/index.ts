@@ -21,13 +21,14 @@ import { runQaSweep } from "./qa/sweep.js";
 import { runRetention } from "./retention.js";
 import { buildPorts } from "./runtime/ports.js";
 import { buildQueueRuntime } from "./runtime/queue.js";
+import { runSpendWatch } from "./spend/breaker.js";
 
 // Durable Objects and Workflows are instantiated by the runtime with only `env`; this is how they
 // get their Ports. The MergeQueue DO asks for the "merge-queue" role (the only main-repo writer).
 // Every role's CI port goes through the unclaimed-project gate (quotas, clamped limits,
 // registries-only egress; src/limits/ci-quota.ts).
 configureCoordinatorRuntime<Bindings>({
-  ports: (env, role) => withUnclaimedLimits(buildPorts(env, role), env),
+  ports: (env, role) => withUnclaimedLimits(buildPorts(env, role), env, role),
   coordinatorOptions: COORDINATOR_OPTIONS,
   // The agent-native merge queue (MergeQueue DO): scratch-repo jobs, BatchRunWorkflow, resolver.
   mergeQueue: (env, ports) => buildQueueRuntime(env, ports),
@@ -38,7 +39,7 @@ configureCoordinatorRuntime<Bindings>({
   hosts: (env, ports) => ({ github: ({ repo }) => githubHostFor(env, ports, repo).host }),
 });
 
-export { CiEgressGateway, CiRunWorkflow, Runner } from "@app/ci-engine";
+export { CiEgressGateway, CiRunWorkflow } from "@app/ci-engine";
 export {
   BatchRunWorkflow,
   ChangeWorkflow,
@@ -55,6 +56,8 @@ export { ChangeCoordinator } from "./limits/coordinator-do.js";
 export { AbuseLimiter } from "./limits/limiter-do.js";
 export { PreviewHost } from "./previews/preview-host.js";
 export { QaRunWorkflow } from "./qa/workflow.js";
+// The CI engine's Runner + container-time spend metering.
+export { Runner } from "./spend/runner.js";
 export { WorkspaceEgressGateway } from "./workspace/egress.js";
 export { ProjectLedger } from "./workspace/ledger-do.js";
 export { Workspace } from "./workspace/workspace-do.js";
@@ -81,6 +84,8 @@ export default {
     ctx.waitUntil(runRetention(env).then(() => undefined));
     // QA runs whose workflow was lost end as failed, with a notice (src/qa/sweep.ts).
     ctx.waitUntil(runQaSweep(env).then(() => undefined).catch(() => undefined));
+    // Today's metered spend against the daily budgets: logs, audit, breaker (src/spend/breaker.ts).
+    ctx.waitUntil(runSpendWatch(env).then(() => undefined));
     // Once per worker version: re-warm the templates' CI cache (src/projects/seed-on-deploy.ts).
     ctx.waitUntil(runSeedOnDeploy(env));
   },

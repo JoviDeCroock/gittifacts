@@ -8,11 +8,19 @@ import type { Change } from "@app/domain";
 import { drizzle } from "drizzle-orm/d1";
 import type { QaRunRow } from "../db/qa-schema.js";
 import { ApiError, conflict, notFound } from "../errors.js";
+import {
+  assertSpendAllows,
+  chargeAccountDaily,
+  type PlanGateEnv,
+  QA_RUNS,
+} from "../limits/plan-gate.js";
+import { type PlanEnv, planLimits } from "../limits/plans.js";
 import { D1Store } from "../store/d1-store.js";
 import { type QaRunView, QaStore, viewOf } from "./store.js";
 import { endLostRun, QA_STALE_MS } from "./sweep.js";
 
-export const QA_RATE = { perHour: 6, perDay: 30 } as const;
+/** QA runs per repo: the plan's (src/limits/plans.ts), plus a per-account daily cap. */
+export const qaRate = (env: PlanEnv) => planLimits(env).qa;
 const CLOSED: ReadonlySet<Change["status"]> = new Set([
   "merged",
   "rolling-out",
@@ -22,7 +30,7 @@ const CLOSED: ReadonlySet<Change["status"]> = new Set([
   "abandoned",
 ]);
 
-export interface QaEnv {
+export interface QaEnv extends PlanGateEnv {
   DB: D1Database;
   BLOBS: R2Bucket;
   QA_WORKFLOW: { create(opts: { id: string; params: unknown }): Promise<unknown> };
@@ -48,6 +56,7 @@ export class QaRateLimited extends ApiError {
   constructor(
     readonly retryAfterSec: number,
     message: string,
+    rate: { perHour: number; perDay: number },
   ) {
     super(
       429,
@@ -55,7 +64,7 @@ export class QaRateLimited extends ApiError {
       message,
       { retryAfterSec },
       {
-        explanation: `QA runs are limited per repo (${QA_RATE.perHour} an hour, ${QA_RATE.perDay} a day). Ask again in ${retryAfterSec} s.`,
+        explanation: `QA runs are limited per repo (${rate.perHour} an hour, ${rate.perDay} a day on the free plan). Ask again in ${retryAfterSec} s.`,
       },
     );
   }
@@ -126,16 +135,27 @@ export async function requestQa(
         ((from === undefined ? at.getTime() : Date.parse(from)) + windowMs - at.getTime()) / 1000,
       ),
     );
-  if (day.length >= QA_RATE.perDay)
+  const rate = qaRate(env);
+  if (day.length >= rate.perDay)
     throw new QaRateLimited(
       wait(day[0]?.createdAt, 86_400_000),
       `this repo had ${day.length} QA runs in the last day`,
+      rate,
     );
-  if (hour.length >= QA_RATE.perHour)
+  if (hour.length >= rate.perHour)
     throw new QaRateLimited(
       wait(hour[0]?.createdAt, 3_600_000),
       `this repo had ${hour.length} QA runs in the last hour`,
+      rate,
     );
+  // The spend breaker, then the account's QA runs today (src/limits/plan-gate.ts).
+  await assertSpendAllows(env, change.repoId, "qa-runs", at.getTime());
+  await chargeAccountDaily(
+    env,
+    change.repoId,
+    { metric: QA_RUNS, quota: "qa-runs", perDay: rate.perDay },
+    at.getTime(),
+  );
 
   const n =
     prior === null

@@ -138,13 +138,18 @@ describe("claim flow", () => {
       ]),
     );
 
-    // Limits lifted: no quotas reported, no per-token limit, start_change no longer metered.
+    // Unclaimed limits lifted: the free plan's quotas instead (the owner's account), no per-token
+    // limit, start_change no longer metered.
     const caps = await request(app, "GET", "/api/v1/capabilities", {
       token: p.token as string,
       env: { UNCLAIMED_TOKEN_LIMITER: { limit: async () => ({ success: false }) } },
     });
     expect(caps.status).toBe(200);
-    expect(((await caps.json()) as { quotas: { enforced: boolean } }).quotas.enforced).toBe(false);
+    expect(((await caps.json()) as { quotas: unknown }).quotas).toMatchObject({
+      enforced: true,
+      ciMinutesPerDay: 240,
+      artifactsOpsPerDay: null,
+    });
     await env.PROJECT_LEDGER.getByName(p.projectId).charge({
       metric: "ci-minutes",
       amount: 1000,
@@ -178,7 +183,7 @@ describe("claim flow", () => {
     });
   });
 
-  it("after a claim, the project's CI gets the claimed tier (open egress, no clamp)", async () => {
+  it("after a claim, the project's CI gets the claimed tier (open egress, the free plan's limits)", async () => {
     const app = platformApp();
     await using workflows = await introspectWorkflow(env.CHANGE_WORKFLOW);
     await workflows.modifyAll(async (m) => {
@@ -205,7 +210,7 @@ describe("claim flow", () => {
       await new Promise((r) => setTimeout(r, 20));
     expect(fakes.ci.runs.get(runId)?.request).toMatchObject({
       network: "open",
-      limits: { maxMinutes: 90 },
+      limits: { maxMinutes: 30, instance: "standard-2" },
     });
   });
 });

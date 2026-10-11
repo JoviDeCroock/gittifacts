@@ -14,6 +14,8 @@ import { drizzle } from "drizzle-orm/d1";
 import type { Bindings } from "../app-env.js";
 import { githubHostFor } from "../github/runtime.js";
 import { D1Notifier } from "../notifier.js";
+import { recordSpend } from "../spend/meter.js";
+import { browserUsd } from "../spend/prices.js";
 import { D1Store } from "../store/d1-store.js";
 import { QaStore } from "./store.js";
 
@@ -75,6 +77,13 @@ export async function finishQaRun(env: Bindings, runId: string, item: QaRun): Pr
       });
     else await store.putClassification(row.changeId, row.headSha, raised);
   }
+  // Browser time is the platform's own spend (the model's arrives through recordSpend below).
+  await recordSpend(env, {
+    source: "browser",
+    usd: browserUsd(item.usage.browserMs),
+    repoId: row.repoId,
+    ref: `qa ${runId}`,
+  });
   if (item.usage.llmUsd > 0)
     await bindings
       .changeCoordinator(row.changeId)

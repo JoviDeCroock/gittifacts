@@ -35,6 +35,12 @@ import { z } from "zod";
 import type { Caller, Services } from "../app-env.js";
 import { ApiError, conflict, forbidden } from "../errors.js";
 import { admitUnclaimedWork } from "../limits/gates.js";
+import {
+  assertSpendAllows,
+  assertUnderDaily,
+  type PlanGateEnv,
+  WORKSPACE_CPU_SECONDS,
+} from "../limits/plan-gate.js";
 import { requireChange, requireRepo } from "../services/changes.js";
 import type { LedgerUsage, ProjectLedger } from "./ledger-do.js";
 import {
@@ -258,6 +264,24 @@ export async function openWorkspace(
   // The platform's own workspaces (import proposals) are short and don't count against the
   // project's open-workspace limit or block on its quota; their time is still recorded.
   const platform = caller.principal.id === SYSTEM_PRINCIPAL_ID;
+  if (!platform) {
+    // The spend breaker, and the plan's vCPU-minutes per account (src/limits/plan-gate.ts).
+    const env = svc.env as unknown as PlanGateEnv;
+    await assertSpendAllows(env, repo.id, "workspace", now);
+    if (limits.cpuSecondsPerDay !== null) {
+      await assertUnderDaily(
+        env,
+        repo.id,
+        {
+          metric: WORKSPACE_CPU_SECONDS,
+          quota: "workspace-cpu-minutes",
+          perDay: limits.cpuSecondsPerDay / 60,
+          unit: 60,
+        },
+        now,
+      );
+    }
+  }
   if (!platform && usage.cpuSecondsRemaining !== null && usage.cpuSecondsRemaining <= 0) {
     throw quotaExceeded(repo, limits, usage);
   }
@@ -371,7 +395,11 @@ export async function wsExec(
   const w = await resolve(svc, caller, input.workspaceId);
   const usage = await ledgerUsage(svc, w.repo, w.limits);
   if (usage.cpuSecondsRemaining !== null && usage.cpuSecondsRemaining <= 0) {
-    throw quotaExceeded(w.repo, w.limits, usage);
+    // An expired or closed workspace says so first (its fix is to reopen); a live one is over quota.
+    const d = await w.stub.describe(caller.principal.id);
+    if (!d.ok || ["starting", "ready", "sleeping"].includes(d.value.status)) {
+      throw quotaExceeded(w.repo, w.limits, usage);
+    }
   }
   const budgetSec =
     usage.cpuSecondsRemaining === null

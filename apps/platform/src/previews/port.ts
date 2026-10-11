@@ -10,6 +10,9 @@ import type { PreviewOutcome, PreviewRequest, Previews } from "@app/coordinator"
 import type { Screenshots } from "@app/evidence";
 import { desc, eq } from "drizzle-orm";
 import { previews } from "../db/schema.js";
+import { type PlanEnv, planLimits } from "../limits/plans.js";
+import { recordSpend, type SpendEnv } from "../spend/meter.js";
+import { browserUsd } from "../spend/prices.js";
 import type { D1Store } from "../store/d1-store.js";
 import { previewIdFor, previewUrlFor, previewZone } from "./ids.js";
 import type { PreviewConfig, PreviewState } from "./preview-host.js";
@@ -24,7 +27,15 @@ const VIEWPORTS = {
   mobile: { width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
 } as const;
 
-export interface PreviewsEnv {
+interface ScreenshotsInput {
+  changeId: string;
+  headSha: string;
+  url: string;
+  routes: string[];
+  template: string | null;
+}
+
+export interface PreviewsEnv extends SpendEnv, PlanEnv {
   BLOBS: R2Bucket;
   PREVIEW_ZONE?: string;
   PREVIEW_HOST_SUFFIX?: string;
@@ -115,8 +126,12 @@ export class PlatformPreviews implements Previews {
         target: previews.id,
         set: { snapshotId, snapshotStep: step, status: "starting", detail: null, updatedAt: at },
       });
-    // O3: an unclaimed project keeps only its newest previews live (bounds container time).
-    if (!req.claimed) await this.retireOldPreviews(req.repoId, UNCLAIMED_LIVE_PREVIEWS);
+    // Every project keeps only its newest previews live (bounds container time): unclaimed (O3)
+    // and the plan's count (src/limits/plans.ts).
+    await this.retireOldPreviews(
+      req.repoId,
+      req.claimed ? planLimits(this.env).previews.live : UNCLAIMED_LIVE_PREVIEWS,
+    );
     let state: PreviewState;
     try {
       state = await this.env.PREVIEW_HOST.getByName(id).ensure(config, { waitMs: START_WAIT_MS });
@@ -167,13 +182,24 @@ export class PlatformPreviews implements Previews {
     }
   }
 
-  async screenshots(input: {
-    changeId: string;
-    headSha: string;
-    url: string;
-    routes: string[];
-    template: string | null;
-  }): Promise<Screenshots> {
+  /** Before/after screenshots through Browser Run; the browser time is recorded as spend. */
+  async screenshots(input: ScreenshotsInput): Promise<Screenshots> {
+    const timer = { ms: 0 };
+    try {
+      return await this.takeScreenshots(input, timer);
+    } finally {
+      await recordSpend(this.env, {
+        source: "browser",
+        usd: browserUsd(timer.ms),
+        ref: `screenshots ${input.changeId}@${input.headSha.slice(0, 8)}`,
+      });
+    }
+  }
+
+  private async takeScreenshots(
+    input: ScreenshotsInput,
+    timer: { ms: number },
+  ): Promise<Screenshots> {
     const browser = this.env.BROWSER;
     if (browser === undefined || typeof browser.quickAction !== "function") {
       return {
@@ -199,6 +225,7 @@ export class PlatformPreviews implements Previews {
         [keyof typeof VIEWPORTS, (typeof VIEWPORTS)[keyof typeof VIEWPORTS]]
       >) {
         let res: Response;
+        const t0 = Date.now();
         try {
           res = await browser.quickAction("screenshot", {
             url: `${base}${route.startsWith("/") ? route : `/${route}`}`,
@@ -209,6 +236,8 @@ export class PlatformPreviews implements Previews {
         } catch (e) {
           failures.push(`${route} (${viewport}): ${e instanceof Error ? e.message : String(e)}`);
           continue;
+        } finally {
+          timer.ms += Date.now() - t0;
         }
         if (res.status === 429) {
           limited = true;

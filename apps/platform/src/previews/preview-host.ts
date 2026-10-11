@@ -30,11 +30,19 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { previews } from "../db/schema.js";
+import { addPlanUsage, type PlanGateEnv, PREVIEW_MS, previewRefusal } from "../limits/plan-gate.js";
+import { planLimits } from "../limits/plans.js";
+import { recordSpend } from "../spend/meter.js";
+import { containerUsd } from "../spend/prices.js";
 import { busyPage, errorPage } from "./pages.js";
 
 export const PREVIEW_PORT = 8787;
+/** Previews run on this instance type (metered at its price). */
+export const PREVIEW_INSTANCE = "standard-1";
 /** A preview sleeps after this long without requests. */
 export const IDLE_MS = 10 * 60_000;
+/** While a preview container runs, an alarm meters it this often (and stops it past its boot limit). */
+export const METER_INTERVAL_MS = 5 * 60_000;
 /** How long a boot may take before the preview is reported failed. */
 export const BOOT_TIMEOUT_MS = 150_000;
 const PROBE_INTERVAL_MS = 250;
@@ -81,12 +89,21 @@ export interface PreviewContainer {
   destroy?(error?: unknown): Promise<void>;
 }
 
-export interface PreviewHostEnv {
+export interface PreviewHostEnv extends PlanGateEnv {
   DB: D1Database;
   ARTIFACTS: Artifacts;
   CF_ACCOUNT_ID: string;
   ARTIFACTS_NAMESPACE: string;
 }
+
+/** The running container's metering: when it booted and up to when it is recorded. */
+const Meter = z.object({
+  bootedAt: z.number(),
+  since: z.number(),
+  repoId: z.string(),
+  previewId: z.string(),
+});
+type Meter = z.infer<typeof Meter>;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -97,6 +114,8 @@ function message(e: unknown): string {
 export class PreviewHost extends DurableObject<PreviewHostEnv> {
   private state: PreviewState = IDLE;
   private booting: Promise<PreviewState> | null = null;
+  /** Why the last boot was refused (spend breaker, plan quota); re-checked on the next visit. */
+  private paused: string | null = null;
 
   /** The container seam (`ctx.container`); null where containers are unavailable. */
   protected container(): PreviewContainer | null {
@@ -147,6 +166,7 @@ export class PreviewHost extends DurableObject<PreviewHostEnv> {
    * `previews` rows are gone; this stops what was already running.
    */
   async destroy(): Promise<void> {
+    await this.settleMeter(Date.now()).catch((e: unknown) => console.warn("preview meter", e));
     const c = this.container();
     if (c?.running && c.destroy) await c.destroy().catch(() => undefined);
     this.state = IDLE;
@@ -175,6 +195,12 @@ export class PreviewHost extends DurableObject<PreviewHostEnv> {
         // The server went away (container slept or the process exited): boot again below.
         this.state = IDLE;
       }
+    }
+    if (this.paused !== null) {
+      const refused = await previewRefusal(this.env, config.repoId);
+      if (refused !== null) return errorPage(request, 429, "Preview paused", refused);
+      this.paused = null;
+      this.state = IDLE;
     }
     if (this.state.status === "failed") {
       return errorPage(
@@ -249,6 +275,14 @@ export class PreviewHost extends DurableObject<PreviewHostEnv> {
     }
     const started = Date.now();
     this.state = { ...IDLE, status: "booting" };
+    if (!c.running) {
+      const refused = await previewRefusal(this.env, config.repoId);
+      if (refused !== null) {
+        this.paused = refused;
+        this.state = { ...IDLE, status: "failed", detail: refused };
+        return this.state;
+      }
+    }
     try {
       if (!c.running || !(await this.serving(c))) {
         if (!c.running) await this.startContainer(c, config);
@@ -272,7 +306,7 @@ export class PreviewHost extends DurableObject<PreviewHostEnv> {
         containerSnapshot: { id: config.snapshotId },
         // Previews have no internet (unclaimed or not, for now): only the gateway reaches in.
         enableInternet: false,
-        instance: "standard-1",
+        instance: PREVIEW_INSTANCE,
         // Container label keys are limited to 16 bytes.
         labels: { "gf-preview": config.previewId.slice(0, 63) },
       });
@@ -288,7 +322,70 @@ export class PreviewHost extends DurableObject<PreviewHostEnv> {
       },
     );
     await c.setInactivityTimeout(IDLE_MS);
+    await this.startMeter(config);
     if (config.snapshotStep === "install") await this.checkout(c, config);
+  }
+
+  // ------------------------------------------------------------------ metering
+
+  private bootLimitMs(): number {
+    return planLimits(this.env).previews.minutesPerBoot * 60_000;
+  }
+
+  private async startMeter(config: PreviewConfig): Promise<void> {
+    const now = Date.now();
+    await this.settleMeter(now);
+    const meter: Meter = {
+      bootedAt: now,
+      since: now,
+      repoId: config.repoId,
+      previewId: config.previewId,
+    };
+    await this.ctx.storage.put("meter", meter);
+    await this.ctx.storage.setAlarm(now + Math.min(METER_INTERVAL_MS, this.bootLimitMs()));
+  }
+
+  /** Records container time since the last record as spend and plan usage. */
+  private async settleMeter(now: number): Promise<Meter | null> {
+    const parsed = Meter.safeParse(await this.ctx.storage.get("meter"));
+    if (!parsed.success) return null;
+    const m = parsed.data;
+    const ms = Math.max(0, now - m.since);
+    await this.ctx.storage.put("meter", { ...m, since: now });
+    if (ms > 0) {
+      await recordSpend(this.env, {
+        source: "preview",
+        usd: containerUsd(PREVIEW_INSTANCE, ms),
+        repoId: m.repoId,
+        ref: m.previewId,
+        atMs: now,
+      });
+      await addPlanUsage(this.env, m.repoId, PREVIEW_MS, ms, now).catch((e: unknown) =>
+        console.warn("preview usage", e),
+      );
+    }
+    return m;
+  }
+
+  /**
+   * The meter's heartbeat: records the time since the last one (a container that slept in between
+   * is charged up to now: an upper bound), then stops the container once it has run its boot
+   * limit, or forgets the meter when the container is gone.
+   */
+  override async alarm(): Promise<void> {
+    const now = Date.now();
+    const m = await this.settleMeter(now);
+    if (m === null) return;
+    const c = this.container();
+    const over = now - m.bootedAt >= this.bootLimitMs();
+    if (c === null || !c.running || over) {
+      if (c?.running && c.destroy) await c.destroy().catch(() => undefined);
+      this.state = IDLE;
+      await this.ctx.storage.delete("meter");
+      return;
+    }
+    const left = m.bootedAt + this.bootLimitMs() - now;
+    await this.ctx.storage.setAlarm(now + Math.max(1000, Math.min(METER_INTERVAL_MS, left)));
   }
 
   /** From an install snapshot: fetch the head through the egress gateway (git host only). */

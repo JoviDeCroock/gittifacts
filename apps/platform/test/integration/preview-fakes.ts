@@ -81,6 +81,12 @@ export class FakePreviewContainer implements PreviewContainer {
   }
 
   async setInactivityTimeout(): Promise<void> {}
+
+  async destroy(): Promise<void> {
+    this.running = false;
+    this.serving = false;
+  }
+
   async interceptAllOutboundHttp(): Promise<void> {}
   async interceptOutboundHttps(): Promise<void> {}
 }

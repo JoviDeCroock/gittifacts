@@ -135,7 +135,7 @@ export function busyPage(
 
 export function errorPage(
   request: Request,
-  status: 404 | 410 | 502 | 503,
+  status: 404 | 410 | 429 | 502 | 503,
   title: string,
   body: string,
   opts: { projectName?: string; changeId?: string; claimed?: boolean } = {},

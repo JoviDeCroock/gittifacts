@@ -154,12 +154,13 @@ describe("auth: agents", () => {
       principal: { id: string };
       scopes: string[];
       canApprove: boolean;
-      quotas: { enforced: boolean };
+      quotas: { enforced: boolean; ciMinutesPerDay: number | null };
     }>(await call(app, "GET", "/api/v1/capabilities", { token: agent.token }));
     expect(caps).toMatchObject({
       principal: { id: agent.principal.id },
       canApprove: false,
-      quotas: { enforced: false },
+      // The free plan's CI quota of the agent's owner (2 × 120 container-minutes a day).
+      quotas: { enforced: true, ciMinutesPerDay: 240, ciMinutesUsedToday: 0 },
     });
     expect(caps.scopes).toEqual(["repo:read", "plan:create", "change:create"]);
     const humanCaps = await json<{ canApprove: boolean }>(
