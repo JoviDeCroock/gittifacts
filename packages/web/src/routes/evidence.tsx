@@ -1,7 +1,7 @@
 import type { LaneReason, RepoPolicy } from "@app/domain";
 import type { EvidenceItem } from "@app/evidence";
 import { useSignal } from "@preact/signals";
-import { useEffect } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import { api } from "../api/client.js";
 import type { Change, EvidenceResponse, RepoDetail } from "../api/types.js";
 import { RedGreenList, ShotPair, kindIcon } from "../components/EvidenceBits.js";
@@ -547,6 +547,99 @@ function ItemSection({ item, policy, reasons }: { item: EvidenceItem; policy: Re
   );
 }
 
+/**
+ * The item in view: the last one whose top has passed a reading line near the top of the view
+ * (30% of the height, at most 280px), as on the walkthrough's station strip. A jump from the index
+ * keeps its item current until you scroll again, so a short item at the end can still be current.
+ */
+function useItemInView(ids: readonly string[]): { current: string | null; pin: (id: string) => void } {
+  const current = useSignal<string | null>(null);
+  const pinned = useRef<string | null>(null);
+  const key = ids.join(" ");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the ids' joined key is the cache key
+  useEffect(() => {
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      if (pinned.current) return;
+      const line = Math.min(window.innerHeight * 0.3, 280);
+      let found: string | null = null;
+      for (const id of ids) {
+        const el = document.getElementById(itemAnchor(id));
+        if (el && el.getBoundingClientRect().top <= line) found = id;
+      }
+      current.value = found;
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    const unpin = () => {
+      pinned.current = null;
+    };
+    measure();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    for (const ev of ["wheel", "touchmove", "keydown"] as const) window.addEventListener(ev, unpin, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      for (const ev of ["wheel", "touchmove", "keydown"] as const) window.removeEventListener(ev, unpin);
+    };
+  }, [key, current]);
+  return {
+    current: current.value,
+    pin: (id) => {
+      pinned.current = id;
+      current.value = id;
+    },
+  };
+}
+
+/** The index: what needs a person's judgment first (in one line), then every item in its fixed order. */
+function EvidenceIndex({ items }: { items: readonly EvidenceItem[] }) {
+  const { current, pin } = useItemInView(items.map((i) => i.id));
+  const flagged = items.filter((i) => {
+    const tone = summarize(i).tone;
+    return tone === "warn" || tone === "danger";
+  });
+  return (
+    <nav class="ev-index" aria-label="Evidence items" data-testid="evidence-index">
+      <p class="ev-index__summary" data-testid="evidence-flagged">
+        {flagged.length === 0 ? (
+          "Nothing here needs your judgment."
+        ) : (
+          <>
+            <b class="tnum">{flagged.length}</b> {flagged.length === 1 ? "needs" : "need"} your judgment:{" "}
+            {flagged.map((i, n) => (
+              <span key={i.id}>
+                {n > 0 ? ", " : null}
+                <a href={`#${itemAnchor(i.id)}`} onClick={() => pin(i.id)}>
+                  {summarize(i).label}
+                </a>
+              </span>
+            ))}
+          </>
+        )}
+      </p>
+      <ul>
+        {items.map((i) => {
+          const s = summarize(i);
+          return (
+            <li key={i.id}>
+              <a href={`#${itemAnchor(i.id)}`} aria-current={current === i.id ? "location" : undefined} onClick={() => pin(i.id)}>
+                <Icon name={kindIcon(i.kind)} size={15} />
+                <span class="ev-index__label">{s.label}</span>
+                <span class={`ev-index__value tone--${s.tone}`}>{s.value}</span>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
 export function EvidenceView({ changeId }: { changeId: string }) {
   const res = useResource(async () => {
     const detail = await api.change(changeId);
@@ -583,29 +676,13 @@ export function EvidenceView({ changeId }: { changeId: string }) {
   const items = ev.evidence.items;
   return (
     <Page
-      title="Evidence"
+      title={`Evidence for ${change.title}`}
       wide
       class="evidence-page"
-      crumbs={[...crumbs, { href: `/repos/${repo.repo.id}`, label: repo.repo.name }, { href: `/changes/${change.id}`, label: change.title }]}
-      meta={<span>{change.title}</span>}
+      crumbs={[...crumbs, { href: `/repos/${repo.repo.id}`, label: repo.repo.name }, { href: `/changes/${change.id}`, label: "Walkthrough" }]}
     >
       <div class="ev-layout">
-        <nav class="ev-index" aria-label="Evidence items">
-          <ul>
-            {items.map((i) => {
-              const s = summarize(i);
-              return (
-                <li key={i.id}>
-                  <a href={`#${itemAnchor(i.id)}`}>
-                    <Icon name={kindIcon(i.kind)} size={15} />
-                    <span class="ev-index__label">{s.label}</span>
-                    <span class={`ev-index__value tone--${s.tone}`}>{s.value}</span>
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+        <EvidenceIndex items={items} />
         <div class="ev-main">
           <Attestation ev={ev} change={change} />
           {items.map((i) => (

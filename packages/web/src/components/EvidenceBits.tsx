@@ -151,7 +151,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
  * Registered difference: both captures drawn at the same scale, changed pixels marked in carmine
  * over a faded copy of the "after" frame. Computed in the browser from the two images.
  */
-function DiffFrame({ beforeRef, afterRef, label }: { beforeRef: string | undefined; afterRef: string | undefined; label: string }) {
+function DiffFrame({ beforeRef, afterRef, label, signed }: { beforeRef: string | undefined; afterRef: string | undefined; label: string; signed: boolean }) {
   const before = useArtifact(beforeRef);
   const after = useArtifact(afterRef);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -217,7 +217,8 @@ function DiffFrame({ beforeRef, afterRef, label }: { beforeRef: string | undefin
     <>
       <canvas ref={canvas} class="shot__canvas" role="img" aria-label={`${label}: changed pixels marked in red`} />
       {failed.value ? <p class="shot__none">Could not compare the captures.</p> : null}
-      {ratio.value !== null ? <span class="sr-only">{pct(ratio.value, 1)} of pixels changed</span> : null}
+      {/* The signed figure in the caption is the evidence; the browser's own count is only spoken when there is none. */}
+      {ratio.value !== null && !signed ? <span class="sr-only">About {pct(ratio.value, 1)} of pixels differ, as computed in your browser</span> : null}
     </>
   );
 }
@@ -262,7 +263,7 @@ export function ShotPair({ shot }: { shot: Shot }) {
         <div class="shot__frame shot__frame--diff">
           <span class="shot__tag">Difference</span>
           <div class="shot__img">
-            <DiffFrame beforeRef={shot.beforeRef} afterRef={shot.afterRef} label={label} />
+            <DiffFrame beforeRef={shot.beforeRef} afterRef={shot.afterRef} label={label} signed={shot.diffRatio !== undefined} />
           </div>
         </div>
       </div>
