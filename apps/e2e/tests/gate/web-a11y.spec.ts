@@ -179,8 +179,12 @@ test.describe("touch targets at 390 px", () => {
     await expectCoarse(page);
     await expect(page.locator(".q-entry__title").first()).toBeVisible();
     await expectTargets(page.locator(".q-entry__title"), "a queue entry's title");
+    // Phones fold the tracks under the per-change list; the summary is itself a target.
+    const tracks = page.locator(".q-fold > summary");
+    await expectTargets(tracks, "the tracks disclosure");
+    await tracks.click();
     await expectTargets(page.locator(".q-batch__members a"), "a batch member");
-    await expectTargets(page.locator("a.q-stat__sub"), "the flake-rate link");
+    await expectTargets(page.locator(".q-fig dt a"), "the flake-rate link");
 
     // GitHub surfaces are switched off for now (@app/domain/surfaces): no page to check.
     if (!GITHUB_SURFACES) return;
