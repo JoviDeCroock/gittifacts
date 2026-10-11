@@ -42,7 +42,7 @@ On its first run, the new E2E found two production bugs. Both are fixed in `bb4d
 |---|---|---|---|---|
 | **1. Pre-deploy gate** | GitHub Actions, `deploy-gate.yml` | Every deploy (`deploy-clean.sh --gate=ci`), on the exact commit | Job `gate`: generated artifacts fresh, `pnpm -r typecheck`, the web design rules and unit tests (`pnpm --filter @app/web test`: DESIGN.md's named rules and the palette's agent twins against the MCP contract), the platform workerd suite (58 files, 315 tests). Job `e2e`: the browser and HTTP journeys at 1280 and 390 px against the real Worker served locally | `gate` ≈ 8–10 min; `e2e` ≈ 2 min (42 tests in 39 s on a runner, server start included; run 37183803438). The two jobs run in parallel |
 | **2. Post-deploy smoke** | GitHub Actions, `post-deploy-smoke.yml` | Right after every `wrangler deploy` (`deploy-clean.sh`), or on demand | Against the live URL: health and the deployed commit, the front door and docs, the E2E account signing in, anonymous `create_project` to first green and a preview within 120 s, the webhook's 401 | ≈ 2–3 min (the agent path takes ≈ 45–80 s) |
-| **3. Nightly / weekly** | GitHub Actions, `e2e-nightly.yml` (and `github-live.yml`) | Nightly at 03:47 UTC; weekly on Sunday; on demand | Full live journeys as the E2E account: m1, remote workspace, merge queue with the resolver, the CLI and MCP agent journeys; weekly m4 (rollout regression → auto-revert) and the GitHub import. The GitHub live contract on ReSynapse/fixture-lib (`github-live.yml`, 03:17) | 5–40 min per suite, three in parallel |
+| **3. Live journeys** | By hand, `scripts/e2e/nightly.sh` (and `github-live.yml` on Actions) | On demand; the scheduled `e2e-nightly.yml` is off for now (DECISIONS 2026-10-11) | Full live journeys as the E2E account: m1, remote workspace, merge queue with the resolver, the CLI and MCP agent journeys, m4 (rollout regression → auto-revert) and the GitHub import. The GitHub live contract on ReSynapse/fixture-lib (`github-live.yml`, nightly at 03:17) | 5–40 min per suite |
 | Contract | GitHub Actions, `host-contract.yml` | Every push that can change a lane | Native and GitHub hosts give the same lane, evidence and walkthrough | ≈ 2 min |
 
 ### Tier 1: the hermetic E2E server
@@ -154,7 +154,6 @@ scripts/rollback.sh --url https://… --deployed <id> --to <id> --dry-run     # 
 
 # Tier 3: one suite at a time, as the E2E account (credentials from the environment only)
 scripts/e2e/nightly.sh cli-journey
-gh workflow run e2e-nightly.yml -f suites=m1,merge-queue
 ```
 
 ## Adding a test
@@ -167,7 +166,7 @@ gh workflow run e2e-nightly.yml -f suites=m1,merge-queue
      with real bindings. Fakes are only for what has no local equivalent (Artifacts, containers, the
      model).
    - Something only production has (real containers, Artifacts, previews, GitHub): a smoke test if
-     it's cheap and read-mostly (≤ 5 min in total), otherwise a nightly suite.
+     it's cheap and read-mostly (≤ 5 min in total), otherwise a tier-3 suite in `scripts/e2e/nightly.sh`.
    - Pure logic only: a unit test.
 3. **Import `test`/`expect` from `apps/e2e/lib/fixtures.ts`.** That gives you a fresh account, the
    page guard (uncaught errors and 5xx fail the test), quarantine handling, and
@@ -209,7 +208,7 @@ the aria snapshot of a sign-in form the test had filled in. Since then:
 - **The smoke records no traces and no page snapshots.** It sets `trace: "off"` and
   `PLAYWRIGHT_NO_COPY_PROMPT=1`. Failure screenshots stay: after an API sign-in, no page renders a
   secret.
-- **Workflows mask every credential** with `::add-mask::` (smoke, nightly, the gate's canary).
+- **Workflows mask every credential** with `::add-mask::` (smoke, the gate's canary).
 - **Every report is scanned before upload.** `scripts/check-report-secrets.mjs` searches every file
   for each secret's value: raw, URL-encoded, JSON-escaped and base64. It also refuses trace archives
   wherever real credentials ran. On a hit it names the file, deletes the report and fails the job, and

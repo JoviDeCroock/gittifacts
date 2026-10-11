@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One tier-3 suite (docs/testing.md) against a deployed platform, reusing the existing live
-# scripts (scripts/e2e/*, scripts/journeys/terminal/*). .github/workflows/e2e-nightly.yml runs one
-# suite per job; locally:
+# scripts (scripts/e2e/*, scripts/journeys/terminal/*). Run by hand; the scheduled e2e-nightly
+# workflow is off for now (DECISIONS 2026-10-11):
 #
 #   GF_HOST=https://gittifacts.decroockjovi.workers.dev E2E_AGENT_TOKEN=… E2E_EMAIL=… E2E_PASSWORD=… \
 #     scripts/e2e/nightly.sh m1

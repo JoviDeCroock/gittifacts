@@ -3074,3 +3074,19 @@ findings), the shell and operations screens (38), entry, consent and settings (4
   recipient); **password reset** (there is no email transport); whether **agents may dequeue others'
   changes**; whether a repo may **forbid owners approving their own agent's work**; MCP tools for
   integrations.
+
+
+## 2026-10-11 — The scheduled E2E nightly is off for now
+
+**Context.** `e2e-nightly.yml` ran the tier-3 live journeys every night (and m4 and the GitHub import weekly), and
+commented on issue #4 whenever a suite failed. For a week, merge-queue failed on every run at its 40-minute
+timeout (and m4 once), so the issue turned into a daily notification that nobody acted on. It also cost Actions
+minutes and created live projects on production each night.
+
+**Decision.** Delete the workflow. `scripts/e2e/nightly.sh` stays as the way to run one suite by hand against
+production or staging. Tiers 1 (the pre-deploy gate) and 2 (the post-deploy smoke), plus `github-live.yml` and
+`host-contract.yml`, are unchanged.
+
+**Consequences.** Regressions that only the live journeys catch (merge queue with the resolver, rollout
+auto-revert, the GitHub import) are found when someone runs a suite, not overnight. To bring the schedule back,
+restore the workflow from git history after merge-queue is green against production again.
