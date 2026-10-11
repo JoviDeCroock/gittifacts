@@ -10,7 +10,9 @@
  * both say README.md and rewrite the same README line, so agent 2's start_change is told that
  * agent 1 is on it (overlaps), and whichever lands second needs the resolver (`system:resolver`,
  * never the author). Every overlap an agent is told about is logged. The human approves each Change
- * as it reaches review (agents never can); the queue lands them all. Prints a timeline and a
+ * as it reaches review (agents never can), and approves the resolution again when the resolver
+ * wrote lines of its own (the Change goes back to awaiting-review); the queue lands them all. A
+ * poll the MCP client times out on is asked again. Prints a timeline and a
  * summary, then revokes the agents' tokens.
  *
  *   GITTIFACTS_EMAIL=… GITTIFACTS_PASSWORD=… pnpm tsx scripts/e2e/many-agents.ts \
@@ -227,7 +229,10 @@ function tell(a: Agent, when: Told["when"], report: OverlapReport): void {
       )
       .join("; ");
     told.push({ agent: a.label, when, changeId: o.changeId, other, why });
-    log(a.label, `${when === "start" ? "told" : "status"}: overlaps ${other}'s ${o.changeId} (${why})`);
+    log(
+      a.label,
+      `${when === "start" ? "told" : "status"}: overlaps ${other}'s ${o.changeId} (${why})`,
+    );
   }
 }
 
@@ -311,38 +316,114 @@ async function agentWork(s: Started, workdir: string, stamp: string): Promise<Wo
   return { agent: a, changeId: change.id, queuedAt: Date.now() };
 }
 
-/** The human approves each Change once it reaches review; every agent waits for its own merge. */
+/** What GET /changes/:id/resolution says (the parts the human's log line uses). */
+interface Resolution {
+  headSha: string;
+  kind: "textual" | "semantic";
+  lane: number | null;
+  approvalRequested: boolean;
+  upstream: { changeId: string }[];
+  item: { novelLines: number; touchesOutsideConflictHunks: boolean } | null;
+}
+
+/**
+ * A poll the MCP SDK gave up on (it times a request out after 60 s, e.g. while the queue's Durable
+ * Object is busy) is asked again on the next round instead of ending the run; anything else, or
+ * five timeouts in a row for one agent, still fails it.
+ */
+const timeouts = new Map<string, number>();
+async function poll<T>(who: string, what: string, call: () => Promise<T>): Promise<T | null> {
+  try {
+    const out = await call();
+    timeouts.delete(who);
+    return out;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    const n = (timeouts.get(who) ?? 0) + 1;
+    if (!/timed out|timeout|fetch failed|ECONNRESET|socket hang up/i.test(message) || n >= 5)
+      throw e;
+    timeouts.set(who, n);
+    log(who, `${what} did not answer (${message}); asking again`);
+    return null;
+  }
+}
+
+/** Waits are bounded server-side (timeoutSec); the request may take that plus slack. */
+const WAIT_SEC = 20;
+const WAIT_REQUEST = { timeout: (WAIT_SEC + 70) * 1000 };
+
+/**
+ * The human approves each Change once it reaches review, and approves again when the queue's
+ * resolver rewrote one and the resolution asks for it (the Change is back in awaiting-review and
+ * GET /changes/:id/resolution says approvalRequested). Every agent waits for its own merge.
+ */
 async function untilLanded(cookie: string, work: Work[]): Promise<void> {
   const approved = new Set<string>();
+  const resolutions = new Set<string>(); // `${changeId}@${resolved head}` the human approved
   const waiting = new Set<string>();
+  const agentOf = (id: string) => work.find((w) => w.changeId === id)?.agent.label ?? id;
+  const approve = async (w: Work, what: string): Promise<boolean> => {
+    const r = await asHuman(cookie, "POST", `/api/v1/changes/${w.changeId}/review`, {
+      decision: "approve",
+    });
+    if (r.ok) return true;
+    const key = `${what} ${w.changeId}`;
+    if (!waiting.has(key)) {
+      waiting.add(key);
+      log("human", `can't approve ${w.agent.label}'s ${what} yet: HTTP ${r.status}`);
+    }
+    return false;
+  };
   while (work.some((w) => w.outcome === undefined) && Date.now() < DEADLINE) {
     await Promise.all(
       work
         .filter((w) => w.outcome === undefined)
         .map(async (w) => {
           const a = w.agent;
-          const st = ok(
-            "get_change_status",
-            await a.mcp.tools.get_change_status({ changeId: w.changeId }),
+          const res = await poll(a.label, "get_change_status", () =>
+            a.mcp.tools.get_change_status({ changeId: w.changeId }),
           );
+          if (res === null) return;
+          const st = ok("get_change_status", res);
           if (st.change.status === "awaiting-review" && !approved.has(w.changeId)) {
-            const r = await asHuman(cookie, "POST", `/api/v1/changes/${w.changeId}/review`, {
-              decision: "approve",
-            });
-            if (r.ok) {
+            if (await approve(w, "Change")) {
               approved.add(w.changeId);
               log("human", `approved ${a.label}'s Change (Lane ${st.change.lane})`);
-            } else if (!waiting.has(w.changeId)) {
-              waiting.add(w.changeId);
-              log("human", `can't approve ${a.label} yet: HTTP ${r.status}`);
+            }
+          } else if (st.change.status === "awaiting-review") {
+            // Back in review after the first approval: the queue's resolver rewrote it.
+            const r = await asHuman<{ resolution: Resolution | null }>(
+              cookie,
+              "GET",
+              `/api/v1/changes/${w.changeId}/resolution`,
+            );
+            const res = r.ok ? r.body.resolution : null;
+            const key = `${w.changeId}@${res?.headSha}`;
+            if (
+              res?.approvalRequested === true &&
+              !resolutions.has(key) &&
+              (await approve(w, "resolution"))
+            ) {
+              resolutions.add(key);
+              const upstream =
+                res.upstream.map((u) => agentOf(u.changeId)).join(", ") || "upstream";
+              const novel = res.item?.novelLines ?? 0;
+              log(
+                "human",
+                `approved ${a.label}'s resolution (Lane ${res.lane ?? st.change.lane}, ${res.kind} conflict with ${upstream}, ${novel} new line${novel === 1 ? "" : "s"}${res.item?.touchesOutsideConflictHunks ? ", outside the hunks" : ""}, resolved head ${res.headSha.slice(0, 12)})`,
+              );
             }
           }
           if (st.change.status === "failing" || st.change.status === "rejected")
             throw new Error(`${a.label}'s Change is ${st.change.status}`);
-          const m = ok(
-            "wait_for_merge",
-            await a.mcp.tools.wait_for_merge({ changeId: w.changeId, timeoutSec: 20 }),
+          const waited = await poll(a.label, "wait_for_merge", () =>
+            a.mcp.tools.wait_for_merge(
+              { changeId: w.changeId, timeoutSec: WAIT_SEC },
+              WAIT_REQUEST,
+            ),
           );
+          if (waited === null) return;
+          const m = ok("wait_for_merge", waited);
           if (m.reason === "merged" || m.reason === "ejected" || m.reason === "dequeued") {
             w.outcome = m.reason;
             w.mergedAt = Date.now();
