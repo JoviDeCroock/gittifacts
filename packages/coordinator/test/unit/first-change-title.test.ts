@@ -18,7 +18,12 @@ async function firstChange(s: Awaited<ReturnType<typeof scenario>>, planId?: str
 
 async function pushWith(s: Awaited<ReturnType<typeof scenario>>, id: string, message: string) {
   const change = await reload(s, id);
-  const head = s.ports.git.commit(change.forkName, "main", { "src/t.ts": `// ${message}\n` }, message);
+  const head = s.ports.git.commit(
+    change.forkName,
+    "main",
+    { "src/t.ts": `// ${message}\n` },
+    message,
+  );
   await s.coordinator.onPush({
     repoName: change.forkName,
     ref: "refs/heads/main",
@@ -33,9 +38,15 @@ describe("the first Change's placeholder title", () => {
   it("becomes the pushed commit's subject, once", async () => {
     const s = await scenario();
     const change = await firstChange(s);
-    const pushed = await pushWith(s, change.id, "Add a /time endpoint\n\nReturns the current time.");
+    const pushed = await pushWith(
+      s,
+      change.id,
+      "Add a /time endpoint\n\nReturns the current time.",
+    );
     expect(pushed.title).toBe("Add a /time endpoint");
-    expect(s.ports.audit.payloadOf("change.pushed")).toMatchObject({ title: "Add a /time endpoint" });
+    expect(s.ports.audit.payloadOf("change.pushed")).toMatchObject({
+      title: "Add a /time endpoint",
+    });
     // A later push keeps it: only the placeholder is ever replaced.
     expect((await pushWith(s, change.id, "fix typo")).title).toBe("Add a /time endpoint");
   });
@@ -62,5 +73,9 @@ describe("the first Change's placeholder title", () => {
     expect(titleFromCommitMessage("   \n")).toBeNull();
     expect(titleFromCommitMessage(null)).toBeNull();
     expect(titleFromCommitMessage("x".repeat(300))?.length).toBe(200);
+    // An emoji straddling the cut is dropped whole, never halved into a lone surrogate (audit M10).
+    const cut = titleFromCommitMessage(`${"x".repeat(198)}🚀${"y".repeat(10)}`) ?? "";
+    expect(cut).toBe(`${"x".repeat(198)}…`);
+    expect(/[\uD800-\uDFFF]/.test(cut)).toBe(false);
   });
 });

@@ -1,8 +1,10 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { z } from "zod";
 import { ErrorSchema } from "../api/schemas.js";
+import { wellFormedJsonBody } from "../api/well-formed.js";
 import type { AppEnv } from "../app-env.js";
 import { fixFor, zodIssues } from "../errors.js";
+import { MCP_PATH } from "../mcp/route.js";
 
 export type ApiApp = OpenAPIHono<AppEnv>;
 
@@ -49,7 +51,7 @@ export function body<S extends z.ZodType>(schema: S) {
 export const SECURITY: { [scheme: string]: string[] }[] = [{ Session: [] }, { Bearer: [] }];
 
 export function newApiApp(): ApiApp {
-  return new OpenAPIHono<AppEnv>({
+  const app = new OpenAPIHono<AppEnv>({
     defaultHook: (result, c) => {
       if (!result.success) {
         return c.json(
@@ -66,4 +68,7 @@ export function newApiApp(): ApiApp {
       }
     },
   });
+  // Before auth and validation: no handler (HTTP or MCP) sees a lone UTF-16 surrogate (M10).
+  app.use("*", wellFormedJsonBody({ mcpPath: MCP_PATH }));
+  return app;
 }

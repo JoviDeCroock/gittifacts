@@ -27,11 +27,18 @@ export function titleFromCommitMessage(message: string | null | undefined): stri
     .map((l) => l.trim())
     .find((l) => l !== "");
   if (subject === undefined) return null;
-  return subject.length <= 200 ? subject : `${subject.slice(0, 199)}…`;
+  if (subject.length <= 200) return subject;
+  // Never cut a surrogate pair in half: a lone surrogate is not canonical JSON (audit M10).
+  const cut = subject.slice(0, 199);
+  return `${/[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut}…`;
 }
 
 /** Statuses in which CI may be re-run on the same head (`rerun_ci`). */
-export const RERUNNABLE_STATUSES: readonly ChangeStatus[] = ["running", "failing", "awaiting-review"];
+export const RERUNNABLE_STATUSES: readonly ChangeStatus[] = [
+  "running",
+  "failing",
+  "awaiting-review",
+];
 
 /** Merged changes a human may kill (flag off, roll back, revert). */
 export const KILLABLE_STATUSES: readonly ChangeStatus[] = ["merged", "rolling-out", "released"];

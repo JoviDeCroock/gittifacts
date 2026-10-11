@@ -7,13 +7,13 @@
  * key set can re-derive both and verify.
  */
 import { pageUrl } from "@app/conventions";
+import { cloudflareBindings, PUSHABLE_STATUSES } from "@app/coordinator";
 import { type Change, type Plan, PlanDraftInput, type Principal } from "@app/domain";
 import { canonicalBytes, sha256Base64url } from "@app/evidence";
 import { assertPlanAccess, assertRepoAccess } from "../access/access.js";
 import type { Caller, Services } from "../app-env.js";
 import { ApiError, conflict, forbidden, notFound } from "../errors.js";
 import { type PlatformSigner, Purpose, type VerifyOutcome } from "../signing.js";
-import { cloudflareBindings, PUSHABLE_STATUSES } from "@app/coordinator";
 import type { PrincipalRef } from "../store/d1-store.js";
 import type { PlanView } from "../store/rows.js";
 
@@ -166,17 +166,20 @@ export async function createPlan(svc: Services, caller: Caller, input: unknown):
     supersedes: draft.supersedes ?? null,
     createdAt: now,
   };
+  // Everything the audit entry needs is computed before the state commits, so only a failed
+  // append itself (which surfaces as an error) can follow a committed write.
+  const payload = {
+    repoId: plan.repoId,
+    title: plan.title,
+    contentHash: await planContentHash(plan),
+    supersedes: plan.supersedes,
+  };
   await svc.store.insertPlan(plan);
   await svc.audit.append({
     principalId: caller.principal.id,
     action: "plan.created",
     subject: `plan:${plan.id}`,
-    payload: {
-      repoId: plan.repoId,
-      title: plan.title,
-      contentHash: await planContentHash(plan),
-      supersedes: plan.supersedes,
-    },
+    payload,
   });
   return view(plan);
 }
@@ -254,24 +257,25 @@ export async function approvePlan(
       );
     }
   }
+  const author = await authorOf(svc, plan);
+  const payload = {
+    ...doc,
+    keyId: sig.keyId,
+    signature: sig.signature,
+    comment: input.comment ?? null,
+    // Recorded, not blocked: owners may approve their agents' plans unless policy says otherwise.
+    approverOwnsAuthor: author?.ownerId === caller.principal.id,
+    supersedes: superseded?.id ?? null,
+  };
   const [first, ...rest] = statements;
   if (!first) throw new Error("unreachable");
   await svc.store.db.batch([first, ...rest]);
 
-  const author = await authorOf(svc, plan);
   await svc.audit.append({
     principalId: caller.principal.id,
     action: "plan.approved",
     subject: `plan:${plan.id}`,
-    payload: {
-      ...doc,
-      keyId: sig.keyId,
-      signature: sig.signature,
-      comment: input.comment ?? null,
-      // Recorded, not blocked: owners may approve their agents' plans unless policy says otherwise.
-      approverOwnsAuthor: author?.ownerId === caller.principal.id,
-      supersedes: superseded?.id ?? null,
-    },
+    payload,
   });
   if (superseded) {
     await svc.audit.append({
@@ -291,7 +295,9 @@ async function regradeGithubChanges(svc: Services, planId: string): Promise<void
   const bindings = cloudflareBindings(svc.env);
   for (const c of await svc.store.listChangesForPlan(planId)) {
     if (c.host == null || !PUSHABLE_STATUSES.includes(c.status)) continue;
-    await bindings.changeCoordinator(c.id).regrade({ changeId: c.id, reason: `plan ${planId} was approved` });
+    await bindings
+      .changeCoordinator(c.id)
+      .regrade({ changeId: c.id, reason: `plan ${planId} was approved` });
   }
 }
 

@@ -27,6 +27,53 @@ export class CanonicalizationError extends Error {
 }
 
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+const LONE_SURROGATES = new RegExp(LONE_SURROGATE.source, "g");
+
+/** True when `s` has no lone UTF-16 surrogate (`String#isWellFormed`, ES2024). */
+export function isWellFormedText(s: string): boolean {
+  return !LONE_SURROGATE.test(s);
+}
+
+/** `s` with every lone surrogate replaced by U+FFFD (`String#toWellFormed`, ES2024). */
+export function toWellFormedText(s: string): string {
+  return LONE_SURROGATE.test(s) ? s.replace(LONE_SURROGATES, "\uFFFD") : s;
+}
+
+/**
+ * A deep copy of a JSON value with every string and object key made well-formed
+ * ({@link toWellFormedText}), so {@link canonicalize} cannot reject it for a lone surrogate.
+ */
+export function toWellFormedJson(value: unknown): unknown {
+  if (typeof value === "string") return toWellFormedText(value);
+  if (Array.isArray(value)) return value.map(toWellFormedJson);
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) out[toWellFormedText(k)] = toWellFormedJson(v);
+    return out;
+  }
+  return value;
+}
+
+/** JSON pointer of the first string or key in `value` with a lone surrogate, else null. */
+export function findLoneSurrogate(value: unknown, path = ""): string | null {
+  if (typeof value === "string") return isWellFormedText(value) ? null : path || "/";
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      const hit = findLoneSurrogate(value[i], pointer(path, i));
+      if (hit !== null) return hit;
+    }
+    return null;
+  }
+  if (value !== null && typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) {
+      const p = pointer(path, isWellFormedText(k) ? k : toWellFormedText(k));
+      if (!isWellFormedText(k)) return p;
+      const hit = findLoneSurrogate(v, p);
+      if (hit !== null) return hit;
+    }
+  }
+  return null;
+}
 
 function compareUtf16(a: string, b: string): number {
   // String relational comparison in ECMAScript is by UTF-16 code units, which is
