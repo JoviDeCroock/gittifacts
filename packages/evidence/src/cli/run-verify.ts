@@ -92,6 +92,8 @@ interface Report {
   keyName?: string;
   signer?: string;
   signedAt?: string;
+  /** Attestation version: 2 signs signedAt and signer, 1 leaves them as unsigned claims. */
+  attestationVersion?: number;
   bindingChecked: boolean;
   items?: { id: string; kind: string; status: string; summary: string }[];
   why?: WhyReport;
@@ -112,6 +114,14 @@ function itemsOf(doc: unknown): Report["items"] {
 
 const short = (s: string) => s.slice(0, 12);
 
+/** v2 signs its time; a v1 time is only the signer's (editable) claim, so say so. */
+function signedAtLabel(r: Report): string {
+  if (!r.signedAt) return "";
+  return r.attestationVersion === 1
+    ? `claims ${r.signedAt} (v1: time not signed)`
+    : `signed ${r.signedAt}`;
+}
+
 function render(r: Report): string {
   const lines: string[] = [];
   // r.ok is the overall result; "why-note" means the evidence itself verified.
@@ -129,9 +139,7 @@ function render(r: Report): string {
   }
   if (r.keyId || r.signer) {
     const key = r.keyId ? `key ${r.keyId}${r.keyName ? ` (${r.keyName})` : ""}` : "";
-    lines.push(
-      `  signer    ${[r.signer, key, r.signedAt ? `signed ${r.signedAt}` : ""].filter(Boolean).join(" | ")}`,
-    );
+    lines.push(`  signer    ${[r.signer, key, signedAtLabel(r)].filter(Boolean).join(" | ")}`);
   }
   if (r.items) {
     lines.push(`  items (${r.items.length})${evidenceOk ? "" : " - UNVERIFIED, do not trust"}`);
@@ -252,6 +260,7 @@ async function checkEvidence(
   const att = header.attestation as Record<string, unknown> | undefined;
   if (att && typeof att.signer === "string") base.signer = att.signer;
   if (att && typeof att.signedAt === "string") base.signedAt = att.signedAt;
+  if (att && typeof att.v === "number") base.attestationVersion = att.v;
   const items = itemsOf(doc);
   if (items) base.items = items;
 

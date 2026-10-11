@@ -243,7 +243,12 @@ export async function verifyWhyNote(
     signer: "gittifacts",
     purpose,
   };
-  const r = await verifyDocument(record, sig, keys, { purpose: WHY_SIGNATURE_PURPOSE });
+  // landedAt is a field of the signed record, so the time a retired key's notAfter is checked
+  // against is signed even though the raw (v1) signature carries no attestation header.
+  const r = await verifyDocument(record, sig, keys, {
+    purpose: WHY_SIGNATURE_PURPOSE,
+    signedAtBound: true,
+  });
   if (!r.ok) return { ok: false, reason: r.reason, detail: r.detail, note };
   if (opts.commit !== undefined && note.landedSha !== opts.commit) {
     return {

@@ -587,13 +587,18 @@ export const EvidencePayload = z.object({
 export type EvidencePayload = z.infer<typeof EvidencePayload>;
 
 export const Attestation = z.object({
-  v: z.literal(1),
+  /**
+   * 2: the signature covers the attestation header (`typ`, `v`, `alg`, `keyId`, `payloadDigest`,
+   * `signedAt`, `signer`), so the signing time is signed. 1 (before 2026-10-11): it covers the
+   * payload bytes only; `signedAt` and `signer` are unsigned claims. See attest.ts.
+   */
+  v: z.union([z.literal(1), z.literal(2)]),
   alg: z.literal("Ed25519"),
   /** base64url(SHA-256(raw public key)), first 16 bytes. */
   keyId: z.string(),
   /** base64url(SHA-256(canonical payload bytes)). */
   payloadDigest: z.string(),
-  /** base64url Ed25519 signature over the canonical payload bytes. */
+  /** base64url Ed25519 signature: over the header (v2) or the canonical payload bytes (v1). */
   signature: z.string(),
   signedAt: z.string().datetime(),
   signer: z.string(),

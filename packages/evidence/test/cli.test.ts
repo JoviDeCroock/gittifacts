@@ -7,6 +7,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runKeygen } from "../src/cli/run-keygen.js";
 import { runVerify } from "../src/cli/run-verify.js";
 import {
+  base64urlDecode,
+  base64urlEncode,
+  canonicalBytes,
   type EvidencePayload,
   encodeNote,
   encodeWhyNote,
@@ -258,6 +261,47 @@ describe("verify-attestation (in-process)", () => {
       1,
     );
     attach(head, await signedNote(head), ["-f"]);
+  });
+
+  it("a v1 note (unsigned time): verifies under a current key, unverifiable-time under a retired one", async () => {
+    const v2 = JSON.parse(await signedNote(head)) as {
+      changeId: string;
+      headSha: string;
+      items: unknown[];
+      attestation: Record<string, unknown>;
+    };
+    // Re-sign the way v1 did: the signature covers canonical {changeId, headSha, items} only.
+    const bytes = canonicalBytes({ changeId: v2.changeId, headSha: v2.headSha, items: v2.items });
+    const pk = await crypto.subtle.importKey(
+      "pkcs8",
+      base64urlDecode(key.privateKey),
+      { name: "Ed25519" },
+      false,
+      ["sign"],
+    );
+    const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, pk, bytes));
+    const v1 = { ...v2, attestation: { ...v2.attestation, v: 1, signature: base64urlEncode(sig) } };
+    const file = join(tmp, "v1.json");
+    writeFileSync(file, `${JSON.stringify(v1, null, 2)}\n`);
+
+    const current = await run("--file", file, "--commit", head, "--public-key", key.publicKey);
+    expect(current.code).toBe(0);
+    expect(current.out).toContain("claims 2026-10-01T12:00:00.000Z (v1: time not signed)");
+
+    const keysFile = join(tmp, "retired.json");
+    writeFileSync(
+      keysFile,
+      JSON.stringify([{ publicKey: key.publicKey, notAfter: "2027-01-01T00:00:00Z" }]),
+    );
+    const retired = await run("--file", file, "--commit", head, "--keys", keysFile);
+    expect(retired.code).toBe(1);
+    expect(retired.out).toContain("NOT VERIFIED (unverifiable-time)");
+    // The same key set verifies a v2 note: its time is signed.
+    const v2file = join(tmp, "v2.json");
+    writeFileSync(v2file, await signedNote(head));
+    const ok = await run("--file", v2file, "--commit", head, "--keys", keysFile);
+    expect(ok.code).toBe(0);
+    expect(ok.out).toContain("signed 2026-10-01T12:00:00.000Z");
   });
 
   it("--file mode, with and without a commit binding", async () => {

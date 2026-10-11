@@ -33,11 +33,26 @@ async function signed(): Promise<SignedEvidence> {
   return signEvidence(samplePayload(), signer, { now: NOW });
 }
 
+/** A v1 attestation as written before 2026-10-11: the signature covers the payload bytes only. */
+async function signedV1(now: Date): Promise<SignedEvidence> {
+  const s = await signEvidence(samplePayload(), signer, { now });
+  const bytes = evidenceSigningBytes(s);
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    base64urlDecode(k1.privateKey),
+    { name: "Ed25519" },
+    false,
+    ["sign"],
+  );
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, key, bytes));
+  return { ...s, attestation: { ...s.attestation, v: 1, signature: base64urlEncode(sig) } };
+}
+
 describe("signEvidence / verifyEvidence", () => {
   it("round-trips, including through JSON", async () => {
     const s = await signed();
     expect(s.attestation).toMatchObject({
-      v: 1,
+      v: 2,
       alg: "Ed25519",
       keyId: k1.keyId,
       signer: "gittifacts-ci",
@@ -184,10 +199,30 @@ describe("signEvidence / verifyEvidence", () => {
       });
     });
 
-    it("accepts changes to unsigned metadata (signer label) — documented limitation", async () => {
+    it("v2 signs the signer label and signedAt: editing either fails", async () => {
       const s = jsonClone(await signed());
       s.attestation.signer = "someone-else";
-      expect(await verifyEvidence(s, k1.publicKey)).toMatchObject({ ok: true });
+      expect(await verifyEvidence(s, k1.publicKey)).toMatchObject({
+        ok: false,
+        reason: "bad-signature",
+      });
+      const t = jsonClone(await signed());
+      t.attestation.signedAt = "2026-09-01T00:00:00.000Z";
+      expect(await verifyEvidence(t, k1.publicKey)).toMatchObject({
+        ok: false,
+        reason: "bad-signature",
+      });
+    });
+
+    it("a v2 signature cannot pass as v1, nor a v1 signature as v2", async () => {
+      const v2 = jsonClone(await signed());
+      expect(
+        await verifyEvidence({ ...v2, attestation: { ...v2.attestation, v: 1 } }, k1.publicKey),
+      ).toMatchObject({ ok: false, reason: "bad-signature" });
+      const v1 = await signedV1(NOW);
+      expect(
+        await verifyEvidence({ ...v1, attestation: { ...v1.attestation, v: 2 } }, k1.publicKey),
+      ).toMatchObject({ ok: false, reason: "bad-signature" });
     });
   });
 
@@ -259,6 +294,36 @@ describe("signEvidence / verifyEvidence", () => {
         now: new Date("2027-01-01T00:00:00Z"),
       });
       expect(await verifyEvidence(edge, keys)).toMatchObject({ ok: true });
+    });
+
+    it("v1 (unsigned signedAt): current keys still verify; a retired key is unverifiable-time, backdated or not", async () => {
+      const v1 = await signedV1(NOW);
+      expect(v1.attestation.v).toBe(1);
+      // Existing evidence signed by a key without notAfter keeps verifying, signer edits included.
+      expect(await verifyEvidence(v1, k1.publicKey)).toMatchObject({ ok: true, keyId: k1.keyId });
+      expect(
+        await verifyEvidence(
+          { ...v1, attestation: { ...v1.attestation, signer: "relabelled" } },
+          k1.publicKey,
+        ),
+      ).toMatchObject({ ok: true });
+      // Once the key has a notAfter, a v1 time proves nothing: escalate instead of trusting it.
+      const keys = [{ publicKey: k1.publicKey, notAfter: "2027-01-01T00:00:00Z" }];
+      const late = await signedV1(new Date("2027-06-01T00:00:00Z"));
+      const backdated = jsonClone(late);
+      backdated.attestation.signedAt = "2026-06-01T00:00:00.000Z";
+      for (const att of [v1, late, backdated]) {
+        const r = await verifyEvidence(att, keys);
+        expect(r).toMatchObject({ ok: false, reason: "unverifiable-time" });
+      }
+      // Documents whose time is a signed field opt in with signedAtBound (audit entries, why notes).
+      const doc = { landedAt: NOW.toISOString(), id: "w1" };
+      const sig = await signDocument(doc, signer, { purpose: "why", now: NOW });
+      expect(sig.v).toBe(1);
+      expect(await verifyDocument(doc, sig, keys)).toMatchObject({ reason: "unverifiable-time" });
+      expect(await verifyDocument(doc, sig, keys, { signedAtBound: true })).toMatchObject({
+        ok: true,
+      });
     });
 
     it("ignores key-set entries whose stated keyId does not match their key", async () => {

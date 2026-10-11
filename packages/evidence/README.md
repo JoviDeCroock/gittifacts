@@ -35,11 +35,12 @@ It does not prove that:
   unknown as risk.
 - **anything about the base.** The signed payload binds the head commit only. Base
   commits appear inside items (for example `red-green.base.sha`) as the signer's claim.
-- **when it was signed.** `attestation.signedAt`, `attestation.signer` and
-  `attestation.keyId` are not covered by the signature. A wrong `keyId` simply fails to
-  verify. `signedAt` is only used to apply a key's `notAfter`, so a leaked retired key can
-  still backdate a signature. Rotate keys, and remove compromised keys from the key set
-  (don't only expire them).
+- **when it was signed, against the key holder.** Version 2 attestations (`"v": 2`, written
+  since 2026-10-11) sign `signedAt` and `signer`, so nobody without the key can move a
+  signature across a key's `notAfter`. Whoever holds the key can still sign any time, so a
+  leaked key must be removed from the key set (revoked), not only expired. Version 1
+  attestations sign neither: `signedAt` is an editable claim, so a v1 attestation from a key
+  with a `notAfter` fails as `unverifiable-time` (see Key sets).
 - **model judgments are facts.** `llm-judgment` items are signed opinions and may only
   raise risk.
 - **anything when the note is missing.** No note means no evidence. It is not a failed
@@ -62,16 +63,20 @@ with a trailing newline:
     "signature": "<base64url Ed25519 signature>",
     "signedAt": "2026-10-01T12:00:00.000Z",
     "signer": "gittifacts-ci",
-    "v": 1
+    "v": 2
   },
   "items": [{ "id": "red-green", "kind": "red-green", "status": "ok", "...": "..." }]
 }
 ```
 
-- **Signed bytes:** UTF-8 of RFC 8785 canonical JSON of exactly
+- **Payload bytes:** UTF-8 of RFC 8785 canonical JSON of exactly
   `{"changeId", "headSha", "items"}`. Keys are sorted by UTF-16 code units, there is no
   whitespace, and numbers use ECMAScript form. Any JCS implementation in any language can
   reproduce them.
+- **Signed bytes (v2):** canonical JSON of the attestation header
+  `{"alg", "keyId", "payloadDigest", "signedAt", "signer", "typ": "gittifacts.attestation/v2", "v": 2}`,
+  which commits to the payload through `payloadDigest`. **v1** (before 2026-10-11) signed the
+  payload bytes themselves; verifiers accept both, and the two shapes cannot be swapped.
 - **`keyId`:** base64url of the first 16 bytes of SHA-256(raw 32-byte public key).
 - **`payloadDigest`:** base64url SHA-256 of the signed bytes. It is redundant with the
   signature, but it lets a verifier report that the content changed rather than only that
@@ -159,8 +164,13 @@ dependencies, so `node verify-attestation.mjs ...` works on any Node 22 machine 
 or `{ "keys": [...] }`.
 
 - If an entry states a `keyId` that does not match its public key, the entry is ignored.
-- `notAfter` rejects signatures dated after it (`expired-key`) while older notes keep
-  verifying.
+- `notAfter` rejects v2 signatures dated after it (`expired-key`) while older v2 notes keep
+  verifying. A v1 note under a key with `notAfter` fails as `unverifiable-time`: its date is
+  unsigned, so it cannot show it predates `notAfter`. If you accept that key's v1 notes, list
+  the key without `notAfter` (an explicit decision to trust it unconditionally). Why notes
+  carry their time in the signed body (`landedAt`), so they are checked against `notAfter`
+  directly. The verdict's signer line says `signed <time>` (v2) or
+  `claims <time> (v1: time not signed)`.
 - To rotate, add the new key, give the old one `notAfter`, and switch the signer.
 - `--keys-url` must be HTTPS. Plain HTTP is allowed only on loopback, because keys fetched
   over an unauthenticated channel would make the check meaningless.
@@ -217,11 +227,12 @@ else console.error(why.reason, why.detail); // why.note, when present, is for di
 ```
 
 Verification never throws on bad input. Failure reasons are `schema`, `unknown-key`,
-`digest-mismatch`, `bad-signature` and `expired-key`. To check the stored bytes exactly,
+`digest-mismatch`, `bad-signature`, `expired-key` and `unverifiable-time`. To check the stored bytes exactly,
 including any injected fields, pass the raw document from `lastNoteDocument(text)`.
 
 `signDocument(value, signer, { purpose })` and `verifyDocument(value, sig, keys, { purpose })`
-sign any JSON value with the same canonicalization (for example plan approvals and
+(v1 by default, so the raw signature can be stored alone: put the signing time in the document
+and verify with `signedAtBound: true`; `version: 2` signs the time too) sign any JSON value with the same canonicalization (for example plan approvals and
 audit-log entries). The signed bytes are canonical `{document, purpose}`, so a document
 signature can never pass as an evidence attestation or be reused for another purpose.
 

@@ -162,14 +162,23 @@ export class PlatformSigner implements SignerPort {
     return (await this.signDetached(value, Purpose.document)).signature;
   }
 
+  /**
+   * A raw v1 signature over `{ document, purpose }`: it is stored without its attestation, so the
+   * signing time must be a field of `value` (an audit entry's `at`, a plan's `approvedAt`, a why
+   * note's `landedAt`) for {@link verifyDetached} to apply a retired key's `notAfter`.
+   */
   async signDetached(value: unknown, purpose: Purpose, at?: Date): Promise<DetachedSignature> {
-    const sig = await signDocument(value, this.evidenceSigner, { purpose, now: at ?? this.now() });
+    const sig = await signDocument(value, this.evidenceSigner, {
+      purpose,
+      now: at ?? this.now(),
+      version: 1,
+    });
     return { signature: sig.signature, keyId: sig.keyId, signedAt: sig.signedAt };
   }
 
   /**
-   * Verify a raw detached signature. `signedAt` is the time the signature claims (an audit
-   * entry's `at`, a plan's `approvedAt`); it is only used to apply a retired key's `notAfter`.
+   * Verify a raw detached signature. `signedAt` must be a time `value` itself commits to (an
+   * audit entry's `at`, a plan's `approvedAt`); it is only used to apply a retired key's `notAfter`.
    */
   async verifyDetached(
     value: unknown,
@@ -192,7 +201,10 @@ export class PlatformSigner implements SignerPort {
       signer: SIGNER_NAME,
       purpose: opts.purpose,
     };
-    const r = await verifyDocument(value, sig, this.keys, { purpose: opts.purpose });
+    const r = await verifyDocument(value, sig, this.keys, {
+      purpose: opts.purpose,
+      signedAtBound: true,
+    });
     return r.ok ? { ok: true, keyId: r.keyId } : { ok: false, reason: `${r.reason}: ${r.detail}` };
   }
 }
