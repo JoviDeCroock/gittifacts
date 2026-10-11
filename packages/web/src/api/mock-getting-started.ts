@@ -1,7 +1,8 @@
 /**
- * Mock backend for the dashboard checklist. `?mock&gs=new` is a brand-new account (no repos, no
- * agent), `?mock&gs=partial` has an agent but no first green; otherwise everything is done. "Try it
- * now" creates a project whose first run goes green after a few seconds, with a preview link.
+ * Mock backend for the dashboard checklist (the golden path). `?mock&gs=new` is a brand-new
+ * account (no repos, no agent), `?mock&gs=partial` has repos and an agent and a sample plan to
+ * approve; otherwise all five steps are done. "Create repo" makes a project whose first run goes
+ * green after a few seconds, with a preview link and its sample plan to approve.
  * The scenario is remembered for the tab, like `?mock` itself.
  */
 import { GITHUB_SURFACES } from "@app/domain/surfaces";
@@ -52,6 +53,18 @@ function previewUrl(changeId: string): string {
   return `https://p-${changeId}-pv.example.dev`;
 }
 
+function samplePlan(repoId: string, repoName: string, approved: boolean): GettingStarted["plan"] {
+  return {
+    approved,
+    planId: `plan_sample_${repoId}`,
+    title: "Add GET /version",
+    status: approved ? "approved" : "draft",
+    repoId,
+    repoName,
+    sample: true,
+  };
+}
+
 function state(): GettingStarted {
   const s = scenario();
   const now = Date.now();
@@ -94,6 +107,26 @@ function state(): GettingStarted {
         }
       : null,
     repo: s === "done" ? { connected: true, via: GITHUB_SURFACES ? "github-app" : "import" } : { connected: false, via: null },
+    plan: latest
+      ? samplePlan(latest.id, latest.name, false)
+      : s === "new"
+        ? null
+        : samplePlan("r_billing", "billing-api", s === "done"),
+    review:
+      s === "done"
+        ? { approved: true, changeId: "chdemo2", title: "Add GET /version", status: "merged", repoId: "r_billing" }
+        : null,
+    firstMerge:
+      s === "done" && latest === undefined
+        ? {
+            projectId: "r_billing",
+            projectName: "billing-api",
+            changeId: "chdemo2",
+            title: "Add GET /version",
+            at: new Date(now - 82_800_000).toISOString(),
+            msToFirstMerge: 342_000,
+          }
+        : null,
   };
 }
 
@@ -121,6 +154,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       template,
       previewUrl: previewUrl(c.changeId),
       bootstrapChangeId: c.changeId,
+      samplePlanId: `plan_sample_${c.id}`,
     };
     return { status: 201, body: out };
   }

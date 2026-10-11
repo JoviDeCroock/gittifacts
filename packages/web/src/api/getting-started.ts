@@ -30,6 +30,33 @@ export interface GettingStarted {
     msToFirstGreen: number | null;
   } | null;
   repo: { connected: boolean; via: "import" | "github-mirror" | "github-app" | null };
+  /** The Plan you approved, else the one to approve (a template repo's sample Plan first). */
+  plan: {
+    approved: boolean;
+    planId: string;
+    title: string;
+    status: "draft" | "approved" | "superseded" | "rejected";
+    repoId: string;
+    repoName: string;
+    sample: boolean;
+  } | null;
+  /** The Change you approved, else the newest one waiting for review. */
+  review: {
+    approved: boolean;
+    changeId: string;
+    title: string;
+    status: string;
+    repoId: string;
+  } | null;
+  /** The first Change the merge queue landed in your repos. */
+  firstMerge: {
+    projectId: string;
+    projectName: string;
+    changeId: string;
+    title: string;
+    at: string | null;
+    msToFirstMerge: number | null;
+  } | null;
 }
 
 export interface ProjectCreated {
@@ -38,6 +65,7 @@ export interface ProjectCreated {
   template: string | null;
   previewUrl: string | null;
   bootstrapChangeId: string | null;
+  samplePlanId?: string | null;
 }
 
 export const GETTING_STARTED_PATH = "/api/v1/me/getting-started";

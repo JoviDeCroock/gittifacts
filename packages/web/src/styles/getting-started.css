@@ -1,5 +1,5 @@
-/* The dashboard's getting-started checklist (components/GettingStarted.tsx). One panel, a numbered
-   list of three steps with a state mark each; no cards inside it. */
+/* The dashboard's getting-started checklist (components/GettingStarted.tsx): the golden path. One
+   panel, a numbered list of five steps with a state mark each; no cards inside it. */
 .gs {
   display: grid;
   gap: var(--s-4);
@@ -25,6 +25,15 @@
 }
 .gs__hide {
   margin-inline-start: auto;
+}
+.gs__lead {
+  max-inline-size: var(--measure);
+  margin-block-start: calc(-1 * var(--s-2));
+  color: var(--text-2);
+}
+/* The MCP setup sits inside the step's column, never wider than a command line. */
+.gs-step__body .mcp-setup {
+  max-inline-size: 36rem;
 }
 .gs__steps {
   display: grid;

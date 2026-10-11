@@ -1,8 +1,14 @@
 /**
- * The dashboard's first-run checklist: three one-action paths (connect your agent, try it now,
- * bring a repo), each ticked from real state (GET /api/v1/me/getting-started). All done, it
- * collapses to one slim line that can be dismissed per user. The first green check gets one quiet
- * line with its preview link.
+ * The dashboard's first-run checklist: the golden path (DECISIONS 2026-10-11) in five steps, each
+ * ticked from real state (GET /api/v1/me/getting-started) and each with exactly one action:
+ *
+ *   1. Create a repo        a template (with a small first plan), or an import
+ *   2. Connect your agent   its MCP client setup, copy-paste
+ *   3. Approve your plan    the sample plan the platform drafted (a person approves intent)
+ *   4. Review the Change    the prompt that has the agent build it, then the Change to review
+ *   5. First merge          the merge queue lands it; the time from repo to merge
+ *
+ * All done, it collapses to one slim line that can be dismissed per user.
  */
 import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import { useSignal } from "@preact/signals";
@@ -10,7 +16,7 @@ import type { ComponentChildren } from "preact";
 import { describeError } from "../api/client.js";
 import { gettingStartedApi, type GettingStarted as State } from "../api/getting-started.js";
 import {
-  agentPrompt,
+  buildPrompt,
   type ChecklistView,
   durationLabel,
   type StepId,
@@ -18,14 +24,18 @@ import {
 } from "../lib/getting-started.js";
 import { useTick } from "../state/clock.js";
 import { Icon, type IconId } from "./Icon.js";
+import { McpSetup } from "./McpSetup.js";
 import { Button, Command, LinkButton } from "./ui.js";
 import "../styles/getting-started.css";
+// McpSetup's styles (.mcp-setup) live with the agents screen.
+import "../styles/agents.css";
 
-/** Templates with a preview (ts-library has none), fastest first. */
+/** Templates, each with a small first plan; the ones with a preview first, fastest first. */
 const TEMPLATES = [
   { id: "static-site", label: "Static site" },
   { id: "preact-app", label: "Preact app" },
   { id: "workers-api", label: "Workers API" },
+  { id: "ts-library", label: "TypeScript library" },
 ] as const;
 
 const MARK: Record<StepState, { icon: IconId; label: string }> = {
@@ -33,6 +43,14 @@ const MARK: Record<StepState, { icon: IconId; label: string }> = {
   running: { icon: "loader", label: "Running" },
   failed: { icon: "x-circle", label: "Failed" },
   todo: { icon: "circle-dashed", label: "To do" },
+};
+
+const TITLES: Record<StepId, string> = {
+  repo: "Create a repo",
+  agent: "Connect your agent",
+  plan: "Approve your first plan",
+  review: "Review your first Change",
+  merge: "First merge",
 };
 
 interface Props {
@@ -48,7 +66,21 @@ export function GettingStarted({ state, view, onDismiss, onChanged }: Props) {
   if (view.mode === "banner") return <DoneBanner state={state} onDismiss={onDismiss} />;
   // The next step to do carries the primary action; the others stay quiet.
   const next = view.steps.find((s) => s.state !== "done")?.id;
-  const stateOf = (id: StepId) => view.steps.find((s) => s.id === id)?.state ?? "todo";
+  const body = (id: StepId): ComponentChildren => {
+    const primary = next === id;
+    switch (id) {
+      case "repo":
+        return <RepoBody state={state} primary={primary} onChanged={onChanged} />;
+      case "agent":
+        return <AgentBody state={state} />;
+      case "plan":
+        return <PlanBody state={state} primary={primary} />;
+      case "review":
+        return <ReviewBody state={state} primary={primary} />;
+      case "merge":
+        return <MergeBody state={state} />;
+    }
+  };
   return (
     <section class="gs" aria-labelledby="gs-title" data-testid="first-run-checklist">
       <div class="gs__head">
@@ -62,71 +94,38 @@ export function GettingStarted({ state, view, onDismiss, onChanged }: Props) {
           Hide
         </button>
       </div>
+      <p class="gs__lead">
+        From a repo to your first merge: you approve the plan and the Change, your agent does the
+        work, and the merge queue lands it.
+      </p>
       <ol class="gs__steps">
-        <Step state={stateOf("agent")} title="Connect your agent">
-          <AgentBody state={state} primary={next === "agent"} />
-        </Step>
-        <Step state={stateOf("try")} title="Try it now">
-          <TryBody
-            state={state}
-            stepState={stateOf("try")}
-            primary={next === "try"}
-            onChanged={onChanged}
-          />
-        </Step>
-        <Step state={stateOf("repo")} title="Bring a repo">
-          <RepoBody state={state} primary={next === "repo"} onChanged={onChanged} />
-        </Step>
+        {view.steps.map((s) => (
+          <Step key={s.id} id={s.id} state={s.state}>
+            {body(s.id)}
+          </Step>
+        ))}
       </ol>
     </section>
   );
 }
 
-function Step({
-  state,
-  title,
-  children,
-}: {
-  state: StepState;
-  title: string;
-  children: ComponentChildren;
-}) {
+function Step({ id, state, children }: { id: StepId; state: StepState; children: ComponentChildren }) {
   const mark = MARK[state];
   return (
-    <li class="gs-step" data-state={state}>
+    <li class="gs-step" data-state={state} data-step={id}>
       <span class="gs-step__mark">
         <Icon name={mark.icon} size={20} class={state === "running" ? "spin" : undefined} />
         <span class="sr-only">{mark.label}: </span>
       </span>
       <div class="gs-step__body">
-        <h3 class="gs-step__title">{title}</h3>
+        <h3 class="gs-step__title">{TITLES[id]}</h3>
         {children}
       </div>
     </li>
   );
 }
 
-function AgentBody({ state, primary }: { state: State; primary: boolean }) {
-  if (state.agent.connected) {
-    return (
-      <p class="gs-step__line">
-        <b>{state.agent.name ?? "Your agent"}</b> is connected. <a href="/agents">Manage agents</a>
-      </p>
-    );
-  }
-  return (
-    <>
-      <p class="gs-step__line">Tell your agent:</p>
-      <div class={`gs-step__cmd ${primary ? "is-next" : ""}`}>
-        <Command text={agentPrompt(window.location.origin)} />
-      </div>
-      <p class="gs-step__aside">
-        It reads the guide, then sends you a link to approve it or to claim its first repo. Or{" "}
-        <a href="/agents">create a token</a> yourself.
-      </p>
-    </>
-  );
-}
+// ---------------------------------------------------------------- 1. a repo
 
 /** The quiet line for a first green: where, how fast, and the preview. */
 function GreenLine({ green }: { green: NonNullable<State["firstGreen"]> }) {
@@ -157,29 +156,38 @@ function Running({ b }: { b: NonNullable<State["latestBootstrap"]> }) {
   const sec = Math.max(0, Math.round((now.value - Date.parse(b.createdAt)) / 1000));
   return (
     <p class="gs-step__line" role="status">
-      Creating <b>{b.projectName}</b>: first check running, <span class="tnum">{sec} s</span>.{" "}
+      <a href={`/repos/${b.projectId}`}>{b.projectName}</a> is ready; its first check is running,{" "}
+      <span class="tnum">{sec} s</span>.{" "}
       {b.changeId ? <a href={`/changes/${b.changeId}`}>Watch the run</a> : null}
     </p>
   );
 }
 
-function TryBody({
-  state,
-  stepState,
-  primary,
-  onChanged,
-}: {
-  state: State;
-  stepState: StepState;
-  primary: boolean;
-  onChanged: () => void;
-}) {
+function RepoDone({ state }: { state: State }) {
+  const b = state.latestBootstrap;
+  if (state.firstGreen) return <GreenLine green={state.firstGreen} />;
+  if (b?.status === "running") return <Running b={b} />;
+  if (b && b.status !== "green") {
+    return (
+      <p class="gs-step__line gs-step__line--failed">
+        The first check on <b>{b.projectName}</b> failed.{" "}
+        {b.changeId ? <a href={`/changes/${b.changeId}`}>See why</a> : null}
+      </p>
+    );
+  }
+  return (
+    <p class="gs-step__line">
+      You have <span class="tnum">{state.projects}</span>{" "}
+      {state.projects === 1 ? "repo" : "repos"}.
+    </p>
+  );
+}
+
+function RepoBody({ state, primary, onChanged }: { state: State; primary: boolean; onChanged: () => void }) {
   const template = useSignal<string>(TEMPLATES[0].id);
   const busy = useSignal(false);
   const error = useSignal<string | null>(null);
-  if (stepState === "done" && state.firstGreen) return <GreenLine green={state.firstGreen} />;
-  const b = state.latestBootstrap;
-  if (stepState === "running" && b) return <Running b={b} />;
+  if (state.projects > 0) return <RepoDone state={state} />;
   async function create(e: Event) {
     e.preventDefault();
     if (busy.value) return;
@@ -197,24 +205,13 @@ function TryBody({
   }
   return (
     <>
-      {stepState === "failed" && b ? (
-        <p class="gs-step__line gs-step__line--failed">
-          The first check on <b>{b.projectName}</b> failed.{" "}
-          {b.changeId ? <a href={`/changes/${b.changeId}`}>See why</a> : null}
-        </p>
-      ) : (
-        <p class="gs-step__line">
-          Create a repo from a template. Its first check runs and a live preview comes up.
-        </p>
-      )}
+      <p class="gs-step__line">
+        From a template: its first check runs, and it comes with a small first plan to approve.
+      </p>
       <form class="gs-try" onSubmit={create}>
         <label class="field gs-try__field">
           <span class="field__label">Template</span>
-          <select
-            class="input"
-            value={template.value}
-            onChange={(e) => (template.value = e.currentTarget.value)}
-          >
+          <select class="input" value={template.value} onChange={(e) => (template.value = e.currentTarget.value)}>
             {TEMPLATES.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.label}
@@ -222,13 +219,7 @@ function TryBody({
             ))}
           </select>
         </label>
-        <Button
-          type="submit"
-          variant={primary ? "primary" : "secondary"}
-          icon="rocket"
-          busy={busy.value}
-          busyLabel="Creating…"
-        >
+        <Button type="submit" variant={primary ? "primary" : "secondary"} icon="rocket" busy={busy.value} busyLabel="Creating…">
           Create repo
         </Button>
       </form>
@@ -237,37 +228,20 @@ function TryBody({
           {error.value}
         </p>
       ) : null}
+      <details class="gs-repo__import">
+        <summary>Or import a public repository</summary>
+        <ImportForm onChanged={onChanged} />
+      </details>
     </>
   );
 }
 
 const EXAMPLE_URL = GITHUB_SURFACES ? "https://github.com/you/repo" : "https://git.example.com/you/repo";
 
-const VIA: Record<NonNullable<State["repo"]["via"]>, string> = {
-  "github-app": "The GitHub App is connected.",
-  "github-mirror": "A GitHub repository is mirrored here.",
-  import: "A repository is imported.",
-};
-
-function RepoBody({
-  state,
-  primary,
-  onChanged,
-}: {
-  state: State;
-  primary: boolean;
-  onChanged: () => void;
-}) {
+function ImportForm({ onChanged }: { onChanged: () => void }) {
   const url = useSignal("");
   const busy = useSignal(false);
   const error = useSignal<string | null>(null);
-  if (state.repo.connected && state.repo.via) {
-    return (
-      <p class="gs-step__line">
-        {VIA[state.repo.via]} {GITHUB_SURFACES ? <a href="/settings/github">GitHub settings</a> : null}
-      </p>
-    );
-  }
   async function importRepo(e: Event) {
     e.preventDefault();
     if (busy.value) return;
@@ -289,7 +263,7 @@ function RepoBody({
       busy.value = false;
     }
   }
-  const form = (
+  return (
     <>
       <form class="gs-try" onSubmit={importRepo} noValidate>
         <label class="field gs-try__field gs-try__field--wide">
@@ -305,7 +279,7 @@ function RepoBody({
             aria-describedby={error.value ? "gs-import-error" : undefined}
           />
         </label>
-        <Button type="submit" variant={GITHUB_SURFACES || !primary ? "secondary" : "primary"} icon="git-merge" busy={busy.value} busyLabel="Importing…">
+        <Button type="submit" variant="secondary" icon="git-merge" busy={busy.value} busyLabel="Importing…">
           Import
         </Button>
       </form>
@@ -316,67 +290,161 @@ function RepoBody({
       ) : null}
     </>
   );
-  // GitHub surfaces off (@app/domain/surfaces): the import form is the step.
-  if (!GITHUB_SURFACES) {
+}
+
+// ---------------------------------------------------------------- 2. the agent
+
+function AgentBody({ state }: { state: State }) {
+  if (state.agent.connected) {
     return (
-      <>
-        <p class="gs-step__line">Import a public repository by its https URL, with its full history.</p>
-        <div class="gs-repo">{form}</div>
-      </>
+      <p class="gs-step__line">
+        <b>{state.agent.name ?? "Your agent"}</b> is connected. <a href="/agents">Manage agents</a>
+      </p>
+    );
+  }
+  return (
+    <>
+      <p class="gs-step__line">Add this platform to your agent's MCP client. It signs in on first use and you approve it.</p>
+      <McpSetup idPrefix="gs-mcp" />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- 3. the plan
+
+function PlanBody({ state, primary }: { state: State; primary: boolean }) {
+  const p = state.plan;
+  if (p?.approved) {
+    return (
+      <p class="gs-step__line">
+        You approved <a href={`/plans/${p.planId}`}>{p.title}</a> in {p.repoName}.
+      </p>
+    );
+  }
+  if (p === null) {
+    return (
+      <p class="gs-step__line">
+        A plan says what should change and why; a person approves it before an agent builds it. A
+        template repo comes with a small one.
+      </p>
     );
   }
   return (
     <>
       <p class="gs-step__line">
-        Grade your GitHub pull requests with the GitHub App, or import a public repository.
+        {p.sample ? "The platform drafted a first task for " : "A plan waits for your approval in "}
+        <b>{p.repoName}</b>: <b>{p.title}</b>.
       </p>
-      <div class="gs-repo">
-        <LinkButton
-          href="/settings/github"
-          variant={primary ? "primary" : "secondary"}
-          icon="git-branch"
-        >
-          Connect GitHub
+      <div>
+        <LinkButton href={`/plans/${p.planId}`} variant={primary ? "primary" : "secondary"} icon="file-text">
+          Read and approve the plan
         </LinkButton>
-        <details class="gs-repo__import">
-          <summary>Import by URL</summary>
-          {form}
-        </details>
       </div>
     </>
   );
 }
 
-/** All three done: one slim line, dismissible. */
+// ---------------------------------------------------------------- 4. the review
+
+function ReviewBody({ state, primary }: { state: State; primary: boolean }) {
+  const r = state.review;
+  const p = state.plan;
+  if (r?.approved) {
+    return (
+      <p class="gs-step__line">
+        You approved <a href={`/changes/${r.changeId}`}>{r.title}</a>.
+      </p>
+    );
+  }
+  if (r !== null) {
+    return (
+      <>
+        <p class="gs-step__line">
+          Your agent built <b>{r.title}</b>. The evidence is signed and the Change waits for your
+          review.
+        </p>
+        <div>
+          <LinkButton href={`/changes/${r.changeId}`} variant={primary ? "primary" : "secondary"} icon="eye">
+            Review the Change
+          </LinkButton>
+        </div>
+      </>
+    );
+  }
+  if (p?.approved) {
+    return (
+      <>
+        <p class="gs-step__line">Tell your agent to build it:</p>
+        <div class={`gs-step__cmd ${primary ? "is-next" : ""}`} data-testid="gs-build-prompt">
+          <Command text={buildPrompt(window.location.origin, p.repoId, p.planId)} />
+        </div>
+        <p class="gs-step__aside">
+          It starts a Change on the plan and pushes. CI runs and the evidence is signed; then it
+          asks you to review.
+        </p>
+      </>
+    );
+  }
+  return (
+    <p class="gs-step__line">
+      Once you approve the plan, your agent builds it and asks you to review the Change.
+    </p>
+  );
+}
+
+// ---------------------------------------------------------------- 5. the merge
+
+function MergeBody({ state }: { state: State }) {
+  const m = state.firstMerge;
+  if (m !== null) {
+    return (
+      <p class="gs-step__line gs-merged">
+        <a href={`/changes/${m.changeId}`}>{m.title}</a> landed on main in{" "}
+        <a href={`/repos/${m.projectId}`}>{m.projectName}</a>
+        {m.msToFirstMerge !== null ? (
+          <>
+            , <span class="tnum">{durationLabel(m.msToFirstMerge)}</span> after the repo was created
+          </>
+        ) : null}
+        .
+      </p>
+    );
+  }
+  const r = state.review;
+  if (r?.approved) {
+    return (
+      <p class="gs-step__line" role="status">
+        The merge queue is testing <b>{r.title}</b> on main and lands it.{" "}
+        <a href={`/changes/${r.changeId}`}>Watch it land</a>
+      </p>
+    );
+  }
+  return (
+    <p class="gs-step__line">
+      After your approval the merge queue tests it on main and lands it, with a signed note on why
+      it exists.
+    </p>
+  );
+}
+
+/** All five done: one slim line, dismissible. */
 function DoneBanner({ state, onDismiss }: { state: State; onDismiss: () => void }) {
-  const green = state.firstGreen;
+  const m = state.firstMerge;
   return (
     <div class="gs-banner" role="status">
       <Icon name="check-circle" size={18} />
       <p class="gs-banner__text">
-        You're set up: your agent is connected
-        {green ? (
-          <>
-            , <a href={`/repos/${green.projectId}`}>{green.projectName}</a> went green
-          </>
-        ) : null}{" "}
-        and a repo is connected.
-        {green?.previewUrl ? (
+        You're set up: your agent built a plan you approved, and{" "}
+        {m ? <a href={`/changes/${m.changeId}`}>{m.title}</a> : "your first Change"} landed
+        {m?.msToFirstMerge != null ? (
           <>
             {" "}
-            <a href={green.previewUrl} class="gs-ext" target="_blank" rel="noopener noreferrer">
-              Preview
-              <Icon name="arrow-up-right" size={14} />
-            </a>
+            <span class="tnum">{durationLabel(m.msToFirstMerge)}</span> after the repo was created
           </>
         ) : null}
+        .
       </p>
-      <button
-        type="button"
-        class="icon-btn gs-banner__close"
-        aria-label="Dismiss getting started"
-        onClick={onDismiss}
-      >
+      <button type="button" class="icon-btn gs-banner__close" aria-label="Dismiss getting started" onClick={onDismiss}>
         <Icon name="x" size={18} />
       </button>
     </div>
