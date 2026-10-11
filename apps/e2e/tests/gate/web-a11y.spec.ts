@@ -231,6 +231,7 @@ test("scripted scrolling respects reduced motion", async ({ authed: page, world 
 
   // Creating an agent scrolls back up to its one-time token.
   await page.goto("/agents");
+  await page.getByTestId("create-agent-open").click();
   const form = page.getByTestId("create-agent");
   await form.getByRole("textbox").fill(uniqueName("a11y").toLowerCase());
   await form.locator('button[type="submit"]').click();

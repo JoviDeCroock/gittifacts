@@ -9,7 +9,8 @@
     gap: var(--s-7);
     align-items: start;
   }
-  .agents-side {
+  /* The rail stays in view while it is short; an open hand-made form scrolls with the page. */
+  .agents-side:not(:has(.by-hand[open])) {
     position: sticky;
     inset-block-start: var(--s-6);
   }
@@ -82,12 +83,98 @@
 }
 .agent__actions {
   grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-2);
 }
 @media (min-width: 640px) {
   .agent__actions {
     grid-column: 3;
     grid-row: 1 / span 2;
+    flex-direction: column;
+    align-items: flex-end;
   }
+}
+/* Now and last: the band's state word, then the last act with its object, linked to it. */
+.agent__now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--s-3);
+  margin-block: 2px var(--s-1);
+}
+.agent__now .fleet__state {
+  justify-self: start;
+}
+.agent__now--none {
+  color: var(--text-3);
+  font-size: var(--text-small);
+}
+.agent__last {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+a.agent__last:hover .fleet__object {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+.agent__repos a {
+  font-weight: var(--weight-medium);
+}
+.agents__lede {
+  margin-block: calc(-1 * var(--s-2)) var(--s-3);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+/* What a revoked agent leaves open. */
+.agent__left {
+  margin-block-start: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--panel);
+  font-size: var(--text-small);
+}
+.agent__left ul {
+  margin: var(--s-1) 0 0;
+  padding-inline-start: var(--s-4);
+}
+.agent__left li {
+  padding-block: 2px;
+}
+
+/* The rail: connecting is the common path; a hand-made token sits behind a disclosure. */
+.connect {
+  display: grid;
+  gap: var(--s-2);
+}
+.connect__title {
+  font-size: var(--text-title);
+}
+.connect__lede {
+  margin-block-end: var(--s-2);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.connect__label {
+  margin-block-start: var(--s-1);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--text-2);
+}
+.by-hand {
+  margin-block-start: var(--s-5);
+  border-block-start: 1px solid var(--rule);
+}
+.by-hand > summary {
+  min-block-size: var(--tap);
+  font-weight: var(--weight-medium);
+}
+.by-hand > .create-agent {
+  margin-block-start: var(--s-2);
 }
 .agent__confirm {
   display: grid;
@@ -252,22 +339,6 @@
 .scopes__never .icon {
   flex: none;
   margin-block-start: 3px;
-}
-.agents__notice {
-  display: flex;
-  gap: var(--s-2);
-  align-items: flex-start;
-  margin-block-end: var(--s-4);
-  padding: var(--s-3);
-  border-radius: var(--r-control);
-  background: var(--panel);
-  font-size: var(--text-small);
-  color: var(--text);
-}
-.agents__notice .icon {
-  flex: none;
-  margin-block-start: 2px;
-  color: var(--ok);
 }
 fieldset.agent__confirm {
   margin: 0;
