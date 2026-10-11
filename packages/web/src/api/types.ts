@@ -128,7 +128,8 @@ export interface RepoDetail {
 export type ChangeSummary = Change & {
   planTitle: string | null;
   authorName: string;
-  authorKind: "human" | "agent";
+  /** The server sends every principal kind (`ChangeSummary` in apps/platform). */
+  authorKind: PrincipalKind;
 };
 
 /** GAP: docs/api.md names ClassifyResult without defining it. */

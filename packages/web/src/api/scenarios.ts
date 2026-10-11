@@ -20,6 +20,7 @@ import {
   testRun,
   trace,
 } from "./scenario-kit.js";
+import { MISSION_SCENARIOS } from "./scenarios-mission.js";
 import { RESOLUTION_SCENARIOS } from "./scenarios-resolution.js";
 import { TRAIN_SCENARIOS } from "./scenarios-trains.js";
 
@@ -1331,5 +1332,5 @@ const ghTotal = scenario({
 
 export const SCENARIOS: Scenario[] = [
   tz, locale, paginate, breaking, pdf, session, codemod, policy, drift, fx, ledger, ledgerRevert, numbering, wrangler,
-  undici, cors, laneTags, darkMode, ghTotal, ...TRAIN_SCENARIOS, ...RESOLUTION_SCENARIOS,
+  undici, cors, laneTags, darkMode, ghTotal, ...TRAIN_SCENARIOS, ...RESOLUTION_SCENARIOS, ...MISSION_SCENARIOS,
 ];

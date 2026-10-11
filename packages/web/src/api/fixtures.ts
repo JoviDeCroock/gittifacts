@@ -49,6 +49,13 @@ export function principals(): Principal[] {
     { id: "prn_coder12", kind: "agent", name: "fleet-coder-12", ownerId: "prn_dev", keys: [key("coder12", 30_000)], scopes: ["repo:read", "change:create"] },
     { id: "prn_planner", kind: "agent", name: "planner-02", ownerId: "prn_maya", keys: [key("planner", 20_000)], scopes: ["repo:read", "plan:create"] },
     { id: "prn_triage", kind: "agent", name: "issue-triager", ownerId: "prn_maya", keys: [key("triage", 9_000, 2_000)], scopes: ["repo:read"] },
+    // Mission control's demo crew (scenarios-mission.ts): one change each on billing-api.
+    { id: "prn_coder09", kind: "agent", name: "fleet-coder-09", ownerId: "prn_maya", keys: [key("coder09", 8_000)], scopes: ["repo:read", "change:create"] },
+    { id: "prn_gardener", kind: "agent", name: "test-gardener", ownerId: "prn_maya", keys: [key("gardener", 7_000)], scopes: ["repo:read", "change:create"] },
+    { id: "prn_bumper", kind: "agent", name: "dep-bumper", ownerId: "prn_dev", keys: [key("bumper", 7_000)], scopes: ["repo:read", "change:create"] },
+    { id: "prn_migrator", kind: "agent", name: "schema-migrator", ownerId: "prn_dev", keys: [key("migrator", 6_000)], scopes: ["repo:read", "change:create"] },
+    { id: "prn_scribe", kind: "agent", name: "docs-scribe", ownerId: "prn_lena", keys: [key("scribe", 6_000)], scopes: ["repo:read", "change:create"] },
+    { id: "prn_perf", kind: "agent", name: "perf-tuner", ownerId: "prn_lena", keys: [key("perf", 5_000)], scopes: ["repo:read", "change:create"] },
     { id: "prn_reviewer", kind: "system", name: "Reviewer agent", ownerId: null, keys: [], scopes: [] },
     { id: "prn_platform", kind: "system", name: "gittifacts platform", ownerId: null, keys: [], scopes: [] },
   ];
@@ -499,6 +506,17 @@ function baseEvents(): RawEvent[] {
     [6, "prn_platform", "rollout.stage.started", "change:chg_fx2r7"],
     [1, "prn_platform", "rollout.check.passed", "change:chg_fx2r7"],
     [1, "prn_platform", "rollout.check.passed", "change:chg_lt4v9"],
+    // Mission control's demo crew.
+    [70, "prn_scribe", "change.created", "change:chg_ds4n1"],
+    [26, "prn_platform", "merge.completed", "change:chg_ds4n1"],
+    [90, "prn_coder09", "change.created", "change:chg_fc9w3"],
+    [40, "prn_migrator", "change.created", "change:chg_sm6i8"],
+    [14, "prn_migrator", "change.review-requested", "change:chg_sm6i8"],
+    [55, "prn_gardener", "change.created", "change:chg_tg3p5"],
+    [22, "prn_perf", "change.created", "change:chg_pt2c9"],
+    [2, "prn_perf", "change.pushed", "change:chg_pt2c9"],
+    [3, "prn_bumper", "change.created", "change:chg_db7z2"],
+    [1, "prn_bumper", "change.pushed", "change:chg_db7z2"],
   ];
   return ev.sort((a, b) => b[0] - a[0]);
 }

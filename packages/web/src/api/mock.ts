@@ -121,7 +121,7 @@ function summary(c: Change): ChangeSummary {
     ...c,
     planTitle: plan?.title ?? null,
     authorName: author.name,
-    authorKind: author.kind === "human" ? "human" : "agent",
+    authorKind: author.kind,
   };
 }
 

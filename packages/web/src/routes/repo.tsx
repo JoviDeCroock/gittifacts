@@ -216,6 +216,11 @@ export function RepoChanges({ repoId }: { repoId: string }) {
         <>
           {/* GitHub mode: GitHub merges; the platform's queue is native only. */}
           {repo.host ? null : (
+            <LinkButton href={`/repos/${repoId}/mission`} size="sm" icon="bot">
+              Mission control
+            </LinkButton>
+          )}
+          {repo.host ? null : (
             <LinkButton href={`/repos/${repoId}/queue`} size="sm" icon="list-ordered">
               Merge queue
             </LinkButton>

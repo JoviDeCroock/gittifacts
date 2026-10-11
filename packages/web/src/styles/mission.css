@@ -1,0 +1,328 @@
+/*
+ * Mission control (routes/mission.tsx). Hairline rows like every list; agents are squares. The
+ * stage is a word with an icon beside five station ticks: ink for progress, carmine only for a
+ * failed state, green only for merged (the Band Means Lane Rule); the lane is the lane tag. A
+ * working agent's row carries the trace (fleet-trace), the one live signal; the stage clock ticks.
+ */
+.mission {
+  display: grid;
+  gap: var(--s-6);
+}
+.mission__h2 {
+  margin-block-end: var(--s-2);
+  font-size: var(--text-title);
+}
+
+/* Counts: four figures on paper, separated by hairlines. Ink, never teal (the One Ink Rule). */
+.mission__top {
+  display: grid;
+  gap: var(--s-2);
+}
+.mission__counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-block: 1px solid var(--rule);
+}
+.mission__count {
+  display: grid;
+  gap: 2px;
+  padding: var(--s-3) var(--s-2);
+}
+.mission__count:nth-child(odd) {
+  border-inline-end: 1px solid var(--rule);
+}
+.mission__count:nth-child(-n + 2) {
+  border-block-end: 1px solid var(--rule);
+}
+.mission__count dt {
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.mission__count dd {
+  margin: 0;
+  font-size: var(--text-display);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+.mission__of {
+  color: var(--text-3);
+  font-size: var(--text-small);
+  font-weight: var(--weight-regular);
+}
+.mission__updated,
+.mission__stale {
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.mission__stale {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-block-start: var(--s-3);
+}
+@media (min-width: 768px) {
+  .mission__counts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .mission__count:nth-child(-n + 2) {
+    border-block-end: 0;
+  }
+  .mission__count:not(:last-child) {
+    border-inline-end: 1px solid var(--rule);
+  }
+  .mission__count {
+    padding-inline: var(--s-4);
+  }
+}
+
+/* Tracks: one line per track, its batches as status chips. */
+.mission__tracklist {
+  list-style: none;
+  border-block-start: 1px solid var(--rule);
+}
+.mission__track-row {
+  display: grid;
+  gap: var(--s-1) var(--s-4);
+  padding: var(--s-2) 0;
+  border-block-end: 1px solid var(--rule);
+}
+.mission__trackname {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+}
+.mission__batches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+@media (min-width: 768px) {
+  .mission__track-row {
+    grid-template-columns: 9rem minmax(0, 1fr);
+    align-items: center;
+  }
+}
+
+/* Rows: stacked on phones (agent and lane, the change, then stage and clock), a table from 1100px. */
+.mission__cols {
+  display: none;
+}
+.mission__list {
+  list-style: none;
+  border-block-start: 1px solid var(--rule);
+}
+.mission__row {
+  position: relative;
+  overflow: clip;
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  grid-template-areas:
+    "avatar who lane"
+    "change change change"
+    "stage stage clock";
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-2) var(--s-4);
+  border-block-end: 1px solid var(--rule);
+}
+.mission__avatar {
+  grid-area: avatar;
+  display: grid;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: 6px;
+  background: var(--text);
+  color: var(--canvas);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.02em;
+}
+.mission__who {
+  grid-area: who;
+  display: grid;
+  min-inline-size: 0;
+}
+.mission__name,
+.mission__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-medium);
+}
+.mission__owner,
+.mission__sub,
+.mission__detail,
+.mission__batch,
+.mission__none {
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.mission__change {
+  grid-area: change;
+  display: grid;
+  min-inline-size: 0;
+}
+.mission__title {
+  display: block;
+  padding-block: 2px;
+}
+.mission__stage {
+  grid-area: stage;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "stations word" "detail detail";
+  align-items: center;
+  gap: 2px var(--s-2);
+  min-inline-size: 0;
+}
+.mission__lane {
+  grid-area: lane;
+  justify-self: end;
+}
+.mission__lane .lane-tag__label {
+  display: none;
+}
+.mission__queue {
+  display: none;
+}
+.mission__clock {
+  grid-area: clock;
+  align-self: start;
+  justify-self: end;
+  color: var(--text-2);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+}
+
+/* Five station ticks: done (muted ink), now (ink), still to come (hairline). */
+.mission__stations {
+  grid-area: stations;
+  display: flex;
+  gap: 3px;
+  list-style: none;
+}
+.mission__station {
+  inline-size: 14px;
+  block-size: 6px;
+  border-radius: 2px;
+  background: var(--rule);
+  transition: background-color var(--dur-state) var(--ease-out);
+}
+.mission__station[data-at="done"] {
+  background: var(--text-3);
+}
+.mission__station[data-at="now"] {
+  background: var(--text);
+}
+.mission__row[data-stage="failing"] .mission__station[data-at="now"],
+.mission__row[data-stage="ejected"] .mission__station[data-at="now"] {
+  background: var(--danger);
+}
+.mission__row[data-stage="merged"] .mission__station {
+  background: var(--ok);
+}
+.mission__word {
+  grid-area: word;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+.mission__word--person .icon {
+  color: var(--action-ink);
+}
+.mission__word--danger {
+  color: var(--danger);
+}
+.mission__word--done {
+  color: var(--ok);
+}
+.mission__detail {
+  grid-area: detail;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 1100px) {
+  .mission__cols,
+  .mission__row {
+    grid-template-columns: 2.25rem minmax(8rem, 0.7fr) minmax(0, 1.6fr) minmax(13rem, 1.2fr) 8.5rem 3.5rem 4rem;
+    gap: var(--s-4);
+  }
+  .mission__cols {
+    display: grid;
+    padding: 0 var(--s-2) var(--s-2);
+    color: var(--text-3);
+    font-size: var(--text-meta);
+    font-weight: var(--weight-medium);
+  }
+  .mission__cols span:first-child {
+    grid-column: 1 / 3;
+  }
+  .mission__cols span:last-child {
+    text-align: end;
+  }
+  .mission__row {
+    grid-template-areas: "avatar who change stage lane queue clock";
+    min-block-size: 72px;
+    padding-block: var(--s-3);
+  }
+  .mission__lane {
+    justify-self: start;
+  }
+  .mission__lane .lane-tag__label {
+    display: inline;
+  }
+  .mission__queue {
+    grid-area: queue;
+    display: grid;
+    line-height: var(--leading-tight);
+  }
+  .mission__clock {
+    align-self: center;
+  }
+  /* At a desk there is room to read the whole title and detail (two lines at most). */
+  .mission__title,
+  .mission__detail {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
+}
+
+/* A new stage settles in once; a working row carries the trace while it is on screen. */
+.mission__row--working::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: -1px;
+  block-size: 2px;
+  background: linear-gradient(90deg, transparent 0 38%, var(--text-2) 50%, transparent 62% 100%);
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mission__word {
+    animation: mission-settle var(--dur-state) var(--ease-out);
+  }
+  .mission__row--working[data-onscreen]::after {
+    opacity: 0.7;
+    animation: fleet-trace var(--dur-trace) linear infinite;
+  }
+}
+@keyframes mission-settle {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}

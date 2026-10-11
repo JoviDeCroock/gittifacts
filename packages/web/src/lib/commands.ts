@@ -63,7 +63,7 @@ export function contextOf(path: string): Ctx {
   if (m?.[1]) return { kind: "change", id: decodeURIComponent(m[1]), sub: (m[2] ?? "") as "" | "evidence" | "rollout" };
   m = /^\/plans\/([^/]+)$/.exec(p);
   if (m?.[1]) return { kind: "plan", id: decodeURIComponent(m[1]) };
-  m = /^\/repos\/([^/]+)(?:\/(?:queue|members))?$/.exec(p);
+  m = /^\/repos\/([^/]+)(?:\/(?:queue|members|mission))?$/.exec(p);
   if (m?.[1]) return { kind: "repo", id: decodeURIComponent(m[1]) };
   return null;
 }
@@ -111,6 +111,7 @@ function repoCommands(repo: RepoRef | { id: string; name?: undefined }): Command
   const args = { repoId: repo.id };
   return [
     { id: "repo.changes", label: "Changes by lane", group: "This repo", icon: "layers", act: { kind: "go", href: `/repos/${enc}` }, twin: { tool: "list_changes", args, positional: "repoId" }, words: "open review" },
+    { id: "repo.mission", label: "Mission control", group: "This repo", icon: "bot", act: { kind: "go", href: `/repos/${enc}/mission` }, twin: { tool: "list_changes", args, positional: "repoId" }, words: "agents live board fleet stage" },
     { id: "repo.queue", label: "Merge queue", group: "This repo", icon: "git-merge", act: { kind: "go", href: `/repos/${enc}/queue` }, twin: { tool: "queue_overview", args, positional: "repoId" }, words: "batches land" },
     { id: "repo.plans", label: "Plans", group: "This repo", icon: "list-checks", act: { kind: "go", href: `/repos/${enc}` }, twin: { tool: "list_plans", args, positional: "repoId" }, words: "intent approval" },
     { id: "repo.members", label: "Members", group: "This repo", icon: "user", act: { kind: "go", href: `/repos/${enc}/members` }, twin: { tool: "list_members", args, positional: "repoId" }, words: "people roles access" },

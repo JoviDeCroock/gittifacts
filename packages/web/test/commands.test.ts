@@ -29,7 +29,7 @@ function contractInputs(): Map<string, { properties: Record<string, unknown>; re
 
 const TOOLS = contractInputs();
 const REPOS = [{ id: "repo_billing", name: "billing-api" }];
-const PATHS = ["/dashboard", "/repos/repo_billing", "/repos/repo_billing/queue", "/plans/plan_1", "/changes/chg_1", "/changes/chg_1/evidence", "/changes/chg_1/rollout", "/agents"];
+const PATHS = ["/dashboard", "/repos/repo_billing", "/repos/repo_billing/queue", "/repos/repo_billing/mission", "/plans/plan_1", "/changes/chg_1", "/changes/chg_1/evidence", "/changes/chg_1/rollout", "/agents"];
 const every: Command[] = PATHS.flatMap((p) => commandsFor(p, REPOS));
 
 describe("agent twins", () => {
