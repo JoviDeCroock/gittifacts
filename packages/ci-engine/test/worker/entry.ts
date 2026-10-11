@@ -6,7 +6,7 @@ import type { CiRunParams, RunSink } from "../../src/engine.js";
 import type { RunDurablyOptions } from "../../src/runner/client.js";
 import type { ContainerLike } from "../../src/runner/container.js";
 import type { RunnerRpc } from "../../src/runner/job.js";
-import { Runner } from "../../src/runner/runner-do.js";
+import { type ContainerTime, Runner } from "../../src/runner/runner-do.js";
 import { CiRunWorkflow, type CiWorkflowEnv } from "../../src/workflows/ci-run.js";
 import { FAKE_TOKEN, FakeContainer, fakeRepo } from "./fakes.js";
 
@@ -25,6 +25,13 @@ export class TestRunner extends Runner<TestEnv> {
 
   protected override async mintReadToken(): Promise<string> {
     return FAKE_TOKEN;
+  }
+
+  /** Container-time reports land in the bucket (`container-time/<run>/<step>/<n>`) for tests. */
+  protected override async onContainerTime(usage: ContainerTime): Promise<void> {
+    const prefix = `container-time/${usage.runId}/${usage.step}/`;
+    const n = (await this.env.CI_BUCKET.list({ prefix })).objects.length;
+    await this.env.CI_BUCKET.put(`${prefix}${n}`, JSON.stringify(usage));
   }
 }
 

@@ -70,6 +70,19 @@ describe("Runner durable jobs", () => {
     });
   });
 
+  it("reports each container's instance and run time once, after it is destroyed", async () => {
+    const stub = e.RUNNER.getByName("dur-ct:s");
+    await stub.start({ jobId: "main", job: job("dur-ct", "s", "fake:sleep=200") });
+    const done = RunnerJobState.parse(await stub.poll("main", 10_000));
+    if (done.state !== "done") throw new Error(`job ${done.state}`);
+    const list = await e.CI_BUCKET.list({ prefix: "container-time/dur-ct/s/" });
+    expect(list.objects).toHaveLength(1);
+    const key = list.objects[0]?.key ?? "";
+    const report = JSON.parse((await (await e.CI_BUCKET.get(key))?.text()) ?? "{}");
+    expect(report).toMatchObject({ instance: "lite", runId: "dur-ct", step: "s" });
+    expect(report.ms).toBeGreaterThanOrEqual(200);
+  });
+
   it("a second start with the same id re-attaches (running, then finished) and never restarts", async () => {
     const stub = e.RUNNER.getByName("dur2:s");
     const input = { jobId: "main", job: job("dur2", "s", "fake:sleep=300") };

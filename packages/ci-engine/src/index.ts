@@ -64,7 +64,7 @@ export {
   parsePlanOutput,
 } from "./runner/markers.js";
 export { createStreamRedactor, REDACTED, redactText } from "./runner/redact.js";
-export type { RunnerEnv } from "./runner/runner-do.js";
+export type { ContainerTime, RunnerEnv } from "./runner/runner-do.js";
 export { Runner, snapshotName, stepEnv } from "./runner/runner-do.js";
 // The image's shell contract, for other `ctx.container` hosts on the same image (previews).
 export {

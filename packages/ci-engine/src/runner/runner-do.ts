@@ -199,12 +199,22 @@ class StepLog {
   }
 }
 
+/** One container's run, reported to `Runner.onContainerTime`. */
+export interface ContainerTime {
+  instance: InstanceType;
+  runId: string;
+  step: string;
+  ms: number;
+}
+
 /** Per-job accounting, also reachable from `noteEgressDenied` while the job runs. */
 class Session {
   readonly timings: RunnerTimings = {};
   log: StepLog | null = null;
   container: ContainerLike | null = null;
   containerStartedAt: number | null = null;
+  /** What the container was started as, and for which run and step (container-time reports). */
+  started: { instance: InstanceType; runId: string; step: string } | null = null;
   denied = 0;
   readonly deniedHosts = new Set<string>();
   /** Extra env every exec gets (e.g. NODE_EXTRA_CA_CERTS once egress is intercepted). */
@@ -249,6 +259,13 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
   private readonly jobs = new Map<string, LiveJob>();
 
   // ------------------------------------------------------------------ seams (overridden in tests)
+
+  /**
+   * Called once per container this object started, after it is destroyed: what it ran as and for
+   * how long (wall time from start). Every container the Runner drives (CI steps, plan jobs and
+   * the platform's sandbox jobs) passes here, so the platform meters spend at this one seam.
+   */
+  protected async onContainerTime(_usage: ContainerTime): Promise<void> {}
 
   /** The container. Production: `ctx.container`. */
   protected container(): ContainerLike {
@@ -552,6 +569,11 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     } finally {
       if (session.container !== null) await destroyQuietly(session.container);
       if (this.session === session) this.session = null;
+      if (session.started !== null) {
+        await this.onContainerTime({ ...session.started, ms: session.computeMs() }).catch(
+          (e: unknown) => console.error("container-time report failed", errorMessage(e)),
+        );
+      }
     }
   }
 
@@ -966,6 +988,7 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     };
     try {
       session.containerStartedAt = Date.now();
+      session.started = { instance: opts.instance, runId: opts.runId, step: opts.step };
       if (opts.from.kind === "snapshot") {
         await log.line(
           `starting ${opts.instance} from snapshot ${opts.from.snapshotId} (commit ${opts.from.sha})`,
