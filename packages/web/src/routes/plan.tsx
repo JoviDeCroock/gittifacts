@@ -1,13 +1,13 @@
 import type { Change, Plan } from "@app/domain";
 import { useSignal } from "@preact/signals";
-import { useRef } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { PrincipalRef, RepoDetail } from "../api/types.js";
 import { Attempts } from "../components/Attempts.js";
 import { Icon } from "../components/Icon.js";
 import { Prose, ProseBlocks } from "../components/Prose.js";
 import { Page } from "../components/Shell.js";
-import { Button, ErrorState, Hash, LaneTag, Loading, StatusChip, Who } from "../components/ui.js";
+import { Button, CopyButton, ErrorState, Hash, LaneTag, Loading, StatusChip, Who } from "../components/ui.js";
 import { formatDateTime, relative } from "../lib/time.js";
 import { CHANGE_STATUS, PLAN_STATUS, plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
@@ -34,6 +34,92 @@ async function loadPlan(planId: string): Promise<PlanData> {
   return { plan, changes, repo, author, approver };
 }
 
+/**
+ * The author's own draft: someone else signs it, so the author gets the two moves it has. Share the
+ * link, or withdraw the draft (its agent twin is `withdraw_plan`), behind an inline confirmation.
+ */
+function OwnDraft({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
+  const confirming = useSignal(false);
+  const reason = useSignal("");
+  const busy = useSignal(false);
+  const error = useSignal<string | null>(null);
+  const intentKey = useRef<string | null>(null);
+  const opener = useRef<HTMLButtonElement>(null);
+  const prompt = useRef<HTMLParagraphElement>(null);
+  // The palette's "Withdraw your draft plan" lands here with #withdraw: open the confirmation.
+  useEffect(() => {
+    if (window.location.hash === "#withdraw") confirming.value = true;
+  }, [confirming]);
+  useEffect(() => {
+    if (confirming.value) prompt.current?.focus();
+  }, [confirming.value]);
+
+  function back() {
+    confirming.value = false;
+    error.value = null;
+    queueMicrotask(() => opener.current?.focus());
+  }
+
+  async function withdraw(e: Event) {
+    e.preventDefault();
+    if (busy.value) return;
+    busy.value = true;
+    error.value = null;
+    try {
+      intentKey.current ??= newIdempotencyKey();
+      const res = await api.withdrawPlan(plan.id, reason.value.trim() || undefined, intentKey.current);
+      onPlan(res.plan);
+    } catch (err) {
+      error.value = inlineError(err);
+    } finally {
+      busy.value = false;
+    }
+  }
+
+  return (
+    <section class="signature signature--locked" id="withdraw" aria-labelledby="sig-title" data-testid="plan-own-draft">
+      <h2 id="sig-title" class="signature__title">
+        <Icon name="lock" size={18} /> You wrote this plan
+      </h2>
+      <p>Another person has to approve or reject it. Share the link with a teammate who has the plan:approve scope.</p>
+      {confirming.value ? (
+        <form class="signature__confirm" onSubmit={withdraw} data-testid="plan-withdraw-form">
+          <p class="signature__confirm-q" ref={prompt} tabIndex={-1}>
+            Withdraw this draft? It closes for good: agents cannot start work on it, and a new plan has to be drafted to try again.
+          </p>
+          <label class="field">
+            <span class="field__label">
+              Why<span class="field__hint"> (optional, goes into the audit log)</span>
+            </span>
+            <textarea class="textarea" rows={2} value={reason.value} onInput={(e) => (reason.value = e.currentTarget.value)} aria-describedby={error.value ? "withdraw-error" : undefined} />
+          </label>
+          {error.value ? (
+            <p class="field__error" id="withdraw-error" role="alert">
+              {error.value}
+            </p>
+          ) : null}
+          <div class="signature__actions">
+            <Button variant="secondary" onClick={back} disabled={busy.value}>
+              Back
+            </Button>
+            <Button type="submit" variant="danger-outline" icon="undo" busy={busy.value} busyLabel="Withdrawing…" wide data-testid="plan-withdraw-confirm">
+              Withdraw draft
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div class="signature__own">
+          <CopyButton text={`${window.location.origin}/plans/${encodeURIComponent(plan.id)}`} label="Copy link" />
+          <button type="button" class="btn btn--secondary btn--sm" ref={opener} onClick={() => (confirming.value = true)} data-testid="plan-withdraw">
+            <Icon name="undo" />
+            <span>Withdraw draft…</span>
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) => void }) {
   const { plan, author, approver } = data;
   const me = principal.value;
@@ -43,13 +129,20 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
   const busy = useSignal(false);
   const error = useSignal<string | null>(null);
   const intentKey = useRef<string | null>(null);
+  // Withdrawn here, this session: the button that had focus is gone, so focus lands on what happened.
+  const withdrawn = useSignal(false);
+  const decidedTitle = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (withdrawn.value && plan.status !== "draft") decidedTitle.current?.focus();
+  }, [withdrawn.value, plan.status]);
 
   if (plan.status !== "draft") {
     return (
       <section class="signature" aria-labelledby="sig-title" data-testid="plan-decided" data-status={plan.status}>
-        <h2 id="sig-title" class="signature__title">
-          {plan.status === "approved" ? "Signed approval" : `Plan ${PLAN_STATUS[plan.status].label.toLowerCase()}`}
+        <h2 id="sig-title" class="signature__title" ref={decidedTitle} tabIndex={-1}>
+          {plan.status === "approved" ? "Signed approval" : withdrawn.value ? "Draft withdrawn" : `Plan ${PLAN_STATUS[plan.status].label.toLowerCase()}`}
         </h2>
+        {withdrawn.value ? <p class="signature__consequence">You withdrew it. Agents cannot start work on it; draft a new plan to try again.</p> : null}
         <dl class="signature__block">
           <dt>Drafted by</dt>
           <dd>{author ? <Who kind={author.kind} name={author.name} owner={author.ownerName} size={20} /> : plan.authorId}</dd>
@@ -80,16 +173,16 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
     );
   }
 
-  if (me && plan.authorId === me.id) {
+  if (me && plan.authorId === me.id)
     return (
-      <section class="signature signature--locked" aria-labelledby="sig-title">
-        <h2 id="sig-title" class="signature__title">
-          <Icon name="lock" size={18} /> You wrote this plan
-        </h2>
-        <p>Another person has to approve or reject it. Share the link with a teammate who has the plan:approve scope.</p>
-      </section>
+      <OwnDraft
+        plan={plan}
+        onPlan={(p) => {
+          withdrawn.value = true;
+          onPlan(p);
+        }}
+      />
     );
-  }
 
   const ownAgent = author?.kind === "agent" && author.ownerId === me?.id;
 
@@ -310,6 +403,37 @@ function PlanDoc({ data }: { data: PlanData }) {
   );
 }
 
+/**
+ * Phones: the way to the signing panel stays in the thumb zone while you read. It steps aside while
+ * the panel itself is on screen (one signature control at a time, like the rollout's switch-off
+ * bar), and the jump puts focus on the attestation, the first thing to do there.
+ */
+function PlanBar() {
+  const bar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const target = document.getElementById("sign");
+    const el = bar.current;
+    if (!target || !el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => el.toggleAttribute("data-aside", !!e?.isIntersecting));
+    io.observe(target);
+    return () => io.disconnect();
+  }, []);
+  function jump() {
+    const sign = document.getElementById("sign");
+    if (!sign) return;
+    sign.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+    sign.querySelector<HTMLElement>("[data-testid=plan-read], textarea")?.focus({ preventScroll: true });
+  }
+  return (
+    <div class="plan-bar" ref={bar} data-testid="plan-bar">
+      <span class="plan-bar__text">Read to the end, then sign.</span>
+      <Button variant="primary" icon="signature" data-testid="plan-jump-to-sign" onClick={jump}>
+        Review and sign
+      </Button>
+    </div>
+  );
+}
+
 export function PlanView({ planId }: { planId: string }) {
   const res = useResource(() => loadPlan(planId), [planId]);
   const desktop = useMedia("(min-width: 1100px)");
@@ -353,19 +477,7 @@ export function PlanView({ planId }: { planId: string }) {
           <SignaturePanel data={data} onPlan={(p) => res.set({ ...data, plan: p, approver: p.approvedBy === principal.value?.id && principal.value ? { id: principal.value.id, kind: principal.value.kind, name: principal.value.name, ownerId: null } : data.approver })} />
         </aside>
       </div>
-      {isDraft && !desktop && !mine ? (
-        <div class="plan-bar">
-          <span class="plan-bar__text">Read to the end, then sign.</span>
-          <Button
-            variant="primary"
-            icon="signature"
-            data-testid="plan-jump-to-sign"
-            onClick={() => document.getElementById("sign")?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" })}
-          >
-            Review and sign
-          </Button>
-        </div>
-      ) : null}
+      {isDraft && !desktop && !mine ? <PlanBar /> : null}
     </Page>
   );
 }

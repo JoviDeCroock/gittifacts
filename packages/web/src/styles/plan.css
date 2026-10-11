@@ -248,6 +248,21 @@
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--s-2);
 }
+/* The author's own draft: share it, or withdraw it behind an inline confirmation. */
+.signature__own {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.signature__confirm {
+  display: grid;
+  gap: var(--s-3);
+  padding-block-start: var(--s-3);
+  border-block-start: 1px solid var(--rule);
+}
+.signature__confirm-q {
+  color: var(--text);
+}
 .signature__block {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -298,6 +313,20 @@
   -webkit-backdrop-filter: var(--acetate-filter);
   border-block-start: 1px solid var(--acetate-edge);
   box-shadow: var(--acetate-rim), var(--shadow-sheet);
+  transition:
+    transform var(--dur-state) var(--ease-out),
+    opacity var(--dur-state) var(--ease-out),
+    visibility 0s linear;
+}
+/* While the signing panel is on screen the bar steps aside: one signature control at a time. */
+.plan-bar[data-aside] {
+  transform: translateY(100%);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform var(--dur-exit) var(--ease-in),
+    opacity var(--dur-exit) var(--ease-in),
+    visibility 0s linear var(--dur-exit);
 }
 @media (min-width: 1024px) {
   .plan-bar {
