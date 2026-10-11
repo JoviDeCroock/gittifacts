@@ -1,23 +1,57 @@
 .chain {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--s-3);
-  align-items: start;
-  margin-block-end: var(--s-5);
-  padding: var(--s-4);
+  margin-block-end: var(--s-4);
   border-radius: var(--r-panel);
   background: var(--ok-tint);
   border: 1px solid var(--ok-line);
 }
-.chain--ok > .icon {
-  color: var(--ok);
-}
+/* Broken: the whole warning, open. */
 .chain--bad {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: start;
+  padding: var(--s-4);
   background: var(--danger-tint);
   border-color: var(--danger-line);
 }
 .chain--bad > .icon {
   color: var(--danger);
+}
+/* Verified: one line; the explanation opens under it. */
+.chain__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--s-2);
+  min-block-size: var(--tap);
+  padding-inline: var(--s-3);
+  cursor: pointer;
+  list-style: none;
+}
+.chain__summary::-webkit-details-marker {
+  display: none;
+}
+.chain__summary > .icon:first-child {
+  color: var(--ok);
+}
+.chain__summary .disclosure__chev {
+  margin-inline-start: auto;
+  color: var(--text-3);
+  transition: transform var(--dur-state) var(--ease-out);
+}
+.chain[open] .disclosure__chev {
+  transform: rotate(180deg);
+}
+.chain--ok > .chain__line {
+  padding: 0 var(--s-3) var(--s-3) calc(var(--s-3) + 18px + var(--s-2));
+}
+.chain__count {
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.chain-space {
+  block-size: var(--tap);
+  margin-block-end: var(--s-4);
 }
 .chain__title {
   font-weight: var(--weight-bold);
@@ -28,14 +62,56 @@
   max-inline-size: var(--measure);
 }
 
+/* The filter: who, action, subject as plain fields, side by side from 900px. */
 .audit-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
   margin-block-end: var(--s-5);
-  max-inline-size: 560px;
+}
+@media (min-width: 900px) {
+  .audit-filter {
+    grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 1fr) minmax(18rem, 1.6fr);
+    align-items: start;
+  }
 }
 .audit-filter__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--s-2);
+}
+.audit-filter__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: start;
+  min-block-size: var(--tap);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+}
+@media (min-width: 900px) {
+  .audit-filter__clear {
+    grid-column: 1 / -1;
+    min-block-size: 32px;
+  }
+}
+/* A native select in the input's clothes, with the app's chevron. */
+.select {
+  position: relative;
+  display: block;
+}
+.select > select {
+  appearance: none;
+  padding-inline-end: 36px;
+  text-overflow: ellipsis;
+}
+.select__chev {
+  position: absolute;
+  inset-inline-end: 12px;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  color: var(--text-3);
+  pointer-events: none;
 }
 
 .audit__cols {
@@ -45,15 +121,16 @@
   list-style: none;
   border-block-start: 1px solid var(--rule);
 }
+/* Phones: two lines. What happened to what, then who, when, the sequence and the hash chevron. */
 .audit__row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   grid-template-areas:
-    "what what"
-    "who time"
-    "seq hash";
-  gap: 6px var(--s-3);
-  padding-block: var(--s-3);
+    "what what what what"
+    "who time seq hash";
+  align-items: center;
+  gap: 2px var(--s-3);
+  padding-block: var(--s-2) 0;
   border-block-end: 1px solid var(--rule);
   font-size: var(--text-small);
 }
@@ -66,12 +143,94 @@
 .audit__time {
   grid-area: time;
   color: var(--text-3);
+  font-size: var(--text-meta);
   justify-self: end;
   align-self: center;
 }
 .audit__who {
   grid-area: who;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s-2);
   min-inline-size: 0;
+}
+/* Who filters to that actor's trail; the link keeps the Who's own look. */
+.audit__who-link {
+  display: inline-flex;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+.audit__who-link:hover .who__name {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+.audit__owner {
+  color: var(--text-3);
+  font-size: var(--text-meta);
+  white-space: nowrap;
+}
+/* One line: the title truncates before the repo and the filter mark do. */
+.audit__subject-cell {
+  display: inline-flex;
+  flex: 1 1 12rem;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-inline-size: 0;
+}
+.audit__subject-cell > .audit__subject {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audit__title {
+  font-weight: var(--weight-medium);
+}
+/* Titles read as names in ink, like list rows; the link shows itself on hover and focus. */
+a.audit__subject:has(.audit__title) {
+  color: var(--text);
+  text-decoration: none;
+}
+a.audit__subject:has(.audit__title):hover {
+  color: var(--action-ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+.audit__in {
+  flex: none;
+  color: var(--text-3);
+  font-size: var(--text-meta);
+  white-space: nowrap;
+}
+.audit__only {
+  flex: none;
+}
+/* "Only events on this": a quiet mark beside the subject; 44px on touch. */
+.audit__only {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  align-self: center;
+  border-radius: var(--r-control);
+  color: var(--text-3);
+  transition: color var(--dur-feedback) var(--ease-out), background-color var(--dur-feedback) var(--ease-out);
+}
+.audit__only:hover {
+  color: var(--action-ink);
+  background: var(--panel);
+}
+@media (pointer: coarse) {
+  .audit__only {
+    inline-size: var(--tap);
+    block-size: var(--tap);
+    margin-block: -10px;
+  }
 }
 .audit__what {
   grid-area: what;
@@ -118,7 +277,62 @@ a.audit__subject {
 @media (pointer: coarse) {
   .audit__hash > summary {
     min-block-size: var(--tap);
+    min-inline-size: var(--tap);
+    justify-content: flex-end;
   }
+}
+/* On phones the hash is the row's trailing chevron; the digest shows once it is opened. A long
+   title wraps once rather than losing its meaning to an ellipsis. */
+@media (max-width: 899px) {
+  .audit__hash-short {
+    display: none;
+  }
+  .audit__what {
+    display: block;
+  }
+  .audit__what > * + * {
+    margin-inline-start: var(--s-2);
+  }
+  .audit__subject-cell,
+  .audit__subject-cell > .audit__subject {
+    display: inline;
+    white-space: normal;
+  }
+  .audit__subject-cell > * + * {
+    margin-inline-start: var(--s-2);
+  }
+  .audit__only {
+    vertical-align: middle;
+  }
+  .audit__detail {
+    display: block;
+    margin-inline-start: 0;
+  }
+  /* Filters fold into one line on phones; the summary says what is applied. */
+  .audit-filter-fold > summary {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    min-block-size: var(--tap);
+    margin-block-end: var(--s-2);
+    font-weight: var(--weight-medium);
+  }
+  .audit-filter-fold[open] > summary {
+    margin-block-end: var(--s-3);
+  }
+}
+@media (min-width: 900px) {
+  .audit-filter-fold > summary {
+    display: none;
+  }
+}
+.audit-filter-fold__now {
+  color: var(--text-2);
+  font-weight: var(--weight-regular);
+  font-size: var(--text-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .audit__hash > summary::-webkit-details-marker {
   display: none;
@@ -170,7 +384,7 @@ a.audit__subject {
   .audit__cols,
   .audit__row {
     display: grid;
-    grid-template-columns: 64px 128px minmax(150px, 0.9fr) minmax(0, 2fr) 150px;
+    grid-template-columns: 56px 116px minmax(150px, 0.8fr) minmax(0, 2.4fr) 112px;
     grid-template-areas: "seq time who what hash";
     column-gap: var(--s-4);
     align-items: center;
