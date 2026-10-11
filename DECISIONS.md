@@ -3532,3 +3532,16 @@ before audit H2 that send `GITTIFACTS_TOKEN` wherever a checkout's `.gittifacts.
   fresh one, since they can't update themselves. The platform keeps answering the old path with the same v2 file
   (`routes/cli.ts`), so it is never a stale build. Rejected: a new URL per build (template digests and every surface
   would churn on each CLI change).
+
+## 2026-10-11 — The deploy gate runs as seven parallel jobs (≈ 3 min instead of ≈ 10)
+
+`deploy-gate.yml`'s `gate` job ran the full typecheck (2.5–3 min) and then the whole platform workerd suite
+(6–8 min, `--maxWorkers=2`) one after the other on one runner, so every deploy waited 9–12 min before staging.
+Now: `checks` (generated artifacts, typecheck, web tests), `platform` sharded by file over 4 runners
+(`vitest run --shard=i/4`, the Cloudflare pool shards like any other) and `e2e` sharded over 2 (`playwright
+--shard=i/2`, each shard with its own `wrangler dev` server, report and step summary). Shared setup lives in
+`.github/actions/setup`. First run (38127829536): 2 min 42 s end to end, every job green, same tests. Why it's
+cheap: the repository is public, so standard runners cost no minutes; `fail-fast: false` so one run names every
+failing shard. The deploy scripts now look up their dispatched run on `main` only, so a rehearsal of the gate on a
+branch (`gh workflow run deploy-gate.yml --ref <branch>`) is never mistaken for the deploy's run. Rejected: caching
+the pnpm store and the Playwright browser (≈ 15 s and ≈ 20 s per job, not the long pole).
