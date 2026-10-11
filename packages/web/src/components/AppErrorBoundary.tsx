@@ -1,13 +1,15 @@
 /**
  * A screen that throws while rendering shows what failed and a way out (reload, or the
- * dashboard) inside the app frame, instead of a blank page. It also keeps preact-iso's
+ * dashboard) inside the app frame, instead of a blank page. The first read is a sentence and the
+ * way out; the exception itself waits in a disclosure, ready to copy into a report. It also keeps preact-iso's
  * ErrorBoundary job: lazy routes suspend here while their chunk loads. Resets on navigation.
  */
 import { Component, type ComponentChildren } from "preact";
 import { ErrorBoundary, useLocation } from "preact-iso";
 import { APP_HOME } from "../lib/nav.js";
+import { Icon } from "./Icon.js";
 import { Page } from "./Shell.js";
-import { Button, EmptyState, LinkButton } from "./ui.js";
+import { Button, Command, EmptyState, LinkButton } from "./ui.js";
 
 interface State {
   error: unknown;
@@ -48,13 +50,15 @@ class Catcher extends Component<{ path: string; children: ComponentChildren }, S
             </>
           }
         >
-          <p>
-            Reloading usually fixes it. If it keeps happening, include this message when you report
-            it.
-          </p>
-          <p>
-            <code>{message}</code>
-          </p>
+          <p>Something on this screen broke while it was drawing. Reloading usually fixes it.</p>
+          <details class="disclosure error-details" data-testid="error-details">
+            <summary>
+              Technical details
+              <Icon name="chevron-down" size={16} class="disclosure__chev" />
+            </summary>
+            <p>If it keeps happening, copy this into your report:</p>
+            <Command text={message} />
+          </details>
         </EmptyState>
       </Page>
     );

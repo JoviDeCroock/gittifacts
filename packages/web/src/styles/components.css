@@ -689,3 +689,19 @@ a.btn:hover {
     block-size: auto;
   }
 }
+
+/* ================================================================ error boundary details */
+/* The sentence and the way out come first; the exception sits here, ready to copy. */
+.error-details {
+  margin-block-start: var(--s-3);
+  text-align: start;
+}
+.error-details > summary {
+  justify-content: center;
+  color: var(--text-2);
+}
+.error-details > p {
+  margin-block-end: var(--s-2);
+  color: var(--text-3);
+  font-size: var(--text-small);
+}
