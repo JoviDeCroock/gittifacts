@@ -41,6 +41,7 @@ const LABEL: Record<string, string> = {
   "merge-queue.build-errored": "Batch tree could not be built",
   "merge-queue.batch-timed-out": "Batch stuck past its time limit",
   "merge-queue.batch-gave-up": "Batch gave up after retries",
+  "merge-queue.run-lost": "Batch CI run ended without a result, retrying",
   "merge-queue.resolution": "Conflict resolved by the resolver agent",
   "merge-queue.approval-requested": "Fresh approval requested",
   "deploy.train-deployed": "Deploy batch deployed",
@@ -105,5 +106,5 @@ export function actionLabel(action: string): string {
 
 /** Actions a reader should notice: something failed, was undone or was stopped. */
 export function isBadAction(action: string): boolean {
-  return /failed|rolled-back|killed|regression|alarm-error|refused|undelivered|dropped|errored|timed-out|gave-up/.test(action);
+  return /failed|rolled-back|killed|regression|alarm-error|refused|undelivered|dropped|errored|timed-out|gave-up|run-lost/.test(action);
 }

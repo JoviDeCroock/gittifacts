@@ -83,6 +83,32 @@ export function summarizeStatus(s: CiRunStatus, startedAt: number, now: number):
   return { status: "running", ...base };
 }
 
+/**
+ * `ciRun`, but a step that failed for good (start refused, polling broken) is an errored run
+ * instead of an errored Workflow instance: the instance must always report back, or the batch
+ * sits "running" in the DO until its run timeout (live 2026-10-11: 25+ min, four landings).
+ */
+async function ciRunOrErrored(
+  deps: FlowDeps,
+  params: z.output<typeof BatchRunParams>,
+  step: Step,
+  input: Parameters<typeof ciRun>[3],
+): Promise<Polled & { error?: string }> {
+  try {
+    return await ciRun(deps, params, step, input);
+  } catch (e) {
+    const error = (e instanceof Error ? `${e.name}: ${e.message}` : String(e)).slice(0, 2000);
+    return {
+      status: "errored",
+      failedSteps: [],
+      logRef: null,
+      durationMs: null,
+      bundleRef: null,
+      error,
+    };
+  }
+}
+
 /** One CI run of the pipeline on `commitSha` (main repo), polled to its end with fail-fast. */
 async function ciRun(
   deps: FlowDeps,
@@ -157,9 +183,12 @@ export async function runBatchRun(
       const t = await deps.ports.git.treeOf(params.mainRepo, cmd.commitSha);
       return t ?? cmd.treeSha;
     });
-    const targets = cmd.targets === "all" ? null : cmd.targets;
+    // No impacted test target (a docs-only revalidation) is not "nothing to check": the build and
+    // lint steps still have to pass on the new tree, and the engine takes no empty target list
+    // (it refused `testTargets: []`; live 2026-10-11). Run everything: "all" covers [].
+    const targets = cmd.targets === "all" || cmd.targets.length === 0 ? null : cmd.targets;
     const id = ciRunId("r");
-    const r = await ciRun(deps, params, step, {
+    const r = await ciRunOrErrored(deps, params, step, {
       name: "run",
       ciRunId: id,
       commitSha: cmd.commitSha,
@@ -180,7 +209,12 @@ export async function runBatchRun(
         ...(r.durationMs === null ? {} : { durationMs: r.durationMs }),
         ...(r.logRef === null ? {} : { logRef: r.logRef }),
       },
-      { ciRunId: id, bundleRef: r.bundleRef, failedSteps: r.failedSteps },
+      {
+        ciRunId: id,
+        bundleRef: r.bundleRef,
+        failedSteps: r.failedSteps,
+        ...(r.error === undefined ? {} : { error: r.error }),
+      },
     );
     return { outcome, ciRunIds: [id] };
   }
@@ -190,7 +224,7 @@ export async function runBatchRun(
   const decided = async (name: string, commitSha: string): Promise<Polled> => {
     let last: Polled | null = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
-      last = await ciRun(deps, params, step, {
+      last = await ciRunOrErrored(deps, params, step, {
         name: `${name}${attempt}`,
         ciRunId: ciRunId(`k${name[0]}${attempt}`),
         commitSha,

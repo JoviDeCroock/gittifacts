@@ -162,6 +162,8 @@ const SUMMARIES: Record<string, (p: Payload) => string | null> = {
   },
   "merge-queue.batch-gave-up": (p) =>
     `Batch gave up${num(p, "retries") === null ? "" : ` after ${num(p, "retries")} retries`}${str(p, "why") ? `: ${clip(str(p, "why")!)}` : ""}`,
+  "merge-queue.run-lost": (p) =>
+    `Batch CI run ended ${str(p, "status") ?? "early"} without a result${str(p, "error") ? ` (${clip(str(p, "error")!, 160)})` : ""}; it counts as errored and the batch is retried`,
   "merge-queue.alarm-error": (p) =>
     `Merge queue step failed, retrying${str(p, "error") ? ` (${clip(str(p, "error")!)})` : ""}`,
   "merge-queue.resolution": (p) => {

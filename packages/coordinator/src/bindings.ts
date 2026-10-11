@@ -27,7 +27,8 @@ export interface WorkflowInstanceHandle {
   terminate(): Promise<void>;
   /** Restart from the beginning (used when an old head is pushed again). */
   restart(): Promise<void>;
-  status(): Promise<{ status: WorkflowRunStatus }>;
+  /** `error`: why an errored instance failed ("Name: message"), when the platform says. */
+  status(): Promise<{ status: WorkflowRunStatus; error?: string }>;
 }
 
 export interface WorkflowHandle<P> {

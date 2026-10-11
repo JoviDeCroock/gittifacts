@@ -32,7 +32,7 @@ interface WorkflowInstanceLike {
   sendEvent(event: { type: string; payload: unknown }): Promise<void>;
   terminate(): Promise<void>;
   restart(): Promise<void>;
-  status(): Promise<{ status: string }>;
+  status(): Promise<{ status: string; error?: { name?: string; message?: string } | null }>;
 }
 
 export interface WorkflowLike<P> {
@@ -71,8 +71,13 @@ function instanceHandle(i: WorkflowInstanceLike): WorkflowInstanceHandle {
     terminate: () => i.terminate(),
     restart: () => i.restart(),
     status: async () => {
-      const { status } = await i.status();
-      return { status: STATUSES.has(status) ? (status as WorkflowRunStatus) : "unknown" };
+      const { status, error } = await i.status();
+      const known = STATUSES.has(status) ? (status as WorkflowRunStatus) : "unknown";
+      if (error === undefined || error === null) return { status: known };
+      return {
+        status: known,
+        error: `${error.name ?? "Error"}: ${error.message ?? ""}`.slice(0, 2000),
+      };
     },
   };
 }

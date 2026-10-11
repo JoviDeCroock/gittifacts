@@ -103,8 +103,11 @@ export class FakeWorkflowInstance<P = unknown> implements WorkflowInstanceHandle
     this.start();
   }
 
-  async status(): Promise<{ status: WorkflowRunStatus }> {
-    return { status: this.waiters.length > 0 && this.state === "running" ? "waiting" : this.state };
+  async status(): Promise<{ status: WorkflowRunStatus; error?: string }> {
+    const status = this.waiters.length > 0 && this.state === "running" ? "waiting" : this.state;
+    if (status !== "errored" || this.error === undefined) return { status };
+    const e = this.error;
+    return { status, error: e instanceof Error ? `${e.name}: ${e.message}` : String(e) };
   }
 
   /** Used by FakeStep. */

@@ -12,7 +12,8 @@ import type { OutboxRow } from "./store.js";
 /** One thing that went wrong, kept in `mq_meta` (newest last, at most PROBLEMS_KEPT). */
 export interface QueueProblem {
   at: number;
-  kind: "dropped" | "build-errored" | "timed-out";
+  /** run-errored: a run reported it could not run; run-lost: its Workflow ended without a result. */
+  kind: "dropped" | "build-errored" | "timed-out" | "run-errored" | "run-lost";
   command: string | null;
   batchId: string | null;
   changeIds: string[];
@@ -209,6 +210,49 @@ export function stallsOf(input: {
         error: errorOf(last),
         since: last.at,
         next: { kind: "rebuild", at: null },
+      });
+      continue;
+    }
+    // 4. Running far past what a run takes (its result may be lost; live 2026-10-11 four landing
+    //    revalidations sat "running" with no stall shown): the core's run timeout cancels and
+    //    retries it, and the alarm's run watch does sooner once its Workflow ended.
+    const overdue = Math.max(s.config.buildTimeoutMs, 2 * s.stats.ciDurationMs);
+    if (b.state === "running" && b.startedAt !== null && now - b.startedAt > overdue) {
+      out.push({
+        state: "stalled",
+        what:
+          b.kind === "landing"
+            ? "Revalidating the landing batch on main"
+            : "Waiting for the batch's CI run",
+        command: "StartBatchRun",
+        batchId: b.id,
+        changeIds: entriesOf(b),
+        attempts: b.infraRetries,
+        maxAttempts: s.config.maxInfraRetries + 1,
+        error: errorOf(last),
+        since: b.startedAt,
+        next: { kind: "retry", at: b.startedAt + s.config.runTimeoutMs },
+      });
+      continue;
+    }
+    // 5. Running again after a run that errored, was lost or timed out: say why.
+    const runFailed =
+      last !== undefined &&
+      (last.kind === "run-errored" ||
+        last.kind === "run-lost" ||
+        (last.kind === "timed-out" && last.command === "StartBatchRun"));
+    if ((b.state === "ready" || b.state === "running") && b.infraRetries > 0 && runFailed) {
+      out.push({
+        state: "retrying",
+        what: "Re-running the batch's CI after a failure",
+        command: "StartBatchRun",
+        batchId: b.id,
+        changeIds: entriesOf(b),
+        attempts: b.infraRetries,
+        maxAttempts: s.config.maxInfraRetries + 1,
+        error: errorOf(last),
+        since: last.at,
+        next: { kind: "retry", at: b.startedAt ?? last.at },
       });
     }
   }

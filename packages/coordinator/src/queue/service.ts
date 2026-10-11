@@ -32,7 +32,8 @@ import { failureText } from "./failure.js";
 import { CoordinatorQueueShell } from "./handlers.js";
 import type { QueueJobs } from "./jobs.js";
 import { type HaltInfo, QueueLoop } from "./loop.js";
-import { commandDropped, recentProblems } from "./problems.js";
+import { commandDropped, recentProblems, recordProblem } from "./problems.js";
+import { lostRuns } from "./run-watch.js";
 import { type QueueStall, stallsOf } from "./stalls.js";
 import { type EventRow, QueueStore, type Transact } from "./store.js";
 import { CoordinatorTrainShell } from "./trains.js";
@@ -251,6 +252,14 @@ export class MergeQueueService {
         bundleRef: typeof input.meta?.bundleRef === "string" ? input.meta.bundleRef : null,
         ciRunId: typeof input.meta?.ciRunId === "string" ? input.meta.ciRunId : null,
       });
+    // A run that could not run (the engine refused it, polling broke): say why on the queue view.
+    const ev = parsed.data;
+    if (
+      ev.type === "BatchResult" &&
+      ev.outcome === "errored" &&
+      typeof input.meta?.error === "string"
+    )
+      this.runProblem(ev.batchId, input.meta.error, "run-errored");
     this.loop.dispatch(parsed.data);
     this.wakeAll();
     await this.arm();
@@ -426,6 +435,7 @@ export class MergeQueueService {
     await this.init();
     if (this.loop.halted === null) {
       try {
+        await this.watchRuns();
         this.loop.dispatch({ type: "Tick" });
         this.loop.dispatchTrain({ type: "Tick" });
         await this.trainShell.monitor(this.loop.trains, (e) => void this.loop.dispatchTrain(e));
@@ -439,6 +449,45 @@ export class MergeQueueService {
       this.wakeAll();
     }
     await this.arm();
+  }
+
+  /** Runs whose BatchRunWorkflow ended without a result count as errored now (run-watch.ts). */
+  private async watchRuns(): Promise<void> {
+    const lost = await lostRuns({
+      state: this.loop.state,
+      store: this.store,
+      batchRuns: this.deps.batchRuns,
+      now: this.ctx.now(),
+    });
+    for (const l of lost) {
+      const why = `its BatchRunWorkflow ${l.status} without reporting a result${l.error === null ? "" : ` (${l.error})`}`;
+      this.runProblem(l.batchId, why, "run-lost");
+      await this.ctx.audit(this.ctx.repoSubject(), "merge-queue.run-lost", {
+        batchId: l.batchId,
+        runId: l.runId,
+        instanceId: l.instanceId,
+        status: l.status,
+        error: l.error,
+        changeIds: l.changeIds,
+        next: "the run counts as errored and the batch is retried",
+      });
+      this.loop.dispatch(l.event);
+    }
+  }
+
+  private runProblem(batchId: string, message: string, kind: "run-errored" | "run-lost"): void {
+    const b = this.loop.state.batches[batchId];
+    const m = /^([A-Za-z_$][\w$.]{0,99}): ([\s\S]*)$/.exec(message);
+    recordProblem(this.store, {
+      at: this.ctx.now(),
+      kind,
+      command: "StartBatchRun",
+      batchId,
+      changeIds: b === undefined ? [] : [...b.carried, ...b.units.flatMap((u) => u.changeIds)],
+      attempts: b === undefined ? null : b.infraRetries + 1,
+      errorClass: m?.[1] ?? null,
+      message: (m?.[2] ?? message).slice(0, 2000),
+    });
   }
 
   /** Main moved outside the queue (should never happen: the DO is the only writer). */
