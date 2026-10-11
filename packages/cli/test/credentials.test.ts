@@ -13,6 +13,7 @@ import {
   writeCredentials,
 } from "../src/config.js";
 import { CliError } from "../src/errors.js";
+import { envTokenAllowed, isSecureOrigin } from "../src/host-trust.js";
 import { tempDir } from "./support/io.js";
 
 const H = "https://gittifacts.example";
@@ -143,5 +144,45 @@ describe("token and host resolution", () => {
     });
     writeFileSync(join(root, "a", PROJECT_FILE), "[]");
     expect(() => findProject(deep)).toThrow(CliError);
+  });
+});
+
+describe("which hosts get GITTIFACTS_TOKEN", () => {
+  const empty: Credentials = { version: 1, hosts: {} };
+  const fromProject = { host: H, source: "project" as const };
+
+  it("a host the user chose always; one only the project file names, when trusted", () => {
+    for (const source of ["flag", "env", "login", "build"] as const) {
+      expect(envTokenAllowed({ host: H, source }, {}, empty)).toBe(true);
+    }
+    expect(envTokenAllowed(fromProject, {}, empty)).toBe(false);
+    // Created an (unclaimed) project there from this machine, or logged in to it.
+    const created: Credentials = {
+      version: 1,
+      hosts: {
+        [H]: {
+          projects: { prj_1: { token: "t", expiresAt: null, claimUrl: null, createdAt: "" } },
+        },
+      },
+    };
+    expect(envTokenAllowed(fromProject, {}, created)).toBe(true);
+    // GITTIFACTS_TOKEN_HOST is normalized like --host; another host doesn't count.
+    expect(
+      envTokenAllowed(fromProject, { GITTIFACTS_TOKEN_HOST: "gittifacts.example/" }, empty),
+    ).toBe(true);
+    expect(envTokenAllowed(fromProject, { GITTIFACTS_TOKEN_HOST: "other.example" }, empty)).toBe(
+      false,
+    );
+    expect(envTokenAllowed(fromProject, { GITTIFACTS_TOKEN_HOST: "ftp://x" }, empty)).toBe(false);
+  });
+
+  it("plain http only to loopback", () => {
+    expect(isSecureOrigin("https://gittifacts.example")).toBe(true);
+    expect(isSecureOrigin("http://localhost:8787")).toBe(true);
+    expect(isSecureOrigin("http://127.0.0.1:1")).toBe(true);
+    expect(isSecureOrigin("http://[::1]:9")).toBe(true);
+    expect(isSecureOrigin("http://gittifacts.example")).toBe(false);
+    expect(isSecureOrigin("http://localhost.evil.example")).toBe(false);
+    expect(isSecureOrigin("not a url")).toBe(false);
   });
 });

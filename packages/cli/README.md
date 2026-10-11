@@ -93,6 +93,11 @@ with the token" step (an MCP session needs it; the CLI doesn't).
   `login --no-wait` to get the URL and code as JSON, then `login --device-code <code>` to finish.
 - **Host**, highest priority first: `--host`, `GITTIFACTS_HOST`, the nearest `.gittifacts.json`, then the last host you logged in to.
 - **Token**, highest priority first: `GITTIFACTS_TOKEN`, the host's login, then the token of the project in the current directory.
+- **What a checkout can't do.** `.gittifacts.json` comes from the directory tree, so the CLI doesn't let it redirect a
+  token. `GITTIFACTS_TOKEN` is sent to a host only `.gittifacts.json` names when you logged in to that host, created a
+  project there from this machine, or set `GITTIFACTS_TOKEN_HOST` to it; otherwise the command fails with
+  `untrusted-host` (set `GITTIFACTS_HOST` next to `GITTIFACTS_TOKEN` and it never comes up). Its `mcpUrl` is ignored
+  unless it is on the host, and plain `http://` is refused except to localhost, 127.0.0.1 and [::1].
 - Credentials live in `~/.config/gittifacts/credentials.json` (mode 0600, keyed by host; override the directory
   with `GITTIFACTS_CONFIG_DIR`). `.gittifacts.json` holds `{ host, projectId, remote }` and no secrets.
 - `init --clone` passes the token to git through its environment. It never appears in argv or `.git/config`.

@@ -13,6 +13,7 @@ import { noHostError, normalizeHost, resolveHost, updateCredentials } from "../c
 import type { Ctx } from "../context.js";
 import { cliError, EXIT } from "../errors.js";
 import { isAbort } from "../failures.js";
+import { requireSecureOrigin } from "../host-trust.js";
 import { type Builtin, bool, builtinSpec, int, str } from "./builtin.js";
 
 function hostFor(ctx: Ctx): string {
@@ -70,6 +71,8 @@ export const login: Builtin = {
   ],
   async run(ctx, parsed) {
     const host = hostFor(ctx);
+    // The device flow's token comes back over this origin.
+    requireSecureOrigin(host, "the login host");
     const env = ctx.io.env;
     const endpoints = await discoverEndpoints(ctx.io.fetch, host, {
       deviceCodeUrl: str(parsed, "deviceCodeUrl") ?? env.GITTIFACTS_DEVICE_CODE_URL,

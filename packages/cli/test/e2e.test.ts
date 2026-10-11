@@ -4,7 +4,8 @@
  * @app/mcp, served over HTTP with a fake McpBackend.
  */
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TOOL_DEFINITIONS } from "../src/tools/definitions.js";
@@ -53,8 +54,8 @@ function cli(
   args: string[],
   env: Record<string, string | undefined> = {},
   stdin?: string,
+  cwd = join(work, "project"),
 ): Promise<Result> {
-  const cwd = join(work, "project");
   mkdirSync(cwd, { recursive: true });
   return exec(process.execPath, [bundle, ...args], {
     cwd,
@@ -237,5 +238,117 @@ describe("bundled CLI against the real MCP server", () => {
       },
       idempotencyKey: "k-net",
     });
+  });
+});
+
+describe("a checkout can't redirect the token (.gittifacts.json names the host)", () => {
+  /** Another origin that records every request it gets (and serves nothing). */
+  let attacker: Server;
+  let evil: string;
+  const seen: { url: string; authorization: string | null }[] = [];
+
+  beforeAll(async () => {
+    attacker = createServer((req, res) => {
+      seen.push({ url: req.url ?? "", authorization: req.headers.authorization ?? null });
+      res.writeHead(404).end();
+    });
+    await new Promise<void>((resolve) => attacker.listen(0, "127.0.0.1", resolve));
+    const addr = attacker.address();
+    if (addr === null || typeof addr === "string") throw new Error("no port");
+    evil = `http://127.0.0.1:${addr.port}`;
+  });
+  afterAll(async () => {
+    await new Promise<void>((resolve) => attacker.close(() => resolve()));
+  });
+
+  /** A checkout whose committed .gittifacts.json says `config`; returns its directory. */
+  function checkout(name: string, config: Record<string, unknown>): string {
+    const dir = join(work, name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, ".gittifacts.json"), JSON.stringify({ projectId: "prj_x", ...config }));
+    return dir;
+  }
+
+  it("refuses to send GITTIFACTS_TOKEN to a host only the project file names", async () => {
+    const dir = checkout("hostile-host", { host: evil });
+    const r = await cli(["whoami"], { GITTIFACTS_HOST: undefined }, undefined, dir);
+    expect(r.code).toBe(1);
+    expect(json(r)).toMatchObject({
+      error: {
+        code: "untrusted-host",
+        message: expect.stringContaining(evil),
+        fix: {
+          explanation: expect.stringContaining("GITTIFACTS_TOKEN_HOST"),
+          // Look at the file, never a command that sends the token there.
+          command: expect.stringMatching(/^cat .*hostile-host\/\.gittifacts\.json$/),
+        },
+      },
+    });
+    expect(seen).toEqual([]);
+  });
+
+  it("ignores an mcpUrl that is not on the host, with a warning, and talks to the host", async () => {
+    const dir = checkout("hostile-mcp", { host, mcpUrl: `${evil}/mcp` });
+    const r = await cli(["whoami"], {}, undefined, dir);
+    expect(r.code, r.stdout + r.stderr).toBe(0);
+    expect(json(r)).toMatchObject({ principalId: "ag_1", auth: { host, tokenSource: "env" } });
+    expect(r.stderr).toContain(`ignoring mcpUrl "${evil}/mcp"`);
+    expect(seen).toEqual([]);
+  });
+
+  it("refuses plain http to anything but loopback, before sending anything", async () => {
+    const dir = checkout("hostile-http", { host: "http://gittifacts.example" });
+    const r = await cli(["whoami"], { GITTIFACTS_HOST: undefined }, undefined, dir);
+    expect(json(r)).toMatchObject({ error: { code: "insecure-host" } });
+    const flag = await cli(["whoami"], { GITTIFACTS_HOST: "http://gittifacts.example" });
+    expect(json(flag)).toMatchObject({
+      error: { code: "insecure-host", message: expect.stringContaining("GITTIFACTS_HOST") },
+    });
+  });
+
+  it("still works for a host the user trusts: GITTIFACTS_TOKEN_HOST, or a login to that host", async () => {
+    const dir = checkout("trusted", { host });
+    const named = await cli(
+      ["whoami"],
+      { GITTIFACTS_HOST: undefined, GITTIFACTS_TOKEN_HOST: host },
+      undefined,
+      dir,
+    );
+    expect(json(named)).toMatchObject({
+      principalId: "ag_1",
+      auth: { host, hostSource: "project", tokenSource: "env" },
+    });
+
+    // A person who logged in to the host, then works in a repo `init` made: no env at all.
+    const config = join(work, "config-logged-in");
+    mkdirSync(config, { recursive: true });
+    writeFileSync(
+      join(config, "credentials.json"),
+      JSON.stringify({
+        version: 1,
+        defaultHost: host,
+        hosts: { [host]: { login: { token: bearerFor("hu_1"), tokenType: "Bearer" } } },
+      }),
+    );
+    const env = { GITTIFACTS_HOST: undefined, GITTIFACTS_TOKEN: undefined };
+    const loggedIn = await cli(
+      ["whoami"],
+      { ...env, GITTIFACTS_CONFIG_DIR: config },
+      undefined,
+      dir,
+    );
+    expect(json(loggedIn)).toMatchObject({
+      principalId: "hu_1",
+      auth: { host, hostSource: "project", tokenSource: "login" },
+    });
+    // …and an env token (an agent the person started) is fine there too.
+    const agent = await cli(
+      ["whoami"],
+      { GITTIFACTS_HOST: undefined, GITTIFACTS_CONFIG_DIR: config },
+      undefined,
+      dir,
+    );
+    expect(json(agent)).toMatchObject({ principalId: "ag_1", auth: { tokenSource: "env" } });
+    expect(seen).toEqual([]);
   });
 });

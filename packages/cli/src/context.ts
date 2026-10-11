@@ -8,8 +8,9 @@ import {
   type Credentials,
   credentialsPath,
   findProject,
-  mcpUrlFor,
+  type HostSource,
   noHostError,
+  PROJECT_FILE,
   type ProjectConfig,
   type ResolvedToken,
   readCredentials,
@@ -17,6 +18,12 @@ import {
   resolveToken,
 } from "./config.js";
 import { type FailureContext, toCliError } from "./failures.js";
+import {
+  envTokenAllowed,
+  requireSecureOrigin,
+  trustedMcpUrl,
+  untrustedHostError,
+} from "./host-trust.js";
 import type { CliIo } from "./io.js";
 import type { McpConnection } from "./mcp.js";
 import type { Output } from "./output.js";
@@ -58,16 +65,36 @@ export class Ctx {
     this.credsCache = undefined;
   }
 
+  /** Where to connect and with what token; host-trust.ts decides what a checkout may redirect. */
   targetOrNull(): Target | null {
-    const project = this.project()?.config ?? null;
-    const resolved = resolveHost(this.globals.host, this.io.env, project, this.creds());
+    const found = this.project();
+    const project = found?.config ?? null;
+    const env = this.io.env;
+    const resolved = resolveHost(this.globals.host, env, project, this.creds());
     if (!resolved) return null;
+    const from =
+      resolved.source === "project" && found ? found.path : hostSourceLabel(resolved.source);
+    requireSecureOrigin(resolved.host, from);
+    const mcpUrl = trustedMcpUrl(resolved.host, found, env, (line) => this.warnOnce(line));
+    requireSecureOrigin(mcpUrl, env.GITTIFACTS_MCP_URL ? "GITTIFACTS_MCP_URL" : from);
+    if (env.GITTIFACTS_TOKEN && !envTokenAllowed(resolved, env, this.creds())) {
+      throw untrustedHostError(resolved.host, found?.path ?? PROJECT_FILE);
+    }
     return {
       host: resolved.host,
       hostSource: resolved.source,
-      mcpUrl: mcpUrlFor(resolved.host, project, this.io.env),
-      token: resolveToken(resolved.host, this.io.env, this.creds(), project, this.io.now()),
+      mcpUrl,
+      token: resolveToken(resolved.host, env, this.creds(), project, this.io.now()),
     };
+  }
+
+  private warned = new Set<string>();
+
+  /** A stderr notice, once per invocation (target() runs more than once in some commands). */
+  private warnOnce(line: string): void {
+    if (this.warned.has(line)) return;
+    this.warned.add(line);
+    this.out.notice(line);
   }
 
   target(): Target {
@@ -134,5 +161,20 @@ export class Ctx {
       out.push(shellQuote(a));
     }
     return ["gittifacts", ...out, "--idempotency-key", shellQuote(key)].join(" ");
+  }
+}
+
+function hostSourceLabel(source: HostSource): string {
+  switch (source) {
+    case "flag":
+      return "--host";
+    case "env":
+      return "GITTIFACTS_HOST";
+    case "login":
+      return "the last login (credentials.json)";
+    case "build":
+      return "the build's default host";
+    case "project":
+      return PROJECT_FILE;
   }
 }
