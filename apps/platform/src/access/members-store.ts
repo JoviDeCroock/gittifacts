@@ -2,7 +2,7 @@
  * `repo_members` queries. Everything that reads or writes memberships goes through here.
  */
 import { and, eq, sql } from "drizzle-orm";
-import { principals, repoMembers } from "../db/schema.js";
+import { principals, repoMembers, repos } from "../db/schema.js";
 import type { D1Store } from "../store/d1-store.js";
 import { isRepoRole, type RepoRole } from "./roles.js";
 
@@ -63,6 +63,27 @@ export async function countOwners(store: D1Store, repoId: string): Promise<numbe
     .where(and(eq(repoMembers.repoId, repoId), eq(repoMembers.role, "owner")))
     .get();
   return r?.n ?? 0;
+}
+
+/**
+ * How many distinct humans belong to a repo: its human `repo_members` rows (any role) plus the
+ * claim owner (normally an owner row already; counted once either way). Pending invites are not
+ * members. Separation of duties on `.platform/**` reads this (the coordinator's solo exception).
+ */
+export async function countHumanMembers(store: D1Store, repoId: string): Promise<number> {
+  const r = await store.db
+    .select({ n: sql<number>`count(DISTINCT ${principals.id})` })
+    .from(principals)
+    .where(
+      and(
+        eq(principals.kind, "human"),
+        sql`(${principals.id} IN (SELECT m.principal_id FROM ${repoMembers} m WHERE m.repo_id = ${repoId})
+          OR ${principals.id} = (SELECT ${repos.claimOwnerId} FROM ${repos} WHERE ${repos.id} = ${repoId} AND ${repos.claimStatus} = 'claimed'))`,
+      ),
+    )
+    .get();
+  if (typeof r?.n !== "number") throw new Error(`could not count the members of repo ${repoId}`);
+  return r.n;
 }
 
 /** Insert or change a membership (the caller checked who may). */

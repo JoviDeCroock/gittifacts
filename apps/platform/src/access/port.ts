@@ -7,6 +7,7 @@ import type { Bindings } from "../app-env.js";
 import { ApiError } from "../errors.js";
 import { D1Store } from "../store/d1-store.js";
 import { type AccessDeps, assertRepoAccess } from "./access.js";
+import { countHumanMembers } from "./members-store.js";
 
 export function repoAccessPort(
   env: Pick<Bindings, "DB" | "BLOBS" | "PLATFORM_ADMINS" | "PLATFORM_AUDITORS">,
@@ -23,6 +24,11 @@ export function repoAccessPort(
         if (e instanceof ApiError && e.status === 403) return "denied";
         throw e;
       }
+    },
+    // Separation of duties on `.platform/**`: the coordinator's solo exception applies only when
+    // this is exactly 1. A failed read throws, which the coordinator treats as unknown (no exception).
+    humanMembers(repoId) {
+      return countHumanMembers(deps.store, repoId);
     },
   };
 }
