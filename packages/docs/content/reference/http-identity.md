@@ -81,7 +81,7 @@ Revoke every token of a principal (its owner or itself)
 What the sign-in page may offer on this deployment (no sign-in needed)
 
 - **Auth:** none
-- **200:** `SignInOptions { passwordReset, passkeys }`
+- **200:** `SignInOptions { passwordReset }`
 
 ## oauth
 

@@ -50,6 +50,7 @@ Schema `ConflictResolution`. A merge conflict resolved by the platform's resolve
 | `truncated` | boolean |  |
 | `touchesOutsideConflictHunks` | boolean | True when any edit is not explained by replacing conflict regions (or no regions exist). |
 | `novelLines?` | integer | Resolved lines found verbatim on neither side of their conflict region (written by the resolver). |
+| `droppedLines?` | integer | Lines of either side's change the resolution lost, reordered or undid (0 = every region is an in-order merge of both sides). Absent on items from before 2026-10-11. |
 | `semanticConflictWith` | string \| null | Semantic conflicts: the upstream changeId the resolver blamed; null for textual conflicts. |
 | `failingTests?` | string[] | Semantic conflicts: the test ids that failed on the merged tree before the resolution. |
 | `rationale` | string | The resolver's own explanation (model text: may only raise risk). |

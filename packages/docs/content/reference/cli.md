@@ -18,10 +18,10 @@ The CLI prints exactly one JSON document on stdout (errors too) and `--human` ta
 | Flag | Notes |
 | --- | --- |
 | `--host <url>` | Platform origin (else GITTIFACTS_HOST, .gittifacts.json, the last login). |
-| `--human` | Tables and sections instead of JSON. |
-| `--json <object\|->` | Raw tool arguments as a JSON object (`-` reads stdin). |
+| `--human` | Text for people (the default when stdout is a terminal). |
+| `--json [<object\|->]` | Print JSON (the default when stdout is not a terminal). With an object (or `-` for stdin): raw tool arguments. |
 | `--idempotency-key <key>` | Key for mutating commands (default: generated, printed in the output). |
-| `--help` | Usage for a command (JSON, or text with --human). |
+| `--help` | Usage for a command. |
 | `--version` | Print the CLI version. |
 
 ## Environment
@@ -67,6 +67,40 @@ gittifacts init [--template <workers-api|preact-app|ts-library|static-site>] [--
 | `--show-token` | boolean |  | Include the repo token in the output (it is stored either way). |
 
 Examples: `gittifacts init --template workers-api --name my-api`, `gittifacts init --template preact-app --name app --clone`, `gittifacts init --from https://github.com/org/repo`.
+
+### `gittifacts clone`
+
+git clone a repo you can read (the platform's read-only /git/ proxy, with your login token), write .gittifacts.json and install the credential helper. Then edit, commit and run `gittifacts ship`.
+
+```text
+gittifacts clone <repoId> [--dir <string>] [--url <string>]
+```
+
+| Flag | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `--repo-id` | string | yes | Also the first positional argument. The repo (from list-repos or the repo page). |
+| `--dir` | string |  | Where to clone (default ./<repo name>). |
+| `--url` | string |  | The repo's /git/ URL, when the platform doesn't report one. |
+
+Examples: `gittifacts clone repo_123`, `gittifacts clone repo_123 --dir work`.
+
+### `gittifacts ship`
+
+Push HEAD to this clone's open Change (or start one: start_change, then point origin at its fork), wait for CI and the lane, and print the lane, why, the Change's page and the next step.
+
+```text
+gittifacts ship [--title <string>] [--plan <string>] [--category <fix|feature|refactor|dependency|transform|revert|docs|chore>] [--timeout <integer>] [--wait] [--idempotency-key <key>]
+```
+
+| Flag | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `--title` | string |  | A new Change's title (default: the last commit subject). |
+| `--plan` | string |  | The approved plan a new Change implements (planId). |
+| `--category` | fix \| feature \| refactor \| dependency \| transform \| revert \| docs \| chore |  | A new Change's category (default feature). |
+| `--timeout` | integer |  | Seconds to wait for the lane (default 900). |
+| `--wait` | boolean |  | Wait for the lane (default true; --no-wait to skip). |
+
+Examples: `gittifacts ship`, `gittifacts ship --title "Rate limit logins" --category fix`.
 
 ### `gittifacts login`
 
@@ -174,6 +208,18 @@ gittifacts help <command>
 | Flag | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `--command` | string |  | Also the first positional argument. |
+
+### `gittifacts git-credential`
+
+git's credential helper (installed per clone by init --clone, clone, start-change and ship): a fresh push token for this clone's Change on every git push. Not for running by hand.
+
+```text
+gittifacts git-credential <action>
+```
+
+| Flag | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `--action` | get \| store \| erase |  | Also the first positional argument. |
 
 ## Tool commands
 

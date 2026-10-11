@@ -40,6 +40,16 @@ Authenticated by the shared secret in `cf-webhook-auth`. Body is parsed lenientl
 
 ## internal
 
+### `POST /api/v1/admin/audit/verify`
+
+Re-verify the whole audit chain from genesis, ignoring the verified-through checkpoint
+
+Reads verify the chain incrementally from a checkpoint. This checks every entry again (O(N) signature checks), clears a recorded break when the chain passes, and moves the checkpoint to the head. Platform admins only (PLATFORM_ADMINS).
+
+- **Auth:** session cookie or bearer token
+- **200:** `{ verified, brokenAt?, verifiedThrough, headSeq, complete, checked }`
+- **Errors:** 401, 403
+
 ### `POST /api/v1/admin/seed-cache`
 
 Pre-build every template's dependency snapshot (CI global cache)
