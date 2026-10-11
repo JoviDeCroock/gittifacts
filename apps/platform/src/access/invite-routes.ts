@@ -9,8 +9,10 @@
  * there is no MCP twin: agents read members with list_members and hand invites to their human.
  */
 import { createRoute } from "@hono/zod-openapi";
+import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { IdempotencyHeaders, RepoIdParam } from "../api/schemas.js";
+import type { AppEnv } from "../app-env.js";
 import { callerOf, requirePrincipal, resolveCaller } from "../auth/middleware.js";
 import { ApiError } from "../errors.js";
 import { idempotent } from "../idempotency.js";
@@ -49,6 +51,21 @@ const InviteLinkSchema = z
   .meta({ id: "InviteLink" });
 
 const TokenParam = z.object({ token: z.string().min(1).max(200) });
+
+/**
+ * Accepting needs a signed-in person, said before the idempotency middleware (which keys on the
+ * caller) runs, with the way back to the link.
+ */
+const signedInPerson: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const caller = await resolveCaller(c);
+  if (!caller || caller.principal.kind !== "human" || !caller.user) {
+    const token = c.req.param("token") ?? "";
+    throw new ApiError(401, "unauthorized", "sign in to accept this invite", undefined, {
+      explanation: `A person accepts an invite for themselves. Sign in with the invited e-mail, then open ${c.get("services").origin}/invite/${encodeURIComponent(token)} again.`,
+    });
+  }
+  await next();
+};
 const InviteParams = RepoIdParam.extend({ inviteId: z.string().min(1).max(64) });
 
 const revoke = createRoute({
@@ -82,7 +99,7 @@ const accept = createRoute({
   description:
     "Needs the link and the invited e-mail. 403 `invite-email-mismatch` for another account; 409 `invite-closed` once used, revoked or expired.",
   security: SECURITY,
-  middleware: [idempotent()] as const,
+  middleware: [signedInPerson, idempotent()] as const,
   request: { headers: IdempotencyHeaders, params: TokenParam },
   responses: {
     200: json(
@@ -103,14 +120,7 @@ export function registerInviteRoutes(app: ApiApp): void {
     const out = await getInviteLink(c.get("services"), caller, c.req.valid("param").token);
     return c.json(out, 200, { "cache-control": "no-store" });
   });
-  app.openapi(accept, async (c) => {
-    const caller = await resolveCaller(c);
-    const token = c.req.valid("param").token;
-    if (!caller || caller.principal.kind !== "human" || !caller.user) {
-      throw new ApiError(401, "unauthorized", "sign in to accept this invite", undefined, {
-        explanation: `A person accepts an invite for themselves. Sign in with the invited e-mail, then open ${c.get("services").origin}/invite/${encodeURIComponent(token)} again.`,
-      });
-    }
-    return c.json(await acceptInvite(c.get("services"), caller, token), 200);
-  });
+  app.openapi(accept, async (c) =>
+    c.json(await acceptInvite(c.get("services"), callerOf(c), c.req.valid("param").token), 200),
+  );
 }

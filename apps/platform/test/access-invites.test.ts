@@ -69,6 +69,11 @@ describe("member invites", () => {
     });
     expect(anon.emailHint).toBe(`${email.slice(0, 2)}•••@example.com`);
     await expectError(await call(w.app, "POST", `/api/v1/invites/${token}/accept`), 401, "unauthorized");
+    await expectError(
+      await call(w.app, "POST", `/api/v1/invites/${token}/accept`, { headers: { "idempotency-key": "k-anon" } }),
+      401,
+      "unauthorized",
+    );
 
     // Someone else holding the link cannot use it.
     await expectError(
@@ -84,7 +89,11 @@ describe("member invites", () => {
     expect(mine.viewer.emailMatches).toBe(true);
     // Signing up alone grants nothing: e-mail sign-up does not prove the address.
     expect((await call(w.app, "GET", `/api/v1/repos/${w.repo.id}`, { cookie })).status).toBe(404);
-    const accepted = await call(w.app, "POST", `/api/v1/invites/${token}/accept`, { cookie });
+    // As the web page sends it: with an Idempotency-Key.
+    const accepted = await call(w.app, "POST", `/api/v1/invites/${token}/accept`, {
+      cookie,
+      headers: { "idempotency-key": `accept-${token.slice(4, 16)}` },
+    });
     expect(accepted.status).toBe(200);
     expect(await json(accepted)).toEqual({ repoId: w.repo.id, role: "reviewer", alreadyMember: false });
     expect((await call(w.app, "GET", `/api/v1/repos/${w.repo.id}`, { cookie })).status).toBe(200);
