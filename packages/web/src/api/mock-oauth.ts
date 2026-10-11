@@ -58,7 +58,8 @@ function consentFor(flow: ConsentView["flow"], id: string): ConsentView {
           { uri: `${window.location.origin}/api`, label: "HTTP API" },
         ]
       : [{ uri: `${window.location.origin}/mcp`, label: "MCP server" }],
-    expiresAt: ahead(device ? 14 : 9),
+    // "soon": a request in its last minute, to see the countdown turn urgent and then expire.
+    expiresAt: id === "soon" ? ahead(1.1) : ahead(device ? 14 : 9),
     repos: REPOS,
     grantableScopes: GRANTABLE,
     neverScopes: NEVER,
@@ -247,6 +248,24 @@ export async function handle(method: string, path: string, body?: unknown): Prom
         if (bad) return bad;
       }
       decided.set(`${flow}:${id}`, action === "approve" ? "approved" : "denied");
+      if (action === "approve") {
+        // The new agent appears on the Agents screen under the name the person gave it.
+        const d = body as ConsentDecision;
+        sessions.unshift(
+          session({
+            principalId: `ag_mock_${flow === "device_code" ? "cli" : "quill"}_${sessions.length}`,
+            name: d.name?.trim() || view.client.name,
+            flow,
+            client: { id: view.client.id, name: view.client.name, uri: view.client.uri },
+            scopes: d.scopes,
+            repoIds: d.repoIds,
+            repos: (d.repoIds ?? []).map((rid) => ({ id: rid, name: repoName(rid) })),
+            createdAt: new Date().toISOString(),
+            lastUsedAt: null,
+            expiresAt: ahead(60 * 24 * d.sessionDays),
+          }),
+        );
+      }
       if (flow === "device_code")
         return ok({ status: action === "approve" ? "approved" : "denied" });
       return ok({

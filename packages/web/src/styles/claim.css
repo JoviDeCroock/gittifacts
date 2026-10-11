@@ -143,6 +143,11 @@
   min-block-size: 32px;
   font-weight: var(--weight-medium);
 }
+@media (pointer: coarse) {
+  .claim__preview {
+    min-block-size: var(--tap);
+  }
+}
 
 .claim__h2 {
   display: flex;
@@ -229,6 +234,37 @@
   color: var(--danger);
 }
 
+/* After the claim: the agent stays visible as the actor (a square), with a way to see it. */
+.claim__agent-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: start;
+}
+.claim__agent-line b {
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+.claim__agent-line code {
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  color: var(--text);
+}
+.claim__next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+}
+.claim__see-agent {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tap);
+  font-weight: var(--weight-medium);
+}
+.claim__check:focus {
+  outline: none;
+}
 .claim__audit {
   display: flex;
   align-items: center;

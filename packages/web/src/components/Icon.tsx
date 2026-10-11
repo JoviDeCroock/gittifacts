@@ -26,6 +26,7 @@ import {
   Flag,
   GitBranch,
   GitMerge,
+  Globe,
   type IconNode,
   Image,
   Info,
@@ -131,6 +132,7 @@ const ICONS = {
   upload: Upload,
   user: User,
   webhook: Webhook,
+  globe: Globe,
   archive: Archive,
   x: X,
 } satisfies Record<string, IconNode>;

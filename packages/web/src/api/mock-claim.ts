@@ -32,13 +32,13 @@ const TTL = 7 * DAY;
 
 export const MOCK_CLAIMING = [
   "You become the owner. It stops expiring and stays in your account.",
-  "The agent that made it keeps working on this one project, now accountable to you.",
-  "Normal limits: CI minutes, storage and sandbox network access of a claimed project.",
+  "The agent that made it keeps working on this one repo, now accountable to you.",
+  "Normal limits: CI minutes, storage and sandbox network access of a claimed repo.",
   "You review its Changes. Auto-merge (Lane 0) stays off until you turn it on.",
 ];
 
+// The expiry is said once, above the lists (its date and countdown), so it is not repeated here.
 export const MOCK_LIMITS = [
-  "Deleted 7 days after it was made, unless someone claims it",
   "Previews only, on a separate, marked domain: no production deploys",
   "No secrets and no custom domains",
   "Nothing merges on its own: auto-merge (Lane 0) is off",

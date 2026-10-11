@@ -10,12 +10,15 @@ import { ApiError } from "../api/client.js";
 import { type InstallView, integrationsApi } from "../api/integrations.js";
 import { isMockMode } from "../api/mode.js";
 import { ConsentFrame, ConsentOutcome } from "../components/ConsentPanel.js";
-import { InstallPanel } from "../components/InstallPanel.js";
+import { Icon } from "../components/Icon.js";
+import { type InstallGranted, InstallPanel } from "../components/InstallPanel.js";
 import { Button, Loading } from "../components/ui.js";
 import { hostOf } from "../lib/integrations.js";
 import { useResource } from "../state/resource.js";
 
-type Done = { kind: "approved" | "denied"; redirectTo: string };
+type Done =
+  | { kind: "approved"; redirectTo: string; granted: InstallGranted }
+  | { kind: "denied"; redirectTo: string };
 
 function Decided({ view, done }: { view: InstallView; done: Done }) {
   useEffect(() => {
@@ -41,10 +44,25 @@ function Decided({ view, done }: { view: InstallView; done: Done }) {
       title={view.existing ? `${name} is updated` : `${name} is installed`}
       action={<a href="/settings/integrations">See your integrations</a>}
     >
-      <p>{back}</p>
+      <dl class="consent-receipt" data-testid="consent-receipt">
+        <div>
+          <dt>Can</dt>
+          <dd>{done.granted.scopes.map((s) => s.title).join(" · ")}</dd>
+        </div>
+        <div>
+          <dt>On</dt>
+          <dd>
+            {done.granted.repos === "all"
+              ? "All repositories you own or maintain, and any later"
+              : done.granted.repos.join(", ")}
+          </dd>
+        </div>
+      </dl>
+      <p class="consent-receipt__audit">
+        <Icon name="scroll-text" size={14} /> Recorded in the audit log.
+      </p>
       <p>
-        It can read the repositories you picked and report what it deployed. Uninstall it any time
-        on the Integrations page; its tokens stop working at once.
+        {back} Uninstall it any time on the Integrations page; its tokens stop working at once.
       </p>
     </ConsentOutcome>
   );
@@ -103,11 +121,11 @@ export function IntegrationInstall() {
   );
   const st = res.state.value;
 
+  // An outcome names the tab itself (ConsentOutcome); this covers loading and the open decision.
   useEffect(() => {
-    document.title =
-      st.status === "ok" && st.data
-        ? `Install ${st.data.install.integration.name} · gittifacts`
-        : "Install an integration · gittifacts";
+    if (st.status === "loading") document.title = "Install an integration · gittifacts";
+    else if (st.status === "ok" && st.data?.install.status === "pending" && !done.value && !conflict.value)
+      document.title = `Install ${st.data.install.integration.name} · gittifacts`;
   }, [st]);
 
   /** A 409 means someone (or another tab) decided first: show that, not an inline error. */
@@ -160,10 +178,11 @@ export function IntegrationInstall() {
         ) : (
           <InstallPanel
             view={st.data.install}
-            onApprove={(d, key) =>
+            expired={<NotPending status="expired" name={st.data.install.integration.name} />}
+            onApprove={(d, key, granted) =>
               guard(async () => {
                 const { redirectTo } = await integrationsApi.approveInstall(requestId, d, key);
-                done.value = { kind: "approved", redirectTo };
+                done.value = { kind: "approved", redirectTo, granted };
               })
             }
             onDeny={(key) =>

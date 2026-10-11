@@ -40,7 +40,8 @@ const ORIGIN = typeof window === "undefined" ? "https://gittifacts.dev" : window
 const REPOS: RepoRef[] = fixtureRepos()
   .map((r) => r.repo)
   .filter((r) => r.claim.status === "claimed" && r.claim.ownerId === ME.id)
-  .map((r) => ({ id: r.id, name: r.name, fullName: `${r.namespace}/${r.name}` }));
+  // Some fixture names already carry their namespace ("acme/widgets"): never prefix it twice.
+  .map((r) => ({ id: r.id, name: r.name, fullName: r.name.includes("/") ? r.name : `${r.namespace}/${r.name}` }));
 const repo = (id: string): RepoRef => REPOS.find((r) => r.id === id) ?? { id, name: id, fullName: id };
 
 const NEVER = [
@@ -391,11 +392,17 @@ function installFor(id: string): InstallView | null {
     status,
     integration: update ? CFWB : VERCEL,
     redirectHost: update ? "dash.cloudflare.com" : "vercel.example",
-    scopes: explain(update ? DEPLOY : [...DEPLOY, "checks:write"]),
+    // The update asks for one permission more than the installation granted (checks:write).
+    scopes: explain([...DEPLOY, "checks:write"]),
     never: [...NEVER],
     repos: id === "empty" ? [] : REPOS.map((r) => ({ ...r })),
     existing: existing
-      ? { installationId: existing.id, repoSelection: existing.repoSelection, repoIds: existing.repos.map((r) => r.id) }
+      ? {
+          installationId: existing.id,
+          repoSelection: existing.repoSelection,
+          repoIds: existing.repos.map((r) => r.id),
+          scopes: existing.scopes.map((x) => x.scope),
+        }
       : null,
     expiresAt: ahead(9),
   };
@@ -406,7 +413,7 @@ function applyInstall(view: InstallView, repoSelection: "all" | "selected", repo
   const now = new Date().toISOString();
   const current = installations.find((i) => i.integration.id === view.integration.id && i.status === "active");
   if (current) {
-    Object.assign(current, { repoSelection, repos, updatedAt: now });
+    Object.assign(current, { repoSelection, repos, scopes: view.scopes, updatedAt: now });
     return;
   }
   installations.unshift({

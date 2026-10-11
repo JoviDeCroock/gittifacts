@@ -4,24 +4,35 @@
  * the agent consent panel: same frame, same "can" and "never" blocks, same thumb-zone bar.
  */
 import { useSignal } from "@preact/signals";
+import type { ComponentChildren } from "preact";
+import { useRef } from "preact/hooks";
 import { inlineError, newIdempotencyKey } from "../api/client.js";
-import type { InstallDecision, InstallView } from "../api/integrations.js";
+import type { InstallDecision, InstallView, ScopeExplained } from "../api/integrations.js";
 import { repoLine } from "../lib/integrations.js";
-import { countdown } from "../lib/time.js";
 import { useTick } from "../state/clock.js";
+import { ConsentBarMeta } from "./ConsentPanel.js";
 import { Icon } from "./Icon.js";
 import { IntegrationLogo, RepoPicker } from "./Integrations.js";
 import { Button } from "./ui.js";
 import "../styles/consent.css";
 import "../styles/integrations.css";
 
-interface InstallPanelProps {
-  view: InstallView;
-  onApprove: (d: InstallDecision, key: string) => Promise<void>;
-  onDeny: (key: string) => Promise<void>;
+/** What a person granted, for the receipt on the outcome screen. */
+export interface InstallGranted {
+  scopes: ScopeExplained[];
+  /** Full repo names, or "all". */
+  repos: string[] | "all";
 }
 
-export function InstallPanel({ view, onApprove, onDeny }: InstallPanelProps) {
+interface InstallPanelProps {
+  view: InstallView;
+  onApprove: (d: InstallDecision, key: string, granted: InstallGranted) => Promise<void>;
+  onDeny: (key: string) => Promise<void>;
+  /** Shown in place of the form once the countdown runs out. */
+  expired: ComponentChildren;
+}
+
+export function InstallPanel({ view, onApprove, onDeny, expired }: InstallPanelProps) {
   const it = view.integration;
   const existing = view.existing;
   const selection = useSignal<"all" | "selected">(existing?.repoSelection ?? "selected");
@@ -33,7 +44,10 @@ export function InstallPanel({ view, onApprove, onDeny }: InstallPanelProps) {
   // One key per intent, reused on retry (idempotency).
   const keys = useSignal({ approve: newIdempotencyKey(), deny: newIdempotencyKey() });
   const now = useTick(1000);
-  const remaining = countdown(view.expiresAt, now.value);
+  const form = useRef<HTMLFormElement>(null);
+  // An update shows what it adds to (and drops from) what the installation granted.
+  const before = existing?.scopes ?? null;
+  const removed = before ? before.filter((x) => !view.scopes.some((s) => s.scope === x)) : [];
   const missing =
     selection.value === "selected" && picked.value.length === 0
       ? view.repos.length === 0
@@ -43,19 +57,38 @@ export function InstallPanel({ view, onApprove, onDeny }: InstallPanelProps) {
   const existingRepos = existing
     ? repoLine(
         existing.repoSelection,
-        existing.repoIds.map((id) => view.repos.find((r) => r.id === id) ?? { name: id }),
+        existing.repoIds.map((id) => ({ name: view.repos.find((r) => r.id === id)?.fullName ?? id })),
       )
     : "";
 
+  if (Date.parse(view.expiresAt) <= now.value && busy.value !== "approve") return <>{expired}</>;
+
+  function goToMissing() {
+    const el = form.current?.querySelector<HTMLInputElement>(".repo-picker__list input");
+    el?.focus();
+    el?.scrollIntoView({ block: "center" });
+  }
+
   async function approve(e: Event) {
     e.preventDefault();
-    if (busy.value || missing) return;
+    if (busy.value) return;
+    if (missing) {
+      goToMissing();
+      return;
+    }
     busy.value = "approve";
     error.value = null;
     try {
       await onApprove(
         { repoSelection: selection.value, repoIds: selection.value === "all" ? [] : picked.value },
         keys.value.approve,
+        {
+          scopes: view.scopes,
+          repos:
+            selection.value === "all"
+              ? "all"
+              : picked.value.map((id) => view.repos.find((r) => r.id === id)?.fullName ?? id),
+        },
       );
     } catch (err) {
       error.value = inlineError(err);
@@ -78,7 +111,7 @@ export function InstallPanel({ view, onApprove, onDeny }: InstallPanelProps) {
   }
 
   return (
-    <form class="consent int-install" onSubmit={approve} aria-labelledby="install-title">
+    <form class="consent int-install" ref={form} onSubmit={approve} aria-labelledby="install-title">
       <section class="consent__who">
         <IntegrationLogo name={it.name} logoUrl={it.logoUrl} size={44} />
         <div class="consent__who-text">
@@ -99,7 +132,8 @@ export function InstallPanel({ view, onApprove, onDeny }: InstallPanelProps) {
           <Icon name="info" size={16} />
           <span>
             Already installed on your account, on {existingRepos.charAt(0).toLowerCase()}
-            {existingRepos.slice(1)}. What you choose below replaces that.
+            {existingRepos.slice(1)}. What you approve below replaces that
+            {before ? "; new permissions are marked." : "."}
           </span>
         </p>
       ) : null}
@@ -109,16 +143,33 @@ export function InstallPanel({ view, onApprove, onDeny }: InstallPanelProps) {
           {it.name} wants to:
         </h1>
         <ul class="consent__can int-install__can">
-          {view.scopes.map((s) => (
-            <li key={s.scope}>
-              <Icon name="check" size={16} />
-              <span>
-                <span class="int-install__scope">{s.title}</span>
-                <span class="int-install__scope-desc">{s.description}</span>
-              </span>
-            </li>
-          ))}
+          {view.scopes.map((s) => {
+            const fresh = before !== null && !before.includes(s.scope);
+            return (
+              <li key={s.scope} data-new={fresh ? "" : undefined}>
+                <Icon name={fresh ? "plus" : "check"} size={16} />
+                <span>
+                  <span class="int-install__scope">
+                    {s.title}
+                    {before ? (
+                      <span class={`int-install__delta ${fresh ? "int-install__delta--new" : ""}`}>
+                        <span class="sr-only"> (</span>
+                        {fresh ? "new" : "already granted"}
+                        <span class="sr-only">)</span>
+                      </span>
+                    ) : null}
+                  </span>
+                  <span class="int-install__scope-desc">{s.description}</span>
+                </span>
+              </li>
+            );
+          })}
         </ul>
+        {removed.length > 0 ? (
+          <p class="int-install__removed">
+            No longer asks for: {removed.join(", ")}. Updating removes {removed.length === 1 ? "it" : "them"}.
+          </p>
+        ) : null}
       </section>
 
       <section class="consent__never" aria-labelledby="never-title">
@@ -159,18 +210,16 @@ export function InstallPanel({ view, onApprove, onDeny }: InstallPanelProps) {
       ) : null}
 
       <div class="consent-bar">
-        <p class="consent-bar__time">
-          <Icon name="timer" size={14} /> Decide within <span class="tnum">{remaining}</span>
-        </p>
+        <ConsentBarMeta expiresAt={view.expiresAt} now={now.value} />
         <div class="consent-bar__actions">
           <Button
             variant="secondary"
             busy={busy.value === "deny"}
-            busyLabel="Cancelling…"
+            busyLabel="Denying…"
             disabled={busy.value === "approve"}
             onClick={deny}
           >
-            Cancel
+            Deny
           </Button>
           <Button
             type="submit"
@@ -181,13 +230,14 @@ export function InstallPanel({ view, onApprove, onDeny }: InstallPanelProps) {
             disabled={busy.value === "deny" || missing !== null}
             aria-describedby={missing ? "install-missing" : undefined}
           >
-            {existing ? "Update installation" : "Install & authorize"}
+            {existing ? `Update ${it.name}` : `Install ${it.name}`}
           </Button>
         </div>
         {missing ? (
-          <p class="consent-bar__missing" id="install-missing">
+          <button type="button" class="consent-bar__missing" id="install-missing" onClick={goToMissing}>
+            <Icon name="arrow-up-right" size={14} />
             {missing}
-          </p>
+          </button>
         ) : null}
       </div>
     </form>
