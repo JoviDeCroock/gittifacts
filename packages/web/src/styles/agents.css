@@ -356,3 +356,45 @@ fieldset.agent__confirm {
 .ev-sub code {
   overflow-wrap: anywhere;
 }
+
+/* Connect an agent: the MCP client snippets (components/McpSetup.tsx), in the rail. */
+.connect {
+  grid-template-columns: minmax(0, 1fr);
+  min-inline-size: 0;
+}
+.mcp-setup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+  min-inline-size: 0;
+}
+.mcp-setup .segmented {
+  justify-self: start;
+  max-inline-size: 100%;
+}
+.mcp-setup__where {
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.mcp-setup__box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-2);
+  justify-items: start;
+  min-inline-size: 0;
+}
+.mcp-setup__box pre {
+  inline-size: 100%;
+  margin: 0;
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--code-bg);
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  line-height: var(--leading-code);
+  white-space: pre;
+}
+.agent__scope-id {
+  font-size: var(--text-meta);
+  color: var(--text-3);
+}

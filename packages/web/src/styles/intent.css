@@ -1,0 +1,85 @@
+/* ================================================================ what should change?
+   How a person starts work on the repo page: the intent, then the prompt for their agent. */
+.intent {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+  margin-block-end: var(--s-6);
+  padding: var(--s-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+}
+.intent__title {
+  font-size: var(--text-title);
+}
+.intent__box {
+  min-block-size: 64px;
+}
+.intent__out {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+  min-inline-size: 0;
+}
+.intent__how {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s-1);
+  max-inline-size: var(--measure);
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.intent__how .icon {
+  align-self: center;
+}
+.intent__prompt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
+  border: 1px solid var(--control-border);
+  border-radius: var(--r-control);
+  background: var(--code-bg);
+}
+.intent__code {
+  padding-block: 10px;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  line-height: var(--leading-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: none;
+}
+.intent__switch {
+  justify-self: start;
+  min-block-size: var(--tap);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--action-ink);
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.intent__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+/* Clone, in the side column: the CLI command with its copy button. */
+.clone__cmd {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-2);
+  font-size: var(--text-small);
+}
+.clone__cmd .cmd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+}

@@ -1,6 +1,7 @@
 import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import type { Lane } from "@app/domain";
 import { useSignal } from "@preact/signals";
+import { useLocation } from "preact-iso";
 import { useEffect } from "preact/hooks";
 import { api } from "../api/client.js";
 import { gettingStartedApi } from "../api/getting-started.js";
@@ -8,8 +9,10 @@ import type { RepoSummary } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { GettingStarted } from "../components/GettingStarted.js";
 import { Fleet, fleetRows, rememberedFleet } from "../components/Fleet.js";
+import { ImportRepo } from "../components/ImportRepo.js";
 import { Page } from "../components/Shell.js";
-import { EmptyState, ErrorState, LaneTag, Meter, SkeletonHead, SkeletonRows } from "../components/ui.js";
+import { Term } from "../components/Term.js";
+import { Button, EmptyState, ErrorState, LaneTag, Meter, SkeletonHead, SkeletonRows } from "../components/ui.js";
 import { checklistView, POLL_MS, readDismissed, writeDismissed } from "../lib/getting-started.js";
 import { LANES, pct, shadowProgress } from "../lib/lanes.js";
 import { relative } from "../lib/time.js";
@@ -43,6 +46,16 @@ export function ShadowLine({
   const enabled = repo.policy.lane0Enabled;
   const fill = p.state === "collecting" ? p.samples / Math.max(1, p.samples + p.needed) : (p.ratio ?? 0);
   const value = p.state === "collecting" ? `${p.samples}/${p.samples + p.needed}` : pct(p.ratio ?? 0, 1);
+  // Auto-merge on: the agreement no longer decides anything, so the list row says only that.
+  if (enabled && !detail) {
+    return (
+      <div class="shadow-line shadow-line--on">
+        <span class="shadow-line__head">
+          <Icon name="check-circle" size={15} /> Auto-merge on
+        </span>
+      </div>
+    );
+  }
   return (
     <div class={`shadow-line shadow-line--${enabled ? "on" : p.state}`}>
       <span class="shadow-line__head">
@@ -161,6 +174,12 @@ export function Repos() {
     if (me) writeDismissed(me.id, true);
     dismissed.value = true;
   };
+  // The palette's "Import a private repo…" lands on /dashboard#import.
+  const { url } = useLocation();
+  const importing = useSignal(false);
+  useEffect(() => {
+    if (window.location.hash === "#import") importing.value = true;
+  }, [url]);
   const st = res.state.value;
   // Triage order: work waiting for you first, then live rollouts and failures, then the rest by name.
   const repos = st.status === "ok" ? [...st.data.repos].sort(byAttention) : [];
@@ -180,14 +199,30 @@ export function Repos() {
     <Page
       title="Dashboard"
       wide
+      actions={
+        importing.value ? null : (
+          <Button size="sm" icon="upload" onClick={() => (importing.value = true)} data-testid="import-open-panel">
+            Import a private repo
+          </Button>
+        )
+      }
       meta={
         settled && st.status === "ok" && repos.length > 0 ? (
           <p class="repos-summary">
             {waiting + plansWaiting > 0 ? (
               <>
-                {waiting > 0 ? <b class="tnum">{plural(waiting, "change")}</b> : null}
+                {waiting > 0 ? (
+                  <b class="tnum">
+                    {waiting} <Term id="change">{waiting === 1 ? "Change" : "Changes"}</Term>
+                  </b>
+                ) : null}
                 {waiting > 0 && plansWaiting > 0 ? " and " : null}
-                {plansWaiting > 0 ? <b class="tnum">{plural(plansWaiting, "plan")}</b> : null} {waiting + plansWaiting === 1 ? "waits" : "wait"} for review in{" "}
+                {plansWaiting > 0 ? (
+                  <b class="tnum">
+                    {plansWaiting} <Term id="plan">{plansWaiting === 1 ? "Plan" : "Plans"}</Term>
+                  </b>
+                ) : null}{" "}
+                {waiting + plansWaiting === 1 ? "waits" : "wait"} for review in{" "}
                 {plural(withWaiting, "repository", "repositories")}.
               </>
             ) : (
@@ -198,6 +233,15 @@ export function Repos() {
         ) : null
       }
     >
+      {importing.value ? (
+        <ImportRepo
+          onClose={() => {
+            importing.value = false;
+            if (window.location.hash === "#import") history.replaceState(null, "", window.location.pathname + window.location.search);
+          }}
+          onImported={() => res.reload()}
+        />
+      ) : null}
       {!settled ? (
         <div class="dash-loading" role="status" aria-live="polite" data-testid="dashboard-loading">
           <span class="sr-only">Loading your dashboard</span>

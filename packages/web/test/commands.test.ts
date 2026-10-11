@@ -114,6 +114,26 @@ describe("agent twins", () => {
   });
 });
 
+describe("what a person can start", () => {
+  it("offers plan approval to a person, landing on the signing form", () => {
+    const me = forMode(commandsFor("/plans/plan_1", REPOS), "me", "/plans/plan_1");
+    expect(me.find((c) => c.id === "plan.approve")?.act).toEqual({ kind: "go", href: "/plans/plan_1#sign" });
+  });
+
+  it("lets a person say what should change, with create_plan as the agent's twin", () => {
+    const c = commandsFor("/repos/repo_billing", REPOS).find((x) => x.id === "repo.plan");
+    expect(c?.act).toEqual({ kind: "go", href: "/repos/repo_billing#intent" });
+    expect(c?.twin?.tool).toBe("create_plan");
+    expect(forMode(commandsFor("/repos/repo_billing", REPOS), "me", "/repos/repo_billing").map((x) => x.id)).toContain("repo.plan");
+  });
+
+  it("keeps importing a private repo person-only, listed for agents with its rule", () => {
+    const c = commandsFor("/dashboard", REPOS).find((x) => x.id === "go.import");
+    expect(c).toMatchObject({ twin: null, act: { kind: "go", href: "/dashboard#import" }, personOnly: expect.stringMatching(/Only a person/) });
+    expect(forMode(commandsFor("/agents", REPOS), "agent", "/agents").map((x) => x.id)).toContain("go.import");
+  });
+});
+
 describe("modes", () => {
   it("lists runnable commands for a person, minus the screen in view", () => {
     const me = forMode(commandsFor("/changes/chg_1", REPOS), "me", "/changes/chg_1");

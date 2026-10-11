@@ -68,6 +68,7 @@ export interface PaletteObjects {
 
 const APPROVE_RULE = "Only a person approves, and never their own work. Agents can't approve.";
 const KILL_RULE = "Only a person switches a rollout off.";
+const IMPORT_RULE = "Only a person imports a private repo: the one-time push grant goes to its signed-in owner. Agents import public repos with create_project({ from }).";
 const PICK_RULE = "Only a person approves a Change, and picking an attempt approves it. Agents never approve.";
 const AGENTS_RULE = "Only a person creates, revokes or pauses agents.";
 const NAV_ONLY = "Navigation only: a key for the reader, not an act.";
@@ -185,7 +186,7 @@ function repoCommands(repo: RepoRef | { id: string; name?: undefined; hosted?: u
     { id: "repo.members", label: "Members", group: "This repo", icon: "user", act: { kind: "go", href: `/repos/${enc}/members` }, twin: { tool: "list_members", args, positional: "repoId" }, words: "people roles access" },
     { id: "repo.membership", label: "Add, remove or change a member…", group: "This repo", icon: "user", act: sub === "members" ? null : { kind: "go", href: `/repos/${enc}/members` }, twin: null, personOnly: "Only a person manages membership.", words: "invite role remove leave" },
     { id: "repo.lane0", label: "Turn auto-merge (Lane 0) on or off…", group: "This repo", icon: "shield-check", act: { kind: "go", href: `/repos/${enc}#lane0-title` }, twin: null, personOnly: "Only a person changes policy, such as auto-merge.", words: "policy lane 0 automerge" },
-    { id: "repo.plan", label: "Draft a plan", group: "This repo", icon: "plus", act: null, twin: { tool: "create_plan", args, fill: ["title", "intent", "acceptanceCriteria"] }, words: "new intent" },
+    { id: "repo.plan", label: "What should change?", group: "This repo", icon: "plus", act: { kind: "go", href: `/repos/${enc}#intent` }, twin: { tool: "create_plan", args, fill: ["title", "intent", "acceptanceCriteria"] }, words: "draft a plan new intent start work ask agent" },
     { id: "repo.change", label: "Start a change", group: "This repo", icon: "git-branch", act: null, twin: { tool: "start_change", args, fill: ["title", "category"] }, words: "new branch fork push" },
   );
   // The queue's own controls are a person's; the queue screen holds them (owners only).
@@ -210,6 +211,7 @@ function agentsCommands(): Command[] {
 
 const ALL_NAV: Command[] = [
   { id: "go.dashboard", label: "Dashboard", group: "Go to", icon: "layers", act: { kind: "go", href: "/dashboard" }, twin: { tool: "list_repos", args: {} }, words: "home repos repositories" },
+  { id: "go.import", label: "Import a private repo…", group: "Go to", icon: "upload", act: { kind: "go", href: "/dashboard#import" }, twin: null, personOnly: IMPORT_RULE, words: "push history migrate new repository project" },
   { id: "go.audit", label: "Audit log", group: "Go to", icon: "scroll-text", act: { kind: "go", href: "/audit" }, twin: { tool: "list_audit_events", args: {} }, words: "history events chain trail" },
   { id: "go.agents", label: "Agents", group: "Go to", icon: "bot", act: { kind: "go", href: "/agents" }, twin: null, personOnly: AGENTS_RULE, words: "tokens sessions fleet" },
   { id: "go.whoami", label: "Who am I", group: "Go to", icon: "bot", act: null, twin: { tool: "whoami", args: {} }, words: "identity scopes self me" },

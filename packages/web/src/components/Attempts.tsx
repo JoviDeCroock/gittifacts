@@ -16,6 +16,7 @@ import { minuteClock } from "../state/clock.js";
 import { useResource } from "../state/resource.js";
 import { principal } from "../state/session.js";
 import { Icon } from "./Icon.js";
+import { Term } from "./Term.js";
 import { Button, ErrorState, LaneTag, Skeleton, StatusChip, Who } from "./ui.js";
 import "../styles/attempts.css";
 
@@ -239,7 +240,8 @@ export function Attempts({ planId, repoId }: { planId: string; repoId: string })
 
   const head = (count?: number) => (
     <h2 id="attempts-title">
-      Attempts{count !== undefined ? <span class="plan-sec__n tnum">{count}</span> : null}
+      <Term id="attempts" />
+      {count !== undefined ? <span class="plan-sec__n tnum">{count}</span> : null}
     </h2>
   );
   if (st.status === "loading") {

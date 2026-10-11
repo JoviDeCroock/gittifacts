@@ -3,11 +3,14 @@ import { useLocation } from "preact-iso";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { ChangeSummary, Plan, PrincipalRef, RepoDetail } from "../api/types.js";
 import { BacktestCard } from "../components/BacktestCard.js";
+import { IntentPanel } from "../components/IntentPanel.js";
 import { Icon } from "../components/Icon.js";
 import { paletteRepos } from "../components/Palette.js";
 import { Page } from "../components/Shell.js";
-import { Button, EmptyState, ErrorState, LaneTag, LinkButton, Loading, Segmented, StatusChip, Who } from "../components/ui.js";
+import { Term } from "../components/Term.js";
+import { Button, Command, EmptyState, ErrorState, LaneTag, LinkButton, Loading, Segmented, StatusChip, Who } from "../components/ui.js";
 import { type ChangeFilter, FILTERS, LANES, type LaneGroup, groupByLane, matchesFilter, topReason } from "../lib/lanes.js";
+import { cloneCommand } from "../lib/start.js";
 import { relative, shortAge } from "../lib/time.js";
 import { CATEGORY_LABEL, CHANGE_STATUS, PLAN_STATUS, plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
@@ -56,12 +59,13 @@ function ChangeRow({ change, now, showStatus }: { change: ChangeSummary; now: nu
   );
 }
 
-function groupTitle(group: LaneGroup<ChangeSummary>): { title: string; detail: string } {
+function groupTitle(group: LaneGroup<ChangeSummary>): { title: string; detail: string; calibrating?: boolean } {
   if (group.lane === null) return { title: "Not routed yet", detail: "Checks are still running or failing, so there is no lane or walkthrough yet." };
   const meta = LANES[group.lane];
   if (group.lane === 0 && group.shadow) {
     return {
-      title: `${meta.name} (${meta.badge}) · Calibrating`,
+      title: `${meta.name} (${meta.badge})`,
+      calibrating: true,
       detail: "The evidence alone would auto-merge these. Auto-merge is calibrating, so they come to you, and your lane pick counts toward agreement.",
     };
   }
@@ -69,7 +73,7 @@ function groupTitle(group: LaneGroup<ChangeSummary>): { title: string; detail: s
 }
 
 function LaneSection({ group, now, showStatus }: { group: LaneGroup<ChangeSummary>; now: number; showStatus: boolean }) {
-  const { title, detail } = groupTitle(group);
+  const { title, detail, calibrating } = groupTitle(group);
   const id = `group-${group.key}`;
   return (
     <section class={`lane-group lane-group--${group.key}`} aria-labelledby={id}>
@@ -77,7 +81,14 @@ function LaneSection({ group, now, showStatus }: { group: LaneGroup<ChangeSummar
         <LaneTag lane={group.lane} shadow={group.shadow} size="lg" />
         <div class="lane-group__text">
           <h2 id={id}>
-            {title} <span class="lane-group__count tnum">{group.items.length}</span>
+            {title}
+            {calibrating ? (
+              <>
+                {" · "}
+                <Term id="calibrating" />
+              </>
+            ) : null}{" "}
+            <span class="lane-group__count tnum">{group.items.length}</span>
           </h2>
           <p>{detail}</p>
         </div>
@@ -299,6 +310,8 @@ export function RepoChanges({ repoId }: { repoId: string }) {
   const visible = changes.filter((c) => matchesFilter(c.status, filter));
   const groups = groupByLane(visible, repo.policy.lane0Enabled);
   const rail = planRail(pl.status === "ok" ? pl.data.plans : [], changes);
+  const agentsAtWork = changes.some((c) => c.authorKind === "agent" && !matchesFilter(c.status, "closed"));
+  const clone = cloneCommand(window.location.origin, repo.id);
 
   return (
     <Page
@@ -306,8 +319,9 @@ export function RepoChanges({ repoId }: { repoId: string }) {
       wide
       actions={
         <>
-          {/* GitHub mode: GitHub merges; the platform's queue is native only. */}
-          {repo.host ? null : (
+          {/* GitHub mode: GitHub merges; the platform's queue is native only. Mission control only
+              once agents have open Changes here (DESIGN.md, the Show It When It Matters Rule). */}
+          {repo.host || !agentsAtWork ? null : (
             <LinkButton href={`/repos/${repoId}/mission`} size="sm" icon="bot">
               Mission control
             </LinkButton>
@@ -335,11 +349,15 @@ export function RepoChanges({ repoId }: { repoId: string }) {
             </span>
           ) : null}
           {repo.claim.status === "unclaimed" ? (
-            <span class="tone--warn">Unclaimed repo: previews only, no production deploys, no auto-merge</span>
+            <span class="repo-unclaimed" data-testid="repo-unclaimed">
+              <Term id="unclaimed" />: previews only and no auto-merge
+              {repo.claim.expiresAt ? `, deleted ${relative(repo.claim.expiresAt, now)}` : ""} unless a person claims it with the claim link its agent was given.{" "}
+              <a href="/docs/guides/claim-a-project">How to claim</a>
+            </span>
           ) : null}
           {repo.policySha ? (
-            <span title="Policy is read from the default branch">
-              Policy at <code>{repo.policySha.slice(0, 7)}</code>
+            <span>
+              <Term id="policy" /> at <code>{repo.policySha.slice(0, 7)}</code>
             </span>
           ) : null}
         </>
@@ -347,6 +365,7 @@ export function RepoChanges({ repoId }: { repoId: string }) {
     >
       <div class="repo-layout">
         <div class="repo-layout__main">
+          <IntentPanel repoId={repo.id} />
           {drafts.length > 0 ? (
             <section class="plans-waiting" aria-labelledby="plans-waiting">
               <h2 id="plans-waiting" class="plans-waiting__title">
@@ -364,7 +383,7 @@ export function RepoChanges({ repoId }: { repoId: string }) {
           <section class="changes" aria-labelledby="changes-title">
             <div class="changes__bar">
               <h2 id="changes-title" class="changes__title">
-                Changes
+                <Term id="change">Changes</Term>
               </h2>
               <Segmented
                 label="Filter changes"
@@ -375,9 +394,9 @@ export function RepoChanges({ repoId }: { repoId: string }) {
             </div>
             {changes.length === 0 ? (
               <EmptyState icon="git-branch" title="No changes yet">
-                <p>
-                  Agents start changes against an approved plan through the API or MCP (<code>POST /api/v1/changes</code>). Each one shows up here with its lane once
-                  its checks pass and the reviewer agent has written a walkthrough.
+                <p data-testid="changes-empty">
+                  Tell your agent what should change (above). It drafts a Plan for you to approve, then starts a Change in this repo. Each Change shows up here with its review
+                  lane once its checks pass and the reviewer agent has written a walkthrough.
                 </p>
               </EmptyState>
             ) : groups.length === 0 ? (
@@ -401,14 +420,14 @@ export function RepoChanges({ repoId }: { repoId: string }) {
           {repo.host ? <BacktestCard repoId={repo.id} repoUrl={`https://github.com/${repo.host.owner}/${repo.host.repo}`} /> : null}
           <section class="side-block" aria-labelledby="all-plans">
             <h2 id="all-plans" class="side-block__title">
-              Plans
+              <Term id="plan">Plans</Term>
             </h2>
             {pl.status === "loading" ? <Loading label="Loading plans" lines={3} /> : null}
             {pl.status === "error" ? <ErrorState error={pl.error} what="plans" onRetry={plans.reload} /> : null}
             {pl.status === "ok" && rail.open.length + rail.ready.length + rail.done.length === 0 ? (
               <p class="side-block__empty">
                 {drafts.length === 0
-                  ? "No plans yet. Agents and people draft them through the API."
+                  ? "No plans yet. Write what should change and your agent drafts one for you to approve."
                   : `No approved plans yet. ${drafts.length === 1 ? "The plan" : "The plans"} waiting for approval ${drafts.length === 1 ? "is" : "are"} listed above the changes.`}
               </p>
             ) : null}
@@ -423,6 +442,14 @@ export function RepoChanges({ repoId }: { repoId: string }) {
                 <PlanMini plans={rail.done} />
               </details>
             ) : null}
+          </section>
+          <section class="side-block" aria-labelledby="clone-title" data-testid="repo-clone">
+            <h2 id="clone-title" class="side-block__title">
+              Clone
+            </h2>
+            <div class="clone__cmd">
+              <Command text={clone} />
+            </div>
           </section>
         </aside>
       </div>

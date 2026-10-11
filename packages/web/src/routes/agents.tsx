@@ -16,11 +16,14 @@ import { CopyLine } from "../components/CopyLine.js";
 import { LastAct, ownerLine, StateWord } from "../components/Fleet.js";
 import { Icon } from "../components/Icon.js";
 import { RepoPicker } from "../components/Integrations.js";
+import { McpSetup } from "../components/McpSetup.js";
+import { Term } from "../components/Term.js";
 import { Page } from "../components/Shell.js";
 import { Avatar, Button, CopyButton, ErrorState, LinkButton, Loading, Segmented, SkeletonHead, SkeletonRows } from "../components/ui.js";
 import { cliCommand } from "../lib/cli.js";
 import { neverSentence } from "../lib/consent-copy.js";
 import { type AgentActivity, fleetFrom, trailHref } from "../lib/fleet.js";
+import { scopeWords } from "../lib/terms.js";
 import { relative } from "../lib/time.js";
 import { plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
@@ -67,8 +70,10 @@ function TokenReveal({ created, onDone }: { created: CreateAgentResponse; onDone
         <CopyButton text={created.token} label="Copy token" />
       </div>
       <p class="token__use">
-        The agent sends it as <code>Authorization: Bearer …</code> to the API and to <code>/mcp</code>.
+        The agent sends it as <code>Authorization: Bearer …</code> to the API and to{" "}
+        <code>/mcp</code>. Set up its MCP client with the token filled in:
       </p>
+      <McpSetup token={created.token} idPrefix="token-mcp" />
       <Button variant="primary" onClick={onDone}>
         I stored the token
       </Button>
@@ -79,16 +84,16 @@ function TokenReveal({ created, onDone }: { created: CreateAgentResponse; onDone
 /** The common path: an MCP client or the CLI connects on its own and asks you to approve. */
 function Connect() {
   return (
-    <section class="connect" aria-labelledby="connect-title" data-testid="agent-connect">
+    <section class="connect" aria-labelledby="connect-title" data-testid="connect-agent">
       <h2 id="connect-title" class="connect__title">
         Connect an agent
       </h2>
       <p class="connect__lede">
-        Point an MCP client at this server, or log in with the CLI. Either asks you to approve what it may do, then shows up
-        here as its own agent.
+        Add gittifacts to your agent's MCP client, or log in with the CLI. Either asks you to approve what it may do, then
+        shows up here as its own agent.
       </p>
-      <span class="connect__label">MCP server</span>
-      <CopyLine text={`${window.location.origin}/mcp`} label="Copy the MCP server URL" />
+      <span class="connect__label">MCP client</span>
+      <McpSetup />
       <span class="connect__label">CLI</span>
       <CopyLine text={cliCommand("login")} label="Copy the CLI login command" />
     </section>
@@ -209,7 +214,9 @@ function CreateAgent({ onCreated }: { onCreated: (r: CreateAgentResponse) => voi
         )}
       </fieldset>
       <fieldset class="scopes" aria-invalid={error.value?.field === "scopes" ? "true" : undefined}>
-        <legend class="field__label">What it may do</legend>
+        <legend class="field__label">
+          What it may do (its <Term id="scopes">scopes</Term>)
+        </legend>
         {SCOPES.map((s) => (
           <label key={s.id} class="check">
             <input type="checkbox" checked={scopes.value.includes(s.id)} onChange={(e) => toggle(s.id, e.currentTarget.checked)} />
@@ -456,10 +463,14 @@ function SelfRow({ p }: { p: Principal }) {
         <p class="agent__name">
           {p.name} <span class="agent__kind">you</span>
         </p>
-        <p class="agent__keys">You approve Plans and review Changes. You can delegate only what you hold.</p>
-        <ul class="agent__scopes" aria-label="Scopes">
+        <p class="agent__keys">
+          You approve Plans and review Changes. You can delegate only what you hold.
+        </p>
+        <ul class="agent__scopes" aria-label="What you may do">
           {p.scopes.map((s) => (
-            <li key={s}>{s}</li>
+            <li key={s}>
+              {scopeWords(s)} <code class="agent__scope-id">{s}</code>
+            </li>
           ))}
         </ul>
       </div>

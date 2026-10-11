@@ -1,0 +1,80 @@
+/* ================================================================ import a private repo
+   One task on the dashboard: a sheet with a hairline edge, the push command in a code box. */
+.import {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+  margin-block-end: var(--s-5);
+  padding: var(--s-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+}
+.import__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.import__title {
+  font-size: var(--text-title);
+}
+.import__form,
+.import__push,
+.import__done {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+  min-inline-size: 0;
+}
+.import__lede {
+  max-inline-size: var(--measure);
+  color: var(--text-2);
+}
+.import__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.import__branch {
+  max-inline-size: 16rem;
+}
+.import__cmd {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-2);
+  justify-items: start;
+  min-inline-size: 0;
+}
+.import__cmd pre {
+  inline-size: 100%;
+  margin: 0;
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--code-bg);
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  line-height: var(--leading-code);
+  white-space: pre;
+}
+.import__wait {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.import__wait .icon {
+  margin-block-start: 2px;
+}
+.import__closed {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-2);
+  color: var(--text);
+}
+.import__done p {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+}

@@ -6,6 +6,7 @@ import type { PrincipalRef, RepoDetail } from "../api/types.js";
 import { Attempts } from "../components/Attempts.js";
 import { Icon } from "../components/Icon.js";
 import { Prose, ProseBlocks } from "../components/Prose.js";
+import { Term } from "../components/Term.js";
 import { Page } from "../components/Shell.js";
 import { Button, CopyButton, ErrorState, Hash, LaneTag, Loading, StatusChip, Who } from "../components/ui.js";
 import { formatDateTime, relative } from "../lib/time.js";
@@ -225,7 +226,7 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
       </h2>
       {mode.value === "approve" ? (
         <p class="signature__consequence">
-          Agents can then start changes inside {plural(plan.scopePaths.length, "scope path")}. Anything outside them is flagged as scope drift and gets a full review (Lane 2).
+          Agents can then start <Term id="change">Changes</Term> inside {plural(plan.scopePaths.length, "scope path")}. Anything outside them is flagged as scope drift and gets a full review (Lane 2).
         </p>
       ) : (
         <p class="signature__consequence">The plan closes. Agents cannot start work on it, and the author has to draft a new one.</p>
@@ -291,6 +292,11 @@ function PlanDoc({ data }: { data: PlanData }) {
       {attempts ? <Attempts planId={plan.id} repoId={plan.repoId} /> : null}
       <section class="plan-sec" aria-labelledby="intent">
         <h2 id="intent">Intent</h2>
+        {data.plan.status === "draft" ? (
+          <p class="plan-doc__lede">
+            A <Term id="plan">Plan</Term> is what should change and how to tell it worked. Once a person who didn't write it approves it, agents build it as Changes.
+          </p>
+        ) : null}
         <ProseBlocks text={plan.intent} class="plan-doc__intent" />
       </section>
 
@@ -353,7 +359,9 @@ function PlanDoc({ data }: { data: PlanData }) {
 
       <section class="plan-sec plan-sec--cols">
         <div>
-          <h2>Scope paths</h2>
+          <h2>
+            <Term id="scope-paths" />
+          </h2>
           {plan.scopePaths.length === 0 ? (
             <p class="plan-sec__empty">Not declared. Every change under this plan counts as unknown scope, which rules out auto-merge.</p>
           ) : (

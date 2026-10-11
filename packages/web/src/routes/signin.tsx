@@ -8,21 +8,16 @@ import { useEffect, useRef } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { api } from "../api/client.js";
 import { isMockMode } from "../api/mode.js";
+import { signInOptions } from "../api/password.js";
 import { GITHUB_SURFACES } from "@app/domain/surfaces";
+import { LANE_LABELS } from "@app/domain/vocabulary";
 import { CopyLine } from "../components/CopyLine.js";
 import { GitHubMark, Icon } from "../components/Icon.js";
 import { BrandMark } from "../components/Shell.js";
-import { TriageChart } from "../components/TriageChart.js";
 import { Button, LaneTag } from "../components/ui.js";
 import { signinCopy, signinPurpose } from "../lib/signin-context.js";
 import { session, signInWithEmail, signInWithGitHub, signUpWithEmail } from "../state/session.js";
 import "../styles/signin.css";
-
-const SAMPLE = [
-  { code: "api.breaking", lane: 2 as const, message: "Removes Invoice.total from the public SDK." },
-  { code: "proof.red-green", lane: 0 as const, message: "2 new tests fail on main, pass here." },
-  { code: "coverage.changed-lines", lane: 0 as const, message: "92% of changed lines covered." },
-];
 
 type Field = "name" | "email" | "password";
 type Mode = "signin" | "signup";
@@ -53,6 +48,11 @@ export function SignIn() {
   const purpose = signinPurpose(query.next);
   const claimToken = purpose.kind === "claim" ? purpose.token : null;
   const copy = signinCopy(purpose, mode.value, repo.value);
+  // "Forgot password?" only where the server can e-mail a reset link (api/password.ts).
+  const canReset = useSignal(false);
+  useEffect(() => {
+    void signInOptions().then((o) => (canReset.value = o.passwordReset));
+  }, []);
 
   useEffect(() => {
     document.title = `${mode.value === "signin" ? "Sign in" : "Create an account"} · gittifacts`;
@@ -223,6 +223,11 @@ export function SignIn() {
               <span class="field__hint">At least 8 characters.</span>
             ) : null}
           </label>
+          {mode.value === "signin" && canReset.value ? (
+            <p class="field__hint">
+              <a href="/forgot-password">Forgot password?</a>
+            </p>
+          ) : null}
           {error.value ? (
             <p class="field__error" id="signin-error" role="alert">
               {error.value}
@@ -255,14 +260,6 @@ export function SignIn() {
           <CopyLine text={`${window.location.origin}/start`} label="Copy the start URL" />
         </div>
 
-        <aside class="signin__strip" aria-label="Example: how a change is routed">
-          <LaneTag lane={2} />
-          <p>
-            <b>Every change arrives with the reason for its lane.</b>{" "}
-            <span>Public API · removes Invoice.total → full review</span>
-          </p>
-        </aside>
-
         {isMockMode() ? (
           <p class="demo-note">
             <Icon name="info" size={14} />
@@ -271,20 +268,50 @@ export function SignIn() {
         ) : null}
       </main>
 
-      <aside class="signin__specimen" aria-label="Example: how a change is routed">
-        <div class="signin__specimen-inner">
-          <p class="signin__specimen-title">Every change arrives with the reason for its lane.</p>
-          <div class="panel">
-            <TriageChart
-              reasons={SAMPLE}
-              computedLane={2}
-              lane={2}
-              caption="Example: why a breaking SDK change needs a full review"
-            />
-          </div>
-          <p class="signin__specimen-note">
-            Example from a synthetic breaking API change. A full review (Lane 2) means a person reads the diff.
-          </p>
+      <aside class="signin__how" aria-labelledby="how-title" data-testid="how-it-works">
+        <div class="signin__how-inner">
+          <h2 id="how-title" class="signin__how-title">
+            How it works
+          </h2>
+          <ol class="how">
+            <li class="how__step">
+              <span class="how__n tnum" aria-hidden="true">
+                1
+              </span>
+              <div>
+                <p class="how__lead">Your agent drafts a Plan. You approve it.</p>
+                <p class="how__body">A Plan says what should change and how to tell it worked. Nothing starts until a person approves it.</p>
+              </div>
+            </li>
+            <li class="how__step">
+              <span class="how__n tnum" aria-hidden="true">
+                2
+              </span>
+              <div>
+                <p class="how__lead">It builds a Change, with proof.</p>
+                <p class="how__body">A Change is like a pull request that carries its evidence: tests, red/green proof and coverage, run and signed by the platform.</p>
+              </div>
+            </li>
+            <li class="how__step">
+              <span class="how__n tnum" aria-hidden="true">
+                3
+              </span>
+              <div>
+                <p class="how__lead">You review only what needs you.</p>
+                <p class="how__body">Each Change gets a review lane from what it proves:</p>
+                <ul class="how__lanes">
+                  {([2, 1, 0] as const).map((l) => (
+                    <li key={l}>
+                      <LaneTag lane={l} size="sm" />
+                      <span>
+                        <b>{LANE_LABELS[l].name}</b> {LANE_LABELS[l].description}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </li>
+          </ol>
         </div>
       </aside>
     </div>

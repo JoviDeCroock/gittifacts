@@ -111,54 +111,79 @@
   color: var(--text-3);
 }
 
-/* Phones and tablets: the product's signature in one line (the full chart sits beside the form
-   from 1024px). */
-.signin__strip {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--s-3);
-  align-items: start;
-  padding: var(--s-3);
-  border-radius: var(--r-control);
+/* How it works: three steps in the day-one words (Plan, Change, review lane). Beside the form
+   from 1024px; under it on phones, so a new person reads it there too. */
+.signin__how {
+  padding: var(--s-6) var(--gutter) var(--s-7);
   background: var(--panel);
-  font-size: var(--text-small);
-  color: var(--text-2);
-}
-.signin__strip b {
-  display: block;
-  color: var(--text);
-  font-weight: var(--weight-medium);
+  border-block-start: 1px solid var(--rule);
 }
 @media (min-width: 1024px) {
-  .signin__strip {
-    display: none;
-  }
-}
-.signin__specimen {
-  display: none;
-}
-@media (min-width: 1024px) {
-  .signin__specimen {
+  .signin__how {
     display: grid;
     align-items: center;
     padding: var(--s-7);
-    background: var(--panel);
+    border-block-start: 0;
     border-inline-start: 1px solid var(--rule);
   }
 }
-.signin__specimen-inner {
+.signin__how-inner {
   display: grid;
-  gap: var(--s-4);
-  max-inline-size: 560px;
+  gap: var(--s-5);
+  max-inline-size: 520px;
+  margin-inline: auto;
 }
-.signin__specimen-title {
+.signin__how-title {
   font-size: var(--text-heading);
+  line-height: var(--leading-tight);
+}
+.how {
+  display: grid;
+  gap: var(--s-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.how__step {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: start;
+}
+.how__n {
+  display: grid;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--canvas);
+  font-weight: var(--weight-bold);
+}
+.how__lead {
+  font-size: var(--text-title);
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
-  letter-spacing: -0.012em;
-  text-wrap: balance;
 }
-.signin__specimen-note {
+.how__body {
+  margin-block-start: var(--s-1);
+  color: var(--text-2);
+}
+.how__lanes {
+  display: grid;
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  list-style: none;
   font-size: var(--text-small);
-  color: var(--text-3);
+  color: var(--text-2);
+}
+.how__lanes li {
+  display: grid;
+  grid-template-columns: 31px minmax(0, 1fr);
+  gap: var(--s-2);
+  align-items: start;
+}
+.how__lanes b {
+  color: var(--text);
 }

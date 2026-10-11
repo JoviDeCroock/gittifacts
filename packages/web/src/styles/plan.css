@@ -338,3 +338,11 @@
   font-size: var(--text-small);
   color: var(--text-2);
 }
+
+/* A draft names the day-one word before the reader signs (DESIGN.md, Term). */
+.plan-doc__lede {
+  margin-block-end: var(--s-3);
+  max-inline-size: var(--measure);
+  color: var(--text-2);
+  font-size: var(--text-small);
+}

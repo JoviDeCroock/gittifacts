@@ -173,6 +173,9 @@ export const api = {
     const [res, { Plan }] = await Promise.all([request<{ plan: unknown; changes: Change[] }>("GET", `/api/v1/plans/${enc(planId)}`), schemas()]);
     return { plan: validated(Plan, res.plan, "plan"), changes: res.changes };
   },
+  /** A person drafts a Plan themselves; someone else (maintainer or owner) approves it. */
+  createPlan: (input: { repoId: string; title: string; intent: string; acceptanceCriteria: string[] }, key?: string) =>
+    request<{ plan: Plan }>("POST", "/api/v1/plans", input, key),
   approvePlan: (planId: string, comment?: string, key?: string) =>
     request<{ plan: Plan }>("POST", `/api/v1/plans/${enc(planId)}/approve`, comment ? { comment } : {}, key),
   rejectPlan: (planId: string, comment: string, key?: string) =>
