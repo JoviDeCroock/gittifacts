@@ -368,7 +368,7 @@ export function parseQueueOverview(value: unknown): QueueOverviewView {
 
 // ---------------------------------------------------------------- fetch
 
-/** Mock-only switches for screenshots and demos: `?frozen`, `?halted`, `?stalled`. */
+/** Mock-only switches for screenshots and demos: `?frozen`, `?halted`, `?stalled` (acts on the page then override them). */
 function mockVariant(): { frozen: boolean; halted: boolean; stalled: boolean } {
   if (typeof window === "undefined") return { frozen: false, halted: false, stalled: false };
   const q = new URLSearchParams(window.location.search);
@@ -386,3 +386,38 @@ export async function fetchQueueOverview(repoId: string): Promise<QueueOverviewV
 
 /** How often the view refreshes against the real API. */
 export const QUEUE_POLL_MS = 10_000;
+
+// ---------------------------------------------------------------- acts (apps/platform/src/queue/routes.ts)
+
+/** The classes a person may set; reverts get theirs automatically (the DO ignores "revert"). */
+export type SettablePriority = Exclude<Priority, "revert">;
+
+const enc = encodeURIComponent;
+
+async function mockQueue() {
+  return import("./mock-queue.js");
+}
+
+/**
+ * Who may call (queue/service.ts): dequeue and reprioritize, the Change's author, the person who
+ * owns the authoring agent, or a human reviewer; freeze, thaw and resume, a human with
+ * `repo:admin`. The server decides; the screen only hides what it would refuse.
+ */
+export const queueActs = {
+  dequeue: async (changeId: string, key?: string): Promise<{ removed: boolean }> =>
+    isMockMode()
+      ? (await mockQueue()).mockDequeue(changeId)
+      : request<{ removed: boolean }>("DELETE", `/api/v1/changes/${enc(changeId)}/queue`, undefined, key),
+  reprioritize: async (changeId: string, priority: SettablePriority, key?: string): Promise<unknown> =>
+    isMockMode()
+      ? (await mockQueue()).mockReprioritize(changeId, priority)
+      : request("PATCH", `/api/v1/changes/${enc(changeId)}/queue`, { priority }, key),
+  freeze: async (repoId: string, frozen: boolean, reason: string, key?: string): Promise<{ frozen: boolean }> =>
+    isMockMode()
+      ? (await mockQueue()).mockSetFrozen(repoId, frozen, reason)
+      : request<{ frozen: boolean }>("POST", `/api/v1/repos/${enc(repoId)}/queue/${frozen ? "freeze" : "thaw"}`, { reason }, key),
+  resume: async (repoId: string): Promise<{ resumed: boolean }> =>
+    isMockMode()
+      ? (await mockQueue()).mockResume(repoId)
+      : request<{ resumed: boolean }>("POST", `/api/v1/repos/${enc(repoId)}/queue/resume`),
+};

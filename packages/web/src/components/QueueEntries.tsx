@@ -2,12 +2,8 @@
  * Per-entry rows of the merge queue: where each change is, why, what blocks it, and, for an
  * ejected change, exactly what its agent should do next.
  */
-import type {
-  EjectReason,
-  QueueEntryView,
-  QueueOverlap,
-  QueueOverviewView,
-} from "../api/queue.js";
+import type { ComponentChildren } from "preact";
+import type { EjectReason, QueueEntryView, QueueOverlap, QueueOverviewView } from "../api/queue.js";
 import {
   BATCH_STATE,
   EJECT_CODE,
@@ -22,7 +18,7 @@ import {
   STALL_STATE,
   trackLabel,
 } from "../lib/queue.js";
-import { shortAge } from "../lib/time.js";
+import { relative } from "../lib/time.js";
 import { Icon } from "./Icon.js";
 import { CopyButton, Hash, LaneTag, StatusChip } from "./ui.js";
 
@@ -31,14 +27,17 @@ type Find = ReturnType<typeof entryIndex>;
 function ChangeLinks({ ids, find }: { ids: string[]; find: Find }) {
   return (
     <>
-      {ids.map((id, i) => (
-        <span key={id}>
-          {i > 0 ? ", " : null}
-          <a href={`/changes/${id}`} title={find(id).title}>
-            {id}
-          </a>
-        </span>
-      ))}
+      {ids.map((id, i) => {
+        // The title is what people know a change by; the id stays beside it, in Meta.
+        const { title } = find(id);
+        return (
+          <span key={id}>
+            {i > 0 ? ", " : null}
+            <a href={`/changes/${id}`}>{title}</a>
+            {title === id ? null : <span class="q-dim q-rel__id"> {id}</span>}
+          </span>
+        );
+      })}
     </>
   );
 }
@@ -211,16 +210,18 @@ function EntryRow({
   find,
   trackName,
   now,
+  actions,
 }: {
   e: QueueEntryView;
   find: Find;
   trackName: string | null;
   now: number;
+  actions?: ComponentChildren;
 }) {
   const prio = PRIORITY[e.priority];
   const stacked = e.dependsOn.filter((id) => !e.blocking.includes(id));
   return (
-    <li class={`q-entry q-entry--${e.state}`}>
+    <li class={`q-entry q-entry--${e.state}`} data-testid="queue-entry" data-change-id={e.changeId} data-state={e.state}>
       <span
         class="q-entry__pos tnum"
         title={e.position === null ? "No queue position" : `Position ${e.position}`}
@@ -233,7 +234,7 @@ function EntryRow({
           {e.title ?? e.changeId}
         </a>
         <p class="q-entry__id tnum">
-          {e.changeId} · enqueued {shortAge(new Date(e.enqueuedAt).toISOString(), now)} ago
+          {e.changeId} · enqueued {relative(new Date(e.enqueuedAt).toISOString(), now)}
         </p>
         <div class="q-entry__tags">
           <LaneTag lane={e.lane} size="sm" label="name" />
@@ -286,11 +287,21 @@ function EntryRow({
         {e.ejectReason ? <EjectPanel r={e.ejectReason} find={find} /> : null}
       </div>
       <Facts e={e} trackName={trackName} />
+      {actions}
     </li>
   );
 }
 
-export function QueueEntries({ q, now }: { q: QueueOverviewView; now: number }) {
+export function QueueEntries({
+  q,
+  now,
+  actions,
+}: {
+  q: QueueOverviewView;
+  now: number;
+  /** What the viewer may do to an active entry (dequeue, priority), if anything. */
+  actions?: (e: QueueEntryView) => ComponentChildren;
+}) {
   const { active, recent } = splitEntries(q.entries);
   const find = entryIndex(q.entries);
   const express = new Map(q.tracks.map((t) => [t.id, t.express]));
@@ -311,7 +322,7 @@ export function QueueEntries({ q, now }: { q: QueueOverviewView; now: number }) 
       ) : (
         <ul class="q-entries">
           {active.map((e) => (
-            <EntryRow key={e.changeId} e={e} find={find} trackName={nameOf(e)} now={now} />
+            <EntryRow key={e.changeId} e={e} find={find} trackName={nameOf(e)} now={now} actions={actions?.(e)} />
           ))}
         </ul>
       )}

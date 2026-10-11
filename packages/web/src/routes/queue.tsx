@@ -1,31 +1,38 @@
 /**
- * Merge queue: tracks as swimlanes, the landing lane, freeze and halt banners, per-entry reasons
- * and deploy trains. Thin by design: everything here is read-only; agents act through the API/MCP.
+ * Merge queue: freeze and halt banners, a strip of figures, per-entry reasons ("where is my
+ * change?") with the acts a person may take, then tracks as swimlanes, the landing lane and
+ * deploy trains. Agents do the same through the API/MCP; the acts show their twins.
  */
 import { type Signal, useSignal } from "@preact/signals";
-import { useEffect } from "preact/hooks";
+import type { ComponentChildren } from "preact";
+import { useEffect, useRef } from "preact/hooks";
 import { ApiError, api, describeError } from "../api/client.js";
 import { isMockMode } from "../api/mode.js";
-import { fetchQueueOverview, QUEUE_POLL_MS, type QueueOverviewView } from "../api/queue.js";
+import { membersApi } from "../api/members.js";
+import { fetchQueueOverview, QUEUE_POLL_MS, type QueueEntryView, type QueueOverviewView } from "../api/queue.js";
 import { Icon } from "../components/Icon.js";
+import { paletteRepos } from "../components/Palette.js";
+import { EntryActs, FreezeForm, ResumeAct } from "../components/QueueActs.js";
 import { QueueEntries } from "../components/QueueEntries.js";
 import { QueueStalls } from "../components/QueueStalls.js";
 import { DeployTrains, QueueLanes } from "../components/QueueLanes.js";
 import { Page } from "../components/Shell.js";
-import { ErrorState, Hash, Loading } from "../components/ui.js";
+import { Button, ErrorState, Hash, Loading } from "../components/ui.js";
 import {
   durationShort,
   FREEZE_KIND,
   flakeRows,
   freezeTone,
   percentLabel,
+  queuePowers,
   updatedLabel,
 } from "../lib/queue.js";
 import { formatWhen } from "../lib/time.js";
 import { num, shortSha } from "../lib/vocab.js";
 import { useTick } from "../state/clock.js";
+import { useMedia } from "../state/media.js";
 import { useResource } from "../state/resource.js";
-import { sessionExpired } from "../state/session.js";
+import { principal, sessionExpired } from "../state/session.js";
 import "../styles/queue.css";
 
 interface QueueState {
@@ -93,34 +100,45 @@ function UpdatedAgo({ at }: { at: number }) {
   );
 }
 
+/** "Maya Okafor", "Maya Okafor or Dev Patel": who to ask when the viewer cannot act. */
+function ownersLine(owners: string[]): string {
+  if (owners.length === 0) return "a repository owner";
+  if (owners.length === 1) return `a repository owner (${owners[0]})`;
+  return `a repository owner (${owners.slice(0, -1).join(", ")} or ${owners[owners.length - 1]})`;
+}
+
 function HaltedBanner({
   halted,
   now,
+  admin,
 }: {
   halted: NonNullable<QueueOverviewView["halted"]>;
   now: number;
+  /** The resume act for an owner, or who to ask. */
+  admin: { act: ComponentChildren } | { ask: string };
 }) {
   return (
-    <section class="q-banner q-banner--danger" role="alert" aria-labelledby="q-halted">
+    <section class="q-banner q-banner--danger" role="alert" aria-labelledby="q-halted" data-testid="queue-halted">
       <Icon name="pause" size={22} class="q-banner__icon" />
       <div class="q-banner__body">
         <h2 id="q-halted" class="q-banner__title">
           Queue halted
         </h2>
         <p class="q-banner__lede">
-          An invariant check failed, so the queue stopped instead of guessing. It needs an operator:
-          nothing speculates or lands until someone reconciles it.
+          A safety check failed, so the queue stopped instead of guessing. Nothing is tested or
+          lands until a person checks main and resumes it.
         </p>
         <p class="q-banner__msg">{halted.message}</p>
         <p class="q-banner__meta">
           <code>{halted.code}</code> · since {formatWhen(new Date(halted.at).toISOString(), now)}
         </p>
+        {"act" in admin ? admin.act : <p class="q-banner__msg">Ask {admin.ask} to check main and resume the queue.</p>}
       </div>
     </section>
   );
 }
 
-function FreezeBanner({ q, now }: { q: QueueOverviewView; now: number }) {
+function FreezeBanner({ q, now, thaw }: { q: QueueOverviewView; now: number; thaw: ComponentChildren }) {
   const tone = freezeTone(q.freezeReasons);
   return (
     <section class={`q-banner q-banner--${tone}`} role="status" aria-labelledby="q-frozen">
@@ -178,6 +196,7 @@ function FreezeBanner({ q, now }: { q: QueueOverviewView; now: number }) {
             </li>
           ))}
         </ul>
+        {thaw}
       </div>
     </section>
   );
@@ -185,55 +204,50 @@ function FreezeBanner({ q, now }: { q: QueueOverviewView; now: number }) {
 
 const rate = new Intl.NumberFormat("en", { maximumFractionDigits: 1 });
 
+/**
+ * One strip of figures between hairlines, not a grid of cards: value in Title with tabular
+ * numerals, its label under it in Meta. A figure takes a tone only when it is a state
+ * (conflicts being resolved, a measurement missing), and then says so in words.
+ */
 function Stats({ q }: { q: QueueOverviewView }) {
   const t = q.timeInQueueMs;
   return (
-    <section class="q-stats" aria-label="Queue health">
-      <dl class="q-stats__grid">
-        <div class="q-stat">
+    <section class="q-figs" aria-label="Queue health">
+      <dl class="q-figs__row">
+        <div class="q-fig">
           <dt>Waiting</dt>
           <dd class="tnum">{num.format(q.waiting)}</dd>
         </div>
-        <div class="q-stat">
+        <div class={`q-fig ${q.resolving > 0 ? "q-fig--warn" : ""}`}>
           <dt>Resolving conflicts</dt>
           <dd class="tnum">{num.format(q.resolving)}</dd>
         </div>
-        <div class="q-stat">
+        <div class="q-fig">
           <dt>Landed per hour</dt>
           <dd class="tnum">{rate.format(q.throughputPerHour)}</dd>
         </div>
-        <div class="q-stat">
-          <dt>Median time in queue</dt>
-          <dd class="tnum">
-            <span class={t.p50 === null ? "tone--warn q-stat__nm" : ""}>
-              {durationShort(t.p50)}
-            </span>
-            <span class="q-stat__sub">
-              p95 <span class={t.p95 === null ? "tone--warn" : ""}>{durationShort(t.p95)}</span>
-            </span>
+        <div class="q-fig">
+          <dt>
+            Median wait
+            {t.p95 !== null ? <span class="q-fig__sub">p95 {durationShort(t.p95)}</span> : null}
+          </dt>
+          <dd class={`tnum ${t.p50 === null ? "tone--warn q-fig__nm" : ""}`}>{durationShort(t.p50)}</dd>
+        </div>
+        <div class="q-fig">
+          <dt>CI run, median</dt>
+          <dd class={`tnum ${q.ciDurationMs > 0 ? "" : "tone--warn q-fig__nm"}`}>
+            {q.ciDurationMs > 0 ? durationShort(q.ciDurationMs) : "Not measured"}
           </dd>
         </div>
-        <div class="q-stat">
-          <dt>CI run</dt>
-          <dd class="tnum">
-            <span class={q.ciDurationMs > 0 ? "" : "tone--warn q-stat__nm"}>
-              {q.ciDurationMs > 0 ? durationShort(q.ciDurationMs) : "Not measured"}
-            </span>
-            <span class="q-stat__sub">recent median</span>
-          </dd>
-        </div>
-        <div class="q-stat">
-          <dt>Quarantined tests</dt>
-          <dd class="tnum">
-            {num.format(q.quarantined.length)}
+        <div class="q-fig">
+          <dt>
             {q.quarantined.length > 0 ? (
-              <a class="q-stat__sub" href="#q-flaky">
-                See flake rates
-              </a>
+              <a href="#q-flaky">Quarantined tests</a>
             ) : (
-              <span class="q-stat__sub">none</span>
+              "Quarantined tests"
             )}
-          </dd>
+          </dt>
+          <dd class="tnum">{num.format(q.quarantined.length)}</dd>
         </div>
       </dl>
     </section>
@@ -280,10 +294,25 @@ function FlakyTests({ q }: { q: QueueOverviewView }) {
   );
 }
 
+/** Who the viewer is on this repo (role, own agents, owners' names); unknown hides the acts. */
+function useAccess(repoId: string) {
+  const res = useResource(async () => {
+    const [members, mine] = await Promise.all([membersApi.list(repoId), api.principals()]);
+    return { members, mine: new Set(mine.principals.filter((p) => p.kind === "agent").map((p) => p.id)) };
+  }, [repoId]);
+  const st = res.state.value;
+  const data = st.status === "ok" ? st.data : null;
+  const powers = queuePowers(principal.value, data?.members.viewerRole ?? null, data?.mine ?? new Set());
+  const owners = data?.members.members.filter((m) => m.role === "owner").map((m) => m.name) ?? [];
+  return { powers, owners };
+}
+
 export function QueueView({ repoId }: { repoId: string }) {
   const repo = useResource(() => api.repo(repoId), [repoId]);
   const rs = repo.state.value;
-  const repoName = rs.status === "ok" ? rs.data.repo.name : "Repository";
+  // The name the sidebar already has, so the crumb never flashes "Repository".
+  const known = paletteRepos.value.find((r) => r.id === repoId)?.name;
+  const repoName = rs.status === "ok" ? rs.data.repo.name : (known ?? "Repository");
   const crumbs = [
     { href: "/dashboard", label: "Dashboard" },
     { href: `/repos/${repoId}`, label: repoName },
@@ -291,6 +320,17 @@ export function QueueView({ repoId }: { repoId: string }) {
   const { state, retry } = useQueue(repoId);
   const s = state.value;
   const now = useTick(30_000).value;
+  const { powers, owners } = useAccess(repoId);
+  const notice = useSignal<string | null>(null);
+  const phone = useMedia("(max-width: 639px)");
+  const freezing = useSignal<"freeze" | "thaw" | null>(null);
+  const noticeRef = useRef<HTMLParagraphElement>(null);
+  const acted = (message: string) => {
+    notice.value = message;
+    freezing.value = null;
+    retry();
+    requestAnimationFrame(() => noticeRef.current?.focus());
+  };
 
   if (!s.data) {
     return (
@@ -305,11 +345,28 @@ export function QueueView({ repoId }: { repoId: string }) {
   }
 
   const q = s.data;
+  const titleOf = (id: string) => q.entries.find((e) => e.changeId === id)?.title ?? id;
+  const actsFor = (e: QueueEntryView) =>
+    powers.canAct(e.authorId) ? (
+      <EntryActs
+        e={e}
+        dependents={q.entries.filter((d) => d.dependsOn.includes(e.changeId) && d.state !== "dequeued").map((d) => titleOf(d.changeId))}
+        onActed={acted}
+      />
+    ) : null;
+  const automatic = q.freezeReasons.some((r) => r.kind !== "manual");
   return (
     <Page
       title="Merge queue"
       wide
       crumbs={crumbs}
+      actions={
+        powers.canAdmin && !q.frozen && freezing.value === null ? (
+          <Button size="sm" icon="lock" data-testid="queue-freeze" onClick={() => (freezing.value = "freeze")}>
+            Freeze the queue…
+          </Button>
+        ) : null
+      }
       meta={
         <>
           <span>
@@ -325,12 +382,41 @@ export function QueueView({ repoId }: { repoId: string }) {
       }
     >
       <div class="q">
-        {q.halted ? <HaltedBanner halted={q.halted} now={now} /> : null}
-        {q.frozen ? <FreezeBanner q={q} now={now} /> : null}
+        {freezing.value === "freeze" && !q.frozen ? (
+          <FreezeForm repoId={repoId} freeze automatic={false} onDone={acted} onCancel={() => (freezing.value = null)} />
+        ) : null}
+        {q.halted ? (
+          <HaltedBanner
+            halted={q.halted}
+            now={now}
+            admin={powers.canAdmin ? { act: <ResumeAct repoId={repoId} onDone={acted} /> } : { ask: ownersLine(owners) }}
+          />
+        ) : null}
+        {q.frozen ? (
+          <FreezeBanner
+            q={q}
+            now={now}
+            thaw={
+              !powers.canAdmin ? null : freezing.value === "thaw" ? (
+                <FreezeForm repoId={repoId} freeze={false} automatic={automatic} onDone={acted} onCancel={() => (freezing.value = null)} />
+              ) : (
+                <div class="q-banner__acts">
+                  <Button size="sm" icon="lock" data-testid="queue-thaw" onClick={() => (freezing.value = "thaw")}>
+                    Thaw the queue…
+                  </Button>
+                </div>
+              )
+            }
+          />
+        ) : null}
         <QueueStalls q={q} now={now} />
         <Stats q={q} />
-        <QueueLanes q={q} />
-        <QueueEntries q={q} now={now} />
+        {/* After an act the row it came from may move or close, so focus lands on what happened. */}
+        <p class="q-notice" role="status" tabIndex={-1} ref={noticeRef} data-testid="queue-notice">
+          {notice.value}
+        </p>
+        <QueueEntries q={q} now={now} actions={actsFor} />
+        <QueueLanes q={q} folded={phone} />
         <DeployTrains q={q} />
         <FlakyTests q={q} />
       </div>

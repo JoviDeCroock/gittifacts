@@ -3,11 +3,12 @@
  * (express revert track, speculative batches, bisection, a landing lane, an ejected change and two
  * deploy trains); `?frozen` adds a revert-in-progress freeze, `?halted` an invariant stop and
  * `?stalled` a batch whose tree build was given up plus a retrying affected-set analysis.
- * Other known repos have an empty queue; unknown ids answer 404 like the real API.
+ * Other known repos have an empty queue; unknown ids answer 404 like the real API. Acts on the
+ * page (dequeue, priority, freeze, thaw, resume) hold for the tab and override the switches.
  */
 import { ApiError } from "./client.js";
 import { b64u, NOW, sha } from "./fixture-kit.js";
-import type { QueueEntryView, QueueOverlap, QueueOverviewView, QueueStall } from "./queue.js";
+import type { Priority, QueueEntryView, QueueOverlap, QueueOverviewView, QueueStall } from "./queue.js";
 
 const MIN = 60_000;
 const KNOWN = new Set(["repo_billing", "repo_edge", "repo_dashboard", "repo_ios", "repo_widget"]);
@@ -470,15 +471,100 @@ function empty(repoId: string): QueueOverviewView {
   };
 }
 
+// ---------------------------------------------------------------- acts (in-tab state, like mock-members)
+
+/** What people did on the page this session; it overrides the URL switches. */
+const acts = {
+  dequeued: new Set<string>(),
+  priority: new Map<string, Priority>(),
+  /** "thawed" clears every freeze (the platform's Thaw does too); a manual freeze adds a reason. */
+  freeze: new Map<string, "thawed" | { reason: string; at: number }>(),
+  resumed: new Set<string>(),
+};
+
+function wait(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function notFound(): ApiError {
+  return new ApiError(404, "not_found", "No repository with that id.", undefined, {
+    explanation: "Check the link, or go back to the repository list.",
+  });
+}
+
+function overviewWithActs(
+  repoId: string,
+  variant: { frozen: boolean; halted: boolean; stalled: boolean },
+): QueueOverviewView {
+  const freeze = acts.freeze.get(repoId);
+  const v = { ...variant, frozen: freeze === "thawed" ? false : variant.frozen };
+  const q = repoId === "repo_billing" ? billing(v) : empty(repoId);
+  if (acts.resumed.has(repoId)) q.halted = null;
+  const out = new Set([...acts.dequeued].filter((id) => q.entries.some((e) => e.changeId === id)));
+  q.entries = q.entries.map((e) => {
+    if (out.has(e.changeId) && !["merged", "ejected"].includes(e.state)) {
+      return { ...e, state: "dequeued", hold: null, trackId: null, batch: null, position: null, etaSeconds: null, blocking: [], stall: null, reason: "Taken out of the queue by Maya Okafor. It rejoins only when someone enqueues it again." };
+    }
+    const p = acts.priority.get(e.changeId);
+    return p === undefined ? e : { ...e, priority: p };
+  });
+  // Active entries first, then finished ones (the server's order).
+  q.entries = [...q.entries.filter((e) => e.state !== "dequeued"), ...q.entries.filter((e) => e.state === "dequeued")];
+  q.tracks = q.tracks.map((t) => ({ ...t, batches: t.batches.map((b) => ({ ...b, entries: b.entries.filter((id) => !out.has(id)) })).filter((b) => b.entries.length > 0) }));
+  q.landing = q.landing.map((l) => ({ ...l, members: l.members.filter((id) => !out.has(id)) })).filter((l) => l.members.length > 0);
+  if (typeof freeze === "object") {
+    q.frozen = true;
+    q.freezeReasons = [
+      ...q.freezeReasons,
+      { kind: "manual", at: freeze.at, sha: q.mainSha, changeId: null, signer: { principalId: "prn_maya", signature: b64u(`freeze-${freeze.at}`, 86) }, message: freeze.reason },
+    ];
+    q.entries = q.entries.map((e) =>
+      e.frozen || e.priority === "revert" || e.priority === "incident" || ["merged", "ejected", "dequeued"].includes(e.state)
+        ? e
+        : { ...e, frozen: true, etaSeconds: null, reason: `Frozen by hand; it keeps speculating meanwhile. ${e.reason}` },
+    );
+  }
+  return q;
+}
+
 export async function mockQueueOverview(
   repoId: string,
   variant: { frozen: boolean; halted: boolean; stalled: boolean },
 ): Promise<unknown> {
-  await new Promise((r) => setTimeout(r, 220));
-  if (!KNOWN.has(repoId)) {
-    throw new ApiError(404, "not_found", "No repository with that id.", undefined, {
-      explanation: "Check the link, or go back to the repository list.",
-    });
-  }
-  return structuredClone(repoId === "repo_billing" ? billing(variant) : empty(repoId));
+  await wait(220);
+  if (!KNOWN.has(repoId)) throw notFound();
+  return structuredClone(overviewWithActs(repoId, variant));
+}
+
+function queued(changeId: string): QueueEntryView | undefined {
+  return [...billingEntries(), ...billingWaitingAndDone()].find((e) => e.changeId === changeId);
+}
+
+export async function mockDequeue(changeId: string): Promise<{ removed: boolean }> {
+  await wait(420);
+  const e = queued(changeId);
+  if (e === undefined || acts.dequeued.has(changeId) || ["merged", "ejected"].includes(e.state)) return { removed: false };
+  acts.dequeued.add(changeId);
+  return { removed: true };
+}
+
+export async function mockReprioritize(changeId: string, priority: Priority): Promise<{ status: null }> {
+  await wait(420);
+  if (queued(changeId) === undefined) throw new ApiError(404, "not_found", "That change is not in the queue.");
+  acts.priority.set(changeId, priority);
+  return { status: null };
+}
+
+export async function mockSetFrozen(repoId: string, frozen: boolean, reason: string): Promise<{ frozen: boolean }> {
+  await wait(420);
+  if (!KNOWN.has(repoId)) throw notFound();
+  acts.freeze.set(repoId, frozen ? { reason, at: Date.now() } : "thawed");
+  return { frozen };
+}
+
+export async function mockResume(repoId: string): Promise<{ resumed: boolean }> {
+  await wait(420);
+  if (!KNOWN.has(repoId)) throw notFound();
+  acts.resumed.add(repoId);
+  return { resumed: true };
 }
