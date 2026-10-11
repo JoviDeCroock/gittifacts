@@ -44,6 +44,8 @@ export interface E2eConfigOptions {
 
 type Json = Record<string, unknown>;
 
+const AUTH_LIMITERS = new Set(["AUTH_LIMITER", "AUTH_EMAIL_LIMITER", "OAUTH_LIMITER"]);
+
 export function writeE2eConfig({ platformDir, port, secretNames }: E2eConfigOptions): string {
   const raw = readFileSync(join(platformDir, "wrangler.jsonc"), "utf8");
   const cfg = JSON.parse(stripJsonc(raw)) as Json;
@@ -57,6 +59,11 @@ export function writeE2eConfig({ platformDir, port, secretNames }: E2eConfigOpti
   // Remote-only bindings: the entry's fakes stand in for Artifacts and the model.
   delete cfg.artifacts;
   delete cfg.ai;
+  // The auth limits (src/security/auth-limits.ts) stay bound, but every journey signs in from
+  // 127.0.0.1: lift them so a full gate run never sees a 429 it didn't ask for.
+  cfg.ratelimits = ((cfg.ratelimits ?? []) as Json[]).map((r) =>
+    AUTH_LIMITERS.has(String(r.name)) ? { ...r, simple: { limit: 100_000, period: 60 } } : r,
+  );
   cfg.secrets = { required: secretNames };
   cfg.vars = {
     ...(cfg.vars as Json),

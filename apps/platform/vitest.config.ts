@@ -33,6 +33,14 @@ export default defineConfig(async () => ({
       // Never reach the real account from tests (AI, Artifacts, Flagship, Browser stay unbound/local).
       remoteBindings: false,
       miniflare: {
+        // The auth limits (src/security/auth-limits.ts) are real bindings here too, but every
+        // test signs up from the same (absent) client IP: raise them so only the tests that
+        // inject a limiter see a 429 (test/http-security.test.ts).
+        ratelimits: {
+          AUTH_LIMITER: { namespace_id: "4304", simple: { limit: 100_000, period: 60 } },
+          AUTH_EMAIL_LIMITER: { namespace_id: "4305", simple: { limit: 100_000, period: 60 } },
+          OAUTH_LIMITER: { namespace_id: "4306", simple: { limit: 100_000, period: 60 } },
+        },
         bindings: {
           TEST_MIGRATIONS: await readD1Migrations(path.join(import.meta.dirname, "migrations")),
           PLATFORM_SIGNING_KEY: await testSigningKey(),

@@ -1,10 +1,10 @@
 import { TOOL_NAMES } from "@app/conventions";
 import { z } from "zod";
 import { registerMemberRoutes } from "./access/routes.js";
-import { registerPasswordResetRoutes } from "./auth/password-reset.js";
 import { ErrorSchema } from "./api/schemas.js";
 import { type AppOptions, createServices } from "./app-env.js";
 import { authFor, callerOf, requirePrincipal } from "./auth/middleware.js";
+import { registerPasswordResetRoutes } from "./auth/password-reset.js";
 import { registerClaimRoutes } from "./claim/routes.js";
 import { getCoordinator } from "./coordinator.js";
 import { fixFor, toErrorResponse } from "./errors.js";
@@ -33,6 +33,9 @@ import { registerQaRoutes } from "./routes/qa.js";
 import { registerRepoRoutes } from "./routes/repos.js";
 import { registerStatsRoutes } from "./routes/stats.js";
 import { registerWellKnownRoutes } from "./routes/well-known.js";
+import { authRateLimit } from "./security/auth-limits.js";
+import { applySecurityHeaders } from "./security/headers.js";
+import { sameOriginGuard } from "./security/same-origin.js";
 import { readBlob } from "./services/blobs.js";
 import {
   handleIssuesWebhook,
@@ -67,7 +70,13 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
     c.set("caller", undefined);
     await next();
     c.header("x-gittifacts-version", c.env.VERSION?.id ?? "dev");
+    // frame-ancestors 'none', nosniff, Referrer-Policy on everything, assets included (M1).
+    applySecurityHeaders(c);
   });
+  // Sign-in/up, password reset, OAuth authorize/token, device code: per IP (+ e-mail) limits (M2).
+  app.use("/api/*", authRateLimit);
+  // Cookie-authenticated mutations must come from the platform's own origin (M13).
+  app.use("/api/*", sameOriginGuard);
 
   app.onError((err, c) => {
     const r = toErrorResponse(err);
@@ -219,6 +228,8 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
     type: "apiKey",
     in: "cookie",
     name: "better-auth.session_token",
+    description:
+      "The web app's session cookie. On https it is `__Host-better-auth.session_token`; cookie-authenticated mutations must come from the platform's own origin (Origin / Sec-Fetch-Site).",
   });
   app.doc31(OPENAPI_PATH, OPENAPI_CONFIG);
 

@@ -157,7 +157,14 @@
     // (src/integrations/auth.ts). Namespace id is ours to choose; nothing to create.
     { "name": "INTEGRATION_LIMITER", "namespace_id": "4302", "simple": { "limit": 600, "period": 60 } },
     // GitHub webhooks, per client IP, before anything is verified (src/github/webhook.ts).
-    { "name": "GITHUB_WEBHOOK_LIMITER", "namespace_id": "4303", "simple": { "limit": 600, "period": 60 } }
+    { "name": "GITHUB_WEBHOOK_LIMITER", "namespace_id": "4303", "simple": { "limit": 600, "period": 60 } },
+    // Sign-in, sign-up, password reset and passkey sign-in, per client IP (src/security/auth-limits.ts).
+    { "name": "AUTH_LIMITER", "namespace_id": "4304", "simple": { "limit": 20, "period": 60 } },
+    // Sign-in and password reset, per normalized e-mail (password guessing spread over many IPs).
+    { "name": "AUTH_EMAIL_LIMITER", "namespace_id": "4305", "simple": { "limit": 10, "period": 60 } },
+    // OAuth authorize/token and the device-code endpoint, per client IP. A CLI polls the token
+    // endpoint every 5 s (12/min), so this leaves room for several logins behind one NAT.
+    { "name": "OAUTH_LIMITER", "namespace_id": "4306", "simple": { "limit": 120, "period": 60 } }
   ],
 
   // Integration webhooks (src/integrations/delivery.ts): one message per delivery, at least once.

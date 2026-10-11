@@ -16,7 +16,6 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer, deviceAuthorization } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema.js";
-import { mailerFor, resetPasswordEmail } from "./email.js";
 import {
   agentDeviceGrant,
   agentDeviceRedemption,
@@ -24,6 +23,7 @@ import {
   DEVICE_DISABLED_PATHS,
   DEVICE_POLL_INTERVAL,
 } from "../oauth/device.js";
+import { mailerFor, resetPasswordEmail } from "./email.js";
 
 export interface AuthBindings {
   DB: D1Database;
@@ -47,6 +47,28 @@ export function authBaseUrl(env: Pick<AuthBindings, "BETTER_AUTH_URL">, origin: 
   const configured = env.BETTER_AUTH_URL?.trim();
   return configured ? configured : origin;
 }
+
+/**
+ * On https, the session cookies are `__Host-` cookies: Secure, Path=/ and no Domain, so a project
+ * Worker on a sibling subdomain (`*.<account>.workers.dev`) cannot toss a session cookie of its
+ * own onto the platform (security audit M1). better-auth would prefix `__Secure-` (which a sibling
+ * may still set with `Domain=`), so its prefixing is off and the names carry `__Host-` themselves;
+ * every other cookie it sets stays Secure. On http (local dev, tests) the names stay plain.
+ */
+export const SESSION_COOKIE_PREFIX_HTTPS = "__Host-";
+const hostCookie = (name: string) => ({
+  name: `${SESSION_COOKIE_PREFIX_HTTPS}better-auth.${name}`,
+});
+const HOST_COOKIES = {
+  useSecureCookies: false,
+  defaultCookieAttributes: { secure: true },
+  cookies: {
+    session_token: hostCookie("session_token"),
+    session_data: hostCookie("session_data"),
+    dont_remember: hostCookie("dont_remember"),
+    account_data: hostCookie("account_data"),
+  },
+} as const;
 
 export function createAuth(env: AuthBindings, rt: AuthRuntime) {
   const baseURL = authBaseUrl(env, rt.origin);
@@ -80,7 +102,10 @@ export function createAuth(env: AuthBindings, rt: AuthRuntime) {
     session: { cookieCache: { enabled: true, maxAge: 300 } },
     // Per-isolate memory rate limiting is meaningless on Workers; use Cloudflare rate limiting rules.
     rateLimit: { enabled: false },
-    advanced: waitUntil ? { backgroundTasks: { handler: (p) => waitUntil(p) } } : {},
+    advanced: {
+      ...(waitUntil ? { backgroundTasks: { handler: (p: Promise<unknown>) => waitUntil(p) } } : {}),
+      ...(url.protocol === "https:" ? HOST_COOKIES : {}),
+    },
     // Device codes must never turn into human sessions; approval goes through our consent API.
     disabledPaths: [...DEVICE_DISABLED_PATHS],
     plugins: [
