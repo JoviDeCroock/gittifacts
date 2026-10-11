@@ -27,7 +27,7 @@ case "$SMOKE" in
     id=""
     for _ in $(seq 1 30); do
       sleep 5
-      id="$(gh run list --workflow post-deploy-smoke.yml --event workflow_dispatch --limit 10 --json databaseId,createdAt \
+      id="$(gh run list --workflow post-deploy-smoke.yml --event workflow_dispatch --branch main --limit 10 --json databaseId,createdAt \
         --jq "[.[] | select(.createdAt >= \"$since\")] | sort_by(.createdAt) | .[0].databaseId // empty")"
       [ -n "$id" ] && break
     done

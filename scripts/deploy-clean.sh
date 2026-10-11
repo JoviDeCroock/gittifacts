@@ -80,7 +80,7 @@ dispatch_and_watch() {
   local id=""
   for _ in $(seq 1 30); do
     sleep 5
-    id="$(gh run list --workflow "$workflow" --event workflow_dispatch --limit 10 --json databaseId,createdAt \
+    id="$(gh run list --workflow "$workflow" --event workflow_dispatch --branch main --limit 10 --json databaseId,createdAt \
       --jq "[.[] | select(.createdAt >= \"$since\")] | sort_by(.createdAt) | .[0].databaseId // empty" 2>/dev/null || true)"
     [ -n "$id" ] && break
   done
