@@ -132,7 +132,10 @@ function changeCommands(id: string, sub: "" | "evidence" | "rollout", here: Chan
     { id: "change.queue-status", label: "Where it is in the merge queue", group: "This change", icon: "git-merge", act: null, twin: twin("queue_status"), words: "queue position eta batch" },
   );
   if (here.status === "queued") {
-    out.push({ id: "change.dequeue", label: "Pull it from the merge queue", group: "This change", icon: "undo", act: null, twin: twin("dequeue"), words: "dequeue remove queue" });
+    out.push(
+      { id: "change.dequeue", label: "Pull it from the merge queue", group: "This change", icon: "undo", act: null, twin: twin("dequeue"), words: "dequeue remove queue" },
+      { id: "change.reprioritize", label: "Move it up or down the merge queue", group: "This change", icon: "list-ordered", act: null, twin: { tool: "reprioritize", args: { changeId: id }, positional: "changeId", fill: ["priority"] }, words: "priority bump queue" },
+    );
   }
   out.push({ id: "change.trail", label: "Its audit trail", group: "This change", icon: "scroll-text", act: { kind: "go", href: `/audit?subject=${encodeURIComponent(`change:${id}`)}` }, twin: { tool: "list_audit_events", args: { subject: `change:${id}` } }, words: "history events audit" });
   out.push({ id: "change.close", label: "Close the change", group: "This change", icon: "archive", act: null, twin: twin("close_change"), words: "abandon stale drop" });
@@ -179,11 +182,14 @@ function repoCommands(repo: RepoRef | { id: string; name?: undefined; hosted?: u
     { id: "repo.plan", label: "Draft a plan", group: "This repo", icon: "plus", act: null, twin: { tool: "create_plan", args, fill: ["title", "intent", "acceptanceCriteria"] }, words: "new intent" },
     { id: "repo.change", label: "Start a change", group: "This repo", icon: "git-branch", act: null, twin: { tool: "start_change", args, fill: ["title", "category"] }, words: "new branch fork push" },
   );
-  if (sub === "queue" && !repo.hosted) {
+  // The queue's own controls are a person's; the queue screen holds them (owners only).
+  if (sub !== "members" && !repo.hosted) {
+    const queue: Act = { kind: "go", href: `/repos/${enc}/queue` };
+    const rule = "Only a person freezes, thaws or resumes the merge queue.";
     out.push(
-      { id: "queue.enqueue", label: "Put a change in the queue", group: "This repo", icon: "git-merge", act: null, twin: { tool: "enqueue", args: {}, fill: ["changeId"] }, words: "enqueue land" },
-      { id: "queue.reprioritize", label: "Move a change up or down the queue", group: "This repo", icon: "list-ordered", act: null, twin: { tool: "reprioritize", args: {}, fill: ["changeId", "priority"] }, words: "priority bump" },
-      { id: "queue.freeze", label: "Freeze, thaw or resume the queue", group: "This repo", icon: "pause", act: null, twin: null, personOnly: "Only a person freezes or resumes the merge queue.", words: "halt stop pause" },
+      { id: "queue.freeze", label: "Freeze the queue…", group: "This repo", icon: "pause", act: queue, twin: null, personOnly: rule, words: "halt stop pause incident" },
+      { id: "queue.thaw", label: "Thaw the queue…", group: "This repo", icon: "redo", act: queue, twin: null, personOnly: rule, words: "unfreeze open" },
+      { id: "queue.resume", label: "Resume the queue…", group: "This repo", icon: "redo", act: queue, twin: null, personOnly: rule, words: "halted restart continue" },
     );
   }
   return out;
@@ -281,9 +287,11 @@ export function jumpCommand(query: string, origin: string): Command | null {
   if (path) {
     return { id: "jump.path", label: `Go to ${path}`, group: "Open", icon: "arrow-up-right", act: { kind: "go", href: path }, twin: null, twinless: "Navigation only: an address to open.", words: q.toLowerCase() };
   }
+  const enc = encodeURIComponent(q);
+  // The platform's ids are 20 characters of [0-9a-z] with no kind in them: offer the likely two.
+  if (/^[0-9a-z]{20}$/.test(q)) return { id: "jump.change", label: `Open change ${q}`, group: "Open", icon: "git-branch", act: { kind: "go", href: `/changes/${enc}` }, twin: { tool: "get_change_status", args: { changeId: q }, positional: "changeId" }, words: q };
   const m = /^(chg|plan|repo)_[\w-]+$/.exec(q);
   if (!m) return null;
-  const enc = encodeURIComponent(q);
   if (m[1] === "chg") return { id: "jump.change", label: `Open change ${q}`, group: "Open", icon: "git-branch", act: { kind: "go", href: `/changes/${enc}` }, twin: { tool: "get_change_status", args: { changeId: q }, positional: "changeId" }, words: q.toLowerCase() };
   if (m[1] === "plan") return { id: "jump.plan", label: `Open plan ${q}`, group: "Open", icon: "list-checks", act: { kind: "go", href: `/plans/${enc}` }, twin: { tool: "get_plan", args: { planId: q }, positional: "planId" }, words: q.toLowerCase() };
   return { id: "jump.repo", label: `Open repository ${q}`, group: "Open", icon: "layers", act: { kind: "go", href: `/repos/${enc}` }, twin: { tool: "list_changes", args: { repoId: q }, positional: "repoId" }, words: q.toLowerCase() };
@@ -331,7 +339,7 @@ export function match(commands: Command[], query: string): Command[] {
   const scored: { c: Command; score: number; i: number }[] = [];
   commands.forEach((c, i) => {
     const label = c.label.toLowerCase();
-    const hay = `${label} ${c.group.toLowerCase()} ${c.words ?? ""} ${c.twin?.tool ?? ""} ${c.twin ? commandName(c.twin.tool) : ""}`;
+    const hay = `${label} ${c.group.toLowerCase()} ${c.words ?? ""} ${(c.meta ?? "").toLowerCase()} ${c.twin?.tool ?? ""} ${c.twin ? commandName(c.twin.tool) : ""}`;
     if (!words.every((w) => hay.includes(w))) return;
     const first = words[0] ?? "";
     const score = label.startsWith(first) ? 0 : label.split(/\W+/).some((t) => t.startsWith(first)) ? 1 : 2;

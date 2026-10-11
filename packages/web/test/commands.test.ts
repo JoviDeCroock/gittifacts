@@ -78,7 +78,7 @@ describe("agent twins", () => {
     // Picking an attempt approves it: person-only; comparing them is an agent's read.
     expect(every.find((c) => c.id === "plan.pick")).toMatchObject({ twin: null, personOnly: expect.stringMatching(/person/i) });
     expect(every.find((c) => c.id === "plan.attempts")?.twin).toMatchObject({ tool: "compare_attempts", args: { planId: "plan_1" } });
-    for (const id of ["go.agents", "agents.add", "agents.revoke", "repo.membership", "repo.lane0", "queue.freeze", "plan.reject"]) {
+    for (const id of ["go.agents", "agents.add", "agents.revoke", "repo.membership", "repo.lane0", "queue.freeze", "queue.thaw", "queue.resume", "plan.reject"]) {
       expect(every.find((c) => c.id === id)?.personOnly, `${id} is a person's act`).toMatch(/person/i);
     }
   });
@@ -88,7 +88,10 @@ describe("agent twins", () => {
     expect(cmds.find((c) => c.id === "change.tour")?.twin?.tool).toBe("get_tour");
     for (const tool of ["request_review", "close_change", "queue_status", "get_qa", "get_change_status"]) expect(cmds.map((c) => c.twin?.tool)).toContain(tool);
     expect(cmds.map((c) => c.id)).not.toContain("change.dequeue");
-    expect(commandsFor("/changes/chg_1", REPOS, { status: "queued" }).find((c) => c.id === "change.dequeue")?.twin?.tool).toBe("dequeue");
+    const queued = commandsFor("/changes/chg_1", REPOS, { status: "queued" });
+    expect(queued.find((c) => c.id === "change.dequeue")?.twin?.tool).toBe("dequeue");
+    expect(queued.find((c) => c.id === "change.reprioritize")?.twin?.tool).toBe("reprioritize");
+    expect(commandsFor("/repos/gh-1/queue", REPOS).map((c) => c.id)).not.toContain("queue.freeze");
     expect(commandsFor("/changes/chg_1/rollout", REPOS).find((c) => c.id === "change.issues")?.twin?.tool).toBe("list_issues_for_change");
     expect(cmds.find((c) => c.id === "change.rollout")?.twin?.tool).toBe("get_rollout");
     expect(commandsFor("/dashboard", REPOS).find((c) => c.id === "go.audit")?.twin?.tool).toBe("list_audit_events");
@@ -168,5 +171,6 @@ describe("text", () => {
     expect(jumpCommand("chg_zz9", "https://x.test")?.act).toEqual({ kind: "go", href: "/changes/chg_zz9" });
     expect(jumpCommand("https://x.test/plans/plan_1#sign", "https://x.test")?.act).toEqual({ kind: "go", href: "/plans/plan_1#sign" });
     expect(jumpCommand("backoff", "https://x.test")).toBeNull();
+    expect(jumpCommand("0a1b2c3d4e5f6g7h8i9j", "https://x.test")?.act).toEqual({ kind: "go", href: "/changes/0a1b2c3d4e5f6g7h8i9j" });
   });
 });
