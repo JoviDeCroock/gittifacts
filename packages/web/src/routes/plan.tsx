@@ -48,7 +48,12 @@ function OwnDraft({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
   const prompt = useRef<HTMLParagraphElement>(null);
   // The palette's "Withdraw your draft plan" lands here with #withdraw: open the confirmation.
   useEffect(() => {
-    if (window.location.hash === "#withdraw") confirming.value = true;
+    const open = () => {
+      if (window.location.hash === "#withdraw") confirming.value = true;
+    };
+    open();
+    window.addEventListener("hashchange", open);
+    return () => window.removeEventListener("hashchange", open);
   }, [confirming]);
   useEffect(() => {
     if (confirming.value) prompt.current?.focus();
