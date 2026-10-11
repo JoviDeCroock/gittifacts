@@ -30,3 +30,30 @@ export const repoMembers = sqliteTable(
     index("repo_members_principal_idx").on(t.principalId),
   ],
 );
+
+/**
+ * Pending invites (src/access/invites.ts): an owner adds an e-mail nobody has signed up with yet.
+ * The invite link (`/invite/gtm_…`) is shown once; only its SHA-256 is stored. Accepting needs the
+ * link AND a signed-in person whose e-mail is `email` (DECISIONS 2026-10-11). One pending invite
+ * per (repo, e-mail): inviting again replaces the link. Single use: `accepted_at` is set once.
+ */
+export const repoInvites = sqliteTable(
+  "repo_invites",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
+    /** Trimmed and lower-cased. */
+    email: text("email").notNull(),
+    role: text("role", { enum: REPO_ROLES }).notNull(),
+    invitedBy: text("invited_by").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdAt: text("created_at").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    acceptedAt: text("accepted_at"),
+    acceptedBy: text("accepted_by"),
+    revokedAt: text("revoked_at"),
+  },
+  (t) => [index("repo_invites_repo_email_idx").on(t.repoId, t.email)],
+);

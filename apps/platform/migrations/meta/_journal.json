@@ -162,6 +162,13 @@
       "when": 1791701078294,
       "tag": "0022_audit_action_index",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1791701897803,
+      "tag": "0023_repo_invites",
+      "breakpoints": true
     }
   ]
 }
