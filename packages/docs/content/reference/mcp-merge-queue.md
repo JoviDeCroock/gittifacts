@@ -52,7 +52,7 @@ queue_status({ changeId: "<changeId>" })
 
 ## `wait_for_merge`
 
-Long-polls until the Change merges, is ejected or dequeued, or the queue freezes (timeoutSec ≤ 55). Prefer this to polling; call again while reason is "timeout".
+Long-polls until the Change merges, is ejected or dequeued, or the queue freezes (timeoutSec ≤ 55). Prefer this to polling; call again while reason is "timeout". It watches the queue only: from review to merge use wait_for_change (until "merged"), which also answers when a reviewer or CI sends the change back.
 
 **Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts wait-for-merge`
 

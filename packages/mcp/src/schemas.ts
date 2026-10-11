@@ -134,6 +134,7 @@ export const WAIT_REASONS = [
   "rejected",
   "approval-withdrawn",
   "superseded",
+  "failing",
 ] as const;
 
 const Review = {
@@ -902,7 +903,7 @@ export const WaitForChangeOutput = {
     reason: {
       enum: WAIT_REASONS,
       description:
-        "reached; timeout (call again); unreachable (the change ended); or a human sent it back first: changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review); superseded (a person picked another attempt at the same plan and this change was closed: supersededBy).",
+        "reached; timeout (call again); unreachable (the change ended); a human sent it back first: changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review); the machines did (merged/reverted waits): failing (red CI, a merge-queue ejection or a failed merge: read get_change_status, fix and push a new head); or superseded (a person picked another attempt at the same plan and this change was closed: supersededBy).",
     },
     supersededBy: {
       type: "string",

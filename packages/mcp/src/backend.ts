@@ -39,8 +39,9 @@ export interface McpCaller {
 
 /**
  * Why `wait_for_change` answered. Besides reached / timeout / unreachable (the change ended), a
- * human may have sent it back: changes-requested, rejected or approval-withdrawn; or picked another
- * attempt at the same plan, which closed this one: superseded.
+ * human may have sent it back (changes-requested, rejected or approval-withdrawn); the machines
+ * did (failing: red CI, a queue ejection or a failed merge, for merged/reverted waits); or a person
+ * picked another attempt at the same plan, which closed this one: superseded.
  */
 export type WaitReasonData =
   | "reached"
@@ -49,7 +50,8 @@ export type WaitReasonData =
   | "changes-requested"
   | "rejected"
   | "approval-withdrawn"
-  | "superseded";
+  | "superseded"
+  | "failing";
 
 export interface GitRemote {
   url: string;

@@ -16,7 +16,14 @@ import type { Ports, Store } from "./ports.js";
  */
 export type SentBack = "changes-requested" | "rejected" | "approval-withdrawn";
 
-export type MilestoneState = "reached" | "pending" | "unreachable" | SentBack;
+/**
+ * The machines sent it back before a merged/reverted milestone: the current head is `failing`
+ * (red CI, or the merge queue ejected it, or the merge failed). Only a new push (or a re-run)
+ * moves it again, so a merged wait answers instead of holding until its timeout.
+ */
+export type MachinesSentBack = "failing";
+
+export type MilestoneState = "reached" | "pending" | "unreachable" | SentBack | MachinesSentBack;
 
 /** Why `wait_for_change` answered: a settled milestone state, or the timeout. */
 export type WaitReason = Exclude<MilestoneState, "pending"> | "timeout";
@@ -28,6 +35,7 @@ export const WAIT_REASONS = [
   "changes-requested",
   "rejected",
   "approval-withdrawn",
+  "failing",
 ] as const satisfies readonly WaitReason[];
 
 const ENDED: ReadonlySet<Change["status"]> = new Set(["abandoned", "rejected"]);
@@ -59,7 +67,8 @@ const ROUTED: ReadonlySet<Change["status"]> = new Set([
  * `changes-requested` when the head that was pushed is awaiting a new push again (a review asked
  * for changes); `approval-withdrawn` when `since` (the snapshot the wait started from) was
  * approved or queued and the same head is back to running or awaiting review (merged/reverted
- * waits only: the approval was what they were waiting on).
+ * waits only: the approval was what they were waiting on). And `failing` (merged/reverted waits)
+ * when the head is failing: red CI, a queue ejection or a failed merge, fixed by a new push.
  */
 export function milestoneState(
   change: Change,
@@ -111,6 +120,9 @@ export function milestoneState(
     since.headSha === change.headSha
   ) {
     return "approval-withdrawn";
+  }
+  if ((until === "merged" || until === "reverted") && change.status === "failing") {
+    return "failing";
   }
   return "pending";
 }

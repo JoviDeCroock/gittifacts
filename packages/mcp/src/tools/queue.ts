@@ -720,7 +720,7 @@ export function queueTools(backend: McpBackend, kit: ToolKit) {
       name: "wait_for_merge",
       title: "Wait for the merge",
       description:
-        'Long-polls until the Change merges, is ejected or dequeued, or the queue freezes (timeoutSec ≤ 55). Prefer this to polling; call again while reason is "timeout".',
+        'Long-polls until the Change merges, is ejected or dequeued, or the queue freezes (timeoutSec ≤ 55). Prefer this to polling; call again while reason is "timeout". It watches the queue only: from review to merge use wait_for_change (until "merged"), which also answers when a reviewer or CI sends the change back.',
       inputSchema: WaitForMergeInput,
       outputSchema: WaitForMergeOutput,
       annotations: READ,

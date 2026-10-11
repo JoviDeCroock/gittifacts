@@ -220,6 +220,12 @@ describe("milestones", () => {
     ["evidence_ready", { status: "awaiting-push", evidenceId: "ev" }, "reached"],
     // Nothing pushed yet is not a request for changes.
     ["merged", { status: "awaiting-push", headSha: null }, "pending"],
+    // Sent back by the machines (red CI, a queue ejection, a failed merge): push a new head.
+    ["merged", { status: "failing", lane: 1, evidenceId: "ev" }, "failing"],
+    ["merged", { status: "failing", evidenceId: "ev" }, "failing"],
+    ["reverted", { status: "failing", lane: 1 }, "failing"],
+    ["evidence_ready", { status: "failing", evidenceId: "ev" }, "reached"],
+    ["merged", { status: "running" }, "pending"],
   ] as const)("%s with %j → %s", (until, patch, expected) => {
     expect(milestoneState({ ...base, ...patch } as Change, until)).toBe(expected);
   });
