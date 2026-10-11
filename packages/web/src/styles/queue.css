@@ -167,8 +167,8 @@
 @media (pointer: coarse) {
   .q-fig dt a {
     display: inline-block;
-    padding-block: 13px;
-    margin-block: -13px;
+    padding-block: 14px;
+    margin-block: -14px;
   }
 }
 .q-fig__sub {
