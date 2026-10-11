@@ -19,3 +19,5 @@ fixtures/.materialized/
 .cloudflare/
 apps/platform/wrangler.e2e.json
 apps/platform/wrangler.staging.json
+# The CLI project file for the operator's own live project (names the host, project and remote).
+/.gittifacts.json
