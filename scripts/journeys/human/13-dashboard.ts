@@ -35,15 +35,16 @@ export const journey: HumanJourney = {
     await j.hold(1500);
     await j.snap("dashboard-new");
 
-    await j.chapter("Try it now", "Try it now: a project from a template");
+    await j.chapter("Create a repo", "Create a repo from a template");
     const create = p.getByRole("button", { name: "Create repo" });
     await j.reveal(create);
     const createAt = Date.now();
     await j.click(create);
-    await p.waitForSelector(".gs-step[data-state='running']", { timeout: 30_000 });
+    // The repo exists at once (step 1 ticks); its first check runs on the step's quiet line.
+    await p.waitForSelector(".gs-step[data-step='repo'][data-state='done']", { timeout: 30_000 });
     await j.hold(1200);
     await j.snap("try-running");
-    await j.caption("The first check runs; the step ticks itself off", 3000);
+    await j.caption("The repo is there; its first check runs, and a first plan waits for approval", 3000);
     await p.waitForSelector(".gs-green, .gs-step__line--failed", { timeout: 300_000 });
     const greenAt = Date.now();
     const failed = (await p.locator(".gs-step__line--failed").count()) > 0;
