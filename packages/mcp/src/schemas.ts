@@ -191,7 +191,10 @@ export const Resolution = {
   description:
     "Set when the merge queue resolved a conflict: what lands is headSha (the resolver's commit), not the head you pushed. null: no resolution.",
   properties: {
-    headSha: { type: "string", description: "The resolved head: what lands on the default branch." },
+    headSha: {
+      type: "string",
+      description: "The resolved head: what lands on the default branch.",
+    },
     originalHeadSha: { ...nullableStr, description: "The head you pushed." },
     kind: { enum: ["textual", "semantic"] },
     at: str,
@@ -748,7 +751,10 @@ export const ChangeStatusOutput = {
   properties: {
     change: ChangeBrief,
     url: changeUrl,
-    author: { ...Person, description: "Who started the change, and for an agent the person accountable." },
+    author: {
+      ...Person,
+      description: "Who started the change, and for an agent the person accountable.",
+    },
     resolution: Resolution,
     reviews: {
       type: "array",
@@ -851,7 +857,16 @@ export const EvidenceOutput = {
     url: { type: "string", description: "The change's evidence page, to hand a person." },
     nextSteps: NextSteps,
   },
-  required: ["changeId", "headSha", "verification", "signedAt", "keyId", "items", "url", "nextSteps"],
+  required: [
+    "changeId",
+    "headSha",
+    "verification",
+    "signedAt",
+    "keyId",
+    "items",
+    "url",
+    "nextSteps",
+  ],
 } as const;
 
 export const TourOutput = {

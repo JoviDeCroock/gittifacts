@@ -28,6 +28,9 @@ export const MemberSchema = z
     role: RepoRoleSchema,
     addedBy: z.string(),
     addedAt: z.string(),
+    agents: z
+      .array(z.object({ principalId: z.string(), name: z.string() }))
+      .describe("The agents this member owns that can act in this repo, with this member's role"),
   })
   .meta({ id: "RepoMember" });
 

@@ -37,7 +37,13 @@ export type PlatformPage =
   /** A change's walkthrough (`/changes/:id`), or its evidence or rollout page. */
   | { changeId: string; view?: "evidence" | "rollout" | undefined }
   /** The audit log, filtered (`/audit?actor=…`). */
-  | { audit: { subject?: string | undefined; actor?: string | undefined; action?: string | undefined } }
+  | {
+      audit: {
+        subject?: string | undefined;
+        actor?: string | undefined;
+        action?: string | undefined;
+      };
+    }
   /** The person's agents (`/agents`): where an owner inspects or revokes them. */
   | { agents: true };
 

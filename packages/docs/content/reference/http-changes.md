@@ -236,5 +236,5 @@ Audit log, newest first, with hash-chain verification
 
 - **Auth:** session cookie or bearer token
 - **Parameters:** `repoId` (query), `subject` (query), `actor` (query), `action` (query), `cursor` (query), `limit` (query)
-- **200:** `{ events, nextCursor, chain: ChainStatus, principals: PrincipalsMap }`
+- **200:** `{ events, nextCursor, chain: ChainStatus, principals: PrincipalsMap, subjects: AuditSubjectsMap }`
 - **Errors:** 400, 401, 403, 404

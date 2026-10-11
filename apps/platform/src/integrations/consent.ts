@@ -4,6 +4,7 @@
  * first one to open it owns it. Repos must be ones the human may install on (claimed, owned);
  * unclaimed projects never appear and are refused if named.
  */
+import { IntegrationScope } from "@app/domain";
 import { sha256Hex } from "@app/evidence";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -55,6 +56,9 @@ export const InstallViewSchema = z
         installationId: z.string(),
         repoSelection: z.enum(["all", "selected"]),
         repoIds: z.array(z.string()),
+        scopes: z
+          .array(IntegrationScope)
+          .describe("What the installation already granted: an update marks what it adds"),
       })
       .nullable(),
     expiresAt: z.string(),
@@ -163,6 +167,7 @@ export async function getInstallRequest(
       installationId: existing.id,
       repoSelection: existing.repoSelection,
       repoIds: rows.map((r) => r.repoId),
+      scopes: IntegrationScope.array().catch([]).parse(existing.scopes),
     };
   }
   return {

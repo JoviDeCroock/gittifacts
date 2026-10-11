@@ -27,7 +27,12 @@ import { qaBrief } from "../qa/brief.js";
 import { createQueueMcpBackend } from "../queue/mcp.js";
 import { compareAttempts } from "../services/attempts.js";
 import { supersededBy } from "../services/attempts-pick.js";
-import { type AuditEventView, listAudit } from "../services/audit.js";
+import {
+  type AuditEventView,
+  type AuditSubjectRef,
+  auditSubjectRefs,
+  listAudit,
+} from "../services/audit.js";
 import { capabilities } from "../services/capabilities.js";
 import {
   closeChange,
@@ -109,6 +114,7 @@ function actorData(id: string, principals: Record<string, PrincipalRef>): ActorD
 function auditEventData(
   e: AuditEventView,
   principals: Record<string, PrincipalRef>,
+  subjects: Record<string, AuditSubjectRef> = {},
 ): AuditEventData {
   return {
     seq: e.seq,
@@ -117,6 +123,7 @@ function auditEventData(
     subject: e.subject,
     summary: e.summary,
     actor: actorData(e.principalId, principals),
+    about: subjects[e.subject] ?? null,
   };
 }
 
@@ -304,7 +311,11 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     },
 
     async getResolution(mc, changeId) {
-      const { resolution: r } = await getChangeResolution(svc, await scoped(mc, { changeId }), changeId);
+      const { resolution: r } = await getChangeResolution(
+        svc,
+        await scoped(mc, { changeId }),
+        changeId,
+      );
       if (r === null) return null;
       return {
         headSha: r.headSha,
@@ -402,16 +413,17 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
 
     async getRollout(mc, changeId) {
       const caller = await scoped(mc, { changeId });
-      const [r, change] = await Promise.all([
+      const [r, change, subjects] = await Promise.all([
         getChangeRollout(svc, caller, changeId),
         requireChange(svc, changeId),
+        auditSubjectRefs(svc, [`change:${changeId}`], {}),
       ]);
       return {
         change,
         rollout: r.rollout,
         policy: r.policy,
         policySha: r.policySha,
-        timeline: r.timeline.map((e) => auditEventData(e, r.principals)),
+        timeline: r.timeline.map((e) => auditEventData(e, r.principals, subjects)),
       };
     },
 
@@ -421,7 +433,7 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
         filter.repoId === undefined ? callerFrom(mc) : await scoped(mc, { repoId: filter.repoId });
       const page = await listAudit(svc, caller, filter);
       return {
-        events: page.events.map((e) => auditEventData(e, page.principals)),
+        events: page.events.map((e) => auditEventData(e, page.principals, page.subjects)),
         nextCursor: page.nextCursor,
         chain: page.chain,
       };

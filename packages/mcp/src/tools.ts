@@ -402,7 +402,8 @@ export function changeNextSteps(
 /** The merge queue rewrote what lands: say so before anything else (get_change_status, queue_status). */
 export function resolutionSteps(changeId: string, r: ResolutionData | null): NextStep[] {
   if (r === null) return [];
-  const pushed = r.originalHeadSha === null ? "your head" : `your head ${r.originalHeadSha.slice(0, 7)}`;
+  const pushed =
+    r.originalHeadSha === null ? "your head" : `your head ${r.originalHeadSha.slice(0, 7)}`;
   const steps: NextStep[] = [
     {
       title: `The merge queue resolved a ${r.kind} conflict: ${r.headSha.slice(0, 7)} lands, not ${pushed}`,

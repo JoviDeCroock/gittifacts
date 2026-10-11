@@ -63,12 +63,19 @@ const Rollout = {
       type: "array",
       items: {
         type: "object",
-        properties: { percent: { type: "integer" }, startedAt: nullableStr, completedAt: nullableStr },
+        properties: {
+          percent: { type: "integer" },
+          startedAt: nullableStr,
+          completedAt: nullableStr,
+        },
         required: ["percent", "startedAt", "completedAt"],
       },
     },
     watchUntil: nullableStr,
-    flagKey: { ...nullableStr, description: "The flag a person switches off to disable the change." },
+    flagKey: {
+      ...nullableStr,
+      description: "The flag a person switches off to disable the change.",
+    },
     lastCheck: {
       type: ["object", "null"],
       properties: {
@@ -96,13 +103,20 @@ const GetRolloutOutput = {
   type: "object",
   properties: {
     changeId: str,
-    status: { type: "string", description: "The change's status (merged, rolling-out, released, reverted, ...)." },
+    status: {
+      type: "string",
+      description: "The change's status (merged, rolling-out, released, reverted, ...).",
+    },
     mergedSha: nullableStr,
-    revertedBy: { ...nullableStr, description: "The revert change, once a regression rolled it back." },
+    revertedBy: {
+      ...nullableStr,
+      description: "The revert change, once a regression rolled it back.",
+    },
     rollout: Rollout,
     policy: {
       type: "object",
-      description: "The rollout policy from the change's base (.platform/policy.ts), not the repo's current one.",
+      description:
+        "The rollout policy from the change's base (.platform/policy.ts), not the repo's current one.",
       properties: {
         stages: { type: "array", items: { type: "integer" } },
         stageMinutes: { type: "integer" },
@@ -111,10 +125,21 @@ const GetRolloutOutput = {
         maxNewIssueGroups: { type: "integer" },
         minRequests: { type: "integer" },
       },
-      required: ["stages", "stageMinutes", "watchMinutes", "maxErrorRateIncrease", "maxNewIssueGroups", "minRequests"],
+      required: [
+        "stages",
+        "stageMinutes",
+        "watchMinutes",
+        "maxErrorRateIncrease",
+        "maxNewIssueGroups",
+        "minRequests",
+      ],
     },
     policySha: nullableStr,
-    timeline: { type: "array", description: "The change's audit events, oldest first.", items: AuditEvent },
+    timeline: {
+      type: "array",
+      description: "The change's audit events, oldest first.",
+      items: AuditEvent,
+    },
     url: { type: "string", description: "The change's rollout page, to hand a person." },
     nextSteps: {
       type: "array",

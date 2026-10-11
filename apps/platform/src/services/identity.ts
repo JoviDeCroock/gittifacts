@@ -1,6 +1,6 @@
 import type { Principal, Scope } from "@app/domain";
 import type { z } from "zod";
-import { canSeePrincipal } from "../access/access.js";
+import { canSeePrincipal, filterAccessible } from "../access/access.js";
 import type { CreateAgentBody } from "../api/schemas.js";
 import type { Caller, Services } from "../app-env.js";
 import { issueAgentToken, revokeAgentTokens } from "../auth/agent-tokens.js";
@@ -67,12 +67,14 @@ export async function createAgent(
       },
     );
   }
+  const repoIds = await grantableRepoIds(svc, caller, body.repoIds ?? null);
   const now = svc.clock.now();
   const principal = await createAgentPrincipal(svc.store, {
     name: body.name,
     ownerId: caller.principal.id,
     scopes: scopes as Scope[],
     now,
+    repoIds,
   });
   const issued = await issueAgentToken(svc.store, {
     principalId: principal.id,
@@ -88,12 +90,46 @@ export async function createAgent(
     payload: {
       name: principal.name,
       scopes: principal.scopes,
+      repoIds,
       tokenId: issued.id,
       tokenPrefix: issued.prefix,
       expiresAt: issued.expiresAt,
     },
   });
   return { principal, token: issued.token };
+}
+
+/**
+ * The repos a hand-made agent is limited to, checked like OAuth consent's picker: claimed repos the
+ * creator can access. null (or omitted) keeps today's default, every repo the creator can reach.
+ */
+async function grantableRepoIds(
+  svc: Services,
+  caller: Caller,
+  requested: readonly string[] | null,
+): Promise<string[] | null> {
+  if (requested === null) return null;
+  const claimed = (await svc.store.listRepos()).filter((r) => r.claim.status === "claimed");
+  const allowed = new Set(
+    (await filterAccessible(svc, caller.principal, claimed)).map((r) => r.id),
+  );
+  const unique = [...new Set(requested)];
+  const unknown = unique.filter((id) => !allowed.has(id));
+  if (unknown.length > 0) {
+    throw new ApiError(
+      400,
+      "invalid-request",
+      `unknown or undelegable repo: ${unknown.join(", ")}`,
+      {
+        unknown,
+      },
+      {
+        explanation:
+          "Pick repos you are a member of (claimed repos you can access), or leave repoIds out for all of them.",
+      },
+    );
+  }
+  return unique;
 }
 
 /** Revoke all tokens of a principal: its owner, or the principal itself. */
