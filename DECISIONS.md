@@ -2997,3 +2997,80 @@ and still cheap for static sites. A lost run is noticed within one or two alarm 
 cost of one Workflows `status()` call per running batch per tick after its first minute. Stuck queues
 deployed before this fix recover on the first alarm after deploy: the four errored instances count as
 errored and re-run with the fix.
+## 2026-10-11 — UX/UI/AX review, round two: glass on every screen, agents' homes, honest agent outputs
+
+**Context.** The owner asked for a large-scale UX/UI/AX review with the fixes: top-notch, glassy, very
+nice to interact with, agents first-class. Four audits ran on ed4261e: the review journey (27
+findings), the shell and operations screens (38), entry, consent and settings (46), and agent parity
+(23, with a UI × HTTP × MCP × CLI × palette matrix). Nothing was P0. The P1s that drove the work:
+- At 1100 to 1350px the walkthrough's reading column was narrower than on a phone (348px at 1100,
+  code clipped at ~45 columns), because the decision rail joined on a viewport query.
+- The desktop had no glass at all (the top bar was hidden from 1024px), and where acetate existed it
+  read as solid: 74%/84% grounds over content of the same luminance.
+- Two "current" places on every repo screen; the phone drawer dropped the repos and search.
+- `/agents` was a credentials list with no links; the agent band never named the accountable person
+  live (only the mock had `ownerName`); avatars collided ("FC" twice, "P0" read as a priority).
+- Still open from 2026-10-10: no human queue controls, no audit filter by actor (and the "action"
+  filter silently matched nothing), `request_review` said `notified: true` with nobody notified.
+- `wait_for_change(merged)` never settled on a red or ejected change, and AGENTS.md told agents to
+  keep calling it.
+- Consent never said who was approving, and agents couldn't be named there.
+
+**Decision.**
+- **Glass is on every screen, and reads as glass.** The top bar (`.topbar`, already a listed acetate
+  surface) stays at every width: from 1024px a 48px bar over the content column, hidden at rest,
+  fading in with the crumbs, title and search once the page head scrolls away. `--acetate` 74 → 64%,
+  `--acetate-strong` 84 → 76%, a second rim on the bottom edge (`--acetate-floor`), and the palette's
+  scrim is the full backdrop with a 4px blur. Crumbs on glass are ink, not ink-2, so 4.5:1 holds
+  over a solid lane tag. Sticky rails sit at `calc(var(--topbar-h) + 16px)`.
+- **The walkthrough's rail joins on the tour's own width (≥1040px, about 1350px of window),**
+  measured with a ResizeObserver, not a CSS container (a container would trap the fixed bar). Below
+  it the page keeps one column and the decision bar.
+- **The decision flow is keyboard- and thumb-correct.** J/K focus the stop heading; Approve focuses
+  the sheet title (no keyboard on phones for an optional comment); Escape, Back and the scrim return
+  focus to the opening choice; the phone sheet has a tint scrim and makes the page `inert` (no blur:
+  blur stays on `::backdrop` only); the rail carries the 2px ink edge; the lane picker is one Tab stop;
+  N opens the next change after a decision. A person may close a change (author, the author agent's
+  owner, or a reviewer, as the coordinator already allowed).
+- **An owner approving their own agent's change sees the boundary** (the plan page's note, now on the
+  change too). It informs and doesn't block; whether a repo may forbid it is an owner decision.
+- **Agents have a home.** One `AgentMark` per agent (first letter + number, a stable ink/outline and
+  corner variant from the principal id; never a lane colour). `/agents` rows show the state and last
+  act with its object, the repos it may touch, a Trail (`/audit?actor=`), and Revoke as a quiet
+  button that turns danger only inside the confirmation, with honest copy (minted push tokens keep
+  working up to an hour) and the agent's open changes listed after. Other people's agents are listed
+  read-only. Hand-made agents take repos and an expiry. The band is "Agents at work".
+- **People can steer the merge queue.** Priority and Dequeue per entry for reviewers; Freeze, Thaw and
+  Resume (the halted banner) for owners, each opening an inline confirmation that names the act.
+  Freeze, thaw and resume are written down as a person's acts ("Only a person freezes, thaws or
+  resumes the merge queue"), matching the service's existing human-only check.
+- **The palette searches objects** (changes, plans, agents by title or id; a pasted id or URL jumps)
+  **and every row has exactly one of: an MCP twin, a person-only rule, or a `twinless` reason**
+  (navigation only, or no tool yet). `test/commands.test.ts` enforces the three-way rule. Twins were
+  corrected (walkthrough → `get_tour`, rollout → `get_rollout`, audit → `list_audit_events`, agents
+  → person-only with a separate "Who am I").
+- **Agent outputs are honest and complete.** `request_review` returns `requested: true` and no
+  `notified`; its first next step is to hand the link to a person. `wait_for_change` settles with
+  `failing` for merged/reverted waits; AGENTS.md says to use it over `wait_for_merge`, and that
+  `enqueue` is optional; `CONVENTIONS_VERSION` 2. New read tools `get_rollout` and
+  `list_audit_events`; `GET /api/v1/audit` takes `repoId`, `actor`, `action` (migration 0022 indexes
+  `(log, action, seq)`) and returns `subjects` titles; every `principals` map carries `ownerName`;
+  `get_change_status` carries `author` and `resolution`; `whoami` names the owner and links `/agents`;
+  members list their agents; CLI `logout` revokes server-side. The default `forbidden` fix points to
+  `whoami`.
+- **Consent names both sides:** "Approving as <person> · Switch account", a field to name the agent,
+  a receipt of what was granted, focus and tab title on the outcome, and Allow turns off at 0:00. One
+  repository picker (All / Only these) on consent, device, install, integrations and `/agents`.
+  Integrations get a plate mark (tag radius, hairline ring): circles are people, squares agents.
+- **The landing's torn strip plays when the tag scrolls into view**, not on load below the fold.
+
+**Consequences.**
+- Deploy needs migration 0022 (additive index). `CONVENTIONS_VERSION` 2 opens one AGENTS.md
+  regeneration Change per repo; this repo's own root `AGENTS.md` and `.platform/policy.ts` are still v1.
+- New E2E gate specs: `web-review-ux`, `web-evidence-rollout-plan-ux`, `web-shell-ux`,
+  `web-agents-home-ux`, `web-queue-members-ux`, `web-consent-ux`, and `http.agent` extended.
+- Owner decisions still open: **agent pause** (reversible, one principal, what happens to its open
+  work); **notification delivery** (in-app inbox, email or chat; the `notifications` table has no
+  recipient); **password reset** (there is no email transport); whether **agents may dequeue others'
+  changes**; whether a repo may **forbid owners approving their own agent's work**; MCP tools for
+  integrations.

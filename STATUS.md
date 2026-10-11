@@ -53,6 +53,17 @@ Specs:
   bar, 44px targets, focus on navigation, no band colour on in-flight states, notch-safe top bar; DESIGN.md
   rules enforced by `packages/web/test/design-rules.test.ts` + `commands.test.ts` in the deploy gate; E2E
   `web-agents.spec.ts`, `web-a11y.spec.ts`. DECISIONS 2026-10-10.
+- **UX/UI/AX review, round two (2026-10-11), branch `ux/review-2026-10-11`, not deployed (needs
+  migration 0022):** four audits (review journey, shell and ops, entry and settings, agent parity) and
+  their fixes: glass on every screen (desktop top bar, thinner acetate, palette scrim), the walkthrough's
+  rail on the tour's own width, a keyboard- and thumb-correct decision flow (focus, Escape, scrim, N for
+  next), people can close changes and steer the merge queue (priority, dequeue, freeze, thaw, resume),
+  `/agents` as each agent's home (AgentMark, state, trail, repos, honest revoke), an audit log filtered
+  by actor and action with subject titles, a palette that searches objects with a three-way twin rule,
+  consent that names the person and the agent, and honest agent outputs (`request_review` without
+  `notified`, `wait_for_change` → `failing`, `get_rollout`, `list_audit_events`, `ownerName`
+  everywhere, CONVENTIONS v2). Open for the owner: agent pause, notification delivery, password reset,
+  agents dequeuing others' changes. DECISIONS 2026-10-11.
 - **Product gap (2026-10-04): import-by-push has no UI.** A private repo can only come in by push, and only a
   signed-in human can open the import (`POST /api/v1/projects {"importMode":"push"}` with a browser session); the
   app has no button for it, so a person can't bring a private repo in from the app. Scheduled by the coordinator.
