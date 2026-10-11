@@ -5,7 +5,7 @@
  */
 import type { Change, Lane, Principal } from "@app/domain";
 import { type Signal, useSignal } from "@preact/signals";
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { ChangeSummary, PrincipalRef, ReviewDecisionKind, ShadowStats } from "../api/types.js";
@@ -237,8 +237,9 @@ export function DecisionPanel({ change, me, author, authorName, shadow, lane0Ena
   // Focus follows the sheet. Opening lands on the title for Approve (its comment is optional, and on
   // a phone a focused field raises the keyboard over the sheet) and in the comment where one is
   // required. Closing (Back, Cancel, Escape, the scrim) resets the attempt and returns focus to the
-  // choice that opened it.
-  useEffect(() => {
+  // choice that opened it. A layout effect: focus is in the sheet before the next keystroke, so an
+  // Escape pressed right after A reaches the sheet's handler instead of the page.
+  useLayoutEffect(() => {
     const d = decision.value;
     const was = wasOpen.current;
     wasOpen.current = d;

@@ -93,6 +93,11 @@ test("the owner of the authoring agent sees the boundary, and can close the chan
   await page.keyboard.press("a");
   await expect(page.getByTestId("decision-own-agent").filter({ visible: true })).toContainText("Your agent");
   await page.keyboard.press("Escape");
+  await expect(page.getByTestId("decision-form")).toHaveCount(0);
+  // A then Escape straight away: focus is already in the sheet, so the Escape closes it.
+  await page.keyboard.press("a");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("decision-form")).toHaveCount(0);
 
   await visible(page, "close-change-open").click();
   const form = page.getByTestId("close-change-form");
