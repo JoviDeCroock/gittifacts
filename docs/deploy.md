@@ -156,6 +156,31 @@ Kill switch, fastest first: set the flag to false in Flagship; or, if Flagship i
 `curl -X PUT -H 'content-type: application/json' --cookie '<admin session>' <host>/api/v1/admin/unclaimed-creation -d '{"mode":"off"}'`
 (`"flag"` clears the override; `"on"` only bridges a Flagship that can't be evaluated).
 
+## Spend: metering, the breaker and the free plan
+
+Nothing to create: the meter uses the existing `ProjectLedger`, `METRICS` (Analytics Engine) and `platform_settings`,
+and the `*/10` cron checks the day's spend. Every paid resource is priced at Cloudflare list prices
+(`apps/platform/src/spend/prices.ts`; containers as if every vCPU were busy, so an upper bound) and logged as one JSON
+line per record (`{"spend":{source,usd,repoId,ref}}`) plus `{"event":"spend.day",…}` every 10 minutes.
+
+| Var (all optional) | Default | What |
+|---|---|---|
+| `SPEND_SOFT_USD_PER_DAY` | 5 | Past it: `spend.soft` (console.warn) and the audit event `platform.spend-soft`, once per UTC day. |
+| `SPEND_HARD_USD_PER_DAY` | 20 | Past it: `spend.hard` (console.error), `platform.spend-hard`, and new paid work is refused until 00:00 UTC (CI except the merge queue's, workspaces, preview boots, QA, model calls, unclaimed creation). |
+| `FREE_LIMITS` | see `FREE_PLAN` in `apps/platform/src/limits/plans.ts` | JSON, merged per section, e.g. `{"ci":{"minutesPerDay":600}}`. Every project is on the free plan (paid plans don't exist yet). |
+
+Look and act (platform admins, `PLATFORM_ADMINS`):
+- `curl --cookie '<admin session>' <host>/api/v1/admin/spend`: today's spend by source, budgets, `paused`.
+- `curl -X PUT -H 'content-type: application/json' --cookie '<admin session>' <host>/api/v1/admin/spend-breaker -d '{"mode":"resume"}'`
+  resumes for the rest of the UTC day (`"auto"` hands back to the budgets).
+- Workers Logs: filter on `spend.hard`, `spend.soft` or `spend.day`; Analytics Engine `gittifacts_metrics` rows with
+  `blob4 = 'spend'` hold every record (`blob1` source, `blob2` project, `double1` USD).
+
+**Backstop (a human sets this once):** Cloudflare dashboard → Manage Account → Billing → Billable Usage → Create
+budget alert, e.g. at $50 and $150 for the month. Cloudflare evaluates usage once a day for the day before, e-mails
+the recipients and never pauses anything; it is what catches a cost the meter doesn't see (Artifacts storage and
+operations, R2, Durable Objects, D1, Workers requests).
+
 ## Repo membership (access control)
 
 Migration `0009_repo_members` adds `repo_members` and backfills an `owner` row for every claimed repo (its claim

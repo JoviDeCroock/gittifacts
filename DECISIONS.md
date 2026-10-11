@@ -3248,3 +3248,45 @@ private repo, no clone or MCP setup to copy, and "Approve the plan…" missing f
 
 **Consequences.** No new API. Sign-in's lane chart gave way to three steps (Plan, Change, review lane). Gate specs:
 `web-onboarding.spec.ts`, `web-lane-reasons.spec.ts`. `E2E_STATE_DIR` lets two gate servers share a machine.
+
+## 2026-10-11 — Spend meter, spend breaker, and a strict free plan for every project (user)
+
+**Context.** Nothing bounded what the platform spends. Claimed projects' CI went unmetered, previews of claimed
+projects had no cap and could stay up as long as they had traffic, and the only platform-wide cap covered unclaimed
+projects' CI. Cloudflare's budget alerts arrive a day late and never pause anything. There are no paid users yet.
+
+**Decision (user: "alert, then auto-stop", $5 soft / $20 hard a day; strict free plan, nobody exempt; paid plans later).**
+- **Meter** (`apps/platform/src/spend/`). Each paid resource is priced at Cloudflare list prices and recorded at one
+  seam: every Runner container via the new `Runner.onContainerTime` hook (CI steps, plan and sandbox jobs), workspace
+  usage reports, a 5-minute alarm heartbeat on running previews, `ChangeCoordinator.recordSpend` (every model call)
+  and Browser Run time (QA, screenshots). Each record updates the `spend` ProjectLedger's micro-USD day counters,
+  writes an Analytics Engine point and emits one JSON log line. Containers are charged as if every vCPU were busy
+  (the meter can't see CPU use), so the figure is an upper bound.
+- **Breaker** (`spend/breaker.ts`, `*/10` cron). Past the soft budget: one `spend.soft` log line and one
+  `platform.spend-soft` audit event per day. Past the hard budget: new paid work is refused until 00:00 UTC. That
+  covers CI (except the merge queue's, so approved Changes still land), workspaces, preview boots, QA, model calls
+  (today's budget reads as spent, so the Change goes to a human: only ever a higher lane) and unclaimed creation.
+  Running work is not killed. `PUT /api/v1/admin/spend-breaker` resumes for the rest of the day. Reading the
+  breaker **fails open** (logged): a transient DO or D1 error must not stop the platform, and the cron re-checks
+  every 10 minutes. This is the one place where a missing signal doesn't escalate; it gates cost, not risk.
+- **Free plan** (`limits/plans.ts`; `planOf()` returns "free" for every project until paid plans exist).
+  - Per claimed project and day:
+    - CI: 120 container-minutes, 30 minutes per run, instance ceiling standard-2.
+    - Workspaces: 60 vCPU-minutes, 1 open, 1 h TTL.
+    - Previews: 3 live, 60 minutes per boot, 180 preview-minutes a day.
+    - QA: 3 runs an hour, 10 a day.
+    - AI: $0.50.
+  - Per account (the owner, or the creating IP while unclaimed): 2× each daily cap.
+  - Unclaimed projects keep their own tighter CI, storage and Artifacts quotas, and the plan adds the rest.
+  - `FREE_LIMITS` (JSON) overrides any number without new code.
+- **CI admission, not reservation, for plan runs.** A run is admitted while today's settled container-minutes are
+  under the cap, nothing is held while it runs, and its actual container-minutes are added when it finishes
+  (uncapped: parallel steps count). Holding 30 minutes per run would have capped a project at four concurrent runs.
+- Refusals are `quota-exceeded` (429) with the quota, the scope (`project | account | platform`) and the reset time.
+  `whoami` reports the account's CI quota and today's use.
+
+**Consequences.** At these limits the dogfood repo, which used about 110 container-minutes per merged Change on
+2026-10-03, gets about one Change a day; raise its limits with `FREE_LIMITS` until paid plans exist. A run that
+loses its summary never settles, so its minutes don't count (the hard budget still bounds it). Not metered:
+Artifacts operations and storage (billing starts 2026-10-14), R2, D1, Durable Objects and Workers requests. Those are
+left to Cloudflare's budget alert (docs/deploy.md).
