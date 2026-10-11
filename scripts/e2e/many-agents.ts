@@ -5,19 +5,21 @@
  * concurrently (DECISIONS 2026-10-10).
  *
  * A human signs in and registers N agent principals (each its own token, owned by that human).
- * Every agent then, concurrently: start_change → clone its fork → commit → push → enqueue. Agents 1
- * and 2 rewrite the same README line, so whichever lands second needs the resolver
- * (`system:resolver`, never the author). The human approves each Change as it reaches review
- * (agents never can); the queue lands them all. Prints a timeline and a summary, then revokes the
- * agents' tokens.
+ * Every agent then: start_change (with the paths it means to touch) → clone its fork → commit →
+ * push → get_change_status → enqueue. Agent 1 starts first and the rest at once. Agents 1 and 2
+ * both say README.md and rewrite the same README line, so agent 2's start_change is told that
+ * agent 1 is on it (overlaps), and whichever lands second needs the resolver (`system:resolver`,
+ * never the author). Every overlap an agent is told about is logged. The human approves each Change
+ * as it reaches review (agents never can); the queue lands them all. Prints a timeline and a
+ * summary, then revokes the agents' tokens.
  *
  *   GITTIFACTS_EMAIL=… GITTIFACTS_PASSWORD=… pnpm tsx scripts/e2e/many-agents.ts \
  *     --url https://gittifacts.<you>.workers.dev --repo <repoId> [--agents 6] [--timeout-min 60]
  *
  * or `--reviewer-cookie '<better-auth session cookie>'` instead of the email and password (never
  * pass a password on the command line). The human must be a reviewer (or above) on the repo.
- * Exits 0 when every Change merged, each attributed to the agent that wrote it, and the README
- * conflict was resolved in the queue.
+ * Exits 0 when every Change merged, each attributed to the agent that wrote it, agent 2 was told
+ * at start_change that agent 1 works on README.md, and the README conflict was resolved in the queue.
  */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -186,6 +188,76 @@ interface Agent {
   mcp: PlatformClient;
 }
 
+/** One overlap an agent was told about, and when (at start_change or in get_change_status). */
+interface Told {
+  agent: string;
+  when: "start" | "status";
+  changeId: string;
+  other: string;
+  why: string;
+}
+const told: Told[] = [];
+
+/** "many-agents agent-1 <stamp>" → "agent-1": the label the other agent goes by in this run. */
+function labelOf(name: string): string {
+  return /^many-agents (agent-\d+) /.exec(name)?.[1] ?? name;
+}
+
+type OverlapReport = {
+  overlaps: Array<{
+    changeId: string;
+    author: { name: string };
+    reasons: Array<{ code: string; message: string; paths: string[]; morePaths: number }>;
+  }>;
+} | null;
+
+/** Log (and remember) each overlap: `agent-2  told: overlaps agent-1's <id> (same paths: README.md)`. */
+function tell(a: Agent, when: Told["when"], report: OverlapReport): void {
+  if (report === null) {
+    log(a.label, `${when === "start" ? "told" : "status"}: overlaps not checked (null)`);
+    return;
+  }
+  for (const o of report.overlaps) {
+    const other = labelOf(o.author.name);
+    const why = o.reasons
+      .map((r) =>
+        r.code === "same-paths"
+          ? `same paths: ${r.paths.join(", ")}${r.morePaths > 0 ? ` +${r.morePaths}` : ""}`
+          : r.code.replace("-", " "),
+      )
+      .join("; ");
+    told.push({ agent: a.label, when, changeId: o.changeId, other, why });
+    log(a.label, `${when === "start" ? "told" : "status"}: overlaps ${other}'s ${o.changeId} (${why})`);
+  }
+}
+
+/** The paths an agent says it will touch: agents 1 and 2 share README.md; the rest their own note. */
+const pathsOf = (i: number, stamp: string) => (i <= 2 ? ["README.md"] : [`AGENT-${stamp}-${i}.md`]);
+
+interface Started {
+  agent: Agent;
+  changeId: string;
+  remote: Grant;
+}
+
+/** start_change with the paths it means to touch; logs what it was told about other agents. */
+async function startWork(a: Agent, stamp: string): Promise<Started> {
+  const { change, remote, overlaps } = ok(
+    `start_change ${a.label}`,
+    await a.mcp.tools.start_change({
+      repoId: REPO_ID,
+      title: `Many agents ${a.label} ${stamp}`,
+      category: "docs",
+      summary: `Agent ${a.i} of ${N}, working concurrently with the others.`,
+      paths: pathsOf(a.i, stamp),
+      idempotencyKey: `many-agents-${stamp}-${a.i}`,
+    }),
+  );
+  log(a.label, `started ${change.id} on its own fork (paths: ${pathsOf(a.i, stamp).join(", ")})`);
+  tell(a, "start", overlaps);
+  return { agent: a, changeId: change.id, remote };
+}
+
 interface Work {
   agent: Agent;
   changeId: string;
@@ -195,19 +267,10 @@ interface Work {
   mergedSha?: string;
 }
 
-/** One agent's part, run concurrently with the others: start → clone → commit → push → enqueue. */
-async function agentWork(a: Agent, workdir: string, stamp: string): Promise<Work> {
-  const { change, remote } = ok(
-    `start_change ${a.label}`,
-    await a.mcp.tools.start_change({
-      repoId: REPO_ID,
-      title: `Many agents ${a.label} ${stamp}`,
-      category: "docs",
-      summary: `Agent ${a.i} of ${N}, working concurrently with the others.`,
-      idempotencyKey: `many-agents-${stamp}-${a.i}`,
-    }),
-  );
-  log(a.label, `started ${change.id} on its own fork`);
+/** One agent's part after its start, concurrently with the others: clone → commit → push → status → enqueue. */
+async function agentWork(s: Started, workdir: string, stamp: string): Promise<Work> {
+  const { agent: a, remote } = s;
+  const change = { id: s.changeId };
   const dir = join(workdir, a.label);
   git(workdir, remote, ["clone", "--quiet", "--branch", remote.branch, remote.url, dir]);
   if (a.i <= 2) {
@@ -235,6 +298,8 @@ async function agentWork(a: Agent, workdir: string, stamp: string): Promise<Work
   ]);
   git(dir, remote, ["push", "--quiet", "origin", `HEAD:refs/heads/${remote.branch}`]);
   log(a.label, "pushed; grading starts on the push event");
+  const st = ok("get_change_status", await a.mcp.tools.get_change_status({ changeId: change.id }));
+  tell(a, "status", st.overlaps);
   const q = ok(
     `enqueue ${a.label}`,
     await a.mcp.tools.enqueue({
@@ -323,8 +388,11 @@ async function main(): Promise<void> {
       log(label, `registered as ${r.body.principal.id}`);
     }
 
-    // ------------------------------------------------------------ all agents at once
-    const work = await Promise.all(agents.map((a) => agentWork(a, workdir, stamp)));
+    // ------------------------------------------------------------ agent 1 first, then all at once
+    // Agent 1 starts a moment ahead, so agent 2's start_change is told about it on camera.
+    const first = await startWork(agents[0]!, stamp);
+    const rest = await Promise.all(agents.slice(1).map((a) => startWork(a, stamp)));
+    const work = await Promise.all([first, ...rest].map((s) => agentWork(s, workdir, stamp)));
     await untilLanded(cookie, work);
 
     // ------------------------------------------------------------ what landed, and who wrote it
@@ -348,6 +416,21 @@ async function main(): Promise<void> {
       );
     const o = ok("queue_overview", await agents[0]!.mcp.tools.queue_overview({ repoId: REPO_ID }));
 
+    // ------------------------------------------------------------ who was told about whom
+    console.log("\nagent     told about (start = at start_change, status = after its push)");
+    for (const a of agents) {
+      const mine = told.filter((t) => t.agent === a.label);
+      const seen = [...new Map(mine.map((t) => [`${t.when} ${t.changeId}`, t])).values()];
+      console.log(
+        `${a.label.padEnd(9)} ${seen.length === 0 ? "nothing" : seen.map((t) => `${t.when}: ${t.other}'s ${t.changeId} (${t.why})`).join("; ")}`,
+      );
+    }
+    const pairFirst = first.changeId;
+    if (!told.some((t) => t.agent === "agent-2" && t.when === "start" && t.changeId === pairFirst))
+      throw new Error(
+        `agent-2 was not told at start_change that agent-1 (${pairFirst}) works on README.md`,
+      );
+
     console.log("\nagent     change                 queue → merged   merged sha");
     for (const w of work)
       console.log(
@@ -357,7 +440,7 @@ async function main(): Promise<void> {
       `\nqueue: main ${o.mainSha.slice(0, 12)}, ${o.throughputPerHour} merged/h, p50 ${o.timeInQueueMs.p50 ?? "-"} ms, p95 ${o.timeInQueueMs.p95 ?? "-"} ms`,
     );
     console.log(
-      `✓ ${N} agents, ${N} Changes merged concurrently, each attributed to its agent; the README conflict resolved by system:resolver, in ${elapsed()}`,
+      `✓ ${N} agents, ${N} Changes merged concurrently, each attributed to its agent; agent-2 was told agent-1 was on README.md before either pushed; the README conflict resolved by system:resolver, in ${elapsed()}`,
     );
   } finally {
     for (const a of agents) {
