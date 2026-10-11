@@ -135,20 +135,51 @@ Runs detection in a sandbox on the default branch and opens a draft Plan (author
 
 ## members
 
+### `GET /api/v1/invites/{token}`
+
+What an invite link offers: the repo, the role, who sent it (no sign-in needed)
+
+- **Auth:** none
+- **Parameters:** `token` (path, required)
+- **200:** `InviteLink { status, repo, role, invitedBy, emailHint, expiresAt, viewer }`
+- **Errors:** 404
+
+### `POST /api/v1/invites/{token}/accept`
+
+Accept an invite: a signed-in person whose e-mail is the invited one joins the repo
+
+Needs the link and the invited e-mail. 403 `invite-email-mismatch` for another account; 409 `invite-closed` once used, revoked or expired.
+
+- **Auth:** session cookie or bearer token
+- **Idempotency-Key:** accepted
+- **Parameters:** `token` (path, required)
+- **200:** `{ repoId, role, alreadyMember }`
+- **Errors:** 401, 403, 404, 409
+
+### `DELETE /api/v1/repos/{repoId}/invites/{inviteId}`
+
+Revoke an open invite (human owner); its link stops working
+
+- **Auth:** session cookie or bearer token
+- **Idempotency-Key:** accepted
+- **Parameters:** `repoId` (path, required), `inviteId` (path, required)
+- **200:** `{ revoked, inviteId }`
+- **Errors:** 401, 403, 404
+
 ### `GET /api/v1/repos/{repoId}/members`
 
 A repo's members and their roles (anyone who can read the repo)
 
 - **Auth:** session cookie or bearer token
 - **Parameters:** `repoId` (path, required)
-- **200:** `{ repoId, members, viewerRole, canManage }`
+- **200:** `{ repoId, members, viewerRole, canManage, invites }`
 - **Errors:** 401, 403, 404
 
 ### `POST /api/v1/repos/{repoId}/members`
 
 Add a member by e-mail or principal id, or change a member's role (human owner)
 
-Only humans are members (agents act with their owner's role). 409 when the change would leave the repo without an owner.
+Only humans are members (agents act with their owner's role). An e-mail nobody has signed up with gets a pending invite (202): `inviteUrl` is shown once, and works once, for a person signed in with that e-mail. 409 when the change would leave the repo without an owner.
 
 - **Auth:** session cookie or bearer token
 - **Idempotency-Key:** accepted

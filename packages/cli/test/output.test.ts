@@ -199,6 +199,8 @@ describe("--human output", () => {
           kind: "agent",
           name: evil,
           ownerId: null,
+          ownerName: null,
+          agentsUrl: "https://gittifacts.example/agents",
           scopes: ["repo:read"],
           canApprove: false,
           repos: [
@@ -215,6 +217,7 @@ describe("--human output", () => {
             ciMinutesUsedToday: null,
             artifactsOpsPerDay: null,
           },
+          nextSteps: [],
         },
       },
     });

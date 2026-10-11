@@ -2077,6 +2077,120 @@ export type introspection = {
             ],
             "description": "Several agents attempted this change's plan and a person picked this other change, which closed this one (null: not superseded)."
           },
+          "laneSummary": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "lane": {
+                    "enum": [
+                      0,
+                      1,
+                      2
+                    ]
+                  },
+                  "deciding": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "lane": {
+                          "enum": [
+                            0,
+                            1,
+                            2
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "lane",
+                        "message"
+                      ]
+                    },
+                    "description": "The reasons that put the change in this lane (empty in Lane 0)."
+                  },
+                  "passingCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Checks that passed (Lane 0 reasons); change.laneReasons lists them last."
+                  }
+                },
+                "required": [
+                  "lane",
+                  "deciding",
+                  "passingCount"
+                ]
+              }
+            ],
+            "description": "Why the change is in its lane, compact: the deciding reasons and how many checks passed. Null before a lane is set."
+          },
+          "pushIssues": {
+            "type": "array",
+            "description": "Pushes to the fork since its last graded push that graded nothing (another branch, a tag, nothing on top of the base). Non-empty: your work never reached CI; run fix.command.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "wrong-ref",
+                    "tag",
+                    "no-new-commits"
+                  ]
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "expectedRef": {
+                  "type": "string"
+                },
+                "sha": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                },
+                "fix": {
+                  "type": "object",
+                  "properties": {
+                    "explanation": {
+                      "type": "string"
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "call": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "explanation"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "ref",
+                "expectedRef",
+                "sha",
+                "at",
+                "why",
+                "fix"
+              ]
+            }
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
@@ -2112,6 +2226,8 @@ export type introspection = {
           "classification",
           "previewUrl",
           "overlaps",
+          "laneSummary",
+          "pushIssues",
           "nextSteps"
         ]
       },
@@ -6901,6 +7017,124 @@ export type introspection = {
             "type": "string",
             "description": "The change's page on the platform: hand it to the person who reviews it."
           },
+          "laneSummary": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "lane": {
+                    "enum": [
+                      0,
+                      1,
+                      2
+                    ]
+                  },
+                  "deciding": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "lane": {
+                          "enum": [
+                            0,
+                            1,
+                            2
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "lane",
+                        "message"
+                      ]
+                    },
+                    "description": "The reasons that put the change in this lane (empty in Lane 0)."
+                  },
+                  "passingCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Checks that passed (Lane 0 reasons); change.laneReasons lists them last."
+                  }
+                },
+                "required": [
+                  "lane",
+                  "deciding",
+                  "passingCount"
+                ]
+              }
+            ],
+            "description": "Why the change is in its lane, compact: the deciding reasons and how many checks passed. Null before a lane is set."
+          },
+          "pushIssues": {
+            "type": "array",
+            "description": "Pushes to the fork since its last graded push that graded nothing (another branch, a tag, nothing on top of the base). Non-empty: your work never reached CI; run fix.command.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "wrong-ref",
+                    "tag",
+                    "no-new-commits"
+                  ]
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "expectedRef": {
+                  "type": "string"
+                },
+                "sha": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                },
+                "fix": {
+                  "type": "object",
+                  "properties": {
+                    "explanation": {
+                      "type": "string"
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "call": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "explanation"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "ref",
+                "expectedRef",
+                "sha",
+                "at",
+                "why",
+                "fix"
+              ]
+            }
+          },
+          "warning": {
+            "type": "string",
+            "description": "Set when something needs you rather than more waiting, e.g. a timeout while your pushes went to the wrong ref (see pushIssues)."
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
@@ -6931,6 +7165,8 @@ export type introspection = {
           "reason",
           "change",
           "url",
+          "laneSummary",
+          "pushIssues",
           "nextSteps"
         ]
       },

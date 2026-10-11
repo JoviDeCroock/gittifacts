@@ -161,7 +161,7 @@ Long-poll until the change's current head reaches a milestone, can no longer rea
 wait_for_change({ changeId: "<changeId>", until: "merged" })
 ```
 
-**Returns:** `reached` (boolean), `reason` ("reached" | "timeout" | "unreachable" | "changes-requested" | "rejected" | "approval-withdrawn" | "superseded" | "failing"), `supersededBy` (string), `retryAfterSec` (integer), `change` (object), `url` (string), `nextSteps` (object[]).
+**Returns:** `reached` (boolean), `reason` ("reached" | "timeout" | "unreachable" | "changes-requested" | "rejected" | "approval-withdrawn" | "superseded" | "failing"), `supersededBy` (string), `retryAfterSec` (integer), `change` (object), `url` (string), `laneSummary` (null | { lane, deciding, passingCount }), `pushIssues` (object[]), `warning` (string), `nextSteps` (object[]).
 
 ## `get_change_status`
 
@@ -178,7 +178,7 @@ A change's status, lane (and why), pipeline runs for each head, the human review
 get_change_status({})
 ```
 
-**Returns:** `change` (object), `url` (string), `author` (object), `resolution` (object | null), `reviews` (object[]), `runs` (object[]), `classification` (null | object), `previewUrl` (string | null), `overlaps` (null | object), `supersededBy` (string | null), `nextSteps` (object[]).
+**Returns:** `change` (object), `url` (string), `author` (object), `resolution` (object | null), `reviews` (object[]), `runs` (object[]), `classification` (null | object), `previewUrl` (string | null), `overlaps` (null | object), `supersededBy` (string | null), `laneSummary` (null | { lane, deciding, passingCount }), `pushIssues` (object[]), `nextSteps` (object[]).
 
 ## `get_evidence`
 

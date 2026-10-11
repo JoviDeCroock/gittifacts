@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 116 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 120 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -82,6 +82,8 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `POST` | [`/api/v1/integrations/{integrationId}/secrets`](/docs/reference/http-integrations) | Generate a new client secret (shown once; at most two active while you rotate) |
 | `DELETE` | [`/api/v1/integrations/{integrationId}/secrets/{secretId}`](/docs/reference/http-integrations) | Revoke a client secret |
 | `POST` | [`/api/v1/integrations/{integrationId}/webhook-secret`](/docs/reference/http-integrations) | Generate a new webhook secret (shown once; signatures use it from now on) |
+| `GET` | [`/api/v1/invites/{token}`](/docs/reference/http-repos) | What an invite link offers: the repo, the role, who sent it (no sign-in needed) |
+| `POST` | [`/api/v1/invites/{token}/accept`](/docs/reference/http-repos) | Accept an invite: a signed-in person whose e-mail is the invited one joins the repo |
 | `GET` | [`/api/v1/me`](/docs/reference/http-identity) | The calling principal (and the signed-in user, for humans) |
 | `GET` | [`/api/v1/me/getting-started`](/docs/reference/http-identity) | Your first-run checklist: a connected agent, the first green check (with its preview) and a repo brought in |
 | `GET` | [`/api/v1/oauth/device/{userCode}`](/docs/reference/http-identity) | What a device (CLI) login asks for (device screen); binds the code to you |
@@ -112,6 +114,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `GET` | [`/api/v1/repos/{repoId}/import-grant`](/docs/reference/http-repos) | The project's import-by-push grant (state only, never the token) |
 | `POST` | [`/api/v1/repos/{repoId}/import-grant`](/docs/reference/http-repos) | Open a new import-by-push grant for a project that has no default branch yet |
 | `DELETE` | [`/api/v1/repos/{repoId}/import-grant`](/docs/reference/http-repos) | Close the import-by-push grant now (revokes its token) |
+| `DELETE` | [`/api/v1/repos/{repoId}/invites/{inviteId}`](/docs/reference/http-repos) | Revoke an open invite (human owner); its link stops working |
 | `PATCH` | [`/api/v1/repos/{repoId}/lane0`](/docs/reference/http-repos) | Turn Lane 0 (auto-merge) on or off |
 | `GET` | [`/api/v1/repos/{repoId}/members`](/docs/reference/http-repos) | A repo's members and their roles (anyone who can read the repo) |
 | `POST` | [`/api/v1/repos/{repoId}/members`](/docs/reference/http-repos) | Add a member by e-mail or principal id, or change a member's role (human owner) |
@@ -124,6 +127,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `POST` | [`/api/v1/repos/{repoId}/queue/freeze`](/docs/reference/http-merge-queue) | Freeze the queue: only reverts and incident fixes land (human-signed audit event) |
 | `POST` | [`/api/v1/repos/{repoId}/queue/resume`](/docs/reference/http-merge-queue) | Resume a queue that halted on an invariant violation (after an operator checked it) |
 | `POST` | [`/api/v1/repos/{repoId}/queue/thaw`](/docs/reference/http-merge-queue) | Thaw the queue; batches built on the bad main are invalidated (human-signed audit event) |
+| `GET` | [`/api/v1/sign-in-options`](/docs/reference/http-identity) | What the sign-in page may offer on this deployment (no sign-in needed) |
 | `GET` | [`/api/v1/stats/first-green`](/docs/reference/http-platform) | Live time-to-first-green: aggregates only (no project ids), no auth |
 | `POST` | [`/git/{owner}/{repo}.git/git-receive-pack`](/docs/reference/http-integrations) | Always 403: nothing pushes through the integration git endpoint |
 | `POST` | [`/git/{owner}/{repo}.git/git-upload-pack`](/docs/reference/http-integrations) | Git smart HTTP upload-pack (clone/fetch), streamed from the Artifacts remote |

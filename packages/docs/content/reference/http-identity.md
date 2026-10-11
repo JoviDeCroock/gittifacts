@@ -76,6 +76,13 @@ Revoke every token of a principal (its owner or itself)
 - **200:** `{ revoked }`
 - **Errors:** 401, 403, 404
 
+### `GET /api/v1/sign-in-options`
+
+What the sign-in page may offer on this deployment (no sign-in needed)
+
+- **Auth:** none
+- **200:** `SignInOptions { passwordReset, passkeys }`
+
 ## oauth
 
 ### `GET /api/oauth/authorize`

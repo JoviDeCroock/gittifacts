@@ -30,6 +30,8 @@ function waitResult(status: WaitOut["change"]["status"], reason: WaitOut["reason
       updatedAt: "2026-10-01T00:00:00Z",
     },
     url: "https://gittifacts.test/changes/chg_1",
+    laneSummary: { lane: 1, deciding: [], passingCount: 0 },
+    pushIssues: [],
     nextSteps: [
       {
         title: "Watch for production issues",
