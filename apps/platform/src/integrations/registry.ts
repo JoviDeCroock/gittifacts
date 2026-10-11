@@ -26,6 +26,7 @@ import {
   ScopeExplainedSchema,
   WebhookEvent,
 } from "./scopes.js";
+import { webhookUrlRefusal } from "./webhook-url.js";
 
 export type IntegrationRow = typeof integrations.$inferSelect;
 type SecretRow = typeof integrationSecrets.$inferSelect;
@@ -278,6 +279,23 @@ export interface CreatedIntegration {
   webhookSecret: string | null;
 }
 
+/** 400 when the webhook URL points somewhere the platform must not POST to (./webhook-url.ts). */
+function assertWebhookUrl(svc: Services, url: string | null | undefined): void {
+  if (!url) return;
+  const why = webhookUrlRefusal(url, svc.env);
+  if (why === null) return;
+  throw new ApiError(
+    400,
+    "invalid-request",
+    `webhook.url ${why}`,
+    { field: "webhook.url" },
+    {
+      explanation:
+        "Webhooks go to a public https:// DNS name you control: not an IP address, localhost, an internal name, this platform or its previews.",
+    },
+  );
+}
+
 export async function createIntegration(
   svc: Services,
   caller: Caller,
@@ -287,6 +305,7 @@ export async function createIntegration(
   const now = svc.clock.now().toISOString();
   const id = `itg_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`;
   const webhookUrl = input.webhook?.url ?? null;
+  assertWebhookUrl(svc, webhookUrl);
   let webhookSecret: string | null = null;
   if (webhookUrl !== null)
     webhookSecret = input.webhook?.secret ?? randomSecret(WEBHOOK_SECRET_PREFIX);
@@ -350,6 +369,7 @@ export async function updateIntegration(
   if (patch.scopes !== undefined) next.scopes = [...new Set(patch.scopes)];
   const wh = patch.webhook;
   if (wh !== undefined) {
+    assertWebhookUrl(svc, wh.url);
     if (wh.url !== undefined) next.webhookUrl = wh.url;
     if (wh.events !== undefined) next.webhookEvents = [...new Set(wh.events)];
     if (wh.active !== undefined) next.webhookActive = wh.active;

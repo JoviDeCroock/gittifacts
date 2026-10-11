@@ -344,12 +344,17 @@ export async function getDeployment(
 ): Promise<DeploymentView> {
   const d = await svc.store.db.select().from(deployments).where(eq(deployments.id, id)).get();
   const p = caller.principal;
-  const visible =
-    d &&
-    (p.kind === "integration"
-      ? d.principalId === p.id
-      : (p.repoIds ?? null) === null || (p.repoIds ?? []).includes(d.repoId));
-  if (!d || !visible) throw notFound(`deployment ${id}`);
+  // An integration sees only its own deployments; everyone (integrations too) needs read on the
+  // deployment's repo. Any refusal is the same 404 as an unknown id.
+  if (!d || (p.kind === "integration" && d.principalId !== p.id)) {
+    throw notFound(`deployment ${id}`);
+  }
+  try {
+    await assertRepoAccess(svc, p, d.repoId, "read");
+  } catch (e) {
+    if (e instanceof ApiError) throw notFound(`deployment ${id}`);
+    throw e;
+  }
   const [view] = await views(svc, [d]);
   if (!view) throw notFound(`deployment ${id}`);
   return view;

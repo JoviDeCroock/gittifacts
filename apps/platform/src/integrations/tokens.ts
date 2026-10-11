@@ -300,7 +300,16 @@ export async function exchangeIntegrationCode(
   if (row.codeExpiresAt === null || Date.parse(row.codeExpiresAt) <= now.getTime()) {
     throw new OAuthProtocolError("invalid_grant", "authorization code expired");
   }
-  if (redirectUri !== null && redirectUri !== row.redirectUri) {
+  // RFC 6749 §4.1.3: redirect_uri must match the authorization request's. The row does not
+  // record whether the client sent it there or it defaulted to the single registered URI, so it
+  // is always required (the documented flow sends it on both requests).
+  if (redirectUri === null) {
+    throw new OAuthProtocolError(
+      "invalid_request",
+      "redirect_uri is required: send the same redirect_uri as the authorization request",
+    );
+  }
+  if (redirectUri !== row.redirectUri) {
     throw new OAuthProtocolError(
       "invalid_grant",
       "redirect_uri does not match the authorization request",

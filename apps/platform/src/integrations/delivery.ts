@@ -17,6 +17,7 @@ import type { Services } from "../app-env.js";
 import { installations, integrations, webhookDeliveries } from "../db/schema.js";
 import { decryptSecret, masterSecretOf, signWebhook } from "./crypto.js";
 import { sendAll, type WebhookMessage, type WebhookQueue } from "./events.js";
+import { type WebhookUrlEnv, webhookUrlRefusal } from "./webhook-url.js";
 
 export const BACKOFF_SECONDS = [10, 30, 120, 600, 1800, 3600, 7200] as const;
 export const MAX_ATTEMPTS = BACKOFF_SECONDS.length + 1;
@@ -31,7 +32,7 @@ type DeliveryRow = typeof webhookDeliveries.$inferSelect;
 export interface DeliveryDeps {
   store: Pick<Services["store"], "db">;
   clock: Services["clock"];
-  env: { BETTER_AUTH_SECRET?: string };
+  env: { BETTER_AUTH_SECRET?: string } & WebhookUrlEnv;
   queue: WebhookQueue | null;
   fetch: typeof fetch;
 }
@@ -97,6 +98,8 @@ export async function deliver(deps: DeliveryDeps, id: string): Promise<DeliveryO
   if (!integration.webhookUrl || !integration.webhookActive || !integration.webhookSecretEnc) {
     return cancel("webhook disabled");
   }
+  const refused = webhookUrlRefusal(integration.webhookUrl, deps.env);
+  if (refused !== null) return cancel(`webhook url refused: ${refused}`);
   if (d.installationId !== null && d.event !== "installation.deleted") {
     const inst = await deps.store.db
       .select({ status: installations.status })

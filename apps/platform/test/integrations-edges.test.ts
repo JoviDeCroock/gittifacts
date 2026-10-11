@@ -92,6 +92,7 @@ async function installOn(
     code,
     code_verifier: verifier,
     client_id: clientId,
+    redirect_uri: CALLBACK,
   };
   if (secret) params.client_secret = secret;
   const res = await postForm(app, "/api/oauth/token", params);
