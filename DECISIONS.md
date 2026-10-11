@@ -3129,7 +3129,7 @@ then add them again"). There was no way back into an account after a forgotten p
 e-mail.
 
 **Decision.**
-- Adding an e-mail nobody has signed up with creates a pending invite (`repo_invites`, migration 0022) and answers 202
+- Adding an e-mail nobody has signed up with creates a pending invite (`repo_invites`, migration 0023) and answers 202
   with a single-use link `/invite/gtm_…` (32 random bytes; only the SHA-256 is stored; a week). The link is shown once
   and the owner sends it. Inviting the same e-mail again revokes the old link. Adding the person directly once they
   have signed up revokes their open invites. Owners see open invites on the members page and revoke them.
@@ -3175,7 +3175,7 @@ approves, and the merge queue lands it with a signed why note. Time-to-first-mer
   rely on that), then lead down the golden path: claim (if unclaimed) → a human approves the plan at its URL →
   `start_change({ planId })` → push → `wait_for_change(lane_assigned)` → `request_review` → `wait_for_change(merged)`.
 - Time-to-first-merge: `project_onboarding` gains `sample_plan_id`, `first_merge_change_id`, `first_merged_at` and
-  `ms_to_first_merge` (migration 0023). The "merged" notification records it once per project (not the first
+  `ms_to_first_merge` (migration 0025). The "merged" notification records it once per project (not the first
   Change of the initial commit), with an Analytics Engine point (blob4 `ttfm`). `/internal/ttfg` adds `firstMerge`
   (D1).
 - The dashboard's "Get started" checklist is the golden path in five steps, each ticked from real state and each
@@ -3185,7 +3185,7 @@ approves, and the merge queue lands it with a signed why note. Time-to-first-mer
   plan <planId>.", then the Change), first merge (with its time-to-first-merge).
 
 **Consequences.** Template repos start with one draft Plan in their plan list. A person who wants something else
-rejects it or ignores it; nothing waits on it. Migration 0023 must run before the code deploys.
+rejects it or ignores it; nothing waits on it. Migration 0025 must run before the code deploys.
 
 ## 2026-10-11 — Plain `git push` from a CLI clone; `ship`; text on a terminal
 

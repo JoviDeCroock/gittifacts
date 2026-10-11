@@ -83,11 +83,11 @@ work until it pushes) is additive. Without it the Worker still starts Changes, b
 Migration 0021 (`plan_picks`: which attempt at a plan a person picked) is additive. Without it
 `GET /api/v1/plans/{planId}/attempts` and the pick answer 500; nothing else reads it.
 
-Migration 0022 (`repo_invites`: pending member invites for e-mails nobody has signed up with) is additive. Without
+Migration 0023 (`repo_invites`: pending member invites for e-mails nobody has signed up with) is additive. Without
 it, adding an unknown e-mail on the members page and `GET /api/v1/repos/{repoId}/members` answer 500 (the list reads
 open invites for owners), so run it before deploying the code.
 
-Migration 0023 (`time_to_first_merge`: four nullable columns on `project_onboarding`: the sample Plan create_project
+Migration 0025 (`time_to_first_merge`: four nullable columns on `project_onboarding`: the sample Plan create_project
 drafted, and the first merge with its time-to-first-merge) is additive. Run it before deploying the code: the
 getting-started checklist and `/internal/ttfg` select those columns and answer 500 without them, and create_project
 would not record its row.
@@ -190,7 +190,7 @@ has an owner (`SELECT id FROM repos WHERE claim_status = 'claimed' AND id NOT IN
 WHERE role = 'owner')` should be empty; add one with `INSERT INTO repo_members … 'owner'` if not). Owners add
 people at repo → Members (or `POST /api/v1/repos/{repoId}/members`). Set `PLATFORM_AUDITORS` for the eval checker.
 
-An e-mail nobody has signed up with gets a pending invite (migration 0022): the owner copies the single-use link
+An e-mail nobody has signed up with gets a pending invite (migration 0023): the owner copies the single-use link
 (`/invite/gtm_…`, a week) and sends it themselves; it works for a person signed in with that e-mail. There is no
 e-mail sending for invites.
 

@@ -74,7 +74,7 @@ export const githubInstallationLinks = sqliteTable(
     githubLogin: text("github_login").notNull(),
     /**
      * GitHub's numeric user id behind that token: who this human is on GitHub (author checks,
-     * attribution). Null on links made before migration 0023: such a link attributes nothing
+     * attribution). Null on links made before migration 0024: such a link attributes nothing
      * and counts as "may be the author" until it is linked again.
      */
     githubUserId: integer("github_user_id"),
