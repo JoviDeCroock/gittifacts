@@ -102,7 +102,7 @@ function PlanRow({ plan, author, now }: { plan: Plan; author: PrincipalRef | nul
         <Icon name="file-text" size={20} class="plan-row__icon" />
         <span class="plan-row__title">{plan.title}</span>
         <span class="plan-row__meta">
-          {author ? <Who kind={author.kind} name={author.name} owner={author.ownerName ?? null} size={20} /> : null}
+          {author ? <Who kind={author.kind} name={author.name} id={author.id} owner={author.ownerName ?? null} size={20} /> : null}
           <span>
             {plural(plan.acceptanceCriteria.length, "criterion", "criteria")} · {plural(plan.scopePaths.length, "scope path")}
           </span>

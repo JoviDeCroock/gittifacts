@@ -7,8 +7,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas:
     "avatar who act"
-    "avatar role role"
-    "error error error";
+    "avatar role role";
   gap: var(--s-2) var(--s-3);
   align-items: center;
   padding-block: var(--s-4);
@@ -58,16 +57,11 @@
 .add-member__fields .input {
   block-size: 46px;
 }
-.member__error {
-  grid-area: error;
-}
 @media (min-width: 640px) {
   /* Fixed role and action columns, so the selects line up from row to row. */
   .member {
     grid-template-columns: auto minmax(0, 1fr) 11rem 6.5rem;
-    grid-template-areas:
-      "avatar who role act"
-      "error error error error";
+    grid-template-areas: "avatar who role act";
   }
   .member__select {
     inline-size: 100%;
@@ -131,4 +125,61 @@
   margin: 0;
   color: var(--text-2);
   max-inline-size: 68ch;
+}
+
+/* The agents a person runs: read-only squares under their name, linking to the agents page. */
+.member__agents {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--s-3);
+  margin-block-start: 2px;
+  font-size: var(--text-small);
+  color: var(--text-3);
+}
+.member__agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+.member__agent:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+@media (pointer: coarse) {
+  .member__agent {
+    min-block-size: var(--tap);
+  }
+}
+/* Remove, leave or a step down for yourself: named first, then danger (DESIGN Buttons). */
+.member__confirm {
+  grid-column: 2 / -1;
+  display: grid;
+  gap: var(--s-3);
+  min-inline-size: 0;
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  color: var(--text);
+}
+.member__confirm-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.member__error {
+  grid-column: 2 / -1;
+}
+.members__status {
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--text-2);
+}
+.members__status:not(:empty) {
+  margin-block-end: var(--s-3);
 }
