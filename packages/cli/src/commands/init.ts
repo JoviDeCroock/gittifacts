@@ -8,6 +8,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { withCommands } from "../calls.js";
 import { PROJECT_FILE, updateCredentials, writeProject } from "../config.js";
+import type { Ctx, Target } from "../context.js";
 import { cliError, EXIT, usageError } from "../errors.js";
 import { unknownTool } from "../failures.js";
 import { clone, type GitAuth, splitRemote } from "../git.js";
@@ -54,6 +55,8 @@ interface ProjectResult {
   projectId: string;
   remoteUrl: string | null;
   remoteAuth: GitAuth | null;
+  /** The bootstrap Change whose fork `remote` is (refresh_push_token mints its git token). */
+  remoteChangeId: string | null;
   token: string | null;
   tokenExpiresAt: string | null;
   mcpUrl: string | null;
@@ -76,6 +79,7 @@ export function parseProjectResult(doc: Record<string, unknown>): ProjectResult 
   const s = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
   let remoteUrl: string | null = null;
   let remoteAuth: GitAuth | null = null;
+  let remoteChangeId: string | null = null;
   if (typeof doc.remote === "string") remoteUrl = doc.remote;
   else if (isRecord(doc.remote) && typeof doc.remote.url === "string") {
     remoteUrl = doc.remote.url;
@@ -83,6 +87,7 @@ export function parseProjectResult(doc: Record<string, unknown>): ProjectResult 
     // Artifacts tokens carry an `?expires=` suffix that Basic auth rejects; Bearer takes the
     // whole token, so always use it (remote.username is only a placeholder).
     if (tok) remoteAuth = { scheme: "Bearer", token: tok };
+    remoteChangeId = s(doc.remote.changeId);
   }
   if (remoteUrl) {
     const split = splitRemote(remoteUrl);
@@ -93,6 +98,7 @@ export function parseProjectResult(doc: Record<string, unknown>): ProjectResult 
     projectId: doc.projectId,
     remoteUrl,
     remoteAuth,
+    remoteChangeId,
     token: s(doc.token),
     tokenExpiresAt: s(doc.tokenExpiresAt) ?? s(doc.expiresAt),
     mcpUrl: s(doc.mcpUrl),
@@ -123,6 +129,62 @@ function redact(doc: Record<string, unknown>, showToken: boolean): Record<string
     out.remote = showToken ? out.remote : rest;
   } else if (typeof out.remote === "string") out.remote = splitRemote(out.remote).url;
   return out;
+}
+
+/** `url`'s origin, or null for a path or scp-style remote. */
+function originOf(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Git auth for a remote the platform returned without a token. The platform token (login or the
+ * unclaimed project's) is only ever sent to the platform's own origin: on another origin (the
+ * Artifacts git host) the CLI asks the platform for the Change's push token instead, and clones
+ * without auth when it can't get one (the clone then fails with a fix that names the call).
+ */
+async function fallbackAuth(
+  ctx: Ctx,
+  target: Target,
+  project: ProjectResult,
+): Promise<GitAuth | null> {
+  const platformToken = project.token ?? target.token?.token ?? null;
+  if (platformToken === null || project.remoteUrl === null) return null;
+  if (originOf(project.remoteUrl) === target.host)
+    return { scheme: "Bearer", token: platformToken };
+  if (project.remoteChangeId === null) return null;
+  const changeId = project.remoteChangeId;
+  const as: Target = {
+    ...target,
+    token: {
+      token: platformToken,
+      source: project.token ? "project" : (target.token?.source ?? "env"),
+      expiresAt: null,
+    },
+  };
+  try {
+    const doc = await ctx.withConnection(as, "init", {}, async ({ mcp }) => {
+      const r = await callAnyTool(
+        mcp,
+        "refresh_push_token",
+        { changeId },
+        { timeout: DEFAULT_REQUEST_TIMEOUT_MS },
+      );
+      return r.isError ? null : resultDocument(r);
+    });
+    const remote = doc && isRecord(doc.remote) ? doc.remote : null;
+    // Only for the host we are about to clone from: a token minted for another host is not sent.
+    if (remote === null || typeof remote.token !== "string" || remote.token === "") return null;
+    if (typeof remote.url !== "string" || originOf(remote.url) !== originOf(project.remoteUrl))
+      return null;
+    return { scheme: "Bearer", token: remote.token };
+  } catch {
+    return null;
+  }
 }
 
 function slug(s: string): string {
@@ -243,14 +305,24 @@ export const init: Builtin = {
         );
       }
       const dir = resolveDir(dirFlag ?? slug(name ?? project.projectId));
-      const auth: GitAuth | null =
-        project.remoteAuth ??
-        (project.token
-          ? { scheme: "Bearer", token: project.token }
-          : target.token
-            ? { scheme: "Bearer", token: target.token.token }
-            : null);
+      const auth = project.remoteAuth ?? (await fallbackAuth(ctx, target, project));
       const res = await clone(ctx.io.git, { url: project.remoteUrl, dir, cwd: base, auth });
+      if (res.code !== 0 && auth === null) {
+        throw cliError(
+          "clone-failed",
+          `git clone failed (exit ${res.code}): ${res.stderr.trim().split("\n").at(-1) ?? ""}`,
+          {
+            explanation: `The repo ${project.projectId} was created and its token stored; only the clone failed. The platform returned no git token for ${project.remoteUrl}, and the CLI does not send your platform token to another origin. Ask for a push token for the first Change, then clone with it in a header.`,
+            ...(project.remoteChangeId
+              ? {
+                  call: `refresh_push_token({ changeId: "${project.remoteChangeId}" })`,
+                  command: `gittifacts refresh-push-token --change-id ${project.remoteChangeId}`,
+                }
+              : { command: "gittifacts list-repos" }),
+          },
+          { details: redact(doc, false) },
+        );
+      }
       if (res.code !== 0) {
         throw cliError(
           "clone-failed",

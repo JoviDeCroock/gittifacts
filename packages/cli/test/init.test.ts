@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { commandForCall } from "../src/calls.js";
 import { EXIT } from "../src/errors.js";
 import { gitAuthEnv, splitRemote } from "../src/git.js";
 import { type GitRunner, runGit } from "../src/io.js";
@@ -44,10 +45,18 @@ const createProjectSchema = {
 
 function initHarness(
   result: ProjectOut = created(),
-  opts: { git?: GitRunner; declareKey?: boolean } = {},
+  opts: {
+    git?: GitRunner;
+    declareKey?: boolean;
+    env?: Record<string, string>;
+    untyped?: Record<string, (args: Record<string, unknown>) => unknown>;
+  } = {},
 ) {
   const calls: Record<string, unknown>[] = [];
-  const h = harness({ env: { GITTIFACTS_HOST: HOST }, ...(opts.git ? { git: opts.git } : {}) });
+  const h = harness({
+    env: { GITTIFACTS_HOST: HOST, ...opts.env },
+    ...(opts.git ? { git: opts.git } : {}),
+  });
   const connector = mockConnector(
     {
       tools: {
@@ -77,6 +86,7 @@ function initHarness(
           calls.push({ ...args });
           return result;
         },
+        ...opts.untyped,
       },
       ...(opts.declareKey ? { listTools: async () => [createProjectSchema] } : {}),
     },
@@ -226,7 +236,8 @@ describe("gittifacts init", () => {
       mkdirSync(String(args.at(-1)), { recursive: true });
       return { code: 0, stdout: "", stderr: "" };
     };
-    const { h } = initHarness(created(), { git });
+    const remote = { url: "https://git.gittifacts.example/prj_1.git", token: "art_tok?expires=1" };
+    const { h } = initHarness(created({ remote }), { git });
     const r = await run(h, ["init", "--template", "workers-api", "--name", "My API", "--clone"]);
     expect(r.code).toBe(EXIT.ok);
     const dir = join(h.dir, "my-api");
@@ -237,14 +248,83 @@ describe("gittifacts init", () => {
           GIT_TERMINAL_PROMPT: "0",
           GIT_CONFIG_COUNT: "1",
           GIT_CONFIG_KEY_0: "http.extraHeader",
-          GIT_CONFIG_VALUE_0: "Authorization: Bearer tok_secret",
+          GIT_CONFIG_VALUE_0: "Authorization: Bearer art_tok?expires=1",
         },
       },
     ]);
-    expect(JSON.stringify(gitCalls[0]?.args)).not.toContain("tok_secret");
+    expect(JSON.stringify(gitCalls[0]?.args)).not.toContain("art_tok");
     expect(existsSync(join(dir, ".gittifacts.json"))).toBe(true);
     expect(r.json()).toMatchObject({ clonedTo: dir });
     h.cleanup();
+  });
+
+  describe("--clone when the platform returns no git token", () => {
+    const fork = "https://git.gittifacts.example/prj_1.git";
+    const recordingGit = (code = 0) => {
+      const calls: { args: readonly string[]; env: Record<string, string> }[] = [];
+      const git: GitRunner = async (args, opts) => {
+        calls.push({ args, env: opts.env });
+        if (code === 0) mkdirSync(String(args.at(-1)), { recursive: true });
+        return { code, stdout: "", stderr: code === 0 ? "" : "fatal: Authentication failed" };
+      };
+      return { git, calls };
+    };
+    const auth = (env: Record<string, string> | undefined) => env?.GIT_CONFIG_VALUE_0 ?? null;
+
+    it("never sends the platform token (project's or login) to another origin: it asks refresh_push_token", async () => {
+      const { git, calls: gitCalls } = recordingGit();
+      const refreshed: Record<string, unknown>[] = [];
+      const { h, connector } = initHarness(
+        created({ remote: { url: fork, branch: "main", changeId: "chg_1" } }),
+        {
+          git,
+          env: { GITTIFACTS_TOKEN: "login_tok" },
+          untyped: {
+            refresh_push_token: (args) => {
+              refreshed.push(args);
+              return { remote: { url: fork, token: "push_tok", branch: "main" } };
+            },
+          },
+        },
+      );
+      const r = await run(h, ["init", "--template", "workers-api", "--clone", "--dir", "app"]);
+      expect(r.code).toBe(EXIT.ok);
+      expect(refreshed).toEqual([{ changeId: "chg_1" }]);
+      // The refresh is asked of the platform (MCP), with the project's own token.
+      expect(connector.connections[1]?.token).toBe("tok_secret");
+      expect(auth(gitCalls[0]?.env)).toBe("Authorization: Bearer push_tok");
+      expect(JSON.stringify(gitCalls)).not.toMatch(/tok_secret|login_tok/);
+      h.cleanup();
+    });
+
+    it("clones without auth and names the call when no push token is available", async () => {
+      const { git, calls: gitCalls } = recordingGit(128);
+      const { h } = initHarness(
+        created({ token: null, remote: { url: fork, changeId: "chg_1" } }),
+        { git, env: { GITTIFACTS_TOKEN: "login_tok" } },
+      );
+      const r = await run(h, ["init", "--template", "workers-api", "--clone", "--dir", "app"]);
+      expect(r.code).toBe(EXIT.error);
+      expect(gitCalls).toHaveLength(1);
+      expect(auth(gitCalls[0]?.env)).toBeNull();
+      expect(JSON.stringify(gitCalls)).not.toContain("login_tok");
+      const fix = (
+        r.json() as { error: { code: string; fix: { call?: string; command?: string } } }
+      ).error;
+      expect(fix.code).toBe("clone-failed");
+      expect(fix.fix.call).toBe('refresh_push_token({ changeId: "chg_1" })');
+      expect(fix.fix.command).toBe(commandForCall('refresh_push_token({ changeId: "chg_1" })'));
+      h.cleanup();
+    });
+
+    it("sends the platform token to a remote on the platform's own origin", async () => {
+      const { git, calls: gitCalls } = recordingGit();
+      const { h } = initHarness(created({ remote: `${HOST}/git/prj_1.git` }), { git });
+      const r = await run(h, ["init", "--template", "workers-api", "--clone", "--dir", "app"]);
+      expect(r.code).toBe(EXIT.ok);
+      expect(auth(gitCalls[0]?.env)).toBe("Authorization: Bearer tok_secret");
+      h.cleanup();
+    });
   });
 
   it("moves credentials out of a remote URL before cloning", () => {
