@@ -28,6 +28,9 @@ export const TOOL_NAMES = [
   "rerun_ci",
   "close_change",
   "list_issues_for_change",
+  "get_rollout",
+  // the signed audit log
+  "list_audit_events",
   // QA in a browser, on request
   "request_qa",
   "get_qa",

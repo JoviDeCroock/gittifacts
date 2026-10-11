@@ -31,12 +31,32 @@ export function join(origin: string, path: string): string {
   return `${normalizeOrigin(origin)}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+/** A page of the web app a person opens. */
+export type PlatformPage =
+  | { planId: string }
+  /** A change's walkthrough (`/changes/:id`), or its evidence or rollout page. */
+  | { changeId: string; view?: "evidence" | "rollout" | undefined }
+  /** The audit log, filtered (`/audit?actor=…`). */
+  | { audit: { subject?: string | undefined; actor?: string | undefined; action?: string | undefined } }
+  /** The person's agents (`/agents`): where an owner inspects or revokes them. */
+  | { agents: true };
+
 /**
- * The page a person opens for a plan or a change (the web app's `/plans/:id` and `/changes/:id`):
- * what agents hand a human to approve, review or look at.
+ * The page a person opens for a plan, a change, the audit log or their agents (the web app's
+ * routes): what agents hand a human to approve, review or look at.
  */
-export function pageUrl(origin: string, page: { planId: string } | { changeId: string }): string {
-  return "planId" in page
-    ? join(origin, `/plans/${encodeURIComponent(page.planId)}`)
-    : join(origin, `/changes/${encodeURIComponent(page.changeId)}`);
+export function pageUrl(origin: string, page: PlatformPage): string {
+  if ("planId" in page) return join(origin, `/plans/${encodeURIComponent(page.planId)}`);
+  if ("changeId" in page) {
+    const view = page.view === undefined ? "" : `/${page.view}`;
+    return join(origin, `/changes/${encodeURIComponent(page.changeId)}${view}`);
+  }
+  if ("audit" in page) {
+    const q = (["subject", "actor", "action"] as const).flatMap((k) => {
+      const v = page.audit[k];
+      return v === undefined ? [] : [`${k}=${encodeURIComponent(v)}`];
+    });
+    return join(origin, q.length === 0 ? "/audit" : `/audit?${q.join("&")}`);
+  }
+  return join(origin, "/agents");
 }

@@ -19,6 +19,13 @@ export type {
 export { WAIT_REASONS } from "./schemas.js";
 export { type AttemptToolsBackend, type AttemptsData, attemptTools } from "./tools/attempts.js";
 export {
+  type ActorData,
+  type AuditEventData,
+  type AuditFilterData,
+  type AuditToolsBackend,
+  auditTools,
+} from "./tools/audit.js";
+export {
   type ChangeListItem,
   type ChangeListToolsBackend,
   changeListTools,
@@ -39,6 +46,7 @@ export {
   proposalNextSteps,
 } from "./tools/import.js";
 export { type QaRunBrief, type QaToolsBackend, qaTools } from "./tools/qa.js";
+export { type RolloutToolsBackend, rolloutTools } from "./tools/rollout.js";
 export {
   type EnqueueView,
   exampleCall,

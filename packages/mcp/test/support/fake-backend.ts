@@ -132,7 +132,48 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
     webUrl(page) {
       return "planId" in page
         ? `https://gittifacts.test/plans/${page.planId}`
-        : `https://gittifacts.test/changes/${page.changeId}`;
+        : `https://gittifacts.test/changes/${page.changeId}${page.view ? `/${page.view}` : ""}`;
+    },
+    auditUrl(filter) {
+      const q = new URLSearchParams(filter as Record<string, string>).toString();
+      return `https://gittifacts.test/audit${q ? `?${q}` : ""}`;
+    },
+    async listAuditEvents(_caller, filter) {
+      calls.push(`listAuditEvents:${filter.actor ?? "-"}:${filter.cursor ?? "-"}`);
+      const actor = {
+        id: "ag_1",
+        name: "builder-bot",
+        kind: "agent" as const,
+        ownerId: "hu_1",
+        ownerName: "Ada",
+      };
+      const events = [
+        { seq: 3, at: "2026-10-01T00:03:00.000Z", action: "change.review-requested", subject: "change:chg_1", summary: "asked for a review", actor },
+        { seq: 2, at: "2026-10-01T00:02:00.000Z", action: "change.started", subject: "change:chg_1", summary: "started", actor },
+      ].filter((e) => filter.action === undefined || e.action === filter.action);
+      return {
+        events: events.slice(0, filter.limit),
+        nextCursor: events.length > filter.limit ? String(events[filter.limit - 1]!.seq) : null,
+        chain: { verified: true },
+      };
+    },
+    async getRollout(_caller, changeId) {
+      calls.push(`getRollout:${changeId}`);
+      return {
+        change: change({ status: "rolling-out", mergedSha: HEAD }),
+        rollout: {
+          status: "rolling",
+          versionId: "v2",
+          previousVersionId: "v1",
+          stages: [{ percent: 5, startedAt: "2026-10-01T00:10:00.000Z", completedAt: null }],
+          watchUntil: null,
+          flagKey: "change-chg_1",
+          lastCheck: null,
+        },
+        policy: defaultPolicy().rollout,
+        policySha: SHA,
+        timeline: [],
+      };
     },
     async getPlan(_caller, planId) {
       calls.push(`getPlan:${planId}`);

@@ -1,0 +1,1 @@
+CREATE INDEX `audit_events_action_seq_idx` ON `audit_events` (`log`,`action`,`seq`);

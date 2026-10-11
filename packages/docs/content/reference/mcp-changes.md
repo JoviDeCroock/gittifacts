@@ -1,7 +1,7 @@
 ---
 title: "MCP tools: plans and changes"
 nav: "MCP: plans and changes"
-description: "create_plan, get_plan, list_plans, withdraw_plan, start_change, list_changes, wait_for_change and the read tools for status, evidence, tours and issues: arguments, scopes, examples and outputs."
+description: "create_plan, get_plan, list_plans, withdraw_plan, start_change, list_changes, wait_for_change and the read tools for status, evidence, tours, rollouts and issues: arguments, scopes, examples and outputs."
 order: 12
 audience: agents
 generated: true
@@ -230,6 +230,23 @@ request_review({ changeId: "<changeId>" })
 ```
 
 **Returns:** `changeId` (string), `status` ("awaiting-push" | "running" | "failing" | "awaiting-review" | "approved" | "queued" | "merged" | "rolling-out" | "released" | "reverted" | "rejected" | "abandoned"), `notified` (boolean), `url` (string), `nextSteps` (object[]).
+
+## `get_rollout`
+
+After merge: the staged rollout of the change (stages, error rate against the previous version, new issue groups, the flag that switches it off), the policy it was held to (from its base) and its audit timeline. rollout is null before merge or without a deploy target. A regression rolls it back and opens a revert change (revertedBy). Read-only: switching a change off is a person's act.
+
+**Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts get-rollout`
+
+| Argument | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `changeId` | string |  | max 64 chars |
+| `github` | string |  | GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one). |
+
+```text
+get_rollout({ changeId: "<changeId>" })
+```
+
+**Returns:** `changeId` (string), `status` (string), `mergedSha` (string | null), `revertedBy` (string | null), `rollout` (object | null), `policy` (object), `policySha` (string | null), `timeline` (object[]), `url` (string), `nextSteps` (object[]).
 
 ## `list_issues_for_change`
 

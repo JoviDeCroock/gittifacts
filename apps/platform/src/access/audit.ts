@@ -56,3 +56,8 @@ export async function auditVisibility(deps: AccessDeps, p: Principal): Promise<S
   if (isPlatformAdmin(p, deps.env)) parts.push(sql`NOT ${REPO_SUBJECT}`);
   return sql`(${sql.join(parts, sql` OR `)})`;
 }
+
+/** Events about one repo: the repo itself, its plans and its changes (`?repoId=` on the audit log). */
+export function repoAuditSubjects(repoId: string): SQL {
+  return sql`(${auditEvents.subject} = ${`repo:${repoId}`} OR ${auditEvents.subject} IN (SELECT 'plan:' || ${plans.id} FROM ${plans} WHERE ${plans.repoId} = ${repoId}) OR ${auditEvents.subject} IN (SELECT 'change:' || ${changes.id} FROM ${changes} WHERE ${changes.repoId} = ${repoId}))`;
+}

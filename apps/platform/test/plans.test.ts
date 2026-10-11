@@ -103,8 +103,15 @@ describe("plans", () => {
           name: "builder-bot",
           kind: "agent",
           ownerId: agent.principal.ownerId,
+          ownerName: "Alice",
         },
-        [bob.principal.id]: { id: bob.principal.id, name: "Bob", kind: "human", ownerId: null },
+        [bob.principal.id]: {
+          id: bob.principal.id,
+          name: "Bob",
+          kind: "human",
+          ownerId: null,
+          ownerName: null,
+        },
       },
     });
     expect(ap).toMatchObject({ rejectedBy: null, rejectedAt: null, rejectionReason: null });

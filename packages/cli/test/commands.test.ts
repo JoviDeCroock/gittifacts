@@ -32,7 +32,9 @@ describe("command table generated from the MCP tool definitions", () => {
       "get_evidence",
       "get_plan",
       "get_qa",
+      "get_rollout",
       "get_tour",
+      "list_audit_events",
       "list_changes",
       "list_issues_for_change",
       "list_members",
@@ -114,6 +116,8 @@ describe("command table generated from the MCP tool definitions", () => {
       withdraw_plan: true,
       list_changes: true,
       compare_attempts: true,
+      get_rollout: true,
+      list_audit_events: true,
     };
     expect(new Set(names)).toEqual(new Set(Object.keys(all)));
   });

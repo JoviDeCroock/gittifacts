@@ -91,6 +91,10 @@ export const PrincipalRefSchema = z
     name: z.string(),
     kind: z.enum(["human", "agent", "system", "integration"]),
     ownerId: z.string().nullable(),
+    ownerName: z
+      .string()
+      .nullable()
+      .describe("The accountable person's name (an agent's owner); null without an owner"),
   })
   .meta({ id: "PrincipalRef" });
 
@@ -190,7 +194,25 @@ export const ChangeListQuery = z.object({
 });
 
 export const AuditQuery = z.object({
+  repoId: z
+    .string()
+    .min(1)
+    .max(64)
+    .optional()
+    .describe("Only this repo's events (the repo, its plans and its changes)"),
   subject: z.string().min(1).max(200).optional(),
+  actor: z
+    .string()
+    .min(1)
+    .max(64)
+    .optional()
+    .describe("Only events by this principal (an agent's id shows everything it did)"),
+  action: z
+    .string()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe("Only events with exactly this action, e.g. plan.approved"),
   cursor: z
     .string()
     .regex(/^[1-9][0-9]{0,15}$/)

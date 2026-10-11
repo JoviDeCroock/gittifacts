@@ -22,11 +22,12 @@ import type {
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import type { z } from "zod";
 import type { AttemptToolsBackend } from "./tools/attempts.js";
-import type { ChangeListToolsBackend } from "./tools/changes.js";
+import type { AuditToolsBackend } from "./tools/audit.js";import type { ChangeListToolsBackend } from "./tools/changes.js";
 import type { ImportToolsBackend } from "./tools/import.js";
 import type { PlanToolsBackend } from "./tools/plans.js";
 import type { QaToolsBackend } from "./tools/qa.js";
 import type { QueueToolsBackend } from "./tools/queue.js";
+import type { RolloutToolsBackend } from "./tools/rollout.js";
 import type { WorkspaceToolsBackend } from "./tools/workspace.js";
 
 /** The authenticated agent, from the bearer verifier's `AuthInfo`. */
@@ -161,8 +162,10 @@ export interface ChangeReviewData {
   withdrawn: { at: string; reason: string } | null;
 }
 
-/** A platform page a person can open: a plan or a change. */
-export type WebPage = { planId: string } | { changeId: string };
+/** A platform page a person can open: a plan, or a change (its walkthrough, evidence or rollout). */
+export type WebPage =
+  | { planId: string }
+  | { changeId: string; view?: "evidence" | "rollout" | undefined };
 
 /** Every tool family's backend: the core tools below, remote workspaces and import detection. */
 export interface McpBackend
@@ -172,7 +175,9 @@ export interface McpBackend
     QaToolsBackend,
     PlanToolsBackend,
     ChangeListToolsBackend,
-    AttemptToolsBackend {
+    AttemptToolsBackend,
+    RolloutToolsBackend,
+    AuditToolsBackend {
   /** The absolute URL of `page` on the platform, to hand to a person. */
   webUrl(page: WebPage): string;
   whoami(caller: McpCaller): Promise<WhoamiData>;

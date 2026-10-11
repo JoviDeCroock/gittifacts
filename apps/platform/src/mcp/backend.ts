@@ -10,7 +10,7 @@
  */
 import { pageUrl } from "@app/conventions";
 import { type Change, Principal, type ReviewDecision } from "@app/domain";
-import type { ChangeReviewData, McpBackend, McpCaller } from "@app/mcp";
+import type { ActorData, AuditEventData, ChangeReviewData, McpBackend, McpCaller } from "@app/mcp";
 import { z } from "zod";
 import { type AccessTarget, assertTargetAccess } from "../access/access.js";
 import { listMembers } from "../access/members.js";
@@ -27,10 +27,12 @@ import { qaBrief } from "../qa/brief.js";
 import { createQueueMcpBackend } from "../queue/mcp.js";
 import { compareAttempts } from "../services/attempts.js";
 import { supersededBy } from "../services/attempts-pick.js";
+import { type AuditEventView, listAudit } from "../services/audit.js";
 import { capabilities } from "../services/capabilities.js";
 import {
   closeChange,
   getChangeDetail,
+  getChangeRollout,
   getChangeEvidence,
   getChangeTour,
   listChangeIssues,
@@ -92,6 +94,28 @@ function reviewData(r: ReviewDecision, principals: Record<string, PrincipalRef>)
     reviewer: { id: r.reviewerId, name: who?.name ?? r.reviewerId, kind: who?.kind ?? "human" },
     at: r.createdAt,
     withdrawn: r.withdrawn == null ? null : { at: r.withdrawn.at, reason: r.withdrawn.reason },
+  };
+}
+
+/** A principal as agents read it; an id the store doesn't know stays readable. */
+function actorData(id: string, principals: Record<string, PrincipalRef>): ActorData {
+  const p = principals[id];
+  return p === undefined
+    ? { id, name: id, kind: "system", ownerId: null, ownerName: null }
+    : { id, name: p.name, kind: p.kind, ownerId: p.ownerId, ownerName: p.ownerName };
+}
+
+function auditEventData(
+  e: AuditEventView,
+  principals: Record<string, PrincipalRef>,
+): AuditEventData {
+  return {
+    seq: e.seq,
+    at: e.at,
+    action: e.action,
+    subject: e.subject,
+    summary: e.summary,
+    actor: actorData(e.principalId, principals),
   };
 }
 
@@ -354,6 +378,37 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
         if (by !== null) return { ...r, reason: "superseded" as const, supersededBy: by };
       }
       return r;
+    },
+
+    async getRollout(mc, changeId) {
+      const caller = await scoped(mc, { changeId });
+      const [r, change] = await Promise.all([
+        getChangeRollout(svc, caller, changeId),
+        requireChange(svc, changeId),
+      ]);
+      return {
+        change,
+        rollout: r.rollout,
+        policy: r.policy,
+        policySha: r.policySha,
+        timeline: r.timeline.map((e) => auditEventData(e, r.principals)),
+      };
+    },
+
+    async listAuditEvents(mc, filter) {
+      // A named repo is checked like every other tool's (404 when the caller can't see it).
+      const caller =
+        filter.repoId === undefined ? callerFrom(mc) : await scoped(mc, { repoId: filter.repoId });
+      const page = await listAudit(svc, caller, filter);
+      return {
+        events: page.events.map((e) => auditEventData(e, page.principals)),
+        nextCursor: page.nextCursor,
+        chain: page.chain,
+      };
+    },
+
+    auditUrl(filter) {
+      return pageUrl(svc.origin, { audit: filter });
     },
 
     async listMembers(mc, repoId) {

@@ -52,11 +52,13 @@ import {
   WhoamiOutput,
 } from "./schemas.js";
 import { attemptTools } from "./tools/attempts.js";
+import { auditTools } from "./tools/audit.js";
 import { changeListTools } from "./tools/changes.js";
 import { importTools } from "./tools/import.js";
 import { planTools } from "./tools/plans.js";
 import { qaTools } from "./tools/qa.js";
 import { queueTools } from "./tools/queue.js";
+import { rolloutTools } from "./tools/rollout.js";
 import { workspaceTools } from "./tools/workspace.js";
 
 // ---------------------------------------------------------------- errors
@@ -357,7 +359,19 @@ export function changeNextSteps(
     case "rolling-out":
       return [
         {
+          title: "Watch the rollout: stages, error rate and the flag",
+          call: `get_rollout({ changeId: "${id}" })`,
+        },
+        wait("reverted", "Wait for a revert, in case a regression rolls it back"),
+        {
           title: "Watch for production issues",
+          call: `list_issues_for_change({ changeId: "${id}" })`,
+        },
+      ];
+    case "released":
+      return [
+        {
+          title: "Released: watch for production issues",
           call: `list_issues_for_change({ changeId: "${id}" })`,
         },
       ];
@@ -374,6 +388,7 @@ export function changeNextSteps(
     case "reverted":
       return [
         { title: "See what broke", call: `list_issues_for_change({ changeId: "${id}" })` },
+        { title: "See what the rollout measured", call: `get_rollout({ changeId: "${id}" })` },
         {
           title: "Start a follow-up change",
           call: `start_change({ repoId: "${c.repoId}", title: "<title>", category: "fix" })`,
@@ -939,6 +954,12 @@ export function buildTools(backend: McpBackend) {
     ...queueTools(backend, kit),
     // QA in a browser, on request.
     ...qaTools(backend, kit),
+    // After merge (rollout) and the signed audit log: read-only.
+    ...rolloutTools(backend, {
+      ...kit,
+      changeIdOf: (caller, args) => changeIdOf(backend, caller, args),
+    }),
+    ...auditTools(backend, kit),
   ]);
 }
 
