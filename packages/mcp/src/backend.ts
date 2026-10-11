@@ -141,6 +141,8 @@ export interface ProjectCreated {
   previewUrl: string | null;
   claimUrl: string | null;
   bootstrapChangeId: string | null;
+  /** Template repos: the sample Plan the platform drafted for a human to approve; null otherwise. */
+  samplePlanId?: string | null | undefined;
   nextSteps: NextStepData[];
   /** Only for `importMode: "push"` (a human caller). */
   importGrant?: ImportGrantData | undefined;

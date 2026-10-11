@@ -674,6 +674,11 @@ export const CreateProjectOutput = {
       ...nullableStr,
       description: "The Change running the first CI and preview: wait_for_change on it.",
     },
+    samplePlanId: {
+      ...nullableStr,
+      description:
+        "Template repos: a small first Plan the platform drafted. A human approves it, then you build it: start_change({ repoId, planId }). Null otherwise.",
+    },
     nextSteps: NextSteps,
   },
   required: [

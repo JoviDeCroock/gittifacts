@@ -57,6 +57,15 @@ export const projectOnboarding = sqliteTable(
     msToRespond: integer("ms_to_respond"),
     msToGreen: integer("ms_to_green"),
     msToPreview: integer("ms_to_preview"),
+    /** Template repos: the sample Plan create_project drafted (migration 0023). */
+    samplePlanId: text("sample_plan_id"),
+    /**
+     * Time-to-first-merge (migration 0023): the first Change other than the bootstrap that the
+     * merge queue landed, when, and create_project → that merge.
+     */
+    firstMergeChangeId: text("first_merge_change_id"),
+    firstMergedAt: text("first_merged_at"),
+    msToFirstMerge: integer("ms_to_first_merge"),
   },
   (t) => [index("project_onboarding_created_idx").on(t.createdAt)],
 );

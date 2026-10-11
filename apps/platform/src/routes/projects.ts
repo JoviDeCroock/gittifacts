@@ -14,7 +14,12 @@ import { createUnclaimedProject } from "../claim/create.js";
 import { unauthorized } from "../errors.js";
 import { anonymousClient } from "../limits/client.js";
 import { assertPlatformAdmin } from "../limits/routes.js";
-import { ttfgFromAnalyticsEngine, ttfgFromD1, ttfgReport } from "../projects/onboarding.js";
+import {
+  ttfgFromAnalyticsEngine,
+  ttfgFromD1,
+  ttfgReport,
+  ttfmFromD1,
+} from "../projects/onboarding.js";
 import { engineFor, seedTemplateCaches } from "../projects/seed-cache.js";
 import { seedGitHost } from "../projects/seed-on-deploy.js";
 import { CreateProjectInput, createProject } from "../services/projects.js";
@@ -59,6 +64,13 @@ export const ProjectCreatedSchema = z
       .string()
       .nullable()
       .describe("The Change running the first CI and preview: wait_for_change on it"),
+    samplePlanId: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "Template repos: the sample Plan the platform drafted. A human approves it, then an agent builds it (start_change with planId)",
+      ),
     nextSteps: z.array(NextStepSchema),
     importGrant: z
       .object({
@@ -149,6 +161,14 @@ const ttfg = createRoute({
           }),
         ),
         note: z.string().nullable(),
+        firstMerge: z
+          .object({
+            projects: z.number(),
+            merged: z.number(),
+            p50Ms: z.number().nullable(),
+            p90Ms: z.number().nullable(),
+          })
+          .describe("Time-to-first-merge: create_project → the first non-bootstrap Change landed (D1)"),
       }),
       "Report",
     ),
@@ -218,6 +238,7 @@ export function registerProjectRoutes(app: ApiApp): void {
     const since = new Date(svc.clock.now().getTime() - days * 86_400_000);
     const env = c.env;
     let note: string | null = null;
+    const firstMerge = await ttfmFromD1(svc.store, since);
     if (env.CF_API_TOKEN) {
       try {
         const rows = await ttfgFromAnalyticsEngine(
@@ -228,14 +249,15 @@ export function registerProjectRoutes(app: ApiApp): void {
           },
           days,
         );
-        return c.json(ttfgReport(rows, "analytics-engine", days, null), 200);
+        return c.json({ ...ttfgReport(rows, "analytics-engine", days, null), firstMerge }, 200);
       } catch (e) {
         note = `Analytics Engine unavailable (${e instanceof Error ? e.message : String(e)}); showing D1.`;
       }
     } else {
       note = "CF_API_TOKEN is not set; showing D1.";
     }
-    return c.json(ttfgReport(await ttfgFromD1(svc.store, since), "d1", days, note), 200);
+    const rows = await ttfgFromD1(svc.store, since);
+    return c.json({ ...ttfgReport(rows, "d1", days, note), firstMerge }, 200);
   });
 
   app.openapi(seed, async (c) => {

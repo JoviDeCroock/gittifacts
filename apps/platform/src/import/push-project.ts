@@ -60,6 +60,7 @@ export async function createPushImportProject(
     previewUrl: null,
     claimUrl: null,
     bootstrapChangeId: null,
+    samplePlanId: null,
     importGrant: grant,
     nextSteps: [
       {

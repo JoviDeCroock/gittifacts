@@ -27,6 +27,7 @@ import { ApiError } from "../errors.js";
 import { createPushImportProject } from "../import/push-project.js";
 import { previewUrlFor, previewZone } from "../previews/ids.js";
 import { recordProjectCreated } from "../projects/onboarding.js";
+import { draftSamplePlan } from "../projects/sample-plan.js";
 
 export const CreateProjectInput = z
   .object({
@@ -167,9 +168,10 @@ export async function createProjectAs(
   const acting =
     unclaimed === undefined ? actor : ((await svc.store.getPrincipal(actor.id)) ?? actor);
 
-  // 2 + 3, concurrently: the bootstrap (first CI + preview) and the caller's first Change.
+  // 2 + 3 (+ 4), concurrently: the bootstrap (first CI + preview), the caller's first Change and,
+  // from a template, its sample Plan (drafted by the platform; a human approves it).
   const runsCi = source !== "empty";
-  const [bootstrap, first] = await Promise.all([
+  const [bootstrap, first, samplePlan] = await Promise.all([
     runsCi ? svc.coordinator.startBootstrapChange(acting, repo.id) : Promise.resolve(null),
     svc.coordinator
       .startChange(acting, {
@@ -188,6 +190,13 @@ export async function createProjectAs(
           return null;
         },
       ),
+    source === "template"
+      ? draftSamplePlan(svc, repo).catch((e: unknown) => {
+          // The project works without it: the agent drafts its own Plan.
+          console.warn("create_project: sample plan not drafted", e);
+          return null;
+        })
+      : Promise.resolve(null),
   ]);
 
   const zone = previewZone(svc.env);
@@ -218,6 +227,7 @@ export async function createProjectAs(
     // Created without credentials: the caller must reconnect with the token before anything else.
     anonymous: extras?.token ? { mcpUrl } : undefined,
     imported: source === "import",
+    samplePlan: samplePlan ?? undefined,
   });
   if (first === null) {
     // After the reconnect step, which stays first for an anonymous caller.
@@ -235,6 +245,7 @@ export async function createProjectAs(
       source,
       principalId: actor.id,
       bootstrapChangeId: bootstrap?.id ?? null,
+      samplePlanId: samplePlan?.planId ?? null,
       createdAt: startedAt,
       respondedAt,
     }).catch((e: unknown) => console.warn("ttfg: could not record the project", e)),
@@ -254,6 +265,8 @@ export async function createProjectAs(
     // The link a human opens to claim an unclaimed project.
     claimUrl: extras?.claimUrl ?? null,
     bootstrapChangeId: bootstrap?.id ?? null,
+    // The template's sample Plan, drafted for a human to approve (the golden path's first step).
+    samplePlanId: samplePlan?.planId ?? null,
     nextSteps,
   };
 }

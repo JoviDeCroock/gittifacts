@@ -61,6 +61,9 @@ describe("getting started", () => {
       firstGreen: null,
       latestBootstrap: null,
       repo: { connected: false, via: null },
+      plan: null,
+      review: null,
+      firstMerge: null,
     });
   });
 

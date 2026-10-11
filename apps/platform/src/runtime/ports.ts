@@ -247,7 +247,7 @@ export function buildPorts(env: PortsEnv, role: PortsRole, opts: BuildPortsOptio
     flags: new FlagshipFlags(api),
     telemetry: new ObservabilityTelemetry({ ...api, store, clock }),
     audit: new DoAudit(env),
-    notifier: new D1Notifier(store, now),
+    notifier: new D1Notifier(store, now, env),
     clock,
     previews: new PlatformPreviews(env, store, now),
     onboarding: new OnboardingMetrics(store, env),

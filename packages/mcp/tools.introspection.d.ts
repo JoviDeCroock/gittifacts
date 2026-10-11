@@ -950,6 +950,13 @@ export type introspection = {
             ],
             "description": "The Change running the first CI and preview: wait_for_change on it."
           },
+          "samplePlanId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Template repos: a small first Plan the platform drafted. A human approves it, then you build it: start_change({ repoId, planId }). Null otherwise."
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",

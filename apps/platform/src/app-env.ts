@@ -93,7 +93,7 @@ export function createServices(
     env,
     store,
     audit: new DoAudit(env, auditLog),
-    notifier: new D1Notifier(store, now),
+    notifier: new D1Notifier(store, now, env),
     clock,
     coordinator: opts.coordinator(env, ctx, origin),
     signer: () => platformSigner(env),

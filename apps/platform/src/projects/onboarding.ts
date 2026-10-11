@@ -10,6 +10,15 @@
  * written once at creation (outcome "created") and once when the bootstrap Change has sealed its
  * evidence (outcome green | ci-failed | preview-failed | no-preview). The dashboard reads the
  * Analytics Engine SQL API when CF_API_TOKEN can, and the D1 rows otherwise.
+ *
+ * Time-to-first-merge (DECISIONS 2026-10-11, the golden path): create_project → the first Change
+ * other than the bootstrap landed by the merge queue. Recorded on the same D1 row once per project
+ * (`recordFirstMerge`, from the "merged" notification) and as one data point
+ *
+ *   blobs:   [projectId, template, "merged", "ttfm"]
+ *   doubles: [msToFirstMerge, -1, -1]
+ *
+ * The dashboard's first-merge numbers come from D1.
  */
 import {
   changeWorkflowId,
@@ -17,12 +26,13 @@ import {
   type Onboarding,
   type PreviewOutcome,
 } from "@app/coordinator";
-import { desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { projectOnboarding } from "../db/schema.js";
 import type { D1Store } from "../store/d1-store.js";
 
 export const TTFG_METRIC = "ttfg";
+export const TTFM_METRIC = "ttfm";
 export const TTFG_TARGET_MS = 60_000;
 
 export type TtfgOutcome = "created" | "green" | "ci-failed" | "preview-failed" | "no-preview";
@@ -75,6 +85,8 @@ export async function recordProjectCreated(
     source: "template" | "import" | "empty";
     principalId: string;
     bootstrapChangeId: string | null;
+    /** Template repos: the sample Plan create_project drafted. */
+    samplePlanId?: string | null | undefined;
     createdAt: Date;
     respondedAt: Date;
   },
@@ -90,6 +102,7 @@ export async function recordProjectCreated(
       source: input.source,
       principalId: input.principalId,
       bootstrapChangeId: input.bootstrapChangeId,
+      samplePlanId: input.samplePlanId ?? null,
       createdAt,
       respondedAt,
       msToRespond,
@@ -104,6 +117,44 @@ export async function recordProjectCreated(
     msToPreview: null,
     msToRespond,
   });
+}
+
+/**
+ * A Change merged: the project's first merge (other than its bootstrap) sets time-to-first-merge,
+ * once. Projects not created through create_project have no row and are skipped. Never throws.
+ */
+export async function recordFirstMerge(
+  store: D1Store,
+  env: MetricsEnv,
+  input: { repoId: string; changeId: string; mergedAt: Date },
+): Promise<void> {
+  try {
+    const row = await store.db
+      .select()
+      .from(projectOnboarding)
+      .where(eq(projectOnboarding.projectId, input.repoId))
+      .get();
+    if (row === undefined || row.firstMergedAt !== null) return;
+    if (row.bootstrapChangeId === input.changeId) return;
+    const firstMergedAt = input.mergedAt.toISOString();
+    const msToFirstMerge = ms(row.createdAt, firstMergedAt);
+    const updated = await store.db
+      .update(projectOnboarding)
+      .set({ firstMergeChangeId: input.changeId, firstMergedAt, msToFirstMerge })
+      .where(
+        and(eq(projectOnboarding.projectId, input.repoId), isNull(projectOnboarding.firstMergedAt)),
+      )
+      .returning({ projectId: projectOnboarding.projectId })
+      .all();
+    if (updated.length === 0) return; // another merge was first
+    env.METRICS?.writeDataPoint({
+      indexes: [input.repoId],
+      blobs: [input.repoId, row.template ?? "none", "merged", TTFM_METRIC],
+      doubles: [msToFirstMerge ?? -1, -1, -1],
+    });
+  } catch (e) {
+    console.warn("ttfm: could not record the first merge", e);
+  }
 }
 
 /** The coordinator's Onboarding port: the bootstrap Change sealed its evidence. */
@@ -252,6 +303,35 @@ export async function ttfgFromD1(store: D1Store, since: Date): Promise<TtfgProje
     msToGreen: r.msToGreen,
     msToPreview: r.msToPreview,
   }));
+}
+
+export interface TtfmStats {
+  /** Projects created in the period. */
+  projects: number;
+  /** ... of which a Change (other than the bootstrap) merged. */
+  merged: number;
+  p50Ms: number | null;
+  p90Ms: number | null;
+}
+
+/** Time-to-first-merge over the projects created since `since` (D1). */
+export async function ttfmFromD1(store: D1Store, since: Date): Promise<TtfmStats> {
+  const rows = await store.db
+    .select({ ms: projectOnboarding.msToFirstMerge })
+    .from(projectOnboarding)
+    .where(gte(projectOnboarding.createdAt, since.toISOString()))
+    .limit(5000)
+    .all();
+  const merged = rows
+    .map((r) => r.ms)
+    .filter((v): v is number => v !== null)
+    .sort((a, b) => a - b);
+  return {
+    projects: rows.length,
+    merged: merged.length,
+    p50Ms: quantile(merged, 0.5),
+    p90Ms: quantile(merged, 0.9),
+  };
 }
 
 const AeRow = z.object({
