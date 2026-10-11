@@ -89,7 +89,11 @@ function RepoLine({ repo }: { repo: GithubInstallation["repos"][number] }) {
             disabled={busy.value}
             onChange={toggle}
           />
-          <span>Walkthrough review and summary on PRs</span>
+          <span>
+            Walkthrough review and summary on PRs
+            {/* Every row has this switch: its name says which repository it is for. */}
+            <span class="sr-only"> for {repo.fullName}</span>
+          </span>
         </label>
       ) : (
         <span class="gh-repo__wait">graded from its next pull request</span>
