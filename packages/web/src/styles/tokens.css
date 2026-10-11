@@ -127,13 +127,18 @@
    * Acetate: the clear sleeve a ward clips over its chart. Only chrome that floats over a
    * scrolling chart wears it (top bar, station strip, decision bar, palette, switch-off bar);
    * reading surfaces, code and forms never do. Derived from the theme's canvas and surface, so
-   * it follows the theme; solid where blur is unsupported or transparency is reduced.
+   * it follows the theme; solid where blur is unsupported or transparency is reduced. Thin enough
+   * that the saturated blur lets lane bands and teal links bleed through (that reads as glass);
+   * two rims, a lit top and a defined bottom, give the sheet its thickness.
    */
-  --acetate: color-mix(in oklch, var(--canvas) 74%, transparent);
-  --acetate-strong: color-mix(in oklch, var(--surface) 84%, transparent);
+  --acetate: color-mix(in oklch, var(--canvas) 64%, transparent);
+  --acetate-strong: color-mix(in oklch, var(--surface) 76%, transparent);
   --acetate-filter: blur(18px) saturate(1.6);
-  --acetate-rim: inset 0 1px 0 oklch(100% 0 0 / 0.6);
+  --acetate-floor: inset 0 -1px 0 color-mix(in oklch, var(--rule-strong) 40%, transparent);
+  --acetate-rim: inset 0 1px 0 oklch(100% 0 0 / 0.6), var(--acetate-floor);
   --acetate-edge: color-mix(in oklch, var(--rule-strong) 70%, transparent);
+  /* The top bar's height, for anything sticky beneath it (56px under the notch; 48px from 1024px). */
+  --topbar-h: calc(56px + env(safe-area-inset-top));
 
   /* ---------------------------------------------------------------- layers */
   --z-sticky: 200;
@@ -256,7 +261,7 @@
     --diff-del-strong: oklch(33% 0.08 25);
     --code-bg: var(--p-night-2);
     --code-comment: var(--p-night-ink-3);
-    --acetate-rim: inset 0 1px 0 oklch(100% 0 0 / 0.07);
+    --acetate-rim: inset 0 1px 0 oklch(100% 0 0 / 0.07), var(--acetate-floor);
     --code-string: oklch(80% 0.1 152);
     --code-keyword: oklch(80% 0.08 262);
     --code-number: oklch(80% 0.1 50);
@@ -316,7 +321,7 @@
   --diff-del-strong: oklch(33% 0.08 25);
   --code-bg: var(--p-night-2);
   --code-comment: var(--p-night-ink-3);
-  --acetate-rim: inset 0 1px 0 oklch(100% 0 0 / 0.07);
+  --acetate-rim: inset 0 1px 0 oklch(100% 0 0 / 0.07), var(--acetate-floor);
   --code-string: oklch(80% 0.1 152);
   --code-keyword: oklch(80% 0.08 262);
   --code-number: oklch(80% 0.1 50);
@@ -350,5 +355,6 @@
 @media (min-width: 1024px) {
   :root {
     --gutter: 2rem;
+    --topbar-h: 48px;
   }
 }

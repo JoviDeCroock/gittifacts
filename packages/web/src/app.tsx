@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from "preact/hooks";
 import { ErrorBoundary, LocationProvider, lazy, Route, Router, useLocation } from "preact-iso";
 import { AppErrorBoundary } from "./components/AppErrorBoundary.js";
 import { Shell } from "./components/Shell.js";
+import { ShellFrame } from "./components/Skeleton.js";
 import { Loading } from "./components/ui.js";
 import { APP_HOME, isServerPath, postAuthTarget, signInHref } from "./lib/nav.js";
 import { loadSession, session } from "./state/session.js";
@@ -161,11 +162,15 @@ function Gate() {
     );
   }
   if (s.status === "loading") {
-    return (
-      <div class="splash">
-        <Loading label="Checking your session" lines={2} />
-      </div>
-    );
+    // The frame is drawn at once and only the content area waits; consent screens have no frame.
+    if (FOCUSED.test(path)) {
+      return (
+        <main class="page__main">
+          <Loading label="Checking your session" lines={2} />
+        </main>
+      );
+    }
+    return <ShellFrame label="Checking your session" />;
   }
   if (s.status === "authed") return <AuthedApp />;
   return (

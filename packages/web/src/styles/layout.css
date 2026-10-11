@@ -56,8 +56,7 @@
   display: grid;
   gap: var(--s-5);
 }
-.sidebar__nav ul,
-.drawer__nav {
+.sidebar__nav ul {
   list-style: none;
   display: grid;
   gap: 2px;
@@ -86,6 +85,10 @@
 .nav-link[aria-current="page"] .icon {
   color: var(--action-ink);
 }
+/* Dashboard while you are inside one of its repos: an ancestor, quieter than the current item. */
+.nav-link[data-ancestor="true"] {
+  color: var(--text);
+}
 .sidebar__repos {
   padding-block-start: var(--s-3);
   border-block-start: 1px solid var(--rule);
@@ -107,9 +110,12 @@
   color: var(--text);
   text-decoration: none;
 }
+/* The repo you are in (its changes, plans, queue and members too): the one current item. */
 .repo-link[aria-current="page"] {
+  background: var(--surface);
   color: var(--text);
   font-weight: var(--weight-bold);
+  box-shadow: var(--shadow-raise);
 }
 .repo-link__name {
   overflow: hidden;
@@ -246,12 +252,27 @@
   align-items: center;
   justify-content: space-between;
 }
-.drawer__nav .nav-link {
+/* The sidebar's own body (search, places, repositories), at thumb size; it scrolls, the foot stays. */
+.drawer__body {
+  display: grid;
+  align-content: start;
+  gap: var(--s-4);
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.drawer__body .nav-link,
+.drawer__body .repo-link,
+.drawer__body .palette-trigger {
   min-block-size: var(--tap);
   font-size: var(--text-body);
 }
+.drawer__foot {
+  margin-block-start: 0;
+}
 
-/* ================================================================ top bar (phone + tablet) */
+/* ================================================================ top bar (every width) */
 .topbar {
   position: sticky;
   inset-block-start: 0;
@@ -275,10 +296,83 @@
   border-block-end-color: var(--acetate-edge);
   box-shadow: var(--acetate-rim), var(--shadow-float);
 }
+.topbar__crumbs {
+  display: none;
+}
+/*
+ * Desktop: a slim acetate bar in the content column. It takes no room and is not there at rest
+ * (the page head says where you are); once the head scrolls away it fades in with the crumbs,
+ * the title and search, wearing its edge, rims and float shadow.
+ */
 @media (min-width: 1024px) {
   .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    block-size: var(--topbar-h);
+    margin-block-end: calc(var(--topbar-h) * -1);
+    padding-block-start: 0;
+    padding-inline: var(--gutter) var(--s-2);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--dur-exit) var(--ease-in), visibility 0s linear var(--dur-exit), border-color var(--dur-state) var(--ease-out), box-shadow var(--dur-state) var(--ease-out);
+  }
+  .topbar[data-away="true"] {
+    opacity: 1;
+    visibility: visible;
+    border-block-end-color: var(--acetate-edge);
+    box-shadow: var(--acetate-rim), var(--shadow-float);
+    transition: opacity var(--dur-state) var(--ease-out), visibility 0s, border-color var(--dur-state) var(--ease-out), box-shadow var(--dur-state) var(--ease-out);
+  }
+  .topbar > :is(.topbar__back, .topbar__brand, .topbar__title, .topbar__menu) {
     display: none;
   }
+  .topbar__crumbs {
+    display: block;
+    min-inline-size: 0;
+  }
+}
+/*
+ * Sticky chrome under the top bar starts at --topbar-h. The walkthrough's station strip is
+ * tour.css's; until it reads the token itself, this keeps it clear of the desktop bar.
+ */
+@media (min-width: 1024px) {
+  .page__main .stations {
+    inset-block-start: var(--topbar-h);
+  }
+}
+.topbar__crumbs ol {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-inline-size: 0;
+  list-style: none;
+  color: var(--text-2);
+  font-size: var(--text-small);
+  white-space: nowrap;
+}
+.topbar__crumbs li {
+  flex: none;
+}
+.topbar__crumbs li + li::before {
+  content: "/";
+  margin-inline-end: var(--s-1);
+  color: var(--text-3);
+}
+.topbar__crumbs a {
+  color: var(--text-2);
+  text-decoration: none;
+}
+.topbar__crumbs a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+/* The title gives way first when the trail is long. */
+.topbar__crumbs .topbar__here {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-weight: var(--weight-bold);
 }
 .topbar__brand,
 .topbar__back {
@@ -480,10 +574,15 @@
   }
 }
 
-/* ================================================================ splash */
-.splash {
+/* ================================================================ first load: the frame, waiting */
+.frame__nav {
   display: grid;
-  place-items: center;
-  min-block-size: 100dvh;
-  color: var(--text-3);
+  gap: var(--s-5);
+}
+.frame__search {
+  display: block;
+  block-size: 40px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  background: var(--surface);
 }
