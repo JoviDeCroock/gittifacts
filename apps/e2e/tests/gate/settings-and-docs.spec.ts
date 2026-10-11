@@ -10,8 +10,12 @@ test("agents: create an agent and see its token once", async ({ authed: page, re
   await page.goto("/agents");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   const name = uniqueName("bot").toLowerCase();
-  const form = page.locator("form").filter({ has: page.getByRole("textbox") }).first();
-  await form.getByRole("textbox").first().fill(name);
+  // Connecting an agent leads the rail; the hand-made form sits behind "Add one by hand…".
+  await page.getByTestId("create-agent-open").click();
+  const form = page.getByTestId("create-agent");
+  await form.getByRole("textbox", { name: "Name" }).fill(name);
+  // Its repositories are a choice to make (this person has none yet, so: all, including later).
+  await form.getByRole("radio", { name: /^All repositories you can access/ }).check();
   await form.locator('button[type="submit"]').click();
   // The token is shown once, in a field or code block that starts with the token prefix.
   await expect(page.getByText(/gtf_[A-Za-z0-9_-]{8,}/).first()).toBeVisible();
