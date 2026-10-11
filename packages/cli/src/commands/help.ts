@@ -22,7 +22,8 @@ export const EXIT_CODES: Record<string, string> = {
   [EXIT.ok]: "success",
   [EXIT.error]: "error: `{ error: { code, message, fix } }` on stdout",
   [EXIT.usage]: "usage error (unknown command/flag, missing argument); nothing was sent",
-  [EXIT.notReached]: "wait: the milestone was not reached (timeout or unreachable)",
+  [EXIT.notReached]:
+    "wait, ship: the milestone was not reached (timeout, unreachable, or ship: CI failed)",
   [EXIT.interrupted]: "interrupted (Ctrl-C)",
 };
 

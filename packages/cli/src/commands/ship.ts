@@ -23,7 +23,7 @@ import { CliError, cliError, EXIT } from "../errors.js";
 import { gitAuthEnv } from "../git.js";
 import { shipSummary, shipText } from "../ship-view.js";
 import { bundledCommands, findCommand } from "../tools/commands.js";
-import { type Builtin, bool, builtinSpec, int, str } from "./builtin.js";
+import { type Builtin, builtinSpec, int, str } from "./builtin.js";
 import { callTool } from "./tool.js";
 import { waitForMilestone } from "./wait.js";
 
@@ -248,7 +248,7 @@ async function report(
   r: ReportInput,
 ): Promise<number> {
   const timeoutSec = int(parsed, "timeout") ?? SHIP_TIMEOUT_SEC;
-  const wait = parsed.values.wait !== false && !bool(parsed, "noWait");
+  const wait = parsed.values.wait !== false;
   const deadline = ctx.io.now() + timeoutSec * 1000;
   const left = () => Math.ceil((deadline - ctx.io.now()) / 1000);
   let waited = 0;

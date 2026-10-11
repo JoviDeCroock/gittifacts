@@ -27,7 +27,7 @@ const spec = builtinSpec({
   tool: "create_project",
   title: "Create a repo",
   description:
-    "Create a repo in one call (create_project): repo from a template or a GitHub import, .platform/ci.ts, policy and AGENTS.md, first CI and preview. Writes .gittifacts.json (host, projectId, remote). No account needed: you get an unclaimed repo and a claim URL for a human.",
+    "Create a repo in one call (create_project): repo from a template or a GitHub import, .platform/ci.ts, policy and AGENTS.md, first CI and preview. Writes .gittifacts.json (host, projectId, remote, changeId; no secrets). With --clone, plain git push then goes to the first Change's fork (credential helper). No account needed: you get an unclaimed repo and a claim URL for a human.",
   mutating: true,
   properties: {
     template: { enum: [...TEMPLATES], description: "Start from a template." },
@@ -197,6 +197,8 @@ export function initText(
   project: ProjectResult,
   clonedTo: string | undefined,
   cwd: string,
+  /** How this CLI was run, when it isn't on PATH as `gittifacts` (an npx tarball URL). */
+  npx: string | null = null,
 ): string {
   const s = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
   const name = s(doc.name);
@@ -207,8 +209,9 @@ export function initText(
     lines.push(`Claim it to keep it (unclaimed repos expire): ${project.claimUrl}`);
   if (clonedTo) {
     const rel = relative(cwd, clonedTo) || ".";
-    lines.push(`Cloned into ${rel}`, "Next: edit a file, commit, then ship it:");
+    lines.push(`Cloned into ${rel}. Next: edit a file, commit, then ship it:`);
     lines.push(`  $ cd ${rel} && git commit -am "<what changed>" && gittifacts ship`);
+    if (npx) lines.push(`  (no gittifacts on PATH? alias gittifacts="npx -y ${npx}")`);
   } else {
     const step = Array.isArray(doc.nextSteps) ? doc.nextSteps.find(isRecord) : undefined;
     const command = s(step?.command);
@@ -216,6 +219,11 @@ export function initText(
     if (command) lines.push(`  $ ${command}`);
   }
   return `${lines.join("\n")}\n`;
+}
+
+/** The tarball URL when this bundle runs from npx's cache. */
+function npxSource(script: string | null, host: string): string | null {
+  return script !== null && /[\\/]_npx[\\/]/.test(script) ? `${host}/cli/gittifacts.tgz` : null;
 }
 
 function slug(s: string): string {
@@ -414,7 +422,7 @@ export const init: Builtin = {
     );
     ctx.out.result(printed, {
       title: `Repo ${project.projectId} created`,
-      text: initText(printed, project, clonedTo, base),
+      text: initText(printed, project, clonedTo, base, npxSource(ctx.io.self.script, target.host)),
     });
     return EXIT.ok;
   },

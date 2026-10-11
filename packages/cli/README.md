@@ -1,8 +1,8 @@
 # gittifacts
 
 The CLI for [gittifacts](https://github.com/JoviDeCroock/gittifacts), the git platform built for coding agents.
-Humans approve intent and machines prove conformance. Every MCP tool is a command, the output is JSON by default, and
-you don't need an account to start.
+Humans approve intent and machines prove conformance. Every MCP tool is a command, the output is text on a terminal
+and JSON when piped (or with `--json`), and you don't need an account to start.
 
 The platform serves the CLI as an npm tarball; always run it from your platform's URL. A bare `npx gittifacts`
 fetches whatever npm package holds that name, which is not this CLI. Node 22 or later:
@@ -16,35 +16,37 @@ alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz"
 ## Ship something in 5 commands
 
 ```sh
-# 1. Create a repo with CI, a preview and AGENTS.md. No account needed: you get an unclaimed project
-#    and a claimUrl for a human. Writes .gittifacts.json, so later commands in ./my-api need no --host.
+# 1. Create a repo with CI, a preview and AGENTS.md, cloned into ./my-api. No account needed: you get an unclaimed
+#    repo and a claim link for a human. The clone's origin is your first Change's fork, and git push just works.
 gittifacts --host https://<host> init --template workers-api --name my-api --clone && cd my-api
 
-# 2. Wait for the first green build. The changeId is bootstrapChangeId of step 1 (its wait is nextSteps[0]).
-gittifacts wait <changeId> --until evidence_ready
+# 2. Wait for the first green build: the Change is bs-<repoId> (nextSteps[0] in the JSON).
+gittifacts wait bs-<repoId> --until evidence_ready
 
-# 3. Read the result: CI steps, the lane and why, and the preview URL (--human for a summary).
-gittifacts get-change-status <changeId> --human
+# 3. Edit, commit, ship: pushes HEAD to the Change's fork, waits for CI and the lane, prints why and what next.
+git commit -am "Add /time" && gittifacts ship
 
-# 4. For the next change, draft a plan (a human approves it), then open the change. That gives you a fork remote.
-gittifacts create-plan --repo-id <projectId> --title "Add /time" --intent "Clients need server time." --acceptance-criteria "GET /time returns ISO 8601"
-gittifacts start-change --repo-id <projectId> --plan-id <planId> --title "Add /time" --category feature
-git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>
-
-# 5. Ask a human to review it (lanes 1 and 2), then wait until it merges.
+# 4. Ask a human to review it (lanes 1 and 2), then wait until it merges.
 gittifacts request-review <changeId> && gittifacts wait <changeId> --until merged
+
+# 5. Next change: ship again. Once the last one merged, ship starts a new Change and points origin at its fork.
+git commit -am "Add /date" && gittifacts ship --title "Add /date"
 ```
+
+An existing repo: `gittifacts clone <repoId>` (needs a login; claimed repos only), then edit, commit, `gittifacts ship`.
+With an approved plan: `gittifacts ship --plan <planId>`.
 
 Templates: `workers-api`, `preact-app`, `ts-library`, `static-site`. To import a repo instead, use `init --from https://github.com/org/repo`.
 
 ## Output contract
 
-- **stdout gets exactly one JSON document.** That covers errors too:
+- **Piped (or `--json`), stdout gets exactly one JSON document.** That covers errors too:
   `{ "error": { "code", "message", "fix": { "explanation", "call"?, "command"?, "docsUrl"? } } }`.
 - Next steps and fixes carry `call`, the MCP tool call, and `command`, the same step as a CLI command you can run as is.
 - Mutating commands send an idempotency key and print it as `idempotencyKey`. Retry with
   `--idempotency-key <key>` and the platform won't act twice. On retryable errors, `fix.command` is the retry.
-- `--human` prints text sections and tables. It uses color only on a TTY and never with `NO_COLOR`. Errors go to stderr.
+- On a terminal (or with `--human`) the same document prints as text sections and tables; `init`, `ship` and `clone`
+  print a few lines instead. Color only on a TTY and never with `NO_COLOR`. Errors go to stderr.
 - Progress and login prompts go to stderr.
 
 | Exit | Meaning |
@@ -52,7 +54,7 @@ Templates: `workers-api`, `preact-app`, `ts-library`, `static-site`. To import a
 | 0 | Success |
 | 1 | Error. `{ error }` is on stdout (from the platform, the network, auth or the CLI itself) |
 | 2 | Usage error (unknown command or flag, missing argument). Nothing was sent |
-| 3 | `wait` didn't reach the milestone (timeout or unreachable). The result is still printed |
+| 3 | `wait` or `ship` didn't reach the milestone (timeout, unreachable, or CI failed). The result is still printed |
 | 130 | Interrupted with Ctrl-C |
 
 ## Commands
@@ -69,7 +71,8 @@ gittifacts search-tools wait for ci  # fuzzy search over names and descriptions
 gittifacts <command> --help          # flags, from the tool's input schema
 ```
 
-The local commands are `init` (calls `create_project`), `login`, `logout`, `wait`, `tools`, `search-tools` and `help`.
+The local commands are `init` (calls `create_project`), `clone`, `ship`, `login`, `logout`, `wait`, `qa`, `tools`,
+`search-tools`, `help` and `git-credential` (git runs it).
 `wait <changeId> --until <milestone> [--timeout 600]` re-issues the `wait_for_change` long-poll until the change
 reaches the milestone or the timeout runs out. The milestones are `evidence_ready`, `lane_assigned`, `tour_ready`,
 `merged` and `reverted`. `reached: true` means the milestone holds for the change's current head right now:
@@ -99,5 +102,11 @@ with the token" step (an MCP session needs it; the CLI doesn't).
   `untrusted-host` (set `GITTIFACTS_HOST` next to `GITTIFACTS_TOKEN` and it never comes up). Its `mcpUrl` is ignored
   unless it is on the host, and plain `http://` is refused except to localhost, 127.0.0.1 and [::1].
 - Credentials live in `~/.config/gittifacts/credentials.json` (mode 0600, keyed by host; override the directory
-  with `GITTIFACTS_CONFIG_DIR`). `.gittifacts.json` holds `{ host, projectId, remote }` and no secrets.
-- `init --clone` passes the token to git through its environment. It never appears in argv or `.git/config`.
+  with `GITTIFACTS_CONFIG_DIR`). `.gittifacts.json` holds `{ host, projectId, remote, changeId }` and no secrets;
+  templates git-ignore it and the CLI adds it to `.git/info/exclude`.
+- **Plain `git push`.** `init --clone`, `clone`, `start-change` (inside a clone) and `ship` point `origin` at the
+  Change's fork, set `remote.origin.push` to its branch, and install `gittifacts git-credential` as the local
+  credential helper for that origin. On every push git asks it; it calls `refresh_push_token` and answers Basic
+  `x:<token without ?expires=>`. Push tokens live an hour and each Change has its own fork, so nothing is stored:
+  tokens never appear in argv or `.git/config`. The helper runs this bundle by absolute path, or
+  `npx -y <host>/cli/gittifacts.tgz` once npx's cache is gone.

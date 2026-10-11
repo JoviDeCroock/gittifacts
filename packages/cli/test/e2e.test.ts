@@ -620,6 +620,17 @@ describe("git journey: plain git push, ship and clone against real git over HTTP
       expect(init.stdout).toContain("Claim it to keep it");
       expect(init.stdout).toContain("https://p-repo-1.preview.test");
 
+      await commit(clone(), "tty.txt", "on a terminal\n");
+      const shipped = await onTty(["ship"], clone());
+      expect(shipped.code, shipped.stdout).toBe(0);
+      expect(shipped.stdout).toMatch(/^Shipped chg_\d+: pushed [0-9a-f]{12}\n/m);
+      expect(shipped.stdout).toMatch(
+        /Lane: Quick review \(Lane 1\)\n {2}- 40 changed lines \(size\.lane1\)\n {2}2 checks passed\n/,
+      );
+      expect(shipped.stdout).toMatch(
+        /Next: Ask a person to review it\n {2}\$ gittifacts request-review chg_\d+/,
+      );
+
       const piped = await run(["help"], base);
       expect(JSON.parse(piped.stdout)).toMatchObject({
         name: "gittifacts",
