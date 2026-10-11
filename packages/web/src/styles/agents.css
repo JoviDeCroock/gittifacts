@@ -12,7 +12,7 @@
   /* The rail stays in view while it is short; an open hand-made form scrolls with the page. */
   .agents-side:not(:has(.by-hand[open])) {
     position: sticky;
-    inset-block-start: var(--s-6);
+    inset-block-start: calc(var(--topbar-h) + 16px);
   }
 }
 .agents-main {
