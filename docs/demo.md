@@ -35,6 +35,9 @@ GITTIFACTS_EMAIL=… GITTIFACTS_PASSWORD=… pnpm tsx scripts/e2e/many-agents.ts
   --url https://<host> --repo <repoId> --agents 6
 ```
 
+Measured live (2026-10-11, 09d3cb6): 6 agents → 6 merged in 270 s, 8 agents → 8 merged in 286 s,
+each Change 95–244 s from enqueue to main.
+
 What happens, line by line in the timeline it prints:
 
 - The human registers six agent principals, each with its own token and owner.
