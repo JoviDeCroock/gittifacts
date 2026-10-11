@@ -29,7 +29,7 @@
 .ev-index ul::-webkit-scrollbar {
   display: none;
 }
-.ev-index a {
+.ev-index li > a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -44,12 +44,41 @@
   white-space: nowrap;
 }
 @media (pointer: coarse) {
-  .ev-index a {
+  .ev-index li > a {
     min-block-size: var(--tap);
   }
 }
 .ev-index .icon {
   color: var(--text-3);
+}
+/* What needs a person first, in one line; the list below keeps its fixed order. */
+.ev-index__summary {
+  margin-block-end: var(--s-2);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.ev-index__summary b {
+  color: var(--text);
+}
+/* The item in view: the station strip's teal underline (One Ink: selection is teal). */
+.ev-index li > a {
+  position: relative;
+  transition: background-color var(--dur-feedback) var(--ease-out);
+}
+.ev-index li > a[aria-current="location"] {
+  border-color: var(--text);
+}
+.ev-index li > a[aria-current="location"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 8px;
+  inset-block-end: -1px;
+  block-size: 3px;
+  border-radius: 2px;
+  background: var(--action);
+}
+.ev-index li > a[aria-current="location"] .ev-index__label {
+  font-weight: var(--weight-bold);
 }
 .ev-index__value {
   font-weight: var(--weight-bold);
@@ -70,7 +99,7 @@
   .ev-index li {
     border-block-end: 1px solid var(--rule);
   }
-  .ev-index a {
+  .ev-index li > a {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     gap: 0 8px;
@@ -80,8 +109,12 @@
     background: transparent;
     white-space: normal;
   }
-  .ev-index a:hover {
+  .ev-index li > a:hover {
     background: var(--panel);
+  }
+  .ev-index li > a[aria-current="location"]::after {
+    inset-inline: 4px;
+    inset-block-end: 3px;
   }
   .ev-index__value {
     grid-column: 2;
