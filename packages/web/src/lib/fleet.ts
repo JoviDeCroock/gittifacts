@@ -3,7 +3,7 @@
  * waits on a person. No new endpoint and no guessing: every row is an audit event you can open,
  * and an agent with nothing in the window simply isn't listed.
  */
-import type { AuditPage, PrincipalRef } from "../api/types.js";
+import type { AuditPage, AuditSubjectRef, PrincipalRef } from "../api/types.js";
 import { actionLabel } from "./audit-actions.js";
 
 /** Waiting on a person, failing, active in the last few minutes, or quiet. */
@@ -12,8 +12,11 @@ export type AgentState = "waiting" | "failing" | "working" | "quiet";
 export interface AgentActivity {
   agent: PrincipalRef;
   state: AgentState;
-  /** The agent's latest event, in words, with a link to what it acted on (null: nothing to open). */
-  last: { action: string; label: string; subject: string; href: string | null; at: string };
+  /**
+   * The agent's latest event, in words, with a link to what it acted on (null: nothing to open)
+   * and what that is called (`object`: the plan or change title and its repo, when the log names it).
+   */
+  last: { action: string; label: string; subject: string; href: string | null; at: string; object: AuditSubjectRef | null };
   /** Events by this agent in the page that was read. */
   events: number;
 }
@@ -26,6 +29,11 @@ export const WINDOW_MS = 7 * 24 * 60 * 60_000;
 /** After these, the next move is a person's (a review, a plan approval). */
 const WAITS_ON_PERSON = new Set(["change.review-requested", "plan.created", "merge-queue.approval-requested"]);
 const FAILING = /ci-failed|tour-failed|build-errored|gave-up/;
+
+/** One agent's (or person's) trail: the audit log filtered to its events. */
+export function trailHref(principalId: string): string {
+  return `/audit?actor=${encodeURIComponent(principalId)}`;
+}
 
 /** `change:abc` → `/changes/abc`; subjects with no screen of their own get no link. */
 export function subjectHref(subject: string): string | null {
@@ -63,7 +71,7 @@ export function fleetFrom(page: AuditPage, now: number): AgentActivity[] {
     byAgent.set(who.id, {
       agent: who,
       state: stateOf(e.action, at, now),
-      last: { action: e.action, label: actionLabel(e.action), subject: e.subject, href: subjectHref(e.subject), at: e.at },
+      last: { action: e.action, label: actionLabel(e.action), subject: e.subject, href: subjectHref(e.subject), at: e.at, object: page.subjects?.[e.subject] ?? null },
       events: 1,
     });
   }

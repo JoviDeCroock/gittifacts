@@ -177,6 +177,9 @@ export const api = {
     request<{ plan: Plan }>("POST", `/api/v1/plans/${enc(planId)}/approve`, comment ? { comment } : {}, key),
   rejectPlan: (planId: string, comment: string, key?: string) =>
     request<{ plan: Plan }>("POST", `/api/v1/plans/${enc(planId)}/reject`, { comment }, key),
+  /** The author withdraws its own draft (ends as rejected, audited as withdrawn). */
+  withdrawPlan: (planId: string, reason?: string, key?: string) =>
+    request<{ plan: Plan }>("POST", `/api/v1/plans/${enc(planId)}/withdraw`, reason ? { reason } : {}, key),
 
   // changes
   changes: (repoId: string, filter: { status?: string; lane?: string } = {}) =>
@@ -208,7 +211,7 @@ export const api = {
 
   // audit
   audit: (q: AuditQuery = {}) =>
-    request<AuditPage>("GET", `/api/v1/audit${query({ subject: q.subject, cursor: q.cursor, limit: q.limit })}`),
+    request<AuditPage>("GET", `/api/v1/audit${query({ subject: q.subject, actor: q.actor, action: q.action, cursor: q.cursor, limit: q.limit })}`),
 };
 
 /** Resolves opaque `beforeRef` / `afterRef` / `logRef` pointers: `GET /api/v1/blobs/:ref` (docs/api.md). */

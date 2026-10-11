@@ -10,6 +10,29 @@
   display: none;
 }
 
+/* The list's own head, like the agent band's: a title and its sum line. */
+.repos__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s-3);
+  min-block-size: var(--tap);
+  margin-block-end: var(--s-2);
+}
+.repos__title {
+  font-size: var(--text-title);
+}
+.repos__sum {
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.repos + .fleet {
+  margin-block-start: var(--s-6);
+}
+.dash-loading > .skel-rows--rows .skel-row {
+  min-block-size: 112px;
+}
+
 .repo-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -128,6 +151,21 @@
   color: var(--text-3);
   font-weight: var(--weight-regular);
 }
+/* Nothing open in a lane: the tag keeps its die-cut and numeral but drops its band, so carmine,
+   ochre and green appear only where there is work (the Band Means Lane Rule). Solid edge, since
+   dashed already means unrouted or calibrating. */
+.lane-count.is-zero .lane-tag__body {
+  fill: none;
+  stroke: var(--text-4);
+  stroke-width: 1;
+  stroke-dasharray: none;
+}
+.lane-count.is-zero .lane-tag__num {
+  fill: var(--text-3);
+}
+.lane-count.is-zero {
+  color: var(--text-3);
+}
 .repo-row__shadow {
   grid-area: shadow;
 }
@@ -198,9 +236,25 @@
   }
 }
 
-/* Phones: a repository with nothing open skips its row of zero counts. */
+/* Phones: two short lines per repository (name, then what waits and what's live), lane counts
+   only where something is open, and the agreement meter left to the repository screen. */
 @media (max-width: 899px) {
-  .repo-row--idle .repo-row__lanes {
+  .repo-row {
+    gap: var(--s-2);
+    padding-block: var(--s-3) var(--s-4);
+  }
+  .repo-row--idle .repo-row__lanes,
+  .repo-row__shadow,
+  .lane-count.is-zero {
     display: none;
+  }
+  .repo-row__name {
+    font-size: var(--text-body);
+  }
+  .waiting b {
+    font-size: var(--text-body);
+  }
+  .dash-loading > .skel-rows--rows .skel-row {
+    min-block-size: 96px;
   }
 }

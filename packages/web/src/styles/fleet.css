@@ -1,5 +1,5 @@
 /*
- * Your agents (components/Fleet.tsx). Hairline rows like every list; agents are squares. State is
+ * Agents at work (components/Fleet.tsx). Hairline rows like every list; agents are squares. State is
  * a word with an icon: "Waits on you" in ink (it's your move, not an alarm), "Failing" in carmine
  * (a state, per the Band Means Lane Rule), "Working" with the trace, "Quiet" in muted ink.
  */
@@ -72,18 +72,13 @@ a.fleet__link:hover {
     grid-template-areas: "avatar who last state";
   }
 }
-.fleet__avatar {
+.fleet__link > .agent-mark {
   grid-area: avatar;
-  display: grid;
-  place-items: center;
-  inline-size: 2.25rem;
-  block-size: 2.25rem;
-  border-radius: 6px;
-  background: var(--text);
-  color: var(--canvas);
-  font-size: var(--text-meta);
-  font-weight: var(--weight-bold);
-  letter-spacing: 0.02em;
+}
+/* The row clips its trace, so the focus ring is drawn inside the link, never cut off. */
+.fleet__link:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--r-control);
 }
 .fleet__who {
   grid-area: who;
@@ -110,6 +105,19 @@ a.fleet__link:hover {
   min-inline-size: 0;
   color: var(--text-2);
   font-size: var(--text-small);
+}
+/* What it acted on: the plan or change title is the line's subject, so it reads in ink. */
+.fleet__object {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+.fleet__repo {
+  color: var(--text-3);
 }
 .fleet__state {
   grid-area: state;

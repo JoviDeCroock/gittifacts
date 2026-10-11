@@ -15,6 +15,7 @@ import { mockCreatedProjects, mockFreshAccount } from "./mock-getting-started.js
 import type { Scenario } from "./scenario-kit.js";
 import type {
   AuditPage,
+  AuditSubjectRef,
   ChangeDetail,
   ChangeSummary,
   ClassifyResult,
@@ -158,8 +159,14 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     "POST",
     /^\/api\/v1\/principals\/agents$/,
     (_p, _q, body) => {
-      const input = parseBody<{ name: string; scopes: Scope[] }>(body);
+      const input = parseBody<{ name: string; scopes: Scope[]; repoIds: string[]; expiresInDays: number }>(body);
       const name = (input.name ?? "").trim();
+      const known = new Set(db.repos.map((r) => r.repo.id));
+      if (input.repoIds !== undefined && (!Array.isArray(input.repoIds) || input.repoIds.length === 0 || input.repoIds.some((r) => !known.has(r)))) {
+        return fail(400, "invalid_repos", "Pick repositories you are a member of, or leave the agent on all of them.");
+      }
+      const days = input.expiresInDays ?? 90;
+      if (!Number.isInteger(days) || days < 1 || days > 365) return fail(400, "invalid_expiry", "Give the token between 1 and 365 days.");
       if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(name)) {
         return fail(400, "invalid_name", "Use 2–41 lowercase letters, digits or hyphens, starting with a letter or digit.");
       }
@@ -174,7 +181,9 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
         keys: [{ id: `key_${b64u(id, 8)}`, alg: "Ed25519", publicKey: b64u(`${id}:pub`, 43), createdAt: new Date().toISOString(), revokedAt: null }],
         scopes,
       };
-      db.principals.push(principal);
+      // The grant rides on the record so the agent-sessions mock can show its repos and end date.
+      const grant = { repoIds: input.repoIds ?? null, expiresAt: new Date(Date.now() + days * 86_400_000).toISOString() };
+      db.principals.push(Object.assign(principal, grant));
       appendAudit(db.me, "principal.created", `principal:${id}`);
       return ok({ principal, token: `gfa_${b64u(`${id}:token:${Date.now()}`, 40)}` }, 201);
     },
@@ -279,6 +288,21 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
         plan.approvalSignature = b64u(`${plan.id}:approval:${Date.now()}`, 86);
         appendAudit(db.me, "plan.approved", `plan:${plan.id}`);
       }
+      return ok({ plan });
+    },
+  ],
+
+  [
+    "POST",
+    /^\/api\/v1\/plans\/([^/]+)\/withdraw$/,
+    ([id], _q, body) => {
+      const plan = db.plans.find((p) => p.id === id);
+      if (!plan) return fail(404, "not_found", "No such plan.");
+      if (plan.authorId !== db.me) return fail(403, "forbidden", "Only the plan's author may withdraw it. A person who maintains the repo rejects it instead.");
+      if (plan.status !== "draft") return fail(409, "invalid-state", `This plan is already ${plan.status}; only drafts can be withdrawn.`);
+      parseBody<{ reason?: string }>(body);
+      plan.status = "rejected";
+      appendAudit(db.me, "plan.rejected", `plan:${plan.id}`);
       return ok({ plan });
     },
   ],
@@ -437,11 +461,14 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     "GET",
     /^\/api\/v1\/audit$/,
     (_p, q) => {
+      // Exact matches, as the platform's store does: subject, actor (principal id) and action.
       const subject = q.get("subject")?.trim() ?? "";
+      const actor = q.get("actor")?.trim() ?? "";
+      const action = q.get("action")?.trim() ?? "";
       const limit = Math.min(100, Number(q.get("limit") ?? 25) || 25);
       const cursor = q.get("cursor");
       const newestFirst = [...db.audit].reverse();
-      const filtered = subject ? newestFirst.filter((e) => e.subject.includes(subject) || e.action.includes(subject)) : newestFirst;
+      const filtered = newestFirst.filter((e) => (!subject || e.subject === subject) && (!actor || e.principalId === actor) && (!action || e.action === action));
       const start = cursor ? filtered.findIndex((e) => e.seq < Number(cursor)) : 0;
       const page = start < 0 ? [] : filtered.slice(start, start + limit);
       const last = page[page.length - 1];
@@ -452,11 +479,38 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
         nextCursor: more && last ? String(last.seq) : null,
         chain: { verified: true },
         principals: Object.fromEntries([...ids].map((id) => [id, principalRef(db.principals, id)])),
+        subjects: Object.fromEntries([...new Set(page.map((e) => e.subject))].flatMap((s) => {
+          const ref = subjectRef(s);
+          return ref ? [[s, ref]] : [];
+        })),
       };
       return ok(body);
     },
   ],
 ];
+
+/** `change:…` → its title and repo, as the audit page names it (`subjects`). */
+function subjectRef(subject: string): AuditSubjectRef | null {
+  const [kind, id] = subject.split(":", 2);
+  const repoName = (repoId: string | null | undefined) => db.repos.find((r) => r.repo.id === repoId)?.repo.name ?? null;
+  if (kind === "change") {
+    const c = id ? scenarioById(id)?.change : undefined;
+    return c ? { title: c.title, repoId: c.repoId, repoName: repoName(c.repoId) } : null;
+  }
+  if (kind === "plan") {
+    const p = db.plans.find((x) => x.id === id);
+    return p ? { title: p.title, repoId: p.repoId, repoName: repoName(p.repoId) } : null;
+  }
+  if (kind === "repo" || kind === "project") {
+    const name = repoName(id);
+    return name ? { title: name, repoId: id, repoName: name } : null;
+  }
+  if (kind === "principal") {
+    const p = db.principals.find((x) => x.id === id);
+    return p ? { title: p.name } : null;
+  }
+  return null;
+}
 
 function withScenario(id: string | undefined, fn: (s: Scenario) => RawResponse): RawResponse {
   const s = id ? scenarioById(id) : undefined;
