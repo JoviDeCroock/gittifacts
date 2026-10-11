@@ -37,6 +37,8 @@ export interface TestChange {
   landTogether?: boolean;
   groupSize?: number | null;
   priority?: "revert" | "incident" | "security" | "normal";
+  /** Who set the incident class (default: a human, so incident fixes take the express path). */
+  incidentByHuman?: boolean;
   lane?: 0 | 1 | 2;
   session?: string;
   author?: string;
@@ -163,6 +165,14 @@ export class World {
 
   send(input: CoreEventInput): void {
     const ev: CoreEvent = CoreEventSchema.parse(input);
+    if (ev.type === "Reprioritized") {
+      // Ground truth for "what may land while frozen": who put it in which class.
+      const ch = this.changes.get(ev.changeId);
+      if (ch !== undefined) {
+        ch.priority = ev.priority;
+        ch.incidentByHuman = ev.priority === "incident" && ev.by.kind === "human";
+      }
+    }
     const res = step(this.state, ev, { now: this.now });
     this.state = res.state;
     // The core decides to land on the post-event state.
@@ -201,6 +211,7 @@ export class World {
         sessionId: c.session ?? "a",
       },
       priority: c.priority ?? "normal",
+      incidentByHuman: c.incidentByHuman ?? c.priority === "incident",
       lane: c.lane ?? 0,
       dependsOn: c.dependsOn ?? [],
       landMode: c.landMode ?? "incremental",
@@ -291,7 +302,10 @@ export class World {
     if (frozen)
       for (const e of c.entries) {
         const ch = this.changes.get(e.changeId);
-        if (ch?.priority !== "revert" && ch?.priority !== "incident")
+        if (
+          ch?.priority !== "revert" &&
+          !(ch?.priority === "incident" && ch.incidentByHuman !== false)
+        )
           this.violations.push(`frozen queue landed non-revert ${e.changeId}`);
       }
     this.casLog.push({ cas: c, frozen, content: commit.content });

@@ -37,6 +37,8 @@ export interface QueueIntent {
     groupSize?: number | null;
     landMode?: "atomic" | "incremental";
     incidentPlanId?: string | null;
+    /** A human set the incident class (only those land through a freeze). Missing = false. */
+    incidentByHuman?: boolean;
     automaticRevert?: boolean;
   };
   requestedBy: {

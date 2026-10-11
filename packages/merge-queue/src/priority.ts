@@ -22,8 +22,13 @@ export function baseRank(e: Pick<QueueEntry, "priority" | "lane">): number {
   }
 }
 
-export function isExpress(e: Pick<QueueEntry, "priority">): boolean {
-  return e.priority === "revert" || e.priority === "incident";
+/**
+ * Express = may land while the queue is frozen: reverts, and incident fixes a human put in the
+ * incident class. An agent's incident class (even citing an approved Plan) only orders the entry:
+ * a freeze is a human decision and only a human (or a revert) gets through it.
+ */
+export function isExpress(e: Pick<QueueEntry, "priority" | "incidentByHuman">): boolean {
+  return e.priority === "revert" || (e.priority === "incident" && e.incidentByHuman === true);
 }
 
 export function effectiveRank(e: QueueEntry, now: number, cfg: QueueConfig): number {

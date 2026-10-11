@@ -183,6 +183,11 @@ export const QueueEntry = z.object({
   /** Arrival order (FIFO tiebreak). */
   seq: z.number().int().nonnegative(),
   priority: PriorityClass,
+  /**
+   * The incident class was set by a human. Only human-set incident fixes (and reverts) go through
+   * a freeze; an agent's incident class orders it, never lands it while frozen. Missing = false.
+   */
+  incidentByHuman: z.boolean().optional(),
   /** Current lane. Only ever rises (resolution, quarantine). */
   lane: Lane,
   /** Highest lane a valid approval covers. lane > approvedLane ⇒ held for approval. */

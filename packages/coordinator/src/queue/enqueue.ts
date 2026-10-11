@@ -89,6 +89,7 @@ export async function buildEnqueued(
       sessionId: null,
     },
     priority: priorityFor(change, intent),
+    incidentByHuman: intent?.options.incidentByHuman === true,
     lane,
     approvedLane,
     dependsOn,

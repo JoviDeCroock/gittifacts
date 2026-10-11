@@ -7,6 +7,7 @@
 
 import type { ResolverInput } from "@app/resolver";
 import { describe, expect, it } from "vitest";
+import { approvedPlan } from "../../src/fakes/index.js";
 import { push, reload, scenario } from "./helpers.js";
 import { attachAgentQueue, type QueueEnv, queueEnv } from "./queue-harness.js";
 
@@ -278,6 +279,69 @@ describe("merge queue Q1 (shell + core over fakes)", () => {
     const r = await waiting;
     expect(r.reason).toBe("merged");
     expect(r.status?.mergedSha).toBe(env.ports.git.head("app"));
+  });
+
+  it("a human freeze: an agent's incident class (citing an approved Plan) never lands through it; a human's does", async () => {
+    const env = await queueEnv();
+    const svc = env.queue();
+    const { QueueAgentApi } = await import("../../src/queue/agent-api.js");
+    const api = new QueueAgentApi(svc);
+    const planId = `plan-${env.repo.id}`;
+    await env.ports.store.insertPlan(approvedPlan(env.repo.id)); // approved by a human, any Plan
+    const agent = { principalId: "agent-c1", kind: "agent" as const, sessionId: "s1" };
+    const human = { principalId: "human-1", kind: "human" as const, sessionId: null };
+    const c1 = await env.change("c1", { "src/c1.ts": "c1\n" });
+    const c2 = await env.change("c2", { "src/c2.ts": "c2\n" });
+    // Before the freeze the agent may cite an approved Plan (it orders the entry, nothing more).
+    const early = await api.request({
+      changeId: "c1",
+      priority: "incident",
+      incidentPlanId: planId,
+      by: agent,
+    });
+    expect(early.ok).toBe(true);
+    const freeze = await api.setFrozen({
+      frozen: true,
+      signer: { principalId: "human-1", kind: "human", signature: "sig" },
+      reason: "release freeze",
+    });
+    expect(freeze).toMatchObject({ ok: true, frozen: true });
+    // While frozen an agent can't move anything to incident, Plan or not.
+    const during = await api.request({
+      changeId: "c2",
+      priority: "incident",
+      incidentPlanId: planId,
+      by: agent,
+    });
+    expect(during).toMatchObject({ ok: false, error: { code: "frozen" } });
+    await env.admit(c1);
+    await env.admit(c2);
+    const rounds = async (n: number) => {
+      for (let i = 0; i < n; i++) {
+        await env.settle();
+        await env.bindings.batchRuns.settle();
+        await svc.loop.settle();
+        env.ports.clock.advance(20_000);
+        await svc.alarm();
+      }
+    };
+    await rounds(30);
+    expect(svc.loop.state.entries.c1?.priority).toBe("incident");
+    expect(svc.loop.state.entries.c1?.state).not.toBe("merged");
+    expect(env.mainHistory).toHaveLength(1); // nothing got through the freeze
+    // A human moving it to incident is a human decision: it lands, c2 still waits.
+    const moved = await api.reprioritize({ changeId: "c1", priority: "incident", by: human });
+    expect(moved.ok).toBe(true);
+    await rounds(30);
+    expect(svc.loop.state.entries.c1?.state).toBe("merged");
+    expect(svc.loop.state.entries.c2?.state).not.toBe("merged");
+    await api.setFrozen({
+      frozen: false,
+      signer: { principalId: "human-1", kind: "human", signature: "sig" },
+      reason: "done",
+    });
+    await env.drive();
+    expect(svc.loop.state.entries.c2?.state).toBe("merged");
   });
 
   it("a resolution with new lines invalidates a Lane 1 approval: back to review, a human approves, it lands", async () => {

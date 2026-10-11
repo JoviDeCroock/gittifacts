@@ -41,6 +41,8 @@ export const EnqueuedEvent = z.object({
   authorId: z.string().min(1).max(64),
   enqueuedBy: EnqueuedBy,
   priority: PriorityClass.default("normal"),
+  /** A human set the incident class (agents' incident fixes never land through a freeze). */
+  incidentByHuman: z.boolean().default(false),
   /** Lane the classifier assigned on the Change's evidence. */
   lane: Lane,
   /** Highest lane covered by the approval the Change already has (defaults to `lane`). */

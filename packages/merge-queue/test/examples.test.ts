@@ -318,6 +318,47 @@ describe("freezes (§4.9)", () => {
       "human-1",
     );
   });
+
+  it("a human freeze holds an agent's incident fix (even one citing a Plan); a human's lands", () => {
+    const w = new World({ precompute: true });
+    w.send({ type: "Freeze", signer: human, reason: "release freeze" });
+    // Enqueued with an agent-set incident class, and moved to incident by an agent with a Plan.
+    w.enqueue({
+      id: "agentInc",
+      affected: affected({ files: ["a.ts"] }),
+      priority: "incident",
+      incidentByHuman: false,
+    });
+    w.enqueue({ id: "moved", affected: affected({ files: ["m.ts"] }) });
+    w.send({
+      type: "Reprioritized",
+      changeId: "moved",
+      priority: "incident",
+      by: { principalId: "agent-a", kind: "agent" },
+      incidentPlanId: "plan-any-approved",
+    });
+    w.enqueue({ id: "humanInc", affected: affected({ files: ["h.ts"] }), priority: "incident" });
+    for (let i = 0; i < 40 && w.outstanding > 0; i++) w.complete(0);
+    expect(w.violations).toEqual([]);
+    expect(w.merged).toEqual(["humanInc"]);
+    expect(w.state.entries.agentInc?.state).not.toBe("merged");
+    expect(w.state.entries.moved?.state).not.toBe("merged");
+    // A human moving it to incident lets it through.
+    w.send({
+      type: "Reprioritized",
+      changeId: "moved",
+      priority: "incident",
+      by: { principalId: "human-1", kind: "human" },
+      incidentPlanId: null,
+    });
+    for (let i = 0; i < 40 && w.outstanding > 0; i++) w.complete(0);
+    expect(w.merged).toContain("moved");
+    expect(w.merged).not.toContain("agentInc");
+    w.send({ type: "Thaw", signer: human, reason: "done" });
+    w.drain();
+    expect(w.merged).toContain("agentInc");
+    expect(w.violations).toEqual([]);
+  });
 });
 
 describe("the CAS guard asserts instead of trusting", () => {

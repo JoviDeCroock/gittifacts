@@ -270,6 +270,7 @@ class Machine {
       enqueuedBy: ev.enqueuedBy,
       seq,
       priority: ev.priority,
+      incidentByHuman: ev.priority === "incident" && ev.incidentByHuman,
       lane: ev.lane,
       approvedLane: approvedLane < ev.lane ? ev.lane : approvedLane,
       laneReasons: [],
@@ -369,6 +370,9 @@ class Machine {
     }
     const from = e.priority;
     e.priority = ev.priority;
+    // A human's incident flag sticks until the class changes; an agent re-asking doesn't drop it.
+    e.incidentByHuman =
+      ev.priority === "incident" && (human || (from === "incident" && e.incidentByHuman === true));
     this.audit("merge-queue.reprioritized", `change:${e.changeId}`, {
       from,
       to: ev.priority,
@@ -3176,7 +3180,7 @@ class Machine {
       }
       if (
         expressFirst &&
-        [...want].some((x) => !isExpress(this.entry(x) ?? { priority: "normal" }))
+        [...want].some((x) => !isExpress(this.entry(x) ?? { priority: "normal" as const }))
       )
         return "blocked";
       const holders = new Map<string, Batch>();

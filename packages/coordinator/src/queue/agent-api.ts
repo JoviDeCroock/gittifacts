@@ -117,6 +117,17 @@ export class QueueAgentApi {
         explanation: "Check the change id (get_change_status lists your changes' status).",
       });
     if (input.priority === "incident" && input.by.kind !== "human") {
+      // A freeze is a human decision: only a human (or a revert) gets work through it. The core
+      // never lets an agent-set incident class land while frozen; refuse up front so it's clear.
+      if (this.state.freeze.reasons.length > 0)
+        return refuse(
+          "frozen",
+          "the queue is frozen: an agent can't move a Change to the incident class while it is",
+          {
+            explanation:
+              "Only a human (or a revert) gets work through a freeze. Ask a maintainer to reprioritize this Change to incident, or wait for the thaw.",
+          },
+        );
       const plan = input.incidentPlanId ? await store.getPlan(input.incidentPlanId) : null;
       if (plan === null || plan.repoId !== change.repoId || plan.status !== "approved")
         return refuse(
@@ -131,7 +142,14 @@ export class QueueAgentApi {
     }
     const prior = this.intentOf(change.id);
     const opts = { ...(prior?.options ?? {}) };
-    if (input.priority !== undefined) opts.priority = input.priority;
+    if (input.priority !== undefined) {
+      opts.priority = input.priority;
+      // A human's incident flag sticks until the class changes; an agent re-asking doesn't drop it.
+      opts.incidentByHuman =
+        input.priority === "incident" &&
+        (input.by.kind === "human" ||
+          (prior?.options.priority === "incident" && prior.options.incidentByHuman === true));
+    }
     if (input.dependsOn !== undefined)
       opts.dependsOn = [...new Set(input.dependsOn)].filter((d) => d !== change.id);
     if (input.plangroup !== undefined) opts.plangroup = input.plangroup;
@@ -150,7 +168,13 @@ export class QueueAgentApi {
     this.svc.store.putIntent(change.id, intent);
     const e = this.state.entries[change.id];
     const active = e !== undefined && !TERMINAL_STATES.has(e.state) && e.headSha !== null;
-    if (active && input.priority !== undefined && input.priority !== e.priority) {
+    const humanIncident =
+      input.priority === "incident" && input.by.kind === "human" && e?.incidentByHuman !== true;
+    if (
+      active &&
+      input.priority !== undefined &&
+      (input.priority !== e.priority || humanIncident)
+    ) {
       this.svc.dispatchShellEvent({
         type: "Reprioritized",
         changeId: change.id,

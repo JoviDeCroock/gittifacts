@@ -4,7 +4,7 @@
  */
 import { conflicts } from "./conflict.js";
 import { flakeRate, predict } from "./predict.js";
-import { compareOrder, effectiveRank } from "./priority.js";
+import { compareOrder, effectiveRank, isExpress } from "./priority.js";
 import type {
   Batch,
   EjectReason,
@@ -103,9 +103,11 @@ export function entryStatus(s: QueueState, changeId: string, now: number): Entry
     const pos = chain.findIndex((x) => x.id === b.id);
     const ahead = chain.slice(0, Math.max(0, pos)).flatMap(entriesOf);
     let reason: string;
-    if (frozen && e.priority !== "revert" && e.priority !== "incident")
+    if (frozen && !isExpress(e))
       reason =
-        "queue is frozen: speculating, but only reverts and incident fixes land until it thaws";
+        e.priority === "incident"
+          ? "queue is frozen: an agent's incident class doesn't land through a freeze; ask a human to reprioritize it"
+          : "queue is frozen: speculating, but only reverts and human-flagged incident fixes land until it thaws";
     else if (b.state === "bisecting")
       reason = `batch ${b.id} failed; bisecting to find the culprit`;
     else if (b.state === "passed")
