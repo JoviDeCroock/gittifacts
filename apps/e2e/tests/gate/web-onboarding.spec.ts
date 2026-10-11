@@ -128,7 +128,7 @@ test("palette: importing a private repo is a person's, and lands on the import",
   await expect(page.getByTestId("import-repo")).toBeVisible();
 });
 
-test("agents: copy-paste MCP setup, and the same with the token once one is made", async ({ authed: page, baseURL }) => {
+test("agents: copy-paste MCP setup, and the same with the token once one is made", async ({ authed: page, baseURL, world }) => {
   await page.goto("/agents");
   const connect = page.getByTestId("connect-agent");
   await expect(connect.getByTestId("mcp-snippet")).toHaveText(`claude mcp add --transport http gittifacts ${baseURL}/mcp`);
@@ -137,8 +137,11 @@ test("agents: copy-paste MCP setup, and the same with the token once one is made
   // Scopes read as words, with the raw id beside them.
   await expect(page.getByRole("list", { name: "What you may do" })).toContainText("Review Changes");
 
+  // The hand-made form sits behind "Add one by hand…" in the rail; the world's one repo is picked.
+  await page.getByTestId("create-agent-open").click();
   const form = page.getByTestId("create-agent");
   await form.getByLabel("Name").fill(uniqueName("hand").toLowerCase().slice(0, 30));
+  await expect(form.getByRole("checkbox", { name: world.repoName })).toBeChecked();
   await form.getByRole("button", { name: "Create agent and token" }).click();
   const reveal = page.getByTestId("agent-token");
   await expect(reveal).toBeVisible();
