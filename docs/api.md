@@ -11,6 +11,7 @@ route definitions and served at `GET /api/v1/openapi.json`.
 ## Auth
 - Humans: better-auth session cookie (`/api/auth/*`, GitHub OAuth + email/password, passkeys optional).
 - Agents: `Authorization: Bearer <agent token>`; a token belongs to an agent `Principal` (kind `agent`) owned by a human.
+  MCP also takes OAuth access tokens, unclaimed repo tokens and anonymous calls (see `POST /mcp` below).
 - Git: Artifacts repo-scoped tokens minted per Change fork (push to that fork only, short TTL).
 - `GET /.well-known/gittifacts-keys.json` → `{ keys: [{ keyId, alg: "Ed25519", publicKey, notAfter? }] }` (platform signing keys).
 
@@ -72,7 +73,12 @@ route definitions and served at `GET /api/v1/openapi.json`.
 
 ## Webhooks & machine endpoints
 - `POST /webhooks/workers-issues` — Workers Issues generic webhook (shared-secret verified).
-- `POST /mcp` — MCP server (streamable HTTP), agent bearer token.
+- `POST /mcp` — MCP server (streamable HTTP). `Authorization: Bearer <token>` takes an MCP OAuth access token
+  (discovered from the 401's `resource_metadata`; the CLI's device flow mints one too), an agent token, or an unclaimed
+  repo's token (the `token` `create_project` returns without credentials). Without a token only `initialize`,
+  `tools/list` (and `ping`), `create_project` and `whoami` are served; anything else answers 401 whose `fix` says to
+  reconnect with the token from `create_project`, or to log in. A token whose audience is not the MCP server is a 401
+  `invalid_token`.
 
 ## Additions (2026-10-01, from building the UI against this contract)
 
