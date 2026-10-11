@@ -4,9 +4,10 @@
  * target. Reads `GET /internal/ttfg` (human, repo:admin): Analytics Engine when the platform has
  * an API token for it, D1 otherwise.
  *
- * Form: a KPI row (median, share within target, volume), one horizontal bar per template (median,
- * with the p90 as a tick and the target as a rule), and the recent projects as a table, which is
- * also the chart's accessible table view. Bars are data ink (neutral): colour is reserved for
+ * Form: a row of measured figures on hairlines (median, share within target, volume), one
+ * horizontal bar per template (median, with the p90 as a tick and the target as a rule), and the
+ * recent projects as a table (a definition list per repo on phones), which is also the chart's
+ * accessible table view. Bars are data ink (neutral): colour is reserved for
  * state, which is always spelled out ("Over target", "CI failed").
  */
 import { useSignal } from "@preact/signals";
@@ -77,7 +78,8 @@ function ticks(maxMs: number): number[] {
   return out;
 }
 
-function StatTile({
+/** A measured figure: the number above a hairline, what it measures below (no card). */
+function Figure({
   label,
   value,
   children,
@@ -87,9 +89,9 @@ function StatTile({
   children?: ComponentChildren;
 }) {
   return (
-    <div class="ttfg-tile">
-      <p class="ttfg-tile__label">{label}</p>
-      <p class="ttfg-tile__value">{value}</p>
+    <div class="ttfg-fig">
+      <p class="ttfg-fig__value tnum">{value}</p>
+      <p class="ttfg-fig__label">{label}</p>
       {children}
     </div>
   );
@@ -139,7 +141,12 @@ function TemplateBars({ report }: { report: TtfgReport }) {
               {r.p90Ms !== null ? (
                 <span class="ttfg-bars__p90" style={{ insetInlineStart: x(r.p90Ms) }} />
               ) : null}
-              <span class="ttfg-bars__value tnum">{seconds(r.p50Ms)}</span>
+              <span class="ttfg-bars__value tnum">
+                {seconds(r.p50Ms)}
+                {r.p90Ms !== null ? (
+                  <span class="ttfg-bars__value-p90"> · p90 {seconds(r.p90Ms)}</span>
+                ) : null}
+              </span>
               <span class="ttfg-bars__tip" role="tooltip">
                 <b class="tnum">{seconds(r.p50Ms)}</b> median ·{" "}
                 <span class="tnum">{seconds(r.p90Ms)}</span> p90
@@ -199,20 +206,33 @@ function RecentTable({ rows, targetMs }: { rows: TtfgProject[]; targetMs: number
             const slowest = Math.max(p.msToGreen ?? 0, p.msToPreview ?? 0);
             return (
               <tr key={p.projectId}>
-                <td>
+                <td data-label="Repo">
                   <a href={`/repos/${p.projectId}`}>{p.projectId}</a>
                 </td>
-                <td>{p.template ?? "empty"}</td>
-                <td>
-                  <StatusChip meta={meta} />
-                  {p.outcome === "green" && slowest > targetMs ? (
-                    <span class="tone tone--danger ttfg-table__over">over {seconds(targetMs)}</span>
-                  ) : null}
+                <td data-label="Template">{p.template ?? "empty"}</td>
+                <td data-label="Outcome">
+                  <span>
+                    <StatusChip meta={meta} />
+                    {p.outcome === "green" && slowest > targetMs ? (
+                      <span class="tone tone--danger ttfg-table__over">
+                        <span aria-hidden="true"> · </span>
+                        <span class="sr-only">, </span>over {seconds(targetMs)}
+                      </span>
+                    ) : null}
+                  </span>
                 </td>
-                <td class="num tnum">{seconds(p.msToRespond)}</td>
-                <td class="num tnum">{seconds(p.msToGreen)}</td>
-                <td class="num tnum">{seconds(p.msToPreview)}</td>
-                <td class="tnum">{formatDateTime(p.createdAt)}</td>
+                <td data-label="Responded" class="num tnum">
+                  {seconds(p.msToRespond)}
+                </td>
+                <td data-label="CI green" class="num tnum">
+                  {seconds(p.msToGreen)}
+                </td>
+                <td data-label="Preview" class="num tnum">
+                  {seconds(p.msToPreview)}
+                </td>
+                <td data-label="Created" class="tnum">
+                  {formatDateTime(p.createdAt)}
+                </td>
               </tr>
             );
           })}
@@ -330,30 +350,32 @@ function Report({ report }: { report: TtfgReport }) {
   const share = o.green === 0 ? 0 : o.withinTarget / o.green;
   return (
     <div class="stack">
-      <section class="ttfg-kpis" aria-label="Summary">
-        <StatTile label="Median time to first green" value={seconds(o.p50Ms)}>
-          <p class="ttfg-tile__sub tnum">p90 {seconds(o.p90Ms)}</p>
-        </StatTile>
-        <StatTile
+      <section class="ttfg-figs" aria-label="Summary">
+        <Figure label="Median time to first green" value={seconds(o.p50Ms)}>
+          <p class="ttfg-fig__sub tnum">p90 {seconds(o.p90Ms)}</p>
+        </Figure>
+        <Figure
           label={`Within ${seconds(report.targetMs)}`}
           value={percent(o.withinTarget, o.green)}
         >
+          {/* Ink, not ochre: ochre means Lane 1. Below target is said in words. */}
           <Meter
             value={share}
             threshold={0.9}
             thresholdLabel="90%"
-            tone={o.green === 0 ? "neutral" : share >= 0.9 ? "ok" : "warn"}
+            tone="neutral"
             label={`${o.withinTarget} of ${o.green} green repos within the target`}
           />
-          <p class="ttfg-tile__sub tnum">
+          <p class="ttfg-fig__sub tnum">
             {o.withinTarget} of {o.green} green repos
+            {o.green > 0 && share < 0.9 ? " · below the 90% target" : ""}
           </p>
-        </StatTile>
-        <StatTile label="Repos created" value={String(o.projects)}>
-          <p class="ttfg-tile__sub tnum">
+        </Figure>
+        <Figure label="Repos created" value={String(o.projects)}>
+          <p class="ttfg-fig__sub tnum">
             {o.finished} finished · {o.green} green
           </p>
-        </StatTile>
+        </Figure>
       </section>
 
       <section class="section">

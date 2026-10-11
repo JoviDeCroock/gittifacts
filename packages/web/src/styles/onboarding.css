@@ -12,40 +12,58 @@
   margin-block-end: var(--s-5);
 }
 
-/* ---------------------------------------------------------------- KPI row */
-.ttfg-kpis {
+/* ---------------------------------------------------------------- measured figures */
+/* The landing's figure style, not dashboard cards: a tabular number above a hairline, the label
+   below; figures sit side by side between hairlines from 640px. */
+.ttfg-figs {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-4);
+  border-block: 1px solid var(--rule);
 }
-@media (min-width: 640px) {
-  .ttfg-kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-.ttfg-tile {
+.ttfg-fig {
   display: grid;
   gap: var(--s-2);
   align-content: start;
-  padding: var(--s-4);
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-panel);
+  padding-block: var(--s-4);
 }
-.ttfg-tile__label {
+.ttfg-fig + .ttfg-fig {
+  border-block-start: 1px solid var(--rule);
+}
+@media (min-width: 640px) {
+  .ttfg-figs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .ttfg-fig {
+    padding-inline: var(--s-5);
+  }
+  .ttfg-fig:first-child {
+    padding-inline-start: 0;
+  }
+  .ttfg-fig + .ttfg-fig {
+    border-block-start: 0;
+    border-inline-start: 1px solid var(--rule);
+  }
+}
+.ttfg-fig__value {
+  padding-block-end: var(--s-2);
+  border-block-end: 1px solid var(--rule);
+  font-size: var(--text-heading);
+  font-weight: var(--weight-bold);
+  line-height: 1.15;
+  color: var(--text);
+}
+.ttfg-fig__label {
   font-size: var(--text-small);
   font-weight: var(--weight-medium);
   color: var(--text-2);
 }
-.ttfg-tile__value {
-  font-size: var(--text-display);
-  font-weight: var(--weight-bold);
-  line-height: 1.1;
-  color: var(--text);
-}
-.ttfg-tile__sub {
+.ttfg-fig__sub {
   font-size: var(--text-meta);
   color: var(--text-3);
+}
+/* Clear the meter's threshold label. */
+.ttfg-fig .meter + .ttfg-fig__sub {
+  margin-block-start: var(--s-3);
 }
 
 /* ---------------------------------------------------------------- bars by template */
@@ -84,7 +102,7 @@
 .ttfg-bars__track {
   position: relative;
   block-size: 24px;
-  /* room on the right for the value label */
+  /* room on the right for the value label (the median; "46 s · p90 71 s" from 640px) */
   margin-inline-end: 3.5rem;
 }
 .ttfg-bars__bar {
@@ -132,6 +150,19 @@
   font-weight: var(--weight-medium);
   color: var(--text);
   white-space: nowrap;
+}
+.ttfg-bars__value-p90 {
+  display: none;
+  font-weight: var(--weight-regular);
+  color: var(--text-3);
+}
+@media (min-width: 640px) {
+  .ttfg-bars__track {
+    margin-inline-end: 8rem;
+  }
+  .ttfg-bars__value-p90 {
+    display: inline;
+  }
 }
 .ttfg-bars__tip {
   position: absolute;
@@ -204,7 +235,6 @@
 
 /* ---------------------------------------------------------------- recent projects */
 .ttfg-table-wrap {
-  overflow-x: auto;
   border-block-start: 1px solid var(--rule);
 }
 .ttfg-table {
@@ -230,12 +260,48 @@
   text-align: end;
 }
 .ttfg-table__over {
-  margin-inline-start: var(--s-2);
+  margin-inline-start: var(--s-1);
   font-size: var(--text-meta);
 }
 
 @media (min-width: 640px) {
   .ttfg-bars__row {
     grid-template-columns: minmax(5.5rem, 11rem) minmax(0, 1fr);
+  }
+}
+
+/* Phones: nothing scrolls sideways; each repo is a definition list (label, then value). */
+@media (max-width: 639.98px) {
+  .ttfg-table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .ttfg-table,
+  .ttfg-table tbody,
+  .ttfg-table tr,
+  .ttfg-table td {
+    display: block;
+  }
+  .ttfg-table tr {
+    padding-block: var(--s-3);
+    border-block-end: 1px solid var(--rule);
+  }
+  .ttfg-table td {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr);
+    gap: var(--s-3);
+    padding: 2px 0;
+    border: 0;
+    white-space: normal;
+  }
+  .ttfg-table td::before {
+    content: attr(data-label);
+    color: var(--text-3);
+  }
+  .ttfg-table .num {
+    text-align: start;
   }
 }
