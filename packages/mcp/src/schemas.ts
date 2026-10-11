@@ -881,8 +881,6 @@ export const ChangeStatusOutput = {
     "classification",
     "previewUrl",
     "overlaps",
-    "laneSummary",
-    "pushIssues",
     "nextSteps",
   ],
 } as const;
@@ -1069,5 +1067,5 @@ export const WaitForChangeOutput = {
     },
     nextSteps: NextSteps,
   },
-  required: ["reached", "reason", "change", "url", "laneSummary", "pushIssues", "nextSteps"],
+  required: ["reached", "reason", "change", "url", "nextSteps"],
 } as const;

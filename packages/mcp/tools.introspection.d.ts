@@ -2226,8 +2226,6 @@ export type introspection = {
           "classification",
           "previewUrl",
           "overlaps",
-          "laneSummary",
-          "pushIssues",
           "nextSteps"
         ]
       },
@@ -7165,8 +7163,6 @@ export type introspection = {
           "reason",
           "change",
           "url",
-          "laneSummary",
-          "pushIssues",
           "nextSteps"
         ]
       },

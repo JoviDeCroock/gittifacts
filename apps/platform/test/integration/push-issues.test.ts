@@ -93,7 +93,7 @@ describe("ignored pushes (workerd, real PushRouter + ChangeCoordinator)", () => 
       await routePush(fork, "refs/heads/main", baseSha, baseSha, 3);
       const s2 = await mcp.tools.get_change_status({ changeId: change.id });
       if (s2.isError) throw new Error(JSON.stringify(s2.content));
-      expect(s2.structuredContent.pushIssues.map((i) => i.kind)).toEqual([
+      expect(s2.structuredContent.pushIssues?.map((i) => i.kind)).toEqual([
         "wrong-ref",
         "tag",
         "no-new-commits",
