@@ -305,13 +305,19 @@ test("bands mean lane, verdict or state: an active agent and a rollout in flight
   expect(await bands(state.locator(".icon").first()), "the rollout state's icon").toEqual([]);
 });
 
-test("quiet text keeps 4.5:1: a repo's zero lane counts, light and dark", async ({ authed: page, world }) => {
+test("quiet text keeps 4.5:1: a repo's zero lane counts, light and dark", async ({ authed: page, world }, testInfo) => {
   await page.addInitScript(installProbes);
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     await page.goto("/dashboard");
     await expect(page.getByRole("main").getByRole("link", { name: new RegExp(world.repoName) }).first()).toBeVisible();
     const zeros = page.locator(".lane-count.is-zero b");
+    await expect(zeros.first()).toBeAttached();
+    if (testInfo.project.name === "phone") {
+      // Phones show lane counts only where something is open (repos.css, two-line repo rows).
+      await expect(zeros.filter({ visible: true })).toHaveCount(0);
+      continue;
+    }
     await expect(zeros.first()).toBeVisible();
     const ratios = await zeros.evaluateAll((els) => els.map((e) => (window as unknown as Probed).__a11y.contrast(e)));
     for (const r of ratios) expect(r, `${colorScheme}: a zero count's contrast`).toBeGreaterThanOrEqual(4.5);
