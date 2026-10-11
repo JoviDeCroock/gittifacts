@@ -239,13 +239,22 @@
 }
 
 /* ---------------------------------------------------------------- the one authored moment */
+/* It plays where it is seen: client.ts arms the tag, then sets data-marks when the tag comes into
+   view and data-play once the torn strip is in view (after the marks have settled). Without
+   script, or under reduced motion, nothing is armed and the tag shows settled: strip torn. */
 @media (prefers-reduced-motion: no-preference) {
-  .case__mark {
+  .case[data-armed]:not([data-marks]) .case__mark {
+    opacity: 0;
+  }
+  .case[data-armed]:not([data-play]) .case__strip--2 {
+    transform: none;
+  }
+  .case[data-marks] .case__mark {
     animation: case-mark var(--dur-case-mark) var(--ease-out) backwards;
     animation-delay: calc(260ms + var(--i, 0) * 90ms);
   }
-  .case__strip--2 {
-    animation: case-tear var(--dur-case-tear) var(--ease-expo) 1050ms backwards;
+  .case[data-play] .case__strip--2 {
+    animation: case-tear var(--dur-case-tear) var(--ease-expo) 200ms backwards;
   }
 }
 @keyframes case-mark {

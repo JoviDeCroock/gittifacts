@@ -1,5 +1,6 @@
 /**
- * The landing page's only script: copy buttons, the theme switch (same storage key as the app),
+ * The landing page's only script: copy buttons, the torn strip's timing (it plays in view), the
+ * theme switch (same storage key as the app),
  * the start URL on hosts the Worker did not rewrite (local preview), and the nav's "Sign in" /
  * "Open dashboard" link and the "Create an account" / "Open dashboard" CTAs (one session check). The page works without it.
  */
@@ -169,7 +170,46 @@ async function wireSession(): Promise<void> {
   }
 }
 
+/**
+ * The torn strip is the landing's one focal moment, so it plays when it can be seen: the marks
+ * settle when the tag comes into view, the strip tears once it is in view and the marks are done.
+ * On load it would play below the fold on phones (and mostly on desktop). Reduced motion: never
+ * armed, the tag stays settled.
+ */
+function wireCase(): void {
+  const tag = document.querySelector<HTMLElement>(".case");
+  const strip = tag?.querySelector<HTMLElement>(".case__strip--2");
+  if (!tag || !strip || typeof IntersectionObserver === "undefined") return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  tag.dataset.armed = "";
+  let marksAt: number | null = null;
+  const marks = new IntersectionObserver(
+    ([entry]) => {
+      if (!entry?.isIntersecting) return;
+      marks.disconnect();
+      marksAt = performance.now();
+      tag.dataset.marks = "";
+    },
+    { threshold: 0.2 },
+  );
+  const tear = new IntersectionObserver(
+    ([entry]) => {
+      if (!entry?.isIntersecting) return;
+      tear.disconnect();
+      // The marks settle first (about 1.1 s); the tear waits for them.
+      const wait = Math.max(0, (marksAt ?? performance.now()) + 1050 - performance.now());
+      window.setTimeout(() => {
+        tag.dataset.play = "";
+      }, wait);
+    },
+    { threshold: 0.75 },
+  );
+  marks.observe(tag.querySelector(".case__tag") ?? tag);
+  tear.observe(strip);
+}
+
 fixOrigin();
+wireCase();
 wireCopy();
 wireTheme();
 wireMenu();

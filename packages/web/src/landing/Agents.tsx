@@ -63,15 +63,16 @@ export function Agents() {
             Give your agent one URL.
           </h2>
           <p class="l-lede">
-            From <code>/start</code> it finds the MCP server, the CLI and the git remote, then ships
-            its first change without a person in the loop.
+            From <code>/start</code> it finds the MCP server, the CLI and the git remote, then opens
+            its first change and gets it green with a live preview. A person claims the repo and
+            approves what ships.
           </p>
           <CopyLine id="agent-url-2" originPath="/start" label="Copy the start URL" />
         </div>
         <FirstGreen />
         <div class="agents__calls">
           <h3>
-            Three calls to ship something
+            Three calls to a green first change
             <CopyButton target="ship-calls" label="Copy the three calls" />
           </h3>
           <ol id="ship-calls">
