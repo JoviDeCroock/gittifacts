@@ -24,10 +24,17 @@ const GROUPS: readonly {
   },
   {
     file: "reference/http-repos.md",
-    title: "HTTP API: projects, repos and plans",
-    nav: "HTTP: repos and plans",
-    tags: ["projects", "repos", "members", "plans", "claims"],
-    blurb: "create_project, repos, Lane 0, deploy targets, members, plans and claims",
+    title: "HTTP API: projects, repos and members",
+    nav: "HTTP: repos and members",
+    tags: ["projects", "repos", "members"],
+    blurb: "create_project, repos, Lane 0, deploy targets, import grants, members and invites",
+  },
+  {
+    file: "reference/http-plans.md",
+    title: "HTTP API: plans and claims",
+    nav: "HTTP: plans and claims",
+    tags: ["plans", "claims"],
+    blurb: "plans (draft, approve, reject, withdraw, attempts and the pick) and claiming an unclaimed project",
   },
   {
     file: "reference/http-changes.md",

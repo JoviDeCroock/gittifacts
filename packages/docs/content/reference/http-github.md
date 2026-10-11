@@ -2,7 +2,7 @@
 title: "HTTP API: GitHub mode"
 nav: "HTTP: GitHub"
 description: "HTTP endpoints for the GitHub App overview, install verification and the GitHub webhook receiver."
-order: 36
+order: 37
 audience: both
 generated: true
 ---

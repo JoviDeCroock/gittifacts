@@ -2,7 +2,7 @@
 title: "HTTP API: merge queue"
 nav: "HTTP: merge queue"
 description: "HTTP endpoints for enqueue, status, wait, dequeue, reprioritize, the queue overview, events, freeze and thaw."
-order: 34
+order: 35
 audience: both
 generated: true
 ---

@@ -54,8 +54,8 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `GET` | [`/api/v1/changes/{changeId}/rollout`](/docs/reference/http-changes) | Rollout state and the change's audit timeline |
 | `POST` | [`/api/v1/changes/{changeId}/token`](/docs/reference/http-changes) | Fresh short-lived push token for the change's fork (author only) |
 | `GET` | [`/api/v1/changes/{changeId}/tour`](/docs/reference/http-changes) | The reviewer agent's walkthrough (tour) for the current head |
-| `GET` | [`/api/v1/claims/{token}`](/docs/reference/http-repos) | An unclaimed project behind a claim link: name, creator, expiry, what claiming does |
-| `POST` | [`/api/v1/claims/{token}`](/docs/reference/http-repos) | Claim an unclaimed project (signed-in human + Turnstile); single-use, idempotent |
+| `GET` | [`/api/v1/claims/{token}`](/docs/reference/http-plans) | An unclaimed project behind a claim link: name, creator, expiry, what claiming does |
+| `POST` | [`/api/v1/claims/{token}`](/docs/reference/http-plans) | Claim an unclaimed project (signed-in human + Turnstile); single-use, idempotent |
 | `GET` | [`/api/v1/deployments/{deploymentId}`](/docs/reference/http-integrations) | A deployment with its status history |
 | `POST` | [`/api/v1/deployments/{deploymentId}/statuses`](/docs/reference/http-integrations) | Integrations: report a deployment's state (queued, in_progress, success, failure, error) with its URL and log |
 | `GET` | [`/api/v1/github`](/docs/reference/http-github) | GitHub mode: our GitHub App (or which config is missing) and the installations you linked |
@@ -92,13 +92,13 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `GET` | [`/api/v1/oauth/requests/{id}`](/docs/reference/http-identity) | What an OAuth client asks for, in plain terms (consent screen) |
 | `POST` | [`/api/v1/oauth/requests/{id}/approve`](/docs/reference/http-identity) | Approve an OAuth client: scopes, repos and session length; returns where to send the browser |
 | `POST` | [`/api/v1/oauth/requests/{id}/deny`](/docs/reference/http-identity) | Deny an OAuth client; returns where to send the browser |
-| `POST` | [`/api/v1/plans`](/docs/reference/http-repos) | Draft a plan (intent, acceptance criteria, scope) |
-| `GET` | [`/api/v1/plans/{planId}`](/docs/reference/http-repos) | A plan and the changes that implement it |
-| `POST` | [`/api/v1/plans/{planId}/approve`](/docs/reference/http-repos) | Approve a draft plan (human, plan:approve, not the author); signs the approval |
-| `GET` | [`/api/v1/plans/{planId}/attempts`](/docs/reference/http-repos) | Every change attempting this plan, ranked by evidence and lane, with the recommended one |
-| `POST` | [`/api/v1/plans/{planId}/attempts/{changeId}/pick`](/docs/reference/http-repos) | Pick one attempt (human, change:review, not its author): approves it, closes the others |
-| `POST` | [`/api/v1/plans/{planId}/reject`](/docs/reference/http-repos) | Reject a draft plan (human maintainer or owner; the author may withdraw) |
-| `POST` | [`/api/v1/plans/{planId}/withdraw`](/docs/reference/http-repos) | Withdraw a draft plan you drafted (its author only, agents included) |
+| `POST` | [`/api/v1/plans`](/docs/reference/http-plans) | Draft a plan (intent, acceptance criteria, scope) |
+| `GET` | [`/api/v1/plans/{planId}`](/docs/reference/http-plans) | A plan and the changes that implement it |
+| `POST` | [`/api/v1/plans/{planId}/approve`](/docs/reference/http-plans) | Approve a draft plan (human, plan:approve, not the author); signs the approval |
+| `GET` | [`/api/v1/plans/{planId}/attempts`](/docs/reference/http-plans) | Every change attempting this plan, ranked by evidence and lane, with the recommended one |
+| `POST` | [`/api/v1/plans/{planId}/attempts/{changeId}/pick`](/docs/reference/http-plans) | Pick one attempt (human, change:review, not its author): approves it, closes the others |
+| `POST` | [`/api/v1/plans/{planId}/reject`](/docs/reference/http-plans) | Reject a draft plan (human maintainer or owner; the author may withdraw) |
+| `POST` | [`/api/v1/plans/{planId}/withdraw`](/docs/reference/http-plans) | Withdraw a draft plan you drafted (its author only, agents included) |
 | `GET` | [`/api/v1/principals`](/docs/reference/http-identity) | The caller and the agents it owns |
 | `POST` | [`/api/v1/principals/agents`](/docs/reference/http-identity) | Register an agent principal owned by the caller; returns its bearer token once |
 | `GET` | [`/api/v1/principals/{id}`](/docs/reference/http-identity) | A principal by id (agents include their owner's name) |
@@ -119,7 +119,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `GET` | [`/api/v1/repos/{repoId}/members`](/docs/reference/http-repos) | A repo's members and their roles (anyone who can read the repo) |
 | `POST` | [`/api/v1/repos/{repoId}/members`](/docs/reference/http-repos) | Add a member by e-mail or principal id, or change a member's role (human owner) |
 | `DELETE` | [`/api/v1/repos/{repoId}/members/{principalId}`](/docs/reference/http-repos) | Remove a member (human owner), or leave the repo (your own principal id) |
-| `GET` | [`/api/v1/repos/{repoId}/plans`](/docs/reference/http-repos) | Plans of a repo, newest first |
+| `GET` | [`/api/v1/repos/{repoId}/plans`](/docs/reference/http-plans) | Plans of a repo, newest first |
 | `GET` | [`/api/v1/repos/{repoId}/platform-config`](/docs/reference/http-repos) | The repo's latest .platform proposal (null when none was made) |
 | `POST` | [`/api/v1/repos/{repoId}/platform-config`](/docs/reference/http-repos) | Propose .platform/ci.ts, .platform/policy.ts and AGENTS.md from import detection |
 | `GET` | [`/api/v1/repos/{repoId}/queue`](/docs/reference/http-merge-queue) | The merge queue: tracks, batches, landing, freeze state, entries with reasons and ETAs |

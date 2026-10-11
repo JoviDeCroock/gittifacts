@@ -40,4 +40,4 @@ create_plan({ repoId: "3fk2q8wz7m1x0c5v9nbd", title: "Add /time", intent: "Clien
 
 Expected: `{ "plan": { "id": "4p8n2b7dq0x6w3k9m1zs", "status": "draft", … }, "nextSteps": [ … ] }`. Then ask a human to approve it; you can't.
 
-Reference: [`create_plan`](/docs/reference/mcp-changes#create_plan), [HTTP plans API](/docs/reference/http-repos#plans).
+Reference: [`create_plan`](/docs/reference/mcp-changes#create_plan), [HTTP plans API](/docs/reference/http-plans#plans).
