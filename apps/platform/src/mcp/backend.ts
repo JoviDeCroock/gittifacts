@@ -256,6 +256,7 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
       return {
         previewUrl: await previewUrlOf(svc, d.change),
         overlaps: await overlapsOf(svc, caller, changeId),
+        supersededBy: await supersededBy(svc, d.change).catch(() => null),
         reviews: r.reviews.map((x) => reviewData(x, r.principals)),
         change: d.change,
         runs: d.runs,

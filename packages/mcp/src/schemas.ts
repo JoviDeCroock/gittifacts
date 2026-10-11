@@ -741,6 +741,11 @@ export const ChangeStatusOutput = {
         "The live preview of the current head once it answers (null before that, or when the repo has no preview).",
     },
     overlaps: Overlaps,
+    supersededBy: {
+      type: ["string", "null"],
+      description:
+        "Several agents attempted this change's plan and a person picked this other change, which closed this one (null: not superseded).",
+    },
     nextSteps: NextSteps,
   },
   required: [

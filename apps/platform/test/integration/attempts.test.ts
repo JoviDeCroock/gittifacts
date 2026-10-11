@@ -274,6 +274,14 @@ describe("attempts at one plan (workerd: real DOs + Workflows)", () => {
           `compare_attempts({ planId: "${plan.id}" })`,
         );
       }
+      // get_change_status says the same, so an agent that wasn't waiting learns it too.
+      const status = await drift.mcp.tools.get_change_status({ changeId: idOf("drift") });
+      if (status.isError) throw new Error(JSON.stringify(status.content));
+      expect(status.structuredContent).toMatchObject({
+        supersededBy: idOf("minimal"),
+        change: { status: "abandoned" },
+      });
+      expect(status.structuredContent.nextSteps[0]?.title).toContain("picked another attempt");
       // A second pick of another attempt is refused.
       const again = await call(
         app,

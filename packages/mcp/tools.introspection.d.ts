@@ -1954,6 +1954,13 @@ export type introspection = {
               }
             ]
           },
+          "supersededBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Several agents attempted this change's plan and a person picked this other change, which closed this one (null: not superseded)."
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",

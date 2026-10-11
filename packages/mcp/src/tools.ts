@@ -234,6 +234,17 @@ function changesRequestedSteps(c: Change, reviews: readonly ReviewBrief[]): Next
   ];
 }
 
+/** A person picked another attempt at the same plan, which closed this change. */
+function supersededSteps(c: Change, by: string | null): NextStep[] {
+  return [
+    {
+      title: `A person picked another attempt at this plan${by === null ? "" : ` (${by})`}; this change was closed`,
+      why: "Nothing more to do here. Compare the attempts to see why.",
+      ...(c.planId === null ? {} : { call: `compare_attempts({ planId: "${c.planId}" })` }),
+    },
+  ];
+}
+
 /** The platform-authored bootstrap Change of a project (first CI + preview; @app/coordinator ids). */
 export function isBootstrap(c: Pick<Change, "id" | "authorId">): boolean {
   return c.id.startsWith("bs-") && c.authorId === "system";
@@ -678,7 +689,11 @@ export function buildTools(backend: McpBackend) {
             : null,
           previewUrl: s.previewUrl ?? null,
           overlaps: s.overlaps,
-          nextSteps: changeNextSteps(s.change, s.runs, s.reviews),
+          supersededBy: s.supersededBy ?? null,
+          nextSteps:
+            s.supersededBy != null
+              ? supersededSteps(s.change, s.supersededBy)
+              : changeNextSteps(s.change, s.runs, s.reviews),
         };
       },
     },
@@ -914,17 +929,7 @@ export function buildTools(backend: McpBackend) {
           ...(by !== null ? { supersededBy: by } : {}),
           change: changeBrief(r.change),
           nextSteps:
-            r.reason === "superseded"
-              ? [
-                  {
-                    title: `A person picked another attempt at this plan${by === null ? "" : ` (${by})`}; this change was closed`,
-                    why: "Nothing more to do here. Compare the attempts to see why.",
-                    ...(r.change.planId === null
-                      ? {}
-                      : { call: `compare_attempts({ planId: "${r.change.planId}" })` }),
-                  },
-                ]
-              : changeNextSteps(r.change),
+            r.reason === "superseded" ? supersededSteps(r.change, by) : changeNextSteps(r.change),
         };
       },
     },

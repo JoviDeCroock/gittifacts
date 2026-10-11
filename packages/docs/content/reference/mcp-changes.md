@@ -178,7 +178,7 @@ A change's status, lane (and why), pipeline runs for each head, the human review
 get_change_status({})
 ```
 
-**Returns:** `change` (object), `url` (string), `reviews` (object[]), `runs` (object[]), `classification` (null | object), `previewUrl` (string | null), `overlaps` (null | object), `nextSteps` (object[]).
+**Returns:** `change` (object), `url` (string), `reviews` (object[]), `runs` (object[]), `classification` (null | object), `previewUrl` (string | null), `overlaps` (null | object), `supersededBy` (string | null), `nextSteps` (object[]).
 
 ## `get_evidence`
 

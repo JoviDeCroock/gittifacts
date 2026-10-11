@@ -213,6 +213,8 @@ export interface McpBackend
     reviews: ChangeReviewData[];
     /** Open Changes on the same plan or paths; null when the check could not run. */
     overlaps: OverlapReport | null;
+    /** Closed because a person picked this attempt at the same plan instead; absent = not. */
+    supersededBy?: string | null;
   }>;
   getEvidence(
     caller: McpCaller,
