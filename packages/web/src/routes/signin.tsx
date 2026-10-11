@@ -1,11 +1,20 @@
+/**
+ * /signin (and `?mode=signup`): email and password, in the product's own frame. When `next` is a
+ * claim link, a consent request, a CLI login or an install, the heading says what you're signing
+ * in to do. Agents get their own way in under the form: the /start URL, as on the landing.
+ */
 import { useSignal } from "@preact/signals";
-import { useEffect } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
+import { useLocation } from "preact-iso";
+import { api } from "../api/client.js";
 import { isMockMode } from "../api/mode.js";
 import { GITHUB_SURFACES } from "@app/domain/surfaces";
+import { CopyLine } from "../components/CopyLine.js";
 import { GitHubMark, Icon } from "../components/Icon.js";
 import { BrandMark } from "../components/Shell.js";
 import { TriageChart } from "../components/TriageChart.js";
-import { Button } from "../components/ui.js";
+import { Button, LaneTag } from "../components/ui.js";
+import { signinCopy, signinPurpose } from "../lib/signin-context.js";
 import { session, signInWithEmail, signInWithGitHub, signUpWithEmail } from "../state/session.js";
 import "../styles/signin.css";
 
@@ -15,20 +24,68 @@ const SAMPLE = [
   { code: "coverage.changed-lines", lane: 0 as const, message: "92% of changed lines covered." },
 ];
 
+type Field = "name" | "email" | "password";
+type Mode = "signin" | "signup";
+
+/** Checks that need no round-trip; the server still has the last word. */
+function localProblems(mode: Mode, name: string, email: string, password: string) {
+  const out: Partial<Record<Field, string>> = {};
+  if (mode === "signup" && name.trim() === "") out.name = "Enter your name.";
+  if (email.trim() === "") out.email = "Enter your email address.";
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) out.email = "Enter an email address like maya@acme.dev.";
+  if (password === "") out.password = "Enter your password.";
+  else if (mode === "signup" && password.length < 8) out.password = "Use at least 8 characters.";
+  return out;
+}
+
 export function SignIn() {
+  const { query } = useLocation();
   // `/signin?mode=signup` (the landing page's "Create an account") opens on the sign-up form.
-  const mode = useSignal<"signin" | "signup">(
-    new URLSearchParams(window.location.search).get("mode") === "signup" ? "signup" : "signin",
-  );
+  const mode = useSignal<Mode>(query.mode === "signup" ? "signup" : "signin");
   const busy = useSignal<"github" | "email" | null>(null);
   const error = useSignal<string | null>(null);
+  const problems = useSignal<Partial<Record<Field, string>>>({});
   const name = useSignal("");
   const email = useSignal(isMockMode() ? "maya@acme.dev" : "");
   const password = useSignal(isMockMode() ? "demo-password" : "");
+  const repo = useSignal<string | undefined>(undefined);
+  const form = useRef<HTMLFormElement>(null);
+  const purpose = signinPurpose(query.next);
+  const claimToken = purpose.kind === "claim" ? purpose.token : null;
+  const copy = signinCopy(purpose, mode.value, repo.value);
 
   useEffect(() => {
-    document.title = "Sign in · gittifacts";
-  }, []);
+    document.title = `${mode.value === "signin" ? "Sign in" : "Create an account"} · gittifacts`;
+  }, [mode.value]);
+
+  // A claim link is readable signed out: name the repo the person came to claim.
+  useEffect(() => {
+    if (!claimToken) return;
+    let live = true;
+    api
+      .claim(claimToken)
+      .then((v) => {
+        if (live) repo.value = v.project.name;
+      })
+      .catch(() => {
+        /* "this repo" is fine; the claim page says what's wrong with the link */
+      });
+    return () => {
+      live = false;
+    };
+  }, [claimToken]);
+
+  function switchMode() {
+    mode.value = mode.value === "signin" ? "signup" : "signin";
+    error.value = null;
+    problems.value = {};
+    // The URL keeps the mode, so a reload lands on the same form (and `next` survives).
+    const params = new URLSearchParams(window.location.search);
+    if (mode.value === "signup") params.set("mode", "signup");
+    else params.delete("mode");
+    const q = params.toString();
+    history.replaceState(history.state, "", `${window.location.pathname}${q ? `?${q}` : ""}`);
+  }
 
   const s = session.value;
   const notice =
@@ -42,6 +99,13 @@ export function SignIn() {
     e.preventDefault();
     if (busy.value) return;
     error.value = null;
+    const local = localProblems(mode.value, name.value, email.value, password.value);
+    problems.value = local;
+    const first = (["name", "email", "password"] as const).find((f) => local[f]);
+    if (first) {
+      form.current?.querySelector<HTMLInputElement>(`[name="${first}"]`)?.focus();
+      return;
+    }
     busy.value = "email";
     const res =
       mode.value === "signin"
@@ -60,6 +124,14 @@ export function SignIn() {
     if (!res.ok) error.value = res.message ?? "GitHub sign-in did not start.";
   }
 
+  function fieldProps(f: Field) {
+    const problem = problems.value[f];
+    return {
+      "aria-invalid": problem || (error.value && f !== "name") ? ("true" as const) : undefined,
+      "aria-describedby": problem ? `signin-${f}-error` : error.value ? "signin-error" : undefined,
+    };
+  }
+
   return (
     <div class="signin">
       <main class="signin__main" id="main">
@@ -68,12 +140,10 @@ export function SignIn() {
           <BrandMark size={26} />
           <span class="brand__word">gittifacts</span>
         </a>
-        <h1 class="signin__title">
-          {mode.value === "signin" ? "Sign in to review" : "Create your account"}
+        <h1 class="signin__title" data-testid="signin-title">
+          {copy.title}
         </h1>
-        <p class="signin__lede">
-          Approve plans, read walkthroughs, and watch rollouts for the changes your agents write.
-        </p>
+        <p class="signin__lede">{copy.lede}</p>
 
         {notice ? (
           <p class="signin__notice" role="status">
@@ -103,7 +173,7 @@ export function SignIn() {
           </>
         ) : null}
 
-        <form class="signin__form" onSubmit={submit} noValidate>
+        <form class="signin__form" ref={form} onSubmit={submit} noValidate>
           {mode.value === "signup" ? (
             <label class="field">
               <span class="field__label">Name</span>
@@ -114,7 +184,9 @@ export function SignIn() {
                 required
                 value={name.value}
                 onInput={(e) => (name.value = e.currentTarget.value)}
+                {...fieldProps("name")}
               />
+              <FieldProblem id="signin-name-error" text={problems.value.name} />
             </label>
           ) : null}
           <label class="field">
@@ -128,9 +200,9 @@ export function SignIn() {
               required
               value={email.value}
               onInput={(e) => (email.value = e.currentTarget.value)}
-              aria-invalid={error.value ? "true" : undefined}
-              aria-describedby={error.value ? "signin-error" : undefined}
+              {...fieldProps("email")}
             />
+            <FieldProblem id="signin-email-error" text={problems.value.email} />
           </label>
           <label class="field">
             <span class="field__label">Password</span>
@@ -143,9 +215,13 @@ export function SignIn() {
               minLength={8}
               value={password.value}
               onInput={(e) => (password.value = e.currentTarget.value)}
-              aria-invalid={error.value ? "true" : undefined}
-              aria-describedby={error.value ? "signin-error" : undefined}
+              {...fieldProps("password")}
             />
+            {problems.value.password ? (
+              <FieldProblem id="signin-password-error" text={problems.value.password} />
+            ) : mode.value === "signup" ? (
+              <span class="field__hint">At least 8 characters.</span>
+            ) : null}
           </label>
           {error.value ? (
             <p class="field__error" id="signin-error" role="alert">
@@ -165,17 +241,27 @@ export function SignIn() {
 
         <p class="signin__switch">
           {mode.value === "signin" ? "New to gittifacts?" : "Already have an account?"}{" "}
-          <button
-            type="button"
-            class="linklike"
-            onClick={() => {
-              mode.value = mode.value === "signin" ? "signup" : "signin";
-              error.value = null;
-            }}
-          >
+          <button type="button" class="linklike" onClick={switchMode}>
             {mode.value === "signin" ? "Create an account" : "Sign in instead"}
           </button>
         </p>
+
+        {/* Agents don't need this form: the same way in as the landing's. */}
+        <div class="signin__agent" data-testid="signin-agent">
+          <p>
+            <Icon name="bot" size={16} /> Setting up an agent? It can start without an account;
+            point it at:
+          </p>
+          <CopyLine text={`${window.location.origin}/start`} label="Copy the start URL" />
+        </div>
+
+        <aside class="signin__strip" aria-label="Example: how a change is routed">
+          <LaneTag lane={2} />
+          <p>
+            <b>Every change arrives with the reason for its lane.</b>{" "}
+            <span>Public API · removes Invoice.total → full review</span>
+          </p>
+        </aside>
 
         {isMockMode() ? (
           <p class="demo-note">
@@ -203,4 +289,12 @@ export function SignIn() {
       </aside>
     </div>
   );
+}
+
+function FieldProblem({ id, text }: { id: string; text: string | undefined }) {
+  return text ? (
+    <span class="field__error" id={id}>
+      {text}
+    </span>
+  ) : null;
 }
