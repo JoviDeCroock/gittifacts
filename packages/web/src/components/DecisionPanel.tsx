@@ -4,17 +4,27 @@
  * in the tour's right rail. Same states either way.
  */
 import type { Change, Lane, Principal } from "@app/domain";
-import { useSignal } from "@preact/signals";
+import { type Signal, useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
-import type { ChangeSummary, ReviewDecisionKind, ShadowStats } from "../api/types.js";
+import type { ChangeSummary, PrincipalRef, ReviewDecisionKind, ShadowStats } from "../api/types.js";
 import { LANES } from "../lib/lanes.js";
 import { CHANGE_STATUS, plural, shortSha } from "../lib/vocab.js";
 import { usePageCommands } from "../state/keys.js";
 import { Icon } from "./Icon.js";
-import { Button, LaneTag, LinkButton, StatusChip } from "./ui.js";
+import { Button, LaneTag, LinkButton, StatusChip, Who } from "./ui.js";
 
-const COPY: Record<ReviewDecisionKind, { title: string; confirm: string; busy: string; done: string; consequence: string; variant: "primary" | "secondary" | "danger" }> = {
+const COPY: Record<
+  ReviewDecisionKind,
+  {
+    title: string;
+    confirm: string;
+    busy: string;
+    done: string;
+    consequence: string;
+    variant: "primary" | "secondary" | "danger";
+  }
+> = {
   approve: {
     title: "Approve this change",
     confirm: "Approve change",
@@ -41,18 +51,45 @@ const COPY: Record<ReviewDecisionKind, { title: string; confirm: string; busy: s
   },
 };
 
+/** What the author does after each choice, said before you choose (the rail's hint line). */
+const AFTER: Record<ReviewDecisionKind, (author: string) => string> = {
+  approve: (a) => `${a} is done: the merge queue lands it, then it rolls out behind its flag.`,
+  "request-changes": (a) => `${a} gets your comment, pushes a new head, and the walkthrough is rewritten.`,
+  reject: (a) => `${a}'s change closes for good; it would have to start a new one.`,
+};
+
+const LANE_OPTS: (Lane | null)[] = [0, 1, 2, null];
+
+/**
+ * One Tab stop, arrows move and pick (radio keyboard behaviour). "No call" is the unset state:
+ * a quiet text option at the end, never the teal of a choice.
+ */
 function LanePick({ value, computed, onChange }: { value: Lane | null; computed: Lane | null; onChange: (l: Lane | null) => void }) {
-  const opts: (Lane | null)[] = [0, 1, 2, null];
+  const ref = useRef<HTMLDivElement>(null);
+  const onKey = (e: KeyboardEvent, index: number) => {
+    const n = LANE_OPTS.length;
+    let next = index;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (index + 1) % n;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (index - 1 + n) % n;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = n - 1;
+    else return;
+    e.preventDefault();
+    onChange(LANE_OPTS[next] ?? null);
+    ref.current?.querySelectorAll<HTMLButtonElement>("[role=radio]")[next]?.focus();
+  };
   return (
-    <div class="lane-pick" role="radiogroup" aria-label="Lane you would have picked">
-      {opts.map((l) => (
+    <div class="lane-pick" role="radiogroup" aria-label="Lane you would have picked" ref={ref}>
+      {LANE_OPTS.map((l, i) => (
         <button
           key={String(l)}
           type="button"
           role="radio"
           aria-checked={value === l}
-          class="lane-pick__opt"
+          tabIndex={value === l ? 0 : -1}
+          class={`lane-pick__opt ${l === null ? "lane-pick__opt--skip" : ""}`}
           onClick={() => onChange(l)}
+          onKeyDown={(e) => onKey(e, i)}
         >
           {l === null ? (
             <span class="lane-pick__skip">No call</span>
@@ -72,13 +109,30 @@ function LanePick({ value, computed, onChange }: { value: Lane | null; computed:
 interface DecisionPanelProps {
   change: Change;
   me: Principal | null;
+  /** The author as a principal (null when it could not be read): an agent's owner sees the boundary. */
+  author: PrincipalRef | null;
   authorName: string;
   shadow: ShadowStats | null;
   lane0Enabled: boolean;
   layout: "bar" | "rail";
   /** The merge queue's resolved head when the resolution needs a fresh approval: what lands. */
   resolvedHead?: string | null;
+  /**
+   * The open sheet, when the page needs it too (the phone scrim closes it and makes the page
+   * behind it inert). Setting it to null is the same as Back.
+   */
+  sheet?: Signal<ReviewDecisionKind | null>;
   onDecided: (change: Change) => void;
+}
+
+/** The same note the plan's signing panel shows: the boundary between a person and their agent. */
+function OwnAgentNote({ author }: { author: PrincipalRef }) {
+  return (
+    <p class="decision__note" data-testid="decision-own-agent">
+      <Icon name="bot" size={16} />
+      <span>Your agent {author.name} wrote this change. You are allowed to approve it, but a teammate's eyes are the stronger check.</span>
+    </p>
+  );
 }
 
 /** Approving a resolution: the person approves what the resolver wrote, not only the agent's diff. */
@@ -98,7 +152,7 @@ const STATUS_NOTE: Partial<Record<Change["status"], string>> = {
   approved: "Approved. The merge queue lands it next.",
   queued: "Approved and waiting in the merge queue.",
   rejected: "Rejected. Nothing more to decide.",
-  abandoned: "Closed by its author. Nothing to decide.",
+  abandoned: "Closed before it merged. Nothing to decide.",
 };
 
 /**
@@ -129,7 +183,13 @@ function NextUp({ change, me, approved }: { change: Change; me: Principal | null
       {next.value ? (
         <a class="next-up" href={`/changes/${encodeURIComponent(next.value.first.id)}`}>
           <span class="next-up__label">Next · {plural(next.value.left, "change")} waiting</span>
-          <span class="next-up__title">{next.value.first.title}</span>
+          <span class="next-up__title">
+            <LaneTag lane={next.value.first.lane} size="sm" />
+            <span class="next-up__text">{next.value.first.title}</span>
+          </span>
+          <span class="next-up__by">
+            <Who kind={next.value.first.authorKind} name={next.value.first.authorName} size={16} />
+          </span>
           <Icon name="chevron-right" size={18} />
         </a>
       ) : (
@@ -144,39 +204,69 @@ function NextUp({ change, me, approved }: { change: Change; me: Principal | null
   );
 }
 
-export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, layout, resolvedHead = null, onDecided }: DecisionPanelProps) {
-  const decision = useSignal<ReviewDecisionKind | null>(null);
+export function DecisionPanel({ change, me, author, authorName, shadow, lane0Enabled, layout, resolvedHead = null, sheet, onDecided }: DecisionPanelProps) {
+  const ownSheet = useSignal<ReviewDecisionKind | null>(null);
+  const decision = sheet ?? ownSheet;
   const comment = useSignal("");
   const humanLane = useSignal<Lane | null>(null);
   const busy = useSignal(false);
   const error = useSignal<string | null>(null);
   const done = useSignal<ReviewDecisionKind | null>(null);
+  /** The choice under the pointer or focus: the rail says what the author does after it. */
+  const hint = useSignal<ReviewDecisionKind | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   /** One key per decision attempt; a retry after a network error reuses it. */
   const intentKey = useRef<string | null>(null);
-  /** Opened from a key or the palette: the comment field takes focus in either layout. */
-  const fromCommand = useRef(false);
+  /** The sheet that was open on the last render, so a close knows which choice to hand focus back to. */
+  const wasOpen = useRef<ReviewDecisionKind | null>(null);
 
+  // Focus follows the sheet. Opening lands on the title for Approve (its comment is optional, and on
+  // a phone a focused field raises the keyboard over the sheet) and in the comment where one is
+  // required. Closing (Back, Cancel, Escape, the scrim) resets the attempt and returns focus to the
+  // choice that opened it.
   useEffect(() => {
-    if (decision.value && (layout === "bar" || fromCommand.current)) formRef.current?.querySelector<HTMLElement>("textarea")?.focus({ preventScroll: layout === "bar" });
-    fromCommand.current = false;
+    const d = decision.value;
+    const was = wasOpen.current;
+    wasOpen.current = d;
+    if (d && d !== was) {
+      const form = formRef.current;
+      const target = d === "approve" ? form?.querySelector<HTMLElement>(".decision__title") : form?.querySelector<HTMLElement>("textarea");
+      target?.focus({ preventScroll: layout === "bar" });
+    } else if (!d && was && !done.value) {
+      error.value = null;
+      intentKey.current = null;
+      rootRef.current?.querySelector<HTMLElement>(`[data-choice="${was}"]`)?.focus({ preventScroll: true });
+    }
   }, [decision.value, layout]);
+
+  // Signed: focus the outcome, so "Approved…" is read first and Next up is the next Tab.
+  useEffect(() => {
+    if (done.value) rootRef.current?.querySelector<HTMLElement>(".decision__done")?.focus({ preventScroll: true });
+  }, [done.value]);
 
   // A, or the palette's Approve/Request changes/Reject, open the same sheet the buttons do. Nothing signs
   // until the person confirms; the author's own change and a decided change ignore them.
   const open = (d: ReviewDecisionKind) => {
     if (change.status !== "awaiting-review" || done.value || busy.value) return;
     if (me && change.authorId === me.id) return;
-    fromCommand.current = true;
     decision.value = d;
   };
-  usePageCommands({ approve: () => open("approve"), "request-changes": () => open("request-changes"), reject: () => open("reject") });
+  const close = () => {
+    if (!busy.value) decision.value = null;
+  };
+  usePageCommands({
+    approve: () => open("approve"),
+    "request-changes": () => open("request-changes"),
+    reject: () => open("reject"),
+  });
 
   const shadowCandidate = change.computedLane === 0 && !lane0Enabled;
+  const ownAgent = author !== null && author.kind === "agent" && me !== null && author.ownerId === me.id;
 
   if (done.value) {
     return (
-      <div class={`decision decision--${layout} decision--done decision--done-${done.value}`} role="status" data-testid="decision-done" data-decision={done.value}>
+      <div ref={rootRef} class={`decision decision--${layout} decision--done decision--done-${done.value}`} role="status" data-testid="decision-done" data-decision={done.value}>
         {done.value === "approve" ? (
           <svg class="seal" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
             <circle class="seal__ring" cx="20" cy="20" r="17" />
@@ -186,7 +276,9 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
           <Icon name={done.value === "reject" ? "ban" : "comment"} size={20} />
         )}
         <div>
-          <p class="decision__done">{done.value === "approve" && resolvedHead ? RESOLUTION_APPROVE.done : COPY[done.value].done}</p>
+          <p class="decision__done" tabIndex={-1}>
+            {done.value === "approve" && resolvedHead ? RESOLUTION_APPROVE.done : COPY[done.value].done}
+          </p>
           <p class="decision__fine">Signed as {me?.name ?? "you"} and recorded in the audit log.</p>
           <NextUp change={change} me={me} approved={done.value === "approve"} />
         </div>
@@ -244,6 +336,8 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
         intentKey.current,
       );
       done.value = d;
+      // The sheet has done its job: the page behind it is live again (no scrim, not inert).
+      decision.value = null;
       onDecided(res.change);
     } catch (err) {
       error.value = inlineError(err);
@@ -255,19 +349,41 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
   const d = decision.value;
   const resolving = resolvedHead !== null;
   const copy = d === "approve" && resolving ? { ...COPY.approve, ...RESOLUTION_APPROVE } : d ? COPY[d] : null;
+  const choose = (k: ReviewDecisionKind) => ({
+    "data-choice": k,
+    onClick: () => (decision.value = k),
+    onMouseEnter: () => (hint.value = k),
+    onMouseLeave: () => (hint.value = null),
+    onFocus: () => (hint.value = k),
+    onBlur: () => (hint.value = null),
+  });
   return (
-    <div class={`decision decision--${layout} ${d ? "is-open" : ""}`}>
+    // biome-ignore lint/a11y/noStaticElementInteractions: Escape closes the sheet from any control inside it
+    <div
+      ref={rootRef}
+      class={`decision decision--${layout} ${d ? "is-open" : ""}`}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && d) {
+          e.preventDefault();
+          close();
+        }
+      }}
+    >
       {d && copy ? (
-        <form class="decision__form" onSubmit={submit} ref={formRef} aria-labelledby="decision-title">
+        <form class="decision__form" onSubmit={submit} ref={formRef} aria-labelledby="decision-title" data-testid="decision-form">
           <div class="decision__formhead">
-            <h2 id="decision-title" class="decision__title">
+            <h2 id="decision-title" class="decision__title" tabIndex={-1}>
               {copy.title}
             </h2>
-            <button type="button" class="icon-btn" aria-label="Cancel" onClick={() => ((decision.value = null), (error.value = null), (intentKey.current = null))}>
-              <Icon name="x" size={20} />
-            </button>
+            {/* On a phone, Back in the thumb zone is the one way out. */}
+            {layout === "rail" ? (
+              <button type="button" class="icon-btn" aria-label="Cancel" onClick={close} disabled={busy.value}>
+                <Icon name="x" size={20} />
+              </button>
+            ) : null}
           </div>
           <p class="decision__consequence">{copy.consequence}</p>
+          {ownAgent && author ? <OwnAgentNote author={author} /> : null}
           <label class="field">
             <span class="field__label">
               Comment for {authorName}
@@ -297,17 +413,20 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
             </p>
           ) : null}
           <p class="decision__fine">
-            <Icon name="signature" size={14} /> You sign as {me?.name ?? "yourself"} for head <code>{shortSha(change.headSha)}</code>
-            {resolving ? (
-              <>
-                {" "}
-                as resolved by the merge queue (<code>{shortSha(resolvedHead)}</code> lands)
-              </>
-            ) : null}
-            .
+            <Icon name="signature" size={14} />
+            <span>
+              You sign as {me?.name ?? "yourself"} for head <code>{shortSha(change.headSha)}</code>
+              {resolving ? (
+                <>
+                  {" "}
+                  as resolved by the merge queue (<code>{shortSha(resolvedHead)}</code> lands)
+                </>
+              ) : null}
+              .
+            </span>
           </p>
           <div class="decision__confirm">
-            <Button variant="secondary" onClick={() => ((decision.value = null), (error.value = null), (intentKey.current = null))} disabled={busy.value}>
+            <Button variant="secondary" onClick={close} disabled={busy.value} data-testid="decision-back">
               Back
             </Button>
             <Button type="submit" variant={copy.variant === "secondary" ? "primary" : copy.variant} busy={busy.value} busyLabel={copy.busy} wide data-testid="decision-confirm">
@@ -318,15 +437,24 @@ export function DecisionPanel({ change, me, authorName, shadow, lane0Enabled, la
       ) : (
         <div class="decision__choices" role="group" aria-label="Decide on this change">
           {layout === "rail" ? <h2 class="decision__title">{resolving ? "Your decision on the resolution" : "Your decision"}</h2> : null}
-          <Button variant="secondary" class="decision__reject" onClick={() => (decision.value = "reject")}>
+          {layout === "rail" && ownAgent && author ? <OwnAgentNote author={author} /> : null}
+          <Button variant="secondary" class="decision__reject" {...choose("reject")}>
             Reject
           </Button>
-          <Button variant="secondary" class="decision__changes" onClick={() => (decision.value = "request-changes")}>
-            Request changes
+          <Button variant="secondary" class="decision__changes" aria-label="Request changes" {...choose("request-changes")}>
+            <span class="decision__long">Request changes</span>
+            <span class="decision__short" aria-hidden="true">
+              Changes
+            </span>
           </Button>
-          <Button variant="primary" class="decision__approve" icon="check" onClick={() => (decision.value = "approve")} data-testid="decision-approve">
+          <Button variant="primary" class="decision__approve" icon="check" {...choose("approve")} data-testid="decision-approve">
             {resolving && layout === "rail" ? "Approve resolution" : "Approve"}
           </Button>
+          {layout === "rail" ? (
+            <p class="decision__after" data-testid="decision-after">
+              {hint.value ? AFTER[hint.value](authorName) : `${authorName} waits for your call.`}
+            </p>
+          ) : null}
         </div>
       )}
     </div>

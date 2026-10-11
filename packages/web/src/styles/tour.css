@@ -1,37 +1,36 @@
 /* ================================================================ page frame */
-.tour-page .page__main {
-  padding-block-end: calc(120px + env(safe-area-inset-bottom));
-}
 .tour-page .page__head {
   margin-block-end: var(--s-3);
 }
-@media (min-width: 1100px) {
-  .tour-page .page__main {
-    padding-block-end: var(--s-8);
-  }
+/* Below the rail, the fixed bar sits over the page end: keep the end above it, at whatever height
+   the bar has now (resting, open, or the done sheet with Next up). `--bar-h` comes from tour.tsx. */
+.tour--bar {
+  padding-block-end: var(--bar-h, 72px);
 }
 
+/*
+ * The rail joins when the tour itself is at least 1040px wide (tour.tsx, RAIL_AT), not at a
+ * viewport width: next to the sidebar, that keeps the reading column at 640px or more.
+ */
 .tour__layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-6);
 }
-@media (min-width: 1100px) {
-  .tour__layout {
-    grid-template-columns: minmax(0, 1fr) 392px;
-    gap: var(--s-7);
-    align-items: start;
-  }
-  .tour__rail {
-    position: sticky;
-    inset-block-start: 68px;
-    display: grid;
-    gap: var(--s-4);
-    max-block-size: calc(100dvh - 84px);
-    overflow-y: auto;
-    padding-block-end: var(--s-4);
-    scrollbar-width: thin;
-  }
+.tour--rail .tour__layout {
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: var(--s-6);
+  align-items: start;
+}
+.tour__rail {
+  position: sticky;
+  inset-block-start: 68px;
+  display: grid;
+  gap: var(--s-4);
+  max-block-size: calc(100dvh - 84px);
+  overflow-y: auto;
+  padding-block-end: var(--s-4);
+  scrollbar-width: thin;
 }
 .tour__main {
   min-inline-size: 0;
@@ -119,19 +118,44 @@
 .stations__count b {
   color: var(--text);
 }
+/* Resume sits after the line (under it on phones), so "Stop N of M" never leaves the strip. */
+.stations--resume .stations__inner {
+  flex-wrap: wrap;
+  block-size: auto;
+  min-block-size: 52px;
+  row-gap: 0;
+}
 .stations__resume {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-block-size: 36px;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--panel-strong);
   color: var(--text);
   font-weight: var(--weight-medium);
   font-size: var(--text-small);
+  transition: background-color var(--dur-feedback) var(--ease-out);
+}
+.stations__resume:hover {
+  background: var(--rule);
+}
+@media (pointer: coarse) {
+  .stations__resume {
+    min-block-size: var(--tap);
+  }
+}
+@media (max-width: 639px) {
+  .stations--resume .stations__line {
+    flex-basis: calc(100% - 86px - var(--s-4));
+  }
+  .stations__resume {
+    margin-inline-start: calc(86px + var(--s-4));
+    margin-block-end: var(--s-1);
+  }
 }
 .stations__line {
   position: relative;
@@ -150,7 +174,7 @@
   margin-block-start: -1px;
   background: var(--rule-strong);
 }
-@media (min-width: 1100px) {
+@media (min-width: 1024px) {
   .stations__line {
     max-inline-size: 420px;
   }
@@ -262,7 +286,9 @@
 }
 
 /* ================================================================ handover */
+/* The handover's own width decides its columns: two only when each holds a readable line. */
 .handover {
+  container-type: inline-size;
   margin-block: var(--s-5) var(--s-6);
   padding: var(--s-4) var(--s-4) var(--s-3);
   border-radius: var(--r-panel);
@@ -283,7 +309,7 @@
   display: grid;
   gap: var(--s-4);
 }
-@media (min-width: 760px) {
+@container (min-width: 600px) {
   .handover__cols {
     grid-template-columns: 1fr 1fr;
     gap: var(--s-5);
@@ -309,9 +335,17 @@
   text-wrap: pretty;
 }
 .handover__by {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
   margin-block-start: var(--s-3);
   font-size: var(--text-meta);
   color: var(--text-3);
+}
+.handover__by .who {
+  color: var(--text-2);
+  font-weight: var(--weight-medium);
 }
 
 /* ================================================================ stops */
@@ -438,13 +472,11 @@
 .stop__transform code {
   overflow-wrap: anywhere;
 }
-.stop--transform .stop__collapse > summary {
-  display: grid;
-  gap: var(--s-2);
+.stop__collapse > summary {
   list-style: none;
   cursor: pointer;
 }
-.stop--transform .stop__collapse > summary::-webkit-details-marker {
+.stop__collapse > summary::-webkit-details-marker {
   display: none;
 }
 .stop__expand {
@@ -526,8 +558,62 @@
   font-size: var(--text-small);
   color: var(--warn);
 }
+.excerpt__wrap {
+  flex: none;
+  min-block-size: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  transition:
+    background-color var(--dur-feedback) var(--ease-out),
+    border-color var(--dur-feedback) var(--ease-out);
+}
+.excerpt__wrap:hover {
+  background: var(--panel);
+}
+.excerpt__wrap[aria-pressed="true"] {
+  border-color: var(--action);
+  background: var(--action-tint);
+  color: var(--text);
+}
+@media (pointer: coarse) {
+  .excerpt__wrap {
+    min-block-size: var(--tap);
+    padding-inline: 12px;
+  }
+}
 .excerpt__code {
   outline-offset: -2px;
+}
+/* Code past the right edge fades out into the code ground: there is more, scroll for it. */
+.excerpt__body {
+  position: relative;
+}
+.excerpt__body::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 2;
+  inline-size: 40px;
+  background: linear-gradient(to right, transparent, var(--code-bg));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-state) var(--ease-out);
+}
+.excerpt__body[data-more]::after {
+  opacity: 1;
+}
+/* Wrapped: long lines fold under themselves with a hanging indent; the box never scrolls. */
+.excerpt.is-wrapped .diff__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-inline-start: 2ch;
+  text-indent: -2ch;
 }
 .diff {
   inline-size: 100%;
@@ -558,6 +644,19 @@
 }
 .diff__n {
   margin-inline-start: 1ch;
+}
+/* Phones: one gutter number, the side the line lives on (new, or old for a deletion). */
+@media (max-width: 639px) {
+  .diff__o,
+  .diff__line--del .diff__n {
+    display: none;
+  }
+  .diff__n {
+    margin-inline-start: 0;
+  }
+  .diff__line--del .diff__o {
+    display: inline-block;
+  }
 }
 .diff__line--del .diff__o,
 .diff__line--add .diff__n {
@@ -758,7 +857,8 @@ a.ctx-link:hover .ctx-link__value {
   inset-inline: 0;
   inset-block-end: 0;
   z-index: var(--z-sheet);
-  padding: 10px max(var(--gutter), env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
+  padding: 10px max(var(--gutter), env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
   background: var(--acetate-strong);
   backdrop-filter: var(--acetate-filter);
   -webkit-backdrop-filter: var(--acetate-filter);
@@ -774,6 +874,25 @@ a.ctx-link:hover .ctx-link__value {
   .tour__bar {
     inset-inline-start: 248px;
   }
+}
+/* A wide screen below the rail: the bar's choices keep a hand's width, centred. */
+@media (min-width: 640px) {
+  .decision--bar {
+    max-inline-size: 720px;
+    margin-inline: auto;
+  }
+}
+/* Phones: the open sheet is where you sign, so the page recedes behind a scrim (tap it to go back)
+   and goes inert (tour.tsx). Not while the decision is being sent. */
+.tour__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-sheet) - 1);
+  background: var(--backdrop);
+  animation: scrim-in var(--dur-state) var(--ease-out);
+}
+.tour:has(.tour__bar [aria-busy="true"]) .tour__scrim {
+  pointer-events: none;
 }
 .decision--bar.is-open {
   max-block-size: min(78dvh, 640px);
@@ -795,23 +914,76 @@ a.ctx-link:hover .ctx-link__value {
   min-block-size: 48px;
   padding-inline: 14px;
 }
+.decision__short {
+  display: none;
+}
+/* Narrow phones: "Changes" (spoken "Request changes"), so Approve keeps the widest target. */
+@media (max-width: 479px) {
+  .decision--bar .decision__choices {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr);
+  }
+  .decision--bar .decision__choices .btn {
+    padding-inline: 8px;
+  }
+  .decision--bar .decision__long {
+    display: none;
+  }
+  .decision--bar .decision__short {
+    display: inline;
+  }
+}
+/* Where a signature happens: the 2px ink edge the plan's signing panel carries (Edge Or Lift Rule). */
 .decision--rail {
   padding: var(--s-4);
-  border: 1px solid var(--rule-strong);
+  border: 2px solid var(--text);
   border-radius: var(--r-panel);
   background: var(--surface);
   box-shadow: var(--shadow-raise);
 }
+.decision__title:focus,
+.decision__done:focus {
+  outline: none;
+}
+/* The author agent belongs to the viewer: the same boundary note the plan shows. */
+.decision__note {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--panel);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.decision__note .icon {
+  flex: none;
+  margin-block-start: 2px;
+  color: var(--text);
+}
+/* What the author does after the choice under the pointer or focus. Two lines held, so it never jumps. */
+.decision__after {
+  grid-column: 1 / -1;
+  min-block-size: calc(2 * 1.45em);
+  font-size: var(--text-meta);
+  line-height: 1.45;
+  color: var(--text-3);
+}
 .decision--rail .decision__choices {
   grid-template-columns: 1fr 1fr;
 }
-.decision--rail .decision__title {
+/* Rail order: title, the boundary note, Approve on its own row, then the two other choices. */
+.decision--rail .decision__choices > .decision__title {
   grid-column: 1 / -1;
+  order: -3;
   margin-block-end: var(--s-1);
+}
+.decision--rail .decision__choices > .decision__note {
+  order: -2;
 }
 .decision--rail .decision__approve {
   grid-column: 1 / -1;
-  grid-row: 2;
+  order: -1;
 }
 .decision__title {
   font-size: var(--text-title);
@@ -960,7 +1132,7 @@ a.ctx-link:hover .ctx-link__value {
   text-decoration: none;
 }
 .next-up > .icon {
-  grid-row: 1 / 3;
+  grid-row: 1 / 4;
   grid-column: 2;
   color: var(--action-ink);
 }
@@ -968,11 +1140,29 @@ a.ctx-link:hover .ctx-link__value {
   color: var(--text-3);
   font-size: var(--text-meta);
 }
+/* What is next, at a glance: its lane tag (Band Means Lane: the tag carries the numeral), a title
+   on up to two lines, and who wrote it (agents as squares). */
 .next-up__title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
   font-weight: var(--weight-medium);
+}
+.next-up__title .lane-tag {
+  flex: none;
+  margin-block-start: 2px;
+}
+.next-up__text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  text-wrap: pretty;
+}
+.next-up__by {
+  font-size: var(--text-meta);
+  color: var(--text-2);
 }
 .decision__watch {
   display: inline-flex;
@@ -985,7 +1175,7 @@ a.ctx-link:hover .ctx-link__value {
 
 .lane-pick {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 6px;
 }
 .lane-pick__opt {
@@ -1000,15 +1190,24 @@ a.ctx-link:hover .ctx-link__value {
   background: var(--surface);
   color: var(--text);
   font-size: var(--text-meta);
-  transition: background-color var(--dur-feedback) var(--ease-out), border-color var(--dur-feedback) var(--ease-out);
+  transition:
+    background-color var(--dur-feedback) var(--ease-out),
+    border-color var(--dur-feedback) var(--ease-out);
 }
 .lane-pick__opt:hover {
   background: var(--panel);
 }
-.lane-pick__opt[aria-checked="true"] {
+.lane-pick__opt[aria-checked="true"]:not(.lane-pick__opt--skip) {
   border-color: var(--action);
   box-shadow: inset 0 0 0 1px var(--action);
   background: var(--action-tint);
+}
+/* "No call" is the unset state, not a fourth choice: quiet text, never the teal of a pick. */
+.lane-pick__opt--skip {
+  min-inline-size: var(--tap);
+  padding-inline: var(--s-2);
+  border-color: transparent;
+  background: transparent;
 }
 .lane-pick__name {
   font-weight: var(--weight-medium);
@@ -1019,8 +1218,61 @@ a.ctx-link:hover .ctx-link__value {
   font-size: var(--text-meta);
 }
 .lane-pick__skip {
+  color: var(--text-3);
+  font-size: var(--text-small);
+  white-space: nowrap;
+}
+.lane-pick__opt--skip[aria-checked="true"] .lane-pick__skip {
   color: var(--text-2);
   font-weight: var(--weight-medium);
+}
+
+/* ================================================================ close (abandon) */
+.close-change {
+  margin-block-start: var(--s-2);
+}
+.close-change__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+}
+.close-change__open:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+@media (pointer: coarse) {
+  .close-change__open {
+    min-block-size: var(--tap);
+  }
+}
+.close-change--open {
+  display: grid;
+  gap: var(--s-3);
+  margin-block-start: var(--s-4);
+  padding: var(--s-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+}
+.close-change__title {
+  font-size: var(--text-body);
+}
+.close-change__line {
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.close-change__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s-2);
 }
 
 /* No tour: why, the run behind a disclosure, then every changed file. */
