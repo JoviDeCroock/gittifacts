@@ -419,7 +419,8 @@ function PlanBar() {
     const target = document.getElementById("sign");
     const el = bar.current;
     if (!target || !el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([e]) => el.toggleAttribute("data-aside", !!e?.isIntersecting));
+    // "On screen" means above the bar: a sliver of the section behind the bar doesn't count.
+    const io = new IntersectionObserver(([e]) => el.toggleAttribute("data-aside", !!e?.isIntersecting), { rootMargin: `0px 0px -${el.offsetHeight}px 0px` });
     io.observe(target);
     return () => io.disconnect();
   }, []);
