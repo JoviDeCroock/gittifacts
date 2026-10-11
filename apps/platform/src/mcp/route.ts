@@ -65,6 +65,11 @@ export async function anonymousAllowed(req: Request): Promise<boolean> {
   });
 }
 
+/** The 401 `fix.explanation` for a call that needs credentials and sent none. */
+export const NO_CREDENTIALS_FIX =
+  "Called create_project without credentials? Reconnect with `Authorization: Bearer <token from create_project>` (its `token` field) and call again. " +
+  "Otherwise log in: MCP OAuth (discovered from this 401's resource_metadata), the CLI's `login` command (device flow; see /start), or an agent token a human creates for you.";
+
 function bearerToken(header: string | undefined): string | null {
   if (!header) return null;
   const m = /^Bearer\s+(\S+)\s*$/i.exec(header);
@@ -134,8 +139,15 @@ export async function handleMcp(c: Context<AppEnv>): Promise<Response> {
         },
       });
     }
-    // RFC 6750 §3.1: no error code when the request carried no credentials.
-    return challenge(401, mcpAuthChallenge(discovery), "authentication required", urls.origin);
+    // RFC 6750 §3.1: no error code when the request carried no credentials. The likeliest caller
+    // here just called create_project anonymously and kept its anonymous session: say so first.
+    return challenge(
+      401,
+      mcpAuthChallenge(discovery),
+      "authentication required: only initialize, tools/list, create_project and whoami work without credentials",
+      urls.origin,
+      NO_CREDENTIALS_FIX,
+    );
   }
   const v = await verifyAgentToken(svc.store, token, svc.clock.now(), svc.waitUntil);
   if (!v) {

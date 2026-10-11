@@ -7,6 +7,8 @@ import { env } from "cloudflare:workers";
 import { parseCall, StartDoc } from "@app/conventions";
 import { createPlatformClient } from "@app/mcp/client";
 import { describe, expect, it } from "vitest";
+import { writeOverride } from "../src/limits/kill-switch.js";
+import { store } from "./fixtures.js";
 import { call, createAgent, makeApp, ORIGIN, signUpHuman, type TestApp } from "./http.js";
 
 /** `Link` header → rel → absolute URL. */
@@ -115,6 +117,21 @@ describe("front door", () => {
     // OAuth discovery stays with the OAuth routes.
     const prm = await get("/.well-known/oauth-protected-resource/mcp");
     expect(prm.status).toBe(200);
+  });
+
+  it("/start step 1 says, in bold, to reconnect with the project token when creation is anonymous", async () => {
+    const { app } = makeApp();
+    await writeOverride(store(), "on", "test", new Date());
+    try {
+      const md = await (await call(app, "GET", "/start")).text();
+      const ship = md.slice(md.indexOf("## Ship something in 3 calls"));
+      // Before step 2: an anonymous session's wait_for_change answers 401.
+      expect(ship.slice(0, ship.indexOf("\n2. "))).toContain(
+        "**Called it without credentials? Reconnect with `Authorization: Bearer <token>`",
+      );
+    } finally {
+      await writeOverride(store(), null, "test", new Date());
+    }
   });
 
   it("/ is the landing page for everyone; /dashboard and deep links are the app", async () => {

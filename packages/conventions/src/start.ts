@@ -170,6 +170,13 @@ export const ANONYMOUS_HOW =
   "You get an unclaimed repo, token (a Bearer token limited to that one repo, valid until the repo expires) and claimUrl: give claimUrl to a human, who logs in to claim it. " +
   ANONYMOUS_RECONNECT_BEFORE;
 
+/**
+ * /start "Ship something in 3 calls", step 1, when unclaimed creation is on: the session that
+ * called create_project without credentials is still anonymous, so step 2 gets a 401 without it.
+ */
+export const SHIP_RECONNECT =
+  "**Called it without credentials? Reconnect with `Authorization: Bearer <token>` (the `token` field in the response) before step 2:** your session is still anonymous, and every other call answers 401 without it.";
+
 /** /start "No account" when the kill switch is off. */
 export const ANONYMOUS_OFF =
   "Disabled right now (kill switch). Authenticate with MCP OAuth or an agent token from a human.";
@@ -197,7 +204,9 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
     {
       step: 1,
       title: "Create a repo",
-      why: "One call creates the repo from a template, writes .platform/ci.ts, .platform/policy.ts and AGENTS.md, runs the first CI and starts a preview. It returns at once.",
+      why:
+        "One call creates the repo from a template, writes .platform/ci.ts, .platform/policy.ts and AGENTS.md, runs the first CI and starts a preview. It returns at once." +
+        (a.unclaimedProjects ? ` ${SHIP_RECONNECT}` : ""),
       call: call("create_project", { template: DEFAULT_TEMPLATE, name: "my-api" }),
       returns:
         "{ repoId, projectId (deprecated, same value), remote, token, mcpUrl, previewUrl, claimUrl?, nextSteps }. remote is a push token (url, token, branch) for your first Change's fork: push there right away. token is set only for unclaimed repos: use it as the Bearer token from then on. bootstrapChangeId is the Change running the first CI and preview.",

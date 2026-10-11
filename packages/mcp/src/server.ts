@@ -8,6 +8,7 @@ export const SERVER_INFO = { name: "gittifacts", version: "1.0.0" } as const;
 export const INSTRUCTIONS = [
   "gittifacts is a git platform for agents. Humans approve intent; machines prove conformance.",
   "New repo: create_project({ template }) → wait_for_change on bootstrapChangeId (first CI + preview) → push to remote (your first Change's fork).",
+  "No credentials? Only initialize, tools/list, create_project and whoami work anonymously. After create_project, reconnect with `Authorization: Bearer <token>` (its `token` field) before any other call, wait_for_change included: the anonymous session gets 401.",
   "Flow: whoami → create_plan (a human approves it) → start_change → push to the fork → wait_for_change → get_change_status / get_evidence / get_tour.",
   "You can never approve a plan or a change; use request_review to ask a human.",
   "Errors are JSON `{ error: { code, message, fix } }`; `fix.call` is the tool call that resolves it.",
