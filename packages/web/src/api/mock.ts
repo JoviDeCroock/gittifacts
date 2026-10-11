@@ -27,6 +27,8 @@ import type {
 } from "./types.js";
 
 const db: MockDb = createDb();
+/** Demo push imports: repo id → when its grant opened. */
+const imports = new Map<string, number>();
 
 const AUTH_KEY = "gf:mock-auth";
 
@@ -257,6 +259,86 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
       const plan = db.plans.find((p) => p.id === id);
       if (!plan) return fail(404, "not_found", "No such plan.");
       return ok({ plan, changes: db.scenarios.map((s) => s.change).filter((c) => c.planId === id) });
+    },
+  ],
+
+  // A person drafts a Plan themselves ("What should change?" → "Draft the plan yourself").
+  [
+    "POST",
+    /^\/api\/v1\/plans$/,
+    (_p, _q, body) => {
+      const input = parseBody<{ repoId: string; title: string; intent: string; acceptanceCriteria: string[] }>(body);
+      if (!input.repoId || (input.title ?? "").trim().length < 3 || (input.intent ?? "").trim().length < 10 || !input.acceptanceCriteria?.length) {
+        return fail(400, "invalid_input", "A plan needs a title, an intent of at least 10 characters and one acceptance criterion.");
+      }
+      const plan = {
+        id: `plan_${b64u(`${input.title}:${Date.now()}`, 10).toLowerCase()}`,
+        repoId: input.repoId,
+        title: input.title!.trim(),
+        intent: input.intent!.trim(),
+        acceptanceCriteria: input.acceptanceCriteria,
+        outOfScope: [],
+        riskDeclarations: [],
+        scopePaths: [],
+        affectedRoutes: [],
+        status: "draft" as const,
+        authorId: db.me,
+        approvedBy: null,
+        approvedAt: null,
+        approvalSignature: null,
+        supersedes: null,
+        createdAt: new Date().toISOString(),
+      };
+      db.plans.push(plan);
+      appendAudit(db.me, "plan.created", `plan:${plan.id}`);
+      return { status: 201, body: { plan } };
+    },
+  ],
+
+  // Import a private repo by push: an empty repo and a one-time grant; the demo "push" lands
+  // about ten seconds later so the wait and the done state both show.
+  [
+    "POST",
+    /^\/api\/v1\/projects$/,
+    (_p, _q, body) => {
+      const { name, importMode } = parseBody<{ name: string; importMode: string }>(body);
+      if (importMode !== "push") return fail(400, "invalid_input", "The demo only imports by push here.");
+      const slug = (name ?? "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "imported";
+      const id = `repo_${b64u(`${slug}:${Date.now()}`, 8).toLowerCase()}`;
+      const openedAt = Date.now();
+      imports.set(id, openedAt);
+      const url = `https://artifacts.demo.invalid/git/${id}.git`;
+      const importGrant = {
+        url,
+        branch: "main",
+        token: `art_${b64u(id, 24)}`,
+        expiresAt: new Date(openedAt + 30 * 60_000).toISOString(),
+        command: `git -c http.extraHeader="Authorization: Bearer $GITTIFACTS_IMPORT_TOKEN" -c http.postBuffer=524288000 push ${url} <your-branch>:refs/heads/main --follow-tags`,
+        closesWhen: "The first push closes the grant, as do the first Change and 30 minutes.",
+      };
+      return { status: 201, body: { projectId: id, repoId: id, name: slug, defaultBranch: "main", importGrant } };
+    },
+  ],
+  [
+    "GET",
+    /^\/api\/v1\/repos\/([^/]+)\/import-grant$/,
+    ([id]) => {
+      const at = imports.get(id!);
+      if (at === undefined) return ok({ grant: null });
+      const pushed = Date.now() - at > 10_000;
+      return ok({
+        grant: {
+          repoId: id,
+          status: pushed ? "closed" : "open",
+          openedBy: db.me,
+          openedAt: new Date(at).toISOString(),
+          openUntil: new Date(at + 30 * 60_000).toISOString(),
+          closeReason: pushed ? "pushed" : null,
+          closedAt: pushed ? new Date(at + 10_000).toISOString() : null,
+          mainSha: pushed ? sha(id!) : null,
+          imported: pushed,
+        },
+      });
     },
   ],
 

@@ -3217,3 +3217,34 @@ got committed, and a person at a terminal got 4 KB of JSON.
 
 **Consequences.** Clones made before this don't push until `gittifacts ship` (idempotently wires them). Template
 digests changed (seed caches roll).
+
+## 2026-10-11 — The web app teaches its words and lets people start work
+
+**Context.** An onboarding audit found ~15 terms meeting a new person with one-line hints at best, lane reasons
+listed 19 rows deep (13 saying "ok"), and no way for a person to start anything: no intent box, no import of a
+private repo, no clone or MCP setup to copy, and "Approve the plan…" missing from the palette for people.
+
+**Decision.**
+- Day-one vocabulary is Plan, Change and review lane. Other words get a `<Term>` (DESIGN.md, Term) where they first
+  appear: the hint is the button's description and a paper popover links the docs page (`lib/terms.ts`, after the
+  docs glossary). The router's scope (`SPA_SCOPE`) leaves server paths (`/docs`, `/start`, `/`) to a full navigation,
+  so in-app docs links stop landing on the SPA's not-found page.
+- The Show It When It Matters Rule: Mission control shows when agents have open Changes in the repo; a list row says
+  only "Auto-merge on" once it is on (the agreement meter only while calibrating); scope ids sit beside their words.
+- Lane reasons read through `groupLaneReasons` (`@app/domain/lane-reasons`, a zod-free subpath for the bundle):
+  deciding, then raising, then "N checks passed" folded. A missing measurement never folds into passed. The landing
+  keeps every row (`foldPassing={false}`).
+- "What should change?" on the repo page: the intent becomes a prompt for the person's agent ("Use <origin>/start.
+  In repo <id>, draft a plan for: …"), because nobody approves their own Plan. "Draft the plan yourself" (POST
+  /api/v1/plans) shows only when another member can approve: a maintainer or owner, since approval needs the
+  maintainer role (access/roles.ts), not reviewer.
+- Import a private repo from the dashboard (POST /api/v1/projects `importMode: "push"`), showing the push with the
+  one-time grant and polling GET …/import-grant until it closes. Person-only in the palette (the grant goes to the
+  signed-in owner); agents import public repos with `create_project({ from })`.
+- `/agents` prints MCP setup for Claude Code, Cursor/VS Code (`mcpServers`) and other clients, and the same with the
+  Authorization header once a hand-made token is shown. The repo page prints `gittifacts clone <repoId>`.
+- Palette: "Approve the plan…" runs for people (lands on `#sign`, still person-only for agents); "Draft a plan"
+  became "What should change?" with both hands.
+
+**Consequences.** No new API. Sign-in's lane chart gave way to three steps (Plan, Change, review lane). Gate specs:
+`web-onboarding.spec.ts`, `web-lane-reasons.spec.ts`. `E2E_STATE_DIR` lets two gate servers share a machine.

@@ -41,7 +41,7 @@ test("repo: say what should change, get the agent's prompt; clone; terms explain
   const card = plans.getByTestId("term-card");
   await expect(card).toBeVisible();
   await expect(card).toContainText("A person who didn't write it approves it");
-  await expect(card.getByRole("link", { name: "More about plan" })).toHaveAttribute("href", "/docs/concepts/plans");
+  await expect(card.getByRole("link", { name: "Read more in the docs" })).toHaveAttribute("href", "/docs/concepts/plans");
   await expectNoHorizontalScroll(page);
   await page.keyboard.press("Escape");
   await expect(card).toBeHidden();

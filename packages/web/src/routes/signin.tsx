@@ -304,7 +304,7 @@ export function SignIn() {
                     <li key={l}>
                       <LaneTag lane={l} size="sm" />
                       <span>
-                        <b>{LANE_LABELS[l].name}</b> {LANE_LABELS[l].description}
+                        <b>{LANE_LABELS[l].name}:</b> {LANE_LABELS[l].description}
                       </span>
                     </li>
                   ))}

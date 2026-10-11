@@ -65,7 +65,7 @@ export function Term({ id, children }: { id: TermId; children?: ComponentChildre
       <span ref={card} id={hintId} class="term__card" {...{ popover: "auto" }} data-testid="term-card">
         <span class="term__hint">{t.hint}</span>{" "}
         <a class="term__more" href={t.href}>
-          More about {t.word.toLowerCase()}
+          Read more in the docs
         </a>
       </span>
     </span>
