@@ -224,8 +224,13 @@ export function toErrorResponse(err: unknown): { status: ContentfulStatusCode; b
     return { status: 404, body: envelope("not-found", err.message, fixFor("not-found")) };
   }
   if (err instanceof StoreDataError || err instanceof SigningKeyConfigError) {
+    // The details (R2 keys, key-parsing errors) are for the operator's logs, not the caller.
     console.error(err);
-    return { status: 500, body: envelope("internal", err.message, fixFor("internal")) };
+    const message =
+      err instanceof StoreDataError
+        ? "stored data could not be read"
+        : "the platform signing key is misconfigured";
+    return { status: 500, body: envelope("internal", message, fixFor("internal")) };
   }
   console.error("unhandled error", err);
   return { status: 500, body: envelope("internal", "internal error", fixFor("internal")) };

@@ -10,6 +10,7 @@
 import { FINAL_STATUSES } from "@app/coordinator";
 import type { Change } from "@app/domain";
 import type { Caller, Services } from "../app-env.js";
+import { toErrorResponse } from "../errors.js";
 
 export const CHANGE_EVENTS_MAX_MS = 15 * 60_000;
 const POLL_MS = 25_000;
@@ -69,8 +70,12 @@ export function changeEventStream(
           controller.enqueue(encoder.encode(": keep-alive\n\n"));
         }
       } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        controller.enqueue(encoder.encode(sseEvent("error", { message })));
+        // The same mapping as the JSON API: typed errors keep their code and message, anything
+        // else is logged here and leaves as a generic "internal" (no raw exception text).
+        const { error } = toErrorResponse(e).body;
+        controller.enqueue(
+          encoder.encode(sseEvent("error", { code: error.code, message: error.message })),
+        );
         controller.close();
       }
     },
