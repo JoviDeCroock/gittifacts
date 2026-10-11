@@ -114,6 +114,12 @@ function CreateAgent({ onCreated }: { onCreated: (r: CreateAgentResponse) => voi
     [],
   );
   const list = repos.state.value.status === "ok" ? repos.state.value.data.repos.map((r) => ({ id: r.id, name: r.name, fullName: r.name })) : [];
+  // Until the list arrives there is nothing to pick (and the one repo isn't picked yet): submit waits.
+  const reposLoading = repos.state.value.status === "loading";
+  // A repository picked (or all of them) answers the error about repositories.
+  const answered = () => {
+    if (error.value?.field === "repos") error.value = null;
+  };
 
   function toggle(s: Scope, on: boolean) {
     scopes.value = on ? [...scopes.value, s] : scopes.value.filter((x) => x !== s);
@@ -121,7 +127,7 @@ function CreateAgent({ onCreated }: { onCreated: (r: CreateAgentResponse) => voi
 
   async function submit(e: Event) {
     e.preventDefault();
-    if (busy.value) return;
+    if (busy.value || reposLoading) return;
     if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(name.value.trim())) {
       error.value = { field: "name", text: "Use 2 to 41 lowercase letters, digits or hyphens, starting with a letter or digit." };
       return;
@@ -188,8 +194,14 @@ function CreateAgent({ onCreated }: { onCreated: (r: CreateAgentResponse) => voi
             repos={list}
             selection={selection.value}
             picked={picked.value}
-            onSelection={(v) => (selection.value = v)}
-            onToggle={(id, on) => (picked.value = on ? [...picked.value, id] : picked.value.filter((x) => x !== id))}
+            onSelection={(v) => {
+              selection.value = v;
+              answered();
+            }}
+            onToggle={(id, on) => {
+              picked.value = on ? [...picked.value, id] : picked.value.filter((x) => x !== id);
+              if (on) answered();
+            }}
             allLabel="All repositories you can access"
             later="any you get access to later"
             none="You have no repositories yet. Create or claim one first, or give it all of them."
@@ -227,7 +239,7 @@ function CreateAgent({ onCreated }: { onCreated: (r: CreateAgentResponse) => voi
           {error.value.text}
         </p>
       ) : null}
-      <Button type="submit" variant="primary" icon="plus" busy={busy.value} busyLabel="Creating…">
+      <Button type="submit" variant="primary" icon="plus" busy={busy.value || reposLoading} busyLabel={reposLoading ? "Loading repositories…" : "Creating…"}>
         Create agent and token
       </Button>
     </form>
