@@ -212,8 +212,12 @@ export interface GitHost {
 // ---------------------------------------------------------------- sandbox jobs (not the CI pipeline)
 
 export interface SandboxJobs {
-  /** Evaluate `.platform/ci.ts` at `sha` in plan mode (or produce defaults). Returns raw JSON. */
-  planPipeline(input: { repo: string; sha: string }): Promise<unknown>;
+  /**
+   * Evaluate `.platform/ci.ts` at `sha` in plan mode (or produce defaults). Returns raw JSON.
+   * `cacheScope` (the main repository a fork belongs to) lets Changes share cached plans of the
+   * same commit; without it plans are cached per `repo`.
+   */
+  planPipeline(input: { repo: string; sha: string; cacheScope?: string }): Promise<unknown>;
   /** Evaluate `.platform/policy.ts` at `sha`. Returns the raw exported object (validated by caller). */
   evaluatePolicy(input: { repo: string; sha: string }): Promise<unknown | null>;
   /** Rebase `headSha` (in `fork`) onto `ontoSha` (in `mainRepo`), pushing the result to the fork. */

@@ -5,7 +5,7 @@
 import { env } from "cloudflare:workers";
 import { PlanJob, RunnerJob } from "@app/ci-engine";
 import type { Reviewer } from "@app/coordinator";
-import { GitWriteForbiddenError } from "@app/coordinator/adapters";
+import { GitWriteForbiddenError, PLAN_CACHE_TTL_MS, planCacheKey } from "@app/coordinator/adapters";
 import { describe, expect, it } from "vitest";
 import { BundleError, bundleFromEntries, parseTar, r2BundleLoader } from "../src/runtime/bundle.js";
 import {
@@ -142,6 +142,46 @@ describe("buildPorts", () => {
       command: `gittifacts-runner policy --base ${SHA}`,
       logKey: expect.stringMatching(/^ci-logs\/job-policy-[^/]+\/policy\.log$/),
     });
+  });
+
+  it("caches plans in R2 per repository and commit, with a TTL (security audit M5)", async () => {
+    const plans: string[] = [];
+    const runner = {
+      async plan(job: unknown) {
+        const j = PlanJob.parse(job);
+        plans.push(`${j.artifactsRepo}@${j.sha.slice(0, 1)}`);
+        const spec = { version: 1, source: "file", steps: [], from: j.artifactsRepo };
+        return { ok: true, stdout: `::plan::${JSON.stringify(spec)}\n`, stderr: "", exitCode: 0 };
+      },
+    };
+    const ports = buildPorts(
+      { ...env, RUNNER: { getByName: () => runner } } as unknown as PortsEnv,
+      "default",
+    );
+    const [d, e] = ["d".repeat(40), "e".repeat(40)];
+    // One repository's plan is never another's, even for the same commit.
+    expect(await ports.sandbox.planPipeline({ repo: "evil-fork", sha: d })).toMatchObject({
+      from: "evil-fork",
+    });
+    expect(await ports.sandbox.planPipeline({ repo: "victim-fork", sha: d })).toMatchObject({
+      from: "victim-fork",
+    });
+    // Forks of one main repository share it.
+    await ports.sandbox.planPipeline({ repo: "task-1", sha: e, cacheScope: "app" });
+    expect(
+      await ports.sandbox.planPipeline({ repo: "task-2", sha: e, cacheScope: "app" }),
+    ).toMatchObject({ from: "task-1" });
+    expect(plans).toEqual(["evil-fork@d", "victim-fork@d", "task-1@e"]);
+    // An entry past the TTL is planned again.
+    const key = `plan-cache/${planCacheKey("app", e)}.json`;
+    const stored = (await (await env.BLOBS.get(key))?.json()) as { storedAt: number };
+    expect(stored.storedAt).toBeGreaterThan(Date.now() - 60_000);
+    const expired = { ...stored, storedAt: Date.now() - PLAN_CACHE_TTL_MS - 1 };
+    await env.BLOBS.put(key, JSON.stringify(expired));
+    expect(
+      await ports.sandbox.planPipeline({ repo: "task-3", sha: e, cacheScope: "app" }),
+    ).toMatchObject({ from: "task-3" });
+    expect(plans).toHaveLength(4);
   });
 
   it("signs with the platform key on first use", async () => {

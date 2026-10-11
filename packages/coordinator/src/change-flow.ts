@@ -277,7 +277,8 @@ export async function runChangeWorkflow(
     pipeline = (
       await step.do("plan-ci", RETRY.sandbox, async () => {
         const sha = await pipelineShaFor(git, forkName, baseSha, headSha);
-        return { spec: (await ports.sandbox.planPipeline({ repo: forkName, sha })) ?? null };
+        const input = { repo: forkName, sha, cacheScope: ctx.mainRepo };
+        return { spec: (await ports.sandbox.planPipeline(input)) ?? null };
       })
     ).spec;
   } catch (e) {

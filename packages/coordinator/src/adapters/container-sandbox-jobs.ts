@@ -27,13 +27,17 @@ export interface RunnerLike extends RunnerStubLike {
 export interface ContainerSandboxJobsOptions {
   /** `(name) => env.RUNNER.getByName(name)`. */
   runner(name: string): RunnerLike;
-  git: Pick<GitHost, "remoteOf" | "mintToken" | "transferObjects"> & Partial<Pick<GitHost, "readFile">>;
+  git: Pick<GitHost, "remoteOf" | "mintToken" | "transferObjects">;
   /**
-   * Plan results keyed by the content hash of `.platform/ci.ts`. Plan mode is deterministic in
-   * the file's content, and starting a container just to re-plan an unchanged pipeline dominates
-   * time-to-first-green. Only successful plans are cached.
+   * Plan results per repository and commit (`planCacheKey`), so Changes on the same base skip
+   * the plan container, which dominates time-to-first-green. Only successful plans are cached,
+   * and an entry older than `planCacheTtlMs` is planned again.
    */
   planCache?: PlanCache;
+  /** Default {@link PLAN_CACHE_TTL_MS}. */
+  planCacheTtlMs?: number;
+  /** Clock for the plan cache's TTL (ms since the epoch). */
+  now?: () => number;
   /** R2 key for a job's log. */
   logKey(jobId: string, step: string): string;
   newJobId?: () => string;
@@ -46,13 +50,27 @@ export interface PlanCache {
   put(key: string, spec: unknown): Promise<void>;
 }
 
-/** Bump when the recorder's output format changes, so stale plans are never reused. */
-export const PLAN_CACHE_VERSION = "v1";
+/**
+ * Bump when the recorder's output format or the default pipeline changes, so stale plans are
+ * never reused. v2 (security audit 2026-10-11, M5): keyed per repository and commit instead of
+ * by the bytes of `.platform/ci.ts`, which can import files the hash didn't cover.
+ */
+export const PLAN_CACHE_VERSION = "v2";
+/** How long a cached plan is trusted. */
+export const PLAN_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+/**
+ * `v2/<scope>/<sha>`. A commit id pins the whole tree, so everything plan mode can read
+ * (`.platform/ci.ts`, the files it imports, vendored modules, the files the defaults look at) is
+ * the same for every plan under one key; the plan container has no install step and no network
+ * beyond the git host. The scope (the main repository) keeps tenants apart on top of that.
+ */
+export function planCacheKey(scope: string, sha: string): string {
+  return `${PLAN_CACHE_VERSION}/${encodeURIComponent(scope)}/${sha}`;
 }
+
+/** What the plan cache stores: the spec and when it was planned. */
+const PlanCacheEntry = z.object({ storedAt: z.number(), spec: z.unknown() });
 
 const PLAN_PREFIX = "::plan::";
 const EVIDENCE_PREFIX = "::evidence::";
@@ -197,35 +215,49 @@ export class ContainerSandboxJobs implements SandboxJobs {
   private async pushEnv(fork: string): Promise<Record<string, string>> {
     const ttl = Math.min(this.opts.pushTokenTtlSeconds ?? 600, 600);
     const { token } = await this.opts.git.mintToken(fork, "write", ttl);
+    // No global/system config, hooks, fsmonitor or credential helper while the token is in env
+    // (same list as the Runner's checkout, @app/ci-engine `gitTokenEnv`).
+    const config: [string, string][] = [
+      ["http.extraHeader", `Authorization: Bearer ${token}`],
+      ["core.hooksPath", "/dev/null"],
+      ["core.fsmonitor", "false"],
+      ["credential.helper", ""],
+      ["safe.directory", "*"],
+    ];
     return {
-      GIT_CONFIG_COUNT: "1",
-      GIT_CONFIG_KEY_0: "http.extraHeader",
-      GIT_CONFIG_VALUE_0: `Authorization: Bearer ${token}`,
       GIT_TERMINAL_PROMPT: "0",
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_COUNT: String(config.length),
+      ...Object.fromEntries(
+        config.flatMap(([k, v], i) => [
+          [`GIT_CONFIG_KEY_${i}`, k],
+          [`GIT_CONFIG_VALUE_${i}`, v],
+        ]),
+      ),
     };
   }
 
-  async planPipeline(input: { repo: string; sha: string }): Promise<unknown> {
-    const cacheKey = await this.planCacheKey(input);
-    if (cacheKey !== null) {
-      const cached = await this.opts.planCache?.get(cacheKey).catch(() => null);
-      if (cached !== null && cached !== undefined) return cached;
+  async planPipeline(input: { repo: string; sha: string; cacheScope?: string }): Promise<unknown> {
+    const cache = this.opts.planCache;
+    const now = this.opts.now ?? Date.now;
+    const ttl = this.opts.planCacheTtlMs ?? PLAN_CACHE_TTL_MS;
+    // Only a full commit id pins the tree; anything else is never cached.
+    const key = /^[0-9a-f]{40}$/.test(input.sha)
+      ? planCacheKey(input.cacheScope || input.repo, input.sha)
+      : null;
+    if (cache !== undefined && key !== null) {
+      const raw = await cache.get(key).catch(() => null);
+      const entry = PlanCacheEntry.safeParse(raw);
+      if (entry.success && entry.data.spec != null) {
+        const age = now() - entry.data.storedAt;
+        if (age >= 0 && age < ttl) return entry.data.spec;
+      }
     }
     const spec = await this.planInSandbox(input);
-    if (cacheKey !== null) await this.opts.planCache?.put(cacheKey, spec).catch(() => undefined);
+    if (cache !== undefined && key !== null)
+      await cache.put(key, { storedAt: now(), spec }).catch(() => undefined);
     return spec;
-  }
-
-  /** `null` when there is nothing safe to key on (no cache, no file, or the read failed). */
-  private async planCacheKey(input: { repo: string; sha: string }): Promise<string | null> {
-    if (this.opts.planCache === undefined || this.opts.git.readFile === undefined) return null;
-    try {
-      const file = await this.opts.git.readFile(input.repo, input.sha, ".platform/ci.ts");
-      if (file === null) return null;
-      return `${PLAN_CACHE_VERSION}/${await sha256Hex(file)}`;
-    } catch {
-      return null;
-    }
   }
 
   private async planInSandbox(input: { repo: string; sha: string }): Promise<unknown> {

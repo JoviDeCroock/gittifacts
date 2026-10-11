@@ -13,6 +13,8 @@ import { CfApiError } from "../../src/adapters/cf-api.js";
 import {
   ContainerSandboxJobs,
   lastMarked,
+  PLAN_CACHE_VERSION,
+  planCacheKey,
   RESULT_PREFIX,
 } from "../../src/adapters/container-sandbox-jobs.js";
 import { FlagshipFlags } from "../../src/adapters/flagship-flags.js";
@@ -526,22 +528,21 @@ describe("ContainerSandboxJobs", () => {
     );
   });
 
-  it("caches plans by .platform/ci.ts content and skips the plan container on a hit", async () => {
+  it("caches plans per repository and commit, with a TTL, never across repositories", async () => {
+    // Security audit 2026-10-11 (M5): v1 keyed plans by the bytes of .platform/ci.ts alone, shared
+    // by every tenant, so a repo that committed the same ci.ts with a hostile ./steps.ts first
+    // decided another repo's pipeline.
     const store = new Map<string, unknown>();
-    let plans = 0;
-    const files: Record<string, string | null> = {
-      a: "export default 1",
-      b: "export default 1",
-      c: null,
-    };
+    const plans: string[] = [];
+    let clock = 1_000_000;
     const sandbox = new ContainerSandboxJobs({
       runner: () => ({
         run: async () => ({}),
-        plan: async () => {
-          plans += 1;
+        plan: async (job) => {
+          plans.push(`${job.artifactsRepo}@${String(job.sha).slice(0, 1)}`);
           return {
             ok: true,
-            stdout: `::plan::${JSON.stringify({ version: 1, n: plans })}`,
+            stdout: `::plan::${JSON.stringify({ version: 1, from: job.artifactsRepo, n: plans.length })}`,
             stderr: "",
             exitCode: 0,
           };
@@ -551,29 +552,50 @@ describe("ContainerSandboxJobs", () => {
         remoteOf: (r) => `https://git/${r}.git`,
         mintToken: async () => ({ token: "t", expiresAt: "x" }),
         transferObjects: async () => undefined,
-        readFile: async (repo) => {
-          const text = files[repo];
-          return text === null || text === undefined ? null : new TextEncoder().encode(text);
-        },
       },
       planCache: {
         get: async (k) => store.get(k) ?? null,
         put: async (k, v) => void store.set(k, v),
       },
+      planCacheTtlMs: 60_000,
+      now: () => clock,
       logKey: (id, step) => `logs/${id}/${step}`,
       newJobId: () => "j1",
     });
-    const sha = "a".repeat(40);
-    expect(await sandbox.planPipeline({ repo: "a", sha })).toEqual({ version: 1, n: 1 });
-    // Same content in another repo: a cache hit, no container.
-    expect(await sandbox.planPipeline({ repo: "b", sha })).toEqual({ version: 1, n: 1 });
-    expect(plans).toBe(1);
-    // No pipeline file: never cached (defaults depend on the repo, not on a file).
-    await sandbox.planPipeline({ repo: "c", sha });
-    await sandbox.planPipeline({ repo: "c", sha });
-    expect(plans).toBe(3);
-    expect([...store.keys()]).toHaveLength(1);
-    expect([...store.keys()][0]).toMatch(/^v1\/[0-9a-f]{64}$/);
+    const a = "a".repeat(40);
+    const b = "b".repeat(40);
+    // The attacker plans first; the victim (another repo, same ci.ts bytes) gets its own plan.
+    expect(await sandbox.planPipeline({ repo: "evil", sha: a })).toMatchObject({ from: "evil" });
+    expect(await sandbox.planPipeline({ repo: "victim", sha: b })).toMatchObject({
+      from: "victim",
+    });
+    // Even the very same commit is planned again in another repository.
+    expect(await sandbox.planPipeline({ repo: "victim", sha: a })).toMatchObject({
+      from: "victim",
+    });
+    expect(plans).toEqual(["evil@a", "victim@b", "victim@a"]);
+    // Forks of one main repository share a commit's plan through cacheScope.
+    const fork1 = await sandbox.planPipeline({ repo: "task-1", sha: b, cacheScope: "app" });
+    const fork2 = await sandbox.planPipeline({ repo: "task-2", sha: b, cacheScope: "app" });
+    expect(fork2).toEqual(fork1);
+    expect(plans).toHaveLength(4);
+    expect(store.has(planCacheKey("app", b))).toBe(true);
+    expect([...store.keys()].every((k) => k.startsWith(`${PLAN_CACHE_VERSION}/`))).toBe(true);
+    expect(PLAN_CACHE_VERSION).toBe("v2");
+    // Past the TTL the entry is planned again (and refreshed).
+    clock += 60_001;
+    await sandbox.planPipeline({ repo: "task-3", sha: b, cacheScope: "app" });
+    expect(plans).toHaveLength(5);
+    await sandbox.planPipeline({ repo: "task-3", sha: b, cacheScope: "app" });
+    expect(plans).toHaveLength(5);
+    // An entry from another format (v1 stored the bare spec) or a short sha is never trusted.
+    store.set(planCacheKey("app", a), { version: 1, n: 99 });
+    expect(await sandbox.planPipeline({ repo: "x", sha: a, cacheScope: "app" })).not.toMatchObject({
+      n: 99,
+    });
+    await sandbox.planPipeline({ repo: "x", sha: "abc123" });
+    await sandbox.planPipeline({ repo: "x", sha: "abc123" });
+    expect(plans).toHaveLength(8);
   });
 
   it("evaluates the policy at a sha (no file → null; evaluation error → throws)", async () => {
@@ -620,6 +642,15 @@ describe("ContainerSandboxJobs", () => {
       GIT_CONFIG_KEY_0: "http.extraHeader",
       GIT_CONFIG_VALUE_0: "Authorization: Bearer fork-write-token",
       GJ_ONTO: "b".repeat(40),
+      // Nothing repo code could configure runs while the write token is in env.
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_KEY_1: "core.hooksPath",
+      GIT_CONFIG_VALUE_1: "/dev/null",
+      GIT_CONFIG_KEY_2: "core.fsmonitor",
+      GIT_CONFIG_VALUE_2: "false",
+      GIT_CONFIG_KEY_3: "credential.helper",
+      GIT_CONFIG_VALUE_3: "",
     });
     expect(String(t.jobs[0]?.job.command)).not.toContain("fork-write-token");
     const conflict = setup(() => ran(`${RESULT_PREFIX}{"status":"conflict","files":["src/a.ts"]}`));
