@@ -61,6 +61,34 @@ Scale, from the simulator (`sim/merge-queue/report.md`, the real queue core on a
 its gate-200 workload (about 600 Changes) the queue lands 167 per hour with a median of 13 minutes
 in the queue. A strictly serial queue manages 5.7 per hour on the same workload.
 
+## 3b. Several agents, one task: compare attempts, pick one with a tap (2 min)
+
+```sh
+GITTIFACTS_EMAIL=… GITTIFACTS_PASSWORD=… pnpm tsx scripts/e2e/attempts.ts \
+  --url https://<host> --repo <repoId>
+```
+
+One agent drafts a Plan scoped to `attempts/<stamp>/**` and the human approves the intent. Then
+three agents attempt that same Plan at once, each its own Change: a minimal one inside the scope,
+one that also rewrites README.md (scope drift, Lane 2), and one that adds a failing test (or, in a
+repo without vitest tests, 400 lines of noise). When grading is done the script prints
+`compare_attempts`: the ranking, each attempt's reasons ("Lane 1 · tests pass · red/green proven ·
+within plan scope · 4 lines") and the recommended one.
+
+Open the Plan's page (`/plans/<planId>`) beside the terminal: the same ranking as cards, one
+**Pick this one** button per finished attempt. The ranking is pure and deterministic
+(`@app/domain` `rankAttempts`): finished and green first, then lane, tests, CI, red/green, scope
+drift, coverage, mutation, public API, diff size and time to green; anything not measured ranks
+below measured, and an attempt still grading is never recommended over a finished one.
+
+An agent trying to pick is refused (`403`, with a fix naming `compare_attempts`). The human's pick
+approves the winner through the normal review path (bound to the head they saw) and closes the
+other two; their agents' `wait_for_change` answers `superseded` with the winner's id, and the
+winner lands through the queue. The pick is in the audit log as `plan.attempt-picked`.
+
+Proof: `apps/platform/test/integration/attempts.test.ts` runs this journey on the real Worker,
+Durable Objects and Workflows.
+
 ## 4. Review costs what the risk is worth (1.5 min)
 
 Open one of the Changes. Show the lane and its reasons, the evidence, and the walkthrough's stops
