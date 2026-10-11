@@ -73,6 +73,16 @@ Specs:
 - **Product gap (2026-10-04): import-by-push has no UI.** A private repo can only come in by push, and only a
   signed-in human can open the import (`POST /api/v1/projects {"importMode":"push"}` with a browser session); the
   app has no button for it, so a person can't bring a private repo in from the app. Scheduled by the coordinator.
+- **Security audit (2026-10-11), fixed and integrated:** full pre-open-source audit
+  (`docs/security-audit-2026-10-11.md`, `SECURITY.md`). Fixed: GitHub installation links grant per repo (H1), the
+  CLI never sends its token where a checkout's `.gittifacts.json` points (H2), security headers + `__Host-` cookies,
+  auth rate limits, cookie same-origin guard, verified-e-mail member adds, GitHub user ids for self-approval,
+  per-repo plan cache, freeze bypass, lockfile check for dependency-patch, conflict-resolution dropped lines,
+  incremental audit verification, lone-surrogate audit gap, Turnstile fail-closed, `.platform/**` separation of
+  duties, and the Lows. Open: Lane 0 still trusts the author's test environment for test-run/red-green/coverage/
+  mutation evidence (H3 residual, SECURITY.md); previews share `resynapse.dev`; memberships the old H1 behaviour
+  granted are not revoked; existing GitHub links need relinking to review. Ops: R2 lifecycle rule on `plan-cache/`;
+  web sessions sign out once (cookie rename). DECISIONS 2026-10-11 "Security audit".
 
 ## What works (tested)
 | Package | What it does | Tests |

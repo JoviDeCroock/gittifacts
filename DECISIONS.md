@@ -3290,3 +3290,218 @@ projects' CI. Cloudflare's budget alerts arrive a day late and never pause anyth
 loses its summary never settles, so its minutes don't count (the hard budget still bounds it). Not metered:
 Artifacts operations and storage (billing starts 2026-10-14), R2, D1, Durable Objects and Workers requests. Those are
 left to Cloudflare's budget alert (docs/deploy.md).
+
+## 2026-10-11 — Security audit before open-sourcing
+Full audit in docs/security-audit-2026-10-11.md (findings H1–H3, M1–M13, Lows; status table), reporting policy
+and self-host caveats in SECURITY.md. The entries below record each fix.
+
+## 2026-10-11 — CLI: a checkout can't redirect the token; no platform token to other origins
+Context: security audit 2026-10-11 H2 and CLI Lows. `.gittifacts.json` is read from the cwd or any
+parent, so a hostile checkout could send GITTIFACTS_TOKEN (and a login token, via mcpUrl) anywhere.
+Decision:
+- GITTIFACTS_TOKEN is sent to a host from --host, GITTIFACTS_HOST, the last login or the build
+  default. A host named only by `.gittifacts.json` gets it only when credentials.json has that host
+  (logged in, or created a project there) or GITTIFACTS_TOKEN_HOST names it; else `untrusted-host`.
+  Its fix is `cat <file>`, never a command that would send the token to that host (agents run fixes as is).
+- The project file's `mcpUrl` is used only when its origin is the host; otherwise ignored with a
+  stderr warning.
+- Plain http is refused (`insecure-host`) for the host, the MCP URL and login, except loopback.
+- `init --clone` sends a platform token only to a remote on the platform's origin; for the Artifacts
+  remote without a token it asks refresh_push_token, else clones without auth (fix names the call).
+- `--human` output and progress lines strip C0 (but tab/newline), DEL and C1 from server strings.
+- Docs no longer promise `npx gittifacts` (npm name unregistered); always run the platform's tarball.
+Consequences: agents using GITTIFACTS_TOKEN should also set GITTIFACTS_HOST. Code: packages/cli/src/host-trust.ts.
+
+## 2026-10-11 — GitHub installation links grant per repo, from the linker's own GitHub access (audit H1)
+GitHub lists an installation in /user/installations for anyone who can read one of its repos, so
+a link proves nothing about the other repos. The setup callback now stores, per link, the repos the
+user token lists (`GET /user/installations/{id}/repositories`) with the access GitHub reports, in
+`github_link_repos` (migration 0024). Grants come only from those rows: admin (repo admin, or the
+personal account the App is installed on; org owners are repo admins) may claim an unclaimed repo,
+otherwise at least maintainer; maintain/push → at least maintainer; pull/triage/absent → at least
+reader. System grants only raise a membership, never lower one. Rows are replaced on every link and
+dropped when a repo leaves the installation. GET /api/v1/github lists only the repos the link saw.
+Trade-offs: a repo added to an installation after the link grants nobody until someone links again
+(a per-repo collaborator-permission check with the App token, verified by user id, is the
+follow-up); linking again only adds access, never removes it; memberships the old behaviour
+granted are not revoked automatically.
+
+## 2026-10-11 — GitHub identity is the numeric user id, never the login (audit M4)
+Logins are renamable and re-registrable. `github_installation_links.github_user_id` (migration
+0024) is recorded at link time; the self-approval guard (`isHostAuthor`) and the actor mapping
+(`githubActorPrincipal`) compare `change.host.author.id` / the event's user id with it. Links from
+before the column exist have no id. Unknown → escalate: such a link counts as "is the author"
+(platform review of any GitHub PR is refused) and is not used to attribute GitHub activity to its
+human until they link again. The login is kept for display only.
+
+## 2026-10-11 — Migration 0024 written by hand (drizzle meta not regenerated)
+0023 (time-to-first-merge) landed in flight by hand without a drizzle snapshot or journal entry;
+regenerating would have mixed both changes into one migration. 0024 was written by hand to match
+the schema. After both are committed, run `pnpm db:generate` once, keep the snapshot and journal it
+writes, and delete the SQL file it emits (its statements are already in 0023/0024).
+
+## 2026-10-11 — Turnstile fails closed without a secret (audit M11)
+`verifyTurnstile` with no `TURNSTILE_SECRET_KEY` refuses (`503 turnstile-not-configured`, fix names the secret) unless
+`TURNSTILE_TEST_KEYS=1`, which only vitest, the hermetic E2E server, staging (scripts/staging/config.ts: staging has no
+Turnstile secret) and `.dev.vars.example` set. Replaces "unset → Cloudflare's always-pass test keys": a self-host that
+forgot the secret silently lost the human check. A missing signal may only raise risk. Production has the secret.
+
+## 2026-10-11 — Retention purges authorization attempts (audit M2 tail)
+`runRetention` deletes `oauth_requests`, `integration_authorizations` (one row per anonymous authorize GET) and
+`device_code` rows a day (`AUTH_REQUEST_GRACE_DAYS`) after both the request and its code expired, batched like the
+other purges. A code replayed after that is "unknown", not "reused" — its 5-minute lifetime is long past.
+
+## 2026-10-11 — Integration hardening (audit Lows)
+- `GET /api/v1/deployments/{id}` checks read on the deployment's repo for every principal (integrations additionally
+  only their own); refusal is the 404 of an unknown id.
+- The integration token exchange always requires `redirect_uri`, equal to the authorization request's (RFC 6749
+  §4.1.3). Stricter than the RFC (required only if sent at authorize) because the row does not record whether it was
+  sent or defaulted to the single registered URI; the documented flow sends it on both. Checked before redemption.
+- Webhook URLs (src/integrations/webhook-url.ts) must be public https DNS names: no IP literals, localhost,
+  single-label or .localhost/.local/.internal/.arpa names, the platform host, its workers.dev account siblings or the
+  preview zone. Checked at registration/PATCH (400) and at every delivery (cancelled, nothing sent). DNS rebinding to
+  private ranges is not covered (Workers' fetch does not reach private networks).
+
+## 2026-10-11 — No internal text in error responses (audit Low)
+The change SSE stream's `error` event is `{code, message}` from `toErrorResponse` (typed errors keep theirs; anything
+else is a generic `internal`). `StoreDataError`/`SigningKeyConfigError` answer a generic 500 message; details (R2
+keys, key parse errors) only in `console.error`.
+
+## 2026-10-11 — Security headers on every platform response (audit M1)
+Every response from the platform app (API, errors, better-auth, ASSETS passthroughs incl. the SPA HTML) gets
+`Content-Security-Policy: frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and
+`Referrer-Policy: strict-origin-when-cross-origin` (src/security/headers.ts). Headers a route already set win; a CSP
+without frame-ancestors gets a second policy appended (browsers enforce both), so blobs/qa-img keep their sandbox CSP.
+No script-src policy: the SPA build has not been audited against one. Why: project Workers share the platform's
+registrable domain (*.<account>.workers.dev) and could frame /oauth/consent or plan approval with Lax cookies.
+
+## 2026-10-11 — __Host- session cookies on https (audit M1)
+On an https base URL the better-auth session cookies are named `__Host-better-auth.{session_token,session_data,
+dont_remember,account_data}` (Secure, Path=/, no Domain); better-auth's own `__Secure-` prefixing is off and
+`defaultCookieAttributes.secure` keeps every other cookie Secure. http (local dev, vitest, E2E server) keeps the plain
+names. Why: a sibling *.workers.dev Worker can set `__Secure-`/plain cookies with Domain= (cookie tossing / login CSRF);
+it cannot set a `__Host-` cookie. Cost: every web session is signed out once on the deploy that ships this; agent
+tokens are unaffected. A separate registrable domain for tenant Workers remains the stronger fix.
+
+## 2026-10-11 — Auth endpoints are rate limited by Workers Rate Limiting (audit M2)
+better-auth's per-isolate limiter stays off; src/security/auth-limits.ts runs in front of it. Bindings: AUTH_LIMITER
+(4304, 20/60 s per CF-Connecting-IP: sign-in/*, sign-up/*, password reset, passkey verify-authentication),
+AUTH_EMAIL_LIMITER (4305, 10/60 s per normalized e-mail: sign-in, password reset), OAUTH_LIMITER (4306, 120/60 s per
+IP: /api/oauth/authorize, /api/oauth/token, /api/auth/device/*; a CLI polls every 5 s). Over a limit: 429
+`rate-limited` envelope + Retry-After: 60 (also on the OAuth token endpoint, not RFC 6749 JSON). A missing binding
+fails closed (500). vitest and the E2E server raise these three to 100k (all their traffic shares one IP); staging
+mirrors them with its +100 namespace offset.
+
+## 2026-10-11 — Same-origin guard on cookie-authenticated REST mutations (audit M13)
+Non-GET/HEAD/OPTIONS requests under /api/ that carry the better-auth session cookie and no Authorization header must
+send Origin equal to the browser-facing origin (BETTER_AUTH_URL) or the request's own origin (the pair /mcp accepts),
+or, without Origin, Sec-Fetch-Site same-origin/none (same-site is refused: tenant Workers are same-site). Neither
+header = not a browser (curl) and passes. Refusal: 403 `foreign-origin` with a fix. Exempt: /api/auth/* (better-auth's
+trustedOrigins check), /api/oauth/token and /api/oauth/revoke (CORS *, no cookies read); webhooks, /git/*, /mcp are
+outside /api/. src/security/same-origin.ts.
+
+## 2026-10-11 — Evidence is read from the file only; Lane 0 trusts the author's test environment (security audit H3)
+The Runner reads evidence only from $GITTIFACTS_EVIDENCE_OUT. The stdout `::evidence::` line is no longer a channel:
+repository code shares that output. Every checkout rewrites .git/config and runs git with the token and no
+global/system config, hooks, fsmonitor or credential helper (gitTokenEnv). Evidence steps reset tracked files to HEAD
+over the install snapshot. gittifacts-runner's own git ignores global/system config and fsmonitor. Result:
+dependencies and policy can't be forged by the Change's code, and public-api only through type declarations in
+node_modules. Not done: running the evidence tool as a different uid from the code it measures. test-run, red-green,
+coverage and mutation run the head's tests in the same process tree and uid, so that code can forge them; transforms
+can be forged through node_modules; the snapshot-replay path is not covered. Lane 0 therefore trusts the author's
+test environment for those kinds. Follow-up: label evidence produced inside the author's environment and decide in
+the classifier whether Lane 0 may rest on it. The opt-in @cloudflare/ci engine reads stdout only and must not be used
+with Lane 0. Table in packages/ci-engine/RUNNER_CONTRACT.md §3.
+
+## 2026-10-11 — CI plans are cached per main repository and commit, with a TTL (security audit M5)
+plan-cache v1 keyed plans by sha256(.platform/ci.ts) across every tenant, with no expiry. ci.ts can import sibling
+files, so one repo could decide another's pipeline. v2 keys on `v2/<main repo>/<commit sha>`: a commit pins the whole
+tree, and the plan container has no install step and no network beyond git. Forks share through
+SandboxJobs.planPipeline({cacheScope}). Entries store {storedAt, spec} and are re-planned after 7 days
+(PLAN_CACHE_TTL_MS). Old-format entries and short shas are never trusted. Trade-off: one plan per new base commit
+instead of one per ci.ts version. Ops: add an R2 lifecycle rule on plan-cache/ (v1 objects are orphaned).
+
+## 2026-10-11 — Git never reads repository-writable config while a token is in env (security audit Low)
+The CI checkout, the workspace checkout/commit-push and the merge-queue rebase/revert all set
+GIT_CONFIG_GLOBAL=/dev/null, GIT_CONFIG_NOSYSTEM=1, core.hooksPath=/dev/null, core.fsmonitor=false, credential.helper=
+and safe.directory=* (the image's system config is off). Both checkouts rewrite .git/config from scratch, because
+command-scope config can't remove insteadOf rewrites or filter drivers.
+
+## 2026-10-11 — Request text must be well-formed Unicode (security audit M10)
+A JSON escape like `\ud800` decodes to a lone surrogate. Canonical JSON rejects those, so a plan approval committed
+in D1 and then failed its audit append: the plan was approved with no `plan.approved` entry (reproduced). One
+middleware in `newApiApp()` (`api/well-formed.ts`) refuses any HTTP or MCP JSON body with a lone surrogate in a
+string or key, before auth: 400 `invalid-request`, or JSON-RPC `-32602` on `/mcp`. It only parses bodies that contain
+a `\uD8xx`–`\uDFxx` escape. As a second layer, the AuditLog DO makes appended strings well-formed (U+FFFD) so an
+append never throws after its state change committed. Commit subjects are never cut inside a surrogate pair. Writing
+state first and auditing second stays (D1 and the DO can't be atomic), but every audit payload is built before the
+write and a failed append surfaces as an error.
+
+## 2026-10-11 — Audit chain verified incrementally from a checkpoint (security audit M9)
+`GET /api/v1/audit` no longer re-verifies the whole chain in the global DO. The DO keeps a verified-through
+checkpoint (seq and hash) and re-checks that entry on every read; it verifies at most 200 new entries per read and
+advances the checkpoint. A break is recorded and stays reported until a full re-verify passes.
+`POST /api/v1/admin/audit/verify` (platform admins) re-verifies from genesis in batches, ignoring the checkpoint, and
+is the only check for entries older than the checkpoint. The API says how far it got: `verified` is true only when
+complete, plus `verifiedThrough`, `headSeq` and `complete`. The web shows "verified through #X of #Y" instead of
+claiming a full verification.
+
+## 2026-10-11 — Evidence attestation v2 signs its time (security audit Low)
+v1 signed only the payload, so `signedAt` and `signer` were editable and a retired key's `notAfter` could be bypassed
+by backdating. v2 signs `{typ:"gittifacts.attestation/v2", v:2, alg, keyId, payloadDigest, signedAt, signer}`, and
+`signEvidence` writes v2. Verifiers accept both versions; the two signed shapes can't be swapped. Unknown escalates: a
+v1 attestation under a key with `notAfter` fails as `unverifiable-time`. Operators who accept that key's old notes
+list it without `notAfter`. Detached document signatures stay v1 (stored raw; their time is a signed field: audit
+`at`, plan `approvedAt`, why-note `landedAt`); verifiers pass `signedAtBound`. A signed time doesn't stop a leaked
+key: revoke compromised keys rather than only setting `notAfter`.
+
+## 2026-10-11 — Only a human (or a revert) gets work through a freeze (security audit M6)
+An agent could land during a human freeze by citing any approved Plan as "incident". Plans carry no incident marker,
+so the rule is: an agent-set incident class orders the entry but is never "express" — it does not land while the
+queue is frozen (any freeze reason). Only a human's incident class (`incidentByHuman`, set by Enqueued from the
+intent or by a human Reprioritized; an agent re-asking never drops it) and reverts land through a freeze. While
+frozen, an agent's request for incident is refused (`frozen`, "ask a maintainer to reprioritize"). Entries stored
+before this have no flag and count as agent-set (unknown → escalate).
+
+## 2026-10-11 — A conflict resolution keeps the approval only if it is an in-order merge (security audit M8)
+"Novel lines" missed deletions and reordering: keeping base and dropping upstream's `requireAuth()` wrote 0 novel
+lines and kept the human approval. `resolutionScope` now also counts `droppedLines` per region: lines of either side
+(minus base lines the other side deleted) missing or out of order in the resolution, plus lines beyond the merge's
+multiset (a side's deletion undone). Without a diff3 base every line of each side must survive; unknown whole-file
+sides escalate. The queue requires a fresh approval (Lane ≥ 1, `merge-queue.resolution-dropped-lines`) when it is
+> 0 or missing. Picking one side of a same-line conflict now needs a human — deliberately.
+
+## 2026-10-11 — dependency-patch Lane 0 needs a verified lockfile (security audit M7)
+The dependencies producer takes the lockfile texts at base and head (`lockfiles`) and records `lockfile: { verified,
+changes, problems }`. Verified = every entry change in pnpm-lock.yaml (v6/v9) or package-lock.json /
+npm-shrinkwrap.json (v2/v3) is one patch bump of a manifest-bumped package, re-resolved from the registry
+(pnpm `{integrity}` only; npm same tarball URL with the version swapped), nothing else in the entry changed,
+references follow, no entries added or removed, settings/overrides unchanged. Transitive updates are not explained.
+yarn/bun lockfiles are unsupported. The classifier raises `dependency.lockfile-unverified` (Lane 1) when a dependency
+changed and the lockfile check is missing or not verified, and grants planless dependency-patch only on a verified
+lockfile. The runner (`evidence dependencies`) reads every touched lockfile from git objects at base and head
+(unchanged ones are skipped; one over ~8 MiB is reported unchecked → Lane 1).
+
+## 2026-10-11 — Separation of duties on .platform/** (security audit M12)
+Refines "an owner approving its own agent's Change is allowed": for a `requiresHumanApproval` change (`.platform/**`
+or unknown scope) the approver must be maintainer+ (`approve`), and not the owner of the authoring agent — unless they
+are the repo's only human member (solo project, so it isn't bricked; audited `soloOwnerApprovedOwnAgentPolicy`).
+Membership comes from `RepoAccess.humanMembers`; absent or failing → the solo exception does not apply. Rejections
+and request-changes stay open to reviewers. Ordinary Changes keep the owner-approves-own-agent rule (`viaOwner`).
+
+## 2026-10-11 — Separation of duties on .platform/: the platform counts human members (M12 follow-up)
+The platform's access port implements `humanMembers` as one D1 count of distinct human principals among the repo's
+`repo_members` (any role) plus the claim owner of a claimed repo (counted once). Pending invites are not members and
+don't count; agents and integrations are never members. A failed read throws, which the coordinator treats as
+unknown: the solo exception doesn't apply. Covered end to end by `test/integration/policy-separation.test.ts`. A solo
+project can approve its own agent's policy change (audited `soloOwnerApprovedOwnAgentPolicy`); inviting someone
+doesn't end that, their accepting does.
+
+## 2026-10-11 — Adding a member by e-mail trusts only verified e-mails (security audit M3)
+`POST /repos/{id}/members` with an e-mail resolved to any account with that e-mail; e-mail sign-up proves nothing, so
+whoever pre-registered bob@corp.com received the role meant for Bob. Now an e-mail resolves directly to an account
+only when `emailVerified` is true (today: GitHub sign-in with a verified primary e-mail). Every other e-mail, including
+an existing unverified account's, gets the single-use invite (202): joining needs the link and a signed-in account
+with the invited e-mail, and the link, handed to the person the owner means, is the proof. Adding by principal id is
+unchanged. Residual: a squatted e-mail can keep the real person from signing up with it (denial, not access); turning
+on e-mail verification removes it.
