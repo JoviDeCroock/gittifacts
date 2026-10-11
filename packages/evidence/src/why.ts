@@ -12,6 +12,7 @@
  * `documentSigningBytes(<the note without "attestation">, attestation.purpose)`, checked with the
  * platform's published keys (/.well-known/gittifacts-keys.json); `landedAt` is when it was signed.
  * Like evidence notes, the LAST complete JSON document in a note is authoritative.
+ * `verifyWhyNote` checks all of that; `verify-attestation` runs it on every commit it verifies.
  */
 import { z } from "zod";
 import { documentSigningBytes, type VerifyFailureReason, verifyDocument } from "./attest.js";

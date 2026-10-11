@@ -78,7 +78,21 @@ git log --notes=why --notes=evidence -3
 Every commit the queue landed carries two signed notes: `refs/notes/evidence` (what it was proven
 to do) and `refs/notes/why` (the approved plan's intent and acceptance criteria, the agent that
 wrote it and the human accountable for it, the lane, the approvals). No platform needed to read
-them; the platform's published keys verify them.
+them; the platform's published keys verify them. Verify both on camera (from a gittifacts
+checkout; `node verify-attestation.mjs` from `pnpm --filter @app/evidence build:cli` works the
+same with no install):
+
+```sh
+pnpm verify-attestation --repo <clone> --commit HEAD --require-why \
+  --keys-url https://<host>/.well-known/gittifacts-keys.json
+```
+
+It prints the evidence verdict, then the why note: the Change, `landedSha … matches commit`, the
+author and accountable human, the plan's intent and acceptance criteria, the lane, the approvals,
+and `verdict   VERIFIED - signed by a trusted key and landed as <sha>`. To show the failure, edit
+one word of the intent and put the note back (`git notes --ref=refs/notes/why edit HEAD`): the
+evidence still verifies, the why note says `UNVERIFIED, do not trust` and
+`NOT VERIFIED (bad-signature)`, and the exit code is 1.
 
 ## 6. Easy to undo after merge (1.5 min)
 

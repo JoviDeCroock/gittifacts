@@ -100,6 +100,13 @@ pnpm verify-attestation --file note.json --commit <sha> --public-key <base64url>
 Add `--json` for machine output and `--ref` for a different notes ref. The exit code is
 `0` when verified, `1` when not verified, and `2` for usage or configuration errors.
 
+The same run checks the commit's why note (see [Why notes](#why-notes)) with the same keys.
+A why note that is present but does not verify fails the run (exit `1`, top-level
+`reason: "why-note"` in `--json`, with the details under `why`), even when the evidence
+verifies. A missing why note is reported as `NONE` and does not fail the run, because older
+commits and evidence-only repositories have none; pass `--require-why` to fail on it. In
+`--file` mode, give the why note with `--why-file <why.json>`.
+
 ```text
 gittifacts evidence attestation (. refs/notes/evidence)
   commit    2222222222222222222222222222222222222222
@@ -113,7 +120,35 @@ gittifacts evidence attestation (. refs/notes/evidence)
     ok      sensitive-paths  no hits (1 pattern)
     (1 item(s) not measured: a valid signature does not make them pass)
   verdict   VERIFIED - signed by a trusted key and bound to 222222222222
+
+gittifacts why note (. refs/notes/why)
+  change    chg_01JABCDEF "Guard division by zero"
+  landedSha 2222222222222222222222222222222222222222 matches commit
+  author    builder-bot (agent ag_1); accountable: Ada (human usr_ada)
+  plan      pln_1 "Division guard", approved by Bo (human usr_bo)
+  intent    div(x, 0) must throw instead of returning Infinity
+  accept    - div(1, 0) throws RangeError
+  lane      1 (signal.public-api)
+  approvals Bo (human usr_bo)
+  trace     claude-code trace-1
+  evidence  ev_1
+  signer    key q3Jm6tW0bJ0bq0Ck2y1y3A (2026) | landed 2026-10-01T12:00:00.000Z
+  verdict   VERIFIED - signed by a trusted key and landed as 222222222222
 ```
+
+A why note edited after signing keeps its evidence verdict but fails the run:
+
+```text
+gittifacts why note (. refs/notes/why) - UNVERIFIED, do not trust
+  ...
+  verdict   NOT VERIFIED (bad-signature): Ed25519 signature does not verify under key q3Jm6tW0bJ0bq0Ck2y1y3A
+```
+
+Other why-note failures: `unknown-key`, `expired-key`, `commit-mismatch` (the note names
+another `landedSha`, e.g. it was copied from another commit), `digest-mismatch` (signed for
+a purpose other than `gittifacts/document`), `schema`, `bad-note`, and `no-note` with
+`--require-why`. Text from the note is printed with control and bidi characters escaped, so
+a note cannot print a verdict line of its own.
 
 **Standalone script.** `pnpm --filter @app/evidence build:cli` writes
 `dist/verify-attestation.mjs` and `dist/keygen.mjs`. These are single files with no
@@ -135,6 +170,34 @@ or `{ "keys": [...] }`.
 is base64url raw 32 bytes. Store the private key as a secret (for example
 `wrangler secret put`) and publish the public key.
 
+## Why notes
+
+The merge queue writes a second note on every commit it lands, under `refs/notes/why`
+(`src/why.ts`, format `gittifacts.why/v1`): why the Change exists and who answers for it.
+It holds the approved Plan (intent, acceptance criteria, out of scope, who approved it), the
+author and, for an agent, the accountable human, the lane and its reasons, the approvals
+that stood, the agent trace, the evidence id, and `headSha` (as reviewed) and `landedSha`
+(the commit the note is on; they differ after a rebase).
+
+- **Signature:** `attestation.signature` is a detached Ed25519 signature by the platform's
+  key over `documentSigningBytes(<the note without "attestation">, "gittifacts/document")`,
+  i.e. canonical JSON of `{ document, purpose }`. `attestation.keyId` names the key.
+- **Checked over what is stored:** the signature is verified over the stored document minus
+  `attestation`, not a schema-stripped copy, so an injected field fails like an edited one.
+- **`landedAt`** is the signing time the note claims, used only to apply a key's
+  `notAfter`.
+- **Binding:** against a commit, `landedSha` must name that commit.
+- **Appends:** as with evidence notes, the last complete JSON document is authoritative.
+
+From any clone, with the platform's published keys:
+
+```sh
+git fetch origin 'refs/notes/*:refs/notes/*'
+git log --notes=why -1
+pnpm verify-attestation --repo . --commit HEAD --require-why \
+  --keys-url https://<host>/.well-known/gittifacts-keys.json
+```
+
 ## Library
 
 ```ts
@@ -146,6 +209,11 @@ const noteText = encodeNote(signed); // git notes --ref=refs/notes/evidence add 
 const result = await verifyEvidence(decodeNote(noteText), trustedKeysOrPublicKey);
 if (result.ok) use(result.evidence); // the schema-validated bundle
 else console.error(result.reason, result.detail);
+
+// refs/notes/why: the note text as stored, the trusted keys, and the commit it is on
+const why = await verifyWhyNote(whyNoteText, trustedKeysOrPublicKey, { commit: sha });
+if (why.ok) use(why.note.plan?.intent);
+else console.error(why.reason, why.detail); // why.note, when present, is for display only
 ```
 
 Verification never throws on bad input. Failure reasons are `schema`, `unknown-key`,
