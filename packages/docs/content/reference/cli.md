@@ -23,6 +23,7 @@ The CLI prints exactly one JSON document on stdout (errors too) and `--human` ta
 | `--idempotency-key <key>` | Key for mutating commands (default: generated, printed in the output). |
 | `--help` | Usage for a command. |
 | `--version` | Print the CLI version. |
+| `--no-update` | Run this build as it is: skip the check for a newer one on the platform (also GITTIFACTS_NO_UPDATE=1). |
 
 ## Environment
 
@@ -32,6 +33,7 @@ The CLI prints exactly one JSON document on stdout (errors too) and `--human` ta
 | `GITTIFACTS_TOKEN` | bearer token (overrides stored credentials) |
 | `GITTIFACTS_TOKEN_HOST` | the one host GITTIFACTS_TOKEN may be sent to when the host comes only from .gittifacts.json |
 | `GITTIFACTS_CONFIG_DIR` | credentials directory (default ~/.config/gittifacts) |
+| `GITTIFACTS_NO_UPDATE` | 1: never check the platform for a newer CLI build (like --no-update; builds live in ~/.cache/gittifacts/cli) |
 | `NO_COLOR` | no color in --human output |
 
 ## Exit codes

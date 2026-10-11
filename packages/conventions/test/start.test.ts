@@ -77,7 +77,7 @@ describe("startGuide JSON", () => {
     );
     expect(json.auth.deviceFlow).toEqual({
       available: true,
-      command: `npx -y ${HOST}/cli/gittifacts.tgz --host ${HOST} login`,
+      command: `npx -y ${HOST}/cli/v2/gittifacts.tgz --host ${HOST} login`,
     });
     const off = startGuide({
       ...opts,
@@ -131,7 +131,7 @@ describe("startGuide no-account path", () => {
 
 describe("startGuide CLI", () => {
   const { json, markdown } = startGuide(opts);
-  const tarball = `${HOST}/cli/gittifacts.tgz`;
+  const tarball = `${HOST}/cli/v2/gittifacts.tgz`;
 
   it("runs the CLI from the platform's tarball (not on npm yet), with the host passed", () => {
     expect(json.cli.tarball).toBe(tarball);

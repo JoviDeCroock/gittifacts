@@ -114,7 +114,7 @@ Each journey that matters, and the tier that covers it today:
 | Agent over MCP: status, evidence, wait_for_change; agents can't approve | ✓ mcp | ✓ m1, mcp.test | ✓ | ✓ (anonymous) | ✓ m1, mcp-journey |
 | Anonymous create_project → first green + preview | — | ✓ unclaimed-create, onboarding | — (kill switch off locally) | ✓ within 120 s | ✓ cli-journey |
 | Remote-only agent (workspace) | — | ✓ remote-workspace.test | — | — | ✓ remote-workspace |
-| CLI onboarding (`npx …/cli/gittifacts.tgz init`) | ✓ cli | — | ◐ tarball served | ◐ tarball served | ✓ cli-journey |
+| CLI onboarding (`npx …/cli/v2/gittifacts.tgz init`) | ✓ cli | — | ◐ tarball served | ◐ tarball served | ✓ cli-journey |
 | GitHub import | — | ✓ import-* | — | — | ✓ import-journey (weekly) |
 | GitHub App PR grading | ✓ host-github | ✓ github-*, host-contract | — | ✓ webhook rejects a bad signature | ✓ github-live |
 | Rollout regression → auto-revert | ✓ coordinator | ◐ coordinator rollout tests | — | — | ✓ m4 (weekly) |

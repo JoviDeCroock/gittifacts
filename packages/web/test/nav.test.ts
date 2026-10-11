@@ -108,6 +108,6 @@ describe("server paths need a full navigation", () => {
 describe("the router's scope", () => {
   it("handles app links in the page and leaves server paths to a full navigation", () => {
     for (const href of ["/dashboard", "/repos/r1?filter=all", "/changes/c1/evidence", "/agents", "?filter=all", "/settings/github"]) expect(SPA_SCOPE.test(href), href).toBe(true);
-    for (const href of ["/", "/docs", "/docs/concepts/plans", "/docs/concepts/lanes#calibrating", "/start", "/api/v1/me", "/cli/gittifacts.tgz"]) expect(SPA_SCOPE.test(href), href).toBe(false);
+    for (const href of ["/", "/docs", "/docs/concepts/plans", "/docs/concepts/lanes#calibrating", "/start", "/api/v1/me", "/cli/v2/gittifacts.tgz"]) expect(SPA_SCOPE.test(href), href).toBe(false);
   });
 });

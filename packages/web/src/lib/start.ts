@@ -11,7 +11,7 @@ export function agentPrompt(origin: string, repoId: string, intent: string): str
 
 /** The CLI's clone, from the tarball this host serves (`gittifacts clone <repoId>`). */
 export function cloneCommand(origin: string, repoId: string): string {
-  return `npx -y ${origin}/cli/gittifacts.tgz clone ${repoId}`;
+  return `npx -y ${origin}/cli/v2/gittifacts.tgz clone ${repoId}`;
 }
 
 export type McpClient = "claude" | "json" | "other";

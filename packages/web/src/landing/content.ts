@@ -6,8 +6,8 @@
 
 /** The deployed origin, used in the static HTML; the Worker rewrites it to the request origin. */
 export const DEFAULT_ORIGIN = "https://gittifacts.decroockjovi.workers.dev";
-/** The CLI tarball the platform serves (not on npm yet): `npx -y <origin>/cli/gittifacts.tgz`. */
-export const CLI_PATH = "/cli/gittifacts.tgz";
+/** The CLI tarball the platform serves (not on npm yet): `npx -y <origin>/cli/v2/gittifacts.tgz`. */
+export const CLI_PATH = "/cli/v2/gittifacts.tgz";
 
 /**
  * A URL split where a line may break: after "//" and each "." of the host, and before each "/"

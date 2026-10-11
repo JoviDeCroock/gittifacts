@@ -8,7 +8,7 @@ machines prove conformance (evidence), and every Change is routed to the cheapes
 - MCP: {{mcpUrl}}
 - Guide: {{host}}/start · API: {{host}}/openapi.json
 - CLI (every MCP tool as a shell command, JSON output; not on npm yet, the platform serves it):
-   `npx -y {{host}}/cli/gittifacts.tgz --host {{host}} --help`
+   `npx -y {{host}}/cli/v2/gittifacts.tgz --host {{host}} --help`
 - Status: **unclaimed**: deleted when it expires unless a human claims it.
   Give the `claimUrl` from `create_project` to a human (they log in to claim it).
   Until then: previews only, no secrets, custom domains or production deploys, no Lane 0 or

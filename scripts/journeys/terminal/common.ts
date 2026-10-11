@@ -8,7 +8,7 @@ export const HOST = (process.env.GF_HOST ?? "https://gittifacts.decroockjovi.wor
   "",
 );
 /** The CLI as the platform serves it (not on npm yet). */
-export const CLI = `${HOST}/cli/gittifacts.tgz`;
+export const CLI = `${HOST}/cli/v2/gittifacts.tgz`;
 
 export function terminalArgs(): {
   out: string;

@@ -111,7 +111,7 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   registerHealthRoutes(app);
   // Documentation (packages/docs build in the static assets): HTML, or markdown on request.
   registerDocsRoutes(app);
-  // The CLI as an npm tarball (packages/cli pack:assets): npx -y <origin>/cli/gittifacts.tgz.
+  // The CLI as an npm tarball (packages/cli pack:assets): npx -y <origin>/cli/v2/gittifacts.tgz.
   registerCliRoutes(app);
   registerWellKnownRoutes(app);
   registerIdentityRoutes(app);

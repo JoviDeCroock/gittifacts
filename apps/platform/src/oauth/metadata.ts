@@ -77,7 +77,7 @@ export const AS_METADATA_PATH = OAUTH_PATHS.asMetadata;
  * both discovered from /.well-known/oauth-authorization-server.
  */
 export function deviceFlowCommand(origin: string): string {
-  // The CLI tarball this platform serves (/cli/gittifacts.tgz); `npx gittifacts` once on npm.
+  // The CLI tarball this platform serves (/cli/v2/gittifacts.tgz); `npx gittifacts` once on npm.
   return cliCommand(origin, "login");
 }
 

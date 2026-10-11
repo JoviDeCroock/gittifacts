@@ -27,7 +27,7 @@ const CHECKS: UrlCheck[] = [
   { path: "/.well-known/ai-catalog.json", accept: "*/*", type: "json" },
   { path: "/.well-known/gittifacts-keys.json", accept: "*/*", type: "application/json" },
   { path: "/.well-known/oauth-protected-resource/mcp", accept: "*/*", type: "json" },
-  { path: "/cli/gittifacts.tgz", accept: "*/*", type: "gzip" },
+  { path: "/cli/v2/gittifacts.tgz", accept: "*/*", type: "gzip" },
   { path: "/docs", accept: "text/html", type: "text/html", body: "<h1" },
   { path: "/docs/llms.txt", accept: "*/*", type: "text/plain" },
   { path: "/docs/llms-full.txt", accept: "*/*", type: "text/markdown" },

@@ -15,7 +15,7 @@ You need Node 22 or later and git.
 ## 1. Create a repo
 
 ```sh
-npx -y https://<host>/cli/gittifacts.tgz --host https://<host> init --template workers-api --name my-api --clone
+npx -y https://<host>/cli/v2/gittifacts.tgz --host https://<host> init --template workers-api --name my-api --clone
 ```
 
 Expected, after about 20 seconds:
@@ -26,7 +26,7 @@ Preview: https://p-bs-3fk2q8wz7m1x0c5v9nbd-pv.resynapse.dev (live once the first
 Claim it to keep it (unclaimed repos expire): https://<host>/claim/gtc_…
 Cloned into my-api. Next: edit a file, commit, then ship it:
   $ cd my-api && git commit -am "<what changed>" && gittifacts ship
-  (no gittifacts on PATH? alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz")
+  (no gittifacts on PATH? alias gittifacts="npx -y https://<host>/cli/v2/gittifacts.tgz")
 ```
 
 The platform made a repo from the `workers-api` template and started its first CI run and a preview.
@@ -46,7 +46,7 @@ Without an account, each network address can create 3 repos an hour. Past that, 
 
 ```sh
 cd my-api
-alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz"
+alias gittifacts="npx -y https://<host>/cli/v2/gittifacts.tgz"
 gittifacts wait bs-3fk2q8wz7m1x0c5v9nbd --until evidence_ready
 ```
 

@@ -92,7 +92,7 @@ describe.each(
   });
 
   it("runs the CLI from the platform's tarball, not npm", () => {
-    expect(md).toContain(`\`npx -y ${HOST}/cli/gittifacts.tgz --host ${HOST} --help\``);
+    expect(md).toContain(`\`npx -y ${HOST}/cli/v2/gittifacts.tgz --host ${HOST} --help\``);
     expect(md).not.toContain("npx gittifacts");
   });
 

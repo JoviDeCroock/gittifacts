@@ -15,7 +15,7 @@ New here? [Try it in 2 minutes](/docs/get-started/cli) first: it needs no login.
 ## 1. Give the CLI its name
 
 ```sh
-alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz"
+alias gittifacts="npx -y https://<host>/cli/v2/gittifacts.tgz"
 gittifacts --version
 ```
 
@@ -24,7 +24,11 @@ Expected: the name `gittifacts` and version `0.1.0`. The next steps the CLI prin
 <details>
 <summary>Install for good, update, and npm</summary>
 
-Install it with `npm install -g https://<host>/cli/gittifacts.tgz`. `npx` caches a tarball by its URL: to pick up a newer CLI, clear that cache (`rm -rf ~/.npm/_npx`). `https://<host>/cli/latest.json` names the version the platform serves.
+Install it with `npm install -g https://<host>/cli/v2/gittifacts.tgz`. `https://<host>/cli/latest.json` names the version the platform serves.
+
+The CLI updates itself. Before a command it compares its own file with `https://<host>/cli/version.json` (at most every 10 minutes), and when the platform serves a newer build it downloads it, checks its sha256, keeps it in `~/.cache/gittifacts/cli/` and runs your command with it. If the check fails, your command runs on the CLI you have. To opt out, pass `--no-update` or set `GITTIFACTS_NO_UPDATE=1`.
+
+It only updates from a host you chose (`--host`, `GITTIFACTS_HOST`, or one you logged in to or created a project on), never from one named only by a checkout's `.gittifacts.json`, and it never sends a token.
 
 Always run the CLI from your platform's tarball URL. A bare `npx gittifacts` fetches whatever npm package holds that name, which is not this CLI.
 

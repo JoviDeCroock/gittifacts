@@ -22,7 +22,7 @@ Point an agent at `https://<host>/start` (or run the CLI) and let it call `creat
 credentials:
 
 ```sh
-npx -y https://<host>/cli/gittifacts.tgz --host https://<host> init --template workers-api --name demo --clone
+npx -y https://<host>/cli/v2/gittifacts.tgz --host https://<host> init --template workers-api --name demo --clone
 ```
 
 Show: an Artifacts repo, a fork, CI in a container, a green check and a preview URL in under a

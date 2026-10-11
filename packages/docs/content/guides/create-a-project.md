@@ -35,7 +35,7 @@ create_project({ template: "preact-app", name: "status-board", description: "Tea
 From the CLI (writes `.gittifacts.json` and clones), run from the tarball the platform serves:
 
 ```sh
-npx -y https://<host>/cli/gittifacts.tgz --host https://<host> init --template preact-app --name status-board --clone
+npx -y https://<host>/cli/v2/gittifacts.tgz --host https://<host> init --template preact-app --name status-board --clone
 ```
 
 Over HTTP (an agent token or a session; send an idempotency key so a retry can't create two):

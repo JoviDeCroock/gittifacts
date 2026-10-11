@@ -8,10 +8,14 @@ The platform serves the CLI as an npm tarball; always run it from your platform'
 fetches whatever npm package holds that name, which is not this CLI. Node 22 or later:
 
 ```sh
-npx -y https://<host>/cli/gittifacts.tgz --host https://<host> init --template workers-api --name my-api --clone
+npx -y https://<host>/cli/v2/gittifacts.tgz --host https://<host> init --template workers-api --name my-api --clone
 # The CLI prints next steps as `gittifacts …` commands: give it that name.
-alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz"
+alias gittifacts="npx -y https://<host>/cli/v2/gittifacts.tgz"
 ```
+
+The CLI updates itself: before a command it checks `<host>/cli/version.json` (at most every 10 minutes, only for a
+host you chose, never one named only by a checkout's `.gittifacts.json`, never with a token) and runs the newer
+verified build from `~/.cache/gittifacts/cli/`. Opt out with `--no-update` or `GITTIFACTS_NO_UPDATE=1`.
 
 ## Ship something in 5 commands
 
@@ -109,4 +113,4 @@ with the token" step (an MCP session needs it; the CLI doesn't).
   credential helper for that origin. On every push git asks it; it calls `refresh_push_token` and answers Basic
   `x:<token without ?expires=>`. Push tokens live an hour and each Change has its own fork, so nothing is stored:
   tokens never appear in argv or `.git/config`. The helper runs this bundle by absolute path, or
-  `npx -y <host>/cli/gittifacts.tgz` once npx's cache is gone.
+  `npx -y <host>/cli/v2/gittifacts.tgz` once npx's cache is gone.

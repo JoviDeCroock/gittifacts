@@ -8,7 +8,7 @@ machines prove conformance (evidence), and every Change is routed to the cheapes
 - MCP: https://gittifacts.decroockjovi.workers.dev/mcp
 - Guide: https://gittifacts.decroockjovi.workers.dev/start · API: https://gittifacts.decroockjovi.workers.dev/openapi.json
 - CLI (every MCP tool as a shell command, JSON output; not on npm yet, the platform serves it):
-   `npx -y https://gittifacts.decroockjovi.workers.dev/cli/gittifacts.tgz --host https://gittifacts.decroockjovi.workers.dev --help`
+   `npx -y https://gittifacts.decroockjovi.workers.dev/cli/v2/gittifacts.tgz --host https://gittifacts.decroockjovi.workers.dev --help`
 - Status: **claimed** (a human owns it). Auto-merge (Lane 0) stays off until the owner turns it on.
 
 Every response has `nextSteps` and every error has `fix` (`call` / `command`). Do what they say.

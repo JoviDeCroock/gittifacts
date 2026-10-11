@@ -32,7 +32,7 @@ test("repo: say what should change, get the agent's prompt; clone; terms explain
   // A solo owner can't approve their own Plan: no "draft it yourself" without another maintainer.
   await expect(intent.getByTestId("intent-self")).toHaveCount(0);
 
-  await expect(page.getByTestId("repo-clone")).toContainText(`npx -y ${baseURL}/cli/gittifacts.tgz clone ${world.repoId}`);
+  await expect(page.getByTestId("repo-clone")).toContainText(`npx -y ${baseURL}/cli/v2/gittifacts.tgz clone ${world.repoId}`);
   // The seeded agent has an open Change here, so Mission control is offered.
   await expect(page.getByRole("link", { name: "Mission control" })).toBeVisible();
 

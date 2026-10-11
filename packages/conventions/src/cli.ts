@@ -1,18 +1,22 @@
 /**
  * The gittifacts CLI as the platform serves it: an `npm pack` tarball in the Worker's static
- * assets (`/cli/gittifacts.tgz`), because the package is not on npm yet. `npx -y <tarball>` runs
- * it without installing anything. The tarball has no host baked in, so commands pass `--host`
- * (the CLI remembers it after `login` or `init`).
+ * assets (`/cli/v2/gittifacts.tgz`), because the package is not on npm yet. `npx -y <tarball>`
+ * runs it without installing anything. The tarball has no host baked in, so commands pass
+ * `--host` (the CLI remembers it after `login` or `init`).
+ *
+ * `/v2/`: npx reuses its install for a tarball URL it has seen, so builds from before the CLI
+ * updated itself would run forever at the old path (DECISIONS 2026-10-11). The platform still
+ * serves the pre-v2 path too, with the same bytes.
  */
 
-export const CLI_TARBALL_PATH = "/cli/gittifacts.tgz";
+export const CLI_TARBALL_PATH = "/cli/v2/gittifacts.tgz";
 
-/** `https://h` (or a `{{host}}` placeholder) → `https://h/cli/gittifacts.tgz`. */
+/** `https://h` (or a `{{host}}` placeholder) → `https://h/cli/v2/gittifacts.tgz`. */
 export function cliTarballUrl(host: string): string {
   return `${host.trim().replace(/\/+$/, "")}${CLI_TARBALL_PATH}`;
 }
 
-/** `npx -y https://h/cli/gittifacts.tgz --host https://h <args>`: runnable as is. */
+/** `npx -y https://h/cli/v2/gittifacts.tgz --host https://h <args>`: runnable as is. */
 export function cliCommand(host: string, args = ""): string {
   const origin = host.trim().replace(/\/+$/, "");
   const rest = args.trim();

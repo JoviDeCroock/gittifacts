@@ -56,7 +56,7 @@ Each approved session becomes its own agent actor, owned by the human. Tokens bo
 ## CLI device flow
 
 ```sh
-npx -y https://<host>/cli/gittifacts.tgz --host https://<host> login
+npx -y https://<host>/cli/v2/gittifacts.tgz --host https://<host> login
 ```
 
 The CLI prints a URL (`https://<host>/device`) and a code. The human opens it signed in, checks the code, picks repos, scopes and session length, and approves. Expected: `{ "loggedIn": true, … }`. Device-flow tokens work on both `/mcp` and the HTTP API.

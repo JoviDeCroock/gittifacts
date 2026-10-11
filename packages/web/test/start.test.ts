@@ -9,7 +9,7 @@ describe("what a person pastes to start", () => {
   });
 
   it("clones with the CLI the host serves", () => {
-    expect(cloneCommand(O, "repo_1")).toBe("npx -y https://gf.example/cli/gittifacts.tgz clone repo_1");
+    expect(cloneCommand(O, "repo_1")).toBe("npx -y https://gf.example/cli/v2/gittifacts.tgz clone repo_1");
   });
 
   it("sets up each MCP client the way get-started/agents.md shows, with the token when there is one", () => {

@@ -38,11 +38,11 @@ describe("llmsTxt", () => {
       `${HOST}/.well-known/oauth-protected-resource/mcp`,
       `${HOST}/docs`,
       `${HOST}/docs/llms-full.txt`,
-      `${HOST}/cli/gittifacts.tgz`,
+      `${HOST}/cli/v2/gittifacts.tgz`,
     ]) {
       expect(text).toContain(`](${url})`);
     }
-    expect(text).toContain(`npx -y ${HOST}/cli/gittifacts.tgz --host ${HOST} --help`);
+    expect(text).toContain(`npx -y ${HOST}/cli/v2/gittifacts.tgz --host ${HOST} --help`);
   });
 
   it("says to reconnect with the token after an anonymous create_project, in one line", () => {

@@ -134,8 +134,8 @@ export function cliProblem(argv: readonly string[], strict = true): string | nul
   }
 }
 
-/** The CLI tarball the platform serves (`npx -y https://<host>/cli/gittifacts.tgz …`). */
-const CLI_TARBALL = /^https?:\/\/[^\s/]+\/cli\/gittifacts(-[\w.-]+)?\.tgz$/;
+/** The CLI tarball the platform serves (`npx -y https://<host>/cli/v2/gittifacts.tgz …`). */
+const CLI_TARBALL = /^https?:\/\/[^\s/]+\/cli\/(?:v\d+\/)?gittifacts(-[\w.-]+)?\.tgz$/;
 
 /**
  * Where the CLI's own argv starts in a command's words: after `gittifacts`, `npx gittifacts`, or
@@ -252,7 +252,7 @@ export function checkSamples(page: Page, x: Extracted): Problem[] {
   for (const c of x.inline) {
     problems.push(...checkToolCalls(page, c.text, c.line));
     // Inline mentions name commands; usage notation (`[--flag <x>]`) is not an invocation.
-    if (/^(npx (-y )?)?(gittifacts|\S+\/cli\/gittifacts\S*\.tgz) /.test(c.text) && !c.text.includes("[")) {
+    if (/^(npx (-y )?)?(gittifacts|\S+\/cli\/(?:v\d+\/)?gittifacts\S*\.tgz) /.test(c.text) && !c.text.includes("[")) {
       problems.push(...checkCommands(page, c.text, c.line, false));
     }
   }

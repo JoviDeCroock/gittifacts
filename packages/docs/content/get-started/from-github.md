@@ -15,7 +15,7 @@ You need Node 22 or later, git, and a public GitHub repo. The commands use our s
 ## 1. Import the repo
 
 ```sh
-npx -y https://<host>/cli/gittifacts.tgz --host https://<host> init --from https://github.com/JoviDeCroock/gittifacts-fixture-clock-api --name clock-api --clone
+npx -y https://<host>/cli/v2/gittifacts.tgz --host https://<host> init --from https://github.com/JoviDeCroock/gittifacts-fixture-clock-api --name clock-api --clone
 ```
 
 Expected, after about 30 seconds: `projectId`, `bootstrapChangeId` and `clonedTo`. The clone has the same history as GitHub: `git -C clock-api log --oneline -1` shows GitHub's latest commit.
@@ -33,7 +33,7 @@ Agents call the same thing over MCP: `create_project({ from: "https://github.com
 
 ```sh
 cd clock-api
-alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz"
+alias gittifacts="npx -y https://<host>/cli/v2/gittifacts.tgz"
 gittifacts wait bs-8t4xc6kq2w9m0d7z3r1b --until evidence_ready
 ```
 
