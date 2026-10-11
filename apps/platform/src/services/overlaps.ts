@@ -51,13 +51,17 @@ interface OpenChange {
   change: ChangeSummary;
   /** Changed paths at its current head; null when unknown (nothing pushed, or no diff yet). */
   paths: string[] | null;
+  /** While `paths` is null: the paths it said it would touch at start_change (stored). */
+  intended: string[];
+  /** While `paths` is null: its plan's scopePaths. */
+  scope: string[];
 }
 
 export interface OverlapIndex {
   open: readonly OpenChange[];
   truncated: boolean;
   report(subject: OverlapSubject): OverlapReport;
-  /** A change as a subject: its diff at the current head, else its plan's scopePaths. */
+  /** A change as a subject: its diff at the current head, else its intended paths + plan scope. */
   subjectOf(change: Change): Promise<OverlapSubject>;
 }
 
@@ -73,7 +77,22 @@ export async function loadOverlapIndex(svc: Services, repoId: string): Promise<O
     c.headSha === null ? [] : [{ changeId: c.id, headSha: c.headSha }],
   );
   const paths = await svc.store.changedPathsAt(heads);
-  const open = scanned.map((change) => ({ change, paths: paths.get(change.id) ?? null }));
+  // No head (or no diff yet): compare on what it said it would touch, plus its plan's scope.
+  const headless = scanned.filter((c) => !paths.has(c.id));
+  const intents = await svc.store.changeIntentsOf(headless.map((c) => c.id));
+  const scopes = new Map<string, string[]>();
+  for (const planId of new Set(headless.flatMap((c) => (c.planId === null ? [] : [c.planId])))) {
+    scopes.set(planId, (await svc.store.getPlan(planId))?.scopePaths ?? []);
+  }
+  const open = scanned.map((change) => {
+    const known = paths.get(change.id) ?? null;
+    return {
+      change,
+      paths: known,
+      intended: known === null ? (intents.get(change.id) ?? []) : [],
+      scope: known === null && change.planId !== null ? (scopes.get(change.planId) ?? []) : [],
+    };
+  });
   const origin = svc.origin;
   return {
     open,
@@ -88,12 +107,16 @@ export async function loadOverlapIndex(svc: Services, repoId: string): Promise<O
         files = own.get(change.id) ?? null;
       }
       if (files !== null) return { changeId: change.id, planId: change.planId, files, globs: [] };
+      // Nothing pushed yet: what it said it would touch, plus its plan's scope.
+      const scannedSelf = open.find((o) => o.change.id === change.id);
+      const intended =
+        scannedSelf?.intended ?? (await svc.store.changeIntentsOf([change.id])).get(change.id) ?? [];
       const plan = change.planId === null ? null : await svc.store.getPlan(change.planId);
       return {
         changeId: change.id,
         planId: change.planId,
-        files: [],
-        globs: plan?.scopePaths ?? [],
+        files: intended,
+        globs: [...intended, ...(plan?.scopePaths ?? [])],
       };
     },
   };
@@ -129,6 +152,53 @@ export async function startOverlaps(
   });
 }
 
+const GLOB_CHARS = /[*?[\]{}!]/;
+const isGlob = (p: string) => GLOB_CHARS.test(p);
+
+/** The literal directory segments before a glob's first wildcard ("src/billing/**" → src, billing). */
+function globBase(p: string): string[] {
+  const out: string[] = [];
+  for (const seg of normalizePath(p).split("/")) {
+    if (isGlob(seg)) break;
+    out.push(seg);
+  }
+  return out;
+}
+
+/** Two globs may match a common file when one's literal base is a prefix of the other's. */
+function globsMayMeet(a: string, b: string): boolean {
+  const [x, y] = [globBase(a), globBase(b)];
+  const n = Math.min(x.length, y.length);
+  for (let i = 0; i < n; i++) if (x[i] !== y[i]) return false;
+  return true;
+}
+
+/**
+ * Which of another change's intended paths/globs meet the subject's files and globs. Literal vs
+ * literal: equal. Glob vs literal: matches. Glob vs glob: their literal bases nest (an overlap
+ * reported too often beats one missed: unknown escalates).
+ */
+function intendedHits(
+  intended: readonly string[],
+  files: ReadonlySet<string>,
+  globs: readonly string[],
+  subjectGlob: ((p: string) => boolean) | null,
+): string[] {
+  const hits = new Set<string>();
+  for (const raw of intended) {
+    const i = normalizePath(raw);
+    if (i === "") continue;
+    if (!isGlob(i)) {
+      if (files.has(i) || (subjectGlob !== null && subjectGlob(i))) hits.add(i);
+      continue;
+    }
+    const m = compileGlobs([i], "match-all");
+    if ([...files].some((f) => m(f))) hits.add(i);
+    else if (globs.some((g) => (isGlob(g) ? globsMayMeet(i, g) : m(normalizePath(g))))) hits.add(i);
+  }
+  return [...hits].sort();
+}
+
 const listed = (paths: readonly string[]) =>
   paths.length <= 3 ? paths.join(", ") : `${paths.slice(0, 3).join(", ")} and ${paths.length - 3} more`;
 
@@ -146,7 +216,8 @@ export function compareOverlaps(
   const found: { entry: ChangeOverlap; rank: number }[] = [];
   const unchecked: string[] = [];
   let scanned = 0;
-  for (const { change: o, paths } of open) {
+  for (const o0 of open) {
+    const { change: o, paths } = o0;
     if (o.id === subject.changeId) continue;
     scanned += 1;
     const samePlan = subject.planId !== null && o.planId === subject.planId;
@@ -159,7 +230,24 @@ export function compareOverlaps(
         morePaths: 0,
       });
     }
-    if (paths === null) {
+    // Nothing pushed: its stored intended paths, plus its plan's scope (same plan: already said).
+    const intended = paths === null ? [...o0.intended, ...(samePlan ? [] : o0.scope)] : [];
+    if (paths === null && intended.length > 0 && known) {
+      const hit = intendedHits(intended, files, subject.globs, glob);
+      if (hit.length > 0) {
+        reasons.push({
+          code: "same-paths",
+          message: `Nothing pushed yet; intends to touch the same ${hit.length === 1 ? "path" : "paths"}: ${listed(hit)}`,
+          paths: hit.slice(0, OVERLAP_MAX_PATHS),
+          morePaths: Math.max(0, hit.length - OVERLAP_MAX_PATHS),
+        });
+      }
+    } else if (paths === null && intended.length > 0) {
+      if (!samePlan) {
+        unchecked.push(o.id);
+        continue;
+      }
+    } else if (paths === null) {
       if (!samePlan) {
         unchecked.push(o.id);
         continue;
@@ -199,7 +287,8 @@ export function compareOverlaps(
         planId: o.planId,
         author: { id: o.authorId, kind: o.authorKind, name: o.authorName },
         reasons,
-        pathsKnown: paths !== null,
+        pathsKnown: paths !== null || intended.length > 0,
+        pathsFrom: paths !== null ? "head" : intended.length > 0 ? "intended" : null,
         url: pageUrl(origin, { changeId: o.id }),
       },
     });

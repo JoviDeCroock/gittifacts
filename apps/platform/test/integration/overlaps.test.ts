@@ -150,7 +150,8 @@ describe("overlapping work (workerd: real DOs + Workflows)", () => {
     const b = await agentNamed(app, human.cookie, "agent-b");
     const c = await agentNamed(app, human.cookie, "agent-c");
 
-    // Plan P (scope src/**), approved by the human.
+    // Plan P (scope src/x.ts), approved by the human. A change with nothing pushed is compared
+    // on its stated paths plus its plan's scope, so a broad scope would reach C's src/y.ts.
     const drafted = await call(app, "POST", "/api/v1/plans", {
       token: a.token,
       body: {
@@ -158,7 +159,7 @@ describe("overlapping work (workerd: real DOs + Workflows)", () => {
         title: "Make x add two",
         intent: "x must add two to its input, not one",
         acceptanceCriteria: ["x(0) returns 2"],
-        scopePaths: ["src/**"],
+        scopePaths: ["src/x.ts"],
       },
     });
     expect(drafted.status).toBe(201);
@@ -183,7 +184,7 @@ describe("overlapping work (workerd: real DOs + Workflows)", () => {
       const changeA = startedA.structuredContent.change.id;
       expect(startedA.structuredContent.overlaps).toMatchObject({
         overlaps: [],
-        comparedPaths: ["src/**"],
+        comparedPaths: ["src/x.ts"],
         unchecked: [],
       });
       await pushAndGrade(
@@ -220,8 +221,8 @@ describe("overlapping work (workerd: real DOs + Workflows)", () => {
         call: `get_change_status({ changeId: "${changeA}" })`,
       });
 
-      // C, planless, on src/y.ts (over HTTP): nothing overlaps. B has nothing pushed and another
-      // plan, so whether it overlaps is unknown: named as unchecked, not dropped.
+      // C, planless, on src/y.ts (over HTTP): nothing overlaps. B has nothing pushed, but it said
+      // it would touch src/x.ts, so it is compared on that (not unchecked).
       const startedC = await call(app, "POST", "/api/v1/changes", {
         token: c.token,
         body: { repoId: repo.id, title: "Double y", category: "feature", paths: ["src/y.ts"] },
@@ -229,7 +230,7 @@ describe("overlapping work (workerd: real DOs + Workflows)", () => {
       expect(startedC.status).toBe(201);
       const c1 = await json<{ change: { id: string }; overlaps: OverlapReport | null }>(startedC);
       expect(c1.overlaps).toMatchObject({ overlaps: [], comparedPaths: ["src/y.ts"] });
-      expect(c1.overlaps?.unchecked).toEqual([changeB]);
+      expect(c1.overlaps?.unchecked).toEqual([]);
       const changeC = c1.change.id;
 
       // Bounded input: too many paths is a 400, not a slow scan.
@@ -254,8 +255,8 @@ describe("overlapping work (workerd: real DOs + Workflows)", () => {
       const statusA = await a.mcp.tools.get_change_status({ changeId: changeA });
       if (statusA.isError) throw new Error(JSON.stringify(statusA.content));
       expectOverlap(statusA.structuredContent.overlaps, { changeId: changeB, title: titleB, agent: b }, plan.id);
-      // C has nothing pushed and another plan: unknown, so unchecked.
-      expect(statusA.structuredContent.overlaps?.unchecked).toEqual([changeC]);
+      // C has nothing pushed but said src/y.ts: compared on that, no overlap, not unchecked.
+      expect(statusA.structuredContent.overlaps?.unchecked).toEqual([]);
       expect(statusA.structuredContent.overlaps?.comparedPaths.sort()).toEqual([
         "src/x.ts",
         "test/x.test.ts",
@@ -277,6 +278,70 @@ describe("overlapping work (workerd: real DOs + Workflows)", () => {
     } finally {
       for (const d of disposables) await d[Symbol.asyncDispose]();
       for (const x of [a, b, c]) await x.mcp.client.close();
+    }
+  });
+
+  it("two agents starting before either pushes see each other by their stated paths", async () => {
+    const app = platformApp();
+    const human = await signUpHuman(app, "Ada");
+    const created = await call(app, "POST", "/api/v1/repos", {
+      cookie: human.cookie,
+      body: { name: `intent-${Date.now().toString(36)}` },
+    });
+    expect(created.status).toBe(201);
+    const { repo } = await json<{ repo: { id: string; artifactsName: string } }>(created);
+    fakes.git.seed(repo.artifactsName, {
+      "package.json": '{ "name": "intent" }\n',
+      "src/x.ts": "export const x = 1;\n",
+    });
+    const a = await agentNamed(app, human.cookie, "agent-a");
+    const b = await agentNamed(app, human.cookie, "agent-b");
+    try {
+      const startedA = await a.mcp.tools.start_change({
+        repoId: repo.id,
+        title: "Rework x",
+        category: "refactor",
+        paths: ["src/x.ts"],
+      });
+      if (startedA.isError) throw new Error(JSON.stringify(startedA.content));
+      const changeA = startedA.structuredContent.change.id;
+      expect(startedA.structuredContent.change.headSha).toBeNull();
+
+      // B, no plan, same path, A still has nothing pushed: same-paths from A's stated intent.
+      const startedB = await b.mcp.tools.start_change({
+        repoId: repo.id,
+        title: "Rename x",
+        category: "refactor",
+        paths: ["src/x.ts"],
+      });
+      if (startedB.isError) throw new Error(JSON.stringify(startedB.content));
+      const changeB = startedB.structuredContent.change.id;
+      const told = startedB.structuredContent.overlaps;
+      expect(told?.overlaps).toEqual([
+        expect.objectContaining({
+          changeId: changeA,
+          headSha: null,
+          planId: null,
+          pathsKnown: true,
+          pathsFrom: "intended",
+          author: { id: a.principal.id, kind: "agent", name: "agent-a" },
+          reasons: [expect.objectContaining({ code: "same-paths", paths: ["src/x.ts"] })],
+        }),
+      ]);
+      expect(told?.unchecked).toEqual([]);
+
+      // And A, re-checking before anyone pushed, hears of B the same way.
+      const statusA = await a.mcp.tools.get_change_status({ changeId: changeA });
+      if (statusA.isError) throw new Error(JSON.stringify(statusA.content));
+      expect(statusA.structuredContent.overlaps?.overlaps).toEqual([
+        expect.objectContaining({
+          changeId: changeB,
+          pathsFrom: "intended",
+          reasons: [expect.objectContaining({ code: "same-paths", paths: ["src/x.ts"] })],
+        }),
+      ]);
+    } finally {
+      for (const x of [a, b]) await x.mcp.client.close();
     }
   });
 });

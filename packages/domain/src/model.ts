@@ -346,8 +346,9 @@ export const StartChangeInput = z.object({
   summary: z.string().max(10_000).optional(),
   agentTraceId: z.string().max(200).optional(),
   /**
-   * Paths or globs this change expects to touch (it has no head yet). Only used to tell the
-   * caller which open Changes already touch them; never stored, never an input to the lane.
+   * Paths or globs this change expects to touch (it has no head yet). Stored so other agents are
+   * compared against them until it pushes; tells the caller which open Changes already touch
+   * them. Never an input to the lane.
    */
   paths: z.array(z.string().trim().min(1).max(300)).max(OVERLAP_MAX_INPUT_PATHS).optional(),
 });
@@ -383,8 +384,10 @@ export const ChangeOverlap = z.object({
     name: z.string(),
   }),
   reasons: z.array(OverlapReason).min(1),
-  /** False when it has nothing pushed yet: whether its paths overlap is unknown. */
+  /** False when it has nothing pushed and declared no paths: whether its paths overlap is unknown. */
   pathsKnown: z.boolean(),
+  /** What its paths were read from: its diff at the head, or what it said it would touch. */
+  pathsFrom: z.enum(["head", "intended"]).nullable(),
   /** Its page on the platform. */
   url: z.string(),
 });

@@ -102,7 +102,7 @@ Fork the repo for one change and get a short-lived push token for that fork only
 | `category` | "fix" \| "feature" \| "refactor" \| "dependency" \| "transform" \| "revert" \| "docs" \| "chore" | yes | Your claim; it can only raise risk, never lower it. |
 | `summary` | string |  | max 10000 chars |
 | `agentTraceId` | string |  | max 200 chars |
-| `paths` | string[] |  | Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them; never stored, never a lane input. max 50 items |
+| `paths` | string[] |  | Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them, and until you push, agents starting later are told you intend to touch them. Never a lane input. max 50 items |
 
 ```text
 start_change({ repoId: "<repoId>", title: "<what>", category: "fix" })

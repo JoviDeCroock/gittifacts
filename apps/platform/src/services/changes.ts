@@ -302,6 +302,12 @@ export async function startChange(
   });
   // Who else is on the same plan or paths. The change exists now: a failed read must not fail
   // the start (a retry without a key would fork twice); null says "not checked, ask again".
+  if (v.paths !== undefined) {
+    // Stored first, so an agent starting at the same moment is compared against these paths.
+    await svc.store
+      .putChangeIntent(started.change.id, v.paths)
+      .catch((err: unknown) => console.warn("start_change: storing intended paths failed", err));
+  }
   let overlaps: OverlapReport | null = null;
   try {
     overlaps = await startOverlaps(svc, started.change, v.paths ?? []);

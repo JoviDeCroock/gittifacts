@@ -27,6 +27,7 @@ import { isHumanPrincipal, ownerMembershipInsert } from "../access/members-store
 import * as schema from "../db/schema.js";
 import {
   auditEvents,
+  changeIntents,
   changes,
   classifications,
   diffs,
@@ -603,6 +604,41 @@ export class D1Store implements Store {
           r.changeId,
           parsed.data.filter((p): p is string => typeof p === "string" && p.length > 0),
         );
+      }
+    }
+    return out;
+  }
+
+  /**
+   * The paths a change's author said it would touch at start_change (bounded to 50, as the
+   * input). The first answer stands: a retried start doesn't rewrite it.
+   */
+  async putChangeIntent(changeId: string, paths: readonly string[]): Promise<void> {
+    const bounded = [...new Set(paths.map((p) => p.trim()).filter((p) => p.length > 0))]
+      .slice(0, 50)
+      .map((p) => p.slice(0, 300));
+    if (bounded.length === 0) return;
+    await this.db
+      .insert(changeIntents)
+      .values({ changeId, paths: bounded, createdAt: this.iso() })
+      .onConflictDoNothing()
+      .run();
+  }
+
+  /** Stored intended paths of these changes; a change without any is absent. */
+  async changeIntentsOf(changeIds: readonly string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    const PathList = z.array(z.string()).max(50);
+    const ids = [...new Set(changeIds)];
+    for (let i = 0; i < ids.length; i += 90) {
+      const rows = await this.db
+        .select()
+        .from(changeIntents)
+        .where(inArray(changeIntents.changeId, ids.slice(i, i + 90)))
+        .all();
+      for (const r of rows) {
+        const parsed = PathList.safeParse(r.paths);
+        if (parsed.success && parsed.data.length > 0) out.set(r.changeId, parsed.data);
       }
     }
     return out;

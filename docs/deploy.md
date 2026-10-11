@@ -77,6 +77,9 @@ pnpm --filter @app/platform deploy:dry-run        # builds web + sandbox bundle,
 pnpm --filter @app/platform deploy                # same, then uploads; registers the push trigger
 ```
 
+Migration 0020 (`change_intents`: the paths an agent gives `start_change`, compared against other agents'
+work until it pushes) is additive. Without it the Worker still starts Changes, but `overlaps` answers null.
+
 `deploy:prepare` also regenerates `apps/platform/src/generated/templates.ts` from `templates/` (bundle-templates).
 Migration `0006_onboarding_previews_ttfg` adds the `previews` and `project_onboarding` tables.
 

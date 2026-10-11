@@ -292,7 +292,7 @@ export const StartChangeInput = {
       maxItems: 50,
       items: { type: "string", minLength: 1, maxLength: 300 },
       description:
-        "Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them; never stored, never a lane input.",
+        "Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them, and until you push, agents starting later are told you intend to touch them. Never a lane input.",
     },
     idempotencyKey: {
       ...idempotencyKey,
@@ -594,7 +594,12 @@ const ChangeOverlap = {
     reasons: { type: "array", items: OverlapReason },
     pathsKnown: {
       ...bool,
-      description: "False: it has nothing pushed yet, so whether its paths overlap is unknown.",
+      description:
+        "False: it has nothing pushed and declared no paths, so whether its paths overlap is unknown.",
+    },
+    pathsFrom: {
+      enum: ["head", "intended", null],
+      description: "head: its pushed diff; intended: the paths it gave start_change (nothing pushed yet).",
     },
     url: { ...str, description: "Its page on the platform." },
   },
@@ -608,6 +613,7 @@ const ChangeOverlap = {
     "author",
     "reasons",
     "pathsKnown",
+    "pathsFrom",
     "url",
   ],
 } as const;

@@ -1659,7 +1659,15 @@ export type introspection = {
                         },
                         "pathsKnown": {
                           "type": "boolean",
-                          "description": "False: it has nothing pushed yet, so whether its paths overlap is unknown."
+                          "description": "False: it has nothing pushed and declared no paths, so whether its paths overlap is unknown."
+                        },
+                        "pathsFrom": {
+                          "enum": [
+                            "head",
+                            "intended",
+                            null
+                          ],
+                          "description": "head: its pushed diff; intended: the paths it gave start_change (nothing pushed yet)."
                         },
                         "url": {
                           "type": "string",
@@ -1676,6 +1684,7 @@ export type introspection = {
                         "author",
                         "reasons",
                         "pathsKnown",
+                        "pathsFrom",
                         "url"
                       ]
                     }
@@ -5168,7 +5177,7 @@ export type introspection = {
      * Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically. overlaps lists the open changes already on the same plan or touching the paths you name (paths) or your plan's scopePaths: coordinate with them or wait.
      * @param args.planId The approved plan this change implements.
      * @param args.category Your claim; it can only raise risk, never lower it.
-     * @param args.paths Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them; never stored, never a lane input.
+     * @param args.paths Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them, and until you push, agents starting later are told you intend to touch them. Never a lane input.
      * @param args.idempotencyKey Optional. Retrying with the same key returns the same change with a fresh push token.
      */
     "start_change": {
@@ -5220,7 +5229,7 @@ export type introspection = {
               "minLength": 1,
               "maxLength": 300
             },
-            "description": "Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them; never stored, never a lane input."
+            "description": "Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them, and until you push, agents starting later are told you intend to touch them. Never a lane input."
           },
           "idempotencyKey": {
             "type": "string",
@@ -5523,7 +5532,15 @@ export type introspection = {
                         },
                         "pathsKnown": {
                           "type": "boolean",
-                          "description": "False: it has nothing pushed yet, so whether its paths overlap is unknown."
+                          "description": "False: it has nothing pushed and declared no paths, so whether its paths overlap is unknown."
+                        },
+                        "pathsFrom": {
+                          "enum": [
+                            "head",
+                            "intended",
+                            null
+                          ],
+                          "description": "head: its pushed diff; intended: the paths it gave start_change (nothing pushed yet)."
                         },
                         "url": {
                           "type": "string",
@@ -5540,6 +5557,7 @@ export type introspection = {
                         "author",
                         "reasons",
                         "pathsKnown",
+                        "pathsFrom",
                         "url"
                       ]
                     }

@@ -8,3 +8,4 @@ export * from "./integration-schema.js";
 export * from "./oauth-schema.js";
 export * from "./onboarding-schema.js";
 export * from "./qa-schema.js";
+export * from "./overlap-schema.js";
