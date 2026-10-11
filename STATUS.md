@@ -157,6 +157,12 @@ in `docs/screenshots/docs-*`.
   - third-party models fail through the binding without credits, so the reviewer now uses Workers AI;
   - CI plans are now cached by `ci.ts` content.
 
+Merge queue never hangs on a lost run (2026-10-11, DECISIONS): a revalidation with no impacted test runs the whole
+pipeline (the engine takes no empty target list), a BatchRunWorkflow always reports (errored when CI can't start),
+and the DO alarm's run watch counts a run whose Workflow ended without a result as errored; runs past their expected
+time show in `stalls`. Tests: `apps/platform/test/integration/many-agents.test.ts` (docs-only Changes + README
+resolution re-approved by the human), coordinator `queue-stalls.test.ts`.
+
 ## Mocked / not yet real
 - Workers Issues webhooks are not wired for project Workers (no Notifications destination, policy or automation per
   script). Rollout health polls Workers Logs telemetry every 30 s instead.

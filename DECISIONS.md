@@ -2959,3 +2959,41 @@ is best effort: failures are listed in `notClosed`, and retrying the pick closes
 are compared, with one diff read each. Open: the live demo hasn't been run against a deployment
 yet; ranking doesn't weigh the reviewer agent's walkthrough verdicts; `CONVENTIONS_VERSION` is not
 bumped, so existing repos keep the AGENTS.md they have.
+
+## 2026-10-11 — A landing revalidation with no impacted test runs everything; a batch run always reports
+
+**Context.** A live `scripts/e2e/many-agents.ts` run (6 agents, static-site repo) landed agent-1 and then
+stopped. The four other Changes were docs-only, so they had no impacted test targets. Once main moved, they
+revalidated in landing batches with `targets: []`. The CI engine's `RunRequest` requires
+`testTargets.min(1)`, so it refused every start (`InvalidRunRequestError`). After its step retries, each
+BatchRunWorkflow instance errored without reporting a `BatchResult`. The DO kept the four landings `running`
+with no stall shown, and only `runTimeoutMs` (90 min) would have retried them. Separately, the resolver's
+README merge wrote a line found on neither side, which correctly needs a fresh human approval, but the demo
+only approved first reviews. The workerd tests didn't catch either problem: their Changes all touched tests
+(non-empty targets), and no resolver was configured.
+
+**Decision.**
+- An empty impacted-target set does not mean nothing to check, because build and lint still have to pass on
+  the new tree. The BatchRunWorkflow runs the whole pipeline and reports scope `all`, which covers `[]`. The
+  core keeps `[]` because it is the honest affected set. The engine contract stays at ≥ 1 target.
+- A batch run always reports. If a CI step fails for good (start refused, polling broken), the run reports
+  `BatchResult{errored}` with the error in `meta.error`, which goes into the queue's problem log. The instance
+  does not error out.
+- Run watch on the DO alarm (`queue/run-watch.ts`): if a batch has been `running` for more than 60 s, its
+  BatchRunWorkflow instance has ended (errored, terminated, or complete), and no result arrived, that run counts
+  as errored now (audit `merge-queue.run-lost`, problem `run-lost`). The core then retries it and, after
+  `maxInfraRetries`, falls back to a full run or ejects. If the instance's status can't be read, the run is
+  left to the run timeout: unknown escalates.
+- Stalls: a batch still `running` after max(build timeout, 2 × CI duration) shows as `stalled` ("Revalidating
+  the landing batch on main" or "Waiting for the batch's CI run"), with the run-timeout retry as its next
+  step. A batch re-running after an errored, lost or timed-out run shows as `retrying` with the error.
+- The demo re-approves a resolution as the human when the Change is back in `awaiting-review` and
+  `GET /changes/:id/resolution` says `approvalRequested`. It retries polls the MCP client timed out on (60 s
+  SDK default) instead of dying. The workerd tests get a scriptable fake resolver (`resolver-fakes.ts`, which
+  declines unless scripted).
+
+**Consequences.** A docs-only landing pays for a full run instead of a near-empty one; it is still correct
+and still cheap for static sites. A lost run is noticed within one or two alarm ticks (30 s each), at the
+cost of one Workflows `status()` call per running batch per tick after its first minute. Stuck queues
+deployed before this fix recover on the first alarm after deploy: the four errored instances count as
+errored and re-run with the fix.
