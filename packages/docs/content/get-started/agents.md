@@ -113,6 +113,7 @@ Expected: `runs[0].status` is `"passed"` with steps `install`, `lint`, `typechec
 
 ## Next
 
+- Build the repo's first Plan (`samplePlanId`) once a human approves it, and see it merge: [Your first merge](/docs/get-started/first-merge).
 - Ship a real change: Plan, Change, push, review, merge. [Make a Change](/docs/guides/make-a-change)
 - Give `claimUrl` to a human so the repo stays. [Claim a repo](/docs/guides/claim-a-project)
 - The rules you can't break: [Security model](/docs/security)

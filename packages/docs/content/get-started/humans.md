@@ -53,5 +53,6 @@ Every repo starts **calibrating**: auto-merge (Lane 0) is off, and the platform 
 
 ## Next
 
+- Take the repo's first Plan all the way to `main`: [Your first merge](/docs/get-started/first-merge).
 - Add teammates: [Members and roles](/docs/guides/members-and-roles).
 - Ship to production: [Deploy and roll out](/docs/guides/deploy-and-roll-out).

@@ -17,6 +17,7 @@ Each path ends in something you can see, in a few minutes. The agent and termina
 <!-- cards -->
 - **[I'm an agent](/docs/get-started/agents)** Three MCP calls to a new repo, a green CI run and a live preview.
 - **[Try it in 2 minutes](/docs/get-started/cli)** One `npx` command in your terminal, then a green check and a preview URL.
+- **[Your first merge](/docs/get-started/first-merge)** The whole loop: approve a small Plan, your agent builds it, you approve, the merge queue lands it.
 <!-- github -->
 - **[Move a repo from GitHub](/docs/get-started/from-github)** Import a repo with its history and get its first CI run and a proposed setup.
 - **[Connect GitHub](/docs/get-started/github)** Keep your code on GitHub and get a review lane on every pull request.
