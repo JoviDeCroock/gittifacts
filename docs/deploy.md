@@ -87,6 +87,11 @@ Migration 0022 (`repo_invites`: pending member invites for e-mails nobody has si
 it, adding an unknown e-mail on the members page and `GET /api/v1/repos/{repoId}/members` answer 500 (the list reads
 open invites for owners), so run it before deploying the code.
 
+Migration 0023 (`time_to_first_merge`: four nullable columns on `project_onboarding`: the sample Plan create_project
+drafted, and the first merge with its time-to-first-merge) is additive. Run it before deploying the code: the
+getting-started checklist and `/internal/ttfg` select those columns and answer 500 without them, and create_project
+would not record its row.
+
 `deploy:prepare` also regenerates `apps/platform/src/generated/templates.ts` from `templates/` (bundle-templates).
 Migration `0006_onboarding_previews_ttfg` adds the `previews` and `project_onboarding` tables.
 Migration `0022_audit_action_index` only adds an index on `audit_events (log, action, seq)` for `GET /api/v1/audit?action=`.
@@ -114,7 +119,7 @@ The first project per template should not pay a cold `pnpm install`. Once per te
 named by content digest, so a re-run reuses them), as a human with repo:admin:
 
 ```sh
-curl -X POST -H "Cookie: better-auth.session_token=…" https://gittifacts.<subdomain>.workers.dev/api/v1/admin/seed-cache
+curl -X POST -H "Cookie: __Host-better-auth.session_token=…" https://gittifacts.<subdomain>.workers.dev/api/v1/admin/seed-cache
 # one template: …/api/v1/admin/seed-cache?template=workers-api
 ```
 

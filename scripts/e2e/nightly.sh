@@ -33,7 +33,8 @@ cookie_jar() {
   node -e 'process.stdout.write(JSON.stringify({ email: process.env.E2E_EMAIL, password: process.env.E2E_PASSWORD }))' |
     curl -sf -c "$WORK/cookies.txt" -o /dev/null -X POST "$HOST/api/auth/sign-in/email" \
       -H "content-type: application/json" -H "origin: $HOST" --data-binary @-
-  awk '$6 == "better-auth.session_token" { print $6 "=" $7 }' "$WORK/cookies.txt"
+  # On https the session cookie is `__Host-better-auth.session_token` (src/auth/better-auth.ts).
+  awk '$6 ~ /^(__Host-|__Secure-)?better-auth\.session_token$/ { print $6 "=" $7 }' "$WORK/cookies.txt"
 }
 
 # The terminal journeys record rather than assert: check the metrics that only exist on success.
