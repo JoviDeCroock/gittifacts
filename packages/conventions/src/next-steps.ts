@@ -287,7 +287,6 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
           call: call("whoami", {}),
         });
       }
-      if (c.samplePlan !== undefined) steps.push(...goldenPath(c, c.samplePlan));
       if (c.changeId !== undefined) {
         steps.push({
           title: "Wait for the first CI run and preview",
@@ -299,6 +298,8 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
           }),
         });
       }
+      // Template repos: then the golden path, from the sample Plan to its merge.
+      if (c.samplePlan !== undefined) steps.push(...goldenPath(c, c.samplePlan));
       if (c.imported === true) {
         steps.push({
           title: "Let detection propose this repo's .platform/ci.ts, policy.ts and AGENTS.md",

@@ -194,9 +194,13 @@ describe("nextStepsFor", () => {
       claimed: false,
       samplePlan,
     });
-    const lead = steps.slice(0, 7).map((s) => s.call ?? s.command);
+    // The first CI run stays first (the CLI, /start and journey 10 rely on it).
+    expect(steps[0]?.call).toBe(
+      'wait_for_change({ changeId: "bs-rep_1", until: "evidence_ready", timeoutSec: 50 })',
+    );
+    const lead = steps.slice(1, 8).map((s) => s.call ?? s.command);
     expect(lead[0]).toBe("whoami({})");
-    expect(steps[0]?.why).toContain("https://h/claim/x");
+    expect(steps[1]?.why).toContain("https://h/claim/x");
     expect(lead.slice(1)).toEqual([
       'get_plan({ planId: "plan_s1" })',
       'start_change({ repoId: "rep_1", planId: "plan_s1", title: "Add GET /version", category: "feature" })',
@@ -205,7 +209,7 @@ describe("nextStepsFor", () => {
       'request_review({ changeId: "<changeId from start_change>" })',
       'wait_for_change({ changeId: "<changeId from start_change>", until: "merged", timeoutSec: 50 })',
     ]);
-    expect(steps[1]?.why).toContain("https://h/plans/plan_s1 (after they claim the repo)");
+    expect(steps[2]?.why).toContain("https://h/plans/plan_s1 (after they claim the repo)");
     // The claim step is said once, up front.
     expect(steps.filter((s) => s.title.includes("claim link"))).toHaveLength(1);
     // Claimed: no claim step; the approval comes first.
