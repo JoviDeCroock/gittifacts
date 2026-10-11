@@ -1,9 +1,12 @@
 # Deploy gate (docs/testing.md, tier 1) on the exact commit about to be deployed, on GitHub runners
-# instead of the developer machine. Two jobs in parallel, both must pass:
-#   gate: generated artifacts fresh, full typecheck, the web design rules, the platform workerd suite;
-#   e2e:  browser + HTTP journeys (desktop 1280 and phone 390) against the real Worker served by
-#         `wrangler dev --local` with the integration fakes (apps/e2e).
-# Dispatch-only, so it spends Actions minutes only when deploying:
+# instead of the developer machine. Every job runs in parallel and all must pass:
+#   checks:      generated artifacts fresh, full typecheck, the web design rules and unit tests;
+#   platform:    the platform workerd suite, sharded by file over 4 runners;
+#   e2e:         browser + HTTP journeys (desktop 1280 and phone 390) against the real Worker served
+#                by `wrangler dev --local` with the integration fakes (apps/e2e), sharded over 2 runners.
+# The suite used to run as two jobs (typecheck then the platform suite in one), ≈ 10–12 min end to
+# end; sharded, the longest job is ≈ 4 min. Runners are free on a public repo.
+# Dispatch-only, so it runs only when deploying:
 #
 #   scripts/deploy-clean.sh --gate=ci            (dispatches this workflow, waits, then deploys)
 #   gh workflow run deploy-gate.yml -f sha=<sha> (manual)
@@ -26,54 +29,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  gate:
+  checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
-      - name: Enable corepack (pnpm from packageManager)
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - name: Build what tests read (web assets, docs, templates)
-        run: |
-          pnpm --filter @app/platform run bundle-templates
-          pnpm --filter @app/web build
-          pnpm --filter @app/docs build
-          pnpm --filter gittifacts pack:assets
+      - uses: ./.github/actions/setup
       - name: Generated artifacts are fresh (docs references, MCP snapshot, templates, docs check)
         run: scripts/check-generated.sh
       - name: Typecheck (every package)
         run: pnpm -r typecheck
       - name: Web design rules and unit tests (DESIGN.md named rules, palette twins vs the MCP contract)
         run: pnpm --filter @app/web test
-      - name: Platform tests
-        working-directory: apps/platform
-        env:
-          CI: "1"
-        run: pnpm exec vitest run --maxWorkers=2
 
-  e2e:
+  platform:
+    name: platform (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
+    strategy:
+      # Every shard reports, so one gate run shows every failing file.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: ./.github/actions/setup
+      - name: Platform tests
+        working-directory: apps/platform
+        env:
+          CI: "1"
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/4 --maxWorkers=2
+
+  e2e:
+    name: e2e (${{ matrix.shard }}/2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          node-version: 22
-      - name: Enable corepack (pnpm from packageManager)
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - name: Build what the Worker serves (web, docs, CLI tarball, templates)
-        run: pnpm --filter @app/e2e prepare-assets
+          ref: ${{ inputs.sha }}
+      - uses: ./.github/actions/setup
       - name: Browser
         run: pnpm --filter @app/e2e exec playwright install --with-deps chromium
       - name: A fresh canary password (tests/gate/secrets.spec.ts)
@@ -84,7 +87,7 @@ jobs:
       - name: Pre-deploy E2E (desktop + phone)
         env:
           CI: "1"
-        run: pnpm --filter @app/e2e gate
+        run: pnpm --filter @app/e2e exec playwright test -c playwright.gate.config.ts --shard=${{ matrix.shard }}/2
       - name: The canary is nowhere in the report (deletes it and fails otherwise)
         id: scan
         if: always()
@@ -93,11 +96,11 @@ jobs:
         run: node scripts/check-report-secrets.mjs --allow-traces apps/e2e/playwright-report/gate apps/e2e/test-results
       - name: Summary
         if: always()
-        run: node scripts/e2e-summary.mjs apps/e2e/test-results/gate.json "Pre-deploy E2E" >> "$GITHUB_STEP_SUMMARY"
+        run: node scripts/e2e-summary.mjs apps/e2e/test-results/gate.json "Pre-deploy E2E (shard ${{ matrix.shard }}/2)" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always() && steps.scan.outcome == 'success'
         with:
-          name: e2e-gate-report
+          name: e2e-gate-report-${{ matrix.shard }}
           path: |
             apps/e2e/playwright-report/gate
             apps/e2e/test-results
