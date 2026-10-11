@@ -1,0 +1,172 @@
+/* Attempts at one plan (components/Attempts.tsx): hairline rows on paper, one decision. */
+.attempts {
+  scroll-margin-block-start: 72px;
+}
+.attempts__summary {
+  color: var(--text-2);
+  max-inline-size: var(--measure);
+}
+.attempts__fine {
+  margin-block-start: var(--s-1);
+  color: var(--text-3);
+  font-size: var(--text-small);
+  max-inline-size: var(--measure);
+}
+.attempts__picked {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-block-start: var(--s-2);
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.attempts__picked .icon {
+  flex: none;
+  margin-block-start: 1px;
+  color: var(--ok);
+}
+.attempts__list {
+  list-style: none;
+  margin-block-start: var(--s-3);
+  border-block-start: 1px solid var(--rule);
+}
+
+.attempt {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: var(--s-3);
+  row-gap: var(--s-3);
+  padding-block: var(--s-4);
+  border-block-end: 1px solid var(--rule);
+}
+.attempt__rank {
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  margin-block-start: 1px;
+  border-radius: 6px;
+  border: 1.5px solid var(--text-3);
+  color: var(--text-2);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-bold);
+}
+.attempt--recommended .attempt__rank {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--canvas);
+}
+.attempt__body {
+  display: grid;
+  gap: var(--s-2);
+  min-inline-size: 0;
+}
+.attempt__title {
+  font-size: 1.0625rem;
+  font-weight: var(--weight-bold);
+  line-height: 1.35;
+  color: var(--text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.attempt__title:hover {
+  text-decoration: underline;
+}
+.attempt__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  min-inline-size: 0;
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.attempt__size {
+  color: var(--text-3);
+}
+.attempt__reasons {
+  color: var(--text-2);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+.attempt__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.attempt__chips:empty {
+  display: none;
+}
+.attempt__rec {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--text);
+}
+.attempt__act {
+  grid-column: 2;
+}
+.attempt__act .btn {
+  inline-size: 100%;
+}
+.attempt__note {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-3);
+  font-size: var(--text-small);
+}
+.attempt--closed .attempt__title,
+.attempt--closed .attempt__reasons {
+  color: var(--text-3);
+}
+@media (min-width: 640px) {
+  .attempt {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+  }
+  .attempt__act,
+  .attempt__note {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: start;
+  }
+  .attempt__act .btn {
+    inline-size: auto;
+  }
+}
+
+/* After a pick: what was recorded, on a sheet that settles into the approved tint. */
+.attempts__done {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: var(--s-3);
+  margin-block-start: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-panel);
+  border: 1px solid var(--ok-line);
+  background: var(--ok-tint);
+}
+.attempts__done > .icon {
+  margin-block-start: 2px;
+  color: var(--ok);
+}
+.attempts__done-title {
+  font-weight: var(--weight-medium);
+}
+.attempts__who {
+  white-space: nowrap;
+}
+.attempts__done .attempts__fine {
+  color: var(--text-2);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .attempts__done {
+    animation: attempts-done-in var(--dur-state) var(--ease-out);
+  }
+}
+@keyframes attempts-done-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}

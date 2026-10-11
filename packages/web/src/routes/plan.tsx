@@ -3,6 +3,7 @@ import { useSignal } from "@preact/signals";
 import { useRef } from "preact/hooks";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { PrincipalRef, RepoDetail } from "../api/types.js";
+import { Attempts } from "../components/Attempts.js";
 import { Icon } from "../components/Icon.js";
 import { Prose, ProseBlocks } from "../components/Prose.js";
 import { Page } from "../components/Shell.js";
@@ -185,8 +186,11 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
 
 function PlanDoc({ data }: { data: PlanData }) {
   const { plan, changes } = data;
+  // Several agents attempted this plan: comparing and picking one is the decision on this page.
+  const attempts = changes.length >= 2;
   return (
     <article class="plan-doc">
+      {attempts ? <Attempts planId={plan.id} repoId={plan.repoId} /> : null}
       <section class="plan-sec" aria-labelledby="intent">
         <h2 id="intent">Intent</h2>
         <ProseBlocks text={plan.intent} class="plan-doc__intent" />
@@ -280,6 +284,7 @@ function PlanDoc({ data }: { data: PlanData }) {
         </div>
       </section>
 
+      {attempts ? null : (
       <section class="plan-sec" aria-labelledby="plan-changes">
         <h2 id="plan-changes">
           Changes under this plan <span class="plan-sec__n tnum">{changes.length}</span>
@@ -300,6 +305,7 @@ function PlanDoc({ data }: { data: PlanData }) {
           </ul>
         )}
       </section>
+      )}
     </article>
   );
 }
