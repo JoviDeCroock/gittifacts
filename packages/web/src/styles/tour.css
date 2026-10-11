@@ -883,7 +883,7 @@ a.ctx-link:hover .ctx-link__value {
 .tour__scrim {
   position: fixed;
   inset: 0;
-  z-index: calc(var(--z-sheet) - 1);
+  z-index: var(--z-backdrop);
   background: var(--backdrop);
   animation: scrim-in var(--dur-state) var(--ease-out);
 }

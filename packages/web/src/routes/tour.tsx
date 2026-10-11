@@ -864,8 +864,8 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
         />
       ) : null}
 
-      <div class="tour__layout" inert={modal}>
-        <div class="tour__main">
+      <div class="tour__layout" inert={modal} data-testid="tour-layout">
+        <div class="tour__main" data-testid="tour-main">
           <div class="tour__meta">
             {author ? <Who kind={author.kind} name={author.name} owner={author.ownerName} /> : null}
             <span class="tour__dot" aria-hidden="true" />
@@ -934,7 +934,7 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
         </div>
 
         {desktop ? (
-          <aside class="tour__rail" aria-label="Decision and lane">
+          <aside class="tour__rail" aria-label="Decision and lane" data-testid="tour-rail">
             {decision}
             <LaneBlock change={change} open rail />
             <ContextLinks data={data} />
@@ -947,7 +947,7 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
           a tap on it is Back. The sheet itself stays solid paper (the Acetate Rule). */}
       {modal ? <div class="tour__scrim" aria-hidden="true" data-testid="decision-scrim" onClick={() => (sheet.value = null)} /> : null}
       {!desktop ? (
-        <div class="tour__bar" ref={barRef}>
+        <div class="tour__bar" ref={barRef} data-testid="decision-bar">
           {decision}
         </div>
       ) : null}
