@@ -2,7 +2,7 @@
  * The static build: every page as HTML and markdown, the machine files, determinism.
  */
 import { describe, expect, it } from "vitest";
-import { loadPages } from "../src/content.js";
+import { GITHUB_PAGES, githubBlocks, listed, loadPages } from "../src/content.js";
 import { SHELL_MARKERS } from "../src/layout.js";
 import { buildSite, htmlFileOf, mdFileOf } from "../src/site.js";
 
@@ -20,7 +20,7 @@ describe("docs build", () => {
       const html = text(htmlFileOf(p));
       expect(html.match(/<h1[ >]/g)?.length, p.file).toBe(1);
       expect(html).toContain(`<link rel="alternate" type="text/markdown" href="${p.mdUrl}">`);
-      for (const other of pages) expect(html).toContain(`href="${other.url}"`);
+      for (const other of pages.filter((x) => listed(x))) expect(html).toContain(`href="${other.url}"`);
     }
   });
 
@@ -44,8 +44,23 @@ describe("docs build", () => {
       expect(full).toContain(`URL: https://<host>${p.url}\n`);
       expect(llms).toContain(`(https://<host>${p.mdUrl})`);
       expect(sitemap).toContain(`<loc>https://&lt;host&gt;${p.url}</loc>`);
-      expect(search.some((s) => s.u === p.url)).toBe(true);
+      expect(search.some((s) => s.u === p.url)).toBe(listed(p));
     }
+  });
+
+  it("keeps the GitHub pages out of what a person browses while GitHub surfaces are off", () => {
+    expect([...GITHUB_PAGES].every((slug) => pages.some((p) => p.slug === slug)), "a GITHUB_PAGES slug no longer exists").toBe(true);
+    const shown = pages.filter((p) => listed(p, false));
+    expect(shown.some((p) => GITHUB_PAGES.has(p.slug))).toBe(false);
+    expect(pages.filter((p) => listed(p, true))).toEqual(pages);
+    const block = "a\n<!-- github -->\n- gh\n<!-- /github -->\nb\n";
+    expect(githubBlocks(block, false)).toBe("a\nb\n");
+    expect(githubBlocks(block, true)).toBe("a\n- gh\nb\n");
+    if (pages.filter((p) => listed(p)).length === pages.length) return;
+    const home = text("index.html");
+    expect(home).not.toContain('href="/docs/get-started/github"');
+    expect(home).not.toContain("&lt;!-- github");
+    expect(text("index.md")).not.toContain("<!-- github -->");
   });
 
   it("ships the design tokens, fonts, script and a 404 page", () => {

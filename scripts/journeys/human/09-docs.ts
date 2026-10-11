@@ -24,7 +24,9 @@ export const journey: HumanJourney = {
       .first();
     const link =
       (await nav.count()) > 0 ? nav : p.getByRole("link", { name: /Migrate from GitHub/ }).first();
-    await j.click(link);
+    // GitHub surfaces off (packages/domain/src/surfaces.ts): the guide is built but not linked.
+    if ((await link.count()) > 0) await j.click(link);
+    else await j.goto("/docs/guides/migrate-from-github", { waitFor: "h1", settleMs: 1800 });
     await p.waitForURL(/migrate-from-github/);
     await p.waitForLoadState("networkidle").catch(() => {});
     await j.hold(2600);

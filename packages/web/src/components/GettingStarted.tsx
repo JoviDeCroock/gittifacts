@@ -4,6 +4,7 @@
  * collapses to one slim line that can be dismissed per user. The first green check gets one quiet
  * line with its preview link.
  */
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import { useSignal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
 import { describeError } from "../api/client.js";
@@ -240,6 +241,8 @@ function TryBody({
   );
 }
 
+const EXAMPLE_URL = GITHUB_SURFACES ? "https://github.com/you/repo" : "https://git.example.com/you/repo";
+
 const VIA: Record<NonNullable<State["repo"]["via"]>, string> = {
   "github-app": "The GitHub App is connected.",
   "github-mirror": "A GitHub repository is mirrored here.",
@@ -261,7 +264,7 @@ function RepoBody({
   if (state.repo.connected && state.repo.via) {
     return (
       <p class="gs-step__line">
-        {VIA[state.repo.via]} <a href="/settings/github">GitHub settings</a>
+        {VIA[state.repo.via]} {GITHUB_SURFACES ? <a href="/settings/github">GitHub settings</a> : null}
       </p>
     );
   }
@@ -270,7 +273,7 @@ function RepoBody({
     if (busy.value) return;
     const from = url.value.trim();
     if (!/^https:\/\/\S+$/.test(from)) {
-      error.value = "Paste the repository's https URL, like https://github.com/you/repo.";
+      error.value = `Paste the repository's https URL, like ${EXAMPLE_URL}.`;
       return;
     }
     busy.value = true;
@@ -285,6 +288,42 @@ function RepoBody({
     } finally {
       busy.value = false;
     }
+  }
+  const form = (
+    <>
+      <form class="gs-try" onSubmit={importRepo} noValidate>
+        <label class="field gs-try__field gs-try__field--wide">
+          <span class="field__label">Public repository URL</span>
+          <input
+            class="input"
+            type="url"
+            inputMode="url"
+            placeholder={EXAMPLE_URL}
+            value={url.value}
+            onInput={(e) => (url.value = e.currentTarget.value)}
+            aria-invalid={error.value ? "true" : undefined}
+            aria-describedby={error.value ? "gs-import-error" : undefined}
+          />
+        </label>
+        <Button type="submit" variant={GITHUB_SURFACES || !primary ? "secondary" : "primary"} icon="git-merge" busy={busy.value} busyLabel="Importing…">
+          Import
+        </Button>
+      </form>
+      {error.value ? (
+        <p class="field__error" id="gs-import-error" role="alert">
+          {error.value}
+        </p>
+      ) : null}
+    </>
+  );
+  // GitHub surfaces off (@app/domain/surfaces): the import form is the step.
+  if (!GITHUB_SURFACES) {
+    return (
+      <>
+        <p class="gs-step__line">Import a public repository by its https URL, with its full history.</p>
+        <div class="gs-repo">{form}</div>
+      </>
+    );
   }
   return (
     <>
@@ -301,35 +340,7 @@ function RepoBody({
         </LinkButton>
         <details class="gs-repo__import">
           <summary>Import by URL</summary>
-          <form class="gs-try" onSubmit={importRepo} noValidate>
-            <label class="field gs-try__field gs-try__field--wide">
-              <span class="field__label">Public repository URL</span>
-              <input
-                class="input"
-                type="url"
-                inputMode="url"
-                placeholder="https://github.com/you/repo"
-                value={url.value}
-                onInput={(e) => (url.value = e.currentTarget.value)}
-                aria-invalid={error.value ? "true" : undefined}
-                aria-describedby={error.value ? "gs-import-error" : undefined}
-              />
-            </label>
-            <Button
-              type="submit"
-              variant="secondary"
-              icon="git-merge"
-              busy={busy.value}
-              busyLabel="Importing…"
-            >
-              Import
-            </Button>
-          </form>
-          {error.value ? (
-            <p class="field__error" id="gs-import-error" role="alert">
-              {error.value}
-            </p>
-          ) : null}
+          {form}
         </details>
       </div>
     </>

@@ -2,18 +2,20 @@
  * Top bar and first viewport: the rule, one line on what the platform does, the human action
  * (sign in) and the agent action (one URL), beside the case tag.
  */
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import { type ComponentChildren, Fragment } from "preact";
 import { BrandMark } from "../components/BrandMark.js";
 import { Icon } from "../components/Icon.js";
 import { CaseTag } from "./CaseTag.js";
 import { CLI_PATH, DEFAULT_ORIGIN, urlParts } from "./content.js";
 
+/** "Migrate" (from GitHub) leaves with its section while GitHub surfaces are off (@app/domain/surfaces). */
 const NAV = [
   { href: "#loop", label: "How it works" },
   { href: "#migrate", label: "Migrate" },
   { href: "#agents", label: "For agents" },
   { href: "#rules", label: "Rules" },
-];
+].filter((n) => GITHUB_SURFACES || n.href !== "#migrate");
 
 export function TopBar() {
   return (

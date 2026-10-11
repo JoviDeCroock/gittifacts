@@ -1,3 +1,4 @@
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import type { Lane } from "@app/domain";
 import { useSignal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
@@ -196,8 +197,13 @@ export function Repos() {
       {st.status === "ok" && repos.length === 0 && view?.mode !== "full" ? (
         <EmptyState icon="git-branch" title="No repositories yet">
           <p>
-            Ask your agent to <code>use {window.location.origin}/start</code>, connect the GitHub App in{" "}
-            <a href="/settings/github">GitHub settings</a>, or ask a repo admin to add you. Changes then show up here by lane.
+            Ask your agent to <code>use {window.location.origin}/start</code>
+            {GITHUB_SURFACES ? (
+              <>
+                , connect the GitHub App in <a href="/settings/github">GitHub settings</a>,
+              </>
+            ) : null}{" "}
+            or ask a repo admin to add you. Changes then show up here by lane.
           </p>
         </EmptyState>
       ) : null}

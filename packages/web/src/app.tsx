@@ -1,3 +1,4 @@
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import { useCallback, useEffect, useRef } from "preact/hooks";
 import { ErrorBoundary, LocationProvider, lazy, Route, Router, useLocation } from "preact-iso";
 import { AppErrorBoundary } from "./components/AppErrorBoundary.js";
@@ -28,6 +29,9 @@ const IntegrationsDeveloper = lazy(() => import("./routes/integrations-developer
 const IntegrationDetail = lazy(() => import("./routes/integration-detail.js").then((m) => m.IntegrationDetail));
 const GithubSettings = lazy(() => import("./routes/github.js").then((m) => m.GithubSettings));
 const IntegrationDeliveries = lazy(() => import("./routes/integration-deliveries.js").then((m) => m.IntegrationDeliveries));
+
+/** GitHub surfaces off (@app/domain/surfaces): /settings/github falls through to not found. */
+const GITHUB_ROUTES = GITHUB_SURFACES ? [<Route key="github" path="/settings/github" component={GithubSettings} />] : [];
 
 /** Agent consent screens: one decision, no navigation to wander off to. */
 const FOCUSED = /^\/(oauth\/consent|device|integrations\/install)\/?$/;
@@ -95,7 +99,7 @@ function AuthedApp() {
           <Route path="/settings/integrations/developer" component={IntegrationsDeveloper} />
           <Route path="/settings/integrations/developer/:integrationId" component={IntegrationDetail} />
           <Route path="/settings/integrations/developer/:integrationId/deliveries/:deliveryId?" component={IntegrationDeliveries} />
-          <Route path="/settings/github" component={GithubSettings} />
+          {GITHUB_ROUTES}
           <Route path="/internal/onboarding" component={OnboardingView} />
           <Route path="/signin" component={RedirectHome} />
           <Route default component={NotFound} />

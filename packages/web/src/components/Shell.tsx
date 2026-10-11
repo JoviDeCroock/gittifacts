@@ -3,6 +3,7 @@
  * a fixed sidebar with the same destinations. One information architecture at every width.
  */
 import { useSignal } from "@preact/signals";
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import type { ComponentChildren } from "preact";
 import { useLocation } from "preact-iso";
 import { useEffect, useRef } from "preact/hooks";
@@ -20,7 +21,7 @@ import { Who } from "./ui.js";
 export { BrandMark };
 
 /** `server`: a page the Worker serves (not an SPA route), so the router must not intercept it. */
-const NAV: { href: string; label: string; icon: IconId; match: (path: string) => boolean; server?: boolean }[] = [
+const ALL_NAV: { href: string; label: string; icon: IconId; match: (path: string) => boolean; server?: boolean }[] = [
   { href: "/dashboard", label: "Dashboard", icon: "layers", match: (p) => p === "/dashboard" || p.startsWith("/repos") || p.startsWith("/changes") || p.startsWith("/plans") },
   { href: "/audit", label: "Audit log", icon: "scroll-text", match: (p) => p.startsWith("/audit") },
   { href: "/agents", label: "Agents", icon: "bot", match: (p) => p.startsWith("/agents") },
@@ -28,6 +29,8 @@ const NAV: { href: string; label: string; icon: IconId; match: (path: string) =>
   { href: "/settings/github", label: "GitHub", icon: "git-branch", match: (p) => p.startsWith("/settings/github") },
   { href: "/docs", label: "Docs", icon: "file-text", match: () => false, server: true },
 ];
+/** The GitHub page leaves the nav while GitHub surfaces are off (@app/domain/surfaces). */
+const NAV = ALL_NAV.filter((n) => GITHUB_SURFACES || n.href !== "/settings/github");
 
 const sidebarRepos = { value: null as RepoSummary[] | null };
 

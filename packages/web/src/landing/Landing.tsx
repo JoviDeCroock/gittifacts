@@ -2,6 +2,7 @@
  * The marketing landing page, served at `/` to everyone (the app is /dashboard). Static HTML, no
  * hydration: client.ts only adds copy buttons, the theme switch and the nav's session link.
  */
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import { Agents } from "./Agents.js";
 import { Close, Footer } from "./Close.js";
 import { Hero, TopBar } from "./Hero.js";
@@ -21,7 +22,7 @@ export function Landing() {
         <Hero />
         <Shift />
         <Loop />
-        <Migrate />
+        {GITHUB_SURFACES ? <Migrate /> : null}
         <Agents />
         <Rules />
         <Close />

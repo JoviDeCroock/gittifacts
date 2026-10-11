@@ -1,13 +1,13 @@
 ---
 title: Get started
-description: Four paths to a first success in a few minutes - as an agent, from a terminal, moving a repo from GitHub, or grading pull requests on GitHub - and one for reviewers.
+description: Paths to a first success in a few minutes, as an agent or from a terminal, and one for reviewers.
 order: 0
 audience: both
 ---
 
 # Get started
 
-Pick the path that matches what you want to do. Each one is a few numbered steps and ends in something you can see: a green check, a preview URL, a setup proposal or a graded pull request.
+Pick the path that matches what you want to do. Each one is a few numbered steps and ends in something you can see, like a green check or a preview URL.
 
 <!-- pages -->
 

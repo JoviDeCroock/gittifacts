@@ -2,6 +2,7 @@
  * Settings (agents, integrations, GitHub) and the docs a newcomer opens first. Creating an agent
  * token is the step every agent onboarding depends on, so it runs for real.
  */
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import { expect, expectNoHorizontalScroll, test } from "../../lib/fixtures.js";
 import { uniqueName } from "../../lib/poll.js";
 
@@ -20,7 +21,8 @@ test("agents: create an agent and see its token once", async ({ authed: page, re
   await expectNoHorizontalScroll(page);
 });
 
-for (const path of ["/settings/integrations", "/settings/integrations/developer", "/settings/github", "/audit"]) {
+const SETTINGS = ["/settings/integrations", "/settings/integrations/developer", ...(GITHUB_SURFACES ? ["/settings/github"] : []), "/audit"];
+for (const path of SETTINGS) {
   test(`settings page ${path} renders without errors`, async ({ authed: page }) => {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -28,6 +30,28 @@ for (const path of ["/settings/integrations", "/settings/integrations/developer"
     await expectNoHorizontalScroll(page);
   });
 }
+
+test("GitHub surfaces switched off: no nav entry, no palette command, no page, no sign-in button", async ({ authed: page, browser, baseURL }) => {
+  test.skip(GITHUB_SURFACES, "GitHub surfaces are on (@app/domain/surfaces)");
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.locator('a[href="/settings/github"]')).toHaveCount(0);
+  await page.getByTestId("palette-open").filter({ visible: true }).first().click();
+  await expect(page.getByTestId("palette")).toBeVisible();
+  await expect(page.locator('[data-command="go.github"]')).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.goto("/settings/github");
+  await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+  // Signed out: email only.
+  const ctx = await browser.newContext({ baseURL });
+  const anon = await ctx.newPage();
+  await anon.goto("/signin");
+  await expect(anon.getByRole("button", { name: /email|sign in/i }).first()).toBeVisible();
+  await expect(anon.getByRole("button", { name: /GitHub/ })).toHaveCount(0);
+  await anon.goto("/docs");
+  await expect(anon.locator('a[href="/docs/get-started/github"], a[href="/docs/get-started/from-github"]')).toHaveCount(0);
+  await ctx.close();
+});
 
 test("docs: home, a getting-started page, and its markdown twin", async ({ page, request, baseURL }) => {
   await page.goto("/docs");

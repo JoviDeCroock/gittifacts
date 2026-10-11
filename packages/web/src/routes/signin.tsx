@@ -1,6 +1,7 @@
 import { useSignal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { isMockMode } from "../api/mode.js";
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import { GitHubMark, Icon } from "../components/Icon.js";
 import { BrandMark } from "../components/Shell.js";
 import { TriageChart } from "../components/TriageChart.js";
@@ -81,21 +82,26 @@ export function SignIn() {
           </p>
         ) : null}
 
-        <Button
-          variant="secondary"
-          wide
-          class="signin__github"
-          busy={busy.value === "github"}
-          busyLabel="Opening GitHub…"
-          onClick={github}
-        >
-          <GitHubMark />
-          Continue with GitHub
-        </Button>
+        {/* GitHub surfaces off (@app/domain/surfaces): email only. */}
+        {GITHUB_SURFACES ? (
+          <>
+            <Button
+              variant="secondary"
+              wide
+              class="signin__github"
+              busy={busy.value === "github"}
+              busyLabel="Opening GitHub…"
+              onClick={github}
+            >
+              <GitHubMark />
+              Continue with GitHub
+            </Button>
 
-        <div class="signin__or" role="separator">
-          <span>or with email</span>
-        </div>
+            <div class="signin__or" role="separator">
+              <span>or with email</span>
+            </div>
+          </>
+        ) : null}
 
         <form class="signin__form" onSubmit={submit} noValidate>
           {mode.value === "signup" ? (

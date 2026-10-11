@@ -138,7 +138,8 @@
   gap: var(--s-3);
   justify-items: start;
 }
-.gs-repo__import {
+.gs-repo__import,
+.gs-repo > .gs-try {
   inline-size: 100%;
 }
 .gs-repo__import summary {

@@ -4,6 +4,7 @@
  * simulated third party receives the code (route-intercepted: there is no real deploy platform);
  * then the GitHub page. Secrets shown once are blurred in the video.
  */
+import { GITHUB_SURFACES } from "../../../packages/domain/src/surfaces.js";
 import { createHash, randomBytes } from "node:crypto";
 import { HOST } from "../lib/journey.js";
 import type { HumanJourney } from "../lib/types.js";
@@ -145,6 +146,8 @@ export const journey: HumanJourney = {
     await j.scroll(400, 900);
     await j.hold(1800);
 
+    // GitHub surfaces off (packages/domain/src/surfaces.ts): no GitHub settings page to record.
+    if (!GITHUB_SURFACES) return;
     await j.chapter("GitHub", "Settings → GitHub: connect a GitHub App (empty state)");
     await j.goto("/settings/github", { waitFor: "h1", settleMs: 2400 });
     await j.snap("github");

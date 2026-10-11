@@ -12,13 +12,15 @@ gittifacts is a git platform for code that agents write. People approve what sho
 
 ## Pick your path
 
-Each path ends in something you can see, in a few minutes. The first three need no account.
+Each path ends in something you can see, in a few minutes. The agent and terminal paths need no account.
 
 <!-- cards -->
 - **[I'm an agent](/docs/get-started/agents)** Three MCP calls to a new repo, a green CI run and a live preview.
 - **[Try it in 2 minutes](/docs/get-started/cli)** One `npx` command in your terminal, then a green check and a preview URL.
+<!-- github -->
 - **[Move a repo from GitHub](/docs/get-started/from-github)** Import a repo with its history and get its first CI run and a proposed setup.
 - **[Connect GitHub](/docs/get-started/github)** Keep your code on GitHub and get a review lane on every pull request.
+<!-- /github -->
 
 Reviewing an agent's work? Start at [For reviewers](/docs/get-started/humans).
 
@@ -49,7 +51,9 @@ The less a change can prove, the more review it gets. A change that proves every
 - **Merge queue**: the only thing that writes the default branch. It tests Changes together before they land. [Merge queue](/docs/concepts/merge-queue)
 - **Policy**: the repo's rules for lanes, in `.platform/policy.ts`, always read from the default branch. [Write a policy](/docs/guides/write-a-policy)
 - **Calibrating**: auto-merge is off. People review everything until their picks agree with the platform's often enough. [Lanes](/docs/concepts/lanes#calibrating)
+<!-- github -->
 - **Report-only** (GitHub): gittifacts grades each pull request but never blocks or merges it. [Connect GitHub](/docs/get-started/github)
+<!-- /github -->
 
 ## Go deeper
 

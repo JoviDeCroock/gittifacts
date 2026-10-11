@@ -2,6 +2,7 @@
  * Synthetic demo data for mock mode (VITE_MOCK=1 or ?mock). Nothing here is real: people,
  * repositories, metrics and hashes are invented. Times are relative to page load.
  */
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import { RepoPolicy } from "@app/domain";
 import { NOW, PLATFORM_KEY_ID, ago, ahead, b64u, sha } from "./fixture-kit.js";
 import type { Scenario } from "./scenario-kit.js";
@@ -545,9 +546,10 @@ export function createDb(): MockDb {
     me: ME,
     user: USER,
     principals: principals(),
-    repos: repos(),
+    // GitHub surfaces off (@app/domain/surfaces): the demo has no GitHub-mode repo.
+    repos: repos().filter((r) => GITHUB_SURFACES || !r.repo.host),
     plans: plans(),
-    scenarios: SCENARIOS,
+    scenarios: SCENARIOS.filter((s) => GITHUB_SURFACES || !s.change.host),
     audit: audit(),
   });
 }

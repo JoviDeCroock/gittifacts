@@ -4,6 +4,7 @@
  * now" creates a project whose first run goes green after a few seconds, with a preview link.
  * The scenario is remembered for the tab, like `?mock` itself.
  */
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import type { GettingStarted, ProjectCreated } from "./getting-started.js";
 
 export interface MockResponse {
@@ -92,7 +93,7 @@ function state(): GettingStarted {
           msToFirstGreen: now - latest.createdAt >= RUN_MS ? RUN_MS : null,
         }
       : null,
-    repo: s === "done" ? { connected: true, via: "github-app" } : { connected: false, via: null },
+    repo: s === "done" ? { connected: true, via: GITHUB_SURFACES ? "github-app" : "import" } : { connected: false, via: null },
   };
 }
 

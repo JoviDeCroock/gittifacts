@@ -6,6 +6,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 
 export const CONTENT_DIR = join(import.meta.dirname, "..", "content");
 
@@ -154,4 +155,33 @@ export function orderPages(pages: readonly Page[]): Page[] {
 
 export function sectionTitle(section: string): string {
   return SECTIONS.find((s) => s.dir === section)?.title ?? "";
+}
+
+/**
+ * The GitHub paths and guides. While GitHub surfaces are off (`@app/domain/surfaces`) they stay
+ * built at their URLs, in llms.txt, index.json and the sitemap (agents and old links still reach
+ * them), but leave what a person browses: the sidebar, section lists, previous/next and search.
+ */
+export const GITHUB_PAGES: ReadonlySet<string> = new Set([
+  "get-started/github",
+  "get-started/from-github",
+  "guides/github-mode",
+  "guides/register-github-app",
+  "guides/migrate-from-github",
+  "reference/http-github",
+]);
+
+/** Whether a page shows in the human navigation (sidebar, lists, previous/next, search). */
+export function listed(page: Page, githubSurfaces: boolean = GITHUB_SURFACES): boolean {
+  return githubSurfaces || !GITHUB_PAGES.has(page.slug);
+}
+
+const GITHUB_BLOCK = /^<!-- github -->\n([\s\S]*?)^<!-- \/github -->\n/gm;
+
+/**
+ * Markdown between `<!-- github -->` and `<!-- /github -->` lines (the home's GitHub cards, a
+ * glossary line): kept without the markers while GitHub surfaces are on, dropped while off.
+ */
+export function githubBlocks(md: string, githubSurfaces: boolean = GITHUB_SURFACES): string {
+  return md.replace(GITHUB_BLOCK, (_m, inner: string) => (githubSurfaces ? inner : ""));
 }

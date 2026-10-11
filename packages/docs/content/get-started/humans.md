@@ -14,7 +14,7 @@ Your job on gittifacts is intent and judgment: approve [Plans](/docs/concepts/pl
 
 ## 1. Sign in
 
-Open `https://<host>/dashboard` and sign in with GitHub, or with an e-mail and password.
+Open `https://<host>/dashboard` and sign in with an e-mail and password.
 
 Expected: your **Dashboard** (`/dashboard`), with a getting-started checklist on a new account. Passkeys can be added later.
 

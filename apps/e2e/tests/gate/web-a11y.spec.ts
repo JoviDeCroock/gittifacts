@@ -13,6 +13,7 @@
  * States the hermetic server can't produce (a rollout in flight, a busy merge queue, GitHub
  * installations) come from the UI's demo backend (`?mock`): the same built app in a real browser.
  */
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import type { APIRequestContext, Locator, Page } from "@playwright/test";
 import { expect, test } from "../../lib/fixtures.js";
 import { uniqueName } from "../../lib/poll.js";
@@ -181,6 +182,8 @@ test.describe("touch targets at 390 px", () => {
     await expectTargets(page.locator(".q-batch__members a"), "a batch member");
     await expectTargets(page.locator("a.q-stat__sub"), "the flake-rate link");
 
+    // GitHub surfaces are switched off for now (@app/domain/surfaces): no page to check.
+    if (!GITHUB_SURFACES) return;
     await page.goto("/settings/github?mock");
     await expect(page.locator(".gh-repo__name a").first()).toBeVisible();
     await expectTargets(page.locator(".gh-repo__name a"), "a GitHub repo name");

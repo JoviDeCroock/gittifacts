@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { BASE, type Page, sectionTitle } from "./content.js";
+import { BASE, githubBlocks, listed, type Page, sectionTitle } from "./content.js";
 import { escapeHtml } from "./highlight.js";
 import { HOST_PLACEHOLDER, pageHtml, shellHtml } from "./layout.js";
 import { plainText, renderMarkdown, resolveHref, stripMarkers } from "./markdown.js";
@@ -18,7 +18,7 @@ const require = createRequire(import.meta.url);
 
 /** The page's markdown as served: the pages marker expanded and relative links made absolute. */
 export function markdownTwin(pages: readonly Page[], page: Page): string {
-  let body = page.body.replace(PAGES_MARKER, () => pagesList(pages, page));
+  let body = githubBlocks(page.body).replace(PAGES_MARKER, () => pagesList(pages.filter((p) => listed(p)), page));
   body = body.replace(
     /\]\((?!https?:|mailto:|\/|#)([^)\s]+)\)/g,
     (_m, href: string) => `](${resolveHref(href, page.file)})`,
@@ -112,11 +112,13 @@ export function buildSite(pages: readonly Page[]): Site {
     `Start here: agents read ${HOST_PLACEHOLDER}/docs/get-started/agents.md (or ${HOST_PLACEHOLDER}/start); people pick a path at ${HOST_PLACEHOLDER}/docs.`,
   ];
   let lastSection: string | null = null;
+  // What a person browses (sidebar, previous/next, search); every page is still built.
+  const shown = pages.filter((p) => listed(p));
 
   for (const page of pages) {
     const md = markdownTwin(pages, page);
     const rendered = renderMarkdown(md, page.file);
-    site.set(htmlFileOf(page), pageHtml(pages, page, rendered));
+    site.set(htmlFileOf(page), pageHtml(shown, page, rendered));
     const twin = stripMarkers(md);
     site.set(mdFileOf(page), twin);
     full.push("---", "", `URL: ${HOST_PLACEHOLDER}${page.url}`, "", twin);
@@ -136,7 +138,7 @@ export function buildSite(pages: readonly Page[]): Site {
       generated: page.fm.generated,
       headings: rendered.headings.map((h) => ({ depth: h.depth, id: h.id, text: h.text })),
     });
-    search.push({
+    if (listed(page)) search.push({
       u: page.url,
       t: page.fm.title,
       s: sectionTitle(page.section),
@@ -147,7 +149,7 @@ export function buildSite(pages: readonly Page[]): Site {
   }
 
   const missing = notFoundPage();
-  site.set("404.html", pageHtml(pages, missing, renderMarkdown(missing.body, missing.file)));
+  site.set("404.html", pageHtml(shown, missing, renderMarkdown(missing.body, missing.file)));
   site.set("llms-full.txt", full.join("\n"));
   site.set("llms.txt", `${index.join("\n")}\n`);
   site.set(

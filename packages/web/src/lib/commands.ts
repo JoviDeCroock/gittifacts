@@ -7,6 +7,7 @@
  * rule instead of a twin, so the palette shows the human/agent boundary instead of hiding it.
  * Pure: no DOM, no fetches. Shell supplies the path and the repos it already loaded.
  */
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import type { IconId } from "../components/Icon.js";
 
 /** An MCP tool call. `positional` names the argument the CLI takes without a flag. */
@@ -118,7 +119,7 @@ function repoCommands(repo: RepoRef | { id: string; name?: undefined }): Command
   ];
 }
 
-const NAV: Command[] = [
+const ALL_NAV: Command[] = [
   { id: "go.dashboard", label: "Dashboard", group: "Go to", icon: "layers", act: { kind: "go", href: "/dashboard" }, twin: { tool: "list_repos", args: {} }, words: "home repos repositories" },
   { id: "go.audit", label: "Audit log", group: "Go to", icon: "scroll-text", act: { kind: "go", href: "/audit" }, twin: null, words: "history events chain" },
   { id: "go.agents", label: "Agents", group: "Go to", icon: "bot", act: { kind: "go", href: "/agents" }, twin: { tool: "whoami", args: {} }, words: "tokens sessions fleet" },
@@ -126,6 +127,8 @@ const NAV: Command[] = [
   { id: "go.github", label: "GitHub", group: "Go to", icon: "git-branch", act: { kind: "go", href: "/settings/github" }, twin: null, words: "app install" },
   { id: "go.docs", label: "Docs", group: "Go to", icon: "file-text", act: { kind: "go", href: "/docs", server: true }, twin: { tool: "search_tools", args: {}, fill: ["query"] }, words: "help guide" },
 ];
+/** "GitHub" leaves the palette while GitHub surfaces are off (@app/domain/surfaces). */
+const NAV = ALL_NAV.filter((c) => GITHUB_SURFACES || c.id !== "go.github");
 
 const PREFS: Command[] = (["system", "light", "dark"] as const).map((value) => ({
   id: `theme.${value}`,
