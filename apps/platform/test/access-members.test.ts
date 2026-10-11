@@ -60,7 +60,7 @@ describe("repo members", () => {
     );
   });
 
-  it("only humans are members; unknown people are 404; non-owners and agents cannot manage", async () => {
+  it("only humans are members; unknown agents are 404; non-owners and agents cannot manage", async () => {
     const w = await world();
     const path = `/api/v1/repos/${w.repo.id}/members`;
     const alice = { cookie: w.alice.cookie };
@@ -72,14 +72,12 @@ describe("repo members", () => {
       404,
       "not-found",
     );
-    await expectError(
-      await call(w.app, "POST", path, {
-        ...alice,
-        body: { email: "nobody@example.com", role: "reader" },
-      }),
-      404,
-      "not-found",
-    );
+    // An e-mail nobody signed up with becomes an invite (test/access-invites.test.ts).
+    const invited = await call(w.app, "POST", path, {
+      ...alice,
+      body: { email: "nobody@example.com", role: "reader" },
+    });
+    expect(invited.status).toBe(202);
     await expectError(
       await call(w.app, "POST", path, { ...alice, body: { role: "reader" } }),
       400,

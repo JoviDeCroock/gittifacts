@@ -8,6 +8,8 @@
  *   remove members. Only humans are members: agents act through their owner's role.
  * - A member may leave (remove themselves). The last owner can never be removed or demoted; the
  *   guard is in the SQL statement, so two owners removing each other at once cannot both win.
+ * - An e-mail nobody has signed up with becomes a pending invite with a single-use link
+ *   (./invites.ts); owners see open invites in the list.
  * - Every change is audit-logged on `repo:<id>`.
  */
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -16,6 +18,7 @@ import { ensureHumanPrincipal } from "../auth/principals.js";
 import { principals, user } from "../db/schema.js";
 import { type ApiError, conflict, notFound } from "../errors.js";
 import { assertRepoAccess, repoAccess } from "./access.js";
+import { createInvite, type InviteView, openInviteViews, supersedeInvites } from "./invites.js";
 import {
   changeRoleRow,
   listMemberRows,
@@ -44,6 +47,8 @@ export interface MembersView {
   viewerRole: RepoRole | null;
   /** True when the caller may add, change and remove members (a human owner). */
   canManage: boolean;
+  /** Open invites (owners only; empty for everyone else). */
+  invites: InviteView[];
 }
 
 /** Each owner's live agents that may act on `repoId` (no repo grant, or one that names it). */
@@ -103,10 +108,11 @@ export async function listMembers(
   const viewerRole = (await repoAccess(svc, caller.principal, repo)).role;
   const canManage = caller.principal.kind === "human" && viewerRole === "owner";
   const ids = rows.map((r) => r.principalId);
-  const [refs, emails, agents] = await Promise.all([
+  const [refs, emails, agents, invites] = await Promise.all([
     svc.store.principalRefs(ids),
     canManage ? emailsOf(svc, ids) : Promise.resolve(new Map<string, string>()),
     agentsOf(svc, ids, repoId),
+    canManage ? openInviteViews(svc, repoId) : Promise.resolve([]),
   ]);
   return {
     repoId,
@@ -121,6 +127,7 @@ export async function listMembers(
     })),
     viewerRole,
     canManage,
+    invites,
   };
 }
 
@@ -131,11 +138,14 @@ function lastOwner(repoId: string): ApiError {
   });
 }
 
-/** The human principal an owner names, by principal id or by a registered user's e-mail. */
+/**
+ * The human principal an owner names, by principal id or by a registered user's e-mail; null for
+ * an e-mail nobody has signed up with (the caller invites them instead).
+ */
 async function targetHuman(
   svc: Services,
   who: { email?: string | undefined; principalId?: string | undefined },
-): Promise<string> {
+): Promise<string | null> {
   if (who.principalId !== undefined) {
     const p = await svc.store.getPrincipal(who.principalId);
     if (p?.kind !== "human") {
@@ -148,12 +158,7 @@ async function targetHuman(
   }
   const email = (who.email ?? "").trim().toLowerCase();
   const u = await svc.store.db.select().from(user).where(eq(user.email, email)).get();
-  if (!u) {
-    throw notFound(`user with e-mail ${email}`, {
-      explanation:
-        "Nobody has signed up with that e-mail. Ask them to sign in once, then add them again.",
-    });
-  }
+  if (!u) return null;
   const p = await ensureHumanPrincipal(
     svc.store,
     { id: u.id, email: u.email, name: u.name, image: u.image ?? null },
@@ -162,15 +167,27 @@ async function targetHuman(
   return p.id;
 }
 
-/** Add a member, or change an existing member's role (owners only). */
+export type AddMemberResult =
+  | { kind: "member"; member: MemberView; created: boolean }
+  | { kind: "invite"; invite: InviteView; inviteUrl: string };
+
+/**
+ * Add a member, change an existing member's role, or invite an e-mail nobody has signed up with
+ * (owners only).
+ */
 export async function addMember(
   svc: Services,
   caller: Caller,
   repoId: string,
   body: { email?: string | undefined; principalId?: string | undefined; role: RepoRole },
-): Promise<{ member: MemberView; created: boolean }> {
+): Promise<AddMemberResult> {
   await assertRepoAccess(svc, caller.principal, repoId, "admin");
   const principalId = await targetHuman(svc, body);
+  if (principalId === null) {
+    const invited = await createInvite(svc, caller, repoId, body.email ?? "", body.role);
+    return { kind: "invite", ...invited };
+  }
+  if (body.email !== undefined) await supersedeInvites(svc, repoId, body.email);
   const previous = await memberRole(svc.store, repoId, principalId);
   const row = {
     repoId,
@@ -194,7 +211,7 @@ export async function addMember(
   const view = await listMembers(svc, caller, repoId);
   const member = view.members.find((m) => m.principalId === principalId);
   if (!member) throw new Error(`member ${principalId} vanished after the write`);
-  return { member, created: previous === null };
+  return { kind: "member", member, created: previous === null };
 }
 
 /** Remove a member (owners), or leave the repo (any member removing itself). */

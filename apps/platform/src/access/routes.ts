@@ -2,8 +2,11 @@
  * Membership HTTP API:
  *
  *   GET    /api/v1/repos/{repoId}/members                 anyone who can read the repo
- *   POST   /api/v1/repos/{repoId}/members                 owner: add by e-mail/principal id, or change a role
+ *   POST   /api/v1/repos/{repoId}/members                 owner: add by e-mail/principal id, or change a role;
+ *                                                         an e-mail nobody signed up with → an invite (202)
  *   DELETE /api/v1/repos/{repoId}/members/{principalId}   owner; or a member leaving
+ *
+ * Invites (./invite-routes.ts): revoke, and the public link a person opens and accepts.
  */
 import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
@@ -11,6 +14,7 @@ import { IdempotencyHeaders, RepoIdParam } from "../api/schemas.js";
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
 import { type ApiApp, body, errors, json, SECURITY } from "../routes/common.js";
+import { InviteSchema, registerInviteRoutes } from "./invite-routes.js";
 import { addMember, listMembers, removeMember } from "./members.js";
 import { REPO_ROLES } from "./roles.js";
 
@@ -39,11 +43,12 @@ const MembersSchema = z.object({
   members: z.array(MemberSchema),
   viewerRole: RepoRoleSchema.nullable(),
   canManage: z.boolean().describe("The caller may add, change and remove members"),
+  invites: z.array(InviteSchema).describe("Open invites (owners only; empty for everyone else)"),
 });
 
 const AddMemberBody = z
   .object({
-    email: z.string().email().max(320).optional().describe("A signed-up user's e-mail"),
+    email: z.string().email().max(320).optional().describe("Their e-mail. Nobody signed up with it yet: they get an invite link instead (202)"),
     principalId: z.string().min(1).max(64).optional().describe("A human principal id (hu_…)"),
     role: RepoRoleSchema,
   })
@@ -71,13 +76,20 @@ const add = createRoute({
   tags: ["members"],
   summary: "Add a member by e-mail or principal id, or change a member's role (human owner)",
   description:
-    "Only humans are members (agents act with their owner's role). 409 when the change would leave the repo without an owner.",
+    "Only humans are members (agents act with their owner's role). An e-mail nobody has signed up with gets a pending invite (202): `inviteUrl` is shown once, and works once, for a person signed in with that e-mail. 409 when the change would leave the repo without an owner.",
   security: SECURITY,
   middleware: [requirePrincipal(["repo:admin"], { humanOnly: true }), idempotent()] as const,
   request: { headers: IdempotencyHeaders, params: RepoIdParam, body: body(AddMemberBody) },
   responses: {
     200: json(z.object({ member: MemberSchema }), "Role changed"),
     201: json(z.object({ member: MemberSchema }), "Added"),
+    202: json(
+      z.object({
+        invite: InviteSchema,
+        inviteUrl: z.string().describe("Single-use; shown only in this response"),
+      }),
+      "Invited: nobody has signed up with that e-mail yet",
+    ),
     ...errors(400, 401, 403, 404, 409),
   },
 });
@@ -109,10 +121,12 @@ export function registerMemberRoutes(app: ApiApp): void {
       c.req.valid("param").repoId,
       c.req.valid("json"),
     );
+    if (r.kind === "invite") return c.json({ invite: r.invite, inviteUrl: r.inviteUrl }, 202);
     return r.created ? c.json({ member: r.member }, 201) : c.json({ member: r.member }, 200);
   });
   app.openapi(remove, async (c) => {
     const p = c.req.valid("param");
     return c.json(await removeMember(c.get("services"), callerOf(c), p.repoId, p.principalId), 200);
   });
+  registerInviteRoutes(app);
 }
