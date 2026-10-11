@@ -36,7 +36,7 @@ enqueue({ changeId: "<changeId>", priority: "normal" })
 
 ## `queue_status`
 
-State, track, batch, position, ETA, the Changes it waits on and why (e.g. "waiting on conflicting Change X in track 2"), and for an ejected Change the reason with fix.call.
+State, track, batch, position, ETA, the Changes it waits on and why (e.g. "waiting on conflicting Change X in track 2"), for an ejected Change the reason with fix.call, and the conflict resolution when the queue rewrote what lands (resolution).
 
 **Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts queue-status`
 
@@ -48,7 +48,7 @@ State, track, batch, position, ETA, the Changes it waits on and why (e.g. "waiti
 queue_status({ changeId: "<changeId>" })
 ```
 
-**Returns:** `queued` (boolean), `status` (object | null), `nextSteps` (object[]).
+**Returns:** `queued` (boolean), `status` (object | null), `resolution` (object | null), `nextSteps` (object[]).
 
 ## `wait_for_merge`
 

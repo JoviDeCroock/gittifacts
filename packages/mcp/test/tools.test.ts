@@ -251,13 +251,17 @@ describe("gittifacts MCP tools", () => {
     expect(r.structuredContent.previewUrl).toBeNull();
   });
 
-  it("request_review notifies and never approves", async () => {
+  it("request_review records the request, says nobody is messaged, and never approves", async () => {
     const r = await mcp.tools.request_review({ changeId: "chg_1", message: "please look" });
     if (r.isError) throw new Error(JSON.stringify(r.content));
     expect(r.structuredContent).toMatchObject({
       changeId: "chg_1",
-      notified: true,
+      requested: true,
       status: "awaiting-review",
     });
+    expect(r.structuredContent).not.toHaveProperty("notified");
+    expect(r.structuredContent.nextSteps[0]?.title).toBe(
+      "Hand a person the change's page: https://gittifacts.test/changes/chg_1",
+    );
   });
 });

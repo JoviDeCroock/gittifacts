@@ -33,7 +33,7 @@ create_project({ template: "workers-api" })
 
 ## `whoami`
 
-Who you are (your actor: principalId, kind, owner), scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.
+Who you are (your actor: principalId, kind, and for an agent the person accountable for you, ownerName, with the page where they inspect or revoke you, agentsUrl), scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.
 
 **Scope:** none · **Kind:** read-only · **CLI:** `gittifacts whoami`
 
@@ -43,7 +43,7 @@ No arguments.
 whoami({})
 ```
 
-**Returns:** `principalId` (string), `kind` ("human" | "agent" | "system"), `name` (string), `ownerId` (string | null), `scopes` (string[]), `canApprove` (boolean), `repos` (object[]), `quotas` ({ enforced, ciMinutesPerDay, ciMinutesUsedToday, artifactsOpsPerDay }).
+**Returns:** `principalId` (string), `kind` ("human" | "agent" | "system"), `name` (string), `ownerId` (string | null), `ownerName` (string | null), `agentsUrl` (string), `scopes` (string[]), `canApprove` (boolean), `repos` (object[]), `quotas` ({ enforced, ciMinutesPerDay, ciMinutesUsedToday, artifactsOpsPerDay }), `nextSteps` (object[]).
 
 ## `list_repos`
 

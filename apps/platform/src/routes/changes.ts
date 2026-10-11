@@ -204,12 +204,21 @@ const requestReviewRoute = createRoute({
   method: "post",
   path: "/api/v1/changes/{changeId}/request-review",
   tags: ["changes"],
-  summary: "Ask for human attention on a change (author or its owner); notifies, never approves",
+  summary:
+    "Ask for a human review of a change (author or its owner): recorded in the audit log, no message is sent; never approves",
   security: SECURITY,
   middleware: [requirePrincipal(["change:create"]), idempotent()] as const,
   request: { headers: IdempotencyHeaders, params: ChangeIdParam, body: body(RequestReviewBody) },
   responses: {
-    200: json(z.object({ change: ChangeSchema, notified: z.boolean() }), "Requested"),
+    200: json(
+      z.object({
+        change: ChangeSchema,
+        requested: z
+          .boolean()
+          .describe("Recorded (audit log); nobody receives a message: share the change's page"),
+      }),
+      "Requested",
+    ),
     ...errors(400, 401, 403, 404, 409),
   },
 });

@@ -46,7 +46,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `PATCH` | [`/api/v1/changes/{changeId}/queue`](/docs/reference/http-merge-queue) | Reprioritize a queued Change (incident needs a human or an approved incident Plan) |
 | `DELETE` | [`/api/v1/changes/{changeId}/queue`](/docs/reference/http-merge-queue) | Take a Change out of the merge queue (its stack dependents leave too) |
 | `GET` | [`/api/v1/changes/{changeId}/queue/wait`](/docs/reference/http-merge-queue) | Long-poll until the Change merges, is ejected or dequeued, or the queue freezes |
-| `POST` | [`/api/v1/changes/{changeId}/request-review`](/docs/reference/http-changes) | Ask for human attention on a change (author or its owner); notifies, never approves |
+| `POST` | [`/api/v1/changes/{changeId}/request-review`](/docs/reference/http-changes) | Ask for a human review of a change (author or its owner): recorded in the audit log, no message is sent; never approves |
 | `POST` | [`/api/v1/changes/{changeId}/rerun`](/docs/reference/http-changes) | Re-run CI, evidence, lane and walkthrough on the current head (author or maintainer) |
 | `GET` | [`/api/v1/changes/{changeId}/resolution`](/docs/reference/http-changes) | The merge queue's conflict resolution of this change (null when it needed none): what lands, what each side had |
 | `POST` | [`/api/v1/changes/{changeId}/review`](/docs/reference/http-changes) | Review a change (human, change:review, not the author); binds to a head |

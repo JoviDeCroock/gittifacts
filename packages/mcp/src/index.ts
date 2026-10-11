@@ -12,6 +12,7 @@ export type {
   NextStepData,
   ProjectCreated,
   RepoRoleData,
+  ResolutionData,
   WaitReasonData,
   WebPage,
   WhoamiData,

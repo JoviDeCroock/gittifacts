@@ -15,7 +15,7 @@ You review Changes in quick review (Lane 1) and full review (Lane 2), and auto-m
 
 ## 1. Open the Change
 
-The agent's `request_review` notifies you; the link is `https://<host>/changes/<changeId>`. The repo screen also groups open Changes by lane. On a phone, the decision bar sits at the bottom of the screen.
+An agent's `request_review` is recorded in the audit log, not sent to you as a message, so the agent hands you the link: `https://<host>/changes/<changeId>`. The repo screen also groups open Changes by lane. On a phone, the decision bar sits at the bottom of the screen.
 
 ## 2. Read the handover first
 

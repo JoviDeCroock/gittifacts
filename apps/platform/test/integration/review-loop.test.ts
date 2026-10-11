@@ -144,7 +144,12 @@ describe("the review loop, agent side (workerd: real DOs + Workflows)", () => {
       const asked = await mcp.tools.request_review({ changeId, message: "ready" });
       if (asked.isError) throw new Error(JSON.stringify(asked.content));
       expect(asked.structuredContent.url).toBe(page);
-      expect(asked.structuredContent.nextSteps[0]).toMatchObject({
+      // Honest about delivery: nothing is sent, so the first step is handing a person the page.
+      expect(asked.structuredContent.requested).toBe(true);
+      expect(asked.structuredContent.nextSteps[0]?.title).toBe(
+        `Hand a person the change's page: ${page}`,
+      );
+      expect(asked.structuredContent.nextSteps[1]).toMatchObject({
         call: `wait_for_change({ changeId: "${changeId}", until: "merged" })`,
         why: expect.stringContaining("changes-requested"),
       });

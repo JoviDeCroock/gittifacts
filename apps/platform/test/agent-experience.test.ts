@@ -9,7 +9,17 @@ import { env } from "cloudflare:workers";
 import { parseToolError } from "@app/mcp";
 import { createPlatformClient } from "@app/mcp/client";
 import { describe, expect, it } from "vitest";
-import { changeFixture, classificationFixture, HEAD_SHA, repoFixture, store } from "./fixtures.js";
+import { conflictResolutionItem } from "@app/evidence";
+import { DoAudit } from "../src/audit/audit.js";
+import {
+  changeFixture,
+  classificationFixture,
+  evidenceFixture,
+  HEAD_SHA,
+  repoFixture,
+  store,
+  tourFixture,
+} from "./fixtures.js";
 import { call, createAgent, json, makeApp, ORIGIN, signUpHuman, type TestApp } from "./http.js";
 
 function fetchVia(app: TestApp) {
@@ -186,6 +196,125 @@ describe("get_rollout", () => {
           `list_issues_for_change({ changeId: "${merged.id}" })`,
         ]),
       );
+    } finally {
+      await mcp.client.close();
+    }
+  });
+});
+
+describe("agent outputs name who is accountable and what to hand a person", () => {
+  it("whoami names the owner and the agents page; get_change_status the author and its owner", async () => {
+    const { agent, change, mcp } = await setup();
+    try {
+      const me = await mcp.tools.whoami();
+      if (me.isError) throw new Error(JSON.stringify(me.content));
+      expect(me.structuredContent).toMatchObject({
+        principalId: agent.principal.id,
+        ownerName: "Ada",
+        agentsUrl: `${ORIGIN}/agents`,
+      });
+      expect(me.structuredContent.nextSteps[0]?.title).toBe(
+        `Ada answers for you and can inspect or revoke you at ${ORIGIN}/agents`,
+      );
+
+      const st = await mcp.tools.get_change_status({ changeId: change.id });
+      if (st.isError) throw new Error(JSON.stringify(st.content));
+      expect(st.structuredContent.author).toEqual({
+        id: agent.principal.id,
+        name: "builder-bot",
+        kind: "agent",
+        ownerId: agent.principal.ownerId,
+        ownerName: "Ada",
+      });
+      expect(st.structuredContent.resolution).toBeNull();
+    } finally {
+      await mcp.client.close();
+    }
+  });
+
+  it("get_evidence and get_tour hand over their pages and say what to do next", async () => {
+    const { change, mcp } = await setup();
+    const s = store();
+    await s.putEvidence(await evidenceFixture(change.id));
+    const tour = tourFixture(change.id);
+    await s.putTour({
+      ...tour,
+      stops: tour.stops.map((st, i) => (i === 0 ? { ...st, verdict: "unproven" as const } : st)),
+    });
+    await s.updateChange(change.id, { tourId: tour.id });
+    try {
+      const ev = await mcp.tools.get_evidence({ changeId: change.id });
+      if (ev.isError) throw new Error(JSON.stringify(ev.content));
+      expect(ev.structuredContent.url).toBe(`${ORIGIN}/changes/${change.id}/evidence`);
+      expect(ev.structuredContent.nextSteps[0]?.call).toBe(`get_tour({ changeId: "${change.id}" })`);
+
+      const t = await mcp.tools.get_tour({ changeId: change.id });
+      if (t.isError) throw new Error(JSON.stringify(t.content));
+      expect(t.structuredContent.url).toBe(`${ORIGIN}/changes/${change.id}`);
+      expect(t.structuredContent.nextSteps[0]?.title).toMatch(
+        /^Turn 1 unproven stop\(s\) into proven ones/,
+      );
+    } finally {
+      await mcp.client.close();
+    }
+  });
+
+  it("get_change_status carries the merge queue's resolution: what lands, and that it needs a fresh approval", async () => {
+    const { change, mcp } = await setup();
+    const s = store();
+    const resolved = "e".repeat(40);
+    const item = conflictResolutionItem({
+      upstreamChanges: [{ changeId: "chg_upstream", sha: "f".repeat(40) }],
+      ontoSha: "f".repeat(40),
+      scope: {
+        conflictHunks: [{ file: "README.md", startLine: 1, endLine: 1 }],
+        touchesOutsideConflictHunks: false,
+        novelLines: 1,
+      },
+      resolutionDiff: "diff --git a/README.md b/README.md\n",
+      semanticConflictWith: null,
+      rationale: "Kept both.",
+      resolver: { model: "m", principalId: "system:resolver", promptVersion: "v" },
+      attempts: 1,
+    });
+    const ev = await evidenceFixture(change.id, resolved);
+    await s.putEvidence({ ...ev, items: [...ev.items, item] });
+    const audit = new DoAudit(env);
+    const subject = `change:${change.id}`;
+    await audit.append({
+      principalId: "system:merge-queue",
+      action: "merge-queue.resolution",
+      subject,
+      payload: { attempt: 1, kind: "textual", status: "resolved", headSha: HEAD_SHA, newHead: resolved },
+    });
+    await audit.append({
+      principalId: "system:merge-queue",
+      action: "merge-queue.approval-requested",
+      subject,
+      payload: { lane: 1, reasons: ["merge-queue.resolution-novel-lines"] },
+    });
+    try {
+      const st = await mcp.tools.get_change_status({ changeId: change.id });
+      if (st.isError) throw new Error(JSON.stringify(st.content));
+      expect(st.structuredContent.resolution).toEqual({
+        headSha: resolved,
+        originalHeadSha: HEAD_SHA,
+        kind: "textual",
+        at: expect.any(String),
+        files: ["README.md"],
+        upstream: [{ changeId: "chg_upstream", title: null }],
+        approvalRequested: true,
+      });
+      expect(st.structuredContent.nextSteps.slice(0, 2)).toEqual([
+        expect.objectContaining({
+          title: `The merge queue resolved a textual conflict: eeeeeee lands, not your head ${HEAD_SHA.slice(0, 7)}`,
+          call: `get_evidence({ changeId: "${change.id}" })`,
+        }),
+        expect.objectContaining({
+          title: "A person must approve the resolution before it lands",
+          call: `request_review({ changeId: "${change.id}" })`,
+        }),
+      ]);
     } finally {
       await mcp.client.close();
     }
