@@ -212,9 +212,21 @@ describe("external integrations (acceptance)", () => {
       ["POST", `${cloneUrl.pathname}/git-receive-pack`],
     ] as const) {
       const push = await raw(app, method, path, gitAuth, method === "POST" ? "0000" : undefined);
+      // git prints a text/plain error body as `remote:` lines (and drops JSON): the fix shows.
       expect(push.status).toBe(403);
-      expect((await json<{ error: { code: string } }>(push)).error.code).toBe("read-only");
+      expect(push.headers.get("content-type")).toMatch(/^text\/plain/);
+      const body = await push.text();
+      expect(body).toContain("push refused (push-to-main)");
+      expect(body).toContain("Only the merge queue writes main");
+      expect(body).toContain('Fix: start_change({ repoId: "<repoId>"');
+      expect(body).toContain("push <remote.url> HEAD:<remote.branch>");
+      const header = JSON.parse(push.headers.get("x-gittifacts-error") ?? "{}");
+      expect(header.code).toBe("push-to-main");
     }
+    // Without credentials too: git's first request carries none, and must not get a prompt.
+    const anonPush = await raw(app, "GET", `${cloneUrl.pathname}/info/refs?service=git-receive-pack`, {});
+    expect(anonPush.status).toBe(403);
+    expect(await anonPush.text()).toContain("push-to-main");
     expect(
       (
         await raw(

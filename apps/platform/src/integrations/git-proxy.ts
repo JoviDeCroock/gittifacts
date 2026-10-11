@@ -11,8 +11,9 @@
  * - integration tokens (`gti_…`) with `contents:read`, on their installation's repos;
  * - agent tokens (`gtf_…`) with `repo:read` whose audience includes the HTTP API, on their repos.
  * Human sessions are not git credentials here (create an agent token). `git-receive-pack` is
- * refused for everyone: nothing pushes through this proxy (agents push to their fork with
- * `refresh_push_token`; only the merge queue moves a default branch).
+ * refused for everyone with a text/plain 403 that git prints as `remote:` lines carrying the
+ * push-to-main fix (git-refusal.ts): agents push to their fork with `refresh_push_token`; only
+ * the merge queue moves a default branch.
  */
 import type { Principal } from "@app/domain";
 import type { Context } from "hono";
@@ -25,6 +26,7 @@ import { audienceAllows } from "../oauth/urls.js";
 import { enforceIntegrationRate, verifyIntegrationToken } from "./auth.js";
 import { looksLikeIntegrationToken } from "./crypto.js";
 import { gitHostFor } from "./git-host.js";
+import { receivePackRefusal } from "./git-refusal.js";
 import { resolveRepoPath } from "./handles.js";
 
 export const GIT_PREFIX = "/git/";
@@ -94,15 +96,6 @@ export function gitCredential(header: string | undefined): string | null {
   const pass = i < 0 ? "" : decoded.slice(i + 1);
   return pass !== "" ? pass : user !== "" ? user : null;
 }
-
-/** Responses are built per request (a Response made at module scope can't serve two requests). */
-const receivePackRefused = () =>
-  errorJson(
-    403,
-    "read-only",
-    "git push is not available through /git/: integrations read code, they never write it",
-    "Deploy platforms only clone and fetch here. Agents push a Change to its own fork with the token from refresh_push_token; only the merge queue moves a default branch.",
-  );
 
 type Authed = { kind: "integration" | "agent"; principal: Principal };
 
@@ -183,8 +176,9 @@ export async function handleGit(c: Context<AppEnv>): Promise<Response> {
     );
   }
   const service = url.searchParams.get("service");
+  // Before auth: `git push` sends no credentials first, and must see the fix, not a prompt.
   if (parsed.endpoint === "git-receive-pack" || service === "git-receive-pack")
-    return receivePackRefused();
+    return receivePackRefusal({ host: urlsFor(c).origin, changeId: parsed.changeId });
   const isRefs = parsed.endpoint === "info/refs";
   if (isRefs ? c.req.method !== "GET" || service !== "git-upload-pack" : c.req.method !== "POST") {
     return errorJson(

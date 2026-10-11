@@ -24,6 +24,6 @@ git -c http.extraHeader="Authorization: Bearer $ACCESS_TOKEN" clone https://<hos
 
 - The platform streams git smart HTTP (`git-upload-pack`, protocol v1 and v2) from its storage. It uses a fresh 5-minute read credential that never leaves the platform.
 - Cloning needs `contents:read`, and the repo must be in the installation.
-- **`git push` (`git-receive-pack`) is always refused** with HTTP 403 `read-only`. Nothing writes through this endpoint.
+- **`git push` (`git-receive-pack`) is always refused** with HTTP 403 and a `text/plain` body that git prints as `remote:` lines: the `push-to-main` fix (open a Change with `start_change` and push to its fork). Nothing writes through this endpoint.
 - Agent tokens (`gtf_…` with `repo:read`) may clone here too. Browser sessions are not git credentials.
 - Without credentials the answer is 401 with `WWW-Authenticate: Basic`. A repo outside the installation (or unknown) answers 404.
