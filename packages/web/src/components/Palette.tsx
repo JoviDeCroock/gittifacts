@@ -357,7 +357,7 @@ export function Palette() {
           autocomplete="off"
           spellcheck={false}
         />
-        <div class="palette__modes" role="radiogroup" aria-label="Who does it" ref={modes} title="Alt+A switches">
+        <div class="palette__modes" role="radiogroup" aria-label="Who does it" ref={modes} title={isMac() ? "⌥A switches" : "Alt+A switches"}>
           {(["me", "agent"] as const).map((m) => (
             <button
               key={m}
@@ -427,7 +427,7 @@ export function Palette() {
       {agent ? <TwinPane cmd={current} copied={copied.value} onCopy={(k) => current && void handOff(current, k)} /> : null}
       <p class="palette__foot">
         <span class="sr-only" role="status">{status.value}</span>
-        <span aria-hidden="true">{status.value || (agent ? "↵ copy MCP call · ⇧↵ copy CLI · alt A myself · esc close" : `↵ run · ${isMac() ? "⌘↵" : "Ctrl ↵"} copy for an agent · alt A switch · esc close`)}</span>
+        <span aria-hidden="true">{status.value || (agent ? `↵ copy MCP call · ⇧↵ copy CLI · ${isMac() ? "⌥A" : "Alt+A"} myself · esc close` : `↵ run · ${isMac() ? "⌘↵" : "Ctrl+↵"} copy for an agent · ${isMac() ? "⌥A" : "Alt+A"} an agent · esc close`)}</span>
       </p>
     </dialog>
   );

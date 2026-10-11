@@ -41,6 +41,12 @@
 .palette-trigger__label {
   flex: 1;
 }
+/* A key hint means nothing to a thumb (the phone drawer's field). */
+@media (pointer: coarse) {
+  .palette-trigger .kbd {
+    display: none;
+  }
+}
 
 /* ================================================================ dialog */
 .palette {
