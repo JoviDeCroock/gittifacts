@@ -81,7 +81,8 @@ async function hmacHex(secret: string, text: string): Promise<string> {
 /**
  * Headers on agent traffic to the platform and its previews (never to other hosts): which run
  * this is, signed when `EVAL_TRAFFIC_SECRET` is set so the platform can key its per-IP creation
- * limits per eval run instead of per Cloudflare egress IP (README: platform follow-up).
+ * limits per eval run instead of per Cloudflare egress IP (README: platform follow-up). The
+ * signature goes to the platform only: previews run project code, which could replay it.
  */
 export async function evalHeaderFn(
   cfg: EvalConfig,
@@ -93,6 +94,7 @@ export async function evalHeaderFn(
   return (url) => {
     const h = url.hostname.toLowerCase();
     if (h !== platform && !h.endsWith(cfg.previewSuffix)) return {};
-    return { "x-gittifacts-eval-run": runId, ...(sig ? { "x-gittifacts-eval-sig": sig } : {}) };
+    const signed = sig !== null && h === platform;
+    return { "x-gittifacts-eval-run": runId, ...(signed ? { "x-gittifacts-eval-sig": sig } : {}) };
   };
 }
