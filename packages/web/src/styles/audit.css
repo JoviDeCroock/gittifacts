@@ -4,8 +4,9 @@
   background: var(--ok-tint);
   border: 1px solid var(--ok-line);
 }
-/* Broken: the whole warning, open. */
-.chain--bad {
+/* Broken (danger) or partly verified (warn, security M9): the whole message, open. */
+.chain--bad,
+.chain--pending {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--s-3);
@@ -16,6 +17,13 @@
 }
 .chain--bad > .icon {
   color: var(--danger);
+}
+.chain--pending {
+  background: var(--warn-tint);
+  border-color: var(--warn-line);
+}
+.chain--pending > .icon {
+  color: var(--warn);
 }
 /* Verified: one line; the explanation opens under it. */
 .chain__summary {

@@ -256,6 +256,24 @@ function Filters({ f, onApply }: { f: AuditFilter; onApply: (f: AuditFilter) => 
 
 /** Verified: one line, the explanation a click away. Broken: the whole warning, always open. */
 function Chain({ chain, count }: { chain: AuditPage["chain"]; count: number }) {
+  // Reads verify in batches (security M9): not verified, no break found, more to check.
+  const pending = !chain.verified && chain.brokenAt === undefined && chain.complete === false;
+  if (pending) {
+    return (
+      <section class="chain chain--pending" aria-live="polite" data-testid="audit-chain" data-verified="partial">
+        <Icon name="timer" size={22} />
+        <div>
+          <p class="chain__title">
+            Verified through event #{chain.verifiedThrough ?? 0} of #{chain.headSeq ?? "?"}
+          </p>
+          <p class="chain__line">
+            Newer events are checked a batch at a time. Reload to continue; until then treat events after this one as not yet
+            verified.
+          </p>
+        </div>
+      </section>
+    );
+  }
   if (!chain.verified) {
     return (
       <section class="chain chain--bad" aria-live="polite" data-testid="audit-chain" data-verified="false">

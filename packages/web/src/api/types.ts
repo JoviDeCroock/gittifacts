@@ -206,7 +206,11 @@ export interface AuditPage {
   /** `summary`: the server's one-liner from the payload (why a step failed, what it changed). */
   events: (AuditEvent & { summary?: string })[];
   nextCursor: string | null;
-  chain: { verified: boolean; brokenAt?: number };
+  /**
+   * `verified` only when every entry up to `headSeq` is checked. Each read verifies a bounded
+   * number of new entries from a checkpoint: `complete: false` means the rest is still pending.
+   */
+  chain: { verified: boolean; brokenAt?: number; verifiedThrough?: number; headSeq?: number; complete?: boolean };
   /** GAP: names and kinds for the principals referenced by `events`. */
   principals?: Record<string, PrincipalRef>;
   /** GAP (not served by the platform yet): titles for the subjects referenced by `events`. */
