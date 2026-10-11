@@ -1,7 +1,7 @@
 /**
  * Repo members (apps/platform/src/access/routes.ts): `GET/POST /api/v1/repos/:repoId/members`,
- * `DELETE /api/v1/repos/:repoId/members/:principalId`, and invites (an e-mail nobody has signed up
- * with gets a single-use link: `/api/v1/invites/:token`). In mock mode an in-browser backend answers.
+ * `DELETE /api/v1/repos/:repoId/members/:principalId`, and invites (an e-mail no verified account
+ * has gets a single-use link: `/api/v1/invites/:token`). In mock mode an in-browser backend answers.
  */
 import { request } from "./client.js";
 import { isMockMode } from "./mode.js";

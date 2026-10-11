@@ -1,8 +1,11 @@
 /**
- * Member invites for people who have not signed up yet (DECISIONS 2026-10-11).
+ * Member invites for people who have not signed up yet, or whose account's e-mail is unverified
+ * (DECISIONS 2026-10-11).
  *
- * - An owner adding an e-mail nobody has signed up with gets a single-use invite link
+ * - An owner adding an e-mail no verified account has gets a single-use invite link
  *   (`/invite/gtm_…`), shown once. There is no e-mail sending; the owner hands the link over.
+ *   An unverified account with that e-mail is not added directly: anyone can sign up as any
+ *   e-mail, so the link, handed to the person the owner means, is the proof (M3).
  * - Accepting needs the link AND a signed-in person whose account e-mail is the invited one.
  *   Neither alone is enough: e-mail sign-up does not prove the address (no mail is sent), and a
  *   forwarded link must not admit whoever opens it.
@@ -68,7 +71,7 @@ export async function openInviteViews(svc: Services, repoId: string): Promise<In
   return views(svc, await listOpenInvites(svc.store, repoId));
 }
 
-/** Invite an e-mail nobody has signed up with (the caller already holds `admin`). */
+/** Invite an e-mail no verified account has (the caller already holds `admin`). */
 export async function createInvite(
   svc: Services,
   caller: Caller,

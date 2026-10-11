@@ -3,7 +3,7 @@
  *
  *   GET    /api/v1/repos/{repoId}/members                 anyone who can read the repo
  *   POST   /api/v1/repos/{repoId}/members                 owner: add by e-mail/principal id, or change a role;
- *                                                         an e-mail nobody signed up with → an invite (202)
+ *                                                         an e-mail no verified account has → an invite (202)
  *   DELETE /api/v1/repos/{repoId}/members/{principalId}   owner; or a member leaving
  *
  * Invites (./invite-routes.ts): revoke, and the public link a person opens and accepts.
@@ -48,7 +48,7 @@ const MembersSchema = z.object({
 
 const AddMemberBody = z
   .object({
-    email: z.string().email().max(320).optional().describe("Their e-mail. Nobody signed up with it yet: they get an invite link instead (202)"),
+    email: z.string().email().max(320).optional().describe("Their e-mail. Unless an account with that verified e-mail exists, they get an invite link instead (202)"),
     principalId: z.string().min(1).max(64).optional().describe("A human principal id (hu_…)"),
     role: RepoRoleSchema,
   })
@@ -76,7 +76,7 @@ const add = createRoute({
   tags: ["members"],
   summary: "Add a member by e-mail or principal id, or change a member's role (human owner)",
   description:
-    "Only humans are members (agents act with their owner's role). An e-mail nobody has signed up with gets a pending invite (202): `inviteUrl` is shown once, and works once, for a person signed in with that e-mail. 409 when the change would leave the repo without an owner.",
+    "Only humans are members (agents act with their owner's role). An e-mail no account has verified (nobody signed up with it, or e-mail sign-up, which doesn't prove the address) gets a pending invite (202): `inviteUrl` is shown once, and works once, for a person signed in with that e-mail. 409 when the change would leave the repo without an owner.",
   security: SECURITY,
   middleware: [requirePrincipal(["repo:admin"], { humanOnly: true }), idempotent()] as const,
   request: { headers: IdempotencyHeaders, params: RepoIdParam, body: body(AddMemberBody) },
@@ -88,7 +88,7 @@ const add = createRoute({
         invite: InviteSchema,
         inviteUrl: z.string().describe("Single-use; shown only in this response"),
       }),
-      "Invited: nobody has signed up with that e-mail yet",
+      "Invited: no account has verified that e-mail",
     ),
     ...errors(400, 401, 403, 404, 409),
   },

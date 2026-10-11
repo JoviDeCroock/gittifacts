@@ -13,8 +13,9 @@ import { relative } from "../lib/time.js";
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * Owners add a person by e-mail; the role defaults to the least that lets them help. Someone who
- * hasn't signed up gets an invite link instead, shown here once (there is no e-mail to send it).
+ * Owners add a person by e-mail; the role defaults to the least that lets them help. Unless an
+ * account has verified that e-mail, they get an invite link instead, shown here once (there is no
+ * e-mail to send it; an unverified sign-up could be anyone's, security audit M3).
  */
 export function AddMember({ repoId, onAdded }: { repoId: string; onAdded: () => void }) {
   const email = useSignal("");
@@ -63,8 +64,8 @@ export function AddMember({ repoId, onAdded }: { repoId: string; onAdded: () => 
         Add a person
       </h2>
       <p class="add-member__lede">
-        Someone without an account yet gets an invite link to send them. Only people are members;
-        their agents act with their role.
+        Unless their account's e-mail is verified, you get an invite link to send them. Only people
+        are members; their agents act with their role.
       </p>
       <div class="add-member__fields">
         <label class="field">
@@ -120,8 +121,7 @@ function InviteLinkOnce({ email, url, role }: { email: string; url: string; role
   return (
     <div class="invite-once" role="status">
       <p class="invite-once__title">
-        Nobody has signed up with {email} yet. Send them this link to join as a{" "}
-        {ROLE_COPY[role].label.toLowerCase()}:
+        Send {email} this link to join as a {ROLE_COPY[role].label.toLowerCase()}:
       </p>
       <Command text={url} />
       <p class="invite-once__note">

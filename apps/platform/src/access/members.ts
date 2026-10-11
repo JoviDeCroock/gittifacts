@@ -4,12 +4,12 @@
  *
  * - Anyone who can read the repo sees who its members are (names and roles); owners also see
  *   e-mails (they add people by e-mail).
- * - Owners (humans) add an existing user by e-mail or a human principal by id, change roles and
- *   remove members. Only humans are members: agents act through their owner's role.
+ * - Owners (humans) add an existing user by verified e-mail or a human principal by id, change
+ *   roles and remove members. Only humans are members: agents act through their owner's role.
  * - A member may leave (remove themselves). The last owner can never be removed or demoted; the
  *   guard is in the SQL statement, so two owners removing each other at once cannot both win.
- * - An e-mail nobody has signed up with becomes a pending invite with a single-use link
- *   (./invites.ts); owners see open invites in the list.
+ * - Any other e-mail (nobody signed up with it, or its account's e-mail is unverified) becomes a
+ *   pending invite with a single-use link (./invites.ts); owners see open invites in the list.
  * - Every change is audit-logged on `repo:<id>`.
  */
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -139,8 +139,11 @@ function lastOwner(repoId: string): ApiError {
 }
 
 /**
- * The human principal an owner names, by principal id or by a registered user's e-mail; null for
- * an e-mail nobody has signed up with (the caller invites them instead).
+ * The human principal an owner names, by principal id or by the e-mail of an account whose e-mail
+ * is verified; null otherwise (the caller invites them instead). E-mail sign-up doesn't prove the
+ * address (nothing is mailed), so an unverified account's e-mail may belong to someone else: whoever
+ * pre-registered bob@corp.com must not receive the role meant for Bob (security audit 2026-10-11,
+ * M3). The invite link, handed to the person the owner means, is the proof then.
  */
 async function targetHuman(
   svc: Services,
@@ -158,7 +161,7 @@ async function targetHuman(
   }
   const email = (who.email ?? "").trim().toLowerCase();
   const u = await svc.store.db.select().from(user).where(eq(user.email, email)).get();
-  if (!u) return null;
+  if (!u?.emailVerified) return null;
   const p = await ensureHumanPrincipal(
     svc.store,
     { id: u.id, email: u.email, name: u.name, image: u.image ?? null },
@@ -172,7 +175,7 @@ export type AddMemberResult =
   | { kind: "invite"; invite: InviteView; inviteUrl: string };
 
 /**
- * Add a member, change an existing member's role, or invite an e-mail nobody has signed up with
+ * Add a member, change an existing member's role, or invite an e-mail no verified account has
  * (owners only).
  */
 export async function addMember(

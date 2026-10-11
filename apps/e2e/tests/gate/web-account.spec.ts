@@ -19,7 +19,7 @@ test.describe("member invites", () => {
     await form.getByLabel("E-mail").fill(invitee);
     await form.getByRole("button", { name: "Add" }).click();
     const once = page.locator(".invite-once");
-    await expect(once).toContainText(`Nobody has signed up with ${invitee} yet`);
+    await expect(once).toContainText(`Send ${invitee} this link to join`);
     const link = (await once.locator("code").innerText()).replace(/\s+/g, "");
     expect(link).toMatch(/\/invite\/gtm_[A-Za-z0-9_-]{43}$/);
     const invited = page.locator("section.invites");

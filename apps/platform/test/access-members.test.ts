@@ -1,4 +1,5 @@
 /** The membership API: owners add/change/remove members, the last owner stays, everything audited. */
+import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { world } from "./access-helpers.js";
 import { addMember } from "./fixtures.js";
@@ -11,7 +12,7 @@ interface Members {
 }
 
 describe("repo members", () => {
-  it("an owner adds by e-mail or principal id, changes roles; members see names, only owners e-mails", async () => {
+  it("an owner adds by verified e-mail or principal id, changes roles; members see names, only owners e-mails", async () => {
     const w = await world();
     const alice = { cookie: w.alice.cookie };
     const path = `/api/v1/repos/${w.repo.id}/members`;
@@ -20,6 +21,8 @@ describe("repo members", () => {
         await call(w.app, "GET", "/api/v1/me", { cookie: w.bob.cookie }),
       )
     ).user.email;
+    // Only a verified e-mail resolves to an account (test/access-member-email.test.ts, M3).
+    await env.DB.prepare("UPDATE user SET email_verified = 1 WHERE email = ?").bind(bobEmail).run();
     const added = await call(w.app, "POST", path, {
       ...alice,
       body: { email: bobEmail.toUpperCase(), role: "reviewer" },
