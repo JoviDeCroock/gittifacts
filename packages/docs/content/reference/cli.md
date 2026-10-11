@@ -103,7 +103,7 @@ gittifacts logout [--all]
 
 ### `gittifacts wait`
 
-Wait until a change reaches a milestone, re-issuing the wait_for_change long-poll until --timeout. Exit 0 when reached, 3 when it timed out, can no longer be reached, or a human sent it back (changes requested, rejected, approval withdrawn).
+Wait until a change reaches a milestone, re-issuing the wait_for_change long-poll until --timeout. Exit 0 when reached, 3 when it timed out, can no longer be reached, a human sent it back (changes requested, rejected, approval withdrawn) or it is failing (red CI, a merge-queue ejection or a failed merge).
 
 ```text
 gittifacts wait <changeId> --until <evidence_ready|lane_assigned|tour_ready|merged|reverted> [--timeout <integer>]

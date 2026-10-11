@@ -52,7 +52,8 @@ export interface WaitResult {
   reached: boolean;
   /**
    * reached | timeout | unreachable (the change ended without reaching the milestone) |
-   * changes-requested | rejected | approval-withdrawn (a human sent it back: see `SentBack`).
+   * changes-requested | rejected | approval-withdrawn (a human sent it back: see `SentBack`) |
+   * failing (merged/reverted waits: red CI, a queue ejection or a failed merge; push a new head).
    */
   reason: WaitReason;
   /**

@@ -3,7 +3,7 @@
  * way existing repos should pick up; the platform compares the marker in a repo's AGENTS.md and
  * opens a Change that regenerates outdated copies.
  */
-export const CONVENTIONS_VERSION = 1;
+export const CONVENTIONS_VERSION = 2;
 
 /** First line of every generated AGENTS.md. */
 export const CONVENTIONS_MARKER = `<!-- gittifacts-conventions v${CONVENTIONS_VERSION} -->`;

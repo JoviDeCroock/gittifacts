@@ -32,7 +32,7 @@ const spec = builtinSpec({
   tool: "wait_for_change",
   title: "Wait for a change",
   description:
-    "Wait until a change reaches a milestone, re-issuing the wait_for_change long-poll until --timeout. Exit 0 when reached, 3 when it timed out, can no longer be reached, or a human sent it back (changes requested, rejected, approval withdrawn).",
+    "Wait until a change reaches a milestone, re-issuing the wait_for_change long-poll until --timeout. Exit 0 when reached, 3 when it timed out, can no longer be reached, a human sent it back (changes requested, rejected, approval withdrawn) or it is failing (red CI, a merge-queue ejection or a failed merge).",
   properties: {
     changeId: { type: "string", description: "The change to wait for." },
     until: { enum: milestones(), description: "The milestone." },
@@ -123,7 +123,7 @@ export const wait: Builtin = {
           if (r.isError) throw toolFailure(spec, r);
           const doc = r.structuredContent;
           last = doc;
-          // Anything but a timeout is final: reached, ended, or sent back by a human.
+          // Anything but a timeout is final: reached, ended, or sent back by a human or by CI.
           if (doc.reached || doc.reason !== "timeout") return last;
           if (ctx.io.now() >= deadline) return last;
           ctx.out.progress(
