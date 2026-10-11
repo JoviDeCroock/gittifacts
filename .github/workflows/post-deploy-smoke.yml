@@ -68,16 +68,24 @@ jobs:
       PREVIOUS_VERSION: ${{ inputs.previous_version }}
       ROLLBACK_DRY_RUN: ${{ inputs.rollback_dry_run && '1' || '' }}
       # Staging has its own database, so its own E2E account; GitHub mode is off there.
-      E2E_EMAIL: ${{ contains(inputs.url, 'gittifacts-staging.') && secrets.STAGING_E2E_EMAIL || secrets.E2E_EMAIL }}
-      E2E_PASSWORD: ${{ contains(inputs.url, 'gittifacts-staging.') && secrets.STAGING_E2E_PASSWORD || secrets.E2E_PASSWORD }}
-      SMOKE_GITHUB: ${{ contains(inputs.url, 'gittifacts-staging.') && 'off' || 'on' }}
+      E2E_EMAIL: ${{ inputs.url == 'https://gittifacts-staging.decroockjovi.workers.dev' && secrets.STAGING_E2E_EMAIL || secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ inputs.url == 'https://gittifacts-staging.decroockjovi.workers.dev' && secrets.STAGING_E2E_PASSWORD || secrets.E2E_PASSWORD }}
+      SMOKE_GITHUB: ${{ inputs.url == 'https://gittifacts-staging.decroockjovi.workers.dev' && 'off' || 'on' }}
       CI: "1"
     steps:
+      - name: Only send credentials to our own deployments
+        env:
+          TARGET: ${{ inputs.url }}
+        run: |
+          case "$TARGET" in
+            ""|https://gittifacts.decroockjovi.workers.dev|https://gittifacts-staging.decroockjovi.workers.dev) ;;
+            *) echo "::error::url must be production or staging, got: $TARGET"; exit 1 ;;
+          esac
       - name: Mask credentials in logs
         run: |
           for v in "$E2E_EMAIL" "$E2E_PASSWORD"; do [ -n "$v" ] && echo "::add-mask::$v"; done; true
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
       - name: Install (the e2e package only)
@@ -96,7 +104,7 @@ jobs:
       - name: Report
         if: always() && steps.scan.outcome == 'success'
         run: node scripts/e2e-summary.mjs apps/e2e/test-results/smoke.json "Post-deploy smoke" >> "$GITHUB_STEP_SUMMARY" || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always() && steps.scan.outcome == 'success'
         with:
           name: smoke-report
