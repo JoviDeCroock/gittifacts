@@ -78,7 +78,6 @@ a.fleet__link:hover {
 /* The row clips its trace, so the focus ring is drawn inside the link, never cut off. */
 .fleet__link:focus-visible {
   outline-offset: -2px;
-  border-radius: var(--r-control);
 }
 .fleet__who {
   grid-area: who;
@@ -91,33 +90,36 @@ a.fleet__link:hover {
   white-space: nowrap;
   font-weight: var(--weight-medium);
 }
-.fleet__owner,
-.fleet__when {
+.fleet__owner {
   color: var(--text-3);
   font-size: var(--text-meta);
 }
+/* The loading shape matches a settled row. */
+.fleet--loading .skel-row {
+  min-block-size: 70px;
+}
+/* What it did, to what (one line, the title truncates), then where and when. */
 .fleet__last {
   grid-area: last;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 var(--s-2);
+  display: grid;
+  gap: 2px;
   min-inline-size: 0;
   color: var(--text-2);
   font-size: var(--text-small);
 }
-/* What it acted on: the plan or change title is the line's subject, so it reads in ink. */
-.fleet__object {
+.fleet__did {
   min-inline-size: 0;
-  max-inline-size: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.fleet__object {
   color: var(--text);
   font-weight: var(--weight-medium);
 }
-.fleet__repo {
+.fleet__where {
   color: var(--text-3);
+  font-size: var(--text-meta);
 }
 .fleet__state {
   grid-area: state;
@@ -166,5 +168,49 @@ a.fleet__link:hover {
 @keyframes fleet-trace {
   to {
     transform: translateX(100%);
+  }
+}
+
+/* Phones: three short lines. The name beside its state; what it did; its person, where, when. */
+@media (max-width: 767px) {
+  .fleet__link {
+    grid-template-columns: 2.25rem auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "avatar name name state"
+      "avatar did did did"
+      "avatar owner where where";
+    align-items: baseline;
+    column-gap: 4px;
+  }
+  .fleet__link > .agent-mark {
+    align-self: start;
+    margin-inline-end: var(--s-2);
+  }
+  .fleet__state {
+    margin-inline-start: var(--s-2);
+  }
+  .fleet__who,
+  .fleet__last {
+    display: contents;
+  }
+  .fleet__name {
+    grid-area: name;
+  }
+  .fleet__did {
+    grid-area: did;
+  }
+  .fleet__owner {
+    grid-area: owner;
+    white-space: nowrap;
+  }
+  .fleet__where {
+    grid-area: where;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .fleet__where::before {
+    content: "· ";
   }
 }

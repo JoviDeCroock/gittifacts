@@ -51,12 +51,16 @@ export function LastAct({ a, now }: { a: AgentActivity; now: number }) {
   const o = a.last.object;
   return (
     <span class="fleet__last">
-      <span class="fleet__action">{a.last.label}</span>
-      {o ? <span class="fleet__object">{o.title}</span> : null}
-      {o?.repoName && o.repoName !== o.title ? <span class="fleet__repo">in {o.repoName}</span> : null}
-      <time class="fleet__when tnum" dateTime={a.last.at}>
-        {relative(a.last.at, now)}
-      </time>
+      <span class="fleet__did">
+        <span class="fleet__action">{a.last.label}</span>
+        {o ? <span class="fleet__object"> {o.title}</span> : null}
+      </span>
+      <span class="fleet__where">
+        {o?.repoName && o.repoName !== o.title ? <span class="fleet__repo">in {o.repoName} · </span> : null}
+        <time class="fleet__when tnum" dateTime={a.last.at}>
+          {relative(a.last.at, now)}
+        </time>
+      </span>
     </span>
   );
 }
