@@ -388,6 +388,24 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
       }),
   ],
 
+  // Close (abandon): the author, the author agent's owner or a reviewer, before it merges.
+  [
+    "POST",
+    /^\/api\/v1\/changes\/([^/]+)\/close$/,
+    ([id]) =>
+      withScenario(id, (s) => {
+        const c = s.change;
+        if (c.status === "abandoned") return ok({ change: c });
+        if (["merged", "rolling-out", "released", "reverted", "rejected"].includes(c.status)) {
+          return fail(409, "invalid-state", `This change is ${c.status}; a merged change is switched off from its rollout instead.`);
+        }
+        c.status = "abandoned";
+        c.updatedAt = new Date().toISOString();
+        appendAudit(db.me, "change.abandoned", `change:${c.id}`);
+        return ok({ change: c });
+      }),
+  ],
+
   [
     "GET",
     /^\/api\/v1\/changes\/([^/]+)\/rollout$/,
