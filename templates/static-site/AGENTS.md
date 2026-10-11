@@ -1,4 +1,4 @@
-<!-- gittifacts-conventions v1 -->
+<!-- gittifacts-conventions v2 -->
 # AGENTS.md — {{projectName}}
 
 This repo lives on **gittifacts**, an agent-native git platform. Humans approve intent (Plans),
@@ -31,10 +31,14 @@ Every response has `nextSteps` and every error has `fix` (`call` / `command`). D
    `wait_for_change({ changeId: "<changeId>", until: "evidence_ready", timeoutSec: 50 })`
 5. **Read** CI, lane, reasons and the preview URL: `get_change_status({ changeId: "<changeId>" })`
 6. **Hand off** Lane 1/2 to a human: `request_review({ changeId: "<changeId>" })`, then wait for `merged`.
+   It records the request (no message is sent): give a person the change's `url` yourself.
    Changes requested? The wait says `changes-requested`; `get_change_status` has the comment: push again.
+   Approval queues the Change by itself; `enqueue` is optional (priority, stacks, landing together).
 
 No Plan yet? You may start a Change without `planId`; it can't auto-merge and scope can't be checked.
 Pushing again to the fork restarts the pipeline for the new head; the old run is superseded.
+New session? List your Changes first; ones a reviewer sent back while you were away are there too:
+   `list_changes({ repoId: "{{repoId}}", mine: true })`
 
 ## Hard rules
 - **Never push to main.** Only the merge queue writes the default branch. Push to your Change's fork.
@@ -94,6 +98,8 @@ walkthrough is regenerated for the new head. Evidence details: `get_evidence({ c
 `"changes-requested"` → read the review in `get_change_status`, push a new head, `request_review` again.
 `"approval-withdrawn"` → the approval stopped counting (e.g. QA failed): fix and push, or ask again.
 `"superseded"` → a person picked another attempt at the same Plan (`supersededBy`); yours was closed.
+`"failing"` (`merged`/`reverted`) → CI is red, or the merge queue ejected it: fix, push a new head.
+Use `wait_for_change` for every milestone; `wait_for_merge` only watches the merge queue.
 
 ## After merge: rollout and switching a Change off
 With a deploy target, a merged Change rolls out in stages (`rollout` in `.platform/policy.ts`) and is
@@ -101,6 +107,8 @@ watched. Its flag `change-<changeId>` is on meanwhile; a regression switches it 
 back and opens a revert Change, with no human involved. Guard a risky new path with the flag so that
 switching it off restores the old one: `if (await isChangeEnabled(env, "<changeId>"))` (`src/flags.ts`
 in Workers templates). `env.FLAGS` exists only in deployed versions; elsewhere the Change counts as on.
+Follow it (stages, error rate, flag); `wait_for_change` until `reverted` answers if it is rolled back:
+   `get_rollout({ changeId: "<changeId>" })`
 
 ## When CI fails
 1. `get_change_status({ changeId: "<changeId>" })` shows the failing step and its log tail.

@@ -176,6 +176,10 @@ export type introspection = {
               "updatedAt"
             ]
           },
+          "url": {
+            "type": "string",
+            "description": "The change's page on the platform: hand it to the person who reviews it."
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
@@ -203,6 +207,7 @@ export type introspection = {
         },
         "required": [
           "change",
+          "url",
           "nextSteps"
         ]
       },
@@ -992,7 +997,7 @@ export type introspection = {
     },
     /**
      * Take a Change out of the merge queue
-     * Removes your Change from the merge queue (stack dependents leave with it). A Change that is landing right now leaves after its CAS settles.
+     * Removes a Change from the merge queue (stack dependents leave with it): its author, the author's owner, or a person who may review it. A Change that is landing right now leaves after its CAS settles.
      * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
      */
     "dequeue": {
@@ -1242,7 +1247,7 @@ export type introspection = {
     },
     /**
      * Enqueue a Change for merge
-     * Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode). It never skips review: an unapproved Change is registered and joins once approved (an auto-merge Change, Lane 0, joins by itself). Returns position, track, ETA and the predicted pass probability.
+     * Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode); optional, since approval queues a Change by itself. It never skips review: an unapproved Change is registered and joins once approved (an auto-merge Change, Lane 0, joins by itself). Returns position, track, ETA and the predicted pass probability.
      * @param args.priority Default normal (ranked by lane). incident needs a human or incidentPlanId.
      * @param args.dependsOn Changes this one is stacked on (they land first).
      * @param args.landTogether Plan-group members merge in one CAS or not at all.
@@ -1399,7 +1404,7 @@ export type introspection = {
     },
     /**
      * Get change status
-     * A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), the open changes on the same plan or paths (overlaps), its page (url) to hand a person, and what to do next.
+     * A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), who started it (author, with an agent's accountable person), the open changes on the same plan or paths (overlaps), the merge queue's conflict resolution when what lands differs from your head (resolution), its page (url) to hand a person, and what to do next.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      */
     "get_change_status": {
@@ -1559,6 +1564,117 @@ export type introspection = {
           "url": {
             "type": "string",
             "description": "The change's page on the platform: hand it to the person who reviews it."
+          },
+          "author": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "human",
+                  "agent",
+                  "system",
+                  "integration"
+                ]
+              },
+              "ownerId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ownerName": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "For an agent: the person accountable for it."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "kind",
+              "ownerId",
+              "ownerName"
+            ],
+            "description": "Who started the change, and for an agent the person accountable."
+          },
+          "resolution": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Set when the merge queue resolved a conflict: what lands is headSha (the resolver's commit), not the head you pushed. null: no resolution.",
+            "properties": {
+              "headSha": {
+                "type": "string",
+                "description": "The resolved head: what lands on the default branch."
+              },
+              "originalHeadSha": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The head you pushed."
+              },
+              "kind": {
+                "enum": [
+                  "textual",
+                  "semantic"
+                ]
+              },
+              "at": {
+                "type": "string"
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files with resolved conflict hunks."
+              },
+              "upstream": {
+                "type": "array",
+                "description": "The changes it was resolved against.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "changeId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "changeId",
+                    "title"
+                  ]
+                }
+              },
+              "approvalRequested": {
+                "type": "boolean",
+                "description": "The resolution invalidated the approval: a person must approve what lands."
+              }
+            },
+            "required": [
+              "headSha",
+              "originalHeadSha",
+              "kind",
+              "at",
+              "files",
+              "upstream",
+              "approvalRequested"
+            ]
           },
           "reviews": {
             "type": "array",
@@ -1989,6 +2105,8 @@ export type introspection = {
         "required": [
           "change",
           "url",
+          "author",
+          "resolution",
           "reviews",
           "runs",
           "classification",
@@ -2086,6 +2204,34 @@ export type introspection = {
                 "status"
               ]
             }
+          },
+          "url": {
+            "type": "string",
+            "description": "The change's evidence page, to hand a person."
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
           }
         },
         "required": [
@@ -2094,7 +2240,9 @@ export type introspection = {
           "verification",
           "signedAt",
           "keyId",
-          "items"
+          "items",
+          "url",
+          "nextSteps"
         ]
       },
       "annotations": {
@@ -3172,11 +3320,41 @@ export type introspection = {
           "stale": {
             "type": "boolean",
             "description": "True when the walkthrough was written for an older head; a new one follows the latest push."
+          },
+          "url": {
+            "type": "string",
+            "description": "The change's page on the platform: hand it to the person who reviews it."
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
           }
         },
         "required": [
           "tour",
-          "stale"
+          "stale",
+          "url",
+          "nextSteps"
         ]
       },
       "annotations": {
@@ -3405,7 +3583,7 @@ export type introspection = {
     },
     /**
      * List changes
-     * A repo's changes, most recently updated first (up to 200): status, lane, plan, who started it and its page (url). Filter by status (e.g. awaiting-review) or to the changes you started (mine: true). get_change_status has one change's details.
+     * A repo's changes, most recently updated first (up to 200): status, lane, plan, who started it and its page (url). Filter by status (e.g. awaiting-review) or to the changes you started (mine: true; applied within those 200, so add status to reach older ones). get_change_status has one change's details.
      * @param args.repoId The repo.
      * @param args.status Only changes with this status.
      * @param args.mine Only changes you started.
@@ -4807,7 +4985,7 @@ export type introspection = {
     },
     /**
      * Where is my Change in the merge queue
-     * State, track, batch, position, ETA, the Changes it waits on and why (e.g. "waiting on conflicting Change X in track 2"), and for an ejected Change the reason with fix.call.
+     * State, track, batch, position, ETA, the Changes it waits on and why (e.g. "waiting on conflicting Change X in track 2"), for an ejected Change the reason with fix.call, and the conflict resolution when the queue rewrote what lands (resolution).
      */
     "queue_status": {
       "inputSchema": {
@@ -5036,6 +5214,77 @@ export type introspection = {
               "mergedSha"
             ]
           },
+          "resolution": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Set when the merge queue resolved a conflict: what lands is headSha (the resolver's commit), not the head you pushed. null: no resolution.",
+            "properties": {
+              "headSha": {
+                "type": "string",
+                "description": "The resolved head: what lands on the default branch."
+              },
+              "originalHeadSha": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The head you pushed."
+              },
+              "kind": {
+                "enum": [
+                  "textual",
+                  "semantic"
+                ]
+              },
+              "at": {
+                "type": "string"
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files with resolved conflict hunks."
+              },
+              "upstream": {
+                "type": "array",
+                "description": "The changes it was resolved against.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "changeId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "changeId",
+                    "title"
+                  ]
+                }
+              },
+              "approvalRequested": {
+                "type": "boolean",
+                "description": "The resolution invalidated the approval: a person must approve what lands."
+              }
+            },
+            "required": [
+              "headSha",
+              "originalHeadSha",
+              "kind",
+              "at",
+              "files",
+              "upstream",
+              "approvalRequested"
+            ]
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
@@ -5064,6 +5313,7 @@ export type introspection = {
         "required": [
           "queued",
           "status",
+          "resolution",
           "nextSteps"
         ]
       },
@@ -5136,7 +5386,7 @@ export type introspection = {
     },
     /**
      * Change a queued Change's priority
-     * Sets the priority class (normal, security, incident). The incident class needs a human or an approved incident Plan (incidentPlanId); reverts are prioritized automatically.
+     * Sets a queued Change's priority class (normal, security, incident): its author, the author's owner, or a person who may review it. The incident class needs a human or an approved incident Plan (incidentPlanId); reverts are prioritized automatically.
      * @param args.incidentPlanId An approved incident Plan (required for the incident class unless you are human).
      * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
      */
@@ -5613,7 +5863,7 @@ export type introspection = {
     },
     /**
      * Request a human review
-     * Ask a human to look at your change (notifies them; url is its page, to share). This never approves anything: agents cannot approve plans or changes.
+     * Ask for a human review of your change. The request is recorded in the change's audit log (the dashboard's agent band shows it), but nobody receives a message: hand url, the change's page, to a person. This never approves anything: agents cannot approve plans or changes.
      * @param args.idempotencyKey Optional. Retrying with the same key returns the first result instead of acting twice.
      */
     "request_review": {
@@ -5663,8 +5913,9 @@ export type introspection = {
               "abandoned"
             ]
           },
-          "notified": {
-            "type": "boolean"
+          "requested": {
+            "type": "boolean",
+            "description": "The request is recorded (audit log, the dashboard's agent band). Nobody receives a message: hand url to a person."
           },
           "url": {
             "type": "string",
@@ -5698,7 +5949,7 @@ export type introspection = {
         "required": [
           "changeId",
           "status",
-          "notified",
+          "requested",
           "url",
           "nextSteps"
         ]
@@ -5978,7 +6229,7 @@ export type introspection = {
     },
     /**
      * Start a change
-     * Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically. overlaps lists the open changes already on the same plan or touching the paths you name (paths) or your plan's scopePaths: coordinate with them or wait.
+     * Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically. overlaps lists the open changes already on the same plan or touching the paths you name (paths) or your plan's scopePaths: coordinate with them or wait. url is the change's page, to hand a person. A plan still in draft is fine to start from, but the change can't auto-merge until a person approves the plan.
      * @param args.planId The approved plan this change implements.
      * @param args.category Your claim; it can only raise risk, never lower it.
      * @param args.paths Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them, and until you push, agents starting later are told you intend to touch them. Never a lane input.
@@ -6444,7 +6695,7 @@ export type introspection = {
     },
     /**
      * Wait for a change
-     * Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first: reason changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review) or superseded (a person picked another attempt at the same plan and closed this one: supersededBy); read get_change_status for the review. On timeout call again, after retryAfterSec when it is set.
+     * Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first, reason changes-requested (push a new head), rejected (it ended) or approval-withdrawn (it needs a fresh review); a person can pick another attempt at the same plan, which closes this one, reason superseded (supersededBy); and for merged and reverted so can the machines, reason failing (red CI, a merge-queue ejection or a failed merge: fix and push a new head); read get_change_status for why. On timeout call again, after retryAfterSec when it is set; prefer this to wait_for_merge, which watches only the merge queue.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      * @param args.timeoutSec Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached.
      */
@@ -6498,9 +6749,10 @@ export type introspection = {
               "changes-requested",
               "rejected",
               "approval-withdrawn",
-              "superseded"
+              "superseded",
+              "failing"
             ],
-            "description": "reached; timeout (call again); unreachable (the change ended); or a human sent it back first: changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review); superseded (a person picked another attempt at the same plan and this change was closed: supersededBy)."
+            "description": "reached; timeout (call again); unreachable (the change ended); a human sent it back first: changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review); the machines did (merged/reverted waits): failing (red CI, a merge-queue ejection or a failed merge: read get_change_status, fix and push a new head); or superseded (a person picked another attempt at the same plan and this change was closed: supersededBy)."
           },
           "supersededBy": {
             "type": "string",
@@ -6645,6 +6897,10 @@ export type introspection = {
               "updatedAt"
             ]
           },
+          "url": {
+            "type": "string",
+            "description": "The change's page on the platform: hand it to the person who reviews it."
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
@@ -6674,6 +6930,7 @@ export type introspection = {
           "reached",
           "reason",
           "change",
+          "url",
           "nextSteps"
         ]
       },
@@ -6685,7 +6942,7 @@ export type introspection = {
     },
     /**
      * Wait for the merge
-     * Long-polls until the Change merges, is ejected or dequeued, or the queue freezes (timeoutSec ≤ 55). Prefer this to polling; call again while reason is "timeout".
+     * Long-polls until the Change merges, is ejected or dequeued, or the queue freezes (timeoutSec ≤ 55). Prefer this to polling; call again while reason is "timeout". It watches the queue only: from review to merge use wait_for_change (until "merged"), which also answers when a reviewer or CI sends the change back.
      * @param args.timeoutSec Default 50 (your MCP client times out at 60 s). Call again while reason is "timeout".
      */
     "wait_for_merge": {
@@ -6971,7 +7228,7 @@ export type introspection = {
     },
     /**
      * Who am I
-     * Who you are (your actor: principalId, kind, owner), scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.
+     * Who you are (your actor: principalId, kind, and for an agent the person accountable for you, ownerName, with the page where they inspect or revoke you, agentsUrl), scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.
      */
     "whoami": {
       "inputSchema": {
@@ -7000,6 +7257,17 @@ export type introspection = {
               "string",
               "null"
             ]
+          },
+          "ownerName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The person accountable for you (an agent's owner); null for a person."
+          },
+          "agentsUrl": {
+            "type": "string",
+            "description": "The page where your person inspects or revokes you (their agents)."
           },
           "scopes": {
             "type": "array",
@@ -7095,6 +7363,30 @@ export type introspection = {
               "ciMinutesUsedToday",
               "artifactsOpsPerDay"
             ]
+          },
+          "nextSteps": {
+            "type": "array",
+            "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "command": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
           }
         },
         "required": [
@@ -7102,10 +7394,13 @@ export type introspection = {
           "kind",
           "name",
           "ownerId",
+          "ownerName",
+          "agentsUrl",
           "scopes",
           "canApprove",
           "repos",
-          "quotas"
+          "quotas",
+          "nextSteps"
         ]
       },
       "annotations": {
