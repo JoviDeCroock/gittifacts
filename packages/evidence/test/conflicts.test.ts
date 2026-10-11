@@ -262,6 +262,132 @@ describe("resolutionScope", () => {
     expect(s.touchesOutsideConflictHunks).toBe(true);
   });
 
+  describe("dropped lines: the region must be an in-order merge of both sides' changes", () => {
+    // Upstream added requireAuth(); the Change added audit(). Both edited the same handler.
+    const merged = [
+      "export function handler(req) {",
+      "<<<<<<< upstream",
+      "  requireAuth(req);",
+      "  return serve(req);",
+      "||||||| base",
+      "  return serve(req);",
+      "=======",
+      "  audit(req);",
+      "  return serve(req);",
+      ">>>>>>> change",
+      "}",
+      "",
+    ].join("\n");
+    const scopeOf = (body: string[]) =>
+      resolutionScope(
+        [
+          {
+            path: "src/handler.ts",
+            merged,
+            resolved: ["export function handler(req) {", ...body, "}", ""].join("\n"),
+            conflicted: true,
+          },
+        ],
+        M,
+      );
+
+    it("keeping base + the Change and dropping upstream's requireAuth() is 0 novel but 1 dropped", () => {
+      const s = scopeOf(["  audit(req);", "  return serve(req);"]);
+      expect(s.touchesOutsideConflictHunks).toBe(false);
+      expect(s.novelLines).toBe(0); // what the old check saw: nothing new, approval kept
+      expect(s.droppedLines).toBe(1);
+      expect(s.files[0]?.droppedLines).toBe(1);
+    });
+
+    it("an in-order merge of both sides drops nothing", () => {
+      expect(
+        scopeOf(["  requireAuth(req);", "  audit(req);", "  return serve(req);"]).droppedLines,
+      ).toBe(0);
+      expect(
+        scopeOf(["  audit(req);", "  requireAuth(req);", "  return serve(req);"]).droppedLines,
+      ).toBe(0);
+    });
+
+    it("reordering a side's lines counts", () => {
+      expect(
+        scopeOf(["  audit(req);", "  return serve(req);", "  requireAuth(req);"]).droppedLines,
+      ).toBeGreaterThan(0);
+    });
+
+    it("undoing a side's deletion counts, and so does a line repeated beyond the merge", () => {
+      const del = [
+        "<<<<<<< upstream",
+        "  serve();",
+        "||||||| base",
+        "  bypassAuth();",
+        "  serve();",
+        "=======",
+        "  bypassAuth();",
+        "  serve();",
+        "  log();",
+        ">>>>>>> change",
+        "",
+      ].join("\n");
+      const of = (lines: string[]) =>
+        resolutionScope(
+          [{ path: "f.ts", merged: del, resolved: [...lines, ""].join("\n"), conflicted: true }],
+          M,
+        ).droppedLines;
+      expect(of(["  serve();", "  log();"])).toBe(0); // upstream removed bypassAuth(); kept removed
+      expect(of(["  bypassAuth();", "  serve();", "  log();"])).toBe(1); // brought it back
+      expect(of(["  serve();", "  log();", "  log();"])).toBe(1);
+    });
+
+    it("without a base section every line of each side must survive (unknown → strict)", () => {
+      const noBase = ["<<<<<<< upstream", "a = 2", "=======", "a = 10", ">>>>>>> change", ""].join(
+        "\n",
+      );
+      const of = (resolved: string) =>
+        resolutionScope([{ path: "f", merged: noBase, resolved, conflicted: true }], M)
+          .droppedLines;
+      expect(of("a = 10\n")).toBe(1); // picking one side drops the other: a human decides
+      expect(of("a = 2\na = 10\n")).toBe(0);
+    });
+
+    it("whole-file conflicts compare against both sides; unknown sides escalate", () => {
+      const s = resolutionScope(
+        [
+          {
+            path: "src/a.ts",
+            merged: "x\n",
+            resolved: "base\nours\n",
+            conflicted: true,
+            wholeFile: true,
+            sides: { ours: "base\nours\n", base: "base\n", theirs: "base\ntheirs\n" },
+          },
+        ],
+        M,
+      );
+      expect(s.novelLines).toBe(0);
+      expect(s.droppedLines).toBe(1);
+      const unknown = resolutionScope(
+        [{ path: "f", merged: "x\n", resolved: "y\n", conflicted: true, wholeFile: true }],
+        M,
+      );
+      expect(unknown.droppedLines).toBeGreaterThan(0);
+    });
+
+    it("the conflict-resolution item carries the count", () => {
+      const s = scopeOf(["  audit(req);", "  return serve(req);"]);
+      const item = conflictResolutionItem({
+        upstreamChanges: UP,
+        scope: s,
+        resolutionDiff: "diff",
+        semanticConflictWith: null,
+        rationale: "kept ours",
+        resolver: RESOLVER,
+        attempts: 1,
+      });
+      expect(item.droppedLines).toBe(1);
+      expect(EvidenceItem.parse(item)).toEqual(item);
+    });
+  });
+
   it("unparseable markers count every edit as outside", () => {
     const s = resolutionScope(
       [{ path: "f", merged: "<<<<<<< upstream\nx\n", resolved: "x\n", conflicted: true }],

@@ -191,6 +191,8 @@ export interface FileScope {
   /** Conflict markers remain in the resolved content. */
   unresolved: boolean;
   novelLines: number;
+  /** Lines of either side's change the resolution lost, reordered or reverted (see `droppedSideLines`). */
+  droppedLines: number;
   /** Where the conflict regions ended up (head side), when that is known. */
   hunks: ConflictHunk[];
   /** Head-side ranges edited outside the conflict regions. */
@@ -210,6 +212,11 @@ export interface ResolutionScope {
   /** Conflicted paths whose resolved content still contains conflict markers. */
   unresolvedFiles: string[];
   novelLines: number;
+  /**
+   * Lines of either side's change missing from the resolution, out of their order, or a side's
+   * deletion undone. 0 = every conflict region is an in-order merge of both sides' changes.
+   */
+  droppedLines: number;
   regions: number;
 }
 
@@ -227,6 +234,82 @@ function countNovel(lines: readonly string[], known: Iterable<string>): number {
     if (k !== "" && !set.has(k)) n++;
   }
   return n;
+}
+
+/** Trailing whitespace never changes what a line does; anything else must match exactly. */
+function exact(line: string): string {
+  return lineBody(line).trimEnd();
+}
+
+/**
+ * How far a resolved conflict region is from an in-order merge of both sides' changes: the number
+ * of lines it is missing or has out of order, plus the lines it repeats beyond what the merge has
+ * (a deletion one side made, undone). 0 means every line of `ours` and of `theirs` (except base
+ * lines the other side deleted) appears in `resolved` in its side's order, and nothing a side
+ * deleted came back. Without a base section every line of each side counts as changed (unknown →
+ * strict). Blank lines are ignored. "Novel lines" (`countNovel`) is the other half: lines found on
+ * neither side. A resolution that keeps base and drops upstream's `requireAuth()` has no novel
+ * line but drops one.
+ */
+export function droppedSideLines(
+  resolved: readonly string[],
+  ours: readonly string[],
+  base: readonly string[] | null,
+  theirs: readonly string[],
+): number {
+  const r = resolved.map(exact);
+  const o = ours.map(exact);
+  const t = theirs.map(exact);
+  const b = base === null ? null : base.map(exact);
+  const opsO = b === null ? null : diffLines(b, o);
+  const opsT = b === null ? null : diffLines(b, t);
+  const deleted = (ops: ReturnType<typeof diffLines> | null): Set<number> => {
+    const out = new Set<number>();
+    for (const op of ops ?? []) if (op.op === "del") out.add(op.a);
+    return out;
+  };
+  const delO = deleted(opsO);
+  const delT = deleted(opsT);
+  /** A side's lines that must survive: its own, minus base lines the other side deleted. */
+  const required = (
+    side: string[],
+    ops: ReturnType<typeof diffLines> | null,
+    delOther: Set<number>,
+  ) => {
+    const out: string[] = [];
+    if (ops === null) out.push(...side);
+    else
+      for (const op of ops) {
+        if (op.op === "ins") out.push(side[op.b]!);
+        else if (op.op === "eq" && !delOther.has(op.a)) out.push(side[op.b]!);
+      }
+    return out.filter((l) => l.trim() !== "");
+  };
+  const missing = (req: string[]): number => {
+    let n = 0;
+    for (const op of diffLines(req, r)) if (op.op === "del") n++;
+    return n;
+  };
+  let dropped = missing(required(o, opsO, delT)) + missing(required(t, opsT, delO));
+  if (b !== null && opsO !== null && opsT !== null) {
+    // The merge holds each line at most (base lines nobody deleted) + (each side's insertions).
+    const bound = new Map<string, number>();
+    const add = (k: string) => bound.set(k, (bound.get(k) ?? 0) + 1);
+    b.forEach((k, i) => {
+      if (!delO.has(i) && !delT.has(i)) add(k);
+    });
+    for (const op of opsO) if (op.op === "ins") add(o[op.b]!);
+    for (const op of opsT) if (op.op === "ins") add(t[op.b]!);
+    const known = new Set([...b, ...o, ...t]);
+    const seen = new Map<string, number>();
+    for (const k of r) {
+      if (k.trim() === "" || !known.has(k)) continue; // novel lines are counted by countNovel
+      const n = (seen.get(k) ?? 0) + 1;
+      seen.set(k, n);
+      if (n > (bound.get(k) ?? 0)) dropped++;
+    }
+  }
+  return dropped;
 }
 
 function startsAt(hay: readonly string[], needle: readonly string[], at: number): boolean {
@@ -322,6 +405,7 @@ function scopeOfFile(f: ResolvedFile, markers: ConflictMarkers): FileScope {
     outside: false,
     unresolved: false,
     novelLines: 0,
+    droppedLines: 0,
     hunks: [],
     outsideHunks: [],
     ...partial,
@@ -344,7 +428,24 @@ function scopeOfFile(f: ResolvedFile, markers: ConflictMarkers): FileScope {
       .flatMap(splitLines);
     const hunks: ConflictHunk[] =
       after.length > 0 ? [{ file: f.path, startLine: 1, endLine: after.length }] : [];
-    const out = scope({ regions: 1, unresolved, novelLines: countNovel(after, known), hunks });
+    const lines = (t: string | null) => (t === null ? [] : splitLines(t));
+    // Sides unknown: nothing shows the resolution kept both changes (unknown → escalate).
+    const droppedLines =
+      f.sides === undefined
+        ? Math.max(1, after.length)
+        : droppedSideLines(
+            after,
+            lines(sides.ours),
+            sides.base === null ? null : splitLines(sides.base),
+            lines(sides.theirs),
+          );
+    const out = scope({
+      regions: 1,
+      unresolved,
+      novelLines: countNovel(after, known),
+      droppedLines,
+      hunks,
+    });
     if (why !== undefined) out.why = why;
     return out;
   };
@@ -367,6 +468,10 @@ function scopeOfFile(f: ResolvedFile, markers: ConflictMarkers): FileScope {
     return scope({
       regions: parsed.regions.length,
       outside: cleanLines,
+      droppedLines: parsed.regions.reduce(
+        (n, r) => n + droppedSideLines([], r.ours, r.base, r.theirs),
+        0,
+      ),
       ...(cleanLines ? { why: "deleted a file with lines outside its conflict regions" } : {}),
     });
   }
@@ -388,14 +493,23 @@ function scopeOfFile(f: ResolvedFile, markers: ConflictMarkers): FileScope {
     });
   }
   let novel = 0;
+  let dropped = 0;
   const hunks: ConflictHunk[] = [];
   parsed.regions.forEach((r, i) => {
     const span = spans[i]!;
-    novel += countNovel(after.slice(span[0], span[1]), [...r.ours, ...(r.base ?? []), ...r.theirs]);
+    const region = after.slice(span[0], span[1]);
+    novel += countNovel(region, [...r.ours, ...(r.base ?? []), ...r.theirs]);
+    dropped += droppedSideLines(region, r.ours, r.base, r.theirs);
     const h = hunkFor(f.path, span, after.length);
     if (h !== null) hunks.push(h);
   });
-  return scope({ regions: parsed.regions.length, unresolved, novelLines: novel, hunks });
+  return scope({
+    regions: parsed.regions.length,
+    unresolved,
+    novelLines: novel,
+    droppedLines: dropped,
+    hunks,
+  });
 }
 
 /**
@@ -418,6 +532,7 @@ export function resolutionScope(
     outsideFiles,
     unresolvedFiles: scopes.filter((s) => s.unresolved).map((s) => s.path),
     novelLines: scopes.reduce((n, s) => n + s.novelLines, 0),
+    droppedLines: scopes.reduce((n, s) => n + s.droppedLines, 0),
     regions: scopes.reduce((n, s) => n + s.regions, 0),
   };
 }
@@ -466,7 +581,7 @@ export interface ConflictResolutionInput {
   upstreamChanges: readonly UpstreamChangeRef[];
   ontoSha?: string;
   scope: Pick<ResolutionScope, "conflictHunks" | "touchesOutsideConflictHunks" | "novelLines"> &
-    Partial<Pick<ResolutionScope, "outsideHunks">>;
+    Partial<Pick<ResolutionScope, "outsideHunks" | "droppedLines">>;
   /** The full resolution diff; it is capped here. */
   resolutionDiff: string;
   semanticConflictWith: string | null;
@@ -514,6 +629,7 @@ export function conflictResolutionItem(input: ConflictResolutionInput): Conflict
     attempts: input.attempts,
   };
   if (input.ontoSha !== undefined) item.ontoSha = input.ontoSha;
+  if (input.scope.droppedLines !== undefined) item.droppedLines = input.scope.droppedLines;
   const outsideHunks = input.scope.outsideHunks ?? [];
   if (outsideHunks.length > 0) item.outsideHunks = outsideHunks.slice(0, 2000);
   if (input.failingTests !== undefined)

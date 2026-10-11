@@ -154,6 +154,38 @@ describe("textual conflicts", () => {
     expect(out.status === "resolved" && out.evidence.touchesOutsideConflictHunks).toBe(false);
   });
 
+  it("a resolution that drops upstream's requireAuth() writes no novel line but reports a dropped one", async () => {
+    const merged = lines(
+      "export function handler(req: Request) {",
+      ...region(
+        ["  requireAuth(req);", "  return serve(req);"],
+        ["  return serve(req);"],
+        ["  audit(req);", "  return serve(req);"],
+      ),
+      "}",
+    );
+    const doc = conflictDoc([
+      conflictFile({ path: "src/handler.ts", merged_with_markers: merged }),
+    ]);
+    const answer = (text: string) =>
+      goodAnswer({ regions: [{ file: "src/handler.ts", conflict: 1, text }] });
+    const dropping = await createResolver(
+      new FakeLlmClient([{ json: answer("  audit(req);\n  return serve(req);\n") }]),
+    ).resolve(input({ merge: doc }));
+    expect(dropping.status).toBe("resolved");
+    if (dropping.status !== "resolved") return;
+    expect(dropping.scope.novelLines).toBe(0);
+    expect(dropping.scope.droppedLines).toBe(1);
+    expect(dropping.evidence).toMatchObject({ novelLines: 0, droppedLines: 1 });
+    expect(EvidenceItem.parse(dropping.evidence)).toEqual(dropping.evidence);
+    const both = await createResolver(
+      new FakeLlmClient([
+        { json: answer("  requireAuth(req);\n  audit(req);\n  return serve(req);\n") },
+      ]),
+    ).resolve(input({ merge: doc }));
+    expect(both.status === "resolved" && both.evidence).toMatchObject({ droppedLines: 0 });
+  });
+
   it("can only edit context files it was given, and such edits are outside", async () => {
     const files = [{ path: "src/index.ts", content: 'export * from "./handlers.js";\n' }];
     const answer = goodAnswer({

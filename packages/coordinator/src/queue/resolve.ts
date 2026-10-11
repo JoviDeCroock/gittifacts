@@ -215,10 +215,12 @@ async function resolveAndApply(
 
 /**
  * Seal the resolved head's evidence (the Change's items + the conflict-resolution item) and
- * reclassify on it. Approval binding: a within-hunk resolution with zero novel lines keeps the
- * approval; novel lines (Lane ≥ 1), outside-hunk edits or a semantic fix invalidate it. The
- * protocol has one flag for "needs a fresh approval" (`outsideHunks`), so a novel-line
- * resolution of a Lane ≥ 1 Change reports it as well (conservative: it only adds a review).
+ * reclassify on it. Approval binding: a within-hunk resolution that is an in-order merge of both
+ * sides (zero novel lines, zero dropped lines) keeps the approval; novel or dropped lines
+ * (Lane ≥ 1), outside-hunk edits or a semantic fix invalidate it. "Dropped" catches what novel
+ * lines can't: keeping base and losing upstream's `requireAuth()` writes nothing new. The
+ * protocol has one flag for "needs a fresh approval" (`outsideHunks`), so a novel- or
+ * dropped-line resolution of a Lane ≥ 1 Change reports it as well (only adds a review).
  */
 async function reEvidence(
   ctx: QueueContext,
@@ -273,6 +275,9 @@ async function reEvidence(
   const lane = Math.max(cls?.lane ?? 2, change.lane ?? 0) as 0 | 1 | 2;
   const outside = outcome.scope.touchesOutsideConflictHunks || cmd.kind === "semantic";
   const novel = outcome.scope.novelLines > 0;
+  // Missing count (a resolver from before the check): unknown → treat as dropped.
+  const droppedLines: unknown = outcome.scope.droppedLines;
+  const dropped = typeof droppedLines !== "number" || droppedLines > 0;
   const reasons: LaneReason[] = (cls?.reasons ?? []).filter((r) => r.lane > 0);
   if (novel && lane >= 1 && !outside)
     reasons.push({
@@ -280,12 +285,21 @@ async function reEvidence(
       lane: 1,
       message: `The conflict resolution wrote ${outcome.scope.novelLines} line(s) found on neither side: the earlier approval no longer covers what lands.`,
     });
+  if (dropped && lane >= 1 && !outside)
+    reasons.push({
+      code: "merge-queue.resolution-dropped-lines",
+      lane: 1,
+      message:
+        typeof droppedLines === "number"
+          ? `The conflict resolution lost, reordered or undid ${droppedLines} line(s) of one side's change: the earlier approval no longer covers what lands.`
+          : "The conflict resolution did not report whether it kept both sides' changes: the earlier approval no longer covers what lands.",
+    });
   return {
     status: "resolved",
     newHeadSha: newHead,
     lane,
     laneReasons: reasons,
-    outsideHunks: outside || (novel && lane >= 1),
+    outsideHunks: outside || ((novel || dropped) && lane >= 1),
     blamedUpstream: cmd.kind === "semantic" ? outcome.semanticConflictWith : null,
     resolutionRef: sealed.evidenceId,
     affected: null,

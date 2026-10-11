@@ -344,6 +344,60 @@ describe("merge queue Q1 (shell + core over fakes)", () => {
     expect(svc.loop.state.entries.c2?.state).toBe("merged");
   });
 
+  it("a resolution that drops upstream's requireAuth() (no novel line) invalidates a Lane 1 approval", async () => {
+    const handler = (...body: string[]) =>
+      ["export function handler(req) {", ...body, "  return serve(req);", "}", ""].join("\n");
+    const s = await scenario({ name: "app", files: { "src/a.ts": handler() } });
+    // The resolver keeps base + B's audit() and silently loses A's requireAuth(): every line it
+    // wrote is on some side, so the novel-line check alone kept the approval.
+    const env = attachAgentQueue(s, s.repo, {
+      config: { maxBatchSize: 1 },
+      resolver: () => ({ "src/a.ts": handler("  audit(req);") }),
+      scope: { mechanical: true },
+    });
+    const start = (title: string) =>
+      s.coordinator.startChange(s.agent, {
+        repoId: s.repo.id,
+        planId: `plan-${s.repo.id}`,
+        title,
+        category: "fix",
+      });
+    const a = (await start("A: require auth")).change;
+    const b = (await start("B: audit")).change;
+    const ha = push(s, a, { "src/a.ts": handler("  requireAuth(req);") });
+    const hb = push(s, b, { "src/a.ts": handler("  audit(req);") });
+    for (const [c, h] of [
+      [a, ha],
+      [b, hb],
+    ] as const)
+      await s.coordinator.onPush({
+        repoName: c.forkName,
+        ref: "refs/heads/main",
+        before: c.baseSha,
+        after: h,
+      });
+    await s.settle();
+    for (const c of [a, b])
+      await s.coordinator.submitReview(s.reviewer, c.id, { decision: "approve" });
+    for (let i = 0; i < 40 && (await reload(s, b.id)).status !== "awaiting-review"; i++) {
+      await s.settle();
+      s.ports.clock.advance(20_000);
+      await env.queue().alarm();
+    }
+    const held = await reload(s, b.id);
+    expect(held.status).toBe("awaiting-review");
+    const codes = held.laneReasons.map((r) => r.code);
+    expect(codes).toContain("merge-queue.resolution-dropped-lines");
+    expect(codes).not.toContain("merge-queue.resolution-novel-lines");
+    expect(env.queue().loop.state.entries[b.id]?.hold).toBe("approval");
+    const resolvedHead = env.queue().loop.state.entries[b.id]?.headSha ?? "";
+    const ev = await s.ports.store.getEvidence(b.id, resolvedHead);
+    expect(ev?.items.find((i) => i.kind === "conflict-resolution")).toMatchObject({
+      novelLines: 0,
+      droppedLines: 1,
+    });
+  });
+
   it("a resolution with new lines invalidates a Lane 1 approval: back to review, a human approves, it lands", async () => {
     const s = await scenario({ name: "app", files: { "src/a.ts": "export const a = 1;\n" } });
     const env = attachAgentQueue(s, s.repo, {

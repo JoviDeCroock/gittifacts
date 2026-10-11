@@ -14,6 +14,8 @@ export interface ResolverScript {
   }): Record<string, string | null> | null;
   /** Lines the resolution wrote that are on neither side (> 0 needs a fresh human approval). */
   novelLines?: number;
+  /** Lines of either side's change the resolution lost or undid (> 0 needs a fresh approval). */
+  droppedLines?: number;
 }
 
 interface MergeDoc {
@@ -36,6 +38,7 @@ export class FakeResolver implements ConflictResolver {
         ? this.script.resolve({ files: merge.files ?? [] })
         : null;
     const novelLines = this.script?.novelLines ?? 0;
+    const droppedLines = this.script?.droppedLines ?? 0;
     const common = {
       costUsd: 0,
       budgetExceeded: false,
@@ -57,6 +60,7 @@ export class FakeResolver implements ConflictResolver {
         conflictHunks: Object.keys(files ?? {}).map((file) => ({ file, startLine: 1, endLine: 1 })),
         touchesOutsideConflictHunks: false,
         novelLines,
+        droppedLines,
       },
       resolutionDiff: files === null ? "" : JSON.stringify(files),
       semanticConflictWith: null,
@@ -96,6 +100,7 @@ export class FakeResolver implements ConflictResolver {
         outsideFiles: [],
         unresolvedFiles: [],
         novelLines,
+        droppedLines,
         regions: 1,
       },
       evidence,

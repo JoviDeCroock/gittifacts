@@ -2,11 +2,12 @@
  * The agent-native merge queue over fakes: the real `MergeQueueService` (store on node:sqlite,
  * the real loop, real command handlers, the real pure core), the real BatchRunWorkflow body, the
  * fake CI engine (red iff the tested tree holds `src/bad.ts`), file-level merges in the scratch
- * repo, and a scripted resolver. Changes are admitted the way the ChangeWorkflow admits them.
+ * repo, and a scripted resolver (its scope scripted, or computed mechanically from the merge
+ * document like the real resolver does: `scope.mechanical`). Changes are admitted the way the ChangeWorkflow admits them.
  */
 import { DatabaseSync } from "node:sqlite";
 import type { Change, Repo } from "@app/domain";
-import { conflictResolutionItem } from "@app/evidence";
+import { conflictResolutionItem, type ResolutionScope, resolutionScope } from "@app/evidence";
 import type { QueueConfigInput } from "@app/merge-queue";
 import type { ConflictResolver, ResolutionOutcome, ResolverInput } from "@app/resolver";
 import {
@@ -42,16 +43,55 @@ export function sqlite(): { sql: SqlLike; transact: <T>(fn: () => T) => T } {
   return { sql, transact };
 }
 
+export interface ScriptedScope {
+  novelLines?: number;
+  droppedLines?: number;
+  touchesOutsideConflictHunks?: boolean;
+  /** Compute the scope with `resolutionScope` from the merge document (overrides the counts). */
+  mechanical?: boolean;
+}
+
+interface MergeDocFile {
+  path: string;
+  base: string | null;
+  ours: string | null;
+  theirs: string | null;
+  merged_with_markers: string | null;
+}
+
+/** What the real resolver computes: `resolutionScope` over the merged and resolved texts. */
+function mechanicalScope(
+  input: ResolverInput,
+  files: Record<string, string | null>,
+): ResolutionScope {
+  const doc = input.merge as {
+    files: MergeDocFile[];
+    markers: { size: number; ours?: string; base?: string; theirs?: string };
+  };
+  return resolutionScope(
+    doc.files.map((f) => ({
+      path: f.path,
+      merged: f.merged_with_markers,
+      resolved: f.path in files ? (files[f.path] ?? null) : f.merged_with_markers,
+      conflicted: true,
+      sides: { ours: f.ours, base: f.base, theirs: f.theirs },
+    })),
+    doc.markers,
+  );
+}
+
 /** A scripted resolver: textual conflicts get `resolve(files)`, semantic ones "not-a-conflict". */
 export function scriptedResolver(
   resolve: (input: ResolverInput) => Record<string, string | null> | null,
-  scope: { novelLines?: number; touchesOutsideConflictHunks?: boolean } = {},
+  scope: ScriptedScope = {},
 ): ConflictResolver {
   return {
     principalId: "system:resolver",
     async resolve(input: ResolverInput): Promise<ResolutionOutcome> {
       const merge = input.merge as { status: string; conflictSha?: string; newSha?: string };
       const files = input.semantic === undefined ? resolve(input) : null;
+      const computed =
+        scope.mechanical === true && files !== null ? mechanicalScope(input, files) : null;
       const common = {
         costUsd: 0,
         budgetExceeded: false,
@@ -67,7 +107,8 @@ export function scriptedResolver(
             endLine: 1,
           })),
           touchesOutsideConflictHunks: scope.touchesOutsideConflictHunks ?? false,
-          novelLines: scope.novelLines ?? 0,
+          novelLines: computed?.novelLines ?? scope.novelLines ?? 0,
+          droppedLines: computed?.droppedLines ?? scope.droppedLines ?? 0,
         },
         resolutionDiff: files === null ? "" : JSON.stringify(files),
         semanticConflictWith: null,
@@ -101,7 +142,7 @@ export function scriptedResolver(
         patch: JSON.stringify({ files }),
         applyOnto: merge.conflictSha ?? merge.newSha ?? "",
         files: Object.entries(files).map(([path, content]) => ({ path, content })),
-        scope: {
+        scope: computed ?? {
           files: [],
           conflictHunks: [],
           outsideHunks: [],
@@ -109,6 +150,7 @@ export function scriptedResolver(
           outsideFiles: [],
           unresolvedFiles: [],
           novelLines: scope.novelLines ?? 0,
+          droppedLines: scope.droppedLines ?? 0,
           regions: 1,
         },
         evidence,
@@ -138,7 +180,7 @@ export interface QueueEnvOptions {
   files?: Files;
   resolver?: (input: ResolverInput) => Record<string, string | null> | null;
   /** Override the scripted resolver's scope (e.g. novel lines). */
-  scope?: { novelLines?: number; touchesOutsideConflictHunks?: boolean };
+  scope?: ScriptedScope;
   /** Deploy merged Changes in trains (the platform default). */
   trains?: boolean;
 }

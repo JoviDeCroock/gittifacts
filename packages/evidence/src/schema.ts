@@ -414,6 +414,11 @@ export const ConflictResolution = z.object({
   touchesOutsideConflictHunks: z.boolean(),
   /** Resolved lines found verbatim on neither side of their conflict region (written by the resolver). */
   novelLines: z.number().int().nonnegative().optional(),
+  /**
+   * Lines of either side's change the resolution lost, reordered or undid (0 = every region is an
+   * in-order merge of both sides). Absent on items from before 2026-10-11.
+   */
+  droppedLines: z.number().int().nonnegative().optional(),
   /** Semantic conflicts: the upstream changeId the resolver blamed; null for textual conflicts. */
   semanticConflictWith: z.string().min(1).max(200).nullable(),
   /** Semantic conflicts: the test ids that failed on the merged tree before the resolution. */
