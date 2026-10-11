@@ -1,6 +1,6 @@
 ---
 title: "MCP tools"
-description: "All 37 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
+description: "All 39 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
 order: 10
 audience: agents
 generated: true
@@ -26,7 +26,7 @@ Mutating tools accept `idempotencyKey`: retry with the same key safely.
 | Tool | What it does | Scope | Kind |
 | --- | --- | --- | --- |
 | [`create_project`](/docs/reference/mcp-projects#create_project) | One call: a repo from a template (or an import, or empty) with .platform/ci.ts, .platform/policy.ts and AGENTS.md committed, the first CI run and preview started, and a push token for your first Change's fork; it returns at once (wait_for_change on bootstrapChangeId for the first green). | `repo:read` `change:create` | write |
-| [`whoami`](/docs/reference/mcp-projects#whoami) | Who you are (your actor: principalId, kind, owner), scopes, the repos you can act on (with claim status and allowed actions) and quotas. |  | read |
+| [`whoami`](/docs/reference/mcp-projects#whoami) | Who you are (your actor: principalId, kind, and for an agent the person accountable for you, ownerName, with the page where they inspect or revoke you, agentsUrl), scopes, the repos you can act on (with claim status and allowed actions) and quotas. |  | read |
 | [`list_repos`](/docs/reference/mcp-projects#list_repos) | Repos you can read, with open changes per lane and whether auto-merge (Lane 0) is on or still calibrating. | `repo:read` | read |
 | [`list_members`](/docs/reference/mcp-projects#list_members) | A repo's human members and their roles (reader < reviewer < maintainer < owner), and your role (an agent acts with its owner's role: reviewer or above to draft plans and start changes). | `repo:read` | read |
 | [`create_plan`](/docs/reference/mcp-changes#create_plan) | Draft a plan: intent, acceptance criteria and the paths you expect to touch. | `plan:create` | write |
@@ -36,10 +36,10 @@ Mutating tools accept `idempotencyKey`: retry with the same key safely.
 | [`start_change`](/docs/reference/mcp-changes#start_change) | Fork the repo for one change and get a short-lived push token for that fork only. | `change:create` | write |
 | [`list_changes`](/docs/reference/mcp-changes#list_changes) | A repo's changes, most recently updated first (up to 200): status, lane, plan, who started it and its page (url). | `repo:read` | read |
 | [`compare_attempts`](#compare_attempts) | Several agents may attempt the same approved plan, each its own change. |  | read |
-| [`get_change_status`](/docs/reference/mcp-changes#get_change_status) | A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), the open changes on the same plan or paths (overlaps), its page (url) to hand a person, and what to do next. | `repo:read` | read |
+| [`get_change_status`](/docs/reference/mcp-changes#get_change_status) | A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), who started it (author, with an agent's accountable person), the open changes on the same plan or paths (overlaps), the merge queue's conflict resolution when what lands differs from your head (resolution), its page (url) to hand a person, and what to do next. | `repo:read` | read |
 | [`get_evidence`](/docs/reference/mcp-changes#get_evidence) | The signed evidence for the change's current head (tests, red/green proof, coverage, API diff, ...) and whether the signature verifies. | `repo:read` | read |
 | [`get_tour`](/docs/reference/mcp-changes#get_tour) | The walkthrough (the tour) a second reviewer agent wrote for the change, what a human will read: stops with verdicts, least-confident points and what was not done. | `repo:read` | read |
-| [`request_review`](/docs/reference/mcp-changes#request_review) | Ask a human to look at your change (notifies them; url is its page, to share). | `change:create` | write |
+| [`request_review`](/docs/reference/mcp-changes#request_review) | Ask for a human review of your change. | `change:create` | write |
 | [`rerun_ci`](#rerun_ci) | Repeats CI, evidence, the lane and the walkthrough on the change's current head, without a push (a flaky step). | `change:create` | write |
 | [`close_change`](#close_change) | Close (abandon) a change that won't merge: stops its CI, takes it out of the merge queue and deletes its fork later. | `change:create` | write |
 | [`list_issues_for_change`](/docs/reference/mcp-changes#list_issues_for_change) | Workers Issues attributed to the change or the version it rolled out (errors seen in production). | `repo:read` | read |
@@ -60,8 +60,10 @@ Mutating tools accept `idempotencyKey`: retry with the same key safely.
 | [`reprioritize`](/docs/reference/mcp-merge-queue#reprioritize) | Sets a queued Change's priority class (normal, security, incident): its author, the author's owner, or a person who may review it. | `change:create` | write |
 | [`queue_overview`](/docs/reference/mcp-merge-queue#queue_overview) | Tracks (independent parallel queues) with their speculative batches, the landing pipeline, freeze state, throughput, p50/p95 time in queue, quarantined tests and every entry with its reason and ETA. | `repo:read` | read |
 | [`search_tools`](/docs/reference/mcp-projects#search_tools) | Fuzzy search over every gittifacts tool's name and description. |  | read |
-| [`request_qa`](#request_qa) | On request only: an agent drives the app built from the change's current head in a real browser against the Plan's acceptance criteria (no Plan: a smoke check), with a screenshot per step, a replay GIF and a pass / fail / couldn't-test verdict per criterion, signed into the evidence. |  | write |
-| [`get_qa`](#get_qa) | The change's QA runs, newest first: status, verdict per criterion with the reason, the lane before and after, cost, and the screenshots' blob refs. |  | read |
+| [`request_qa`](#request_qa) | On request only: an agent drives the app built from the change's current head in a real browser against the Plan's acceptance criteria (no Plan: a smoke check), with a screenshot per step, a replay GIF and a pass / fail / couldn't-test verdict per criterion, signed into the evidence. | `change:create` | write |
+| [`get_qa`](#get_qa) | The change's QA runs, newest first: status, verdict per criterion with the reason, the lane before and after, cost, and the screenshots' blob refs. | `repo:read` | read |
+| [`get_rollout`](/docs/reference/mcp-changes#get_rollout) | After merge: the staged rollout of the change (stages, error rate against the previous version, new issue groups, the flag that switches it off), the policy it was held to (from its base) and its audit timeline. | `repo:read` | read |
+| [`list_audit_events`](#list_audit_events) | The signed audit log, newest first: who did what (actor, with an agent's accountable person), to which subject, when, and whether the hash chain verifies. | `repo:read` | read |
 
 ## `compare_attempts`
 
@@ -111,13 +113,13 @@ Close (abandon) a change that won't merge: stops its CI, takes it out of the mer
 close_change({ changeId: "<changeId>" })
 ```
 
-**Returns:** `change` (object), `nextSteps` (object[]).
+**Returns:** `change` (object), `url` (string), `nextSteps` (object[]).
 
 ## `request_qa`
 
 On request only: an agent drives the app built from the change's current head in a real browser against the Plan's acceptance criteria (no Plan: a smoke check), with a screenshot per step, a replay GIF and a pass / fail / couldn't-test verdict per criterion, signed into the evidence. A failure raises the lane; nothing lowers it. Needs green CI on the head. Idempotent per head (force: run again); at most 6 runs an hour per repo.
 
-**Scope:** none · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts request-qa`
+**Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts request-qa`
 
 | Argument | Type | Required | Notes |
 | --- | --- | --- | --- |
@@ -135,7 +137,7 @@ request_qa({})
 
 The change's QA runs, newest first: status, verdict per criterion with the reason, the lane before and after, cost, and the screenshots' blob refs.
 
-**Scope:** none · **Kind:** read-only · **CLI:** `gittifacts get-qa`
+**Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts get-qa`
 
 | Argument | Type | Required | Notes |
 | --- | --- | --- | --- |
@@ -147,3 +149,24 @@ get_qa({})
 ```
 
 **Returns:** `runs` (object[]), `nextSteps` (object[]).
+
+## `list_audit_events`
+
+The signed audit log, newest first: who did what (actor, with an agent's accountable person), to which subject, when, and whether the hash chain verifies. Filter by repoId, subject (change:<id>, plan:<id>), actor (a principal id: one agent's trail) or exact action (change.approved); page with nextCursor. Answers "who approved this, and when". Read-only.
+
+**Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts list-audit-events`
+
+| Argument | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `repoId` | string |  | Only this repo's events (the repo, its plans and its changes). max 64 chars |
+| `subject` | string |  | Only events about this subject, e.g. change:<id> or plan:<id>. max 200 chars |
+| `actor` | string |  | Only events by this principal id (one agent's trail; whoami gives yours). max 64 chars |
+| `action` | string |  | Only this exact action, e.g. change.approved. max 100 chars |
+| `cursor` | string |  | nextCursor from the previous page. |
+| `limit` | integer |  | Events per page (default 30). 1–100 |
+
+```text
+list_audit_events({ actor: "<principalId>" })
+```
+
+**Returns:** `events` (object[]), `chain` ({ verified, brokenAt }), `nextCursor` (string | null), `url` (string), `nextSteps` (object[]).

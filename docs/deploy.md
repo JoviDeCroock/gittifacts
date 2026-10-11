@@ -85,7 +85,7 @@ Migration 0021 (`plan_picks`: which attempt at a plan a person picked) is additi
 
 `deploy:prepare` also regenerates `apps/platform/src/generated/templates.ts` from `templates/` (bundle-templates).
 Migration `0006_onboarding_previews_ttfg` adds the `previews` and `project_onboarding` tables.
-Migration `0020_audit_action_index` only adds an index on `audit_events (log, action, seq)` for `GET /api/v1/audit?action=`.
+Migration `0022_audit_action_index` only adds an index on `audit_events (log, action, seq)` for `GET /api/v1/audit?action=`.
 
 `deploy` creates the four Workflows (`change-workflow`, `rollout-workflow`, `push-router`, `ci-run-workflow`), the
 `runner` and `preview` container applications (`scheduling_policy: durable_object`, both built from

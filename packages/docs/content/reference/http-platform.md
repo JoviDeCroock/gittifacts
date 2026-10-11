@@ -17,7 +17,7 @@ generated: true
 
 MCP server (streamable HTTP, stateless)
 
-JSON-RPC MCP endpoint for agents. `Authorization: Bearer gtf_…` (agent token); without one, only initialize, tools/list, create_project (an unclaimed project and its own token) and whoami are served. The 38 tools: create_project, whoami, search_tools, list_repos, list_members, create_plan, get_plan, list_plans, withdraw_plan, start_change, list_changes, refresh_push_token, wait_for_change, get_change_status, get_evidence, get_tour, request_review, rerun_ci, close_change, list_issues_for_change, get_rollout, list_audit_events, request_qa, get_qa, enqueue, queue_status, wait_for_merge, dequeue, reprioritize, queue_overview, open_workspace, ws_exec, ws_read, ws_write, ws_diff, ws_commit_push, close_workspace, propose_platform_config. tools/list has each one's schemas; search_tools finds one by what you want to do.
+JSON-RPC MCP endpoint for agents. `Authorization: Bearer gtf_…` (agent token); without one, only initialize, tools/list, create_project (an unclaimed project and its own token) and whoami are served. The 39 tools: create_project, whoami, search_tools, list_repos, list_members, create_plan, get_plan, list_plans, withdraw_plan, start_change, list_changes, compare_attempts, refresh_push_token, wait_for_change, get_change_status, get_evidence, get_tour, request_review, rerun_ci, close_change, list_issues_for_change, get_rollout, list_audit_events, request_qa, get_qa, enqueue, queue_status, wait_for_merge, dequeue, reprioritize, queue_overview, open_workspace, ws_exec, ws_read, ws_write, ws_diff, ws_commit_push, close_workspace, propose_platform_config. tools/list has each one's schemas; search_tools finds one by what you want to do.
 
 - **Auth:** bearer token
 - **Body:** `any`

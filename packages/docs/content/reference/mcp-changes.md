@@ -90,7 +90,7 @@ withdraw_plan({ planId: "<planId>" })
 
 ## `start_change`
 
-Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically. overlaps lists the open changes already on the same plan or touching the paths you name (paths) or your plan's scopePaths: coordinate with them or wait.
+Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically. overlaps lists the open changes already on the same plan or touching the paths you name (paths) or your plan's scopePaths: coordinate with them or wait. url is the change's page, to hand a person. A plan still in draft is fine to start from, but the change can't auto-merge until a person approves the plan.
 
 **Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts start-change`
 
@@ -112,7 +112,7 @@ start_change({ repoId: "<repoId>", title: "<what>", category: "fix" })
 
 ## `list_changes`
 
-A repo's changes, most recently updated first (up to 200): status, lane, plan, who started it and its page (url). Filter by status (e.g. awaiting-review) or to the changes you started (mine: true). get_change_status has one change's details.
+A repo's changes, most recently updated first (up to 200): status, lane, plan, who started it and its page (url). Filter by status (e.g. awaiting-review) or to the changes you started (mine: true; applied within those 200, so add status to reach older ones). get_change_status has one change's details.
 
 **Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts list-changes`
 
@@ -146,7 +146,7 @@ refresh_push_token({ changeId: "<changeId>" })
 
 ## `wait_for_change`
 
-Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first: reason changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review) or superseded (a person picked another attempt at the same plan and closed this one: supersededBy); read get_change_status for the review. On timeout call again, after retryAfterSec when it is set.
+Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first, reason changes-requested (push a new head), rejected (it ended) or approval-withdrawn (it needs a fresh review); a person can pick another attempt at the same plan, which closes this one, reason superseded (supersededBy); and for merged and reverted so can the machines, reason failing (red CI, a merge-queue ejection or a failed merge: fix and push a new head); read get_change_status for why. On timeout call again, after retryAfterSec when it is set; prefer this to wait_for_merge, which watches only the merge queue.
 
 **Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts wait-for-change`
 
@@ -161,11 +161,11 @@ Long-poll until the change's current head reaches a milestone, can no longer rea
 wait_for_change({ changeId: "<changeId>", until: "merged" })
 ```
 
-**Returns:** `reached` (boolean), `reason` ("reached" | "timeout" | "unreachable" | "changes-requested" | "rejected" | "approval-withdrawn" | "superseded"), `supersededBy` (string), `retryAfterSec` (integer), `change` (object), `nextSteps` (object[]).
+**Returns:** `reached` (boolean), `reason` ("reached" | "timeout" | "unreachable" | "changes-requested" | "rejected" | "approval-withdrawn" | "superseded" | "failing"), `supersededBy` (string), `retryAfterSec` (integer), `change` (object), `url` (string), `nextSteps` (object[]).
 
 ## `get_change_status`
 
-A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), the open changes on the same plan or paths (overlaps), its page (url) to hand a person, and what to do next.
+A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), who started it (author, with an agent's accountable person), the open changes on the same plan or paths (overlaps), the merge queue's conflict resolution when what lands differs from your head (resolution), its page (url) to hand a person, and what to do next.
 
 **Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts get-change-status`
 
@@ -178,7 +178,7 @@ A change's status, lane (and why), pipeline runs for each head, the human review
 get_change_status({})
 ```
 
-**Returns:** `change` (object), `url` (string), `reviews` (object[]), `runs` (object[]), `classification` (null | object), `previewUrl` (string | null), `overlaps` (null | object), `supersededBy` (string | null), `nextSteps` (object[]).
+**Returns:** `change` (object), `url` (string), `author` (object), `resolution` (object | null), `reviews` (object[]), `runs` (object[]), `classification` (null | object), `previewUrl` (string | null), `overlaps` (null | object), `supersededBy` (string | null), `nextSteps` (object[]).
 
 ## `get_evidence`
 
@@ -195,7 +195,7 @@ The signed evidence for the change's current head (tests, red/green proof, cover
 get_evidence({})
 ```
 
-**Returns:** `changeId` (string), `headSha` (string), `verification` ({ ok, keyId, reason }), `signedAt` (string), `keyId` (string), `items` (object[]).
+**Returns:** `changeId` (string), `headSha` (string), `verification` ({ ok, keyId, reason }), `signedAt` (string), `keyId` (string), `items` (object[]), `url` (string), `nextSteps` (object[]).
 
 ## `get_tour`
 
@@ -212,11 +212,11 @@ The walkthrough (the tour) a second reviewer agent wrote for the change, what a 
 get_tour({})
 ```
 
-**Returns:** `tour` (object), `stale` (boolean).
+**Returns:** `tour` (object), `stale` (boolean), `url` (string), `nextSteps` (object[]).
 
 ## `request_review`
 
-Ask a human to look at your change (notifies them; url is its page, to share). This never approves anything: agents cannot approve plans or changes.
+Ask for a human review of your change. The request is recorded in the change's audit log (the dashboard's agent band shows it), but nobody receives a message: hand url, the change's page, to a person. This never approves anything: agents cannot approve plans or changes.
 
 **Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts request-review`
 
@@ -229,7 +229,7 @@ Ask a human to look at your change (notifies them; url is its page, to share). T
 request_review({ changeId: "<changeId>" })
 ```
 
-**Returns:** `changeId` (string), `status` ("awaiting-push" | "running" | "failing" | "awaiting-review" | "approved" | "queued" | "merged" | "rolling-out" | "released" | "reverted" | "rejected" | "abandoned"), `notified` (boolean), `url` (string), `nextSteps` (object[]).
+**Returns:** `changeId` (string), `status` ("awaiting-push" | "running" | "failing" | "awaiting-review" | "approved" | "queued" | "merged" | "rolling-out" | "released" | "reverted" | "rejected" | "abandoned"), `requested` (boolean), `url` (string), `nextSteps` (object[]).
 
 ## `get_rollout`
 
