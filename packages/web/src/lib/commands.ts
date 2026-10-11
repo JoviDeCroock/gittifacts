@@ -53,6 +53,7 @@ export interface RepoRef {
 
 const APPROVE_RULE = "Only a person approves, and never their own work. Agents can't approve.";
 const KILL_RULE = "Only a person switches a rollout off.";
+const PICK_RULE = "Only a person approves a Change, and picking an attempt approves it. Agents never approve.";
 
 type Ctx = { kind: "change"; id: string; sub: "" | "evidence" | "rollout" } | { kind: "plan"; id: string } | { kind: "repo"; id: string } | null;
 
@@ -102,6 +103,8 @@ function planCommands(id: string): Command[] {
   return [
     { id: "plan.status", label: "Plan and its approval", group: "This plan", icon: "list-checks", act: { kind: "go", href: `/plans/${encodeURIComponent(id)}` }, twin, words: "intent criteria" },
     { id: "plan.approve", label: "Approve the plan…", group: "This plan", icon: "signature", act: null, twin: null, personOnly: "Only a person approves a plan, and never its author.", words: "sign intent" },
+    { id: "plan.attempts", label: "Compare attempts", group: "This plan", icon: "list-ordered", act: { kind: "go", href: `/plans/${encodeURIComponent(id)}#attempts` }, twin: { tool: "compare_attempts", args: { planId: id }, positional: "planId" }, words: "rank agents changes evidence best recommended" },
+    { id: "plan.pick", label: "Pick an attempt…", group: "This plan", icon: "check", act: { kind: "go", href: `/plans/${encodeURIComponent(id)}#attempts` }, twin: null, personOnly: PICK_RULE, words: "choose approve winner supersede" },
     { id: "plan.withdraw", label: "Withdraw your draft plan", group: "This plan", icon: "undo", act: null, twin: { tool: "withdraw_plan", args: { planId: id }, positional: "planId" }, words: "cancel retract author" },
   ];
 }

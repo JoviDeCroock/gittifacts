@@ -60,6 +60,9 @@ describe("agent twins", () => {
     expect(approve?.personOnly).toMatch(/person/i);
     expect(every.find((c) => c.id === "plan.approve")?.twin).toBeNull();
     expect(every.find((c) => c.id === "change.kill")?.twin).toBeNull();
+    // Picking an attempt approves it: person-only; comparing them is an agent's read.
+    expect(every.find((c) => c.id === "plan.pick")).toMatchObject({ twin: null, personOnly: expect.stringMatching(/person/i) });
+    expect(every.find((c) => c.id === "plan.attempts")?.twin).toMatchObject({ tool: "compare_attempts", args: { planId: "plan_1" } });
   });
 });
 
