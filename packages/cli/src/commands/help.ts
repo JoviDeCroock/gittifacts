@@ -30,6 +30,8 @@ export const EXIT_CODES: Record<string, string> = {
 export const ENV_VARS: Record<string, string> = {
   GITTIFACTS_HOST: "platform origin (overrides .gittifacts.json and the last login)",
   GITTIFACTS_TOKEN: "bearer token (overrides stored credentials)",
+  GITTIFACTS_TOKEN_HOST:
+    "the one host GITTIFACTS_TOKEN may be sent to when the host comes only from .gittifacts.json",
   GITTIFACTS_CONFIG_DIR: "credentials directory (default ~/.config/gittifacts)",
   NO_COLOR: "no color in --human output",
 };

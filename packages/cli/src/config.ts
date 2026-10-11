@@ -1,14 +1,19 @@
 /**
  * Where the CLI finds its host and token.
  *
- * - `.gittifacts.json` (found upward from the cwd): `{ host, projectId, remote, changeId? }`. No
- *   secrets, but local to one clone (which Change it pushes to), so git ignores it.
+ * - `.gittifacts.json` (found upward from the cwd): `{ host, projectId, remote, mcpUrl?,
+ *   changeId?, branch?, cloneUrl? }`. No secrets, and local to one clone (which Change it pushes
+ *   to), so the clone setup keeps it out of git through `.git/info/exclude`. It is not trusted:
+ *   a checkout (a hostile repo, a malicious Change's head) can carry one in any parent directory,
+ *   so what it names only gets a token as `host-trust.ts` allows (https or loopback only, its
+ *   `mcpUrl` only on the resolved host, `GITTIFACTS_TOKEN` only to a host the user chose).
  * - `~/.config/gittifacts/credentials.json` (`$XDG_CONFIG_HOME`, or `GITTIFACTS_CONFIG_DIR`),
  *   mode 0600 in a 0700 directory: the login token per host, and the token of each project
  *   created without an account (unclaimed).
  *
  * Host: `--host` > `GITTIFACTS_HOST` > `.gittifacts.json` > the last host logged in to.
- * Token: `GITTIFACTS_TOKEN` > the host's login token > the project's own token.
+ * Token: `GITTIFACTS_TOKEN` (when `host-trust.ts` allows it for the host) > the host's login
+ * token > the project's own token.
  */
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -75,12 +80,6 @@ export function noHostError() {
       "Tell the CLI which platform to use: pass --host <origin>, set GITTIFACTS_HOST, run it inside a repo with .gittifacts.json, or log in once with --host.",
     command: "gittifacts login --host https://<host>",
   });
-}
-
-export function mcpUrlFor(host: string, project: ProjectConfig | null, env: Env): string {
-  if (env.GITTIFACTS_MCP_URL) return env.GITTIFACTS_MCP_URL;
-  if (project?.mcpUrl && normalizeHost(project.host) === host) return project.mcpUrl;
-  return `${host}/mcp`;
 }
 
 // ---------------------------------------------------------------- project file
