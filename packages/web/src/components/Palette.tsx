@@ -8,7 +8,7 @@
  */
 import { signal, useComputed, useSignal } from "@preact/signals";
 import { useLocation } from "preact-iso";
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 import { api } from "../api/client.js";
 import { oauthApi } from "../api/oauth.js";
 import { cliCommand } from "../lib/cli.js";
@@ -212,10 +212,22 @@ export function Palette() {
   const items = list.value;
   const current = items[Math.min(active.value, items.length - 1)] ?? null;
 
-  useEffect(() => {
+  /** Cancels a close still playing its exit animation (⌘K again before it ends). */
+  const cancelClose = useRef<(() => void) | null>(null);
+
+  // A layout effect, not a passive one: the dialog is open and its field focused before the next
+  // keystroke, so what someone types right after ⌘K lands in the palette, not in the page's
+  // single-key shortcuts behind it.
+  useLayoutEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (paletteOpen.value && !d.open) {
+    if (paletteOpen.value && d.open && closing.value) {
+      cancelClose.current?.();
+      cancelClose.current = null;
+      closing.value = false;
+      focusMain.current = false;
+      input.current?.focus();
+    } else if (paletteOpen.value && !d.open) {
       query.value = openingQuery.value;
       openingQuery.value = "";
       active.value = 0;
@@ -228,6 +240,7 @@ export function Palette() {
     } else if (!paletteOpen.value && d.open && !closing.value) {
       closing.value = true;
       const done = () => {
+        cancelClose.current = null;
         closing.value = false;
         d.close();
         if (focusMain.current) {
@@ -236,8 +249,10 @@ export function Palette() {
         }
       };
       // Leave with the exit animation when there is one; a fallback timer when it never fires.
-      const t = window.setTimeout(done, 260);
-      d.addEventListener("animationend", () => (window.clearTimeout(t), done()), { once: true });
+      const onEnd = () => (window.clearTimeout(t), done());
+      const t = window.setTimeout(() => (d.removeEventListener("animationend", onEnd), done()), 260);
+      d.addEventListener("animationend", onEnd, { once: true });
+      cancelClose.current = () => (window.clearTimeout(t), d.removeEventListener("animationend", onEnd));
     }
   }, [paletteOpen.value]);
 
