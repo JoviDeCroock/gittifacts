@@ -79,12 +79,23 @@ function docsOnly(): ClassifyInput {
 }
 
 /** A mechanically pure dependency patch with no plan; planless only when the policy allows it. */
+/** The producer's check of a lockfile whose only change is left-pad's registry patch bump. */
+const VERIFIED_LOCKFILE = {
+  verified: true,
+  changes: [{ lockfile: "pnpm-lock.yaml", name: "left-pad", from: "1.2.3", to: "1.2.4" }],
+  problems: [],
+};
+
 function dependencyPatch(planless = true): ClassifyInput {
   return mutate(
     replaceKind(
       withFiles(green(), [file("package.json", 1, 1), file("pnpm-lock.yaml", 6, 6)]),
       "dependencies",
-      dependencies({ changed: [bump("left-pad", "patch")], lockfileChanged: true }),
+      dependencies({
+        changed: [bump("left-pad", "patch")],
+        lockfileChanged: true,
+        lockfile: VERIFIED_LOCKFILE,
+      }),
     ),
     (d) => {
       d.plan = null;
@@ -996,6 +1007,64 @@ table("planless Lane 0 categories (mechanically verified)", [
     includes: ["plan.planless", "dependency.patch", "scope.not-applicable"],
     excludes: ["plan.missing"],
     check: (r) => expect(reasonFor(r, "plan.planless")?.message).toContain("dependency-patch"),
+  },
+  {
+    name: "dependency-patch with a lockfile nobody checked → not Lane 0 (unknown → escalate)",
+    input: () =>
+      replaceKind(
+        dependencyPatch(),
+        "dependencies",
+        dependencies({ changed: [bump("left-pad", "patch")], lockfileChanged: true }),
+      ),
+    computedLane: 1,
+    includes: ["dependency.lockfile-unverified", "plan.missing"],
+    excludes: ["plan.planless"],
+    check: (r) =>
+      expect(reasonFor(r, "dependency.lockfile-unverified")?.message).toContain("not checked"),
+  },
+  {
+    name: "dependency-patch whose lockfile entry resolves elsewhere → not Lane 0, the problem named",
+    input: () =>
+      replaceKind(
+        dependencyPatch(),
+        "dependencies",
+        dependencies({
+          changed: [bump("left-pad", "patch")],
+          lockfileChanged: true,
+          lockfile: {
+            verified: false,
+            changes: VERIFIED_LOCKFILE.changes,
+            problems: ["pnpm-lock.yaml: left-pad@1.2.4 does not resolve from the registry"],
+          },
+        }),
+      ),
+    computedLane: 1,
+    includes: ["dependency.lockfile-unverified", "plan.missing"],
+    excludes: ["plan.planless"],
+    check: (r) =>
+      expect(reasonFor(r, "dependency.lockfile-unverified")?.message).toContain(
+        "does not resolve from the registry",
+      ),
+  },
+  {
+    name: "a plan-backed patch bump with an unchecked lockfile is Lane 1, not Lane 0",
+    input: () =>
+      mutate(
+        replaceKind(
+          dependencyPatch(),
+          "dependencies",
+          dependencies({ changed: [bump("left-pad", "patch")], lockfileChanged: true }),
+        ),
+        (d) => {
+          const plan = green().plan;
+          d.plan =
+            plan === null ? null : { ...plan, scopePaths: ["package.json", "pnpm-lock.yaml"] };
+          d.change.category = "dependency";
+        },
+      ),
+    computedLane: 1,
+    includes: ["dependency.lockfile-unverified", "dependency.patch"],
+    excludes: ["scope.drift"],
   },
   {
     name: "dependency-patch not enabled in policy → plan.missing",

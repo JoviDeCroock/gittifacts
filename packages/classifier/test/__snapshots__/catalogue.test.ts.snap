@@ -17,6 +17,7 @@ exports[`REASON_CODES catalogue > is stable (renaming a code is a breaking chang
   "dependency.added",
   "dependency.install-script",
   "dependency.lockfile-only",
+  "dependency.lockfile-unverified",
   "dependency.major",
   "dependency.minor",
   "dependency.none",

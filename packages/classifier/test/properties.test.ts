@@ -68,7 +68,17 @@ const BASES: ReadonlyArray<readonly [string, () => ClassifyInput]> = [
         replaceKind(
           withFiles(green(), [file("package.json", 1, 1), file("pnpm-lock.yaml", 4, 4)]),
           "dependencies",
-          dependencies({ changed: [bump("left-pad", "patch")], lockfileChanged: true }),
+          dependencies({
+            changed: [bump("left-pad", "patch")],
+            lockfileChanged: true,
+            lockfile: {
+              verified: true,
+              changes: [
+                { lockfile: "pnpm-lock.yaml", name: "left-pad", from: "1.2.3", to: "1.2.4" },
+              ],
+              problems: [],
+            },
+          }),
         ),
         (d) => {
           d.plan = null;

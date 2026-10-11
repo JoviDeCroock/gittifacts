@@ -16,15 +16,23 @@ export const TERMS = {
   product: "gittifacts",
   /** Lane names, badges and what a person does: the shared table, so no surface drifts. */
   laneBadge: (n: Lane) => LANE_LABELS[n].badge,
-  laneName: { 0: LANE_LABELS[0].name, 1: LANE_LABELS[1].name, 2: LANE_LABELS[2].name } as Record<Lane, string>,
-  laneAsk: { 0: LANE_LABELS[0].description, 1: LANE_LABELS[1].description, 2: LANE_LABELS[2].description } as Record<Lane, string>,
+  laneName: { 0: LANE_LABELS[0].name, 1: LANE_LABELS[1].name, 2: LANE_LABELS[2].name } as Record<
+    Lane,
+    string
+  >,
+  laneAsk: {
+    0: LANE_LABELS[0].description,
+    1: LANE_LABELS[1].description,
+    2: LANE_LABELS[2].description,
+  } as Record<Lane, string>,
   /** A Lane 0 that still needs a person (it changes .platform/). */
   policyAsk: "A person who is not the author approves it (it changes gittifacts policy).",
   tour: "walkthrough",
   stop: "stop",
   plan: "Plan",
   reportOnly: "Report-only",
-  reportOnlyNote: "Report-only: gittifacts grades this pull request but never blocks, approves or merges it.",
+  reportOnlyNote:
+    "Report-only: gittifacts grades this pull request but never blocks, approves or merges it.",
   /** Shadow raised a Lane 0 to a person: auto-merge is calibrating on this repo. */
   calibrating: "auto-merge is calibrating",
   calibratingLong: "the evidence says auto-merge, but auto-merge is still calibrating on this repo",
@@ -59,6 +67,7 @@ const PHRASE: Record<string, string> = {
   "dependency.prerelease": "prerelease dependency",
   "dependency.install-script": "dependency runs an install script",
   "dependency.lockfile-only": "lockfile changed",
+  "dependency.lockfile-unverified": "lockfile changes not explained",
   "sensitive.hit": "touches sensitive files",
   "migration.touched": "database migration changed",
   "policy.changed": "changes gittifacts policy",
@@ -104,19 +113,26 @@ export function reasonPhrase(r: Pick<LaneReason, "code" | "message">): string {
   }
   const m = /^signal\.(missing|error)\.(.+)$/.exec(r.code);
   // Unknown escalates: say plainly that something was not measured.
-  if (m !== null) return `${words(m[2] ?? "a check")} ${m[1] === "error" ? "failed to run" : "did not run"}`;
+  if (m !== null)
+    return `${words(m[2] ?? "a check")} ${m[1] === "error" ? "failed to run" : "did not run"}`;
   return words(r.code.split(".")[0] ?? r.code);
 }
 
 /** The reason that decides the lane: the first raised reason at the computed lane. */
-export function decisiveReason<R extends Pick<LaneReason, "code" | "message" | "lane">>(reasons: readonly R[]): R | null {
+export function decisiveReason<R extends Pick<LaneReason, "code" | "message" | "lane">>(
+  reasons: readonly R[],
+): R | null {
   const top = reasons.reduce((n, r) => Math.max(n, r.lane), 0);
   return top === 0 ? null : (reasons.find((r) => r.lane === top) ?? null);
 }
 
 /** The one-line why: "possible hidden behavior change", or the calibrating line for a raised Lane 0. */
-export function laneWhy(v: { lane: Lane; computedLane: Lane; reasons: readonly LaneReason[] }, opts: { long?: boolean } = {}): string {
-  if (v.lane > v.computedLane && v.computedLane === 0) return opts.long === true ? TERMS.calibratingLong : TERMS.calibrating;
+export function laneWhy(
+  v: { lane: Lane; computedLane: Lane; reasons: readonly LaneReason[] },
+  opts: { long?: boolean } = {},
+): string {
+  if (v.lane > v.computedLane && v.computedLane === 0)
+    return opts.long === true ? TERMS.calibratingLong : TERMS.calibrating;
   const d = decisiveReason(v.reasons.filter((r) => !r.code.startsWith("shadow.")));
   return d === null ? "all checks passed" : reasonPhrase(d);
 }

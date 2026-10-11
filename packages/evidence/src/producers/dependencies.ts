@@ -9,6 +9,7 @@
 import { z } from "zod";
 import { truncate } from "../encoding.js";
 import type { DependencyDiff, DependencySection } from "../schema.js";
+import { type LockfileChange, lockfileChanges } from "./lockfile.js";
 import { semverBump } from "./semver.js";
 
 export const DEPENDENCY_SECTIONS: readonly { section: DependencySection; dev: boolean }[] = [
@@ -47,6 +48,15 @@ export interface DependencyDiffOptions {
   lockfileChanged?: boolean;
   /** Paths touched by the change; any known lockfile among them sets `lockfileChanged`. */
   changedPaths?: readonly string[];
+  /**
+   * Lockfile texts by repo path at base and head (read from git objects, like the manifests).
+   * Given: every lockfile change is checked against the recorded bumps (`lockfile`). Absent: the
+   * item has no `lockfile`, and a changed lockfile stays unexplained.
+   */
+  lockfiles?: {
+    base: Readonly<Record<string, string>>;
+    head: Readonly<Record<string, string>>;
+  };
 }
 
 function parseManifest(
@@ -91,6 +101,33 @@ function entries(list: [string, string][] | undefined): [string, string][] {
 function isLockfile(path: string): boolean {
   const base = path.slice(path.lastIndexOf("/") + 1);
   return (LOCKFILE_NAMES as readonly string[]).includes(base);
+}
+
+/** Check every lockfile whose text differs between base and head. */
+function checkLockfiles(
+  texts: NonNullable<DependencyDiffOptions["lockfiles"]>,
+  changed: DependencyDiff["changed"],
+  changedPaths: readonly string[],
+): NonNullable<DependencyDiff["lockfile"]> {
+  const own = (m: Readonly<Record<string, string>>, k: string) =>
+    Object.hasOwn(m, k) ? (m[k] ?? null) : null;
+  const changes: LockfileChange[] = [];
+  const problems: string[] = [];
+  const paths = [...new Set([...Object.keys(texts.base), ...Object.keys(texts.head)])].sort();
+  // A touched lockfile that wasn't handed over was not checked (unknown → unexplained).
+  for (const path of changedPaths.filter(isLockfile))
+    if (!Object.hasOwn(texts.base, path) && !Object.hasOwn(texts.head, path))
+      problems.push(`${path}: changed, but its text was not read`);
+  for (const path of paths.filter(isLockfile)) {
+    const r = lockfileChanges(path, own(texts.base, path), own(texts.head, path), changed);
+    changes.push(...r.changes);
+    problems.push(...r.problems);
+  }
+  return {
+    verified: problems.length === 0,
+    changes: changes.slice(0, 2000),
+    problems: problems.slice(0, 200).map((p) => truncate(p, 1000)),
+  };
 }
 
 const byManifestThenName = <T extends { manifest: string; name: string }>(a: T, b: T): number =>
@@ -159,7 +196,14 @@ export function dependencyDiff(
     }
   }
 
-  const lockfileChanged = opts.lockfileChanged ?? (opts.changedPaths ?? []).some(isLockfile);
+  const lockfile =
+    opts.lockfiles === undefined
+      ? undefined
+      : checkLockfiles(opts.lockfiles, changed, opts.changedPaths ?? []);
+  const lockfileChanged =
+    opts.lockfileChanged ??
+    ((opts.changedPaths ?? []).some(isLockfile) ||
+      (lockfile !== undefined && (lockfile.changes.length > 0 || lockfile.problems.length > 0)));
   const item: DependencyDiff = {
     id: opts.id ?? "dependencies",
     kind: "dependencies",
@@ -170,6 +214,7 @@ export function dependencyDiff(
     newInstallScripts,
     lockfileChanged,
   };
+  if (lockfile !== undefined) item.lockfile = lockfile;
   if (errors.length > 0) item.note = truncate(errors.join("\n"), 4000);
   return item;
 }

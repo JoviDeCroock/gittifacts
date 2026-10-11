@@ -266,6 +266,27 @@ export const DependencyDiff = z.object({
     }),
   ),
   lockfileChanged: z.boolean(),
+  /**
+   * The lockfile diff checked against the recorded bumps: `verified` when every changed entry is
+   * a recorded patch bump re-resolved from the registry, with nothing added or removed. Absent:
+   * the lockfiles were not read, so a lockfile change is unexplained (the classifier escalates).
+   */
+  lockfile: z
+    .object({
+      verified: z.boolean(),
+      changes: z
+        .array(
+          z.object({
+            lockfile: z.string().max(500),
+            name: z.string().max(300),
+            from: z.string().max(300),
+            to: z.string().max(300),
+          }),
+        )
+        .max(2000),
+      problems: z.array(z.string().max(1000)).max(200),
+    })
+    .optional(),
 });
 export type DependencyDiff = z.infer<typeof DependencyDiff>;
 

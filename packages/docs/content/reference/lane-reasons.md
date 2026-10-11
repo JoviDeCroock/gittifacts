@@ -1,7 +1,7 @@
 ---
 title: "Lane reason codes"
 nav: "Lane reasons"
-description: "All 110 reason codes the classifier can put on a Change: the lane each one forces, its gate and when it fires."
+description: "All 111 reason codes the classifier can put on a Change: the lane each one forces, its gate and when it fires."
 order: 52
 audience: both
 generated: true
@@ -62,6 +62,7 @@ A Change is Lane 0 only when every gate passes. The checklist in `get_change_sta
 | `api.additive` | 1 | fail | public-api | A public-api item classifies the change as "additive". |
 | `coverage.below-threshold` | 1 | fail | coverage | Lowest coverage ratio over ok items < policy.thresholds.changedLineCoverage. |
 | `dependency.lockfile-only` | 1 | fail | dependencies | lockfileChanged is true but no dependency was added, removed or changed. |
+| `dependency.lockfile-unverified` | 1 | fail | dependencies | lockfileChanged is true, a dependency changed, and the item's lockfile check is missing or not verified (a changed entry that is not one registry patch bump of a bumped package, a new or removed package, a changed setting). |
 | `dependency.minor` | 1 | fail | dependencies | A changed dependency has bump "minor". |
 | `dependency.patch-not-allowed` | 1 | fail | dependencies | Patch bumps and policy.dependencies.allowPatchBumpsInLane0 is false. |
 | `dependency.prerelease` | 1 | fail | dependencies | A changed dependency has bump "prerelease". |

@@ -4,6 +4,12 @@ export * from "./coverage.js";
 export * from "./dependencies.js";
 export * from "./errors.js";
 export * from "./glob.js";
+export {
+  type LockfileChange,
+  type LockfileCheck,
+  lockfileChanges,
+  type ManifestBump,
+} from "./lockfile.js";
 export * from "./mutation.js";
 export * from "./paths.js";
 export * from "./red-green.js";

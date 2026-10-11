@@ -141,6 +141,7 @@ table lists every code with its lane.
 | `signal.error.dependencies` | 2 | dependencies ? | A dependencies item has status "error". |
 | `signal.missing.dependencies` | 2 | dependencies ? | No dependencies item with status "ok" (absent, or only skipped). |
 | `dependency.lockfile-only` | 1 | dependencies ✗ | lockfileChanged is true but no dependency was added, removed or changed. |
+| `dependency.lockfile-unverified` | 1 | dependencies ✗ | lockfileChanged is true, a dependency changed, and the item's lockfile check is missing or not verified (a changed entry that is not one registry patch bump of a bumped package, a new or removed package, a changed setting). |
 | `dependency.minor` | 1 | dependencies ✗ | A changed dependency has bump "minor". |
 | `dependency.patch-not-allowed` | 1 | dependencies ✗ | Patch bumps and policy.dependencies.allowPatchBumpsInLane0 is false. |
 | `dependency.prerelease` | 1 | dependencies ✗ | A changed dependency has bump "prerelease". |

@@ -265,7 +265,9 @@ const isNonSource = compileGlobs(NON_SOURCE_GLOBS, "match-none");
  * - dependency evidence is ok (none errored) and shows >= 1 change, all of them patch bumps,
  *   with nothing added or removed and no new install scripts;
  * - each changed manifest has no more added/deleted lines than patch bumps recorded against it,
- *   so nothing else (scripts, overrides, config) can ride along in package.json.
+ *   so nothing else (scripts, overrides, config) can ride along in package.json;
+ * - a changed lockfile was checked and every entry change is explained: one registry patch bump
+ *   of a bumped package, nothing added or removed (`lockfile.verified`). Not checked → not Lane 0.
  */
 function isDependencyPatchOnly(
   diffStats: DiffStats | null,
@@ -278,6 +280,15 @@ function isDependencyPatchOnly(
   if (changes.some((c) => c.bump !== "patch")) return false;
   if (deps.ok.some((d) => d.added.length > 0 || d.removed.length > 0)) return false;
   if (deps.ok.some((d) => d.newInstallScripts.length > 0)) return false;
+  const lockTouched =
+    diffStats.files.some((f) => isLockfile(normalizePath(f.path))) ||
+    deps.ok.some((d) => d.lockfileChanged);
+  if (lockTouched) {
+    if (!deps.ok.some((d) => d.lockfile?.verified === true)) return false;
+    const unexplained = (d: DependencyDiff) =>
+      (d.lockfileChanged || d.lockfile !== undefined) && d.lockfile?.verified !== true;
+    if (deps.ok.some(unexplained)) return false;
+  }
   for (const f of diffStats.files) {
     const path = normalizePath(f.path);
     if (f.previousPath !== null && normalizePath(f.previousPath) !== path) return false;
@@ -514,6 +525,23 @@ function checkDependencies(out: Reasons, s: SignalRead<DependencyDiff>, policy: 
       code,
       { names: formatList(names) },
       ref((d) => d.changed.length > 0),
+    );
+  }
+
+  // A changed lockfile rides along with the manifest only when every entry change is explained
+  // (recorded patch bumps, from the registry). Not checked or not explained → escalate.
+  const unverified = s.ok.filter((d) => d.lockfileChanged && d.lockfile?.verified !== true);
+  if (unverified.length > 0 && (added.length > 0 || removed.length > 0 || changed.length > 0)) {
+    const problems = unverified.flatMap((d) => d.lockfile?.problems ?? []);
+    const unchecked = unverified.some((d) => d.lockfile === undefined);
+    out.add(
+      "dependency.lockfile-unverified",
+      {
+        detail: unchecked
+          ? ": the lockfiles were not checked"
+          : `: ${formatList(problems.map((p) => truncate(p, 160)))}`,
+      },
+      unverified[0]?.id,
     );
   }
 
@@ -880,7 +908,8 @@ function buildChecklist(
       return { gate, passed, detail: raised.map((r) => r.message).join(" ") };
     }
     const detail = mine.map((r) => r.message).join(" ");
-    if (gate === "qa" && detail === "") return { gate, passed: true, detail: "QA was not requested (optional)." };
+    if (gate === "qa" && detail === "")
+      return { gate, passed: true, detail: "QA was not requested (optional)." };
     return { gate, passed: true, detail: detail || "No issues." };
   });
 }

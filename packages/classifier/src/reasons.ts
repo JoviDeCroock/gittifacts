@@ -130,7 +130,7 @@ export const REASON_CODES = {
     "pass",
     ["tests"],
     "{passed} test(s) passed across {runs} test run(s).",
-    "At least one test-run item has status \"ok\" and none reports failures new against the Change's base.",
+    'At least one test-run item has status "ok" and none reports failures new against the Change\'s base.',
   ),
   "tests.failing": spec(
     2,
@@ -298,6 +298,13 @@ export const REASON_CODES = {
     ["dependencies"],
     "The lockfile changed without any direct dependency change, so transitive updates are unexplained.",
     "lockfileChanged is true but no dependency was added, removed or changed.",
+  ),
+  "dependency.lockfile-unverified": spec(
+    1,
+    "fail",
+    ["dependencies"],
+    "The lockfile changes are not all explained by the recorded patch bumps from the registry{detail}.",
+    "lockfileChanged is true, a dependency changed, and the item's lockfile check is missing or not verified (a changed entry that is not one registry patch bump of a bumped package, a new or removed package, a changed setting).",
   ),
   "dependency.added": spec(
     2,
