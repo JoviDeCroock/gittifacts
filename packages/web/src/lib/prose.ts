@@ -10,10 +10,16 @@ export function proseBlocks(text: string): ProseBlock[] {
     if (line.trim() === "") {
       current = null;
     } else if (item) {
-      if (current?.kind !== "ul") blocks.push((current = { kind: "ul", items: [] }));
+      if (current?.kind !== "ul") {
+        current = { kind: "ul", items: [] };
+        blocks.push(current);
+      }
       current.items.push(item[1] ?? "");
     } else {
-      if (current?.kind !== "p") blocks.push((current = { kind: "p", lines: [] }));
+      if (current?.kind !== "p") {
+        current = { kind: "p", lines: [] };
+        blocks.push(current);
+      }
       current.lines.push(line.trim());
     }
   }

@@ -210,6 +210,7 @@ function Filters({ f, onApply }: { f: AuditFilter; onApply: (f: AuditFilter) => 
   );
   const any = f.actor || f.action || f.subject;
   return (
+    // biome-ignore lint/a11y/useSemanticElements: the search landmark is the form itself (it owns onSubmit); wrapping it in <search> would add an element to the layout
     <form
       class="audit-filter"
       role="search"

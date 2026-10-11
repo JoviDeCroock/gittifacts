@@ -361,9 +361,11 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
             <>
               <Button
                 variant="secondary"
-                onClick={() => (
-                  (mode.value = "reject"), (error.value = null), (intentKey.current = null)
-                )}
+                onClick={() => {
+                  mode.value = "reject";
+                  error.value = null;
+                  intentKey.current = null;
+                }}
               >
                 Reject…
               </Button>
@@ -384,9 +386,11 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
             <>
               <Button
                 variant="secondary"
-                onClick={() => (
-                  (mode.value = "approve"), (error.value = null), (intentKey.current = null)
-                )}
+                onClick={() => {
+                  mode.value = "approve";
+                  error.value = null;
+                  intentKey.current = null;
+                }}
               >
                 Back
               </Button>

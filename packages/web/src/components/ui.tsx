@@ -284,7 +284,7 @@ export function Who({
         ? `Platform: ${name}`
         : name;
   return (
-    <span class={`who who--${kind}`} aria-label={spoken}>
+    <span class={`who who--${kind}`} role="img" aria-label={spoken}>
       <Avatar kind={kind} name={name} id={id} size={size} />
       <span class="who__name" aria-hidden="true">
         {name}
@@ -331,6 +331,7 @@ export function Segmented<T extends string>({
   return (
     <div class={`segmented segmented--${size}`} role="radiogroup" aria-label={label} ref={ref}>
       {options.map((o, i) => (
+        // biome-ignore lint/a11y/useSemanticElements: a radio group of styled buttons (roving tabindex, arrows move the choice); native radio inputs would change its look
         <button
           key={o.id}
           type="button"
@@ -363,6 +364,7 @@ interface MeterProps {
 export function Meter({ value, threshold, label, tone = "neutral", thresholdLabel }: MeterProps) {
   const v = Math.max(0, Math.min(1, value));
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a native <meter> cannot draw the threshold tick and label inside it, and its UA bar ignores our tokens
     <div
       class={`meter meter--${tone}`}
       role="meter"

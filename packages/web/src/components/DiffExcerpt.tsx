@@ -39,7 +39,7 @@ function Code({ text, hash }: { text: string; hash: boolean }) {
  * toggle appears. Re-measured on scroll and resize; a wrapped box never overflows.
  */
 function useOverflow() {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement>(null);
   const overflows = useSignal(false);
   const more = useSignal(false);
   useLayoutEffect(() => {
@@ -107,11 +107,11 @@ function ExcerptView({ ex }: { ex: Excerpt }) {
         </p>
       ) : (
         <div class="excerpt__body" data-more={box.more && !wrap.value ? "" : undefined}>
-          <div
+          <section
             class="excerpt__code scroll-x"
             ref={box.ref}
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable diff excerpt must be keyboard-focusable (axe scrollable-region-focusable)
             tabIndex={0}
-            role="region"
             aria-label={`${ex.file.path} ${rangeLabel(ex.ref)}`}
           >
             <table class="diff">
@@ -160,7 +160,7 @@ function ExcerptView({ ex }: { ex: Excerpt }) {
                 )}
               </tbody>
             </table>
-          </div>
+          </section>
         </div>
       )}
     </figure>

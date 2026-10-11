@@ -62,12 +62,18 @@ export function IntentPanel({ repoId }: { repoId: string }) {
       .map((l) => l.replace(/^\s*[-*\d.)]+\s*/, "").trim())
       .filter(Boolean);
     const t = (title.value.trim() || titleFrom(text)).trim();
-    if (text.length < 10)
-      return void (error.value =
-        "Say a little more about what should change (at least 10 characters).");
-    if (t.length < 3) return void (error.value = "Give the Plan a title of at least 3 characters.");
-    if (lines.length === 0)
-      return void (error.value = "Add at least one way to tell it worked, one per line.");
+    if (text.length < 10) {
+      error.value = "Say a little more about what should change (at least 10 characters).";
+      return;
+    }
+    if (t.length < 3) {
+      error.value = "Give the Plan a title of at least 3 characters.";
+      return;
+    }
+    if (lines.length === 0) {
+      error.value = "Add at least one way to tell it worked, one per line.";
+      return;
+    }
     busy.value = true;
     error.value = null;
     try {
@@ -163,7 +169,10 @@ export function IntentPanel({ repoId }: { repoId: string }) {
           <div class="intent__actions">
             <Button
               variant="secondary"
-              onClick={() => ((mode.value = "agent"), (error.value = null))}
+              onClick={() => {
+                mode.value = "agent";
+                error.value = null;
+              }}
             >
               Back
             </Button>

@@ -315,6 +315,7 @@ function Health({
         </span>
       </div>
       {incident && !live ? <p class="health__note">{stoppedNote(incident)}</p> : null}
+      {/* biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings UA borders, padding and min-inline-size this layout does not want */}
       <div class="rates" role="group" aria-label="Error rate against baseline">
         <div class={`rate ${breach ? "rate--bad" : ""}`}>
           <span class="rate__label">This version</span>
@@ -482,7 +483,10 @@ function KillSwitch({
           <div class="kill__actions">
             <Button
               variant="secondary"
-              onClick={() => ((open.value = false), (error.value = null))}
+              onClick={() => {
+                open.value = false;
+                error.value = null;
+              }}
               disabled={busy.value}
             >
               Cancel

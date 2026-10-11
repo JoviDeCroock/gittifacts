@@ -241,8 +241,8 @@ export function splitFailures(item: TestRunItem): {
 
 /** Tool output without colour codes (notes and failure messages are read by people). */
 export function stripAnsi(text: string): string {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching escape sequences is the point.
   return text.replace(
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching escape sequences is the point.
     /[\u001b\u009b](?:\[[0-?]*[ -/]*[@-~]|\][^\u0007\u001b]*(?:\u0007|\u001b\\)|[@-Z\\-_])/g,
     "",
   );

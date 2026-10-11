@@ -43,6 +43,7 @@ function LaneCount({
   return (
     <span
       class={`lane-count ${count === 0 ? "is-zero" : ""}`}
+      role="img"
       aria-label={`${LANES[lane].name} (Lane ${lane})${shadow ? ", calibrating" : ""}: ${count} open`}
     >
       <LaneTag lane={lane} size="sm" shadow={shadow} />

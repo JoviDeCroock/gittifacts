@@ -47,6 +47,7 @@ export function McpSetup({ token, idPrefix = "mcp" }: { token?: string; idPrefix
       <div class="mcp-setup__box">
         <pre
           class="scroll-x"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable code block must be keyboard-focusable (axe scrollable-region-focusable)
           tabIndex={0}
           aria-describedby={`${idPrefix}-where`}
           data-testid="mcp-snippet"

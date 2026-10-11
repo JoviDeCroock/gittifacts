@@ -106,7 +106,11 @@ function Attestation({ ev, change }: { ev: EvidenceResponse; change: Change }) {
         {raw.value ? <CopyButton text={payload} label="Copy JSON" /> : null}
       </div>
       {raw.value ? (
-        <pre class="attest__raw scroll-x" tabIndex={0}>
+        <pre
+          class="attest__raw scroll-x"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable code block must be keyboard-focusable (axe scrollable-region-focusable)
+          tabIndex={0}
+        >
           {payload}
         </pre>
       ) : null}
@@ -322,7 +326,7 @@ function ApiBody({ item }: { item: Item<"public-api"> }) {
                       <code class="api-list__sym">{s.symbol}</code>
                       {s.before ? (
                         <pre class="api-sig api-sig--before scroll-x">
-                          <span class="api-sig__mark" aria-label="before">
+                          <span class="api-sig__mark" role="img" aria-label="before">
                             −
                           </span>
                           {s.before}
@@ -330,7 +334,7 @@ function ApiBody({ item }: { item: Item<"public-api"> }) {
                       ) : null}
                       {s.after ? (
                         <pre class="api-sig api-sig--after scroll-x">
-                          <span class="api-sig__mark" aria-label="after">
+                          <span class="api-sig__mark" role="img" aria-label="after">
                             +
                           </span>
                           {s.after}

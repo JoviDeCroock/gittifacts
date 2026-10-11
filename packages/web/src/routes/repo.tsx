@@ -251,6 +251,7 @@ function Lane0Control({
       {isAdmin && (eligible || enabled) ? (
         <div class="lane0__actions">
           {confirm.value ? (
+            // biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings UA borders, padding and min-inline-size this layout does not want
             <div class="lane0__confirm" role="group" aria-label="Confirm the auto-merge change">
               <p>
                 {enabled

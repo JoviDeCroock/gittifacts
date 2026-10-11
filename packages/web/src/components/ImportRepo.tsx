@@ -245,7 +245,12 @@ function PushStep({
         />
       </label>
       <div class="import__cmd">
-        <pre class="scroll-x" tabIndex={0} data-testid="import-command">
+        <pre
+          class="scroll-x"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable code block must be keyboard-focusable (axe scrollable-region-focusable)
+          tabIndex={0}
+          data-testid="import-command"
+        >
           <code>{cmd}</code>
         </pre>
         <CopyButton text={cmd} label="Copy commands" />

@@ -176,7 +176,14 @@ export function DeliveryDetailView({
       </Block>
 
       <Block title="Payload" aside={<CopyButton text={d.payload} label="Copy raw body" />}>
-        <pre class="dlv-code" tabIndex={0} aria-label="Payload JSON">
+        {/* biome-ignore lint/a11y/useSemanticElements: the named scrollable box is the <pre> itself; a <section> cannot hold preformatted code */}
+        <pre
+          class="dlv-code"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable code block must be keyboard-focusable (axe scrollable-region-focusable)
+          tabIndex={0}
+          role="region"
+          aria-label="Payload JSON"
+        >
           <code>{payload}</code>
         </pre>
         <p class="field__hint">
@@ -186,7 +193,14 @@ export function DeliveryDetailView({
 
       <Block title="Response">
         {d.responseBody ? (
-          <pre class="dlv-code dlv-code--short" tabIndex={0} aria-label="Response body">
+          // biome-ignore lint/a11y/useSemanticElements: the named scrollable box is the <pre> itself; a <section> cannot hold preformatted code
+          <pre
+            class="dlv-code dlv-code--short"
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable code block must be keyboard-focusable (axe scrollable-region-focusable)
+            tabIndex={0}
+            role="region"
+            aria-label="Response body"
+          >
             <code>{d.responseBody}</code>
           </pre>
         ) : (

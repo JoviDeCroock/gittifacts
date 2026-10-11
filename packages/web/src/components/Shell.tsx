@@ -95,6 +95,7 @@ function ThemeSwitch() {
   return (
     <div class="theme-switch" role="radiogroup" aria-label="Theme" ref={ref}>
       {THEMES.map((o, i) => (
+        // biome-ignore lint/a11y/useSemanticElements: a radio group of styled buttons (roving tabindex, arrows move the choice); native radio inputs would change its look
         <button
           key={o.id}
           type="button"
@@ -168,6 +169,7 @@ function NavBody({ path }: { path: string }) {
                   {r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0) > 0 ? (
                     <span
                       class="repo-link__count tnum"
+                      role="img"
                       aria-label={`${r.counts.awaitingReview} awaiting review, ${r.counts.plansAwaitingApproval ?? 0} plans to approve`}
                     >
                       {r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0)}
@@ -274,6 +276,7 @@ function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
     // biome-ignore lint/correctness/useExhaustiveDependencies: only on path change
   }, [path]);
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the click is the backdrop's light dismiss; Escape closes via the dialog's native cancel (onCancel)
     <dialog
       ref={ref}
       class="drawer"

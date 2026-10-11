@@ -433,6 +433,7 @@ export function Palette() {
   let lastGroup = "";
   const agent = mode.value === "agent";
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the click is the backdrop's light dismiss; Escape closes via the dialog's native cancel (onCancel)
     <dialog
       ref={ref}
       class={`palette ${closing.value ? "is-closing" : ""} ${agent ? "palette--agent" : ""}`}
@@ -455,7 +456,10 @@ export function Palette() {
           aria-autocomplete="list"
           placeholder={agent ? "What should your agent do?" : "Go to, act, or search"}
           value={query.value}
-          onInput={(e) => ((query.value = e.currentTarget.value), (active.value = 0))}
+          onInput={(e) => {
+            query.value = e.currentTarget.value;
+            active.value = 0;
+          }}
           onKeyDown={onKeyDown}
           autocomplete="off"
           spellcheck={false}
@@ -468,6 +472,7 @@ export function Palette() {
           title={isMac() ? "⌥A switches" : "Alt+A switches"}
         >
           {(["me", "agent"] as const).map((m) => (
+            // biome-ignore lint/a11y/useSemanticElements: a segmented radio group of styled buttons (roving tabindex, arrows move the choice); native radio inputs would change its look
             <button
               key={m}
               type="button"
@@ -488,6 +493,7 @@ export function Palette() {
       <ul
         id="palette-list"
         class="palette__list"
+        // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: ARIA combobox pattern; the input owns focus and points into this listbox with aria-activedescendant
         role="listbox"
         aria-label={agent ? "Hand to an agent" : "Commands"}
       >
@@ -504,17 +510,24 @@ export function Palette() {
                 {head}
               </li>
             ) : null,
+            // biome-ignore lint/a11y/useFocusableInteractive lint/a11y/useKeyWithClickEvents: listbox options under aria-activedescendant are deliberately not focusable; the combobox input handles the keys
             <li
               key={c.id}
               id={`pal-${c.id}`}
+              // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: an option of the listbox above (aria-activedescendant pattern)
               role="option"
               aria-selected={c === current}
               aria-disabled={locked ? "true" : undefined}
               class={`palette__item ${c === current ? "is-active" : ""} ${locked ? "is-locked" : ""}`}
               data-index={i}
               data-command={c.id}
-              onPointerMove={() => active.value !== i && (active.value = i)}
-              onClick={() => ((active.value = i), run(c))}
+              onPointerMove={() => {
+                if (active.value !== i) active.value = i;
+              }}
+              onClick={() => {
+                active.value = i;
+                run(c);
+              }}
             >
               <Icon name={c.icon} size={17} />
               {c.meta ? (

@@ -5,6 +5,10 @@
  * The reasons that set the lane come first, then the ones that raised it; the checks that passed
  * fold into "N checks passed" under the result (foldChart, @app/domain groupLaneReasons).
  */
+// The chart is a CSS grid with ARIA table semantics on purpose: <table>/<tr>/<td> cannot carry the
+// banded grid layout, and a static table's rows and cells are not widgets, so they take no focus.
+// biome-ignore-all lint/a11y/useSemanticElements: ARIA table roles on the CSS-grid chart (see above)
+// biome-ignore-all lint/a11y/useFocusableInteractive: rows and cells of a static ARIA table are not focusable widgets
 import type { Lane, LaneReason } from "@app/domain";
 import { itemAnchor } from "../lib/evidence.js";
 import { type ChartRow, foldChart, LANES, laneTitle, triageChart } from "../lib/lanes.js";

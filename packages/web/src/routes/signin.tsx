@@ -169,6 +169,7 @@ export function SignIn() {
               Continue with GitHub
             </Button>
 
+            {/* biome-ignore lint/a11y/useSemanticElements: the separator carries its "or with email" caption; an <hr> cannot hold children */}
             <div class="signin__or" role="separator">
               <span>or with email</span>
             </div>

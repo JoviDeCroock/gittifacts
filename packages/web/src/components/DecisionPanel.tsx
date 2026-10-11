@@ -93,6 +93,7 @@ function LanePick({
   return (
     <div class="lane-pick" role="radiogroup" aria-label="Lane you would have picked" ref={ref}>
       {LANE_OPTS.map((l, i) => (
+        // biome-ignore lint/a11y/useSemanticElements: a radio group of styled buttons (roving tabindex, arrows move the choice); native radio inputs would change its look
         <button
           key={String(l)}
           type="button"
@@ -223,6 +224,7 @@ function NextUp({
         >
           <span class="next-up__label">
             Next · {plural(next.value.left, "change")} waiting{" "}
+            {/* biome-ignore lint/a11y/noAriaHiddenOnFocusable: a <kbd> is not focusable; the hint is decorative, the link announces it via aria-keyshortcuts */}
             <kbd class="kbd next-up__key" aria-hidden="true">
               N
             </kbd>
@@ -547,6 +549,7 @@ export function DecisionPanel({
           </div>
         </form>
       ) : (
+        // biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings UA borders, padding and min-inline-size that this button row does not want
         <div class="decision__choices" role="group" aria-label="Decide on this change">
           {layout === "rail" ? (
             <h2 class="decision__title">

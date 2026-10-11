@@ -4,6 +4,7 @@
  * send e-mail (api/password.ts); elsewhere /forgot-password says so and names the other ways in.
  */
 import { useSignal } from "@preact/signals";
+import type { ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
 import { requestPasswordReset, resetPassword, signInOptions } from "../api/password.js";
 import { ConsentFrame, ConsentOutcome } from "../components/ConsentPanel.js";
@@ -48,7 +49,7 @@ export function ForgotPassword() {
     else error.value = r.message;
   }
 
-  let body;
+  let body: ComponentChildren;
   if (available.value === null)
     body = <Loading label="Checking what this server offers" lines={2} />;
   else if (!available.value) {
@@ -146,7 +147,7 @@ export function ResetPassword() {
     else error.value = r.message;
   }
 
-  let body;
+  let body: ComponentChildren;
   if (badLink) {
     body = (
       <ConsentOutcome
