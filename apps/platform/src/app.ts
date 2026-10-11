@@ -1,6 +1,7 @@
 import { TOOL_NAMES } from "@app/conventions";
 import { z } from "zod";
 import { registerMemberRoutes } from "./access/routes.js";
+import { registerPasswordResetRoutes } from "./auth/password-reset.js";
 import { ErrorSchema } from "./api/schemas.js";
 import { type AppOptions, createServices } from "./app-env.js";
 import { authFor, callerOf, requirePrincipal } from "./auth/middleware.js";
@@ -91,7 +92,9 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
     );
   });
 
-  // better-auth (sign-up/in, sessions, GitHub OAuth callback, passkeys).
+  // Sign-in options and the password-reset guard (no e-mail configured → 503), before better-auth.
+  registerPasswordResetRoutes(app);
+  // better-auth (sign-up/in, sessions, GitHub OAuth callback, passkeys, password reset).
   app.on(["GET", "POST"], "/api/auth/*", (c) => authFor(c).handler(c.req.raw));
 
   registerFrontDoorRoutes(app, () => app.getOpenAPI31Document(OPENAPI_CONFIG));

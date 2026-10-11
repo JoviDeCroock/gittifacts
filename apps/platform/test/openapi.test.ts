@@ -4,6 +4,7 @@ import { call, makeApp } from "./http.js";
 const EXPECTED: Record<string, string[]> = {
   "/api/v1/me": ["get"],
   "/api/v1/capabilities": ["get"],
+  "/api/v1/sign-in-options": ["get"],
   "/api/v1/principals": ["get"],
   "/api/v1/principals/{id}": ["get"],
   "/api/v1/principals/agents": ["post"],

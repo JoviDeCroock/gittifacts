@@ -6,6 +6,9 @@
  * ./agent-tokens.ts) bound to an agent Principal. See that module for why we don't use the
  * api-key plugin. The device-authorization plugin runs the RFC 8628 code state machine for the
  * CLI login, but its session-minting endpoints are disabled (see ../oauth/device.ts).
+ *
+ * Password reset is on only when outbound e-mail is configured (./email.ts); otherwise
+ * ./password-reset.ts answers the request endpoint with 503 and a fix.
  */
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
@@ -13,6 +16,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer, deviceAuthorization } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "../db/schema.js";
+import { mailerFor, resetPasswordEmail } from "./email.js";
 import {
   agentDeviceGrant,
   agentDeviceRedemption,
@@ -28,6 +32,9 @@ export interface AuthBindings {
   BETTER_AUTH_URL?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
+  /** Outbound e-mail (./email.ts): an Email Service `send_email` binding and its sender. */
+  EMAIL?: unknown;
+  EMAIL_FROM?: unknown;
 }
 
 export interface AuthRuntime {
@@ -49,6 +56,18 @@ export function createAuth(env: AuthBindings, rt: AuthRuntime) {
       ? { github: { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET } }
       : {};
   const waitUntil = rt.waitUntil;
+  const mailer = mailerFor(env);
+  const reset = mailer
+    ? {
+        // The e-mailed link lands on /api/auth/reset-password/<token>, which redirects to the
+        // web form (/reset-password?token=…) the request named in `redirectTo`.
+        sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
+          await mailer.send(resetPasswordEmail(user.email, url));
+        },
+        resetPasswordTokenExpiresIn: 3600,
+        revokeSessionsOnPasswordReset: true,
+      }
+    : {};
   return betterAuth({
     appName: "gittifacts",
     baseURL,
@@ -56,7 +75,7 @@ export function createAuth(env: AuthBindings, rt: AuthRuntime) {
     trustedOrigins: [url.origin],
     // D1 has no interactive transactions; the adapter's default (transaction: false) is right.
     database: drizzleAdapter(drizzle(env.DB, { schema }), { provider: "sqlite", schema }),
-    emailAndPassword: { enabled: true },
+    emailAndPassword: { enabled: true, ...reset },
     socialProviders: github,
     session: { cookieCache: { enabled: true, maxAge: 300 } },
     // Per-isolate memory rate limiting is meaningless on Workers; use Cloudflare rate limiting rules.
