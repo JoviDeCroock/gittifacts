@@ -3545,3 +3545,23 @@ cheap: the repository is public, so standard runners cost no minutes; `fail-fast
 failing shard. The deploy scripts now look up their dispatched run on `main` only, so a rehearsal of the gate on a
 branch (`gh workflow run deploy-gate.yml --ref <branch>`) is never mistaken for the deploy's run. Rejected: caching
 the pnpm store and the Playwright browser (≈ 15 s and ≈ 20 s per job, not the long pole).
+
+
+## 2026-10-11 — Staging retired and scheduled GitHub Actions disabled (owner)
+
+**Context.** The owner requested removal of staging resources to stop container costs, then
+asked to disable scheduled GitHub Actions and push these changes to GitHub main.
+
+**Decision.** Delete the staging Worker, its three container apps, eight Workflows, four queues,
+D1 database, Durable Object namespaces and R2 bucket (751 objects removed). Artifacts namespace
+cleanup remains blocked by the existing login's missing Artifacts permission. Production's shared
+resources remain; its health endpoint and database were verified healthy after deletion.
+
+Remove `github-live.yml`'s nightly cron and disable that workflow in GitHub. `e2e-nightly.yml` was
+already deleted, so no GitHub Actions schedules remain. Retain the live contract's manual dispatch
+for an explicitly requested run after re-enabling the workflow. Production's maintenance cron
+continues to expire resources, enforce spend budgets and retry deliveries.
+
+`deploy-clean.sh` no longer invokes staging. It keeps the pre-deploy gate and post-deploy smoke;
+`--staging` exits before doing work, while `--no-staging` stays compatible with existing callers.
+The legacy staging setup/deploy utilities require a new owner decision before reuse.

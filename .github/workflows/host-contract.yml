@@ -1,7 +1,7 @@
 # The host contract suite (docs/prompts/06-two-modes.md §2) on every commit that can change a
 # lane: native (in-memory fakes) and GitHub (recorded webhook/API fixtures) must give the same
 # lane, evidence and tour for the same change. Node only, ~2 minutes. Path-filtered so docs and
-# UI commits don't spend Actions minutes. The live test-org run is nightly (github-live.yml).
+# UI commits don't spend Actions minutes. The live test-org run is on demand (github-live.yml).
 name: host-contract
 
 on:

@@ -1,5 +1,6 @@
 # The host contract suite against GitHub, live (docs/prompts/06-two-modes.md §2): the test org's
-# repo, the real Reader App and the deployed platform, nightly. Skips cleanly (a green "skipped")
+# repo, the real Reader App and the deployed platform, on demand. Scheduled runs were disabled
+# by the owner on 2026-10-11 to stop recurring compute usage. Skips cleanly (a green "skipped")
 # until the repository secrets exist:
 #   - GH_TEST_REPO            owner/repo in the test org (seeded from fixtures/_base)
 #   - GH_TEST_TOKEN           may push branches and open/close PRs there (the PR author, not the App)
@@ -9,8 +10,6 @@
 name: github-live
 
 on:
-  schedule:
-    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       scenarios:

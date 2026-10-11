@@ -42,7 +42,7 @@ On its first run, the new E2E found two production bugs. Both are fixed in `bb4d
 |---|---|---|---|---|
 | **1. Pre-deploy gate** | GitHub Actions, `deploy-gate.yml` | Every deploy (`deploy-clean.sh --gate=ci`), on the exact commit | Job `checks`: generated artifacts fresh, `pnpm -r typecheck`, the web design rules and unit tests (`pnpm --filter @app/web test`: DESIGN.md's named rules and the palette's agent twins against the MCP contract). Job `platform` (×4, `vitest --shard`): the platform workerd suite (77 files). Job `e2e` (×2, `playwright --shard`): the browser and HTTP journeys at 1280 and 390 px against the real Worker served locally, one server per shard | All seven jobs run in parallel: ≈ 3 min end to end (run 38127829536: `checks` 90 s, each `platform` shard ≈ 2.5 min, each `e2e` shard ≈ 2.5 min). Before sharding, `gate` ran typecheck then the whole suite on one runner, ≈ 9–12 min |
 | **2. Post-deploy smoke** | GitHub Actions, `post-deploy-smoke.yml` | Right after every `wrangler deploy` (`deploy-clean.sh`), or on demand | Against the live URL: health and the deployed commit, the front door and docs, the E2E account signing in, anonymous `create_project` to first green and a preview within 120 s, the webhook's 401 | ≈ 2–3 min (the agent path takes ≈ 45–80 s) |
-| **3. Live journeys** | By hand, `scripts/e2e/nightly.sh` (and `github-live.yml` on Actions) | On demand; the scheduled `e2e-nightly.yml` is off for now (DECISIONS 2026-10-11) | Full live journeys as the E2E account: m1, remote workspace, merge queue with the resolver, the CLI and MCP agent journeys, m4 (rollout regression → auto-revert) and the GitHub import. The GitHub live contract on ReSynapse/fixture-lib (`github-live.yml`, nightly at 03:17) | 5–40 min per suite |
+| **3. Live journeys** | By hand, `scripts/e2e/nightly.sh` (and `github-live.yml` on Actions) | On demand; all GitHub Actions schedules are disabled (DECISIONS 2026-10-11) | Full live journeys as the E2E account: m1, remote workspace, merge queue with the resolver, the CLI and MCP agent journeys, m4 (rollout regression → auto-revert) and the GitHub import. The GitHub live contract on ReSynapse/fixture-lib (`github-live.yml`, manual dispatch after explicitly re-enabling the workflow) | 5–40 min per suite |
 | Contract | GitHub Actions, `host-contract.yml` | Every push that can change a lane | Native and GitHub hosts give the same lane, evidence and walkthrough | ≈ 2 min |
 
 ### Tier 1: the hermetic E2E server
@@ -222,54 +222,18 @@ the aria snapshot of a sign-in form the test had filled in. Since then:
      password with a random value nobody keeps.
   3. Create a new account through normal sign-up and `gh secret set` it without printing it.
 
-## Staging
+## Staging (decommissioned)
 
-`gittifacts-staging` (https://gittifacts-staging.decroockjovi.workers.dev) is a second Worker in the
-same account. `deploy-clean.sh` deploys every commit there first (`--staging` is the default;
-`--no-staging` skips it, and you say why). The post-deploy smoke runs against staging with real
-bindings: Artifacts, containers, Workflows, previews, D1, R2 and queues. If it fails, production is not
-touched, not even its migrations. Staging catches what the hermetic E2E can't: a binding that only
-fails remotely, a container image that doesn't start, or a migration that fails on a real D1.
+The owner retired `gittifacts-staging` on 2026-10-11 to stop recurring container costs. Its Worker,
+three container applications, eight Workflows, four queues, D1 database, Durable Object namespaces
+and R2 blob bucket were deleted. The staging Artifacts namespace could not be removed because
+the operator's login lacks Artifacts permission; the image registry and production resources are
+shared and remain in place.
 
-- **The config is derived, never hand-written.** `scripts/staging/config.ts` generates it from
-  `wrangler.jsonc`. Staging gets its own:
-  - name, D1 (the id is in that file; it isn't a secret), R2 bucket and four queues;
-  - Artifacts namespace, rate-limit namespaces and metrics dataset;
-  - container application names (`gittifacts-staging-runner`, `-preview`, `-workspace`). These names
-    are account-wide.
-- **Previews** run on `p-…-pvs.resynapse.dev`. That's the same zone as production but a disjoint
-  first-level pattern, so Universal SSL covers it.
-- **GitHub mode and the platform admins are off.** The smoke expects the webhook to answer 503
-  `github-not-configured` there.
-- **The smoke account.** Staging's database is its own, so it has its own E2E account, created through
-  staging's normal sign-up. Its credentials are the secrets `STAGING_E2E_EMAIL`, `STAGING_E2E_PASSWORD`
-  and `STAGING_E2E_AGENT_TOKEN`. `post-deploy-smoke.yml` picks them, and `SMOKE_GITHUB=off`, whenever
-  the URL is staging.
-- **Workflow names are account-wide**, and a deploy reassigns them. So staging's Workflows are
-  `gittifacts-staging-*`, and `assertNothingShared` refuses any staging config that reuses one of
-  production's names. See the DECISIONS entry of 2026-10-04 for the incident behind this.
-- **Setup** (done 2026-10-04): `scripts/staging/setup.sh --yes-i-have-approval`.
-- **First end-to-end run** (2026-10-04, dcc09cf): `deploy-clean.sh --gate=ci --staging --smoke=ci`
-  took 17 minutes in all.
-  1. The gate took 11 min (run 37189534247).
-  2. Staging deployed, and its smoke passed. That included the anonymous agent path to first green
-     plus a preview on `-pvs`, in ≈ 1.5 min.
-  3. Production deployed with the tag `dcc09cf5dcd4`, and its smoke passed (run 37190322943,
-     2 min).
-
-  `wrangler workflows list` showed all of production's Workflows still owned by `gittifacts`, both
-  before and after.
-- **Per deploy:** `scripts/staging/deploy.sh <checkout> <sha12> [--smoke=ci|local|off]`. It needs
-  the assets that `deploy:prepare` builds.
-- **Cost:** no new plan. Everything is covered by the Workers Paid plan the account already has:
-  - D1, Durable Objects, Workflows and Queues usage at staging volumes is a rounding error inside the
-    included allowances.
-  - R2 storage is cents.
-  - Containers bill only while running, about 1–2 container-minutes per smoke.
-  - One walkthrough per smoke goes through the AI Gateway.
-  - Estimate: well under $5 a month at 10–20 deploys a day.
-- **What it shares with production:** the Flagship app (read-only use from staging), the AI Gateway,
-  the container image registry and the `resynapse.dev` zone.
+`deploy-clean.sh` now deploys production directly after the pre-deploy gate, then runs the
+post-deploy smoke with rollback on failure. `--staging` exits before any deployment or resource
+creation; `--no-staging` is accepted for compatibility. The old `scripts/staging/*` utilities are
+retained as reference and must not be used without a new owner decision to restore staging.
 
 ## Dead weight (candidates, nothing deleted)
 

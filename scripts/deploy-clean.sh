@@ -2,7 +2,7 @@
 # Deploy exactly what is pushed to origin/main, from a clean worktree, so in-progress local
 # edits (other agents, uncommitted work) never ship. Secrets are already set on the Worker.
 #
-#   scripts/deploy-clean.sh [worktree-dir] [--gate=local|ci] [--smoke=ci|local|off] [--no-staging] [--skip-tests]
+#   scripts/deploy-clean.sh [worktree-dir] [--gate=local|ci] [--smoke=ci|local|off] [--skip-tests]
 #
 # Gate: `pnpm -r typecheck` and the platform test suite must pass on the exact commit being
 # deployed (a store bug that only showed up in workerd tests once reached production because
@@ -20,15 +20,14 @@
 # the workflow does it when it has CLOUDFLARE_API_TOKEN, else this script with your wrangler login)
 # and exits 1.
 #
-# Staging first (docs/testing.md, "Staging"): the same commit goes to the gittifacts-staging Worker
-# (its migrations, then the smoke there) before production is touched. --no-staging skips it (say why).
+# Staging was decommissioned on 2026-10-11 to stop recurring container costs. Production deploys
+# run the gate and post-deploy smoke directly. --no-staging remains accepted for old callers.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIR="${TMPDIR:-/tmp}/gittifacts-deploy"
 GATE=local
 SMOKE=ci
-STAGING=1
 SKIP_TESTS=0
 URL="https://gittifacts.decroockjovi.workers.dev"
 for arg in "$@"; do
@@ -39,8 +38,8 @@ for arg in "$@"; do
     --smoke=ci) SMOKE=ci ;;
     --smoke=local) SMOKE=local ;;
     --smoke=off) SMOKE=off ;;
-    --staging) STAGING=1 ;;
-    --no-staging) STAGING=0 ;;
+    --staging) echo "staging has been decommissioned; deploy without --staging" >&2; exit 2 ;;
+    --no-staging) : ;;
     *) DIR="$arg" ;;
   esac
 done
@@ -128,10 +127,7 @@ if ! docker info >/dev/null 2>&1; then
   docker info >/dev/null 2>&1 || { echo "docker: still not running after 5 min"; exit 1; }
 fi
 TAG="${SHA:0:12}"
-if [ "$STAGING" -eq 1 ]; then
-  "$DIR/scripts/staging/deploy.sh" "$DIR" "$TAG" "--smoke=$SMOKE" || { echo "staging: FAILED, production not deployed"; exit 1; }
-fi
-# Production's migrations only once staging (same migrations, real D1) took them and passed.
+# Apply production migrations after the pre-deploy gate.
 CI=1 pnpm exec wrangler d1 migrations apply DB --remote
 PREVIOUS="$(live_version_id)"
 echo "deploy: live before = ${PREVIOUS:-unknown}"
