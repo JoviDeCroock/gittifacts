@@ -256,7 +256,10 @@ so it works with `--network none`.
   - Base runs in a worktree that uses head's `node_modules` for type resolution.
   - The result goes to `diffApiSurface`.
 - **dependencies.** Every `package.json` at base and head is read from git objects. The
-  lockfile flag comes from the touched paths.
+  lockfile flag comes from the touched paths. Every touched lockfile is read from git objects at
+  both commits too (absent at one side → left out of that side; over 8 MiB → not read, so
+  unchecked) and checked by the producer: `lockfile.verified` is true only when each lockfile
+  change is a registry patch bump the manifests record.
 - **transforms.**
   - Each script under `.platform/transforms/` **at base** runs on a clean base worktree
     (`.mjs`/`.js`/`.cjs` with node, `.ts` with type stripping, `.sh` with sh).
