@@ -45,7 +45,9 @@ async function main(): Promise<void> {
     console.error("packages/web/dist is missing: run `pnpm --filter @app/e2e prepare-assets` first");
     process.exit(2);
   }
-  const state = join(PLATFORM, ".wrangler/e2e-state");
+  // E2E_STATE_DIR: a state directory of its own, so two gate servers on one machine (E2E_PORT)
+  // don't wipe each other's database.
+  const state = process.env.E2E_STATE_DIR ?? join(PLATFORM, ".wrangler/e2e-state");
   // Every run starts from an empty database: tests make their own data (unique per test).
   rmSync(state, { recursive: true, force: true });
   mkdirSync(state, { recursive: true });
