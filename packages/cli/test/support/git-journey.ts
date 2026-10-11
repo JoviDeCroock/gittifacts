@@ -101,6 +101,7 @@ export function journeyBackend(git: GitServer, opts: { projectToken: string | nu
         change: c,
         overlaps: null,
         reviews: [],
+        author: { id: c.authorId, name: "bot", kind: "agent", ownerId: "hu_1", ownerName: "Ada" },
         runs: [],
         classification:
           c.lane === null
