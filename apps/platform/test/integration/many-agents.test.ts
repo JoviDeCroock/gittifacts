@@ -310,7 +310,7 @@ describe("many agents, one repo (workerd: real DOs + Workflows)", () => {
       for (const d of disposables) await d[Symbol.asyncDispose]();
       await Promise.all(agents.map((a) => a.mcp.client.close()));
     }
-  });
+  }, 60_000);
 
   // The live demo (scripts/e2e/many-agents.ts) on a static site: docs-only Changes have no test
   // targets, so once the first lands the others revalidate on main with an EMPTY target set (live

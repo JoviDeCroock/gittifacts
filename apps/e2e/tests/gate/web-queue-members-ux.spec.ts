@@ -41,11 +41,15 @@ test("queue: an owner resumes a halted queue from its banner (demo data)", async
   await expect(page.getByTestId("queue-notice")).toContainText("Queue resumed");
 });
 
-test("members: Remove needs an inline confirmation that names the person", async ({ authed: page, world, request, baseURL }) => {
+test("members: Remove needs an inline confirmation that names the person", async ({ authed: page, world, request, baseURL, human }) => {
   const other = await signUp(request, baseURL as string, "e2e-member");
+  // By principal id: an unverified e-mail gets an invite, not a membership (security audit M3).
+  const added = await request.post(`${baseURL}/api/v1/repos/${world.repoId}/members`, {
+    headers: { cookie: human.cookie, origin: baseURL as string },
+    data: { principalId: other.principalId, role: "reviewer" },
+  });
+  expect(added.ok(), await added.text()).toBe(true);
   await page.goto(`/repos/${world.repoId}/members`);
-  await page.getByLabel("E-mail").fill(other.email);
-  await page.getByRole("button", { name: "Add", exact: true }).click();
   const row = page.locator(`[data-testid="member"][data-principal="${other.principalId}"]`);
   await expect(row).toBeVisible();
 
