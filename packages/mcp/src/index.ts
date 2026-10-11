@@ -17,6 +17,7 @@ export type {
   WhoamiData,
 } from "./backend.js";
 export { WAIT_REASONS } from "./schemas.js";
+export { type AttemptToolsBackend, type AttemptsData, attemptTools } from "./tools/attempts.js";
 export {
   type ChangeListItem,
   type ChangeListToolsBackend,

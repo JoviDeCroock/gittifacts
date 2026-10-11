@@ -31,6 +31,7 @@ describe("gittifacts MCP tools", () => {
     expect(tools.map((t) => t.name).sort()).toEqual([
       "close_change",
       "close_workspace",
+      "compare_attempts",
       "create_plan",
       "create_project",
       "dequeue",
@@ -202,7 +203,11 @@ describe("gittifacts MCP tools", () => {
   });
 
   it("rerun_ci re-runs on the same head and forwards the reason and idempotency key", async () => {
-    const r = await mcp.tools.rerun_ci({ changeId: "chg_1", reason: "flaky", idempotencyKey: "k1" });
+    const r = await mcp.tools.rerun_ci({
+      changeId: "chg_1",
+      reason: "flaky",
+      idempotencyKey: "k1",
+    });
     if (r.isError) throw new Error(JSON.stringify(r.content));
     expect(r.structuredContent).toMatchObject({
       headSha: "b".repeat(40),
@@ -211,6 +216,22 @@ describe("gittifacts MCP tools", () => {
     expect(r.structuredContent.nextSteps[0]?.call).toMatch(/until: "evidence_ready"/);
     expect(backend.calls).toContain("rerunCi:chg_1:flaky:k1");
     expect(errorOf(await mcp.tools.rerun_ci({ changeId: "chg_9" }))?.error.code).toBeDefined();
+  });
+
+  it("compare_attempts ranks a plan's attempts, links each, and tells the caller its next step", async () => {
+    const r = await mcp.tools.compare_attempts({ planId: "plan_1" });
+    if (r.isError) throw new Error(JSON.stringify(r.content));
+    const out = r.structuredContent;
+    expect(out.attempts.map((a) => [a.rank, a.changeId, a.recommended])).toEqual([
+      [1, "chg_1", true],
+      [2, "chg_2", false],
+    ]);
+    expect(out.attempts[1]?.reasons).toContain("scope drift");
+    expect(out.attempts[0]?.url).toBe("https://gittifacts.test/changes/chg_1");
+    expect(out.url).toBe("https://gittifacts.test/plans/plan_1");
+    expect(out.recommended).toMatchObject({ changeId: "chg_1", provisional: false });
+    // The caller (ag_1) wrote the recommended attempt: ask a person to pick it.
+    expect(out.nextSteps[0]?.call).toBe('request_review({ changeId: "chg_1" })');
   });
 
   it("close_change abandons with a reason; it is marked destructive", async () => {

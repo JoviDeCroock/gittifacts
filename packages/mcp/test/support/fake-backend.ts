@@ -1,5 +1,5 @@
-import type { ApiError, Change, Plan, Repo, Tour } from "@app/domain";
-import { defaultPolicy } from "@app/domain";
+import type { ApiError, AttemptFacts, Change, Plan, Repo, Tour } from "@app/domain";
+import { defaultPolicy, rankAttempts } from "@app/domain";
 import type { McpBackend, PlanData, QueueEntry, WorkspaceView } from "../../src/index.js";
 
 export const SHA = "a".repeat(40);
@@ -145,13 +145,41 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
       const rows = [
         change(),
         change({ id: "chg_2", authorId: "ag_2", status: "running", title: "Cache sessions" }),
-      ].filter((c) => c.repoId === repoId && (filter.status === undefined || c.status === filter.status));
+      ].filter(
+        (c) => c.repoId === repoId && (filter.status === undefined || c.status === filter.status),
+      );
       return rows.map((c) => ({
         ...c,
         planTitle: c.planId === null ? null : "Rate limit logins",
         authorName: c.authorId === "ag_1" ? "bot" : "other-bot",
         authorKind: "agent" as const,
       }));
+    },
+    async compareAttempts(_caller, planId) {
+      calls.push(`compareAttempts:${planId}`);
+      const facts = (id: string, author: string, lane: 1 | 2): AttemptFacts => ({
+        changeId: id,
+        title: `Attempt ${id}`,
+        status: "awaiting-review",
+        headSha: "a".repeat(40),
+        lane,
+        author: { id: author, name: author, kind: "agent" },
+        ci: "passed",
+        tests: { state: "passed", passed: 3, failed: 0 },
+        redGreen: "proven",
+        scope: { state: lane === 1 ? "within" : "drift", detail: null },
+        publicApi: "none",
+        coverage: null,
+        mutation: null,
+        diff: { lines: 10, files: 1 },
+        timeToGreenMs: null,
+        startedAt: "2026-10-01T00:00:00.000Z",
+      });
+      return {
+        planId,
+        picked: null,
+        ...rankAttempts([facts("chg_2", "ag_2", 2), facts("chg_1", "ag_1", 1)]),
+      };
     },
     async listPlans(_caller, repoId) {
       calls.push(`listPlans:${repoId}`);
@@ -328,7 +356,10 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
     async rerunCi(_caller, changeId, reason, opts) {
       calls.push(`rerunCi:${changeId}:${reason ?? "-"}:${opts.idempotencyKey ?? "-"}`);
       if (changeId !== "chg_1") throw new NotFound(`change ${changeId}`);
-      return { change: change({ status: "running", lane: null, computedLane: null }), headSha: HEAD };
+      return {
+        change: change({ status: "running", lane: null, computedLane: null }),
+        headSha: HEAD,
+      };
     },
     async closeChange(_caller, changeId, reason, opts) {
       calls.push(`closeChange:${changeId}:${reason ?? "-"}:${opts.idempotencyKey ?? "-"}`);

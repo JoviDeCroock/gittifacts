@@ -364,6 +364,234 @@ export type introspection = {
       }
     },
     /**
+     * Compare attempts at a plan
+     * Several agents may attempt the same approved plan, each its own change. This ranks every change on the plan by evidence and lane (lane, CI, tests, red/green proof, scope drift, coverage, mutation, public API, diff size, time to green; anything not measured ranks below measured) and says which one is recommended. A person picks one on the plan's page (url): that approves it and closes the others as superseded. Read-only.
+     * @param args.planId The plan.
+     */
+    "compare_attempts": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "The plan."
+          }
+        },
+        "required": [
+          "planId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string",
+            "description": "\"3 attempts: 2 finished, 1 still grading\"."
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "rank": {
+                  "type": "integer",
+                  "description": "1 is best."
+                },
+                "changeId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "standing": {
+                  "enum": [
+                    "finished",
+                    "grading",
+                    "closed"
+                  ],
+                  "description": "finished: graded; grading: CI, evidence or the lane still running; closed."
+                },
+                "green": {
+                  "type": "boolean",
+                  "description": "CI passed and no test fails."
+                },
+                "lane": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "author": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "kind"
+                  ]
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Why it ranks here, in words: \"Lane 1\", \"tests pass (12)\", \"scope drift\", \"42 lines\"."
+                },
+                "diffLines": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "recommended": {
+                  "type": "boolean"
+                },
+                "pickable": {
+                  "type": "boolean",
+                  "description": "A person can pick it now (awaiting review or approved)."
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The change's page."
+                }
+              },
+              "required": [
+                "rank",
+                "changeId",
+                "title",
+                "status",
+                "standing",
+                "green",
+                "lane",
+                "author",
+                "reasons",
+                "diffLines",
+                "recommended",
+                "pickable",
+                "url"
+              ]
+            },
+            "description": "Best first."
+          },
+          "recommended": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "changeId": {
+                "type": "string"
+              },
+              "provisional": {
+                "type": "boolean",
+                "description": "Nothing finished grading: it leads so far."
+              },
+              "why": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "changeId",
+              "provisional",
+              "why"
+            ]
+          },
+          "picked": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The attempt a person picked (it was approved; the others were closed).",
+            "properties": {
+              "changeId": {
+                "type": "string"
+              },
+              "by": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ]
+              },
+              "at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "changeId",
+              "by",
+              "at"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "The plan's page, where a person picks an attempt."
+          },
+          "nextSteps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "planId",
+          "summary",
+          "attempts",
+          "recommended",
+          "picked",
+          "url",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
      * Create a plan
      * Draft a plan: intent, acceptance criteria and the paths you expect to touch. A human other than you approves it before you start a change. Returns the plan id and its page (url) to hand that person; get_plan shows when it is approved.
      * @param args.intent Why: the problem and the intended outcome.
@@ -5640,7 +5868,7 @@ export type introspection = {
     },
     /**
      * Wait for a change
-     * Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first: reason changes-requested (push a new head), rejected (it ended) or approval-withdrawn (it needs a fresh review); read get_change_status for the review. On timeout call again, after retryAfterSec when it is set.
+     * Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first: reason changes-requested (push a new head), rejected (it ended) or approval-withdrawn (it needs a fresh review); read get_change_status for the review. When several agents attempt one plan and a person picks another attempt, this one is closed: reason superseded (supersededBy). On timeout call again, after retryAfterSec when it is set.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      * @param args.timeoutSec Default 50. Keep it below your MCP client's request timeout (60s in the SDK default) and call again if not reached.
      */
@@ -5693,9 +5921,14 @@ export type introspection = {
               "unreachable",
               "changes-requested",
               "rejected",
-              "approval-withdrawn"
+              "approval-withdrawn",
+              "superseded"
             ],
-            "description": "reached; timeout (call again); unreachable (the change ended); or a human sent it back first: changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review)."
+            "description": "reached; timeout (call again); unreachable (the change ended); or a human sent it back first: changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review); superseded (a person picked another attempt at the same plan and this change was closed: supersededBy)."
+          },
+          "supersededBy": {
+            "type": "string",
+            "description": "With reason \"superseded\": the change a person picked instead."
           },
           "retryAfterSec": {
             "type": "integer",

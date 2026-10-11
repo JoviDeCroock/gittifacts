@@ -133,6 +133,7 @@ export const WAIT_REASONS = [
   "changes-requested",
   "rejected",
   "approval-withdrawn",
+  "superseded",
 ] as const;
 
 const Review = {
@@ -146,7 +147,11 @@ const Review = {
     current: bool,
     reviewer: {
       type: "object",
-      properties: { id: str, name: str, kind: { enum: ["human", "agent", "system", "integration"] } },
+      properties: {
+        id: str,
+        name: str,
+        kind: { enum: ["human", "agent", "system", "integration"] },
+      },
       required: ["id", "name", "kind"],
     },
     at: str,
@@ -209,11 +214,13 @@ export const ChangeIdInput = {
 } as const;
 
 /** GitHub mode: a pull request as `owner/repo#123`, in place of `changeId`. */
-export const GITHUB_REF_PATTERN = "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}#[0-9]{1,9}$";
+export const GITHUB_REF_PATTERN =
+  "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}#[0-9]{1,9}$";
 const githubRef = {
   type: "string",
   pattern: GITHUB_REF_PATTERN,
-  description: "GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).",
+  description:
+    "GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).",
 } as const;
 
 /** A change by id, or (GitHub mode) by pull request. */
@@ -509,7 +516,10 @@ export const CreateProjectOutput = {
   type: "object",
   properties: {
     repoId: { ...str, description: "The repo id: pass it as repoId to every other tool." },
-    projectId: { ...str, description: "Deprecated: the same value as repoId, kept for older clients." },
+    projectId: {
+      ...str,
+      description: "Deprecated: the same value as repoId, kept for older clients.",
+    },
     name: str,
     template: nullableStr,
     defaultBranch: str,
@@ -570,7 +580,11 @@ const OverlapReason = {
   properties: {
     code: { enum: ["same-plan", "same-paths", "paths-unknown"] },
     message: str,
-    paths: { type: "array", items: str, description: "same-paths: the overlapping paths (capped)." },
+    paths: {
+      type: "array",
+      items: str,
+      description: "same-paths: the overlapping paths (capped).",
+    },
     morePaths: { ...int, description: "same-paths: overlapping paths not listed." },
   },
   required: ["code", "message", "paths", "morePaths"],
@@ -588,7 +602,11 @@ const ChangeOverlap = {
     planId: nullableStr,
     author: {
       type: "object",
-      properties: { id: str, kind: { enum: ["human", "agent", "system", "integration"] }, name: str },
+      properties: {
+        id: str,
+        kind: { enum: ["human", "agent", "system", "integration"] },
+        name: str,
+      },
       required: ["id", "kind", "name"],
     },
     reasons: { type: "array", items: OverlapReason },
@@ -599,7 +617,8 @@ const ChangeOverlap = {
     },
     pathsFrom: {
       enum: ["head", "intended", null],
-      description: "head: its pushed diff; intended: the paths it gave start_change (nothing pushed yet).",
+      description:
+        "head: its pushed diff; intended: the paths it gave start_change (nothing pushed yet).",
     },
     url: { ...str, description: "Its page on the platform." },
   },
@@ -632,7 +651,8 @@ const Overlaps = {
         comparedPaths: {
           type: "array",
           items: str,
-          description: "What this change was compared on: its paths, its diff, or its plan's scopePaths.",
+          description:
+            "What this change was compared on: its paths, its diff, or its plan's scopePaths.",
         },
         scanned: { ...int, description: "Open changes looked at (the newest)." },
         truncated: { ...bool, description: "More open changes exist than were scanned." },
@@ -877,7 +897,11 @@ export const WaitForChangeOutput = {
     reason: {
       enum: WAIT_REASONS,
       description:
-        "reached; timeout (call again); unreachable (the change ended); or a human sent it back first: changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review).",
+        "reached; timeout (call again); unreachable (the change ended); or a human sent it back first: changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review); superseded (a person picked another attempt at the same plan and this change was closed: supersededBy).",
+    },
+    supersededBy: {
+      type: "string",
+      description: 'With reason "superseded": the change a person picked instead.',
     },
     retryAfterSec: {
       type: "integer",

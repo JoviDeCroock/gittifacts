@@ -51,6 +51,7 @@ import {
   WaitForChangeOutput,
   WhoamiOutput,
 } from "./schemas.js";
+import { attemptTools } from "./tools/attempts.js";
 import { changeListTools } from "./tools/changes.js";
 import { importTools } from "./tools/import.js";
 import { planTools } from "./tools/plans.js";
@@ -292,7 +293,8 @@ export function changeNextSteps(
     case "running":
       // Follow the milestones the current head has already passed.
       if (c.lane !== null) return [wait("tour_ready", "Lane assigned: wait for the walkthrough")];
-      if (c.evidenceId !== null) return [wait("lane_assigned", "Evidence sealed: wait for the lane")];
+      if (c.evidenceId !== null)
+        return [wait("lane_assigned", "Evidence sealed: wait for the lane")];
       return [wait("evidence_ready")];
     case "failing": {
       const failed = runs[0]?.steps.filter((s) => s.status === "failed").map((s) => s.name) ?? [];
@@ -330,7 +332,10 @@ export function changeNextSteps(
             ];
       return [
         ...withdrawn,
-        { title: "Read the walkthrough a human will review", call: `get_tour({ changeId: "${id}" })` },
+        {
+          title: "Read the walkthrough a human will review",
+          call: `get_tour({ changeId: "${id}" })`,
+        },
         { title: "Ask a human to review it", call: `request_review({ changeId: "${id}" })` },
       ];
     }
@@ -375,7 +380,10 @@ const ChangeIdArgs = z.object({ changeId: Id });
 
 /** `changeId`, or (GitHub mode) `github: "owner/repo#123"`: exactly one. */
 const ChangeRefArgs = z
-  .object({ changeId: Id.optional(), github: z.string().regex(new RegExp(GITHUB_REF_PATTERN)).optional() })
+  .object({
+    changeId: Id.optional(),
+    github: z.string().regex(new RegExp(GITHUB_REF_PATTERN)).optional(),
+  })
   .refine((a) => (a.changeId === undefined) !== (a.github === undefined), {
     message: "pass exactly one of changeId or github",
   });
@@ -614,6 +622,8 @@ export function buildTools(backend: McpBackend) {
     },
     // A repo's changes (by status, or only yours).
     ...changeListTools(backend, kit),
+    // Several attempts at one plan, ranked (a person picks one).
+    ...attemptTools(backend, kit),
     {
       name: "get_change_status",
       title: "Get change status",
@@ -872,7 +882,7 @@ export function buildTools(backend: McpBackend) {
       name: "wait_for_change",
       title: "Wait for a change",
       description:
-        "Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first: reason changes-requested (push a new head), rejected (it ended) or approval-withdrawn (it needs a fresh review); read get_change_status for the review. On timeout call again, after retryAfterSec when it is set.",
+        "Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first: reason changes-requested (push a new head), rejected (it ended) or approval-withdrawn (it needs a fresh review); read get_change_status for the review. When several agents attempt one plan and a person picks another attempt, this one is closed: reason superseded (supersededBy). On timeout call again, after retryAfterSec when it is set.",
       inputSchema: WaitForChangeInput,
       outputSchema: WaitForChangeOutput,
       annotations: READ,
@@ -896,12 +906,25 @@ export function buildTools(backend: McpBackend) {
         const r = await run(backend, () =>
           backend.waitForChange(caller, changeId, v.until, v.timeoutSec * 1000),
         );
+        const by = r.reason === "superseded" ? (r.supersededBy ?? null) : null;
         return {
           reached: r.reached,
           reason: r.reason,
           ...(r.reason === "timeout" ? { retryAfterSec: r.retryAfterSec ?? 0 } : {}),
+          ...(by !== null ? { supersededBy: by } : {}),
           change: changeBrief(r.change),
-          nextSteps: changeNextSteps(r.change),
+          nextSteps:
+            r.reason === "superseded"
+              ? [
+                  {
+                    title: `A person picked another attempt at this plan${by === null ? "" : ` (${by})`}; this change was closed`,
+                    why: "Nothing more to do here. Compare the attempts to see why.",
+                    ...(r.change.planId === null
+                      ? {}
+                      : { call: `compare_attempts({ planId: "${r.change.planId}" })` }),
+                  },
+                ]
+              : changeNextSteps(r.change),
         };
       },
     },

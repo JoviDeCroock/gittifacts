@@ -21,6 +21,7 @@ import type {
 } from "@app/domain";
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import type { z } from "zod";
+import type { AttemptToolsBackend } from "./tools/attempts.js";
 import type { ChangeListToolsBackend } from "./tools/changes.js";
 import type { ImportToolsBackend } from "./tools/import.js";
 import type { PlanToolsBackend } from "./tools/plans.js";
@@ -37,7 +38,8 @@ export interface McpCaller {
 
 /**
  * Why `wait_for_change` answered. Besides reached / timeout / unreachable (the change ended), a
- * human may have sent it back: changes-requested, rejected or approval-withdrawn.
+ * human may have sent it back: changes-requested, rejected or approval-withdrawn; or picked another
+ * attempt at the same plan, which closed this one: superseded.
  */
 export type WaitReasonData =
   | "reached"
@@ -45,7 +47,8 @@ export type WaitReasonData =
   | "unreachable"
   | "changes-requested"
   | "rejected"
-  | "approval-withdrawn";
+  | "approval-withdrawn"
+  | "superseded";
 
 export interface GitRemote {
   url: string;
@@ -168,7 +171,8 @@ export interface McpBackend
     QueueToolsBackend,
     QaToolsBackend,
     PlanToolsBackend,
-    ChangeListToolsBackend {
+    ChangeListToolsBackend,
+    AttemptToolsBackend {
   /** The absolute URL of `page` on the platform, to hand to a person. */
   webUrl(page: WebPage): string;
   whoami(caller: McpCaller): Promise<WhoamiData>;
@@ -258,6 +262,8 @@ export interface McpBackend
     reason: WaitReasonData;
     /** With "timeout": seconds before calling again (the platform was interrupted when > 0). */
     retryAfterSec?: number;
+    /** With "superseded": the attempt at the same plan a person picked instead. */
+    supersededBy?: string;
   }>;
   /** The platform's error envelope for anything a backend call threw. */
   errorEnvelope(err: unknown): ApiError;
