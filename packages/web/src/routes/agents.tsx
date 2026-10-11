@@ -263,7 +263,7 @@ function CanLine({ s }: { s: AgentSession }) {
 
 /** Created, last active (its newest audit event counts, not only its last token use), and the end. */
 function whenLine(s: AgentSession, a: AgentActivity | undefined, now: number): string {
-  const parts = [`Created ${relative(s.createdAt, now)}`];
+  const parts = [`Created ${relative(s.createdAt, Math.max(now, Date.parse(s.createdAt)))}`];
   const used = [s.lastUsedAt, a?.last.at].filter((t): t is string => !!t).sort().pop();
   parts.push(used ? `last active ${relative(used, now)}` : "never used");
   // Just revoked: the minute clock may lag the server's stamp; never say "in under a minute".

@@ -186,31 +186,31 @@ a.fleet__link:hover {
     align-self: start;
     margin-inline-end: var(--s-2);
   }
-  .fleet__state {
+  .fleet__link .fleet__state {
     margin-inline-start: var(--s-2);
   }
-  .fleet__who,
-  .fleet__last {
+  .fleet__link .fleet__who,
+  .fleet__link .fleet__last {
     display: contents;
   }
-  .fleet__name {
+  .fleet__link .fleet__name {
     grid-area: name;
   }
-  .fleet__did {
+  .fleet__link .fleet__did {
     grid-area: did;
   }
-  .fleet__owner {
+  .fleet__link .fleet__owner {
     grid-area: owner;
     white-space: nowrap;
   }
-  .fleet__where {
+  .fleet__link .fleet__where {
     grid-area: where;
     min-inline-size: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .fleet__where::before {
+  .fleet__link .fleet__where::before {
     content: "· ";
   }
 }
