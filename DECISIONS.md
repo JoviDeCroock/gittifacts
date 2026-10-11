@@ -2886,3 +2886,30 @@ and a parity matrix of UI × HTTP × MCP × CLI. Findings that drove the work:
 - Still open from the audit: the queue has no human controls (dequeue, reprioritize), the audit
   filter can't filter by actor, the notifier writes rows nothing reads (`request_review` says
   `notified: true`), and there is no agent pause.
+
+## 2026-10-11 — Agents are told about overlapping work; why notes verified offline; GitHub hidden
+
+**Context.** The brief's first question is how agents coordinate. Forks mean agents never race on a
+branch, but two agents can still spend an hour on the same file or Plan and only find out in the
+queue. The video also needs the why note checkable without the platform, and the product story is
+native-first for now.
+
+**Decision.**
+- `start_change` takes optional intended `paths` (≤50, stored in `change_intents`, migration 0020)
+  and, like `get_change_status`, returns `overlaps`: the open Changes in the repo on the same Plan or
+  touching the same paths (the head's diff once pushed, else the stored paths plus the Plan's
+  `scopePaths`; glob prefixes that nest count). Informational only: it never blocks a start, never
+  feeds the lane, and an unknown is listed (`paths-unknown`, `unchecked`), never dropped; a failed
+  check returns `null`. Paths are stored before the check runs, so of two simultaneous starts the
+  second always sees the first. The queue view shows the same note per entry.
+- `verify-attestation` verifies `refs/notes/why` with the evidence keys (purpose
+  `gittifacts/document`, `landedSha` must equal the commit). A missing note passes (older commits)
+  unless `--require-why`; a present, unverified note fails the run.
+- GitHub surfaces are hidden behind one switch (`GITHUB_SURFACES` in `@app/domain/surfaces`), not
+  removed: the App, the host adapter and the docs pages stay built. Labels on already-linked repos stay.
+- Mission control (`/repos/:repoId/mission`) is built from the existing changes, queue and principal
+  endpoints, polled; no new backend.
+- MIT licence.
+
+**Consequences.** Overlap work runs on every queue poll (bounded at 50 open Changes, ≤5 R2 reads).
+Turning GitHub back on is one line plus the E2E spec that asserts it is hidden.
