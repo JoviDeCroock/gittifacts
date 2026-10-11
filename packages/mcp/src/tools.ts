@@ -20,7 +20,7 @@ import {
 } from "@app/domain";
 import { defineTools, type IntrospectionOf, type ToolExtra } from "mcp-tada-server";
 import { z } from "zod";
-import type { ChangeReviewData, McpBackend, McpCaller } from "./backend.js";
+import type { ChangeReviewData, McpBackend, McpCaller, ResolutionData } from "./backend.js";
 import {
   ChangeIdInput,
   ChangeRefInput,
@@ -399,6 +399,71 @@ export function changeNextSteps(
   }
 }
 
+/** The merge queue rewrote what lands: say so before anything else (get_change_status, queue_status). */
+export function resolutionSteps(changeId: string, r: ResolutionData | null): NextStep[] {
+  if (r === null) return [];
+  const pushed = r.originalHeadSha === null ? "your head" : `your head ${r.originalHeadSha.slice(0, 7)}`;
+  const steps: NextStep[] = [
+    {
+      title: `The merge queue resolved a ${r.kind} conflict: ${r.headSha.slice(0, 7)} lands, not ${pushed}`,
+      why: `Files: ${r.files.join(", ") || "none listed"}. A new push replaces the resolution and the queue resolves again; the resolution diff is in the evidence (conflict-resolution item).`,
+      call: `get_evidence({ changeId: "${changeId}" })`,
+    },
+  ];
+  if (r.approvalRequested) {
+    steps.push({
+      title: "A person must approve the resolution before it lands",
+      call: `request_review({ changeId: "${changeId}" })`,
+    });
+  }
+  return steps;
+}
+
+/** get_tour: prove the unproven stops, wait out a stale walkthrough, then hand it off. */
+function tourNextSteps(
+  changeId: string,
+  stops: readonly { title: string; verdict: string }[],
+  stale: boolean,
+): NextStep[] {
+  if (stale) {
+    return [
+      {
+        title: "This walkthrough is for an older head: wait for the new one",
+        call: `wait_for_change({ changeId: "${changeId}", until: "tour_ready" })`,
+      },
+    ];
+  }
+  const unproven = stops.filter((s) => s.verdict === "unproven");
+  return [
+    ...(unproven.length === 0
+      ? []
+      : [
+          {
+            title: `Turn ${unproven.length} unproven stop(s) into proven ones: add tests or evidence and push`,
+            why: clip(unproven.map((s) => s.title).join("; ")),
+            call: `refresh_push_token({ changeId: "${changeId}" })`,
+          },
+        ]),
+    { title: "Ask a human to review it", call: `request_review({ changeId: "${changeId}" })` },
+  ];
+}
+
+/** whoami: who answers for you and where they see you, then where to start. */
+function whoamiNextSteps(
+  w: { principal: { kind: string; ownerId: string | null }; ownerName: string | null },
+  agentsUrl: string,
+): NextStep[] {
+  const owner: NextStep[] =
+    w.principal.kind === "agent" && w.principal.ownerId !== null
+      ? [
+          {
+            title: `${w.ownerName ?? "Your owner"} answers for you and can inspect or revoke you at ${agentsUrl}`,
+          },
+        ]
+      : [];
+  return [...owner, { title: "See the repos you can act on", call: "list_repos({})" }];
+}
+
 const READ = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
@@ -489,7 +554,7 @@ export function buildTools(backend: McpBackend) {
       name: "whoami",
       title: "Who am I",
       description:
-        "Who you are (your actor: principalId, kind, owner), scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.",
+        "Who you are (your actor: principalId, kind, and for an agent the person accountable for you, ownerName, with the page where they inspect or revoke you, agentsUrl), scopes, the repos you can act on (with claim status and allowed actions) and quotas. Call this first.",
       inputSchema: EmptyInput,
       outputSchema: WhoamiOutput,
       annotations: READ,
@@ -501,6 +566,8 @@ export function buildTools(backend: McpBackend) {
           kind: w.principal.kind,
           name: w.principal.name,
           ownerId: w.principal.ownerId,
+          ownerName: w.ownerName,
+          agentsUrl: backend.webUrl({ agents: true }),
           scopes: [...w.principal.scopes],
           canApprove: w.canApprove,
           repos: w.repos.map((r) => ({
@@ -510,6 +577,7 @@ export function buildTools(backend: McpBackend) {
             actions: r.actions,
           })),
           quotas: w.quotas,
+          nextSteps: whoamiNextSteps(w, backend.webUrl({ agents: true })),
         };
       },
     },
@@ -654,7 +722,7 @@ export function buildTools(backend: McpBackend) {
       name: "get_change_status",
       title: "Get change status",
       description:
-        "A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), the open changes on the same plan or paths (overlaps), its page (url) to hand a person, and what to do next.",
+        "A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), who started it (author, with an agent's accountable person), the open changes on the same plan or paths (overlaps), the merge queue's conflict resolution when what lands differs from your head (resolution), its page (url) to hand a person, and what to do next.",
       inputSchema: ChangeRefInput,
       outputSchema: ChangeStatusOutput,
       annotations: READ,
@@ -662,10 +730,17 @@ export function buildTools(backend: McpBackend) {
         const caller = callerOf(ctx);
         requireScope(caller, "repo:read");
         const changeId = await changeIdOf(backend, caller, parse(ChangeRefArgs, args));
-        const s = await run(backend, () => backend.getChangeStatus(caller, changeId));
+        const [s, resolution] = await run(backend, () =>
+          Promise.all([
+            backend.getChangeStatus(caller, changeId),
+            backend.getResolution(caller, changeId),
+          ]),
+        );
         return {
           change: changeBrief(s.change),
           url: backend.webUrl({ changeId: s.change.id }),
+          author: s.author,
+          resolution,
           reviews: s.reviews.map((r) => ({
             id: r.id,
             decision: r.decision,
@@ -708,7 +783,7 @@ export function buildTools(backend: McpBackend) {
           nextSteps:
             s.supersededBy != null
               ? supersededSteps(s.change, s.supersededBy)
-              : changeNextSteps(s.change, s.runs, s.reviews),
+              : [...resolutionSteps(s.change.id, resolution), ...changeNextSteps(s.change, s.runs, s.reviews)],
         };
       },
     },
@@ -734,6 +809,20 @@ export function buildTools(backend: McpBackend) {
           signedAt: evidence.attestation.signedAt,
           keyId: evidence.attestation.keyId,
           items: evidence.items,
+          url: backend.webUrl({ changeId: evidence.changeId, view: "evidence" }),
+          nextSteps: verification.ok
+            ? [
+                {
+                  title: "Read the walkthrough written from this evidence",
+                  call: `get_tour({ changeId: "${evidence.changeId}" })`,
+                },
+              ]
+            : [
+                {
+                  title: `The signature does not verify (${verification.reason ?? "unknown"}): don't rely on these items`,
+                  why: "Tell a person (hand them url); a new push seals fresh evidence.",
+                },
+              ],
         };
       },
     },
@@ -771,6 +860,8 @@ export function buildTools(backend: McpBackend) {
             notDone: tour.notDone,
           },
           stale,
+          url: backend.webUrl({ changeId }),
+          nextSteps: tourNextSteps(changeId, tour.stops, stale),
         };
       },
     },
@@ -778,7 +869,7 @@ export function buildTools(backend: McpBackend) {
       name: "request_review",
       title: "Request a human review",
       description:
-        "Ask a human to look at your change (notifies them; url is its page, to share). This never approves anything: agents cannot approve plans or changes.",
+        "Ask for a human review of your change. The request is recorded in the change's audit log (the dashboard's agent band shows it), but nobody receives a message: hand url, the change's page, to a person. This never approves anything: agents cannot approve plans or changes.",
       inputSchema: RequestReviewInput,
       outputSchema: RequestReviewOutput,
       annotations: WRITE,
@@ -795,9 +886,13 @@ export function buildTools(backend: McpBackend) {
         return {
           changeId: r.change.id,
           status: r.change.status,
-          notified: r.notified,
+          requested: r.requested,
           url: backend.webUrl({ changeId: r.change.id }),
           nextSteps: [
+            {
+              title: `Hand a person the change's page: ${backend.webUrl({ changeId: r.change.id })}`,
+              why: "No message is sent: the request is only recorded. Any member who may review (not you) can approve.",
+            },
             {
               title: "Wait for the review",
               why: 'It answers early when a reviewer sends the change back (reason "changes-requested", "rejected" or "approval-withdrawn"): then read the reviews in get_change_status.',
@@ -857,6 +952,7 @@ export function buildTools(backend: McpBackend) {
         );
         return {
           change: changeBrief(change),
+          url: backend.webUrl({ changeId: change.id }),
           nextSteps: [
             {
               title: "Start a new change for this work, if any",
@@ -912,7 +1008,7 @@ export function buildTools(backend: McpBackend) {
       name: "wait_for_change",
       title: "Wait for a change",
       description:
-        "Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first: reason changes-requested (push a new head), rejected (it ended) or approval-withdrawn (it needs a fresh review), or superseded (a person picked another attempt at the same plan and closed this one: supersededBy); read get_change_status for the review. For merged and reverted, reason failing means the machines sent it back (red CI, the merge queue ejected it, or the merge failed): read get_change_status, fix and push a new head. On timeout call again, after retryAfterSec when it is set. Use this, not wait_for_merge, unless you only care about the queue.",
+        "Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first, reason changes-requested (push a new head), rejected (it ended) or approval-withdrawn (it needs a fresh review); a person can pick another attempt at the same plan, which closes this one, reason superseded (supersededBy); and for merged and reverted so can the machines, reason failing (red CI, a merge-queue ejection or a failed merge: fix and push a new head); read get_change_status for why. On timeout call again, after retryAfterSec when it is set; prefer this to wait_for_merge, which watches only the merge queue.",
       inputSchema: WaitForChangeInput,
       outputSchema: WaitForChangeOutput,
       annotations: READ,
@@ -943,6 +1039,7 @@ export function buildTools(backend: McpBackend) {
           ...(r.reason === "timeout" ? { retryAfterSec: r.retryAfterSec ?? 0 } : {}),
           ...(by !== null ? { supersededBy: by } : {}),
           change: changeBrief(r.change),
+          url: backend.webUrl({ changeId: r.change.id }),
           nextSteps:
             r.reason === "superseded" ? supersededSteps(r.change, by) : changeNextSteps(r.change),
         };

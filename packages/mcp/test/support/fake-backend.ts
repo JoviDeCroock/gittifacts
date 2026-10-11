@@ -130,9 +130,13 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
   const plans = new Map<string, PlanData>();
   const base: McpBackend = {
     webUrl(page) {
+      if ("agents" in page) return "https://gittifacts.test/agents";
       return "planId" in page
         ? `https://gittifacts.test/plans/${page.planId}`
         : `https://gittifacts.test/changes/${page.changeId}${page.view ? `/${page.view}` : ""}`;
+    },
+    async getResolution() {
+      return null;
     },
     auditUrl(filter) {
       const q = new URLSearchParams(filter as Record<string, string>).toString();
@@ -251,6 +255,7 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
           keys: [],
           scopes: [],
         },
+        ownerName: "Ada",
         canApprove: false,
         repos: [
           { id: repo.id, name: repo.name, claim: repo.claim, actions: ["read", "create-plan"] },
@@ -362,6 +367,7 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
         change: change(),
         overlaps: null,
         reviews: [],
+        author: { id: "ag_1", name: "bot", kind: "agent", ownerId: "hu_1", ownerName: "Ada" },
         runs: [
           {
             id: "run_1",
@@ -392,7 +398,7 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
     },
     async requestReview(_caller, changeId) {
       calls.push(`requestReview:${changeId}`);
-      return { change: change(), notified: true };
+      return { change: change(), requested: true };
     },
     async rerunCi(_caller, changeId, reason, opts) {
       calls.push(`rerunCi:${changeId}:${reason ?? "-"}:${opts.idempotencyKey ?? "-"}`);

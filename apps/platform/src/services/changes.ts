@@ -369,7 +369,7 @@ export async function requestReview(
   caller: Caller,
   changeId: string,
   message: string | undefined,
-): Promise<{ change: Change; notified: boolean }> {
+): Promise<{ change: Change; requested: boolean }> {
   const change = await assertChangeAccess(svc, caller.principal, changeId, "contribute");
   const author = await svc.store.getPrincipal(change.authorId);
   const mayAsk = change.authorId === caller.principal.id || author?.ownerId === caller.principal.id;
@@ -401,7 +401,8 @@ export async function requestReview(
     subject: `change:${change.id}`,
     payload: { headSha: change.headSha, status: change.status, message: text },
   });
-  return { change, notified: true };
+  // Recorded, not delivered: the notifications row has no recipient and nothing sends it.
+  return { change, requested: true };
 }
 
 /**

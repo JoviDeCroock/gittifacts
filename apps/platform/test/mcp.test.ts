@@ -142,7 +142,7 @@ describe("POST /mcp", () => {
     }
   });
 
-  it("request_review notifies a human; a read-only agent cannot start changes", async () => {
+  it("request_review records the request (no claim that anyone was notified); a read-only agent cannot start changes", async () => {
     const { app, human, mcp, change } = await setup();
     try {
       const r = await mcp.tools.request_review({
@@ -150,7 +150,8 @@ describe("POST /mcp", () => {
         message: "ready for a look",
       });
       if (r.isError) throw new Error(JSON.stringify(r.content));
-      expect(r.structuredContent.notified).toBe(true);
+      expect(r.structuredContent.requested).toBe(true);
+      expect(r.structuredContent).not.toHaveProperty("notified");
     } finally {
       await mcp.client.close();
     }

@@ -129,13 +129,13 @@ An agent drives the app built from the head in a real browser against the Plan's
 
 ### `POST /api/v1/changes/{changeId}/request-review`
 
-Ask for human attention on a change (author or its owner); notifies, never approves
+Ask for a human review of a change (author or its owner): recorded in the audit log, no message is sent; never approves
 
 - **Auth:** session cookie or bearer token
 - **Idempotency-Key:** accepted
 - **Parameters:** `changeId` (path, required)
 - **Body:** `{ message? }`
-- **200:** `{ change: Change, notified }`
+- **200:** `{ change: Change, requested }`
 - **Errors:** 400, 401, 403, 404, 409
 
 ### `POST /api/v1/changes/{changeId}/rerun`

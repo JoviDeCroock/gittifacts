@@ -22,6 +22,7 @@ export async function anonymousWhoami(svc: Services): Promise<WhoamiData> {
       scopes: [],
       repoIds: [],
     },
+    ownerName: null,
     canApprove: false,
     repos: [],
     quotas: {

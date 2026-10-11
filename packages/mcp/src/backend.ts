@@ -22,7 +22,8 @@ import type {
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import type { z } from "zod";
 import type { AttemptToolsBackend } from "./tools/attempts.js";
-import type { AuditToolsBackend } from "./tools/audit.js";import type { ChangeListToolsBackend } from "./tools/changes.js";
+import type { ActorData, AuditToolsBackend } from "./tools/audit.js";
+import type { ChangeListToolsBackend } from "./tools/changes.js";
 import type { ImportToolsBackend } from "./tools/import.js";
 import type { PlanToolsBackend } from "./tools/plans.js";
 import type { QaToolsBackend } from "./tools/qa.js";
@@ -72,6 +73,8 @@ export interface LaneCountsData {
 
 export interface WhoamiData {
   principal: Principal;
+  /** The accountable person's name (an agent's owner); null for a person. */
+  ownerName: string | null;
   canApprove: boolean;
   repos: { id: string; name: string; claim: Repo["claim"]; actions: string[] }[];
   quotas: {
@@ -164,10 +167,23 @@ export interface ChangeReviewData {
   withdrawn: { at: string; reason: string } | null;
 }
 
-/** A platform page a person can open: a plan, or a change (its walkthrough, evidence or rollout). */
+/** The merge queue's conflict resolution of a change: what lands instead of the pushed head. */
+export interface ResolutionData {
+  headSha: string;
+  originalHeadSha: string | null;
+  kind: "textual" | "semantic";
+  at: string;
+  files: string[];
+  upstream: { changeId: string; title: string | null }[];
+  approvalRequested: boolean;
+}
+
+/** A platform page a person can open: a plan, a change (walkthrough, evidence, rollout), agents. */
 export type WebPage =
   | { planId: string }
-  | { changeId: string; view?: "evidence" | "rollout" | undefined };
+  | { changeId: string; view?: "evidence" | "rollout" | undefined }
+  /** The person's agents page, where an owner inspects or revokes them. */
+  | { agents: true };
 
 /** Every tool family's backend: the core tools below, remote workspaces and import detection. */
 export interface McpBackend
@@ -222,7 +238,11 @@ export interface McpBackend
     overlaps: OverlapReport | null;
     /** Closed because a person picked this attempt at the same plan instead; absent = not. */
     supersededBy?: string | null;
+    /** Who started it (with an agent's owner). */
+    author: ActorData;
   }>;
+  /** The merge queue's latest resolution of the change's current head, or null (read access). */
+  getResolution(caller: McpCaller, changeId: string): Promise<ResolutionData | null>;
   getEvidence(
     caller: McpCaller,
     changeId: string,
@@ -237,13 +257,13 @@ export interface McpBackend
    * platform doesn't grade that repository). Optional: hosts without GitHub mode omit it.
    */
   resolveGithubChange?(caller: McpCaller, ref: string): Promise<string>;
-  /** Ask a human to look at the change (notify + audit). Never approves anything. */
+  /** Record that the author asks for a human review (audited; no message is sent). Never approves. */
   requestReview(
     caller: McpCaller,
     changeId: string,
     message: string | undefined,
     opts: MutationOptions,
-  ): Promise<{ change: Change; notified: boolean }>;
+  ): Promise<{ change: Change; requested: boolean }>;
   /** CI, evidence, lane and tour again on the same head (author, its owner or a maintainer). */
   rerunCi(
     caller: McpCaller,

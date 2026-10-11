@@ -12,7 +12,8 @@
 import { defineTool } from "mcp-tada-server";
 import { z } from "zod";
 import type { McpBackend, McpCaller, MutationOptions } from "../backend.js";
-import { buildTools } from "../tools.js";
+import { Resolution } from "../schemas.js";
+import { buildTools, resolutionSteps } from "../tools.js";
 import type { ToolKit } from "./workspace.js";
 
 // ---------------------------------------------------------------- backend contract
@@ -302,8 +303,8 @@ export const ChangeOnlyInput = {
 
 export const QueueStatusOutput = {
   type: "object",
-  properties: { queued: bool, status: NullableEntry, nextSteps: NextSteps },
-  required: ["queued", "status", "nextSteps"],
+  properties: { queued: bool, status: NullableEntry, resolution: Resolution, nextSteps: NextSteps },
+  required: ["queued", "status", "resolution", "nextSteps"],
 } as const;
 
 export const WaitForMergeInput = {
@@ -704,7 +705,7 @@ export function queueTools(backend: McpBackend, kit: ToolKit) {
       name: "queue_status",
       title: "Where is my Change in the merge queue",
       description:
-        'State, track, batch, position, ETA, the Changes it waits on and why (e.g. "waiting on conflicting Change X in track 2"), and for an ejected Change the reason with fix.call.',
+        'State, track, batch, position, ETA, the Changes it waits on and why (e.g. "waiting on conflicting Change X in track 2"), for an ejected Change the reason with fix.call, and the conflict resolution when the queue rewrote what lands (resolution).',
       inputSchema: ChangeOnlyInput,
       outputSchema: QueueStatusOutput,
       annotations: READ,
@@ -712,8 +713,15 @@ export function queueTools(backend: McpBackend, kit: ToolKit) {
         const caller = kit.callerOf(ctx);
         kit.requireScope(caller, "repo:read");
         const { changeId } = kit.parse(ChangeArgs, args);
-        const s = await kit.run(backend, () => backend.queueStatus(caller, changeId));
-        return { queued: s !== null, status: entryOut(s), nextSteps: queueNextSteps(changeId, s) };
+        const [s, resolution] = await kit.run(backend, () =>
+          Promise.all([backend.queueStatus(caller, changeId), backend.getResolution(caller, changeId)]),
+        );
+        return {
+          queued: s !== null,
+          status: entryOut(s),
+          resolution,
+          nextSteps: [...resolutionSteps(changeId, resolution), ...queueNextSteps(changeId, s)],
+        };
       },
     }),
     defineTool({

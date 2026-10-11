@@ -32,6 +32,7 @@ import { capabilities } from "../services/capabilities.js";
 import {
   closeChange,
   getChangeDetail,
+  getChangeResolution,
   getChangeRollout,
   getChangeEvidence,
   getChangeTour,
@@ -179,8 +180,11 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     async whoami(mc) {
       if (anonymousFrom(mc) !== null) return anonymousWhoami(svc);
       const caps = await capabilities(svc, callerFrom(mc));
+      const owner = caps.principal.ownerId;
+      const refs = owner === null ? {} : await svc.store.principalRefs([owner]);
       return {
         principal: caps.principal,
+        ownerName: owner === null ? null : (refs[owner]?.name ?? null),
         canApprove: caps.canApprove,
         repos: caps.repos.map((r) => ({
           id: r.id,
@@ -277,7 +281,9 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
         getChangeDetail(svc, caller, changeId),
         listChangeReviews(svc, caller, changeId),
       ]);
+      const authors = await svc.store.principalRefs([d.change.authorId]);
       return {
+        author: actorData(d.change.authorId, authors),
         previewUrl: await previewUrlOf(svc, d.change),
         overlaps: await overlapsOf(svc, caller, changeId),
         supersededBy: await supersededBy(svc, d.change).catch(() => null),
@@ -294,6 +300,20 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
               requiresHumanApproval: d.classification.requiresHumanApproval,
             }
           : null,
+      };
+    },
+
+    async getResolution(mc, changeId) {
+      const { resolution: r } = await getChangeResolution(svc, await scoped(mc, { changeId }), changeId);
+      if (r === null) return null;
+      return {
+        headSha: r.headSha,
+        originalHeadSha: r.originalHeadSha,
+        kind: r.kind,
+        at: r.at,
+        files: [...new Set(r.item?.conflictHunks.map((h) => h.file) ?? [])],
+        upstream: r.upstream.map((u) => ({ changeId: u.changeId, title: u.title })),
+        approvalRequested: r.approvalRequested,
       };
     },
 

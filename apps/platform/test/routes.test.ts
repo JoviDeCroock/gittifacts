@@ -322,7 +322,7 @@ describe("lifecycle routes call the CoordinatorApi", () => {
       body: { message: "stuck on flaky test" },
     });
     expect(res.status).toBe(200);
-    expect(await json(res)).toMatchObject({ notified: true, change: { id: mine.id } });
+    expect(await json(res)).toMatchObject({ requested: true, change: { id: mine.id } });
     const n = await env.DB.prepare("SELECT kind, message FROM notifications WHERE change_id = ?")
       .bind(mine.id)
       .first();

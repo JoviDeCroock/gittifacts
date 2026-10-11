@@ -172,6 +172,47 @@ const Review = {
   ],
 } as const;
 
+/** Who is accountable: a principal, with an agent's owner. */
+const Person = {
+  type: "object",
+  properties: {
+    id: str,
+    name: str,
+    kind: { enum: ["human", "agent", "system", "integration"] },
+    ownerId: nullableStr,
+    ownerName: { ...nullableStr, description: "For an agent: the person accountable for it." },
+  },
+  required: ["id", "name", "kind", "ownerId", "ownerName"],
+} as const;
+
+/** The merge queue's conflict resolution: what lands instead of the head the author pushed. */
+export const Resolution = {
+  type: ["object", "null"],
+  description:
+    "Set when the merge queue resolved a conflict: what lands is headSha (the resolver's commit), not the head you pushed. null: no resolution.",
+  properties: {
+    headSha: { type: "string", description: "The resolved head: what lands on the default branch." },
+    originalHeadSha: { ...nullableStr, description: "The head you pushed." },
+    kind: { enum: ["textual", "semantic"] },
+    at: str,
+    files: { type: "array", items: str, description: "Files with resolved conflict hunks." },
+    upstream: {
+      type: "array",
+      description: "The changes it was resolved against.",
+      items: {
+        type: "object",
+        properties: { changeId: str, title: nullableStr },
+        required: ["changeId", "title"],
+      },
+    },
+    approvalRequested: {
+      type: "boolean",
+      description: "The resolution invalidated the approval: a person must approve what lands.",
+    },
+  },
+  required: ["headSha", "originalHeadSha", "kind", "at", "files", "upstream", "approvalRequested"],
+} as const;
+
 const GitRemote = {
   type: "object",
   description:
@@ -406,6 +447,14 @@ export const WhoamiOutput = {
     kind: { enum: ["human", "agent", "system"] },
     name: str,
     ownerId: nullableStr,
+    ownerName: {
+      ...nullableStr,
+      description: "The person accountable for you (an agent's owner); null for a person.",
+    },
+    agentsUrl: {
+      type: "string",
+      description: "The page where your person inspects or revokes you (their agents).",
+    },
     scopes: { type: "array", items: str },
     canApprove: bool,
     repos: {
@@ -426,8 +475,21 @@ export const WhoamiOutput = {
       },
       required: ["enforced", "ciMinutesPerDay", "ciMinutesUsedToday", "artifactsOpsPerDay"],
     },
+    nextSteps: NextSteps,
   },
-  required: ["principalId", "kind", "name", "ownerId", "scopes", "canApprove", "repos", "quotas"],
+  required: [
+    "principalId",
+    "kind",
+    "name",
+    "ownerId",
+    "ownerName",
+    "agentsUrl",
+    "scopes",
+    "canApprove",
+    "repos",
+    "quotas",
+    "nextSteps",
+  ],
 } as const;
 
 export const ListReposOutput = {
@@ -686,6 +748,8 @@ export const ChangeStatusOutput = {
   properties: {
     change: ChangeBrief,
     url: changeUrl,
+    author: { ...Person, description: "Who started the change, and for an agent the person accountable." },
+    resolution: Resolution,
     reviews: {
       type: "array",
       items: Review,
@@ -752,6 +816,8 @@ export const ChangeStatusOutput = {
   required: [
     "change",
     "url",
+    "author",
+    "resolution",
     "reviews",
     "runs",
     "classification",
@@ -782,8 +848,10 @@ export const EvidenceOutput = {
         required: ["id", "kind", "status"],
       },
     },
+    url: { type: "string", description: "The change's evidence page, to hand a person." },
+    nextSteps: NextSteps,
   },
-  required: ["changeId", "headSha", "verification", "signedAt", "keyId", "items"],
+  required: ["changeId", "headSha", "verification", "signedAt", "keyId", "items", "url", "nextSteps"],
 } as const;
 
 export const TourOutput = {
@@ -831,8 +899,10 @@ export const TourOutput = {
       description:
         "True when the walkthrough was written for an older head; a new one follows the latest push.",
     },
+    url: changeUrl,
+    nextSteps: NextSteps,
   },
-  required: ["tour", "stale"],
+  required: ["tour", "stale", "url", "nextSteps"],
 } as const;
 
 export const RequestReviewOutput = {
@@ -840,11 +910,15 @@ export const RequestReviewOutput = {
   properties: {
     changeId: str,
     status: { enum: CHANGE_STATUSES },
-    notified: bool,
+    requested: {
+      type: "boolean",
+      description:
+        "The request is recorded (audit log, the dashboard's agent band). Nobody receives a message: hand url to a person.",
+    },
     url: changeUrl,
     nextSteps: NextSteps,
   },
-  required: ["changeId", "status", "notified", "url", "nextSteps"],
+  required: ["changeId", "status", "requested", "url", "nextSteps"],
 } as const;
 
 export const RerunCiOutput = {
@@ -859,8 +933,8 @@ export const RerunCiOutput = {
 
 export const CloseChangeOutput = {
   type: "object",
-  properties: { change: ChangeBrief, nextSteps: NextSteps },
-  required: ["change", "nextSteps"],
+  properties: { change: ChangeBrief, url: changeUrl, nextSteps: NextSteps },
+  required: ["change", "url", "nextSteps"],
 } as const;
 
 export const IssuesOutput = {
@@ -916,7 +990,8 @@ export const WaitForChangeOutput = {
         'With reason "timeout": call again after this many seconds (0: right away; more when the platform was interrupted, e.g. by a deploy).',
     },
     change: ChangeBrief,
+    url: changeUrl,
     nextSteps: NextSteps,
   },
-  required: ["reached", "reason", "change", "nextSteps"],
+  required: ["reached", "reason", "change", "url", "nextSteps"],
 } as const;
