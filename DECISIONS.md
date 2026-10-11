@@ -3090,3 +3090,33 @@ production or staging. Tiers 1 (the pre-deploy gate) and 2 (the post-deploy smok
 **Consequences.** Regressions that only the live journeys catch (merge queue with the resolver, rollout
 auto-revert, the GitHub import) are found when someone runs a suite, not overnight. To bring the schedule back,
 restore the workflow from git history after merge-queue is green against production again.
+
+## 2026-10-11 — Pushes that go nowhere are told, not swallowed
+
+**Context.** The onboarding audit found three agent dead ends. `git push` to the read-only `/git/` proxy got a JSON
+403, which git drops, so the agent saw a bare "returned error: 403". A push to another branch of the fork, a tag, or
+the branch still at the base was ignored silently, so `wait_for_change` timed out again and again. And after an
+anonymous `create_project` the next call got a 401 that never mentioned the project token.
+
+**Decision.**
+- The proxy refuses receive-pack (before auth) with a `text/plain` 403. git prints that body as `remote:` lines
+  (remote-curl.c `show_http_message`; a real `git push` in `test-node/git-refusal.spec.ts` checks this). The body
+  carries the `push-to-main` fix (on a Change's read-only path: `refresh_push_token`), and so does an
+  `x-gittifacts-error` JSON header. The code is now `push-to-main`, no longer `read-only`.
+- The ChangeCoordinator records every ignored push on a pushable Change (`pushIssues`, the newest 5: kind
+  `wrong-ref` | `tag` | `no-new-commits`, ref, expected ref, sha, at, why) and audits it as `change.push-ignored`.
+  PushRouter now routes tag pushes too. A push that starts a pipeline clears the list. `get_change_status` and
+  `wait_for_change` return `pushIssues` (a push of the graded head is left out) with `fix.command`
+  `git push <fork> HEAD:<branch>`, and put it first in `nextSteps`. A timeout while one exists sets `warning`.
+  We emit `push-to-main` only where the platform sees the attempt (the proxy). A push to the main repo that
+  Artifacts refuses produces no event, and the merge queue's own pushes are legitimate.
+- The MCP 401 without credentials leads its fix with "reconnect with `Authorization: Bearer <token from
+  create_project>`", then OAuth, the CLI login, or an agent token. /start step 1 and the server instructions say
+  the same.
+- MCP and `GET /changes/{id}` list lane reasons in reading order (`orderLaneReasons`). Status and wait results add
+  `laneSummary { lane, deciding, passingCount }` (null before a lane). The GitHub check-run summary already
+  sorted its reasons this way and is unchanged.
+
+**Consequences.** `pushIssues` and `laneSummary` are required fields of two outputs (additive for clients). The
+coordinator API gains `pushIssues(actor, changeId)`. If reading the list fails, it reports none rather than
+failing the status call: the list is a hint, and leaving it out never lowers risk.
