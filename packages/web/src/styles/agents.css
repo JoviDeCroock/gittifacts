@@ -98,14 +98,19 @@
 }
 /* Now and last: the band's state word, then the last act with its object, linked to it. */
 .agent__now {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px var(--s-3);
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  min-inline-size: 0;
   margin-block: 2px var(--s-1);
 }
-.agent__now .fleet__state {
+.agent__now .fleet__state,
+.agent__now .fleet__last {
+  grid-area: auto;
   justify-self: start;
+}
+.agent__last {
+  display: block;
 }
 .agent__now--none {
   color: var(--text-3);
