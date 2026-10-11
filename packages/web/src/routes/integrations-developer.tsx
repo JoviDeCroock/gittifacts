@@ -3,6 +3,7 @@
  * form to register one. The client secret (and a generated webhook secret) is shown once.
  */
 import { useSignal } from "@preact/signals";
+import type { ComponentChildren } from "preact";
 import { useLocation } from "preact-iso";
 import { inlineError, newIdempotencyKey } from "../api/client.js";
 import {
@@ -22,7 +23,7 @@ import {
   type SecretItem,
 } from "../components/Integrations.js";
 import { Page } from "../components/Shell.js";
-import { Button, EmptyState, ErrorState, Loading } from "../components/ui.js";
+import { Button, EmptyState, ErrorState, LinkButton, Loading } from "../components/ui.js";
 import { DEPLOY_SCOPES, hostOf, lines, redirectUrisProblem, urlProblem } from "../lib/integrations.js";
 import { relative } from "../lib/time.js";
 import { plural } from "../lib/vocab.js";
@@ -51,7 +52,41 @@ const DEFAULT_EVENTS: WebhookEvent[] = [
   "installation.deleted",
 ];
 
-function RegisterForm({ onCreated }: { onCreated: (r: CreatedIntegration) => void }) {
+/** Where each problem lives, in the form's order: the summary links there and focus goes to the first. */
+const FIELD_ORDER: { field: Field; id: string; label: string }[] = [
+  { field: "name", id: "f-name", label: "Name" },
+  { field: "homepageUrl", id: "f-home", label: "Homepage URL" },
+  { field: "logoUrl", id: "f-logo", label: "Logo URL" },
+  { field: "redirectUris", id: "f-redir", label: "Redirect URIs" },
+  { field: "scopes", id: "f-scopes", label: "Permissions" },
+  { field: "webhookUrl", id: "f-hook", label: "Webhook URL" },
+];
+
+function focusField(id: string) {
+  const el = document.getElementById(id);
+  const target = el?.matches("input, textarea") ? el : el?.querySelector<HTMLElement>("input, textarea");
+  target?.focus();
+  target?.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+}
+
+/** One numbered step of the form: what it is for on the left, its fields on the right. */
+function Step({ n, title, lede, children, disabled }: { n: number; title: string; lede: string; children: ComponentChildren; disabled?: boolean }) {
+  return (
+    <fieldset class="int-step" disabled={disabled}>
+      <legend class="sr-only">
+        Step {n}: {title}
+      </legend>
+      <div class="int-step__head" aria-hidden="true">
+        <span class="int-step__n tnum">{n}</span>
+        <span class="int-step__title">{title}</span>
+        <span class="int-step__lede">{lede}</span>
+      </div>
+      <div class="int-step__body">{children}</div>
+    </fieldset>
+  );
+}
+
+function RegisterForm({ onCreated, onCancel }: { onCreated: (r: CreatedIntegration) => void; onCancel: () => void }) {
   const name = useSignal("");
   const description = useSignal("");
   const homepageUrl = useSignal("");
@@ -88,8 +123,11 @@ function RegisterForm({ onCreated }: { onCreated: (r: CreatedIntegration) => voi
     if (busy.value) return;
     const p = check();
     problems.value = p;
-    if (Object.keys(p).length > 0) {
-      error.value = "Fix the highlighted fields.";
+    const first = FIELD_ORDER.find((f) => p[f.field]);
+    if (first) {
+      error.value = null;
+      // Straight to the first problem (it scrolls into view); the summary lists the rest.
+      focusField(first.id);
       return;
     }
     busy.value = true;
@@ -135,21 +173,40 @@ function RegisterForm({ onCreated }: { onCreated: (r: CreatedIntegration) => voi
   });
   const pr = problems.value;
 
-  return (
-    <form class="int-form" onSubmit={submit} aria-labelledby="register-title" noValidate>
-      <h2 id="register-title" class="int-form__title">
-        Register an integration
-      </h2>
-      <p class="int-form__lede">
-        People see the name, logo and homepage when they install it, and the permissions in plain
-        words.
-      </p>
+  const listed = FIELD_ORDER.filter((f) => pr[f.field]);
+  const inv = (f: Field) => (pr[f] ? ("true" as const) : undefined);
 
-      <fieldset class="int-form__group">
-        <legend class="int-form__legend">About</legend>
+  return (
+    <form class="int-form" onSubmit={submit} aria-label="Register an integration" noValidate>
+
+      {listed.length > 0 ? (
+        <div class="int-form__problems" role="alert" data-testid="register-problems">
+          <p>
+            <b>{listed.length === 1 ? "One field needs a fix" : `${listed.length} fields need a fix`}</b>
+          </p>
+          <ul>
+            {listed.map((f) => (
+              <li key={f.field}>
+                <a
+                  href={`#${f.id}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    focusField(f.id);
+                  }}
+                >
+                  {f.label}
+                </a>
+                : {pr[f.field]}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <Step n={1} title="About" lede="What people see when they install it.">
         <label class="field">
           <span class="field__label">Name</span>
-          <input class="input" {...bind(name)} placeholder="Acme Deploy" aria-invalid={pr.name ? "true" : undefined} aria-describedby="f-name-err" />
+          <input id="f-name" class="input" {...bind(name)} autoComplete="off" spellcheck={false} placeholder="Acme Deploy" aria-invalid={inv("name")} aria-describedby="f-name-err" />
           <FieldError id="f-name-err" msg={pr.name} />
         </label>
         <label class="field">
@@ -160,24 +217,23 @@ function RegisterForm({ onCreated }: { onCreated: (r: CreatedIntegration) => voi
         </label>
         <label class="field">
           <span class="field__label">Homepage URL</span>
-          <input class="input" type="url" inputMode="url" autoCapitalize="off" spellcheck={false} {...bind(homepageUrl)} placeholder="https://deploy.example" aria-invalid={pr.homepageUrl ? "true" : undefined} aria-describedby="f-home-err" />
+          <input id="f-home" class="input" type="url" inputMode="url" autoComplete="off" autoCapitalize="off" spellcheck={false} {...bind(homepageUrl)} placeholder="https://deploy.example" aria-invalid={inv("homepageUrl")} aria-describedby="f-home-err" />
           <FieldError id="f-home-err" msg={pr.homepageUrl} />
         </label>
         <label class="field">
           <span class="field__label">
             Logo URL <span class="int-form__opt">optional</span>
           </span>
-          <input class="input" type="url" inputMode="url" autoCapitalize="off" spellcheck={false} {...bind(logoUrl)} placeholder="https://deploy.example/logo.svg" aria-invalid={pr.logoUrl ? "true" : undefined} aria-describedby="f-logo-hint f-logo-err" />
+          <input id="f-logo" class="input" type="url" inputMode="url" autoComplete="off" autoCapitalize="off" spellcheck={false} {...bind(logoUrl)} placeholder="https://deploy.example/logo.svg" aria-invalid={inv("logoUrl")} aria-describedby="f-logo-hint f-logo-err" />
           <span class="field__hint" id="f-logo-hint">A square image. Without one, people see its initials.</span>
           <FieldError id="f-logo-err" msg={pr.logoUrl} />
         </label>
-      </fieldset>
+      </Step>
 
-      <fieldset class="int-form__group">
-        <legend class="int-form__legend">Sign-in</legend>
+      <Step n={2} title="Sign-in" lede="Where people return after they approve, and how your app proves itself.">
         <label class="field">
           <span class="field__label">Redirect URIs</span>
-          <textarea class="textarea mono" rows={3} autoCapitalize="off" spellcheck={false} {...bind(redirects)} placeholder="https://deploy.example/oauth/callback" aria-invalid={pr.redirectUris ? "true" : undefined} aria-describedby="f-redir-hint f-redir-err" />
+          <textarea id="f-redir" class="textarea mono" rows={3} autoCapitalize="off" spellcheck={false} {...bind(redirects)} placeholder="https://deploy.example/oauth/callback" aria-invalid={inv("redirectUris")} aria-describedby="f-redir-hint f-redir-err" />
           <span class="field__hint" id="f-redir-hint">
             One per line. The callback must match one exactly, including path and trailing slash.
             http:// only for localhost.
@@ -197,22 +253,21 @@ function RegisterForm({ onCreated }: { onCreated: (r: CreatedIntegration) => voi
             <span class="check__hint">No secret; proves itself with PKCE. For CLIs and apps that can't keep one.</span>
           </label>
         </div>
-      </fieldset>
+      </Step>
 
-      <div class="int-form__group">
-        <ScopeChecklist value={scopes.value} onChange={(v) => (scopes.value = v)} />
-        <p class="field__hint">Deploy platforms need only the first four.</p>
+      <Step n={3} title="Permissions" lede="What it asks for when people install it. Deploy platforms need only the first four.">
+        <div id="f-scopes">
+          <ScopeChecklist value={scopes.value} onChange={(v) => (scopes.value = v)} />
+        </div>
         <FieldError id="f-scopes-err" msg={pr.scopes} />
-      </div>
+      </Step>
 
-      <fieldset class="int-form__group" disabled={!hooks}>
-        <legend class="int-form__legend">Webhook</legend>
-        {!hooks ? <p class="field__hint">Needs the Receive events permission.</p> : null}
+      <Step n={4} title="Webhook" lede={hooks ? "Where events go, and the secret that signs them." : "Needs the Receive events permission."} disabled={!hooks}>
         <label class="field">
           <span class="field__label">
             Webhook URL <span class="int-form__opt">optional</span>
           </span>
-          <input class="input" type="url" inputMode="url" autoCapitalize="off" spellcheck={false} {...bind(webhookUrl)} placeholder="https://deploy.example/hooks/gittifacts" aria-invalid={pr.webhookUrl ? "true" : undefined} aria-describedby="f-hook-err" />
+          <input id="f-hook" class="input" type="url" inputMode="url" autoComplete="off" autoCapitalize="off" spellcheck={false} {...bind(webhookUrl)} placeholder="https://deploy.example/hooks/gittifacts" aria-invalid={inv("webhookUrl")} aria-describedby="f-hook-err" />
           <FieldError id="f-hook-err" msg={pr.webhookUrl} />
         </label>
         <EventChecklist value={events.value} onChange={(v) => (events.value = v)} disabled={!hooks || !webhookUrl.value.trim()} />
@@ -226,16 +281,21 @@ function RegisterForm({ onCreated }: { onCreated: (r: CreatedIntegration) => voi
             X-Gittifacts-Signature-256.
           </span>
         </label>
-      </fieldset>
+      </Step>
 
       {error.value ? (
         <p class="field__error" role="alert">
           {error.value}
         </p>
       ) : null}
-      <Button type="submit" variant="primary" icon="plus" busy={busy.value} busyLabel="Registering…">
-        Register integration
-      </Button>
+      <div class="int-form__actions">
+        <Button type="submit" variant="primary" icon="plus" busy={busy.value} busyLabel="Registering…">
+          Register integration
+        </Button>
+        <Button variant="secondary" onClick={onCancel} disabled={busy.value}>
+          Cancel
+        </Button>
+      </div>
     </form>
   );
 }
@@ -278,23 +338,45 @@ function revealItems(r: CreatedIntegration): SecretItem[] {
   return items;
 }
 
+const PATH = "/settings/integrations/developer";
+
 export function IntegrationsDeveloper() {
   const { route, query } = useLocation();
   const res = useResource(() => integrationsApi.list(), []);
   const created = useSignal<CreatedIntegration | null>(null);
   const st = res.state.value;
+  // Registering is its own task in the main column (`?register`), not a rail beside the list.
+  const registering = query.register !== undefined;
+  const open = () => route(`${PATH}?register`);
 
   return (
     <Page
-      title="Developer portal"
-      wide
-      crumbs={[{ href: "/settings/integrations", label: "Integrations" }]}
+      title={registering ? "Register an integration" : "Developer portal"}
+      wide={!registering}
+      crumbs={[
+        { href: "/settings/integrations", label: "Integrations" },
+        ...(registering ? [{ href: PATH, label: "Developer portal" }] : []),
+      ]}
+      actions={
+        registering ? undefined : (
+          <LinkButton href={`${PATH}?register`} variant="primary" icon="plus" data-testid="register-open">
+            Register an integration
+          </LinkButton>
+        )
+      }
       meta={
-        <span>
-          Register an integration so a deploy platform can clone the repositories people install it
-          on, receive webhooks and report deployments. See the{" "}
-          <a href="/docs/integrations">integration docs</a>.
-        </span>
+        registering ? (
+          <span>
+            People see the name, logo and homepage when they install it, and the permissions in
+            plain words. You get a client ID and secret at the end.
+          </span>
+        ) : (
+          <span>
+            Register an integration so a deploy platform can clone the repositories people install
+            it on, receive webhooks and report deployments. See the{" "}
+            <a href="/docs/integrations">integration docs</a>.
+          </span>
+        )
       }
     >
       {query.deleted ? (
@@ -311,7 +393,7 @@ export function IntegrationsDeveloper() {
           onDone={() => {
             const id = created.value?.integration.id ?? "";
             created.value = null;
-            route(`/settings/integrations/developer/${encodeURIComponent(id)}`);
+            route(`${PATH}/${encodeURIComponent(id)}`);
           }}
         >
           {created.value.clientSecret === null ? (
@@ -319,7 +401,17 @@ export function IntegrationsDeveloper() {
           ) : null}
         </SecretReveal>
       ) : null}
-      <div class="dev-layout">
+      {registering ? (
+        <RegisterForm
+          onCancel={() => route(PATH)}
+          onCreated={(r) => {
+            created.value = r;
+            res.reload();
+            route(PATH);
+            window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+          }}
+        />
+      ) : (
         <section class="dev-main" aria-labelledby="mine-title">
           <h2 id="mine-title" class="int-section__title">
             Your integrations
@@ -335,6 +427,9 @@ export function IntegrationsDeveloper() {
                 Register one to get a client ID and secret. Then send people to install it from
                 your platform's "connect a git provider" flow.
               </p>
+              <Button variant="primary" icon="plus" onClick={open}>
+                Register an integration
+              </Button>
             </EmptyState>
           ) : null}
           {st.status === "ok" && st.data.integrations.length > 0 ? (
@@ -345,16 +440,7 @@ export function IntegrationsDeveloper() {
             </ul>
           ) : null}
         </section>
-        <aside class="dev-side" id="register">
-          <RegisterForm
-            onCreated={(r) => {
-              created.value = r;
-              res.reload();
-              window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
-            }}
-          />
-        </aside>
-      </div>
+      )}
     </Page>
   );
 }

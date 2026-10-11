@@ -5,6 +5,7 @@
  */
 import { type Signal, useSignal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
+import { useEffect } from "preact/hooks";
 import { useLocation, useRoute } from "preact-iso";
 import { inlineError, newIdempotencyKey } from "../api/client.js";
 import {
@@ -335,7 +336,48 @@ function Webhook({ it, onChange, base }: { it: IntegrationView; onChange: (i: In
 }
 
 /** Save and Discard appear once something changed, so the page carries one primary at a time. */
+/** Sections with unsaved edits (by their save label), so leaving the page can say so. */
+const unsaved = new Set<string>();
+
+/**
+ * Four independent forms on one page: leaving with edits in any of them asks first, both for a
+ * full unload and for an in-app link (a breadcrumb, the sidebar).
+ */
+function useLeaveGuard() {
+  useEffect(() => {
+    const message = () =>
+      `You have unsaved changes (${[...unsaved].map((l) => l.replace(/^Save /, "")).join(", ")}). Leave without saving?`;
+    const onUnload = (e: BeforeUnloadEvent) => {
+      if (unsaved.size > 0) e.preventDefault();
+    };
+    const onClick = (e: MouseEvent) => {
+      if (unsaved.size === 0 || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey) return;
+      const a = (e.target as Element | null)?.closest?.("a[href]");
+      if (!(a instanceof HTMLAnchorElement) || a.target === "_blank" || a.origin !== window.location.origin) return;
+      if (a.pathname === window.location.pathname) return;
+      if (!window.confirm(message())) {
+        e.preventDefault();
+        e.stopPropagation();
+      } else unsaved.clear();
+    };
+    window.addEventListener("beforeunload", onUnload);
+    document.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", onUnload);
+      document.removeEventListener("click", onClick, true);
+      unsaved.clear();
+    };
+  }, []);
+}
+
 function SaveBar({ dirty, busy, label, onDiscard }: { dirty: boolean; busy: boolean; label: string; onDiscard: () => void }) {
+  useEffect(() => {
+    if (dirty) unsaved.add(label);
+    else unsaved.delete(label);
+    return () => {
+      unsaved.delete(label);
+    };
+  }, [dirty, label]);
   if (!dirty && !busy) return null;
   return (
     <div class="int-actions">
@@ -404,6 +446,7 @@ function Permissions({ it, onChange }: { it: IntegrationView; onChange: (i: Inte
   const scopes = useSignal<IntegrationScope[]>(it.scopes);
   const s = useSave(it, onChange);
   const dirty = sortScopes(scopes.value).join() !== sortScopes(it.scopes).join();
+  const widened = scopes.value.some((x) => !it.scopes.includes(x));
   return (
     <Section id="permissions" title="Permissions">
       <form
@@ -423,6 +466,16 @@ function Permissions({ it, onChange }: { it: IntegrationView; onChange: (i: Inte
         <p class="field__hint">
           People see these in plain words on the install screen. It can never push, approve or merge,
           whatever it asks for.
+        </p>
+        <p class="int-sec__note" data-testid="permissions-existing">
+          <Icon name="info" size={16} />
+          <span>
+            Existing installations keep what they granted. People see the new permissions and approve
+            them when they next install or update it.
+            {widened && it.installationCount > 0
+              ? ` ${it.installationCount === 1 ? "1 installation keeps" : `${it.installationCount} installations keep`} the old permissions until ${it.installationCount === 1 ? "its owner approves" : "their owners approve"}.`
+              : ""}
+          </span>
         </p>
         <Result r={s.result} />
         <SaveBar dirty={dirty} busy={s.busy.value} label="Save permissions" onDiscard={() => (scopes.value = it.scopes)} />
@@ -502,7 +555,7 @@ function RecentDeliveries({ it, base }: { it: IntegrationView; base: string }) {
   const res = useResource(() => integrationsApi.deliveries(it.id, { limit: 5 }), [it.id]);
   const st = res.state.value;
   return (
-    <Section id="recent" title="Recent deliveries" aside={<a href={base}>Delivery log</a>}>
+    <Section id="recent" title="Recent deliveries">
       {st.status === "loading" ? <Loading label="Loading recent deliveries" lines={3} /> : null}
       {st.status === "error" ? <ErrorState error={st.error} what="recent deliveries" onRetry={res.reload} /> : null}
       {st.status === "ok" && st.data.deliveries.length === 0 ? (
@@ -572,6 +625,7 @@ export function IntegrationDetail() {
   const st = res.state.value;
   const it = st.status === "ok" ? st.data.integration : null;
   const now = minuteClock.value;
+  useLeaveGuard();
   const base = `/settings/integrations/developer/${encodeURIComponent(id)}/deliveries`;
   const crumbs = [
     { href: "/settings/integrations", label: "Integrations" },

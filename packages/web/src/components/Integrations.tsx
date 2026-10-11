@@ -15,7 +15,10 @@ function monogram(name: string): string {
   return ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
-/** Squares mean apps and agents; an integration is an app. Broken logos fall back to initials. */
+/**
+ * An integration's mark: a plate (the tag radius, ringed by a hairline 2px out), never a square,
+ * because squares mean agents. Broken logos fall back to initials.
+ */
 export function IntegrationLogo({
   name,
   logoUrl,

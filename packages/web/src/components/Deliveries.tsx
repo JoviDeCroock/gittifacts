@@ -43,7 +43,14 @@ export function DeliveryRow({
 }) {
   const now = minuteClock.value;
   const parts = [
-    d.responseStatus === null ? (d.attempts === 0 ? "Not sent yet" : "No response") : String(d.responseStatus),
+    // A cancelled delivery will never be sent: "yet" would promise a send that never comes.
+    d.responseStatus === null
+      ? d.attempts === 0
+        ? d.status === "cancelled"
+          ? "Not sent"
+          : "Not sent yet"
+        : "No response"
+      : String(d.responseStatus),
   ];
   if (d.durationMs !== null) parts.push(durationLabel(d.durationMs));
   if (d.attempts > 1) parts.push(`${d.attempts} attempts`);
