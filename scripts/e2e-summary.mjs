@@ -33,6 +33,7 @@ function walk(suite, path) {
       else if (t.status === "unexpected") {
         const msg = (last?.error?.message ?? "")
           .split("\n")[0]
+          // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI colour codes (ESC [ … m)
           .replace(/\u001b\[[0-9;]*m/g, "")
           .slice(0, 300);
         rows.failed.push(`${name}: ${msg}`);

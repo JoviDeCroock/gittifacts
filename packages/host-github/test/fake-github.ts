@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noAssignInExpressions: the router matches `(m = re.exec(path))` per route
 /**
  * A recorded-fixture GitHub: the REST answers and webhook bodies are GitHub's own examples
  * (OAS `components.examples`, octokit/webhooks payload-examples) with the ids, shas and names of

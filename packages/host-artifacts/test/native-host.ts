@@ -165,9 +165,12 @@ export class NativeContractHost implements ContractHost {
   async review(ref: ChangeRef, headSha: string, who: ContractReviewer): Promise<void> {
     const change = await this.change(ref);
     const { store } = this.env.ports;
+    if (who === "maintainer" && this.maintainer === null) {
+      this.maintainer = store.addPrincipal(principal({ kind: "human" }));
+    }
     const actor =
       who === "maintainer"
-        ? (this.maintainer ??= store.addPrincipal(principal({ kind: "human" })))
+        ? this.maintainer
         : who === "author"
           ? await store.getPrincipal(change.authorId)
           : store.addPrincipal(principal({ kind: "agent", ownerId: this.owner?.id ?? null }));

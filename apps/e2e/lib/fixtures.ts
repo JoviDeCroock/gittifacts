@@ -50,6 +50,7 @@ interface Fixtures {
 
 export const test = base.extend<Fixtures>({
   quarantined: [
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright reads fixture dependencies from this destructuring and requires an object pattern
     async ({}, use, testInfo) => {
       const title = testInfo.titlePath.join(" › ");
       const q = quarantine.find((e) => title.includes(e.test));

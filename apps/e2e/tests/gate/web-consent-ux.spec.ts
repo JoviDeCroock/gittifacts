@@ -43,7 +43,7 @@ async function redeem(request: APIRequestContext, baseURL: string, device: strin
   ).then((t) => expect(t.access_token, JSON.stringify(t)).toBeTruthy());
 }
 
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 test.describe("sign-in carries its context", () => {
   test("a claim link: the heading says claim, and an agent is offered its own way in", async ({
@@ -82,7 +82,9 @@ test("CLI consent names the approver, and the agent's name is the one the person
   const agentName = uniqueName("laptop-cli");
   const nameField = page.getByTestId("consent-agent-name");
   await nameField.fill(agentName);
-  await page.getByRole("checkbox", { name: new RegExp(`${escape(world.repoName)}$`) }).check();
+  await page
+    .getByRole("checkbox", { name: new RegExp(`${escapeRegExp(world.repoName)}$`) })
+    .check();
   await expectNoHorizontalScroll(page);
 
   await page.getByRole("button", { name: /^Allow / }).click();

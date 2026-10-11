@@ -173,6 +173,7 @@ function expectSameColour(actual: number[] | undefined, expected: number[], what
 }
 
 test.describe("touch targets at 390 px", () => {
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright requires an object pattern for the fixtures argument
   test.beforeEach(({}, testInfo) => {
     test.skip(
       testInfo.project.name !== "phone",

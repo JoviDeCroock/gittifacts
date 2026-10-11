@@ -204,7 +204,7 @@ describe("GitHub mode in workerd", () => {
       details_url: `http://localhost/changes/${changeId}`,
     });
     expect(["success", "neutral", "action_required"]).toContain(patch?.body.conclusion);
-    expect(String((patch?.body.output as { title: string }).title)).toMatch(
+    expect(String((patch?.body.output as { title: string } | undefined)?.title)).toMatch(
       /^Quick review \(Lane 1\) · /,
     );
     const change = await store().getChange(changeId);

@@ -41,7 +41,9 @@ const shoot = async (name: string, title: string, md: string, open: boolean) => 
   await p.goto(`file://${file}`);
   if (open)
     await p.evaluate(() =>
-      document.querySelectorAll("details").forEach((d) => d.setAttribute("open", "")),
+      document.querySelectorAll("details").forEach((d) => {
+        d.setAttribute("open", "");
+      }),
     );
   await p.waitForTimeout(2500);
   await p.screenshot({ path: join(OUT, `${name}.png`), fullPage: true });

@@ -235,7 +235,10 @@ async function untilGraded(a: Agent, planId: string): Promise<Ranking> {
   let last = "";
   for (;;) {
     const r = ok("compare_attempts", await a.mcp.tools.compare_attempts({ planId }));
-    if (r.summary !== last) log("platform", (last = r.summary));
+    if (r.summary !== last) {
+      last = r.summary;
+      log("platform", last);
+    }
     if (r.attempts.every((x) => x.standing !== "grading")) return r;
     if (Date.now() > DEADLINE) throw new Error(`timed out while grading: ${r.summary}`);
     // Each grading attempt's own long-poll paces the loop (no fixed sleeps).
