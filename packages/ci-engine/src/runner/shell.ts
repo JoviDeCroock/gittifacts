@@ -55,19 +55,46 @@ export function workspacePath(cwd: string | undefined): string {
  * - With `$GITTIFACTS_BASE_SHA` set: also fetch the base commit *with* blobs (`--no-filter`),
  *   because later commands run without credentials and could not fetch them lazily.
  *
+ * A snapshot's `.git/config` was last written by repository code (the parent step), so it is
+ * rewritten from scratch before anything runs with the token: url rewrites (`insteadOf`),
+ * credential helpers, an fsmonitor command or filter drivers there would see or redirect it, and
+ * would run again in later evidence steps' own git calls. Global and system config and hooks are
+ * off for this exec ({@link gitTokenEnv}).
+ *
  * Verified against git 2.39 with a local `uploadpack.allowFilter` remote: fresh, same-commit and
- * moved-commit cases, and that no base blob is left missing.
+ * moved-commit cases, and that no base blob is left missing
+ * (test/unit/checkout-script.test.ts runs it with real git).
  */
 export const CHECKOUT_SCRIPT = [
   "set -eu",
   `mkdir -p ${WORKSPACE}`,
   `cd ${WORKSPACE}`,
-  'if [ ! -d .git ]; then git init -q . && git remote add origin "$GITTIFACTS_REMOTE"; else git remote set-url origin "$GITTIFACTS_REMOTE"; fi',
+  "if [ ! -d .git ]; then git init -q .; fi",
+  // Always a blobless partial clone of origin (the fetch below uses --filter=blob:none).
+  "cat > .git/config <<EOF",
+  "[core]",
+  "\trepositoryformatversion = 1",
+  "\tfilemode = true",
+  "\tbare = false",
+  "\tlogallrefupdates = true",
+  "[extensions]",
+  "\tpartialclone = origin",
+  '[remote "origin"]',
+  "\turl = $GITTIFACTS_REMOTE",
+  "\tfetch = +refs/heads/*:refs/remotes/origin/*",
+  "\tpromisor = true",
+  "\tpartialclonefilter = blob:none",
+  "EOF",
   'current="$(git rev-parse -q --verify HEAD^{commit} 2>/dev/null || true)"',
   'if [ "$current" != "$GITTIFACTS_HEAD_SHA" ]; then',
   '  git fetch -q --no-tags --depth=1 --filter=blob:none origin "$GITTIFACTS_HEAD_SHA"',
   '  git -c advice.detachedHead=false checkout -q --force --detach "$GITTIFACTS_HEAD_SHA"',
   "fi",
+  // Evidence steps measure the head commit, not what the parent step (repository code: install
+  // scripts) left in the working tree. Tracked files go back to HEAD; untracked and ignored ones
+  // (node_modules, build output) stay.
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template.
+  'if [ "${GITTIFACTS_RESTORE_TRACKED:-}" = 1 ]; then git reset -q --hard HEAD; fi',
   // No existence check first: in a partial clone `git cat-file -e` would lazily fetch the commit
   // without blobs. `--no-filter` overrides the remote's recorded `partialclonefilter`.
   // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template.
@@ -77,23 +104,52 @@ export const CHECKOUT_SCRIPT = [
   'echo "checked out $(git rev-parse HEAD)"',
 ].join("\n");
 
+/**
+ * Env that gives git a bearer token for one exec, and nothing repository code wrote a say in it:
+ * no global (`~/.gitconfig`, `~/.config/git/config`: writable by repo code and kept in
+ * snapshots) or system config, no hooks, no fsmonitor, no credential helpers. Command-scope config
+ * (`GIT_CONFIG_*`) wins over the repository's `.git/config` for these keys; scripts still rewrite
+ * `.git/config` for the keys that can't be overridden (`insteadOf`, filters). `safe.directory`
+ * comes back here because the image sets it in the system config this turns off.
+ */
+export function gitTokenEnv(token: string): Record<string, string> {
+  const config: [string, string][] = [
+    ["http.extraHeader", `Authorization: Bearer ${token}`],
+    ["core.hooksPath", "/dev/null"],
+    ["core.fsmonitor", "false"],
+    ["credential.helper", ""],
+    ["safe.directory", "*"],
+  ];
+  const env: Record<string, string> = {
+    GIT_TERMINAL_PROMPT: "0",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_COUNT: String(config.length),
+  };
+  config.forEach(([key, value], i) => {
+    env[`GIT_CONFIG_KEY_${i}`] = key;
+    env[`GIT_CONFIG_VALUE_${i}`] = value;
+  });
+  return env;
+}
+
 /** Env for the checkout exec. The token is only ever placed here. */
 export function checkoutEnv(opts: {
   remote: string;
   headSha: string;
   baseSha?: string | undefined;
   token: string;
+  /** Evidence steps: put tracked files back to HEAD over a parent step's snapshot. */
+  restoreTracked?: boolean;
 }): Record<string, string> {
   // PATH is inherited from the image; exec does not inherit any other image env.
   return {
     HOME: RUNNER_HOME,
-    GIT_TERMINAL_PROMPT: "0",
     GITTIFACTS_REMOTE: opts.remote,
     GITTIFACTS_HEAD_SHA: opts.headSha,
     ...(opts.baseSha === undefined ? {} : { GITTIFACTS_BASE_SHA: opts.baseSha }),
-    GIT_CONFIG_COUNT: "1",
-    GIT_CONFIG_KEY_0: "http.extraHeader",
-    GIT_CONFIG_VALUE_0: `Authorization: Bearer ${opts.token}`,
+    ...(opts.restoreTracked === true ? { GITTIFACTS_RESTORE_TRACKED: "1" } : {}),
+    ...gitTokenEnv(opts.token),
   };
 }
 

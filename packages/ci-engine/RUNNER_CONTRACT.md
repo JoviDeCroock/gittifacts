@@ -59,13 +59,19 @@ from a cached snapshot.
 `/workspace` is a shallow, blobless git checkout with a detached `HEAD` at the head commit.
 `origin` is the repository remote, and no credentials are stored.
 
+- **Every checkout** rewrites `.git/config` from scratch (a snapshot's copy was written by
+  repository code), and runs git with the token in command-scope config only, with
+  `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, `core.hooksPath=/dev/null`,
+  `core.fsmonitor=false` and no credential helper (`gitTokenEnv`, `shell.ts`).
 - **Fresh container.** `git init`, fetch, checkout.
 - **Snapshot at the same commit.** The workspace is untouched, so steps see their parent's
   changes (`node_modules`).
 - **Snapshot at another commit** (a cache hit). `git checkout --force` of the new commit;
   untracked and ignored files stay.
 - **Evidence steps.** The base commit is also fetched, with blobs. `git worktree add <dir>
-  $GITTIFACTS_BASE_SHA` and `git diff base head` work offline.
+  $GITTIFACTS_BASE_SHA` and `git diff base head` work offline. Tracked files are put back to
+  `HEAD` (`git reset --hard`) over the parent's snapshot, so evidence measures the commit and not
+  what an install script rewrote; untracked and ignored files (`node_modules`) stay.
 - **Global-scope cached steps** (install-like steps by default).
   - The command runs with only its cache input files in `/workspace`: no `.git` and nothing else.
   - If it fails that way, the engine runs it again on the full checkout and caches it for that
@@ -128,13 +134,31 @@ sensitive-path item, `id: "policy:sensitive-paths"`.
 | `evidence:red-green`, `evidence:public-api`, `evidence:transforms` | `install` snapshot | no |
 | `evidence:coverage`, `evidence:mutation` | `install` snapshot | yes |
 
-The Runner reads `$GITTIFACTS_EVIDENCE_OUT` (JSON, no prefix, ≤ 4 MiB). If that file is missing,
-it uses the last `::evidence::` line. The document must be an `EvidenceItem` or an array of up to
-50, and is validated against `@app/evidence`. A failure is recorded as an evidence error, and the
-classifier escalates.
+The Runner reads `$GITTIFACTS_EVIDENCE_OUT` (JSON, no prefix, ≤ 4 MiB) and nothing else. The
+`::evidence::` stdout line is for people and other callers: the step's output also carries
+whatever repository code printed, so the Runner never reads evidence from it. A missing file is
+an evidence error. The document must be an `EvidenceItem` or an array of up to 50, and is
+validated against `@app/evidence`. A failure is recorded as an evidence error, and the classifier
+escalates.
 
-The opt-in `@cloudflare/ci` engine reads only the `::evidence::` line. It does not pre-fetch the
-base commit; its steps carry `ARTIFACTS_REMOTE` and `ARTIFACTS_TOKEN` (read-only).
+**Trust model (security audit 2026-10-11, H3).** Evidence commands run as the same uid (10001)
+as repository code, and some of them run that code:
+
+| Kind | Repository code at the evidence step | Forgeable by the Change's code |
+|---|---|---|
+| `dependencies`, `policy` | none (fresh checkout) | no |
+| `public-api`, `transforms` | none in the step; starts from the `install` snapshot (`transforms` runs the BASE script with head's `node_modules`) | `transforms`: yes, through a planted `node_modules`; `public-api`: only through type declarations in `node_modules` |
+| `test-run`, `red-green`, `coverage`, `mutation` | the head's tests, test config and test runner plugins, in the same process tree | **yes**: that code can write the evidence file or the reports it is built from |
+
+So Lane 0 trusts the author's test environment for test results, red-green, coverage and
+mutation. What the platform recomputes from git in the Worker (sensitive paths, `.platform/**`,
+migrations, diff size) can't be reached this way. Closing the rest needs the evidence tool to run
+under another uid than the code it measures, with an output directory only it can write, and the
+reports it reads produced outside the author's process tree (not done; see DECISIONS.md).
+
+The opt-in `@cloudflare/ci` engine reads only the `::evidence::` line, so with it any evidence
+is forgeable by repository code; don't turn on Lane 0 with it. It does not pre-fetch the base
+commit; its steps carry `ARTIFACTS_REMOTE` and `ARTIFACTS_TOKEN` (read-only).
 
 ### preview
 

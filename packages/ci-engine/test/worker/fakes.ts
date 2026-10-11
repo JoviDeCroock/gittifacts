@@ -134,7 +134,8 @@ export type FakeEvent = {
     | "intercept"
     | "ca"
     | "hermetic"
-    | "tar";
+    | "tar"
+    | "checkout";
   t: number;
   [key: string]: unknown;
 };
@@ -317,6 +318,19 @@ export class FakeContainer implements ContainerLike {
     }
     if (script.includes("git fetch")) {
       state.hermetic = false;
+      await this.record("checkout", {
+        user: options.user ?? null,
+        restoreTracked: env.GITTIFACTS_RESTORE_TRACKED ?? null,
+        gitConfigGlobal: env.GIT_CONFIG_GLOBAL ?? null,
+        gitConfigNoSystem: env.GIT_CONFIG_NOSYSTEM ?? null,
+        rewritesGitConfig: script.includes("cat > .git/config"),
+        commandConfig: Array.from({ length: Number(env.GIT_CONFIG_COUNT ?? 0) }, (_, i) => [
+          env[`GIT_CONFIG_KEY_${i}`],
+          env[`GIT_CONFIG_KEY_${i}`] === "http.extraHeader"
+            ? "[token]"
+            : env[`GIT_CONFIG_VALUE_${i}`],
+        ]),
+      });
       await write(`fetching from ${env.GITTIFACTS_REMOTE} with ${env.GIT_CONFIG_VALUE_0}\n`);
       if (env.GITTIFACTS_HEAD_SHA === BAD_SHA) {
         await write("fatal: remote error: object not found\n");
@@ -390,9 +404,16 @@ export class FakeContainer implements ContainerLike {
     } else if (evidence !== null) {
       const kind = evidence[1]!;
       const item = { id: kind, kind: "sensitive-paths", status: "ok", patterns: [], hits: [] };
-      if (kind === "policy") await write(`noise\n::evidence::${JSON.stringify(item)}\n`);
-      else if (kind === "mutation") await write("::evidence::{not json\n");
-      else state.files[EVIDENCE_OUT] = JSON.stringify([item]);
+      // Like gittifacts-runner: the document goes to the file, and also to stdout as a marker line.
+      if (kind === "policy") {
+        state.files[EVIDENCE_OUT] = JSON.stringify(item);
+        await write(`noise\n::evidence::${JSON.stringify(item)}\n`);
+      } else if (kind === "mutation") state.files[EVIDENCE_OUT] = "{not json";
+      else if (kind === "forged") {
+        // Repository code (a test, a postinstall) printing a perfect document; the tool wrote none.
+        const forged = { ...item, id: "forged" };
+        await write(`::evidence::${JSON.stringify(forged)}\n`);
+      } else state.files[EVIDENCE_OUT] = JSON.stringify([item]);
       // Baseline exchange (lib/baseline.ts in the sandbox): echo what came in, as what goes out.
       const out = env.GITTIFACTS_BASELINE_OUT;
       const inDir = env.GITTIFACTS_BASELINE_IN;

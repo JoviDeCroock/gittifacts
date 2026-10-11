@@ -49,13 +49,7 @@ import {
   type RunnerTimings,
   type StartFrom,
 } from "./job.js";
-import {
-  EvidenceLineScanner,
-  type LogBucket,
-  R2ChunkedUpload,
-  R2LogSink,
-  TailBuffer,
-} from "./log-sink.js";
+import { type LogBucket, R2ChunkedUpload, R2LogSink, TailBuffer } from "./log-sink.js";
 import { createStreamRedactor, redactText, type StreamRedactor, secretVariants } from "./redact.js";
 import {
   CHECKOUT_SCRIPT,
@@ -134,12 +128,11 @@ function label(value: string): string {
   return value.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 63);
 }
 
-/** Redacted, size-capped step log streamed to R2, with a tail and the `::evidence::` scanner. */
+/** Redacted, size-capped step log streamed to R2, with a tail. */
 class StepLog {
   private readonly sink: R2LogSink;
   private readonly redactor: StreamRedactor;
   private readonly tailBuffer = new TailBuffer(16 * 1024);
-  readonly scanner = new EvidenceLineScanner(MAX_EVIDENCE_BYTES);
   private closed: LogInfo | null = null;
 
   constructor(
@@ -194,7 +187,6 @@ class StepLog {
   private async emit(text: string): Promise<void> {
     if (text === "" || this.closed !== null) return;
     this.tailBuffer.push(text);
-    this.scanner.push(text);
     await this.sink.write(text);
   }
 }
@@ -678,6 +670,7 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
               headSha: job.headSha,
               baseSha: job.baseSha,
               token,
+              restoreTracked: job.kind === "evidence",
             }),
           },
           log,
@@ -1286,6 +1279,12 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
     }
   }
 
+  /**
+   * The evidence document is read from `$GITTIFACTS_EVIDENCE_OUT` only. The step's output is
+   * never a channel: it mixes in whatever repository code printed (install scripts, tests), so an
+   * `::evidence::` line there proves nothing. A missing file is an evidence error, which the
+   * classifier escalates.
+   */
   private async captureEvidence(
     c: ContainerLike,
     job: RunnerJob,
@@ -1293,7 +1292,6 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
   ): Promise<EvidenceCapture> {
     if (job.evidenceKey === undefined)
       return { error: "no evidence key was assigned to this step" };
-    let raw: string | null = null;
     const proc = await c.exec(
       [
         "sh",
@@ -1306,22 +1304,11 @@ export class Runner<E extends RunnerEnv = RunnerEnv> extends DurableObject<E> {
       readCapped(proc.stdout, MAX_EVIDENCE_BYTES + 1),
       proc.exitCode,
     ]);
-    if (code === 0) {
-      if (file.bytes > MAX_EVIDENCE_BYTES) {
-        return { error: `the evidence file exceeds ${MAX_EVIDENCE_BYTES} bytes` };
-      }
-      raw = file.text;
-    } else {
-      raw = log.scanner.finish();
-      if (raw === null) {
-        return {
-          error: log.scanner.overflowed
-            ? `the ::evidence:: line exceeds ${MAX_EVIDENCE_BYTES} bytes`
-            : `no evidence: ${EVIDENCE_OUT} is missing and no ::evidence:: line was printed`,
-        };
-      }
+    if (code !== 0) return { error: `no evidence: ${EVIDENCE_OUT} is missing` };
+    if (file.bytes > MAX_EVIDENCE_BYTES) {
+      return { error: `the evidence file exceeds ${MAX_EVIDENCE_BYTES} bytes` };
     }
-    const parsed = parseEvidenceDocument(log.redact(raw));
+    const parsed = parseEvidenceDocument(log.redact(file.text));
     if (!parsed.ok) return { error: parsed.error.slice(0, 4000) };
     await writeJson(this.objectStore(), job.evidenceKey, parsed.items);
     return { key: job.evidenceKey, count: parsed.items.length };

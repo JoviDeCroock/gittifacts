@@ -203,7 +203,8 @@ export class TailBuffer {
 export const EVIDENCE_LINE_PREFIX = "::evidence::";
 
 /**
- * Remembers the last line starting with `::evidence::` (the fallback evidence channel).
+ * Remembers the last line starting with `::evidence::`: the only evidence channel the opt-in
+ * `@cloudflare/ci` adapter has. The Runner never uses it (repository code shares that output).
  * Lines longer than `maxLine` are discarded and flagged.
  */
 export class EvidenceLineScanner {

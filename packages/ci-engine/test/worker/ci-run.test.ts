@@ -182,7 +182,7 @@ describe("CiRunWorkflow", () => {
     const testExec = (await events(req.runId, "test")).find((x) => x.kind === "exec");
     expect(testExec?.user).toBe("10001:10001");
 
-    // Evidence: file channel (dependencies, coverage) and ::evidence:: line channel (policy).
+    // Evidence comes from the file the tool writes ($GITTIFACTS_EVIDENCE_OUT) for every kind.
     const summary = await sinkSummary(req);
     expect(summary.status).toBe("passed");
     expect(summary.evidence.map((i) => i.id).sort()).toEqual([
@@ -255,6 +255,51 @@ describe("CiRunWorkflow", () => {
     expect(summary.evidenceErrors).toEqual([
       { step: "evidence:coverage", message: "skipped: requires every pipeline step to pass" },
     ]);
+  });
+
+  it("takes evidence only from the tool's file: a forged ::evidence:: line in the output is an evidence error", async () => {
+    // H3 (security audit 2026-10-11): repository code shares the step's output, so a printed
+    // `::evidence::` line must never become signed evidence.
+    const forged: EvidenceStepSpec = {
+      name: "evidence:red-green",
+      command: 'gittifacts-runner evidence forged --base "$GITTIFACTS_BASE_SHA"',
+      parent: "install",
+      requiresGreen: false,
+    };
+    const req = request("forged", {
+      pipeline: pipeline([step("install", "fake:touch=node_modules")]),
+      evidenceSteps: [evidence("evidence:dependencies", null, false), forged],
+    });
+    expect(await runToCompletion(req)).toMatchObject({ status: "passed", evidenceItems: 1 });
+    const summary = await sinkSummary(req);
+    expect(summary.evidence.map((i) => i.id)).toEqual(["dependencies"]);
+    expect(summary.evidenceErrors).toEqual([
+      { step: "evidence:red-green", message: expect.stringMatching(/evidence\.json is missing/) },
+    ]);
+    expect(await text(RunKeys.log(req.runId, "evidence:red-green"))).toContain('"id":"forged"');
+
+    // Every checkout rewrites .git/config and gives git the token with global/system config,
+    // hooks, fsmonitor and credential helpers off. Evidence steps also put tracked files back to
+    // HEAD over the install snapshot; user steps keep what their parent left.
+    const checkout = async (s: string) =>
+      (await events(req.runId, s)).find((x) => x.kind === "checkout");
+    for (const s of ["install", "evidence:dependencies", "evidence:red-green"]) {
+      expect(await checkout(s)).toMatchObject({
+        user: "10001:10001",
+        gitConfigGlobal: "/dev/null",
+        gitConfigNoSystem: "1",
+        rewritesGitConfig: true,
+        commandConfig: [
+          ["http.extraHeader", "[token]"],
+          ["core.hooksPath", "/dev/null"],
+          ["core.fsmonitor", "false"],
+          ["credential.helper", ""],
+          ["safe.directory", "*"],
+        ],
+      });
+    }
+    expect((await checkout("install"))?.restoreTracked).toBeNull();
+    expect((await checkout("evidence:red-green"))?.restoreTracked).toBe("1");
   });
 
   it("retries an infrastructure failure once, then marks the step errored", async () => {
