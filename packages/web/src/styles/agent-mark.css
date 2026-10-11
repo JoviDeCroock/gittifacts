@@ -1,0 +1,33 @@
+/*
+ * Agent marks (components/AgentMark.tsx). A square in ink and paper only: the glyph names the
+ * agent, the ground (solid or outline) and the corner (square or notched) keep two agents apart.
+ * Tabular numerals so "07" and "12" sit alike; no hue, never a band (the Band Means Lane Rule).
+ */
+.avatar.agent-mark {
+  border-radius: 6px;
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+.avatar.agent-mark--solid {
+  background: var(--text);
+  color: var(--surface);
+}
+.avatar.agent-mark--outline {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--text);
+}
+/* The notch: the top-right corner cut at 45 degrees, like a clipped card. On the outline ground
+   a hairline across the cut keeps the edge continuous. */
+.avatar.agent-mark--notched {
+  border-start-end-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 28%) 0, 100% 28%, 100% 100%, 0 100%);
+}
+.avatar.agent-mark--outline.agent-mark--notched {
+  background:
+    linear-gradient(225deg, transparent calc(14% - 1px), var(--text) calc(14% - 1px) calc(14% + 0.75px), transparent calc(14% + 0.75px)),
+    var(--surface);
+}

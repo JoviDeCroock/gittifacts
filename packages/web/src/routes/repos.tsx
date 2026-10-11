@@ -7,9 +7,9 @@ import { gettingStartedApi } from "../api/getting-started.js";
 import type { RepoSummary } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { GettingStarted } from "../components/GettingStarted.js";
-import { Fleet } from "../components/Fleet.js";
+import { Fleet, fleetRows, rememberedFleet } from "../components/Fleet.js";
 import { Page } from "../components/Shell.js";
-import { EmptyState, ErrorState, LaneTag, Loading, Meter } from "../components/ui.js";
+import { EmptyState, ErrorState, LaneTag, Meter, SkeletonHead, SkeletonRows } from "../components/ui.js";
 import { checklistView, POLL_MS, readDismissed, writeDismissed } from "../lib/getting-started.js";
 import { LANES, pct, shadowProgress } from "../lib/lanes.js";
 import { relative } from "../lib/time.js";
@@ -138,6 +138,7 @@ function byAttention(a: RepoSummary, b: RepoSummary): number {
 export function Repos() {
   const res = useResource(() => api.repos(), []);
   const gs = useResource(() => gettingStartedApi.state(), []);
+  const audit = useResource(() => api.audit({ limit: 100 }), []);
   const me = principal.value;
   const dismissed = useSignal(me ? readDismissed(me.id) : false);
   const gsState = gs.state.value.status === "ok" ? gs.state.value.data : null;
@@ -167,61 +168,88 @@ export function Repos() {
   const plansWaiting = repos.reduce((n, r) => n + (r.counts.plansAwaitingApproval ?? 0), 0);
   const rolling = repos.reduce((n, r) => n + r.counts.rollingOut, 0);
   const withWaiting = repos.filter((r) => r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0) > 0).length;
+  // One arrival, not three: the checklist, the band and the list each load on their own, so the
+  // page holds a skeleton shaped like itself until all three have answered (errors count).
+  const settled = st.status !== "loading" && gs.state.value.status !== "loading" && audit.state.value.status !== "loading";
+  const fleet = audit.state.value;
+  // Triage order: when an agent waits on a person, the band leads; otherwise the list does.
+  const bandFirst = settled ? fleetRows(fleet, minuteClock.value).some((r) => r.state === "waiting") : rememberedFleet().waiting;
+  const band = <Fleet state={settled ? fleet : { status: "loading" }} me={me?.id ?? null} />;
 
   return (
     <Page
       title="Dashboard"
       wide
       meta={
-        st.status === "ok" && repos.length > 0 ? (
+        settled && st.status === "ok" && repos.length > 0 ? (
           <p class="repos-summary">
             {waiting + plansWaiting > 0 ? (
               <>
                 {waiting > 0 ? <b class="tnum">{plural(waiting, "change")}</b> : null}
                 {waiting > 0 && plansWaiting > 0 ? " and " : null}
-                {plansWaiting > 0 ? <b class="tnum">{plural(plansWaiting, "plan")}</b> : null} {waiting + plansWaiting === 1 ? "waits" : "wait"} for you across{" "}
+                {plansWaiting > 0 ? <b class="tnum">{plural(plansWaiting, "plan")}</b> : null} {waiting + plansWaiting === 1 ? "waits" : "wait"} for review in{" "}
                 {plural(withWaiting, "repository", "repositories")}.
               </>
             ) : (
-              "Nothing waits for your review."
+              "Nothing waits for review."
             )}{" "}
             {rolling > 0 ? `${plural(rolling, "rollout")} in flight.` : null}
           </p>
         ) : null
       }
     >
-      {gsState && view ? <GettingStarted state={gsState} view={view} onDismiss={onDismiss} onChanged={onChanged} /> : null}
-      <Fleet />
-      {st.status === "loading" ? <Loading label="Loading repositories" lines={6} /> : null}
-      {st.status === "error" ? <ErrorState error={st.error} what="your repositories" onRetry={res.reload} /> : null}
-      {st.status === "ok" && repos.length === 0 && view?.mode !== "full" ? (
-        <EmptyState icon="git-branch" title="No repositories yet">
-          <p>
-            Ask your agent to <code>use {window.location.origin}/start</code>
-            {GITHUB_SURFACES ? (
-              <>
-                , connect the GitHub App in <a href="/settings/github">GitHub settings</a>,
-              </>
-            ) : null}{" "}
-            or ask a repo admin to add you. Changes then show up here by lane.
-          </p>
-        </EmptyState>
-      ) : null}
-      {st.status === "ok" && repos.length > 0 ? (
+      {!settled ? (
+        <div class="dash-loading" role="status" aria-live="polite" data-testid="dashboard-loading">
+          <span class="sr-only">Loading your dashboard</span>
+          {bandFirst ? band : null}
+          <SkeletonHead />
+          <SkeletonRows count={4} mark="none" />
+          {bandFirst ? null : band}
+        </div>
+      ) : (
         <>
-          <div class="repo-cols" aria-hidden="true">
-            <span>Repository</span>
-            <span>Review</span>
-            <span>Open by lane</span>
-            <span>Auto-merge agreement</span>
-          </div>
-          <ul class="rows repo-list">
-            {repos.map((r) => (
-              <RepoRow key={r.id} repo={r} />
-            ))}
-          </ul>
+          {gsState && view ? <GettingStarted state={gsState} view={view} onDismiss={onDismiss} onChanged={onChanged} /> : null}
+          {bandFirst ? band : null}
+          {st.status === "error" ? <ErrorState error={st.error} what="your repositories" onRetry={res.reload} /> : null}
+          {st.status === "ok" && repos.length === 0 && view?.mode !== "full" ? (
+            <EmptyState icon="git-branch" title="No repositories yet">
+              <p>
+                Ask your agent to <code>use {window.location.origin}/start</code>
+                {GITHUB_SURFACES ? (
+                  <>
+                    , connect the GitHub App in <a href="/settings/github">GitHub settings</a>,
+                  </>
+                ) : null}{" "}
+                or ask a repo admin to add you. Changes then show up here by lane.
+              </p>
+            </EmptyState>
+          ) : null}
+          {st.status === "ok" && repos.length > 0 ? (
+            <section class="repos" aria-labelledby="repos-title" data-testid="repo-list">
+              <div class="repos__head">
+                <h2 id="repos-title" class="repos__title">
+                  Repositories
+                </h2>
+                <p class="repos__sum">
+                  <span class="tnum">{repos.length}</span>, what waits for review first
+                </p>
+              </div>
+              <div class="repo-cols" aria-hidden="true">
+                <span>Repository</span>
+                <span>Review</span>
+                <span>Open by lane</span>
+                <span>Auto-merge agreement</span>
+              </div>
+              <ul class="rows repo-list">
+                {repos.map((r) => (
+                  <RepoRow key={r.id} repo={r} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+          {bandFirst ? null : band}
         </>
-      ) : null}
+      )}
     </Page>
   );
 }

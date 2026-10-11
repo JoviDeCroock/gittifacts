@@ -76,6 +76,10 @@ export interface MeResponse {
 export interface CreateAgentInput {
   name: string;
   scopes: Scope[];
+  /** Limit the agent to these repositories; omitted: every repository its owner can reach. */
+  repoIds?: string[];
+  /** When its token stops working (the platform's default is 90). */
+  expiresInDays?: number;
 }
 
 export interface CreateAgentResponse {
@@ -183,8 +187,19 @@ export interface RolloutResponse {
 
 export interface AuditQuery {
   subject?: string;
+  /** One principal's events (its id), exact. */
+  actor?: string;
+  /** One action (`plan.approved`), exact. */
+  action?: string;
   cursor?: string;
   limit?: number;
+}
+
+/** What a subject is called, for reading: the change or plan title, the repo it lives in. */
+export interface AuditSubjectRef {
+  title: string;
+  repoId?: string | null;
+  repoName?: string | null;
 }
 
 export interface AuditPage {
@@ -194,6 +209,8 @@ export interface AuditPage {
   chain: { verified: boolean; brokenAt?: number };
   /** GAP: names and kinds for the principals referenced by `events`. */
   principals?: Record<string, PrincipalRef>;
+  /** GAP (not served by the platform yet): titles for the subjects referenced by `events`. */
+  subjects?: Record<string, AuditSubjectRef>;
 }
 
 // ---------------------------------------------------------------- claimable projects (onboarding O3)

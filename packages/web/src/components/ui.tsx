@@ -8,7 +8,9 @@ import { describeError } from "../api/client.js";
 import type { PrincipalKind } from "../api/types.js";
 import { LANES } from "../lib/lanes.js";
 import { type StatusMeta, type Tone, VERDICT } from "../lib/vocab.js";
+import { AgentMark } from "./AgentMark.js";
 import { Icon, type IconId } from "./Icon.js";
+import "../styles/loading.css";
 
 // ---------------------------------------------------------------- button
 
@@ -164,8 +166,13 @@ function initials(name: string): string {
   return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")).toUpperCase();
 }
 
-/** People are circles with initials; agents are squares with a bot glyph; the platform is a server. */
-export function Avatar({ kind, name, size = 24 }: { kind: PrincipalKind; name: string; size?: number }) {
+/**
+ * People are circles with initials; agents are squares with their mark (AgentMark: one face per
+ * agent on every screen); the platform is a square with a server glyph. `id` keeps two agents with
+ * the same name apart.
+ */
+export function Avatar({ kind, name, id, size = 24 }: { kind: PrincipalKind; name: string; id?: string; size?: number }) {
+  if (kind === "agent") return <AgentMark name={name} id={id} size={size} />;
   if (kind === "human") {
     return (
       <span class="avatar avatar--human" style={{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.42)}px` }} aria-hidden="true">
@@ -175,16 +182,16 @@ export function Avatar({ kind, name, size = 24 }: { kind: PrincipalKind; name: s
   }
   return (
     <span class={`avatar avatar--${kind}`} style={{ width: `${size}px`, height: `${size}px` }} aria-hidden="true">
-      <Icon name={kind === "agent" ? "bot" : "server"} size={Math.round(size * 0.66)} />
+      <Icon name="server" size={Math.round(size * 0.66)} />
     </span>
   );
 }
 
-export function Who({ kind, name, owner, size = 22, compact = false }: { kind: PrincipalKind; name: string; owner?: string | null; size?: number; compact?: boolean }) {
+export function Who({ kind, name, id, owner, size = 22, compact = false }: { kind: PrincipalKind; name: string; id?: string; owner?: string | null; size?: number; compact?: boolean }) {
   const spoken = kind === "agent" ? `Agent ${name}${owner ? `, run by ${owner}` : ""}` : kind === "system" ? `Platform: ${name}` : name;
   return (
     <span class={`who who--${kind}`} aria-label={spoken}>
-      <Avatar kind={kind} name={name} size={size} />
+      <Avatar kind={kind} name={name} id={id} size={size} />
       <span class="who__name" aria-hidden="true">
         {name}
         {!compact && kind === "agent" ? <span class="who__role"> agent{owner ? ` of ${owner}` : ""}</span> : null}
@@ -278,11 +285,46 @@ export function Skeleton({ lines = 3, block = false }: { lines?: number; block?:
   );
 }
 
-export function Loading({ label, lines = 4 }: { label: string; lines?: number }) {
+/**
+ * What a loading screen holds while it waits: generic lines, or the final layout's shape so the
+ * arrival swaps content in place instead of re-laying out the page.
+ * - `rows`: list rows (a 36px square or circle, a name and a line under it; 64px tall);
+ * - `table`: dense one-line rows like the audit log (48px).
+ * `SkeletonHead` holds a section title and its sum line above them.
+ */
+export type LoadingShape = "lines" | "rows" | "table";
+
+export function SkeletonRows({ count = 3, shape = "rows", mark = "square" }: { count?: number; shape?: Exclude<LoadingShape, "lines">; mark?: "square" | "circle" | "none" }) {
   return (
-    <div class="loading" role="status" aria-live="polite">
+    <ul class={`skel-rows skel-rows--${shape}`} aria-hidden="true">
+      {Array.from({ length: count }, (_, i) => (
+        <li key={i} class="skel-row">
+          {mark !== "none" ? <span class={`skel-mark skel-mark--${mark}`} /> : null}
+          <span class="skel-text">
+            <span class="skeleton__line" style={{ inlineSize: `${[42, 34, 48, 38][i % 4]}%` }} />
+            {shape === "rows" ? <span class="skeleton__line skel-line--meta" style={{ inlineSize: `${[64, 72, 56, 68][i % 4]}%` }} /> : null}
+          </span>
+          {shape === "rows" ? <span class="skeleton__line skel-end" /> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function SkeletonHead({ id }: { id?: string }) {
+  return (
+    <div class="skel-head" aria-hidden="true" id={id}>
+      <span class="skeleton__line skel-head__title" />
+      <span class="skeleton__line skel-line--meta skel-head__sum" />
+    </div>
+  );
+}
+
+export function Loading({ label, lines = 4, shape = "lines", mark }: { label: string; lines?: number; shape?: LoadingShape; mark?: "square" | "circle" | "none" }) {
+  return (
+    <div class={`loading loading--${shape}`} role="status" aria-live="polite">
       <span class="sr-only">{label}</span>
-      <Skeleton lines={lines} />
+      {shape === "lines" ? <Skeleton lines={lines} /> : <SkeletonRows count={lines} shape={shape} mark={mark} />}
     </div>
   );
 }

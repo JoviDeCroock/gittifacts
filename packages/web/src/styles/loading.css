@@ -1,0 +1,64 @@
+/*
+ * Shaped loading (components/ui.tsx: Loading shape, SkeletonRows, SkeletonHead). The placeholder
+ * takes the final layout's size, so content arrives in place. The lines reuse `.skeleton__line`
+ * (components.css), so `shimmer` stays the one loading loop.
+ */
+.skel-rows {
+  list-style: none;
+  border-block-start: 1px solid var(--rule);
+}
+.skel-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  border-block-end: 1px solid var(--rule);
+}
+.skel-rows--rows .skel-row {
+  min-block-size: 64px;
+  padding: var(--s-3) var(--s-2);
+}
+.skel-rows--table .skel-row {
+  min-block-size: 48px;
+  padding-block: var(--s-2);
+}
+.skel-mark {
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: 6px;
+  background: var(--panel);
+}
+.skel-rows--table .skel-mark {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+.skel-mark--circle {
+  border-radius: 50%;
+}
+.skel-text {
+  display: grid;
+  gap: 8px;
+  min-inline-size: 0;
+}
+.skel-line--meta {
+  block-size: 10px;
+  opacity: 0.7;
+}
+.skel-end {
+  inline-size: 6rem;
+}
+.skel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  min-block-size: var(--tap);
+  margin-block-end: var(--s-2);
+}
+.skel-head__title {
+  inline-size: 9rem;
+  block-size: 18px;
+}
+.skel-head__sum {
+  inline-size: 14rem;
+}
