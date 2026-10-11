@@ -31,7 +31,10 @@ export async function pollUntil<T>(
     }
     const left = deadline - Date.now();
     if (left <= 0) {
-      const seen = lastError !== undefined ? `last error: ${String(lastError)}` : `last value: ${JSON.stringify(last)?.slice(0, 500)}`;
+      const seen =
+        lastError !== undefined
+          ? `last error: ${String(lastError)}`
+          : `last value: ${JSON.stringify(last)?.slice(0, 500)}`;
       throw new Error(`timed out after ${timeoutMs} ms waiting for ${what} (${seen})`);
     }
     await new Promise((r) => setTimeout(r, Math.min(interval, left)));

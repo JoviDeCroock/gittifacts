@@ -48,7 +48,14 @@ const MembersSchema = z.object({
 
 const AddMemberBody = z
   .object({
-    email: z.string().email().max(320).optional().describe("Their e-mail. Unless an account with that verified e-mail exists, they get an invite link instead (202)"),
+    email: z
+      .string()
+      .email()
+      .max(320)
+      .optional()
+      .describe(
+        "Their e-mail. Unless an account with that verified e-mail exists, they get an invite link instead (202)",
+      ),
     principalId: z.string().min(1).max(64).optional().describe("A human principal id (hu_…)"),
     role: RepoRoleSchema,
   })

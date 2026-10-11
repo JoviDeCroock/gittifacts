@@ -254,7 +254,11 @@ describe("overlapping work (workerd: real DOs + Workflows)", () => {
       );
       const statusA = await a.mcp.tools.get_change_status({ changeId: changeA });
       if (statusA.isError) throw new Error(JSON.stringify(statusA.content));
-      expectOverlap(statusA.structuredContent.overlaps, { changeId: changeB, title: titleB, agent: b }, plan.id);
+      expectOverlap(
+        statusA.structuredContent.overlaps,
+        { changeId: changeB, title: titleB, agent: b },
+        plan.id,
+      );
       // C has nothing pushed but said src/y.ts: compared on that, no overlap, not unchecked.
       expect(statusA.structuredContent.overlaps?.unchecked).toEqual([]);
       expect(statusA.structuredContent.overlaps?.comparedPaths.sort()).toEqual([

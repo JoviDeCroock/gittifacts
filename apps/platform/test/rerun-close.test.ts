@@ -9,7 +9,14 @@ import type { CoordinatorApi } from "@app/coordinator";
 import type { Change } from "@app/domain";
 import { createPlatformClient } from "@app/mcp/client";
 import { describe, expect, it, vi } from "vitest";
-import { addMember, changeFixture, evidenceFixture, HEAD_SHA, seedWorld, store } from "./fixtures.js";
+import {
+  addMember,
+  changeFixture,
+  evidenceFixture,
+  HEAD_SHA,
+  seedWorld,
+  store,
+} from "./fixtures.js";
 import {
   call,
   createAgent,

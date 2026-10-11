@@ -5,11 +5,19 @@
  */
 import { useSignal } from "@preact/signals";
 import { useRef } from "preact/hooks";
-import { BreakableCode } from "./ui.js";
 import { Icon } from "./Icon.js";
+import { BreakableCode } from "./ui.js";
 import "../styles/copy-line.css";
 
-export function CopyLine({ text, label, testId }: { text: string; label: string; testId?: string }) {
+export function CopyLine({
+  text,
+  label,
+  testId,
+}: {
+  text: string;
+  label: string;
+  testId?: string;
+}) {
   const state = useSignal<"idle" | "done" | "failed">("idle");
   const timer = useRef<number | undefined>(undefined);
   async function copy() {
@@ -27,14 +35,24 @@ export function CopyLine({ text, label, testId }: { text: string; label: string;
       <span class="copy-line__text">
         <BreakableCode text={text} />
       </span>
-      <button type="button" class="copy-line__btn" aria-label={label} data-state={state.value} onClick={copy}>
+      <button
+        type="button"
+        class="copy-line__btn"
+        aria-label={label}
+        data-state={state.value}
+        onClick={copy}
+      >
         <Icon name={state.value === "done" ? "check" : "copy"} size={16} />
         <span class="copy-line__done" aria-hidden="true">
           {state.value === "failed" ? "Select it instead" : "Copied"}
         </span>
       </button>
       <span class="sr-only" aria-live="polite">
-        {state.value === "done" ? `Copied ${text}` : state.value === "failed" ? "Copying failed. Select the text and copy it instead." : ""}
+        {state.value === "done"
+          ? `Copied ${text}`
+          : state.value === "failed"
+            ? "Copying failed. Select the text and copy it instead."
+            : ""}
       </span>
     </div>
   );

@@ -6,9 +6,13 @@
  */
 import { expect, expectNoHorizontalScroll, test } from "../../lib/fixtures.js";
 
-test("merge queue: an entry that overlaps another open change says so and links to it (demo data)", async ({ authed: page }) => {
+test("merge queue: an entry that overlaps another open change says so and links to it (demo data)", async ({
+  authed: page,
+}) => {
   await page.goto("/repos/repo_billing/queue?mock");
-  const entry = page.locator(".q-entry").filter({ has: page.locator('a.q-entry__title[href="/changes/chg_lc3m9"]') });
+  const entry = page
+    .locator(".q-entry")
+    .filter({ has: page.locator('a.q-entry__title[href="/changes/chg_lc3m9"]') });
   const note = entry.getByTestId("queue-overlap");
   await expect(note).toHaveCount(1);
   await expect(note).toContainText("fleet-coder-07");

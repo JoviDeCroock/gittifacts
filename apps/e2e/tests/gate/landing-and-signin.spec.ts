@@ -5,7 +5,11 @@
  */
 import { expect, expectNoHorizontalScroll, test } from "../../lib/fixtures.js";
 
-async function signInThroughForm(page: import("@playwright/test").Page, email: string, password: string) {
+async function signInThroughForm(
+  page: import("@playwright/test").Page,
+  email: string,
+  password: string,
+) {
   const form = page.locator("form").filter({ has: page.locator('input[type="password"]') });
   await form.locator('input[type="email"]').fill(email);
   await form.locator('input[type="password"]').fill(password);
@@ -21,7 +25,9 @@ test.describe("landing /", () => {
     await expectNoHorizontalScroll(page);
   });
 
-  test("signed in: the session link says where the dashboard is, and it opens", async ({ authed: page }) => {
+  test("signed in: the session link says where the dashboard is, and it opens", async ({
+    authed: page,
+  }) => {
     await page.goto("/");
     await expect(page.locator("html")).toHaveAttribute("data-authed", "");
     const links = page.locator("a[data-session-link]");
@@ -33,7 +39,10 @@ test.describe("landing /", () => {
 });
 
 test.describe("redirects", () => {
-  test("signed out /dashboard → /signin → the dashboard after signing in", async ({ page, human }) => {
+  test("signed out /dashboard → /signin → the dashboard after signing in", async ({
+    page,
+    human,
+  }) => {
     await page.goto("/dashboard");
     // The dashboard is where sign-in lands anyway, so it needs no `next`.
     await expect(page).toHaveURL(/\/signin(\?next=%2Fdashboard)?$/);
@@ -44,13 +53,18 @@ test.describe("redirects", () => {
 
   test("a printed Change link survives sign-in", async ({ page, human, world }) => {
     await page.goto(`/changes/${world.changeId}`);
-    await expect(page).toHaveURL(new RegExp(`/signin\\?next=${encodeURIComponent(`/changes/${world.changeId}`)}$`));
+    await expect(page).toHaveURL(
+      new RegExp(`/signin\\?next=${encodeURIComponent(`/changes/${world.changeId}`)}$`),
+    );
     await signInThroughForm(page, human.email, human.password);
     await expect(page).toHaveURL(new RegExp(`/changes/${world.changeId}$`));
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 
-  test("signed in, /signin?next= goes straight to next; another origin is refused", async ({ authed: page, world }) => {
+  test("signed in, /signin?next= goes straight to next; another origin is refused", async ({
+    authed: page,
+    world,
+  }) => {
     await page.goto(`/signin?next=${encodeURIComponent(`/plans/${world.planId}`)}`);
     await expect(page).toHaveURL(new RegExp(`/plans/${world.planId}$`));
     await page.goto(`/signin?next=${encodeURIComponent("//evil.example/x")}`);

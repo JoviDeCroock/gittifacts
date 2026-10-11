@@ -23,11 +23,11 @@ import type {
   EvidenceResponse,
   LinkedIssue,
   MeResponse,
-  PrincipalRef,
   Principal,
+  PrincipalRef,
+  Repo,
   RepoDetail,
   RepoSummary,
-  Repo,
   ReviewInput,
   RolloutResponse,
 } from "./types.js";
@@ -48,7 +48,13 @@ export class ApiError extends Error {
   /** What the server says to do next (docs/api.md error envelope). */
   readonly fix: ErrorFix | null;
 
-  constructor(status: number, code: string, message: string, details?: unknown, fix: ErrorFix | null = null) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    details?: unknown,
+    fix: ErrorFix | null = null,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
@@ -60,7 +66,9 @@ export class ApiError extends Error {
 
 /** One key per user intent: reuse it when retrying the same action so it applies once. */
 export function newIdempotencyKey(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `k_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `k_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
 export interface RawResponse {
@@ -74,7 +82,12 @@ function isErrorBody(body: unknown): body is ApiErrorBody {
   return typeof err === "object" && err !== null && "code" in err && "message" in err;
 }
 
-async function send(method: Method, path: string, body?: unknown, idempotencyKey?: string): Promise<RawResponse> {
+async function send(
+  method: Method,
+  path: string,
+  body?: unknown,
+  idempotencyKey?: string,
+): Promise<RawResponse> {
   if (isMockMode()) {
     const mock = await import("./mock.js");
     return mock.handle(method, path, body, idempotencyKey);
@@ -91,7 +104,12 @@ async function send(method: Method, path: string, body?: unknown, idempotencyKey
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (cause) {
-    throw new ApiError(0, "network", "Could not reach the server. Check your connection and retry.", cause);
+    throw new ApiError(
+      0,
+      "network",
+      "Could not reach the server. Check your connection and retry.",
+      cause,
+    );
   }
   const text = await res.text();
   let parsed: unknown = null;
@@ -119,7 +137,12 @@ function readFix(err: object): ErrorFix | null {
   };
 }
 
-export async function request<T>(method: Method, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+export async function request<T>(
+  method: Method,
+  path: string,
+  body?: unknown,
+  idempotencyKey?: string,
+): Promise<T> {
   const res = await send(method, path, body, idempotencyKey);
   if (res.status >= 200 && res.status < 300) return res.body as T;
   if (isErrorBody(res.body)) {
@@ -130,12 +153,18 @@ export async function request<T>(method: Method, path: string, body?: unknown, i
 }
 
 /** zod and the domain schemas load on first use, keeping them out of the entry chunk. */
-const schemas = () => import("@app/domain").then((m) => ({ Evidence: m.Evidence, Plan: m.Plan, Tour: m.Tour }));
+const schemas = () =>
+  import("@app/domain").then((m) => ({ Evidence: m.Evidence, Plan: m.Plan, Tour: m.Tour }));
 
 function validated<S extends z.ZodType>(schema: S, value: unknown, what: string): z.infer<S> {
   const result = schema.safeParse(value);
   if (!result.success) {
-    throw new ApiError(502, "invalid_response", `The ${what} from the server did not match the expected shape.`, result.error.issues);
+    throw new ApiError(
+      502,
+      "invalid_response",
+      `The ${what} from the server did not match the expected shape.`,
+      result.error.issues,
+    );
   }
   return result.data;
 }
@@ -154,9 +183,12 @@ export const api = {
   me: () => request<MeResponse>("GET", "/api/v1/me"),
   principals: () => request<{ principals: Principal[] }>("GET", "/api/v1/principals"),
   /** GAP: not in docs/api.md. */
-  principal: (id: string) => request<{ principal: PrincipalRef }>("GET", `/api/v1/principals/${enc(id)}`),
-  createAgent: (input: CreateAgentInput, key?: string) => request<CreateAgentResponse>("POST", "/api/v1/principals/agents", input, key),
-  revokeTokens: (id: string, key?: string) => request<{ revoked: number }>("DELETE", `/api/v1/principals/${enc(id)}/tokens`, undefined, key),
+  principal: (id: string) =>
+    request<{ principal: PrincipalRef }>("GET", `/api/v1/principals/${enc(id)}`),
+  createAgent: (input: CreateAgentInput, key?: string) =>
+    request<CreateAgentResponse>("POST", "/api/v1/principals/agents", input, key),
+  revokeTokens: (id: string, key?: string) =>
+    request<{ revoked: number }>("DELETE", `/api/v1/principals/${enc(id)}/tokens`, undefined, key),
 
   // repos
   repos: () => request<{ repos: RepoSummary[] }>("GET", "/api/v1/repos"),
@@ -166,46 +198,79 @@ export const api = {
 
   // plans
   repoPlans: async (repoId: string) => {
-    const [res, { Plan }] = await Promise.all([request<{ plans: unknown[] }>("GET", `/api/v1/repos/${enc(repoId)}/plans`), schemas()]);
+    const [res, { Plan }] = await Promise.all([
+      request<{ plans: unknown[] }>("GET", `/api/v1/repos/${enc(repoId)}/plans`),
+      schemas(),
+    ]);
     return { plans: res.plans.map((p) => validated(Plan, p, "plan")) };
   },
   plan: async (planId: string) => {
-    const [res, { Plan }] = await Promise.all([request<{ plan: unknown; changes: Change[] }>("GET", `/api/v1/plans/${enc(planId)}`), schemas()]);
+    const [res, { Plan }] = await Promise.all([
+      request<{ plan: unknown; changes: Change[] }>("GET", `/api/v1/plans/${enc(planId)}`),
+      schemas(),
+    ]);
     return { plan: validated(Plan, res.plan, "plan"), changes: res.changes };
   },
   /** A person drafts a Plan themselves; someone else (maintainer or owner) approves it. */
-  createPlan: (input: { repoId: string; title: string; intent: string; acceptanceCriteria: string[] }, key?: string) =>
-    request<{ plan: Plan }>("POST", "/api/v1/plans", input, key),
+  createPlan: (
+    input: { repoId: string; title: string; intent: string; acceptanceCriteria: string[] },
+    key?: string,
+  ) => request<{ plan: Plan }>("POST", "/api/v1/plans", input, key),
   approvePlan: (planId: string, comment?: string, key?: string) =>
-    request<{ plan: Plan }>("POST", `/api/v1/plans/${enc(planId)}/approve`, comment ? { comment } : {}, key),
+    request<{ plan: Plan }>(
+      "POST",
+      `/api/v1/plans/${enc(planId)}/approve`,
+      comment ? { comment } : {},
+      key,
+    ),
   rejectPlan: (planId: string, comment: string, key?: string) =>
     request<{ plan: Plan }>("POST", `/api/v1/plans/${enc(planId)}/reject`, { comment }, key),
   /** The author withdraws its own draft (ends as rejected, audited as withdrawn). */
   withdrawPlan: (planId: string, reason?: string, key?: string) =>
-    request<{ plan: Plan }>("POST", `/api/v1/plans/${enc(planId)}/withdraw`, reason ? { reason } : {}, key),
+    request<{ plan: Plan }>(
+      "POST",
+      `/api/v1/plans/${enc(planId)}/withdraw`,
+      reason ? { reason } : {},
+      key,
+    ),
 
   // changes
   changes: (repoId: string, filter: { status?: string; lane?: string } = {}) =>
-    request<{ changes: ChangeSummary[] }>("GET", `/api/v1/repos/${enc(repoId)}/changes${query(filter)}`),
+    request<{ changes: ChangeSummary[] }>(
+      "GET",
+      `/api/v1/repos/${enc(repoId)}/changes${query(filter)}`,
+    ),
   change: (changeId: string) => request<ChangeDetail>("GET", `/api/v1/changes/${enc(changeId)}`),
-  diff: (changeId: string) => request<{ diff: ChangeDiff }>("GET", `/api/v1/changes/${enc(changeId)}/diff`),
+  diff: (changeId: string) =>
+    request<{ diff: ChangeDiff }>("GET", `/api/v1/changes/${enc(changeId)}/diff`),
   evidence: async (changeId: string): Promise<EvidenceResponse> => {
     const [res, { Evidence }] = await Promise.all([
-      request<{ evidence: unknown; verification: EvidenceResponse["verification"] }>("GET", `/api/v1/changes/${enc(changeId)}/evidence`),
+      request<{ evidence: unknown; verification: EvidenceResponse["verification"] }>(
+        "GET",
+        `/api/v1/changes/${enc(changeId)}/evidence`,
+      ),
       schemas(),
     ]);
-    return { evidence: validated(Evidence, res.evidence, "evidence bundle"), verification: res.verification };
+    return {
+      evidence: validated(Evidence, res.evidence, "evidence bundle"),
+      verification: res.verification,
+    };
   },
   tour: async (changeId: string) => {
-    const [res, { Tour }] = await Promise.all([request<{ tour: unknown }>("GET", `/api/v1/changes/${enc(changeId)}/tour`), schemas()]);
+    const [res, { Tour }] = await Promise.all([
+      request<{ tour: unknown }>("GET", `/api/v1/changes/${enc(changeId)}/tour`),
+      schemas(),
+    ]);
     return { tour: validated(Tour, res.tour, "tour") };
   },
   review: (changeId: string, input: ReviewInput, key?: string) =>
     request<{ change: Change }>("POST", `/api/v1/changes/${enc(changeId)}/review`, input, key),
-  rollout: (changeId: string) => request<RolloutResponse>("GET", `/api/v1/changes/${enc(changeId)}/rollout`),
+  rollout: (changeId: string) =>
+    request<RolloutResponse>("GET", `/api/v1/changes/${enc(changeId)}/rollout`),
   kill: (changeId: string, reason: string, key?: string) =>
     request<{ change: Change }>("POST", `/api/v1/changes/${enc(changeId)}/kill`, { reason }, key),
-  issues: (changeId: string) => request<{ issues: LinkedIssue[] }>("GET", `/api/v1/changes/${enc(changeId)}/issues`),
+  issues: (changeId: string) =>
+    request<{ issues: LinkedIssue[] }>("GET", `/api/v1/changes/${enc(changeId)}/issues`),
 
   // claimable projects (onboarding O3): reading a claim link needs no session; claiming does.
   claim: (token: string) => request<ClaimView>("GET", `/api/v1/claims/${enc(token)}`),
@@ -214,7 +279,10 @@ export const api = {
 
   // audit
   audit: (q: AuditQuery = {}) =>
-    request<AuditPage>("GET", `/api/v1/audit${query({ subject: q.subject, actor: q.actor, action: q.action, cursor: q.cursor, limit: q.limit })}`),
+    request<AuditPage>(
+      "GET",
+      `/api/v1/audit${query({ subject: q.subject, actor: q.actor, action: q.action, cursor: q.cursor, limit: q.limit })}`,
+    ),
 };
 
 /** Resolves opaque `beforeRef` / `afterRef` / `logRef` pointers: `GET /api/v1/blobs/:ref` (docs/api.md). */
@@ -236,34 +304,73 @@ export interface ErrorCopy {
 export function describeError(err: unknown, what = "this"): ErrorCopy {
   // The server's fix is written for agents ("start one from an approved plan"); a person who
   // follows a dead link or lacks access gets the human version below instead.
-  if (err instanceof ApiError && err.fix && err.status !== 401 && err.status !== 403 && err.status !== 404) {
-    return { title: err.message, detail: err.fix.explanation, retry: err.status === 0 || err.status === 409 || err.status === 429 || err.status >= 500 };
+  if (
+    err instanceof ApiError &&
+    err.fix &&
+    err.status !== 401 &&
+    err.status !== 403 &&
+    err.status !== 404
+  ) {
+    return {
+      title: err.message,
+      detail: err.fix.explanation,
+      retry: err.status === 0 || err.status === 409 || err.status === 429 || err.status >= 500,
+    };
   }
   if (err instanceof ApiError) {
     switch (true) {
       case err.status === 0:
         return { title: `Couldn't load ${what}`, detail: err.message, retry: true };
       case err.status === 401:
-        return { title: "Your session ended", detail: "Sign in again to continue where you left off.", retry: false };
+        return {
+          title: "Your session ended",
+          detail: "Sign in again to continue where you left off.",
+          retry: false,
+        };
       case err.status === 403:
-        return { title: `You don't have access to ${what}`, detail: `${sentence(err.message)} Ask the repository's owner for the role you need.`, retry: false };
+        return {
+          title: `You don't have access to ${what}`,
+          detail: `${sentence(err.message)} Ask the repository's owner for the role you need.`,
+          retry: false,
+        };
       case err.status === 404:
         return {
           title: `We couldn't find ${what}`,
-          detail: "It may have been removed, or the link may be wrong. Anything in a repository you are not a member of also looks missing; its owner can add you.",
+          detail:
+            "It may have been removed, or the link may be wrong. Anything in a repository you are not a member of also looks missing; its owner can add you.",
           retry: false,
         };
       case err.status === 409:
-        return { title: "That action conflicts with the current state", detail: err.message, retry: true };
+        return {
+          title: "That action conflicts with the current state",
+          detail: err.message,
+          retry: true,
+        };
       case err.status === 429:
-        return { title: "Too many requests", detail: "Wait a few seconds, then retry.", retry: true };
+        return {
+          title: "Too many requests",
+          detail: "Wait a few seconds, then retry.",
+          retry: true,
+        };
       case err.code === "invalid_response":
-        return { title: `${capitalize(what)} failed validation`, detail: `${err.message} Nothing was rendered from it.`, retry: true };
+        return {
+          title: `${capitalize(what)} failed validation`,
+          detail: `${err.message} Nothing was rendered from it.`,
+          retry: true,
+        };
       default:
-        return { title: `Couldn't load ${what}`, detail: `${err.message} (${err.code})`, retry: true };
+        return {
+          title: `Couldn't load ${what}`,
+          detail: `${err.message} (${err.code})`,
+          retry: true,
+        };
     }
   }
-  return { title: `Couldn't load ${what}`, detail: err instanceof Error ? err.message : "Unknown error.", retry: true };
+  return {
+    title: `Couldn't load ${what}`,
+    detail: err instanceof Error ? err.message : "Unknown error.",
+    retry: true,
+  };
 }
 
 function sentence(s: string): string {
@@ -277,6 +384,7 @@ function capitalize(s: string): string {
 
 /** The message to show inline under a form after a failed mutation: what failed, then what to do. */
 export function inlineError(err: unknown): string {
-  if (err instanceof ApiError) return err.fix ? `${err.message} ${err.fix.explanation}` : err.message;
+  if (err instanceof ApiError)
+    return err.fix ? `${err.message} ${err.fix.explanation}` : err.message;
   return describeError(err).detail;
 }

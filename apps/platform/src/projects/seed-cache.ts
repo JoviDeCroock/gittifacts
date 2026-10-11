@@ -72,7 +72,10 @@ async function seedRepo(
   }
   const head = await git.branchHead(repo, "main");
   if (head !== null) {
-    return { repo, sha: refresh === undefined ? head : await refreshedSeed(git, repo, id, head, refresh) };
+    return {
+      repo,
+      sha: refresh === undefined ? head : await refreshedSeed(git, repo, id, head, refresh),
+    };
   }
   const files = templateFiles(id, {
     projectName: id,

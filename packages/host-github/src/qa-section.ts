@@ -58,7 +58,10 @@ export function qaStatusLine(qa: QaView): string {
     return `testing \`${qa.headSha.slice(0, 7)}\` in a browser. ${report}`;
   if (qa.status === "failed")
     return `could not test this head${qa.error ? `: ${cut(oneLine(qa.error), 140)}` : ""}. ${report}`;
-  const withdrawn = (qa.withdrawn ?? []).length > 0 ? ` · approval by ${(qa.withdrawn ?? []).join(", ")} withdrawn: QA failed` : "";
+  const withdrawn =
+    (qa.withdrawn ?? []).length > 0
+      ? ` · approval by ${(qa.withdrawn ?? []).join(", ")} withdrawn: QA failed`
+      : "";
   return `${counts(qa)} of ${plural(qa.criteria.length, "criterion", "criteria")}${withdrawn} · ${report}`;
 }
 
@@ -85,7 +88,12 @@ export function qaDetailsText(qa: QaView): string | null {
   if (qa.criteria.length > 12) out.push(`- and ${qa.criteria.length - 12} more in the report`);
   // Untraced expectations that didn't hold: shown, never counted (they don't decide a verdict).
   const notes = qa.criteria.slice(0, 12).flatMap((c) => (c.notes ?? []).slice(0, 2));
-  if (notes.length > 0) out.push("", "Also observed (not counted; it isn't what a criterion says):", ...notes.slice(0, 6).map((n) => `- ${cut(oneLine(n.replace(/^also observed: /, "")), 240)}`));
+  if (notes.length > 0)
+    out.push(
+      "",
+      "Also observed (not counted; it isn't what a criterion says):",
+      ...notes.slice(0, 6).map((n) => `- ${cut(oneLine(n.replace(/^also observed: /, "")), 240)}`),
+    );
   if (qa.thumbs.length > 0) out.push("", qaThumbs(qa));
   out.push(
     "",

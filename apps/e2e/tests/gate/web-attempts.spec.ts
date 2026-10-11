@@ -13,7 +13,9 @@ const SMALL = "chg_rl1k4";
 const DRIFT = "chg_rl2d7";
 const FAILING = "chg_rl3f2";
 
-test("attempts: ranked best first, the recommended one on top, the failing one last (demo data)", async ({ authed: page }) => {
+test("attempts: ranked best first, the recommended one on top, the failing one last (demo data)", async ({
+  authed: page,
+}) => {
   await page.goto(`${PLAN}?mock`);
   const section = page.getByTestId("attempts");
   await expect(section).toBeVisible();
@@ -38,15 +40,21 @@ test("attempts: ranked best first, the recommended one on top, the failing one l
   await expectNoHorizontalScroll(page);
 });
 
-test("attempts: the palette compares with an agent twin and keeps the pick person-only (demo data)", async ({ authed: page }) => {
+test("attempts: the palette compares with an agent twin and keeps the pick person-only (demo data)", async ({
+  authed: page,
+}) => {
   await page.goto(`${PLAN}?mock`);
   await expect(page.getByTestId("attempts")).toBeVisible();
   await page.getByTestId("palette-open").filter({ visible: true }).first().click();
   const palette = page.getByTestId("palette");
   await palette.getByTestId("palette-mode-agent").click();
   await page.keyboard.type("attempt");
-  await expect(palette.locator('[data-command="plan.attempts"] .palette__tool')).toHaveText("compare_attempts");
-  await expect(palette.getByTestId("palette-mcp")).toHaveText('compare_attempts({ "planId": "plan_ratelimit" })');
+  await expect(palette.locator('[data-command="plan.attempts"] .palette__tool')).toHaveText(
+    "compare_attempts",
+  );
+  await expect(palette.getByTestId("palette-mcp")).toHaveText(
+    'compare_attempts({ "planId": "plan_ratelimit" })',
+  );
   const pick = palette.locator('[data-command="plan.pick"]');
   await expect(pick).toContainText("Only a person");
   // Locked for an agent (aria-disabled): arrow onto it to read the rule instead of a twin.
@@ -62,10 +70,14 @@ test("attempts: the palette compares with an agent twin and keeps the pick perso
   await expect(page.getByTestId("attempts")).toBeInViewport();
 });
 
-test("attempts: one tap picks the recommended attempt, approves it and closes the others (demo data)", async ({ authed: page }) => {
+test("attempts: one tap picks the recommended attempt, approves it and closes the others (demo data)", async ({
+  authed: page,
+}) => {
   await page.goto(`${PLAN}?mock`);
   const section = page.getByTestId("attempts");
-  const first = section.getByTestId("attempt-card").and(page.locator(`[data-change-id="${SMALL}"]`));
+  const first = section
+    .getByTestId("attempt-card")
+    .and(page.locator(`[data-change-id="${SMALL}"]`));
   await first.getByTestId("attempt-pick").click();
 
   const done = section.getByTestId("attempts-picked");

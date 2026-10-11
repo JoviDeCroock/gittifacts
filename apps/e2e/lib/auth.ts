@@ -5,7 +5,7 @@
  * snapshot, trace, screenshot or error context can contain it. (2026-10-04: the E2E password leaked
  * into a smoke report's error-context.md from a filled sign-in form.)
  */
-import { request as playwrightRequest, type BrowserContext } from "@playwright/test";
+import { type BrowserContext, request as playwrightRequest } from "@playwright/test";
 
 export async function signInWithApi(
   context: BrowserContext,
@@ -22,7 +22,9 @@ export async function signInWithApi(
     });
     // Never echo the response or the request: say only what failed.
     if (!res.ok()) throw new Error(`API sign-in for the E2E account failed: HTTP ${res.status()}`);
-    const cookies = (await api.storageState()).cookies.filter((c) => c.name.includes("session_token"));
+    const cookies = (await api.storageState()).cookies.filter((c) =>
+      c.name.includes("session_token"),
+    );
     if (cookies.length === 0) throw new Error("API sign-in set no session cookie");
     await context.addCookies(cookies);
   } finally {

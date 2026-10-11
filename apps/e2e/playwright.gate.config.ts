@@ -24,7 +24,12 @@ export default defineConfig({
   retries: CI ? 1 : 0,
   workers: CI ? 3 : 2,
   reporter: CI
-    ? [["list"], ["github"], ["html", { open: "never", outputFolder: "playwright-report/gate" }], ["json", { outputFile: "test-results/gate.json" }]]
+    ? [
+        ["list"],
+        ["github"],
+        ["html", { open: "never", outputFolder: "playwright-report/gate" }],
+        ["json", { outputFile: "test-results/gate.json" }],
+      ]
     : [["list"]],
   outputDir: "test-results/gate",
   use: {
@@ -33,7 +38,10 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 } } },
+    {
+      name: "desktop",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 } },
+    },
     {
       name: "phone",
       use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } },

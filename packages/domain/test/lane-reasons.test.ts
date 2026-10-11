@@ -6,7 +6,13 @@ const r = (code: string, lane: 0 | 1 | 2): LaneReason => ({ code, lane, message:
 
 describe("groupLaneReasons", () => {
   it("puts the reasons that set the lane first and folds the passing checks", () => {
-    const reasons = [r("api.none", 0), r("plan.missing", 1), r("ci.failed", 2), r("size.ok", 0), r("tests.failing", 2)];
+    const reasons = [
+      r("api.none", 0),
+      r("plan.missing", 1),
+      r("ci.failed", 2),
+      r("size.ok", 0),
+      r("tests.failing", 2),
+    ];
     const g = groupLaneReasons(reasons);
     expect(g.lane).toBe(2);
     expect(g.deciding.map((x) => x.code)).toEqual(["ci.failed", "tests.failing"]);

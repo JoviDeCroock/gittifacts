@@ -25,7 +25,12 @@ describe("App JWT (RS256, WebCrypto)", () => {
     const now = NOW.getTime() / 1000;
     expect(claims).toEqual({ iat: now - 60, exp: now - 60 + 540, iss: "Iv23abc" });
     expect(claims.exp - claims.iat).toBeLessThanOrEqual(600);
-    const ok = verify("RSA-SHA256", Buffer.from(`${h}.${p}`), createPublicKey(publicKey), Buffer.from(sig, "base64url"));
+    const ok = verify(
+      "RSA-SHA256",
+      Buffer.from(`${h}.${p}`),
+      createPublicKey(publicKey),
+      Buffer.from(sig, "base64url"),
+    );
     expect(ok).toBe(true);
   });
 });
@@ -35,17 +40,32 @@ describe("installation tokens", () => {
     const calls: { method: string; url: string; auth: string; body: unknown }[] = [];
     const fetch = (async (url: string, init: RequestInit) => {
       const headers = new Headers(init.headers);
-      calls.push({ method: init.method ?? "GET", url, auth: headers.get("authorization") ?? "", body: init.body ? JSON.parse(String(init.body)) : null });
+      calls.push({
+        method: init.method ?? "GET",
+        url,
+        auth: headers.get("authorization") ?? "",
+        body: init.body ? JSON.parse(String(init.body)) : null,
+      });
       expect(headers.get("x-github-api-version")).toBe("2026-03-10");
       if (init.method === "DELETE") return new Response(null, { status: 204 });
-      return Response.json({ token: "ghs_secret_value_0123456789", expires_at: "2026-10-03T13:00:00Z" }, { status: 201 });
+      return Response.json(
+        { token: "ghs_secret_value_0123456789", expires_at: "2026-10-03T13:00:00Z" },
+        { status: 201 },
+      );
     }) as typeof globalThis.fetch;
-    const tokens = new InstallationTokens({ appId: 1, clientId: "Iv23abc", privateKey: PEM }, { fetch, now: () => NOW });
-    const seen = await tokens.withToken(77, { repositoryIds: [101], permissions: { checks: "write", contents: "read" } }, async (t) => {
-      expect(JSON.stringify({ t })).not.toContain("ghs_secret");
-      expect(String(t)).not.toContain("ghs_secret");
-      return t.authorization();
-    });
+    const tokens = new InstallationTokens(
+      { appId: 1, clientId: "Iv23abc", privateKey: PEM },
+      { fetch, now: () => NOW },
+    );
+    const seen = await tokens.withToken(
+      77,
+      { repositoryIds: [101], permissions: { checks: "write", contents: "read" } },
+      async (t) => {
+        expect(JSON.stringify({ t })).not.toContain("ghs_secret");
+        expect(String(t)).not.toContain("ghs_secret");
+        return t.authorization();
+      },
+    );
     expect(seen).toBe("Bearer ghs_secret_value_0123456789");
     expect(calls[0]).toMatchObject({
       method: "POST",
@@ -53,7 +73,11 @@ describe("installation tokens", () => {
       body: { repository_ids: [101], permissions: { checks: "write", contents: "read" } },
     });
     expect(calls[0]?.auth).toMatch(/^Bearer ey/);
-    expect(calls[1]).toMatchObject({ method: "DELETE", url: "https://api.github.com/installation/token", auth: "Bearer ghs_secret_value_0123456789" });
+    expect(calls[1]).toMatchObject({
+      method: "DELETE",
+      url: "https://api.github.com/installation/token",
+      auth: "Bearer ghs_secret_value_0123456789",
+    });
   });
 });
 
@@ -73,9 +97,19 @@ describe("REST client", () => {
   });
 
   it("turns secondary limits into retry-afters and other errors into GithubHttpError", async () => {
-    const limited = new GithubApi({ token: async () => "t", fetch: (async () => new Response("{}", { status: 403, headers: { "retry-after": "30" } })) as typeof fetch });
-    await expect(limited.get("/x")).rejects.toMatchObject({ name: "GithubRateLimited", retryAfterSec: 30 });
-    const missing = new GithubApi({ token: async () => "t", fetch: (async () => Response.json({ message: "Not Found" }, { status: 404 })) as typeof fetch });
+    const limited = new GithubApi({
+      token: async () => "t",
+      fetch: (async () =>
+        new Response("{}", { status: 403, headers: { "retry-after": "30" } })) as typeof fetch,
+    });
+    await expect(limited.get("/x")).rejects.toMatchObject({
+      name: "GithubRateLimited",
+      retryAfterSec: 30,
+    });
+    const missing = new GithubApi({
+      token: async () => "t",
+      fetch: (async () => Response.json({ message: "Not Found" }, { status: 404 })) as typeof fetch,
+    });
     await expect(missing.get("/x")).rejects.toBeInstanceOf(GithubHttpError);
   });
 });
@@ -84,7 +118,14 @@ describe("write governor (≤ 80/min, ≤ 500/h, serialized)", () => {
   it("waits inside a minute, refuses beyond the hour budget", async () => {
     let now = 0;
     const slept: number[] = [];
-    const g = new WriteGovernor({ now: () => now, sleep: async (ms) => { slept.push(ms); now += ms; }, maxWaitMs: 60_000 });
+    const g = new WriteGovernor({
+      now: () => now,
+      sleep: async (ms) => {
+        slept.push(ms);
+        now += ms;
+      },
+      maxWaitMs: 60_000,
+    });
     for (let i = 0; i < 80; i++) await g.run(async () => i);
     expect(slept).toEqual([]);
     await g.run(async () => "81st");
@@ -99,12 +140,16 @@ describe("write governor (≤ 80/min, ≤ 500/h, serialized)", () => {
     const g = new WriteGovernor();
     let active = 0;
     let peak = 0;
-    await Promise.all([1, 2, 3].map(() => g.run(async () => {
-      active++;
-      peak = Math.max(peak, active);
-      await new Promise((r) => setTimeout(r, 5));
-      active--;
-    })));
+    await Promise.all(
+      [1, 2, 3].map(() =>
+        g.run(async () => {
+          active++;
+          peak = Math.max(peak, active);
+          await new Promise((r) => setTimeout(r, 5));
+          active--;
+        }),
+      ),
+    );
     expect(peak).toBe(1);
   });
 });

@@ -22,6 +22,7 @@ import { toErrorResponse, unauthorized } from "../errors.js";
 import { resolveGithubChangeId } from "../github/refs.js";
 import { runIdempotent } from "../idempotency.js";
 import { createImportMcpBackend } from "../import/mcp.js";
+import { repoNames } from "../integrations/handles.js";
 import type { AnonymousClient } from "../limits/client.js";
 import { qaBrief } from "../qa/brief.js";
 import { createQueueMcpBackend } from "../queue/mcp.js";
@@ -37,9 +38,9 @@ import { capabilities } from "../services/capabilities.js";
 import {
   closeChange,
   getChangeDetail,
+  getChangeEvidence,
   getChangeResolution,
   getChangeRollout,
-  getChangeEvidence,
   getChangeTour,
   listChangeIssues,
   listChangeReviews,
@@ -54,7 +55,6 @@ import { getChangeOverlaps } from "../services/overlaps.js";
 import { createPlan, getPlanDetail, listPlans, withdrawPlan } from "../services/plans.js";
 import { createProject } from "../services/projects.js";
 import { listQaRuns, requestQaFor } from "../services/qa.js";
-import { repoNames } from "../integrations/handles.js";
 import { listRepoSummaries } from "../services/repos.js";
 import type { PrincipalRef } from "../store/d1-store.js";
 import { createWorkspaceMcpBackend } from "../workspace/mcp.js";

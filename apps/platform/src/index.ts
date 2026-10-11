@@ -80,10 +80,18 @@ export default {
     ctx.waitUntil(runWebhookSweep(env).then(() => undefined));
     ctx.waitUntil(runImportGrantSweep(env).then(() => undefined));
     ctx.waitUntil(runGithubSweep(env));
-    ctx.waitUntil(runGithubRedeliveries(env).then(() => undefined).catch(() => undefined));
+    ctx.waitUntil(
+      runGithubRedeliveries(env)
+        .then(() => undefined)
+        .catch(() => undefined),
+    );
     ctx.waitUntil(runRetention(env).then(() => undefined));
     // QA runs whose workflow was lost end as failed, with a notice (src/qa/sweep.ts).
-    ctx.waitUntil(runQaSweep(env).then(() => undefined).catch(() => undefined));
+    ctx.waitUntil(
+      runQaSweep(env)
+        .then(() => undefined)
+        .catch(() => undefined),
+    );
     // Today's metered spend against the daily budgets: logs, audit, breaker (src/spend/breaker.ts).
     ctx.waitUntil(runSpendWatch(env).then(() => undefined));
     // Once per worker version: re-warm the templates' CI cache (src/projects/seed-on-deploy.ts).

@@ -51,9 +51,9 @@ describe("rerun", () => {
 
     // A second re-run gets the next instance.
     await s.coordinator.rerun(s.owner, change.id);
-    expect(s.bindings.changeWorkflow.instances.has(`${changeWorkflowId(change.id, headSha)}-r2`)).toBe(
-      true,
-    );
+    expect(
+      s.bindings.changeWorkflow.instances.has(`${changeWorkflowId(change.id, headSha)}-r2`),
+    ).toBe(true);
   });
 
   it("only the author, its owner or a human maintainer; never before a push or after approval", async () => {
@@ -85,7 +85,11 @@ describe("close (abandon) with a reason", () => {
     expect(await code(s.coordinator.abandon(principal({ kind: "agent" }), change.id, "x"))).toBe(
       "forbidden",
     );
-    const closed = await s.coordinator.abandon(s.agent, change.id, "  superseded by another change ");
+    const closed = await s.coordinator.abandon(
+      s.agent,
+      change.id,
+      "  superseded by another change ",
+    );
     expect(closed.status).toBe("abandoned");
     expect(s.ports.audit.payloadOf("change.abandoned")).toMatchObject({
       reason: "superseded by another change",

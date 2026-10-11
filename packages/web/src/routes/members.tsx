@@ -47,7 +47,10 @@ function MemberAgents({ agents }: { agents: MemberAgent[] }) {
 
 /** What removing (or leaving) takes away, agents included, so the confirmation can say it. */
 function removeLine(m: RepoMember, isMe: boolean, repoName: string, agents: MemberAgent[]): string {
-  const theirs = agents.length === 0 ? "" : ` ${isMe ? "Your" : "Their"} ${plural(agents.length, "agent")} (${agents.map((a) => a.name).join(", ")}) ${agents.length === 1 ? "loses" : "lose"} access too.`;
+  const theirs =
+    agents.length === 0
+      ? ""
+      : ` ${isMe ? "Your" : "Their"} ${plural(agents.length, "agent")} (${agents.map((a) => a.name).join(", ")}) ${agents.length === 1 ? "loses" : "lose"} access too.`;
   return isMe
     ? `Leave ${repoName}? You lose access at once, and only an owner can add you back.${theirs}`
     : `Remove ${m.name} from ${repoName}?${theirs}`;
@@ -157,20 +160,40 @@ function MemberRow({
       </div>
       <div class="member__act">
         {(view.canManage || isMe) && pending === null ? (
-          <Button size="sm" variant="secondary" data-testid="member-remove" onClick={() => (confirm.value = "remove")}>
+          <Button
+            size="sm"
+            variant="secondary"
+            data-testid="member-remove"
+            onClick={() => (confirm.value = "remove")}
+          >
             {isMe ? "Leave…" : "Remove…"}
           </Button>
         ) : null}
       </div>
       {pending !== null ? (
-        <fieldset class="member__confirm" aria-label={pending === "remove" ? (isMe ? `Leave ${repoName}` : `Remove ${m.name}`) : "Confirm your new role"} data-testid="member-confirm">
+        <fieldset
+          class="member__confirm"
+          aria-label={
+            pending === "remove"
+              ? isMe
+                ? `Leave ${repoName}`
+                : `Remove ${m.name}`
+              : "Confirm your new role"
+          }
+          data-testid="member-confirm"
+        >
           <p>
             {pending === "remove"
               ? removeLine(m, isMe, repoName, agents)
               : `Make yourself ${aRole(pending)}? You lose what ${aRole(m.role)} may do here${agents.length > 0 ? `, and so do your ${plural(agents.length, "agent")}` : ""}; only an owner can give it back.`}
           </p>
           <div class="member__confirm-buttons">
-            <Button size="sm" variant="secondary" disabled={busy.value} onClick={() => (confirm.value = null)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy.value}
+              onClick={() => (confirm.value = null)}
+            >
               Cancel
             </Button>
             <Button
@@ -181,7 +204,11 @@ function MemberRow({
               data-testid="member-confirm-act"
               onClick={() => void (pending === "remove" ? remove() : setRole(pending))}
             >
-              {pending === "remove" ? (isMe ? `Leave ${repoName}` : `Remove ${m.name}`) : `Make me ${aRole(pending)}`}
+              {pending === "remove"
+                ? isMe
+                  ? `Leave ${repoName}`
+                  : `Remove ${m.name}`
+                : `Make me ${aRole(pending)}`}
             </Button>
           </div>
         </fieldset>
@@ -197,7 +224,9 @@ function MemberRow({
 
 /** "Maya Okafor", "Maya Okafor and Dev Patel": who to ask for a role. */
 function names(list: string[]): string {
-  return list.length <= 1 ? (list[0] ?? "") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+  return list.length <= 1
+    ? (list[0] ?? "")
+    : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
 }
 
 export function MembersPage({ repoId }: { repoId: string }) {
@@ -208,7 +237,10 @@ export function MembersPage({ repoId }: { repoId: string }) {
         api.repo(repoId),
         membersApi.list(repoId),
         // The viewer's own agents fill in their row when the server does not list agents yet.
-        api.principals().then((r) => r.principals.filter((p) => p.kind === "agent"), () => []),
+        api.principals().then(
+          (r) => r.principals.filter((p) => p.kind === "agent"),
+          () => [],
+        ),
       ]),
     [repoId],
   );
@@ -239,15 +271,20 @@ export function MembersPage({ repoId }: { repoId: string }) {
   const repoName = detail.repo.name;
   const owners = view.members.filter((m) => m.role === "owner").map((m) => m.name);
   const agentsOf = (m: RepoMember): MemberAgent[] =>
-    m.agents ?? (m.principalId === me ? mine.map((a) => ({ principalId: a.id, name: a.name })) : []);
+    m.agents ??
+    (m.principalId === me ? mine.map((a) => ({ principalId: a.id, name: a.name })) : []);
   return (
     <Page
       title="Members"
-      crumbs={[{ href: "/dashboard", label: "Dashboard" }, { href: `/repos/${repoId}`, label: repoName }]}
+      crumbs={[
+        { href: "/dashboard", label: "Dashboard" },
+        { href: `/repos/${repoId}`, label: repoName },
+      ]}
       meta={
         <>
           <span>
-            {repoName} · {view.viewerRole ? `you are ${aRole(view.viewerRole)}` : "you are not a member"}
+            {repoName} ·{" "}
+            {view.viewerRole ? `you are ${aRole(view.viewerRole)}` : "you are not a member"}
           </span>
           {view.canManage || owners.length === 0 ? null : (
             <span data-testid="members-owners">
@@ -287,7 +324,9 @@ export function MembersPage({ repoId }: { repoId: string }) {
           <p class="members__note">
             Agents act with the role of the person who runs them, and never approve or review
             anything. Removing a person removes their agents' access too.
-            {view.canManage ? null : ` Ask ${owners.length > 0 ? names(owners) : "an owner"} to change a role.`}
+            {view.canManage
+              ? null
+              : ` Ask ${owners.length > 0 ? names(owners) : "an owner"} to change a role.`}
           </p>
         </section>
         {view.canManage ? (

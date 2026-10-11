@@ -149,8 +149,8 @@ export function QueueLanes({ q, folded = false }: { q: QueueOverviewView; folded
   );
   const lede = (
     <p class="q-section__lede">
-      Changes that touch different code speculate in parallel, one track each. Within a track,
-      each batch is tested on top of the one before it.
+      Changes that touch different code speculate in parallel, one track each. Within a track, each
+      batch is tested on top of the one before it.
     </p>
   );
   const lanes = empty ? (

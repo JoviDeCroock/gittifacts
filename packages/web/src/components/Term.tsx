@@ -28,7 +28,8 @@ export function Term({ id, children }: { id: TermId; children?: ComponentChildre
     const onToggle = (e: Event) => {
       const open = (e as ToggleEvent).newState === "open";
       btn.current?.setAttribute("aria-expanded", String(open));
-      if (open) window.addEventListener("scroll", close, { passive: true, capture: true, once: true });
+      if (open)
+        window.addEventListener("scroll", close, { passive: true, capture: true, once: true });
       else window.removeEventListener("scroll", close, { capture: true });
     };
     el.addEventListener("toggle", onToggle);
@@ -54,15 +55,31 @@ export function Term({ id, children }: { id: TermId; children?: ComponentChildre
     el.showPopover();
     // Not enough room below: open above the word instead.
     const h = el.offsetHeight;
-    if (r.bottom + GAP + h > window.innerHeight - EDGE && r.top - GAP - h > EDGE) el.style.top = `${r.top - GAP - h}px`;
+    if (r.bottom + GAP + h > window.innerHeight - EDGE && r.top - GAP - h > EDGE)
+      el.style.top = `${r.top - GAP - h}px`;
   }
 
   return (
     <span class="term" data-term={id}>
-      <button type="button" ref={btn} class="term__word" aria-describedby={hintId} aria-expanded="false" aria-controls={hintId} onClick={toggle} data-testid="term">
+      <button
+        type="button"
+        ref={btn}
+        class="term__word"
+        aria-describedby={hintId}
+        aria-expanded="false"
+        aria-controls={hintId}
+        onClick={toggle}
+        data-testid="term"
+      >
         {children ?? t.word}
       </button>
-      <span ref={card} id={hintId} class="term__card" {...{ popover: "auto" }} data-testid="term-card">
+      <span
+        ref={card}
+        id={hintId}
+        class="term__card"
+        {...{ popover: "auto" }}
+        data-testid="term-card"
+      >
         <span class="term__hint">{t.hint}</span>{" "}
         <a class="term__more" href={t.href}>
           Read more in the docs

@@ -583,10 +583,18 @@ export class ArtifactsGitHost implements GitHost {
       throw new Error("fetchExternal only reads from github.com repositories");
     }
     const to = await this.remote(toRepo, "write");
-    const from: WireRemote = { url: source.url, ...(source.auth === undefined ? {} : { auth: source.auth }) };
-    const result = await this.opts.wire.transferObjects(from, to, { sha: input.sha, toRef: input.toRef });
+    const from: WireRemote = {
+      url: source.url,
+      ...(source.auth === undefined ? {} : { auth: source.auth }),
+    };
+    const result = await this.opts.wire.transferObjects(from, to, {
+      sha: input.sha,
+      toRef: input.toRef,
+    });
     if (!result.ok) {
-      throw new Error(`mirror fetch into ${toRepo} ${input.toRef} failed: ${result.reason ?? "unknown"}`);
+      throw new Error(
+        `mirror fetch into ${toRepo} ${input.toRef} failed: ${result.reason ?? "unknown"}`,
+      );
     }
   }
 

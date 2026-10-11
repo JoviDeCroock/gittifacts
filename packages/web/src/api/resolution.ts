@@ -75,6 +75,9 @@ export async function fetchResolution(changeId: string): Promise<ResolutionView 
 }
 
 /** The resolved head is what the tour describes: not stale, though it differs from the pushed head. */
-export function describesResolution(tourHead: string | undefined, r: ResolutionView | null): boolean {
+export function describesResolution(
+  tourHead: string | undefined,
+  r: ResolutionView | null,
+): boolean {
   return r !== null && tourHead === r.headSha;
 }

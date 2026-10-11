@@ -11,10 +11,10 @@ import {
 } from "@app/coordinator";
 import { repoAccessPort } from "./access/port.js";
 import type { Bindings } from "./app-env.js";
+import { githubReviewOptions } from "./github/review-hooks.js";
 import { guardImportGrants } from "./import/push-grant-runtime.js";
 import { unclaimedLimits } from "./limits/config.js";
 import { initialCommitProvider } from "./projects/initial-commit.js";
-import { githubReviewOptions } from "./github/review-hooks.js";
 import { buildPorts } from "./runtime/ports.js";
 
 /** `origin`: the platform origin agents see (written into new repos' AGENTS.md). */

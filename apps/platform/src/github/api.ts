@@ -41,7 +41,11 @@ async function readJson<S extends z.ZodType>(res: Response, schema: S, what: str
     } catch {
       // not JSON
     }
-    throw new GithubApiError(res.status, "github-error", `${what}: GitHub answered ${res.status}${msg ? ` (${msg.slice(0, 200)})` : ""}`);
+    throw new GithubApiError(
+      res.status,
+      "github-error",
+      `${what}: GitHub answered ${res.status}${msg ? ` (${msg.slice(0, 200)})` : ""}`,
+    );
   }
   let body: unknown;
   try {
@@ -105,7 +109,8 @@ export async function exchangeUserCode(input: {
     }),
   });
   const out = await readJson(res, TokenAnswer, "user authorization");
-  if ("error" in out) throw new GithubApiError(400, "github-oauth-error", `user authorization: ${out.error}`);
+  if ("error" in out)
+    throw new GithubApiError(400, "github-oauth-error", `user authorization: ${out.error}`);
   return out.access_token;
 }
 
@@ -131,7 +136,10 @@ export type InstallationInfo = z.infer<typeof InstallationInfo>;
  * `GET /app/installations/{id}` with the App's JWT: one installation of our App, or null when
  * GitHub doesn't know it (deleted). Used when a delivery names an installation we never recorded.
  */
-export async function appInstallation(appJwt: string, id: number): Promise<InstallationInfo | null> {
+export async function appInstallation(
+  appJwt: string,
+  id: number,
+): Promise<InstallationInfo | null> {
   const res = await fetch(`${GITHUB_API}/app/installations/${id}`, {
     headers: headers({ authorization: `Bearer ${appJwt}` }),
   });
@@ -208,10 +216,13 @@ export async function revokeUserToken(input: {
   token: string;
 }): Promise<void> {
   const basic = btoa(`${input.clientId}:${input.clientSecret}`);
-  const res = await fetch(`${GITHUB_API}/applications/${encodeURIComponent(input.clientId)}/token`, {
-    method: "DELETE",
-    headers: headers({ authorization: `Basic ${basic}`, "content-type": "application/json" }),
-    body: JSON.stringify({ access_token: input.token }),
-  });
+  const res = await fetch(
+    `${GITHUB_API}/applications/${encodeURIComponent(input.clientId)}/token`,
+    {
+      method: "DELETE",
+      headers: headers({ authorization: `Basic ${basic}`, "content-type": "application/json" }),
+      body: JSON.stringify({ access_token: input.token }),
+    },
+  );
   await res.body?.cancel();
 }

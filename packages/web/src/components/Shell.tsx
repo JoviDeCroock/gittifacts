@@ -4,31 +4,54 @@
  * that fades in with the crumbs once the page head scrolls away. One information architecture at
  * every width: the drawer renders the sidebar's own body.
  */
-import { signal, useSignal } from "@preact/signals";
+
 import { GITHUB_SURFACES } from "@app/domain/surfaces";
+import { signal, useSignal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
-import { useLocation } from "preact-iso";
 import { useEffect, useRef } from "preact/hooks";
+import { useLocation } from "preact-iso";
 import { api } from "../api/client.js";
 import { isMockMode } from "../api/mode.js";
 import type { RepoSummary } from "../api/types.js";
-import { principal, session, signOut } from "../state/session.js";
 import { type ThemePref, themePref } from "../state/prefs.js";
+import { principal, session, signOut } from "../state/session.js";
 import { BrandMark } from "./BrandMark.js";
 import { Icon, type IconId } from "./Icon.js";
-import { Palette, PaletteButton, paletteOpen, paletteRepos, usePaletteShortcut } from "./Palette.js";
+import {
+  Palette,
+  PaletteButton,
+  paletteOpen,
+  paletteRepos,
+  usePaletteShortcut,
+} from "./Palette.js";
 import "../styles/palette.css";
 import { Who } from "./ui.js";
 
 export { BrandMark };
 
 /** `server`: a page the Worker serves (not an SPA route), so the router must not intercept it. */
-const ALL_NAV: { href: string; label: string; icon: IconId; match: (path: string) => boolean; server?: boolean }[] = [
+const ALL_NAV: {
+  href: string;
+  label: string;
+  icon: IconId;
+  match: (path: string) => boolean;
+  server?: boolean;
+}[] = [
   { href: "/dashboard", label: "Dashboard", icon: "layers", match: (p) => p === "/dashboard" },
   { href: "/audit", label: "Audit log", icon: "scroll-text", match: (p) => p.startsWith("/audit") },
   { href: "/agents", label: "Agents", icon: "bot", match: (p) => p.startsWith("/agents") },
-  { href: "/settings/integrations", label: "Integrations", icon: "plug", match: (p) => p.startsWith("/settings/integrations") },
-  { href: "/settings/github", label: "GitHub", icon: "git-branch", match: (p) => p.startsWith("/settings/github") },
+  {
+    href: "/settings/integrations",
+    label: "Integrations",
+    icon: "plug",
+    match: (p) => p.startsWith("/settings/integrations"),
+  },
+  {
+    href: "/settings/github",
+    label: "GitHub",
+    icon: "git-branch",
+    match: (p) => p.startsWith("/settings/github"),
+  },
   { href: "/docs", label: "Docs", icon: "file-text", match: () => false, server: true },
 ];
 /** The GitHub page leaves the nav while GitHub surfaces are off (@app/domain/surfaces). */
@@ -53,7 +76,16 @@ function ThemeSwitch() {
   const ref = useRef<HTMLDivElement>(null);
   const onKey = (e: KeyboardEvent, i: number) => {
     const n = THEMES.length;
-    const next = e.key === "ArrowRight" || e.key === "ArrowDown" ? (i + 1) % n : e.key === "ArrowLeft" || e.key === "ArrowUp" ? (i - 1 + n) % n : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : -1;
+    const next =
+      e.key === "ArrowRight" || e.key === "ArrowDown"
+        ? (i + 1) % n
+        : e.key === "ArrowLeft" || e.key === "ArrowUp"
+          ? (i - 1 + n) % n
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? n - 1
+              : -1;
     const opt = THEMES[next];
     if (!opt) return;
     e.preventDefault();
@@ -126,7 +158,12 @@ function NavBody({ path }: { path: string }) {
           <ul class="sidebar__repos" aria-label="Repositories">
             {repos.map((r) => (
               <li key={r.id}>
-                <a href={`/repos/${r.id}`} class="repo-link" aria-current={repoHere === r.id ? "page" : undefined} data-testid="nav-repo">
+                <a
+                  href={`/repos/${r.id}`}
+                  class="repo-link"
+                  aria-current={repoHere === r.id ? "page" : undefined}
+                  data-testid="nav-repo"
+                >
                   <span class="repo-link__name">{r.name}</span>
                   {r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0) > 0 ? (
                     <span
@@ -151,7 +188,13 @@ function NavFoot() {
   const s = session.value;
   return (
     <>
-      {me ? <Who kind={me.kind} name={s.status === "authed" ? (s.me.user?.name ?? me.name) : me.name} compact /> : null}
+      {me ? (
+        <Who
+          kind={me.kind}
+          name={s.status === "authed" ? (s.me.user?.name ?? me.name) : me.name}
+          compact
+        />
+      ) : null}
       <div class="sidebar__row">
         <ThemeSwitch />
         <button type="button" class="btn btn--quiet btn--sm" onClick={() => void signOut()}>
@@ -286,7 +329,16 @@ interface PageProps {
   class?: string;
 }
 
-export function Page({ title, crumbs = [], actions, meta, children, wide, barTitle, class: cls }: PageProps) {
+export function Page({
+  title,
+  crumbs = [],
+  actions,
+  meta,
+  children,
+  wide,
+  barTitle,
+  class: cls,
+}: PageProps) {
   const drawer = useSignal(false);
   const scrolled = useSignal(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -294,23 +346,35 @@ export function Page({ title, crumbs = [], actions, meta, children, wide, barTit
     document.title = `${title} · gittifacts`;
   }, [title]);
   // A change or plan names its repo in its crumbs: that repo's sidebar link is the current one.
-  const repoCrumb = crumbs.map((c) => /^\/repos\/([^/?#]+)$/.exec(c.href)?.[1]).filter(Boolean).pop() ?? null;
+  const repoCrumb =
+    crumbs
+      .map((c) => /^\/repos\/([^/?#]+)$/.exec(c.href)?.[1])
+      .filter(Boolean)
+      .pop() ?? null;
   useEffect(() => {
     pageRepo.value = repoCrumb ? decodeURIComponent(repoCrumb) : null;
   }, [repoCrumb]);
   useEffect(() => {
     const el = heading.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([entry]) => {
-      scrolled.value = entry ? !entry.isIntersecting : false;
-    }, { rootMargin: "-56px 0px 0px 0px" });
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        scrolled.value = entry ? !entry.isIntersecting : false;
+      },
+      { rootMargin: "-56px 0px 0px 0px" },
+    );
     io.observe(el);
     return () => io.disconnect();
   }, [scrolled]);
   const back = crumbs[crumbs.length - 1];
   return (
     <div class={`page ${wide ? "page--wide" : ""} ${cls ?? ""}`}>
-      <header class="topbar" data-scrolled={scrolled.value || barTitle ? "true" : "false"} data-away={scrolled.value ? "true" : "false"} data-testid="topbar">
+      <header
+        class="topbar"
+        data-scrolled={scrolled.value || barTitle ? "true" : "false"}
+        data-away={scrolled.value ? "true" : "false"}
+        data-testid="topbar"
+      >
         {back ? (
           <a href={back.href} class="topbar__back" aria-label={`Back to ${back.label}`}>
             <Icon name="chevron-left" size={24} />
@@ -341,7 +405,13 @@ export function Page({ title, crumbs = [], actions, meta, children, wide, barTit
           </ol>
         </nav>
         <PaletteButton compact />
-        <button type="button" class="icon-btn topbar__menu" aria-label="Open menu" aria-haspopup="dialog" onClick={() => (drawer.value = true)}>
+        <button
+          type="button"
+          class="icon-btn topbar__menu"
+          aria-label="Open menu"
+          aria-haspopup="dialog"
+          onClick={() => (drawer.value = true)}
+        >
           <Icon name="menu" size={22} />
         </button>
       </header>

@@ -78,8 +78,8 @@ function EnterCode({ initial, onSubmit }: { initial: string; onSubmit: (code: st
           </span>
         ) : (
           <span class="field__hint" id="code-hint">
-            Eight letters and digits, like ABCD-2345. Dashes and capitals don't matter; codes
-            last 15 minutes.
+            Eight letters and digits, like ABCD-2345. Dashes and capitals don't matter; codes last
+            15 minutes.
           </span>
         )}
       </label>
@@ -108,8 +108,8 @@ function Decided({ view, decision }: { view: ConsentView; decision: Decision }) 
     >
       <ConsentReceipt granted={decision.granted} />
       <p>
-        Go back to your terminal: {view.client.name} picks up its token within a few seconds and
-        can call <code>whoami</code> to see what it may do. Revoke it any time on the Agents page.
+        Go back to your terminal: {view.client.name} picks up its token within a few seconds and can
+        call <code>whoami</code> to see what it may do. Revoke it any time on the Agents page.
       </p>
     </ConsentOutcome>
   ) : (
@@ -178,9 +178,7 @@ export function DeviceView() {
           <Expired />
         ) : st.data.consent.status !== "pending" ? (
           <ConsentOutcome tone="neutral" title={`This login was already ${st.data.consent.status}`}>
-            <p>
-              Each code can be decided once. Run the login again if the CLI still needs access.
-            </p>
+            <p>Each code can be decided once. Run the login again if the CLI still needs access.</p>
           </ConsentOutcome>
         ) : (
           <ConsentPanel

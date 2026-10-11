@@ -227,7 +227,9 @@ a.audit__subject:has(.audit__title):hover {
   align-self: center;
   border-radius: var(--r-control);
   color: var(--text-3);
-  transition: color var(--dur-feedback) var(--ease-out), background-color var(--dur-feedback) var(--ease-out);
+  transition:
+    color var(--dur-feedback) var(--ease-out),
+    background-color var(--dur-feedback) var(--ease-out);
 }
 .audit__only:hover {
   color: var(--action-ink);

@@ -110,7 +110,9 @@ export async function loadOverlapIndex(svc: Services, repoId: string): Promise<O
       // Nothing pushed yet: what it said it would touch, plus its plan's scope.
       const scannedSelf = open.find((o) => o.change.id === change.id);
       const intended =
-        scannedSelf?.intended ?? (await svc.store.changeIntentsOf([change.id])).get(change.id) ?? [];
+        scannedSelf?.intended ??
+        (await svc.store.changeIntentsOf([change.id])).get(change.id) ??
+        [];
       const plan = change.planId === null ? null : await svc.store.getPlan(change.planId);
       return {
         changeId: change.id,
@@ -200,7 +202,9 @@ function intendedHits(
 }
 
 const listed = (paths: readonly string[]) =>
-  paths.length <= 3 ? paths.join(", ") : `${paths.slice(0, 3).join(", ")} and ${paths.length - 3} more`;
+  paths.length <= 3
+    ? paths.join(", ")
+    : `${paths.slice(0, 3).join(", ")} and ${paths.length - 3} more`;
 
 /** Pure: compare one subject against the open changes. */
 export function compareOverlaps(

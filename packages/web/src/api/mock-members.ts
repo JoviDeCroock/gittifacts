@@ -62,7 +62,11 @@ function view(repoId: string): MembersView {
   const canManage = viewerRole === "owner";
   return {
     repoId,
-    members: all.map((m) => ({ ...m, email: canManage ? m.email : null, agents: agentsOf(m.principalId) })),
+    members: all.map((m) => ({
+      ...m,
+      email: canManage ? m.email : null,
+      agents: agentsOf(m.principalId),
+    })),
     viewerRole,
     canManage,
     invites: canManage ? [...(invitesByRepo.get(repoId) ?? [])] : [],
@@ -87,10 +91,7 @@ export async function listMembers(repoId: string): Promise<MembersView> {
   return view(repoId);
 }
 
-export async function addMember(
-  repoId: string,
-  input: AddMemberInput,
-): Promise<AddMemberResult> {
+export async function addMember(repoId: string, input: AddMemberInput): Promise<AddMemberResult> {
   await wait(420);
   const all = rows(repoId);
   const id =

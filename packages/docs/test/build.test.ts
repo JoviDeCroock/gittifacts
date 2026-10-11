@@ -20,7 +20,8 @@ describe("docs build", () => {
       const html = text(htmlFileOf(p));
       expect(html.match(/<h1[ >]/g)?.length, p.file).toBe(1);
       expect(html).toContain(`<link rel="alternate" type="text/markdown" href="${p.mdUrl}">`);
-      for (const other of pages.filter((x) => listed(x))) expect(html).toContain(`href="${other.url}"`);
+      for (const other of pages.filter((x) => listed(x)))
+        expect(html).toContain(`href="${other.url}"`);
     }
   });
 
@@ -49,7 +50,10 @@ describe("docs build", () => {
   });
 
   it("keeps the GitHub pages out of what a person browses while GitHub surfaces are off", () => {
-    expect([...GITHUB_PAGES].every((slug) => pages.some((p) => p.slug === slug)), "a GITHUB_PAGES slug no longer exists").toBe(true);
+    expect(
+      [...GITHUB_PAGES].every((slug) => pages.some((p) => p.slug === slug)),
+      "a GITHUB_PAGES slug no longer exists",
+    ).toBe(true);
     const shown = pages.filter((p) => listed(p, false));
     expect(shown.some((p) => GITHUB_PAGES.has(p.slug))).toBe(false);
     expect(pages.filter((p) => listed(p, true))).toEqual(pages);

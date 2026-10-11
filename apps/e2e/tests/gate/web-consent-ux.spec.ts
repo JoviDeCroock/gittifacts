@@ -9,7 +9,10 @@ import { expect, expectNoHorizontalScroll, test } from "../../lib/fixtures.js";
 import { pollUntil, uniqueName } from "../../lib/poll.js";
 
 /** A CLI login waiting for a person: what `gittifacts login` asks the platform for. */
-async function deviceCode(request: APIRequestContext, baseURL: string): Promise<{ user: string; device: string }> {
+async function deviceCode(
+  request: APIRequestContext,
+  baseURL: string,
+): Promise<{ user: string; device: string }> {
   const res = await request.post(`${baseURL}/api/auth/device/code`, {
     form: { client_id: "gittifacts-cli", scope: "repo:read change:create" },
   });
@@ -25,11 +28,17 @@ async function redeem(request: APIRequestContext, baseURL: string, device: strin
   await pollUntil(
     async () => {
       const res = await request.post(`${baseURL}/api/oauth/token`, {
-        form: { grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: device, client_id: "gittifacts-cli" },
+        form: {
+          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+          device_code: device,
+          client_id: "gittifacts-cli",
+        },
       });
       return (await res.json()) as { access_token?: string; error?: string };
     },
-    (t) => typeof t.access_token === "string" || (t.error !== undefined && t.error !== "authorization_pending" && t.error !== "slow_down"),
+    (t) =>
+      typeof t.access_token === "string" ||
+      (t.error !== undefined && t.error !== "authorization_pending" && t.error !== "slow_down"),
     { timeoutMs: 30_000, what: "the CLI's token after approval", minIntervalMs: 1_000 },
   ).then((t) => expect(t.access_token, JSON.stringify(t)).toBeTruthy());
 }
@@ -37,7 +46,9 @@ async function redeem(request: APIRequestContext, baseURL: string, device: strin
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 test.describe("sign-in carries its context", () => {
-  test("a claim link: the heading says claim, and an agent is offered its own way in", async ({ page }) => {
+  test("a claim link: the heading says claim, and an agent is offered its own way in", async ({
+    page,
+  }) => {
     await page.goto(`/signin?next=${encodeURIComponent("/claim/gtc_does_not_exist")}`);
     await expect(page.getByTestId("signin-title")).toHaveText(/^Sign in to claim /);
     await expect(page.getByTestId("signin-agent")).toContainText("/start");
@@ -50,7 +61,13 @@ test.describe("sign-in carries its context", () => {
   });
 });
 
-test("CLI consent names the approver, and the agent's name is the one the person gave", async ({ authed: page, playwright, baseURL, human, world }) => {
+test("CLI consent names the approver, and the agent's name is the one the person gave", async ({
+  authed: page,
+  playwright,
+  baseURL,
+  human,
+  world,
+}) => {
   // The CLI's own HTTP client: no browser session. (The shared request context carries the
   // person's cookie from sign-up, and better-auth then wants an Origin as from a browser.)
   const cli = await playwright.request.newContext();

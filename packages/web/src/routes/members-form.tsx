@@ -1,12 +1,6 @@
 import { useSignal } from "@preact/signals";
 import { inlineError, newIdempotencyKey } from "../api/client.js";
-import {
-  membersApi,
-  type RepoInvite,
-  type RepoRole,
-  ROLE_COPY,
-  ROLES,
-} from "../api/members.js";
+import { membersApi, type RepoInvite, type RepoRole, ROLE_COPY, ROLES } from "../api/members.js";
 import { Avatar, Button, Command } from "../components/ui.js";
 import { relative } from "../lib/time.js";
 
@@ -38,7 +32,11 @@ export function AddMember({ repoId, onAdded }: { repoId: string; onAdded: () => 
     added.value = null;
     link.value = null;
     try {
-      const r = await membersApi.add(repoId, { email: value, role: role.value }, newIdempotencyKey());
+      const r = await membersApi.add(
+        repoId,
+        { email: value, role: role.value },
+        newIdempotencyKey(),
+      );
       email.value = "";
       if ("invite" in r) {
         link.value = { email: r.invite.email, url: r.inviteUrl, role: r.invite.role };
@@ -125,8 +123,8 @@ function InviteLinkOnce({ email, url, role }: { email: string; url: string; role
       </p>
       <Command text={url} />
       <p class="invite-once__note">
-        It works once, for a week, and only for someone signed in as {email}. Copy it now: it
-        isn't shown again. Lost it? Add them again for a new link.
+        It works once, for a week, and only for someone signed in as {email}. Copy it now: it isn't
+        shown again. Lost it? Add them again for a new link.
       </p>
     </div>
   );
@@ -202,7 +200,14 @@ function InviteRow({
         <span class="member__role-label">{ROLE_COPY[invite.role].label}</span>
       </div>
       <div class="member__act">
-        <Button size="sm" variant="quiet" icon="trash" busy={busy.value} busyLabel="Revoking…" onClick={() => void revoke()}>
+        <Button
+          size="sm"
+          variant="quiet"
+          icon="trash"
+          busy={busy.value}
+          busyLabel="Revoking…"
+          onClick={() => void revoke()}
+        >
           Revoke
         </Button>
       </div>

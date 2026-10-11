@@ -38,7 +38,9 @@ export interface Mailer {
 const From = z.string().trim().email().max(320);
 
 function isSendBinding(x: unknown): x is SendEmailBinding {
-  return typeof x === "object" && x !== null && typeof (x as { send?: unknown }).send === "function";
+  return (
+    typeof x === "object" && x !== null && typeof (x as { send?: unknown }).send === "function"
+  );
 }
 
 /** The mailer, or null when e-mail is not configured on this deployment. */

@@ -213,7 +213,11 @@ describe("nextStepsFor", () => {
     // The claim step is said once, up front.
     expect(steps.filter((s) => s.title.includes("claim link"))).toHaveLength(1);
     // Claimed: no claim step; the approval comes first.
-    const claimed = nextStepsFor("project_created", { projectId: "rep_1", claimed: true, samplePlan });
+    const claimed = nextStepsFor("project_created", {
+      projectId: "rep_1",
+      claimed: true,
+      samplePlan,
+    });
     expect(claimed[0]?.call).toBe('get_plan({ planId: "plan_s1" })');
     expect(claimed.some((s) => s.title.includes("claim"))).toBe(false);
   });

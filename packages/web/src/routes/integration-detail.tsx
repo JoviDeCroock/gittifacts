@@ -21,8 +21,8 @@ import {
   EventChecklist,
   IntegrationLogo,
   ScopeChecklist,
-  SecretReveal,
   type SecretItem,
+  SecretReveal,
 } from "../components/Integrations.js";
 import { Page } from "../components/Shell.js";
 import { Button, CopyButton, ErrorState, LinkButton, Loading } from "../components/ui.js";
@@ -106,7 +106,13 @@ function SecretRow({
   );
 }
 
-function Credentials({ it, onChange }: { it: IntegrationView; onChange: (i: IntegrationView) => void }) {
+function Credentials({
+  it,
+  onChange,
+}: {
+  it: IntegrationView;
+  onChange: (i: IntegrationView) => void;
+}) {
   const reveal = useSignal<Reveal>(null);
   const busy = useSignal(false);
   const result = useSignal<{ ok: boolean; text: ComponentChildren } | null>(null);
@@ -120,7 +126,10 @@ function Credentials({ it, onChange }: { it: IntegrationView; onChange: (i: Inte
     try {
       const r = await integrationsApi.createSecret(it.id, key.value);
       key.value = newIdempotencyKey();
-      reveal.value = { title: "New client secret", items: [{ label: "Client secret", value: r.clientSecret, secret: true }] };
+      reveal.value = {
+        title: "New client secret",
+        items: [{ label: "Client secret", value: r.clientSecret, secret: true }],
+      };
       onChange(r.integration);
     } catch (err) {
       result.value = { ok: false, text: inlineError(err) };
@@ -145,7 +154,11 @@ function Credentials({ it, onChange }: { it: IntegrationView; onChange: (i: Inte
   return (
     <Section id="credentials" title="Credentials">
       {reveal.value ? (
-        <SecretReveal title={reveal.value.title} items={reveal.value.items} onDone={() => (reveal.value = null)} />
+        <SecretReveal
+          title={reveal.value.title}
+          items={reveal.value.items}
+          onDone={() => (reveal.value = null)}
+        />
       ) : null}
       <dl class="kv int-kv">
         <dt>Client ID</dt>
@@ -195,7 +208,15 @@ function Credentials({ it, onChange }: { it: IntegrationView; onChange: (i: Inte
   );
 }
 
-function Webhook({ it, onChange, base }: { it: IntegrationView; onChange: (i: IntegrationView) => void; base: string }) {
+function Webhook({
+  it,
+  onChange,
+  base,
+}: {
+  it: IntegrationView;
+  onChange: (i: IntegrationView) => void;
+  base: string;
+}) {
   const url = useSignal(it.webhook.url ?? "");
   const active = useSignal(it.webhook.active);
   const events = useSignal(it.webhook.events);
@@ -241,7 +262,14 @@ function Webhook({ it, onChange, base }: { it: IntegrationView; onChange: (i: In
       const r = await integrationsApi.rotateWebhookSecret(it.id, newIdempotencyKey());
       reveal.value = {
         title: "New webhook secret",
-        items: [{ label: "Webhook secret", value: r.webhookSecret, secret: true, hint: "Deliveries are signed with it from now on." }],
+        items: [
+          {
+            label: "Webhook secret",
+            value: r.webhookSecret,
+            secret: true,
+            hint: "Deliveries are signed with it from now on.",
+          },
+        ],
       };
       onChange(r.integration);
     } catch (err) {
@@ -282,7 +310,11 @@ function Webhook({ it, onChange, base }: { it: IntegrationView; onChange: (i: In
       }
     >
       {reveal.value ? (
-        <SecretReveal title={reveal.value.title} items={reveal.value.items} onDone={() => (reveal.value = null)} />
+        <SecretReveal
+          title={reveal.value.title}
+          items={reveal.value.items}
+          onDone={() => (reveal.value = null)}
+        />
       ) : null}
       {!hooks ? (
         <p class="ev-sub">Add the Receive events permission below to send webhooks.</p>
@@ -302,29 +334,58 @@ function Webhook({ it, onChange, base }: { it: IntegrationView; onChange: (i: In
             />
           </label>
           <label class="check">
-            <input type="checkbox" checked={active.value} onChange={(e) => (active.value = e.currentTarget.checked)} />
+            <input
+              type="checkbox"
+              checked={active.value}
+              onChange={(e) => (active.value = e.currentTarget.checked)}
+            />
             <span>Active</span>
-            <span class="check__hint">Untick to pause. While paused, deliveries are cancelled, not queued.</span>
+            <span class="check__hint">
+              Untick to pause. While paused, deliveries are cancelled, not queued.
+            </span>
           </label>
           <EventChecklist value={events.value} onChange={(v) => (events.value = v)} />
-          <SaveBar dirty={dirty} busy={saving.value} label="Save webhook" onDiscard={() => { url.value = it.webhook.url ?? ""; active.value = it.webhook.active; events.value = it.webhook.events; }} />
+          <SaveBar
+            dirty={dirty}
+            busy={saving.value}
+            label="Save webhook"
+            onDiscard={() => {
+              url.value = it.webhook.url ?? "";
+              active.value = it.webhook.active;
+              events.value = it.webhook.events;
+            }}
+          />
         </form>
       )}
       {hooks ? (
         <div class="int-webhook-secret">
           <p>
             <b>Secret</b>{" "}
-            {it.webhook.secretSet ? "is set. Every delivery carries X-Gittifacts-Signature-256." : "is not set; deliveries are unsigned."}
+            {it.webhook.secretSet
+              ? "is set. Every delivery carries X-Gittifacts-Signature-256."
+              : "is not set; deliveries are unsigned."}
           </p>
           <div class="int-actions">
-            <Button icon="send" size="sm" busy={pinging.value} busyLabel="Sending…" disabled={!it.webhook.url} onClick={ping}>
+            <Button
+              icon="send"
+              size="sm"
+              busy={pinging.value}
+              busyLabel="Sending…"
+              disabled={!it.webhook.url}
+              onClick={ping}
+            >
               Send ping
             </Button>
             <ConfirmAction
               label="Generate new webhook secret"
               confirmLabel="Generate new secret"
               busyLabel="Generating…"
-              consequence={<>The old secret stops working now. Update your receiver right after, or its signature checks fail.</>}
+              consequence={
+                <>
+                  The old secret stops working now. Update your receiver right after, or its
+                  signature checks fail.
+                </>
+              }
               onConfirm={rotate}
             />
           </div>
@@ -351,9 +412,15 @@ function useLeaveGuard() {
       if (unsaved.size > 0) e.preventDefault();
     };
     const onClick = (e: MouseEvent) => {
-      if (unsaved.size === 0 || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey) return;
+      if (unsaved.size === 0 || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey)
+        return;
       const a = (e.target as Element | null)?.closest?.("a[href]");
-      if (!(a instanceof HTMLAnchorElement) || a.target === "_blank" || a.origin !== window.location.origin) return;
+      if (
+        !(a instanceof HTMLAnchorElement) ||
+        a.target === "_blank" ||
+        a.origin !== window.location.origin
+      )
+        return;
       if (a.pathname === window.location.pathname) return;
       if (!window.confirm(message())) {
         e.preventDefault();
@@ -370,7 +437,17 @@ function useLeaveGuard() {
   }, []);
 }
 
-function SaveBar({ dirty, busy, label, onDiscard }: { dirty: boolean; busy: boolean; label: string; onDiscard: () => void }) {
+function SaveBar({
+  dirty,
+  busy,
+  label,
+  onDiscard,
+}: {
+  dirty: boolean;
+  busy: boolean;
+  label: string;
+  onDiscard: () => void;
+}) {
   useEffect(() => {
     if (dirty) unsaved.add(label);
     else unsaved.delete(label);
@@ -430,19 +507,39 @@ function SignIn({ it, onChange }: { it: IntegrationView; onChange: (i: Integrati
       >
         <label class="field">
           <span class="sr-only">Redirect URIs, one per line</span>
-          <textarea class="textarea mono" rows={Math.max(2, uris.length + 1)} autoCapitalize="off" spellcheck={false} value={text.value} onInput={(e) => (text.value = e.currentTarget.value)} aria-describedby="redir-hint" />
+          <textarea
+            class="textarea mono"
+            rows={Math.max(2, uris.length + 1)}
+            autoCapitalize="off"
+            spellcheck={false}
+            value={text.value}
+            onInput={(e) => (text.value = e.currentTarget.value)}
+            aria-describedby="redir-hint"
+          />
           <span class="field__hint" id="redir-hint">
-            One per line, matched exactly (path and trailing slash included). http:// only for localhost.
+            One per line, matched exactly (path and trailing slash included). http:// only for
+            localhost.
           </span>
         </label>
         <Result r={s.result} />
-        <SaveBar dirty={dirty} busy={s.busy.value} label="Save redirect URIs" onDiscard={() => (text.value = it.redirectUris.join("\n"))} />
+        <SaveBar
+          dirty={dirty}
+          busy={s.busy.value}
+          label="Save redirect URIs"
+          onDiscard={() => (text.value = it.redirectUris.join("\n"))}
+        />
       </form>
     </Section>
   );
 }
 
-function Permissions({ it, onChange }: { it: IntegrationView; onChange: (i: IntegrationView) => void }) {
+function Permissions({
+  it,
+  onChange,
+}: {
+  it: IntegrationView;
+  onChange: (i: IntegrationView) => void;
+}) {
   const scopes = useSignal<IntegrationScope[]>(it.scopes);
   const s = useSave(it, onChange);
   const dirty = sortScopes(scopes.value).join() !== sortScopes(it.scopes).join();
@@ -453,7 +550,8 @@ function Permissions({ it, onChange }: { it: IntegrationView; onChange: (i: Inte
         class="int-sec__form"
         onSubmit={(e) => {
           e.preventDefault();
-          if (scopes.value.length === 0) s.result.value = { ok: false, text: "Pick at least one permission." };
+          if (scopes.value.length === 0)
+            s.result.value = { ok: false, text: "Pick at least one permission." };
           else void s.save({ scopes: scopes.value }, "Permissions saved.");
         }}
       >
@@ -464,21 +562,26 @@ function Permissions({ it, onChange }: { it: IntegrationView; onChange: (i: Inte
           legend="What it asks for when people install it"
         />
         <p class="field__hint">
-          People see these in plain words on the install screen. It can never push, approve or merge,
-          whatever it asks for.
+          People see these in plain words on the install screen. It can never push, approve or
+          merge, whatever it asks for.
         </p>
         <p class="int-sec__note" data-testid="permissions-existing">
           <Icon name="info" size={16} />
           <span>
-            Existing installations keep what they granted. People see the new permissions and approve
-            them when they next install or update it.
+            Existing installations keep what they granted. People see the new permissions and
+            approve them when they next install or update it.
             {widened && it.installationCount > 0
               ? ` ${it.installationCount === 1 ? "1 installation keeps" : `${it.installationCount} installations keep`} the old permissions until ${it.installationCount === 1 ? "its owner approves" : "their owners approve"}.`
               : ""}
           </span>
         </p>
         <Result r={s.result} />
-        <SaveBar dirty={dirty} busy={s.busy.value} label="Save permissions" onDiscard={() => (scopes.value = it.scopes)} />
+        <SaveBar
+          dirty={dirty}
+          busy={s.busy.value}
+          label="Save permissions"
+          onDiscard={() => (scopes.value = it.scopes)}
+        />
       </form>
     </Section>
   );
@@ -536,16 +639,40 @@ function About({ it, onChange }: { it: IntegrationView; onChange: (i: Integratio
         </label>
         <label class="field">
           <span class="field__label">Homepage URL</span>
-          <input class="input" type="url" inputMode="url" autoCapitalize="off" spellcheck={false} {...bind(homepage)} />
+          <input
+            class="input"
+            type="url"
+            inputMode="url"
+            autoCapitalize="off"
+            spellcheck={false}
+            {...bind(homepage)}
+          />
         </label>
         <label class="field">
           <span class="field__label">
             Logo URL <span class="int-form__opt">optional</span>
           </span>
-          <input class="input" type="url" inputMode="url" autoCapitalize="off" spellcheck={false} {...bind(logo)} />
+          <input
+            class="input"
+            type="url"
+            inputMode="url"
+            autoCapitalize="off"
+            spellcheck={false}
+            {...bind(logo)}
+          />
         </label>
         <Result r={s.result} />
-        <SaveBar dirty={dirty} busy={s.busy.value} label="Save details" onDiscard={() => { name.value = it.name; description.value = it.description ?? ""; homepage.value = it.homepageUrl; logo.value = it.logoUrl ?? ""; }} />
+        <SaveBar
+          dirty={dirty}
+          busy={s.busy.value}
+          label="Save details"
+          onDiscard={() => {
+            name.value = it.name;
+            description.value = it.description ?? "";
+            homepage.value = it.homepageUrl;
+            logo.value = it.logoUrl ?? "";
+          }}
+        />
       </form>
     </Section>
   );
@@ -557,7 +684,9 @@ function RecentDeliveries({ it, base }: { it: IntegrationView; base: string }) {
   return (
     <Section id="recent" title="Recent deliveries">
       {st.status === "loading" ? <Loading label="Loading recent deliveries" lines={3} /> : null}
-      {st.status === "error" ? <ErrorState error={st.error} what="recent deliveries" onRetry={res.reload} /> : null}
+      {st.status === "error" ? (
+        <ErrorState error={st.error} what="recent deliveries" onRetry={res.reload} />
+      ) : null}
       {st.status === "ok" && st.data.deliveries.length === 0 ? (
         <p class="ev-sub">Nothing sent yet. Send a ping to test your endpoint.</p>
       ) : null}
@@ -638,7 +767,13 @@ export function IntegrationDetail() {
       title={it?.name ?? "Integration"}
       wide
       crumbs={crumbs}
-      actions={it ? <LinkButton href={base} size="sm" icon="webhook">Delivery log</LinkButton> : null}
+      actions={
+        it ? (
+          <LinkButton href={base} size="sm" icon="webhook">
+            Delivery log
+          </LinkButton>
+        ) : null
+      }
       meta={
         it ? (
           <span class="int-head-meta">
@@ -657,7 +792,9 @@ export function IntegrationDetail() {
       }
     >
       {st.status === "loading" ? <Loading label="Loading the integration" lines={10} /> : null}
-      {st.status === "error" ? <ErrorState error={st.error} what="this integration" onRetry={res.reload} /> : null}
+      {st.status === "error" ? (
+        <ErrorState error={st.error} what="this integration" onRetry={res.reload} />
+      ) : null}
       {it ? (
         <div class="int-detail">
           <div class="int-detail__main">

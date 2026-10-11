@@ -55,8 +55,9 @@ async function driveCi(done: () => Promise<boolean> | boolean, timeout = 30_000)
 async function changeOf(app: App, cookie: string, changeId: string) {
   const res = await request(app, "GET", `/api/v1/changes/${changeId}`, { cookie });
   expect(res.status).toBe(200);
-  return (await body<{ change: { status: string; lane: number | null; planId: string | null } }>(res))
-    .change;
+  return (
+    await body<{ change: { status: string; lane: number | null; planId: string | null } }>(res)
+  ).change;
 }
 
 describe("golden path: create_project → sample plan → build → review → merge (workerd)", () => {
@@ -84,7 +85,9 @@ describe("golden path: create_project → sample plan → build → review → m
 
       // nextSteps: reconnect with the token, the first CI, then the golden path (claim → approve →
       // build → lane → review → merge).
-      const calls = p.nextSteps.map((s) => parseCall(s.call ?? "")?.tool ?? s.command?.split(" ")[0]);
+      const calls = p.nextSteps.map(
+        (s) => parseCall(s.call ?? "")?.tool ?? s.command?.split(" ")[0],
+      );
       expect(p.nextSteps[0]?.title).toMatch(/^Reconnect/);
       expect(calls.slice(1, 9)).toEqual([
         "wait_for_change",
@@ -167,7 +170,9 @@ describe("golden path: create_project → sample plan → build → review → m
         },
       });
       // CI (and the bootstrap's) finish; evidence is signed; the lane is set and a human is asked.
-      await driveCi(async () => (await changeOf(app, human.cookie, changeId)).status === "awaiting-review");
+      await driveCi(
+        async () => (await changeOf(app, human.cookie, changeId)).status === "awaiting-review",
+      );
       const graded = await changeOf(app, human.cookie, changeId);
       expect(graded.planId).toBe(planId);
       expect(graded.lane).not.toBeNull();

@@ -63,7 +63,10 @@ export interface QueueStall {
   error: { errorClass: string; message: string } | null;
   /** epoch ms */
   since: number | null;
-  next: { kind: "retry"; at: number } | { kind: "rebuild"; at: number | null } | { kind: "human"; message: string };
+  next:
+    | { kind: "retry"; at: number }
+    | { kind: "rebuild"; at: number | null }
+    | { kind: "human"; message: string };
 }
 
 export type OverlapReasonCode = "same-plan" | "same-paths" | "paths-unknown";
@@ -75,7 +78,12 @@ export interface QueueOverlap {
   author: { id: string; kind: string; name: string };
   /** False: it has nothing pushed yet, so whether its paths overlap is unknown. */
   pathsKnown: boolean;
-  reasons: { code: OverlapReasonCode | (string & {}); message: string; paths: string[]; morePaths: number }[];
+  reasons: {
+    code: OverlapReasonCode | (string & {});
+    message: string;
+    paths: string[];
+    morePaths: number;
+  }[];
 }
 
 export interface QueueEntryView {
@@ -407,15 +415,34 @@ export const queueActs = {
   dequeue: async (changeId: string, key?: string): Promise<{ removed: boolean }> =>
     isMockMode()
       ? (await mockQueue()).mockDequeue(changeId)
-      : request<{ removed: boolean }>("DELETE", `/api/v1/changes/${enc(changeId)}/queue`, undefined, key),
-  reprioritize: async (changeId: string, priority: SettablePriority, key?: string): Promise<unknown> =>
+      : request<{ removed: boolean }>(
+          "DELETE",
+          `/api/v1/changes/${enc(changeId)}/queue`,
+          undefined,
+          key,
+        ),
+  reprioritize: async (
+    changeId: string,
+    priority: SettablePriority,
+    key?: string,
+  ): Promise<unknown> =>
     isMockMode()
       ? (await mockQueue()).mockReprioritize(changeId, priority)
       : request("PATCH", `/api/v1/changes/${enc(changeId)}/queue`, { priority }, key),
-  freeze: async (repoId: string, frozen: boolean, reason: string, key?: string): Promise<{ frozen: boolean }> =>
+  freeze: async (
+    repoId: string,
+    frozen: boolean,
+    reason: string,
+    key?: string,
+  ): Promise<{ frozen: boolean }> =>
     isMockMode()
       ? (await mockQueue()).mockSetFrozen(repoId, frozen, reason)
-      : request<{ frozen: boolean }>("POST", `/api/v1/repos/${enc(repoId)}/queue/${frozen ? "freeze" : "thaw"}`, { reason }, key),
+      : request<{ frozen: boolean }>(
+          "POST",
+          `/api/v1/repos/${enc(repoId)}/queue/${frozen ? "freeze" : "thaw"}`,
+          { reason },
+          key,
+        ),
   resume: async (repoId: string): Promise<{ resumed: boolean }> =>
     isMockMode()
       ? (await mockQueue()).mockResume(repoId)

@@ -1,4 +1,15 @@
-import { ChangeDiff, Evidence, Plan, PipelineRun, Repo, Tour, Change, AuditEvent, Principal, LinkedIssue } from "@app/domain";
+import {
+  AuditEvent,
+  Change,
+  ChangeDiff,
+  Evidence,
+  LinkedIssue,
+  PipelineRun,
+  Plan,
+  Principal,
+  Repo,
+  Tour,
+} from "@app/domain";
 import { describe, expect, it } from "vitest";
 import { createDb } from "../src/api/fixtures.js";
 import { excerptForRef } from "../src/lib/diff.js";
@@ -41,7 +52,9 @@ describe("mock fixtures match the domain contract", () => {
         for (const ref of stop.hunkRefs) {
           const ex = excerptForRef(s.diff, ref);
           expect(ex, `${s.change.id}: ${ref.file}`).not.toBeNull();
-          expect(ex?.missing, `${s.change.id}: ${ref.file} ${ref.startLine}-${ref.endLine}`).toBe(false);
+          expect(ex?.missing, `${s.change.id}: ${ref.file} ${ref.startLine}-${ref.endLine}`).toBe(
+            false,
+          );
         }
         for (const id of stop.evidenceRefs) expect(ids.has(id), `${s.change.id}: ${id}`).toBe(true);
       }
@@ -50,16 +63,30 @@ describe("mock fixtures match the domain contract", () => {
 
   it("covers the nine canonical scenarios", () => {
     const by = (id: string) => db.scenarios.find((s) => s.change.id === id);
-    expect(by("chg_tz7k2")?.evidence?.items.find((i) => i.kind === "red-green")).toMatchObject({ verdict: "proven" });
-    expect(by("chg_lc3m9")?.evidence?.items.find((i) => i.kind === "red-green")).toMatchObject({ verdict: "no-tests" });
-    expect(by("chg_pg5q1")?.evidence?.items.find((i) => i.kind === "public-api")).toMatchObject({ classification: "additive" });
+    expect(by("chg_tz7k2")?.evidence?.items.find((i) => i.kind === "red-green")).toMatchObject({
+      verdict: "proven",
+    });
+    expect(by("chg_lc3m9")?.evidence?.items.find((i) => i.kind === "red-green")).toMatchObject({
+      verdict: "no-tests",
+    });
+    expect(by("chg_pg5q1")?.evidence?.items.find((i) => i.kind === "public-api")).toMatchObject({
+      classification: "additive",
+    });
     const breaking = by("chg_br8w4");
-    expect(breaking?.evidence?.items.find((i) => i.kind === "public-api")).toMatchObject({ classification: "breaking" });
+    expect(breaking?.evidence?.items.find((i) => i.kind === "public-api")).toMatchObject({
+      classification: "breaking",
+    });
     expect(breaking?.tour?.stops.find((st) => st.kind === "risk")?.title).toContain("Breaking");
-    expect(by("chg_pd2n6")?.evidence?.items.find((i) => i.kind === "dependencies")).toMatchObject({ newInstallScripts: [{ name: "sharp" }] });
+    expect(by("chg_pd2n6")?.evidence?.items.find((i) => i.kind === "dependencies")).toMatchObject({
+      newInstallScripts: [{ name: "sharp" }],
+    });
     expect(by("chg_ss4h8")?.change.laneReasons.some((r) => r.code === "sensitive.path")).toBe(true);
-    expect(by("chg_cm6t3")?.evidence?.items.find((i) => i.kind === "transform")).toMatchObject({ verified: true });
-    expect(by("chg_pl9c2")?.change.laneReasons.some((r) => r.code === "policy.modified")).toBe(true);
+    expect(by("chg_cm6t3")?.evidence?.items.find((i) => i.kind === "transform")).toMatchObject({
+      verified: true,
+    });
+    expect(by("chg_pl9c2")?.change.laneReasons.some((r) => r.code === "policy.modified")).toBe(
+      true,
+    );
     expect(by("chg_dr1x5")?.change.laneReasons.some((r) => r.code === "scope.drift")).toBe(true);
     expect(by("chg_fx2r7")?.change.rolloutState?.status).toBe("rolling");
     expect(by("chg_lg8b0")?.change.status).toBe("reverted");

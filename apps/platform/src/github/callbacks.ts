@@ -1,5 +1,6 @@
 /** GitHub's redirect back to us after the App's user authorization (install verification). */
 import type { Caller, Services } from "../app-env.js";
+import { repoAllowed } from "./allowlist.js";
 import {
   exchangeUserCode,
   getUser,
@@ -7,7 +8,6 @@ import {
   userInstallationRepos,
   userInstallations,
 } from "./api.js";
-import { repoAllowed } from "./allowlist.js";
 import { githubApp } from "./app-config.js";
 import { accessOf, grantLinkedRepos } from "./grading.js";
 import { FlowError, settingsUrl, takeState } from "./setup.js";

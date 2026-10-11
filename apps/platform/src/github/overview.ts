@@ -54,7 +54,9 @@ export type GithubOverview = z.infer<typeof GithubOverview>;
 
 /** The installation's repos this human's link saw on GitHub (never the whole installation). */
 async function visibleRepos(svc: Services, installationId: number, principalId: string) {
-  const seen = new Set((await linkRepos(svc.store.db, installationId, principalId)).map((r) => r.repoId));
+  const seen = new Set(
+    (await linkRepos(svc.store.db, installationId, principalId)).map((r) => r.repoId),
+  );
   return (await reposOf(svc.store.db, installationId)).filter((r) => seen.has(r.repoId));
 }
 

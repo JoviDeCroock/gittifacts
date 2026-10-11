@@ -162,8 +162,8 @@ function ClaimStageView({
           . A repo has one owner; claim links work once.
         </p>
         <p>
-          If you need access, ask its owner. If this was your agent's repo, ask the agent to make
-          a new one.
+          If you need access, ask its owner. If this was your agent's repo, ask the agent to make a
+          new one.
         </p>
       </ConsentOutcome>
     );

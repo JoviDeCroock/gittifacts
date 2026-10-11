@@ -39,7 +39,9 @@ test("the E2E account signs in and sees its dashboard", async ({ page, context, 
   expect(principal.kind).toBe("human");
   // On a phone the account menu sits in the collapsed navigation: present, not necessarily shown.
   await expect(page.getByText(principal.name, { exact: false }).first()).toBeAttached();
-  await expect(page.getByTestId("first-run-checklist").or(page.getByRole("main").getByRole("list")).first()).toBeVisible();
+  await expect(
+    page.getByTestId("first-run-checklist").or(page.getByRole("main").getByRole("list")).first(),
+  ).toBeVisible();
   await expectNoHorizontalScroll(page);
 });
 
@@ -48,7 +50,11 @@ test("the E2E account signs in and sees its dashboard", async ({ page, context, 
  * at both widths. Screenshots are kept in the report (review aid for copy changes such as the
  * 2026-10-04 terms); the assertions are on roles, test ids and the account's own data, never copy.
  */
-test("the E2E account's dashboard and newest Change page render", async ({ page, context, baseURL }, testInfo) => {
+test("the E2E account's dashboard and newest Change page render", async ({
+  page,
+  context,
+  baseURL,
+}, testInfo) => {
   test.skip(EMAIL === "" || PASSWORD === "", "E2E_EMAIL / E2E_PASSWORD not configured");
   // Signed out, the app sends the dashboard to sign-in (the form itself is tested in the gate).
   await page.goto("/dashboard");
@@ -62,21 +68,38 @@ test("the E2E account's dashboard and newest Change page render", async ({ page,
   await expectNoHorizontalScroll(page);
   const shot = async (name: string) => {
     const body = await page.screenshot();
-    await testInfo.attach(`${name}-${testInfo.project.name}.png`, { body, contentType: "image/png" });
+    await testInfo.attach(`${name}-${testInfo.project.name}.png`, {
+      body,
+      contentType: "image/png",
+    });
   };
   // Shoot the loaded dashboard, not its skeleton.
-  await expect(page.getByTestId("first-run-checklist").or(page.getByRole("main").getByRole("list")).first()).toBeVisible();
+  await expect(
+    page.getByTestId("first-run-checklist").or(page.getByRole("main").getByRole("list")).first(),
+  ).toBeVisible();
   await shot("dashboard");
 
   // Find a Change the way a person does: a link on the dashboard, else on the first repo's page.
   // Read-only, and never a reason to fail the smoke when the account simply has no Change yet.
-  let href = await page.locator('a[href^="/changes/"]').first().getAttribute("href", { timeout: 5_000 }).catch(() => null);
+  let href = await page
+    .locator('a[href^="/changes/"]')
+    .first()
+    .getAttribute("href", { timeout: 5_000 })
+    .catch(() => null);
   if (href === null) {
-    const repo = await page.locator('a[href^="/repos/"]').first().getAttribute("href", { timeout: 5_000 }).catch(() => null);
+    const repo = await page
+      .locator('a[href^="/repos/"]')
+      .first()
+      .getAttribute("href", { timeout: 5_000 })
+      .catch(() => null);
     if (repo !== null) {
       await page.goto(repo);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      href = await page.locator('a[href^="/changes/"]').first().getAttribute("href", { timeout: 5_000 }).catch(() => null);
+      href = await page
+        .locator('a[href^="/changes/"]')
+        .first()
+        .getAttribute("href", { timeout: 5_000 })
+        .catch(() => null);
     }
   }
   test.skip(href === null, "no Change linked from the E2E account's dashboard or first repo");

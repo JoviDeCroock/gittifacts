@@ -23,16 +23,27 @@ interface Created {
   bootstrapChangeId: string | null;
 }
 
-test("anonymous create_project → first green check and a serving preview, within budget", async ({ request, baseURL }) => {
+test("anonymous create_project → first green check and a serving preview, within budget", async ({
+  request,
+  baseURL,
+}) => {
   const t0 = Date.now();
   const res = await request.post(`${baseURL}/api/v1/projects`, {
     headers: { "content-type": "application/json", origin: baseURL as string },
-    data: { template: TEMPLATE, name: uniqueName(`smoke-${(process.env.SMOKE_EXPECT_COMMIT ?? "local").slice(0, 7)}`).toLowerCase() },
+    data: {
+      template: TEMPLATE,
+      name: uniqueName(
+        `smoke-${(process.env.SMOKE_EXPECT_COMMIT ?? "local").slice(0, 7)}`,
+      ).toLowerCase(),
+    },
   });
   if (res.status() === 503) {
     const body = (await res.json()) as { error?: { code?: string } };
     // The operator's kill switch is a decision, not a regression: reported, never green.
-    test.skip(body.error?.code === "creation-disabled", "unclaimed creation is switched off (kill switch)");
+    test.skip(
+      body.error?.code === "creation-disabled",
+      "unclaimed creation is switched off (kill switch)",
+    );
   }
   expect(res.status(), await res.text()).toBe(201);
   const created = (await res.json()) as Created;
@@ -47,19 +58,31 @@ test("anonymous create_project → first green check and a serving preview, with
     const waited = await pollUntil(
       async () => {
         const left = Math.max(5, Math.min(50, Math.floor((t0 + BUDGET_MS - Date.now()) / 1000)));
-        const r = await mcp.tools.wait_for_change({ changeId, until: "evidence_ready", timeoutSec: left });
+        const r = await mcp.tools.wait_for_change({
+          changeId,
+          until: "evidence_ready",
+          timeoutSec: left,
+        });
         if (r.isError) throw new Error(JSON.stringify(r.content));
         return r.structuredContent;
       },
       (w) => w.reached === true || (w.reason !== "timeout" && w.reason !== undefined),
-      { timeoutMs: BUDGET_MS, what: "the bootstrap Change's evidence", minIntervalMs: 100, maxIntervalMs: 1_000 },
+      {
+        timeoutMs: BUDGET_MS,
+        what: "the bootstrap Change's evidence",
+        minIntervalMs: 100,
+        maxIntervalMs: 1_000,
+      },
     );
     expect(waited, JSON.stringify(waited).slice(0, 500)).toMatchObject({ reached: true });
 
     const status = await mcp.tools.get_change_status({ changeId });
     if (status.isError) throw new Error(JSON.stringify(status.content));
     const runs = status.structuredContent.runs;
-    expect(runs.some((r) => r.status === "passed"), JSON.stringify(runs).slice(0, 500)).toBe(true);
+    expect(
+      runs.some((r) => r.status === "passed"),
+      JSON.stringify(runs).slice(0, 500),
+    ).toBe(true);
   } finally {
     await mcp.client.close();
   }
@@ -70,10 +93,18 @@ test("anonymous create_project → first green check and a serving preview, with
     await pollUntil(
       async () => (await request.get(`${previewUrl}/health`, { timeout: 30_000 })).status(),
       (s) => s === 200,
-      { timeoutMs: Math.max(10_000, t0 + BUDGET_MS - Date.now()), what: "the preview's /health to answer 200" },
+      {
+        timeoutMs: Math.max(10_000, t0 + BUDGET_MS - Date.now()),
+        what: "the preview's /health to answer 200",
+      },
     );
   }
   const elapsed = Date.now() - t0;
-  test.info().annotations.push({ type: "ttfg", description: `${Math.round(elapsed / 1000)} s (budget ${BUDGET_MS / 1000} s)` });
+  test
+    .info()
+    .annotations.push({
+      type: "ttfg",
+      description: `${Math.round(elapsed / 1000)} s (budget ${BUDGET_MS / 1000} s)`,
+    });
   expect(elapsed, "time to first green").toBeLessThanOrEqual(BUDGET_MS);
 });

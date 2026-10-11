@@ -5,8 +5,8 @@ import { auditVisibility, repoAuditSubjects } from "../access/audit.js";
 import type { Caller, Services } from "../app-env.js";
 import { auditLogStub } from "../audit/audit.js";
 import { verifyEntries } from "../audit/chain.js";
-import { changes, plans, repos } from "../db/schema.js";
 import { summarizeAudit } from "../audit/summary.js";
+import { changes, plans, repos } from "../db/schema.js";
 import type { PrincipalRef } from "../store/d1-store.js";
 
 /** An audit event as the API returns it: with a readable one-liner. */

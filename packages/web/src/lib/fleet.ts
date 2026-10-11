@@ -16,7 +16,14 @@ export interface AgentActivity {
    * The agent's latest event, in words, with a link to what it acted on (null: nothing to open)
    * and what that is called (`object`: the plan or change title and its repo, when the log names it).
    */
-  last: { action: string; label: string; subject: string; href: string | null; at: string; object: AuditSubjectRef | null };
+  last: {
+    action: string;
+    label: string;
+    subject: string;
+    href: string | null;
+    at: string;
+    object: AuditSubjectRef | null;
+  };
   /** Events by this agent in the page that was read. */
   events: number;
 }
@@ -27,7 +34,11 @@ export const WORKING_MS = 15 * 60_000;
 export const WINDOW_MS = 7 * 24 * 60 * 60_000;
 
 /** After these, the next move is a person's (a review, a plan approval). */
-const WAITS_ON_PERSON = new Set(["change.review-requested", "plan.created", "merge-queue.approval-requested"]);
+const WAITS_ON_PERSON = new Set([
+  "change.review-requested",
+  "plan.created",
+  "merge-queue.approval-requested",
+]);
 const FAILING = /ci-failed|tour-failed|build-errored|gave-up/;
 
 /** One agent's (or person's) trail: the audit log filtered to its events. */
@@ -71,9 +82,18 @@ export function fleetFrom(page: AuditPage, now: number): AgentActivity[] {
     byAgent.set(who.id, {
       agent: who,
       state: stateOf(e.action, at, now),
-      last: { action: e.action, label: actionLabel(e.action), subject: e.subject, href: subjectHref(e.subject), at: e.at, object: page.subjects?.[e.subject] ?? null },
+      last: {
+        action: e.action,
+        label: actionLabel(e.action),
+        subject: e.subject,
+        href: subjectHref(e.subject),
+        at: e.at,
+        object: page.subjects?.[e.subject] ?? null,
+      },
       events: 1,
     });
   }
-  return [...byAgent.values()].sort((a, b) => ORDER[a.state] - ORDER[b.state] || Date.parse(b.last.at) - Date.parse(a.last.at));
+  return [...byAgent.values()].sort(
+    (a, b) => ORDER[a.state] - ORDER[b.state] || Date.parse(b.last.at) - Date.parse(a.last.at),
+  );
 }

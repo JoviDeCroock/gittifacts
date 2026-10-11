@@ -54,10 +54,14 @@ export type CheckActionId = keyof typeof CHECK_ACTIONS;
  * check never shows a red ✕ for something gittifacts doesn't enforce; the title carries the lane.
  * `action_required` is for a repo that opts into enforcing.
  */
-export function conclusionOf(v: Pick<LaneVerdict, "lane" | "blocked" | "action">, opts: { reportOnly?: boolean } = {}): CheckConclusion {
+export function conclusionOf(
+  v: Pick<LaneVerdict, "lane" | "blocked" | "action">,
+  opts: { reportOnly?: boolean } = {},
+): CheckConclusion {
   if (opts.reportOnly === true) return "neutral";
   if (v.blocked) return "action_required";
-  if (v.lane === 0) return v.action === "merge" || v.action === "label-ready" ? "success" : "neutral";
+  if (v.lane === 0)
+    return v.action === "merge" || v.action === "label-ready" ? "success" : "neutral";
   return v.lane === 1 ? "neutral" : "action_required";
 }
 
@@ -99,16 +103,31 @@ export function checkText(v: LaneVerdict, ctx: CheckRunContext): string {
   const passed = v.reasons.filter((r) => r.lane === 0);
   const out: string[] = [];
   if (ctx.qa != null) out.push(qaCheckText(ctx.qa));
-  out.push(`<details><summary>Why this lane: ${raised.length} raised, ${passed.length} passed</summary>`, "");
-  for (const r of raised.slice(0, 40)) out.push(`- **${TERMS.laneBadge(r.lane)}** · ${reasonPhrase(r)}: ${cut(oneLine(r.message), 400)}`);
+  out.push(
+    `<details><summary>Why this lane: ${raised.length} raised, ${passed.length} passed</summary>`,
+    "",
+  );
+  for (const r of raised.slice(0, 40))
+    out.push(
+      `- **${TERMS.laneBadge(r.lane)}** · ${reasonPhrase(r)}: ${cut(oneLine(r.message), 400)}`,
+    );
   if (raised.length > 0 && passed.length > 0) out.push("");
   for (const r of passed.slice(0, 40)) out.push(`- ${cut(oneLine(r.message), 200)}`);
   for (const d of v.degradations) out.push(`- Note: ${cut(oneLine(d.message), 300)}`);
   out.push("", "</details>", "");
   if (ctx.evidence.length > 0) {
-    const sig = v.evidence === null ? "" : v.evidence.verified ? ", signed and verified" : ", **signature did not verify**";
-    out.push(`<details><summary>Evidence: ${plural(ctx.evidence.length, "item")}${sig}</summary>`, "");
-    for (const e of ctx.evidence.slice(0, 60)) out.push(`- ${e.kind}: ${e.status}${e.note ? ` (${cut(oneLine(e.note), 240)})` : ""}`);
+    const sig =
+      v.evidence === null
+        ? ""
+        : v.evidence.verified
+          ? ", signed and verified"
+          : ", **signature did not verify**";
+    out.push(
+      `<details><summary>Evidence: ${plural(ctx.evidence.length, "item")}${sig}</summary>`,
+      "",
+    );
+    for (const e of ctx.evidence.slice(0, 60))
+      out.push(`- ${e.kind}: ${e.status}${e.note ? ` (${cut(oneLine(e.note), 240)})` : ""}`);
     out.push("", "</details>", "");
   }
   out.push(`Graded commit \`${short(v.headSha)}\`.`, "", verdictComment(v, ctx));
@@ -139,7 +158,11 @@ function verdictComment(v: LaneVerdict, ctx: CheckRunContext): string {
 /** The PATCH body that completes the run with the verdict. */
 export function completedCheckRun(v: LaneVerdict, ctx: CheckRunContext, completedAt: string) {
   // ≤ 3 buttons (GitHub's limit). Run QA asks for QA in a browser; never on a blocked head (no build).
-  const actions: CheckActionId[] = v.blocked ? [] : v.lane === 0 ? ["full_review", "run_qa"] : ["approve_tour", "full_review", "run_qa"];
+  const actions: CheckActionId[] = v.blocked
+    ? []
+    : v.lane === 0
+      ? ["full_review", "run_qa"]
+      : ["approve_tour", "full_review", "run_qa"];
   return {
     name: CHECK_NAME,
     status: "completed",
@@ -157,7 +180,10 @@ export function completedCheckRun(v: LaneVerdict, ctx: CheckRunContext, complete
  * stays `in_progress` (no conclusion, no buttons). The walkthrough can only raise the lane, so Lane 1
  * says "so far"; a Lane 0 (or blocked) classification is never shown early: null, no write.
  */
-export function laneRun(v: TitleInput & Pick<LaneVerdict, "requiresHumanApproval">, ctx: Pick<CheckRunContext, "detailsUrl" | "shadow">) {
+export function laneRun(
+  v: TitleInput & Pick<LaneVerdict, "requiresHumanApproval">,
+  ctx: Pick<CheckRunContext, "detailsUrl" | "shadow">,
+) {
   if (v.blocked || v.lane === 0) return null;
   return {
     status: "in_progress" as const,
@@ -174,7 +200,13 @@ export function laneRun(v: TitleInput & Pick<LaneVerdict, "requiresHumanApproval
 }
 
 /** The POST body that opens the run when grading starts. */
-export function startedCheckRun(input: { headSha: string; changeId: string; detailsUrl: string; shadow: boolean; startedAt: string }) {
+export function startedCheckRun(input: {
+  headSha: string;
+  changeId: string;
+  detailsUrl: string;
+  shadow: boolean;
+  startedAt: string;
+}) {
   return {
     name: CHECK_NAME,
     head_sha: input.headSha,
@@ -239,7 +271,11 @@ const Hidden = z.object({
  * runs written before 2026-10-04, the old summary table. The live contract run uses it
  * (scripts/github-live-contract.ts, GITTIFACTS_READ=check-run).
  */
-export function readCheckRunVerdict(output: { title: string | null; summary: string | null; text?: string | null }): { verdict: CheckRunVerdict | undefined; kinds: string[] } {
+export function readCheckRunVerdict(output: {
+  title: string | null;
+  summary: string | null;
+  text?: string | null;
+}): { verdict: CheckRunVerdict | undefined; kinds: string[] } {
   const m = new RegExp(`<!-- ${VERDICT_MARK} (\\{.*?\\}) -->`).exec(output.text ?? "");
   if (m !== null) {
     let raw: unknown = null;
@@ -257,14 +293,19 @@ export function readCheckRunVerdict(output: { title: string | null; summary: str
 }
 
 /** The pre-2026-10-04 summary table: the title says shadow ("Shadow · ", or "Report-only · ") and blocked; the `| Lane | **N** |` row the lane; Why and Evidence the codes and kinds. */
-function readLegacy(output: { title: string | null; summary: string | null }): { verdict: CheckRunVerdict | undefined; kinds: string[] } {
+function readLegacy(output: { title: string | null; summary: string | null }): {
+  verdict: CheckRunVerdict | undefined;
+  kinds: string[];
+} {
   const title = output.title ?? "";
   const summary = output.summary ?? "";
   const lane = /^\| Lane \| \*\*(\d)\*\* \|$/m.exec(summary);
   if (lane === null) return { verdict: undefined, kinds: [] };
   const raised = /^\| Computed lane \| (\d) /m.exec(summary);
   const section = (name: string) => summary.split(`\n### ${name}\n`)[1]?.split("\n### ")[0] ?? "";
-  const reasons = [...section("Why").matchAll(/^- `([^`]+)` \(lane \d\)/gm)].map((m) => ({ code: m[1] ?? "" }));
+  const reasons = [...section("Why").matchAll(/^- `([^`]+)` \(lane \d\)/gm)].map((m) => ({
+    code: m[1] ?? "",
+  }));
   const kinds = [...section("Evidence").matchAll(/^\| ([^|]+?) \| [^|]* \|/gm)]
     .map((m) => m[1] ?? "")
     .filter((k) => k !== "Kind" && !/^-+$/.test(k));

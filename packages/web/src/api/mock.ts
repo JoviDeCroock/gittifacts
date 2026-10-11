@@ -4,11 +4,11 @@
  * Mutations (approve, review, kill, create agent) persist for the life of the tab.
  */
 import type { Change, Lane } from "@app/domain";
+import type { RawResponse } from "./client.js";
+import { ago, b64u, sha } from "./fixture-kit.js";
+import { chainEvents, createDb, type MockDb, principalRef } from "./fixtures.js";
 import invoiceAfter from "./mock-assets/invoice-after.png";
 import invoiceBefore from "./mock-assets/invoice-before.png";
-import { b64u, ago, sha } from "./fixture-kit.js";
-import { type MockDb, chainEvents, createDb, principalRef } from "./fixtures.js";
-import type { RawResponse } from "./client.js";
 import { listAttempts, pickAttempt } from "./mock-attempts.js";
 import { createClaimMock } from "./mock-claim.js";
 import { mockCreatedProjects, mockFreshAccount } from "./mock-getting-started.js";
@@ -68,7 +68,8 @@ const FIX: Record<string, string> = {
   not_reviewable: "Reload the change to see its current state.",
   comment_required: "Add a comment and submit again.",
   reason_required: "Add a reason and submit again.",
-  shadow_threshold_not_met: "Keep reviewing Lane 0 candidates until agreement reaches the policy threshold.",
+  shadow_threshold_not_met:
+    "Keep reviewing Lane 0 candidates until agreement reaches the policy threshold.",
   not_rolling_out: "Reload the rollout; it may already have finished or rolled back.",
   invalid_name: "Pick a name like fleet-coder-08.",
   name_taken: "Pick a different name, or revoke and reuse the old agent.",
@@ -78,7 +79,9 @@ const FIX: Record<string, string> = {
 };
 const fail = (status: number, code: string, message: string): RawResponse => ({
   status,
-  body: { error: { code, message, fix: { explanation: FIX[code] ?? "Retry, or reload the page." } } },
+  body: {
+    error: { code, message, fix: { explanation: FIX[code] ?? "Retry, or reload the page." } },
+  },
 });
 const idempotent = new Map<string, RawResponse>();
 
@@ -101,13 +104,19 @@ function scenarioById(id: string): Scenario | undefined {
 
 function appendAudit(principalId: string, action: string, subject: string): void {
   const last = db.audit[db.audit.length - 1];
-  const [event] = chainEvents([[0, principalId, action, subject]], (last?.seq ?? -1) + 1, last?.hash);
+  const [event] = chainEvents(
+    [[0, principalId, action, subject]],
+    (last?.seq ?? -1) + 1,
+    last?.hash,
+  );
   if (event) db.audit.push(event);
 }
 
 function countsFor(repoId: string): LaneCounts {
   const changes = db.scenarios.map((s) => s.change).filter((c) => c.repoId === repoId);
-  const open = changes.filter((c) => !["released", "reverted", "rejected", "abandoned"].includes(c.status));
+  const open = changes.filter(
+    (c) => !["released", "reverted", "rejected", "abandoned"].includes(c.status),
+  );
   return {
     lane0: open.filter((c) => c.computedLane === 0).length,
     lane1: open.filter((c) => c.lane === 1 && c.computedLane !== 0).length,
@@ -154,25 +163,48 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   [
     "GET",
     /^\/api\/v1\/principals\/([^/]+)$/,
-    ([id]) => (db.principals.some((p) => p.id === id) ? ok({ principal: principalRef(db.principals, id!) }) : fail(404, "not_found", "No such principal.")),
+    ([id]) =>
+      db.principals.some((p) => p.id === id)
+        ? ok({ principal: principalRef(db.principals, id!) })
+        : fail(404, "not_found", "No such principal."),
   ],
 
   [
     "POST",
     /^\/api\/v1\/principals\/agents$/,
     (_p, _q, body) => {
-      const input = parseBody<{ name: string; scopes: Scope[]; repoIds: string[]; expiresInDays: number }>(body);
+      const input = parseBody<{
+        name: string;
+        scopes: Scope[];
+        repoIds: string[];
+        expiresInDays: number;
+      }>(body);
       const name = (input.name ?? "").trim();
       const known = new Set(db.repos.map((r) => r.repo.id));
-      if (input.repoIds !== undefined && (!Array.isArray(input.repoIds) || input.repoIds.length === 0 || input.repoIds.some((r) => !known.has(r)))) {
-        return fail(400, "invalid_repos", "Pick repositories you are a member of, or leave the agent on all of them.");
+      if (
+        input.repoIds !== undefined &&
+        (!Array.isArray(input.repoIds) ||
+          input.repoIds.length === 0 ||
+          input.repoIds.some((r) => !known.has(r)))
+      ) {
+        return fail(
+          400,
+          "invalid_repos",
+          "Pick repositories you are a member of, or leave the agent on all of them.",
+        );
       }
       const days = input.expiresInDays ?? 90;
-      if (!Number.isInteger(days) || days < 1 || days > 365) return fail(400, "invalid_expiry", "Give the token between 1 and 365 days.");
+      if (!Number.isInteger(days) || days < 1 || days > 365)
+        return fail(400, "invalid_expiry", "Give the token between 1 and 365 days.");
       if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(name)) {
-        return fail(400, "invalid_name", "Use 2–41 lowercase letters, digits or hyphens, starting with a letter or digit.");
+        return fail(
+          400,
+          "invalid_name",
+          "Use 2–41 lowercase letters, digits or hyphens, starting with a letter or digit.",
+        );
       }
-      if (db.principals.some((p) => p.name === name)) return fail(409, "name_taken", `An agent called ${name} already exists.`);
+      if (db.principals.some((p) => p.name === name))
+        return fail(409, "name_taken", `An agent called ${name} already exists.`);
       const scopes = (input.scopes ?? []).filter((s) => s !== "plan:approve");
       const id = `prn_${b64u(`${name}:${Date.now()}`, 8).toLowerCase()}`;
       const principal: Principal = {
@@ -180,11 +212,22 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
         kind: "agent",
         name,
         ownerId: db.me,
-        keys: [{ id: `key_${b64u(id, 8)}`, alg: "Ed25519", publicKey: b64u(`${id}:pub`, 43), createdAt: new Date().toISOString(), revokedAt: null }],
+        keys: [
+          {
+            id: `key_${b64u(id, 8)}`,
+            alg: "Ed25519",
+            publicKey: b64u(`${id}:pub`, 43),
+            createdAt: new Date().toISOString(),
+            revokedAt: null,
+          },
+        ],
         scopes,
       };
       // The grant rides on the record so the agent-sessions mock can show its repos and end date.
-      const grant = { repoIds: input.repoIds ?? null, expiresAt: new Date(Date.now() + days * 86_400_000).toISOString() };
+      const grant = {
+        repoIds: input.repoIds ?? null,
+        expiresAt: new Date(Date.now() + days * 86_400_000).toISOString(),
+      };
       db.principals.push(Object.assign(principal, grant));
       appendAudit(db.me, "principal.created", `principal:${id}`);
       return ok({ principal, token: `gfa_${b64u(`${id}:token:${Date.now()}`, 40)}` }, 201);
@@ -197,7 +240,8 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     ([id]) => {
       const p = db.principals.find((x) => x.id === id);
       if (!p) return fail(404, "not_found", "No such principal.");
-      if (p.ownerId !== db.me) return fail(403, "forbidden", "You can only revoke tokens for agents you own.");
+      if (p.ownerId !== db.me)
+        return fail(403, "forbidden", "You can only revoke tokens for agents you own.");
       let revoked = 0;
       for (const k of p.keys) {
         if (k.revokedAt === null) {
@@ -214,12 +258,22 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     "GET",
     /^\/api\/v1\/repos$/,
     () => {
-      const repos: RepoSummary[] = db.repos.map((r) => ({ ...r.repo, counts: countsFor(r.repo.id), shadow: r.shadow }));
+      const repos: RepoSummary[] = db.repos.map((r) => ({
+        ...r.repo,
+        counts: countsFor(r.repo.id),
+        shadow: r.shadow,
+      }));
       if (!mockFreshAccount()) return ok({ repos });
       // `?gs=new`: a brand-new account sees only the projects "Try it now" made in this tab.
       const base = repos[0];
       const fresh: RepoSummary[] = base
-        ? mockCreatedProjects().map((p) => ({ ...base, id: p.id, name: p.name, template: p.template, counts: countsFor(p.id) }))
+        ? mockCreatedProjects().map((p) => ({
+            ...base,
+            id: p.id,
+            name: p.name,
+            template: p.template,
+            counts: countsFor(p.id),
+          }))
         : [];
       return ok({ repos: fresh });
     },
@@ -230,7 +284,9 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     /^\/api\/v1\/repos\/([^/]+)$/,
     ([id]) => {
       const r = db.repos.find((x) => x.repo.id === id);
-      return r ? ok({ repo: r.repo, shadow: r.shadow, counts: countsFor(r.repo.id) }) : fail(404, "not_found", "No such repository.");
+      return r
+        ? ok({ repo: r.repo, shadow: r.shadow, counts: countsFor(r.repo.id) })
+        : fail(404, "not_found", "No such repository.");
     },
   ],
 
@@ -242,7 +298,11 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
       if (!r) return fail(404, "not_found", "No such repository.");
       const { enabled } = parseBody<{ enabled: boolean }>(body);
       if (enabled && !r.shadow.eligibleToEnableLane0) {
-        return fail(409, "shadow_threshold_not_met", "Agreement is below the policy threshold, so Lane 0 stays in shadow mode.");
+        return fail(
+          409,
+          "shadow_threshold_not_met",
+          "Agreement is below the policy threshold, so Lane 0 stays in shadow mode.",
+        );
       }
       r.repo.policy.lane0Enabled = Boolean(enabled);
       appendAudit(db.me, enabled ? "lane0.enabled" : "lane0.disabled", `repo:${r.repo.id}`);
@@ -250,7 +310,11 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     },
   ],
 
-  ["GET", /^\/api\/v1\/repos\/([^/]+)\/plans$/, ([id]) => ok({ plans: db.plans.filter((p) => p.repoId === id) })],
+  [
+    "GET",
+    /^\/api\/v1\/repos\/([^/]+)\/plans$/,
+    ([id]) => ok({ plans: db.plans.filter((p) => p.repoId === id) }),
+  ],
 
   [
     "GET",
@@ -258,7 +322,10 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     ([id]) => {
       const plan = db.plans.find((p) => p.id === id);
       if (!plan) return fail(404, "not_found", "No such plan.");
-      return ok({ plan, changes: db.scenarios.map((s) => s.change).filter((c) => c.planId === id) });
+      return ok({
+        plan,
+        changes: db.scenarios.map((s) => s.change).filter((c) => c.planId === id),
+      });
     },
   ],
 
@@ -267,9 +334,23 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     "POST",
     /^\/api\/v1\/plans$/,
     (_p, _q, body) => {
-      const input = parseBody<{ repoId: string; title: string; intent: string; acceptanceCriteria: string[] }>(body);
-      if (!input.repoId || (input.title ?? "").trim().length < 3 || (input.intent ?? "").trim().length < 10 || !input.acceptanceCriteria?.length) {
-        return fail(400, "invalid_input", "A plan needs a title, an intent of at least 10 characters and one acceptance criterion.");
+      const input = parseBody<{
+        repoId: string;
+        title: string;
+        intent: string;
+        acceptanceCriteria: string[];
+      }>(body);
+      if (
+        !input.repoId ||
+        (input.title ?? "").trim().length < 3 ||
+        (input.intent ?? "").trim().length < 10 ||
+        !input.acceptanceCriteria?.length
+      ) {
+        return fail(
+          400,
+          "invalid_input",
+          "A plan needs a title, an intent of at least 10 characters and one acceptance criterion.",
+        );
       }
       const plan = {
         id: `plan_${b64u(`${input.title}:${Date.now()}`, 10).toLowerCase()}`,
@@ -302,8 +383,13 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     /^\/api\/v1\/projects$/,
     (_p, _q, body) => {
       const { name, importMode } = parseBody<{ name: string; importMode: string }>(body);
-      if (importMode !== "push") return fail(400, "invalid_input", "The demo only imports by push here.");
-      const slug = (name ?? "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "imported";
+      if (importMode !== "push")
+        return fail(400, "invalid_input", "The demo only imports by push here.");
+      const slug =
+        (name ?? "")
+          .toLowerCase()
+          .replace(/[^a-z0-9-]+/g, "-")
+          .replace(/^-+|-+$/g, "") || "imported";
       const id = `repo_${b64u(`${slug}:${Date.now()}`, 8).toLowerCase()}`;
       const openedAt = Date.now();
       imports.set(id, openedAt);
@@ -316,7 +402,10 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
         command: `git -c http.extraHeader="Authorization: Bearer $GITTIFACTS_IMPORT_TOKEN" -c http.postBuffer=524288000 push ${url} <your-branch>:refs/heads/main --follow-tags`,
         closesWhen: "The first push closes the grant, as do the first Change and 30 minutes.",
       };
-      return { status: 201, body: { projectId: id, repoId: id, name: slug, defaultBranch: "main", importGrant } };
+      return {
+        status: 201,
+        body: { projectId: id, repoId: id, name: slug, defaultBranch: "main", importGrant },
+      };
     },
   ],
   [
@@ -347,7 +436,14 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   [
     "POST",
     /^\/api\/v1\/plans\/([^/]+)\/attempts\/([^/]+)\/pick$/,
-    ([planId, changeId], _q, body) => pickAttempt(db, planId!, changeId!, parseBody<{ headSha: string; comment: string }>(body), appendAudit),
+    ([planId, changeId], _q, body) =>
+      pickAttempt(
+        db,
+        planId!,
+        changeId!,
+        parseBody<{ headSha: string; comment: string }>(body),
+        appendAudit,
+      ),
   ],
 
   [
@@ -356,11 +452,18 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     ([id, verb], _q, body) => {
       const plan = db.plans.find((p) => p.id === id);
       if (!plan) return fail(404, "not_found", "No such plan.");
-      if (plan.authorId === db.me) return fail(403, "own_plan", "You wrote this plan, so someone else has to approve or reject it.");
-      if (plan.status !== "draft") return fail(409, "not_draft", `This plan is already ${plan.status}.`);
+      if (plan.authorId === db.me)
+        return fail(
+          403,
+          "own_plan",
+          "You wrote this plan, so someone else has to approve or reject it.",
+        );
+      if (plan.status !== "draft")
+        return fail(409, "not_draft", `This plan is already ${plan.status}.`);
       const { comment } = parseBody<{ comment: string }>(body);
       if (verb === "reject") {
-        if (!comment?.trim()) return fail(400, "comment_required", "Say why you are rejecting the plan.");
+        if (!comment?.trim())
+          return fail(400, "comment_required", "Say why you are rejecting the plan.");
         plan.status = "rejected";
         appendAudit(db.me, "plan.rejected", `plan:${plan.id}`);
       } else {
@@ -380,8 +483,18 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     ([id], _q, body) => {
       const plan = db.plans.find((p) => p.id === id);
       if (!plan) return fail(404, "not_found", "No such plan.");
-      if (plan.authorId !== db.me) return fail(403, "forbidden", "Only the plan's author may withdraw it. A person who maintains the repo rejects it instead.");
-      if (plan.status !== "draft") return fail(409, "invalid-state", `This plan is already ${plan.status}; only drafts can be withdrawn.`);
+      if (plan.authorId !== db.me)
+        return fail(
+          403,
+          "forbidden",
+          "Only the plan's author may withdraw it. A person who maintains the repo rejects it instead.",
+        );
+      if (plan.status !== "draft")
+        return fail(
+          409,
+          "invalid-state",
+          `This plan is already ${plan.status}; only drafts can be withdrawn.`,
+        );
       parseBody<{ reason?: string }>(body);
       plan.status = "rejected";
       appendAudit(db.me, "plan.rejected", `plan:${plan.id}`);
@@ -421,24 +534,43 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     },
   ],
 
-  ["GET", /^\/api\/v1\/changes\/([^/]+)\/diff$/, ([id]) => withScenario(id, (s) => ok({ diff: s.diff }))],
+  [
+    "GET",
+    /^\/api\/v1\/changes\/([^/]+)\/diff$/,
+    ([id]) => withScenario(id, (s) => ok({ diff: s.diff })),
+  ],
 
   [
     "GET",
     /^\/api\/v1\/changes\/([^/]+)\/evidence$/,
     ([id]) =>
       withScenario(id, (s) =>
-        s.evidence ? ok({ evidence: s.evidence, verification: s.verification }) : fail(404, "evidence_not_ready", "Evidence is signed when the pipeline finishes."),
+        s.evidence
+          ? ok({ evidence: s.evidence, verification: s.verification })
+          : fail(404, "evidence_not_ready", "Evidence is signed when the pipeline finishes."),
       ),
   ],
 
   [
     "GET",
     /^\/api\/v1\/changes\/([^/]+)\/tour$/,
-    ([id]) => withScenario(id, (s) => (s.tour ? ok({ tour: s.tour }) : fail(404, "tour_not_ready", "The reviewer agent writes the tour after the pipeline passes."))),
+    ([id]) =>
+      withScenario(id, (s) =>
+        s.tour
+          ? ok({ tour: s.tour })
+          : fail(
+              404,
+              "tour_not_ready",
+              "The reviewer agent writes the tour after the pipeline passes.",
+            ),
+      ),
   ],
 
-  ["GET", /^\/api\/v1\/changes\/([^/]+)\/resolution$/, ([id]) => withScenario(id, (s) => ok({ resolution: s.resolution ?? null }))],
+  [
+    "GET",
+    /^\/api\/v1\/changes\/([^/]+)\/resolution$/,
+    ([id]) => withScenario(id, (s) => ok({ resolution: s.resolution ?? null })),
+  ],
 
   [
     "POST",
@@ -446,13 +578,25 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     ([id], _q, body) =>
       withScenario(id, (s) => {
         const c = s.change;
-        if (c.authorId === db.me) return fail(403, "own_change", "You authored this change, so someone else has to review it.");
-        if (c.status !== "awaiting-review") return fail(409, "not_reviewable", `This change is ${c.status}, not awaiting review.`);
-        const input = parseBody<{ decision: ReviewDecisionKind; humanLane: Lane; comment: string }>(body);
+        if (c.authorId === db.me)
+          return fail(
+            403,
+            "own_change",
+            "You authored this change, so someone else has to review it.",
+          );
+        if (c.status !== "awaiting-review")
+          return fail(409, "not_reviewable", `This change is ${c.status}, not awaiting review.`);
+        const input = parseBody<{ decision: ReviewDecisionKind; humanLane: Lane; comment: string }>(
+          body,
+        );
         if (input.decision !== "approve" && !input.comment?.trim()) {
           return fail(400, "comment_required", "Tell the author what to change.");
         }
-        const next: Record<ReviewDecisionKind, Change["status"]> = { approve: "approved", "request-changes": "awaiting-push", reject: "rejected" };
+        const next: Record<ReviewDecisionKind, Change["status"]> = {
+          approve: "approved",
+          "request-changes": "awaiting-push",
+          reject: "rejected",
+        };
         c.status = input.decision ? next[input.decision] : c.status;
         c.updatedAt = new Date().toISOString();
         if (input.humanLane !== undefined && c.computedLane === 0) {
@@ -461,8 +605,10 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
             repo.shadow.samples += 1;
             if (input.humanLane === 0) repo.shadow.agreed += 1;
             repo.shadow.needed = Math.max(0, repo.shadow.needed - 1);
-            repo.shadow.ratio = repo.shadow.needed > 0 ? null : repo.shadow.agreed / repo.shadow.samples;
-            repo.shadow.eligibleToEnableLane0 = repo.shadow.ratio !== null && repo.shadow.ratio >= repo.shadow.threshold;
+            repo.shadow.ratio =
+              repo.shadow.needed > 0 ? null : repo.shadow.agreed / repo.shadow.samples;
+            repo.shadow.eligibleToEnableLane0 =
+              repo.shadow.ratio !== null && repo.shadow.ratio >= repo.shadow.threshold;
           }
         }
         appendAudit(db.me, `review.${input.decision ?? "approve"}`, `change:${c.id}`);
@@ -479,7 +625,11 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
         const c = s.change;
         if (c.status === "abandoned") return ok({ change: c });
         if (["merged", "rolling-out", "released", "reverted", "rejected"].includes(c.status)) {
-          return fail(409, "invalid-state", `This change is ${c.status}; a merged change is switched off from its rollout instead.`);
+          return fail(
+            409,
+            "invalid-state",
+            `This change is ${c.status}; a merged change is switched off from its rollout instead.`,
+          );
         }
         c.status = "abandoned";
         c.updatedAt = new Date().toISOString();
@@ -493,8 +643,14 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     /^\/api\/v1\/changes\/([^/]+)\/rollout$/,
     ([id]) =>
       withScenario(id, (s) => {
-        const timeline = s.timeline ?? db.audit.filter((e) => e.subject === `change:${s.change.id}`);
-        const principals = Object.fromEntries([...new Set(timeline.map((e) => e.principalId))].map((p) => [p, principalRef(db.principals, p)]));
+        const timeline =
+          s.timeline ?? db.audit.filter((e) => e.subject === `change:${s.change.id}`);
+        const principals = Object.fromEntries(
+          [...new Set(timeline.map((e) => e.principalId))].map((p) => [
+            p,
+            principalRef(db.principals, p),
+          ]),
+        );
         return ok({ rollout: s.change.rolloutState, timeline, principals });
       }),
   ],
@@ -506,9 +662,21 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
       withScenario(id, (s) => {
         const c = s.change;
         const { reason } = parseBody<{ reason: string }>(body);
-        if (!reason?.trim()) return fail(400, "reason_required", "Give a reason; it goes into the audit log and the revert change.");
-        if (!c.rolloutState || !["rolling", "watching", "pending"].includes(c.rolloutState.status)) {
-          return fail(409, "not_rolling_out", "Only a change that is rolling out or being watched can be killed.");
+        if (!reason?.trim())
+          return fail(
+            400,
+            "reason_required",
+            "Give a reason; it goes into the audit log and the revert change.",
+          );
+        if (
+          !c.rolloutState ||
+          !["rolling", "watching", "pending"].includes(c.rolloutState.status)
+        ) {
+          return fail(
+            409,
+            "not_rolling_out",
+            "Only a change that is rolling out or being watched can be killed.",
+          );
         }
         const revertId = `chg_rv${c.id.slice(4, 8)}`;
         c.rolloutState.status = "rolled-back";
@@ -525,7 +693,9 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
             status: "queued",
             computedLane: 0,
             lane: 0,
-            laneReasons: [{ code: "revert.verified", lane: 0, message: `Exact inverse of ${c.id}.` }],
+            laneReasons: [
+              { code: "revert.verified", lane: 0, message: `Exact inverse of ${c.id}.` },
+            ],
             revertOf: c.id,
             revertedBy: null,
             rolloutState: null,
@@ -540,10 +710,19 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
           };
           db.scenarios.push({
             change: revert,
-            diff: { baseSha: c.baseSha, headSha: revert.headSha!, files: [], additions: 0, deletions: 0 },
+            diff: {
+              baseSha: c.baseSha,
+              headSha: revert.headSha!,
+              files: [],
+              additions: 0,
+              deletions: 0,
+            },
             tour: null,
             evidence: null,
-            verification: { ok: false, reason: "Evidence is signed when the revert's pipeline finishes." },
+            verification: {
+              ok: false,
+              reason: "Evidence is signed when the revert's pipeline finishes.",
+            },
             runs: [],
             issues: [],
           });
@@ -555,7 +734,11 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
       }),
   ],
 
-  ["GET", /^\/api\/v1\/changes\/([^/]+)\/issues$/, ([id]) => withScenario(id, (s) => ok({ issues: s.issues }))],
+  [
+    "GET",
+    /^\/api\/v1\/changes\/([^/]+)\/issues$/,
+    ([id]) => withScenario(id, (s) => ok({ issues: s.issues })),
+  ],
 
   [
     "GET",
@@ -568,7 +751,12 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
       const limit = Math.min(100, Number(q.get("limit") ?? 25) || 25);
       const cursor = q.get("cursor");
       const newestFirst = [...db.audit].reverse();
-      const filtered = newestFirst.filter((e) => (!subject || e.subject === subject) && (!actor || e.principalId === actor) && (!action || e.action === action));
+      const filtered = newestFirst.filter(
+        (e) =>
+          (!subject || e.subject === subject) &&
+          (!actor || e.principalId === actor) &&
+          (!action || e.action === action),
+      );
       const start = cursor ? filtered.findIndex((e) => e.seq < Number(cursor)) : 0;
       const page = start < 0 ? [] : filtered.slice(start, start + limit);
       const last = page[page.length - 1];
@@ -579,10 +767,12 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
         nextCursor: more && last ? String(last.seq) : null,
         chain: { verified: true },
         principals: Object.fromEntries([...ids].map((id) => [id, principalRef(db.principals, id)])),
-        subjects: Object.fromEntries([...new Set(page.map((e) => e.subject))].flatMap((s) => {
-          const ref = subjectRef(s);
-          return ref ? [[s, ref]] : [];
-        })),
+        subjects: Object.fromEntries(
+          [...new Set(page.map((e) => e.subject))].flatMap((s) => {
+            const ref = subjectRef(s);
+            return ref ? [[s, ref]] : [];
+          }),
+        ),
       };
       return ok(body);
     },
@@ -592,7 +782,8 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
 /** `change:…` → its title and repo, as the audit page names it (`subjects`). */
 function subjectRef(subject: string): AuditSubjectRef | null {
   const [kind, id] = subject.split(":", 2);
-  const repoName = (repoId: string | null | undefined) => db.repos.find((r) => r.repo.id === repoId)?.repo.name ?? null;
+  const repoName = (repoId: string | null | undefined) =>
+    db.repos.find((r) => r.repo.id === repoId)?.repo.name ?? null;
   if (kind === "change") {
     const c = id ? scenarioById(id)?.change : undefined;
     return c ? { title: c.title, repoId: c.repoId, repoName: repoName(c.repoId) } : null;
@@ -619,13 +810,22 @@ function withScenario(id: string | undefined, fn: (s: Scenario) => RawResponse):
 
 // Claim links are readable signed out, so they are answered before the session check in route().
 const claims = createClaimMock({
-  viewer: () => (signedIn() ? { signedIn: true, principalId: db.me, name: me().name } : { signedIn: false, principalId: null, name: null }),
+  viewer: () =>
+    signedIn()
+      ? { signedIn: true, principalId: db.me, name: me().name }
+      : { signedIn: false, principalId: null, name: null },
 });
 
-export async function handle(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<RawResponse> {
+export async function handle(
+  method: string,
+  path: string,
+  body?: unknown,
+  idempotencyKey?: string,
+): Promise<RawResponse> {
   await wait(latency(method));
   if (path.startsWith("/api/v1/claims/")) return claims.handle(method, path, body);
-  const replayKey = method !== "GET" && idempotencyKey ? `${method} ${path} ${idempotencyKey}` : null;
+  const replayKey =
+    method !== "GET" && idempotencyKey ? `${method} ${path} ${idempotencyKey}` : null;
   const replay = replayKey ? idempotent.get(replayKey) : undefined;
   if (replay) return structuredClone(replay);
   const res = route(method, path, body);
@@ -635,8 +835,10 @@ export async function handle(method: string, path: string, body?: unknown, idemp
 
 function route(method: string, path: string, body: unknown): RawResponse {
   const url = new URL(path, window.location.origin);
-  if (url.pathname !== "/api/v1/me" && !signedIn()) return fail(401, "unauthenticated", "Sign in to continue.");
-  if (url.pathname === "/api/v1/me" && !signedIn()) return fail(401, "unauthenticated", "Sign in to continue.");
+  if (url.pathname !== "/api/v1/me" && !signedIn())
+    return fail(401, "unauthenticated", "Sign in to continue.");
+  if (url.pathname === "/api/v1/me" && !signedIn())
+    return fail(401, "unauthenticated", "Sign in to continue.");
   for (const [m, pattern, handler] of routes) {
     if (m !== method) continue;
     const match = pattern.exec(url.pathname);

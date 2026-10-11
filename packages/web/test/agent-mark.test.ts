@@ -9,7 +9,8 @@ describe("markGlyph", () => {
   });
 
   it("never prints a severity code like P0", () => {
-    for (const name of ["planner-0", "planner-02", "p0", "planner_1"]) expect(markGlyph(name)).not.toMatch(/^P\d$/);
+    for (const name of ["planner-0", "planner-02", "p0", "planner_1"])
+      expect(markGlyph(name)).not.toMatch(/^P\d$/);
   });
 
   it("uses two initials for names without a number", () => {
@@ -22,6 +23,7 @@ describe("markGlyph", () => {
 describe("markVariant", () => {
   it("is stable and in range", () => {
     expect(markVariant("prn_coder07")).toBe(markVariant("prn_coder07"));
-    for (const id of ["a", "b", "prn_x", "ag_quill_old"]) expect([0, 1, 2, 3]).toContain(markVariant(id));
+    for (const id of ["a", "b", "prn_x", "ag_quill_old"])
+      expect([0, 1, 2, 3]).toContain(markVariant(id));
   });
 });

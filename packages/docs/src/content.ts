@@ -4,9 +4,9 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { GITHUB_SURFACES } from "@app/domain/surfaces";
 
 export const CONTENT_DIR = join(import.meta.dirname, "..", "content");
 

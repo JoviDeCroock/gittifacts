@@ -172,7 +172,9 @@ export class FakeStore implements Store {
       .map(clone);
   }
   async getTour(changeId: string, headSha: string) {
-    const t = [...this.tours.values()].find((x) => x.changeId === changeId && x.headSha === headSha);
+    const t = [...this.tours.values()].find(
+      (x) => x.changeId === changeId && x.headSha === headSha,
+    );
     return t === undefined ? null : clone(t);
   }
   async listShadowSamples(repoId: string): Promise<ShadowSample[]> {

@@ -25,7 +25,11 @@ export interface World {
   changeId: string;
 }
 
-export async function signUp(request: APIRequestContext, baseURL: string, label = "human"): Promise<Human> {
+export async function signUp(
+  request: APIRequestContext,
+  baseURL: string,
+  label = "human",
+): Promise<Human> {
   const name = uniqueName(label);
   const email = `${name}@e2e.invalid`;
   const password = `pw-${name}-correct-horse`;
@@ -34,9 +38,12 @@ export async function signUp(request: APIRequestContext, baseURL: string, label 
     headers: { origin: baseURL },
   });
   if (!res.ok()) throw new Error(`sign-up failed: ${res.status()} ${await res.text()}`);
-  const setCookie = res.headersArray().find(
-    (h) => h.name.toLowerCase() === "set-cookie" && h.value.includes("better-auth.session_token="),
-  );
+  const setCookie = res
+    .headersArray()
+    .find(
+      (h) =>
+        h.name.toLowerCase() === "set-cookie" && h.value.includes("better-auth.session_token="),
+    );
   if (setCookie === undefined) throw new Error("sign-up set no session cookie");
   const cookie = setCookie.value.split(";")[0] as string;
   const me = await request.get(`${baseURL}/api/v1/me`, { headers: { cookie } });
@@ -45,7 +52,12 @@ export async function signUp(request: APIRequestContext, baseURL: string, label 
   return { email, password, name, principalId: principal.id, cookie };
 }
 
-export async function seedWorld(request: APIRequestContext, baseURL: string, human: Human, label = "e2e"): Promise<World> {
+export async function seedWorld(
+  request: APIRequestContext,
+  baseURL: string,
+  human: Human,
+  label = "e2e",
+): Promise<World> {
   const res = await request.post(`${baseURL}/__e2e/seed`, {
     data: { principalId: human.principalId, label },
     headers: { "x-e2e-seed": SEED_TOKEN },
@@ -55,15 +67,27 @@ export async function seedWorld(request: APIRequestContext, baseURL: string, hum
 }
 
 /** Puts the human's session cookie into a browser context (signed in, no UI round trip). */
-export async function signInContext(context: BrowserContext, baseURL: string, human: Human): Promise<void> {
+export async function signInContext(
+  context: BrowserContext,
+  baseURL: string,
+  human: Human,
+): Promise<void> {
   const [name, ...rest] = human.cookie.split("=");
   await context.addCookies([
     { name: name as string, value: rest.join("="), url: baseURL, httpOnly: true, sameSite: "Lax" },
   ]);
 }
 
-export async function seedCall<T>(request: APIRequestContext, baseURL: string, path: string, data: unknown): Promise<T> {
-  const res = await request.post(`${baseURL}${path}`, { data, headers: { "x-e2e-seed": SEED_TOKEN } });
+export async function seedCall<T>(
+  request: APIRequestContext,
+  baseURL: string,
+  path: string,
+  data: unknown,
+): Promise<T> {
+  const res = await request.post(`${baseURL}${path}`, {
+    data,
+    headers: { "x-e2e-seed": SEED_TOKEN },
+  });
   if (res.status() >= 300) throw new Error(`${path}: ${res.status()} ${await res.text()}`);
   return (await res.json()) as T;
 }
@@ -91,22 +115,31 @@ export async function agentChange(
 ): Promise<AgentChange> {
   const headers = { cookie: human.cookie, origin: baseURL };
   const repoName = uniqueName("pipe").toLowerCase();
-  const created = await request.post(`${baseURL}/api/v1/repos`, { headers, data: { name: repoName } });
-  if (created.status() !== 201) throw new Error(`create repo: ${created.status()} ${await created.text()}`);
+  const created = await request.post(`${baseURL}/api/v1/repos`, {
+    headers,
+    data: { name: repoName },
+  });
+  if (created.status() !== 201)
+    throw new Error(`create repo: ${created.status()} ${await created.text()}`);
   const { repo } = (await created.json()) as { repo: { id: string; artifactsName: string } };
   await seedCall(request, baseURL, "/__e2e/git/seed", { artifactsName: repo.artifactsName });
   const agentRes = await request.post(`${baseURL}/api/v1/principals/agents`, {
     headers,
-    data: { name: uniqueName("agent").toLowerCase(), scopes: ["repo:read", "plan:create", "change:create"] },
+    data: {
+      name: uniqueName("agent").toLowerCase(),
+      scopes: ["repo:read", "plan:create", "change:create"],
+    },
   });
-  if (agentRes.status() !== 201) throw new Error(`create agent: ${agentRes.status()} ${await agentRes.text()}`);
+  if (agentRes.status() !== 201)
+    throw new Error(`create agent: ${agentRes.status()} ${await agentRes.text()}`);
   const { token } = (await agentRes.json()) as { token: string };
   const auth = { authorization: `Bearer ${token}`, origin: baseURL };
   const started = await request.post(`${baseURL}/api/v1/changes`, {
     headers: auth,
     data: { repoId: repo.id, title: "Fix the off-by-one in a()", category: "fix" },
   });
-  if (started.status() !== 201) throw new Error(`start change: ${started.status()} ${await started.text()}`);
+  if (started.status() !== 201)
+    throw new Error(`start change: ${started.status()} ${await started.text()}`);
   const { change } = (await started.json()) as { change: { id: string } };
   const { head } = await seedCall<{ head: string }>(request, baseURL, "/__e2e/git/push", {
     forkName: `task-${change.id}`,
@@ -116,7 +149,10 @@ export async function agentChange(
     },
   });
   await poll(
-    () => seedCall<{ finished: string[] }>(request, baseURL, "/__e2e/ci/finish", { changeId: change.id }),
+    () =>
+      seedCall<{ finished: string[] }>(request, baseURL, "/__e2e/ci/finish", {
+        changeId: change.id,
+      }),
     (r) => r.finished.length > 0,
     "CI to start for the pushed head",
   );

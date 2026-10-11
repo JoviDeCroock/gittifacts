@@ -13,9 +13,28 @@ describe("cron: redeliver failed GitHub deliveries", () => {
     const appId = APP_ID;
     const now = new Date("2026-10-03T12:00:00Z");
     const at = (h: number) => new Date(now.getTime() - h * 3_600_000).toISOString();
-    await recordDelivery(store().db, { id: "guid-recorded", appId, event: "push", action: null, installationId: 1, receivedAt: at(1) });
-    const d = (id: number, guid: string, status_code: number, hoursAgo: number, event = "pull_request") => ({
-      id, guid, delivered_at: at(hoursAgo), redelivery: false, status_code, event, action: "opened",
+    await recordDelivery(store().db, {
+      id: "guid-recorded",
+      appId,
+      event: "push",
+      action: null,
+      installationId: 1,
+      receivedAt: at(1),
+    });
+    const d = (
+      id: number,
+      guid: string,
+      status_code: number,
+      hoursAgo: number,
+      event = "pull_request",
+    ) => ({
+      id,
+      guid,
+      delivered_at: at(hoursAgo),
+      redelivery: false,
+      status_code,
+      event,
+      action: "opened",
     });
     const asked: string[] = [];
     stubGithub({
@@ -32,10 +51,12 @@ describe("cron: redeliver failed GitHub deliveries", () => {
           { ...d(8, "guid-retried", 202, 4), redelivery: true },
         ]);
       },
-      ...Object.fromEntries([1, 2, 3, 4, 5, 7].map((id) => [
-        `POST https://api.github.com/app/hook/deliveries/${id}/attempts`,
-        () => (asked.push(String(id)), jsonRes({}, 202)),
-      ])),
+      ...Object.fromEntries(
+        [1, 2, 3, 4, 5, 7].map((id) => [
+          `POST https://api.github.com/app/hook/deliveries/${id}/attempts`,
+          () => (asked.push(String(id)), jsonRes({}, 202)),
+        ]),
+      ),
     });
     expect(await runGithubRedeliveries(env as Bindings, now)).toBe(2);
     expect(asked.sort()).toEqual(["1", "2"]);

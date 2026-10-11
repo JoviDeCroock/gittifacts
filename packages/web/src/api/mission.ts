@@ -50,7 +50,9 @@ export async function fetchMission(repoId: string): Promise<MissionData> {
       (error: unknown) => ({ q: null, error }),
     ),
   ]);
-  const agents = [...new Set(changes.changes.filter((c) => c.authorKind === "agent").map((c) => c.authorId))];
+  const agents = [
+    ...new Set(changes.changes.filter((c) => c.authorKind === "agent").map((c) => c.authorId)),
+  ];
   const names = await Promise.all(agents.map(ownerOf));
   const data: MissionData = {
     repoId,

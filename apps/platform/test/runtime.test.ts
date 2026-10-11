@@ -247,13 +247,22 @@ describe("lazyReviewer", () => {
 
   it("REVIEWER_MODEL overrides what auto means", async () => {
     const built: string[] = [];
-    const reviewer = lazyReviewer({ REVIEWER_MODEL: "@cf/openai/gpt-oss-120b" }, "auto", (model) => {
-      built.push(model);
-      return {
-        judge: async () => ({ items: [], costUsd: 0, budgetExceeded: false }),
-        tour: async () => ({ status: "failed", reason: "n/a", costUsd: 0, budgetExceeded: false }),
-      };
-    });
+    const reviewer = lazyReviewer(
+      { REVIEWER_MODEL: "@cf/openai/gpt-oss-120b" },
+      "auto",
+      (model) => {
+        built.push(model);
+        return {
+          judge: async () => ({ items: [], costUsd: 0, budgetExceeded: false }),
+          tour: async () => ({
+            status: "failed",
+            reason: "n/a",
+            costUsd: 0,
+            budgetExceeded: false,
+          }),
+        };
+      },
+    );
     await reviewer.judge({ model: "auto" } as unknown as Parameters<Reviewer["judge"]>[0]);
     expect(built).toEqual(["@cf/openai/gpt-oss-120b"]);
   });

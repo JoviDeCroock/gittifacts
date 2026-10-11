@@ -43,13 +43,20 @@ function shortLabel(item: EvidenceItem): string {
 }
 
 export function summarize(item: EvidenceItem): ItemSummary {
-  if (item.status === "error") return { label: shortLabel(item), value: "Failed to measure", tone: "danger" };
-  if (item.status === "skipped") return { label: shortLabel(item), value: "Not measured", tone: "warn" };
+  if (item.status === "error")
+    return { label: shortLabel(item), value: "Failed to measure", tone: "danger" };
+  if (item.status === "skipped")
+    return { label: shortLabel(item), value: "Not measured", tone: "warn" };
   switch (item.kind) {
     case "red-green":
       return {
         label: "Red → green",
-        value: item.verdict === "proven" ? "Proven" : item.verdict === "no-tests" ? "No tests" : "Not proven",
+        value:
+          item.verdict === "proven"
+            ? "Proven"
+            : item.verdict === "no-tests"
+              ? "No tests"
+              : "Not proven",
         tone: item.verdict === "proven" ? "ok" : "warn",
       };
     case "test-run": {
@@ -75,14 +82,32 @@ export function summarize(item: EvidenceItem): ItemSummary {
     case "public-api":
       return {
         label: "Public API",
-        value: item.classification === "none" ? "Unchanged" : item.classification === "additive" ? "Additive" : "Breaking",
-        tone: item.classification === "breaking" ? "danger" : item.classification === "additive" ? "warn" : "ok",
+        value:
+          item.classification === "none"
+            ? "Unchanged"
+            : item.classification === "additive"
+              ? "Additive"
+              : "Breaking",
+        tone:
+          item.classification === "breaking"
+            ? "danger"
+            : item.classification === "additive"
+              ? "warn"
+              : "ok",
       };
     case "dependencies": {
       const n = item.added.length + item.removed.length + item.changed.length;
       if (item.newInstallScripts.length > 0)
-        return { label: "Dependencies", value: `${item.newInstallScripts.length} install script`, tone: "danger" };
-      return { label: "Dependencies", value: n === 0 ? "Unchanged" : `${n} changed`, tone: n === 0 ? "ok" : "warn" };
+        return {
+          label: "Dependencies",
+          value: `${item.newInstallScripts.length} install script`,
+          tone: "danger",
+        };
+      return {
+        label: "Dependencies",
+        value: n === 0 ? "Unchanged" : `${n} changed`,
+        tone: n === 0 ? "ok" : "warn",
+      };
     }
     case "sensitive-paths":
       return {
@@ -91,9 +116,17 @@ export function summarize(item: EvidenceItem): ItemSummary {
         tone: item.hits.length === 0 ? "ok" : "danger",
       };
     case "preview":
-      return { label: "Preview", value: item.url ? "Deployed" : "No URL", tone: item.url ? "ok" : "warn" };
+      return {
+        label: "Preview",
+        value: item.url ? "Deployed" : "No URL",
+        tone: item.url ? "ok" : "warn",
+      };
     case "screenshots":
-      return { label: "Screenshots", value: item.shots.length === 1 ? "1 route" : `${item.shots.length} routes`, tone: "neutral" };
+      return {
+        label: "Screenshots",
+        value: item.shots.length === 1 ? "1 route" : `${item.shots.length} routes`,
+        tone: "neutral",
+      };
     case "agent-trace":
       return { label: "Agent trace", value: item.provider, tone: "neutral" };
     case "transform":
@@ -105,19 +138,35 @@ export function summarize(item: EvidenceItem): ItemSummary {
     case "llm-judgment":
       return {
         label: QUESTION_LABEL[item.question],
-        value: item.outcome === "no-concern" ? "No concern" : item.outcome === "concern" ? "Concern" : "Unsure",
+        value:
+          item.outcome === "no-concern"
+            ? "No concern"
+            : item.outcome === "concern"
+              ? "Concern"
+              : "Unsure",
         tone: item.outcome === "no-concern" ? "ok" : item.outcome === "concern" ? "danger" : "warn",
       };
     case "conflict-resolution":
       return {
         label: "Conflict resolution",
-        value: item.semanticConflictWith !== null ? "Semantic conflict" : item.touchesOutsideConflictHunks ? "Edits outside conflicts" : "Within conflicts",
-        tone: item.touchesOutsideConflictHunks || item.semanticConflictWith !== null ? "warn" : "neutral",
+        value:
+          item.semanticConflictWith !== null
+            ? "Semantic conflict"
+            : item.touchesOutsideConflictHunks
+              ? "Edits outside conflicts"
+              : "Within conflicts",
+        tone:
+          item.touchesOutsideConflictHunks || item.semanticConflictWith !== null
+            ? "warn"
+            : "neutral",
       };
     case "quarantine":
       return {
         label: "Quarantined tests",
-        value: item.inAffectedSet.length > 0 ? `${item.inAffectedSet.length} in affected set` : `${item.tests.length} quarantined`,
+        value:
+          item.inAffectedSet.length > 0
+            ? `${item.inAffectedSet.length} in affected set`
+            : `${item.tests.length} quarantined`,
         tone: item.inAffectedSet.length > 0 ? "warn" : "neutral",
       };
     case "qa-run": {
@@ -126,7 +175,8 @@ export function summarize(item: EvidenceItem): ItemSummary {
       const pass = item.criteria.length - fail - unsure;
       return {
         label: "QA",
-        value: fail > 0 ? `${fail} failed` : unsure > 0 ? `${unsure} couldn't test` : `${pass} passed`,
+        value:
+          fail > 0 ? `${fail} failed` : unsure > 0 ? `${unsure} couldn't test` : `${pass} passed`,
         tone: fail > 0 ? "danger" : unsure > 0 ? "warn" : "ok",
       };
     }
@@ -134,7 +184,8 @@ export function summarize(item: EvidenceItem): ItemSummary {
 }
 
 export function itemTitle(item: EvidenceItem): string {
-  if (item.kind === "llm-judgment") return `${KIND_LABEL[item.kind]}: ${QUESTION_LABEL[item.question].toLowerCase()}`;
+  if (item.kind === "llm-judgment")
+    return `${KIND_LABEL[item.kind]}: ${QUESTION_LABEL[item.question].toLowerCase()}`;
   if (item.kind === "test-run") return `${KIND_LABEL[item.kind]}: ${item.step}`;
   return KIND_LABEL[item.kind];
 }
@@ -191,5 +242,8 @@ export function splitFailures(item: TestRunItem): {
 /** Tool output without colour codes (notes and failure messages are read by people). */
 export function stripAnsi(text: string): string {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: matching escape sequences is the point.
-  return text.replace(/[\u001b\u009b](?:\[[0-?]*[ -/]*[@-~]|\][^\u0007\u001b]*(?:\u0007|\u001b\\)|[@-Z\\-_])/g, "");
+  return text.replace(
+    /[\u001b\u009b](?:\[[0-?]*[ -/]*[@-~]|\][^\u0007\u001b]*(?:\u0007|\u001b\\)|[@-Z\\-_])/g,
+    "",
+  );
 }

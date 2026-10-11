@@ -2,7 +2,12 @@
  * Shared primitives. Every control ships default, hover, focus, active, disabled and loading.
  */
 import type { Lane, TourVerdict } from "@app/domain";
-import { type AnchorHTMLAttributes, type ButtonHTMLAttributes, type ComponentChildren, Fragment } from "preact";
+import {
+  type AnchorHTMLAttributes,
+  type ButtonHTMLAttributes,
+  type ComponentChildren,
+  Fragment,
+} from "preact";
 import { useRef } from "preact/hooks";
 import { describeError } from "../api/client.js";
 import type { PrincipalKind } from "../api/types.js";
@@ -16,7 +21,8 @@ import "../styles/loading.css";
 
 type ButtonVariant = "primary" | "secondary" | "quiet" | "danger" | "danger-outline";
 
-interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "icon" | "size" | "type"> {
+interface ButtonProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "icon" | "size" | "type"> {
   variant?: ButtonVariant;
   size?: "md" | "sm";
   icon?: IconId;
@@ -28,12 +34,26 @@ interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "ico
   children?: ComponentChildren;
 }
 
-export function Button({ variant = "secondary", size = "md", icon, busy, busyLabel, disabled, type = "button", wide, children, class: cls, ...rest }: ButtonProps) {
+export function Button({
+  variant = "secondary",
+  size = "md",
+  icon,
+  busy,
+  busyLabel,
+  disabled,
+  type = "button",
+  wide,
+  children,
+  class: cls,
+  ...rest
+}: ButtonProps) {
   return (
     <button
       {...rest}
       type={type}
-      class={["btn", `btn--${variant}`, `btn--${size}`, wide ? "btn--wide" : "", cls ?? ""].join(" ")}
+      class={["btn", `btn--${variant}`, `btn--${size}`, wide ? "btn--wide" : "", cls ?? ""].join(
+        " ",
+      )}
       disabled={disabled || busy}
       aria-busy={busy ? "true" : undefined}
     >
@@ -43,7 +63,8 @@ export function Button({ variant = "secondary", size = "md", icon, busy, busyLab
   );
 }
 
-interface LinkButtonProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "icon" | "size" | "href" | "role"> {
+interface LinkButtonProps
+  extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "icon" | "size" | "href" | "role"> {
   href: string;
   variant?: ButtonVariant;
   size?: "md" | "sm";
@@ -51,9 +72,21 @@ interface LinkButtonProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 
   children?: ComponentChildren;
 }
 
-export function LinkButton({ href, variant = "secondary", size = "md", icon, children, class: cls, ...rest }: LinkButtonProps) {
+export function LinkButton({
+  href,
+  variant = "secondary",
+  size = "md",
+  icon,
+  children,
+  class: cls,
+  ...rest
+}: LinkButtonProps) {
   return (
-    <a {...rest} href={href} class={["btn", `btn--${variant}`, `btn--${size}`, cls ?? ""].join(" ")}>
+    <a
+      {...rest}
+      href={href}
+      class={["btn", `btn--${variant}`, `btn--${size}`, cls ?? ""].join(" ")}
+    >
       {icon ? <Icon name={icon} /> : null}
       <span>{children}</span>
     </a>
@@ -96,7 +129,9 @@ export function LaneTag({ lane, shadow = false, size = "md", label = false }: La
   const [w, h] = TAG_SIZES[size];
   const variant = lane === null ? "none" : shadow ? "shadow" : `l${lane}`;
   const meta = lane === null ? null : LANES[lane];
-  const spoken = meta ? `${meta.name} (${meta.badge})${shadow ? ", calibrating" : ""}` : "Not routed yet";
+  const spoken = meta
+    ? `${meta.name} (${meta.badge})${shadow ? ", calibrating" : ""}`
+    : "Not routed yet";
   const r = h / 2;
   const notch = h * 0.3;
   const holeR = Math.max(1.6, h * 0.1);
@@ -106,7 +141,10 @@ export function LaneTag({ lane, shadow = false, size = "md", label = false }: La
   const body = `M${notch} 0.75 H${w - 3} Q${w - 0.75} 0.75 ${w - 0.75} 3 V${h - 3} Q${w - 0.75} ${h - 0.75} ${w - 3} ${h - 0.75} H${notch} L0.75 ${h - notch} V${notch} Z`;
   const hole = `M${holeX + holeR} ${r} a${holeR} ${holeR} 0 1 0 ${-2 * holeR} 0 a${holeR} ${holeR} 0 1 0 ${2 * holeR} 0 Z`;
   return (
-    <span class={`lane-tag lane-tag--${variant} lane-tag--${size}`} title={label ? undefined : spoken}>
+    <span
+      class={`lane-tag lane-tag--${variant} lane-tag--${size}`}
+      title={label ? undefined : spoken}
+    >
       <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img" aria-label={spoken}>
         <path class="lane-tag__body" d={`${body} ${hole}`} fill-rule="evenodd" />
         <text class="lane-tag__num" x={numX} y={r} dy="0.36em" text-anchor="middle">
@@ -127,7 +165,14 @@ export function LaneTag({ lane, shadow = false, size = "md", label = false }: La
 
 export function VerdictMark({ verdict, size = 20 }: { verdict: TourVerdict; size?: number }) {
   return (
-    <svg class={`verdict-mark verdict-mark--${verdict}`} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <svg
+      class={`verdict-mark verdict-mark--${verdict}`}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
       {verdict === "proven" ? (
         <>
           <circle cx="12" cy="12" r="9.5" class="vm-fill" />
@@ -149,7 +194,13 @@ export function VerdictMark({ verdict, size = 20 }: { verdict: TourVerdict; size
   );
 }
 
-export function VerdictBadge({ verdict, size = "md" }: { verdict: TourVerdict; size?: "sm" | "md" }) {
+export function VerdictBadge({
+  verdict,
+  size = "md",
+}: {
+  verdict: TourVerdict;
+  size?: "sm" | "md";
+}) {
   const meta = VERDICT[verdict];
   return (
     <span class={`verdict verdict--${verdict} verdict--${size}`} title={meta.explain}>
@@ -163,7 +214,9 @@ export function VerdictBadge({ verdict, size = "md" }: { verdict: TourVerdict; s
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")).toUpperCase();
+  return (
+    (parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")
+  ).toUpperCase();
 }
 
 /**
@@ -171,30 +224,73 @@ function initials(name: string): string {
  * agent on every screen); the platform is a square with a server glyph. `id` keeps two agents with
  * the same name apart.
  */
-export function Avatar({ kind, name, id, size = 24 }: { kind: PrincipalKind; name: string; id?: string; size?: number }) {
+export function Avatar({
+  kind,
+  name,
+  id,
+  size = 24,
+}: {
+  kind: PrincipalKind;
+  name: string;
+  id?: string;
+  size?: number;
+}) {
   if (kind === "agent") return <AgentMark name={name} id={id} size={size} />;
   if (kind === "human") {
     return (
-      <span class="avatar avatar--human" style={{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.42)}px` }} aria-hidden="true">
+      <span
+        class="avatar avatar--human"
+        style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          fontSize: `${Math.round(size * 0.42)}px`,
+        }}
+        aria-hidden="true"
+      >
         {initials(name)}
       </span>
     );
   }
   return (
-    <span class={`avatar avatar--${kind}`} style={{ width: `${size}px`, height: `${size}px` }} aria-hidden="true">
+    <span
+      class={`avatar avatar--${kind}`}
+      style={{ width: `${size}px`, height: `${size}px` }}
+      aria-hidden="true"
+    >
       <Icon name="server" size={Math.round(size * 0.66)} />
     </span>
   );
 }
 
-export function Who({ kind, name, id, owner, size = 22, compact = false }: { kind: PrincipalKind; name: string; id?: string; owner?: string | null; size?: number; compact?: boolean }) {
-  const spoken = kind === "agent" ? `Agent ${name}${owner ? `, run by ${owner}` : ""}` : kind === "system" ? `Platform: ${name}` : name;
+export function Who({
+  kind,
+  name,
+  id,
+  owner,
+  size = 22,
+  compact = false,
+}: {
+  kind: PrincipalKind;
+  name: string;
+  id?: string;
+  owner?: string | null;
+  size?: number;
+  compact?: boolean;
+}) {
+  const spoken =
+    kind === "agent"
+      ? `Agent ${name}${owner ? `, run by ${owner}` : ""}`
+      : kind === "system"
+        ? `Platform: ${name}`
+        : name;
   return (
     <span class={`who who--${kind}`} aria-label={spoken}>
       <Avatar kind={kind} name={name} id={id} size={size} />
       <span class="who__name" aria-hidden="true">
         {name}
-        {!compact && kind === "agent" ? <span class="who__role"> agent{owner ? ` of ${owner}` : ""}</span> : null}
+        {!compact && kind === "agent" ? (
+          <span class="who__role"> agent{owner ? ` of ${owner}` : ""}</span>
+        ) : null}
       </span>
     </span>
   );
@@ -210,12 +306,19 @@ interface SegmentedProps<T extends string> {
   size?: "md" | "sm";
 }
 
-export function Segmented<T extends string>({ label, value, options, onChange, size = "md" }: SegmentedProps<T>) {
+export function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  size = "md",
+}: SegmentedProps<T>) {
   const ref = useRef<HTMLDivElement>(null);
   const onKey = (e: KeyboardEvent, index: number) => {
     let next = index;
     if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (index + 1) % options.length;
-    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (index - 1 + options.length) % options.length;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp")
+      next = (index - 1 + options.length) % options.length;
     else if (e.key === "Home") next = 0;
     else if (e.key === "End") next = options.length - 1;
     else return;
@@ -260,11 +363,21 @@ interface MeterProps {
 export function Meter({ value, threshold, label, tone = "neutral", thresholdLabel }: MeterProps) {
   const v = Math.max(0, Math.min(1, value));
   return (
-    <div class={`meter meter--${tone}`} role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(v * 100)} aria-label={label}>
+    <div
+      class={`meter meter--${tone}`}
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(v * 100)}
+      aria-label={label}
+    >
       <div class="meter__track">
         <div class="meter__fill" style={{ "--v": String(v) }} />
         {threshold !== undefined ? (
-          <div class="meter__tick" style={{ insetInlineStart: `${Math.max(0, Math.min(1, threshold)) * 100}%` }}>
+          <div
+            class="meter__tick"
+            style={{ insetInlineStart: `${Math.max(0, Math.min(1, threshold)) * 100}%` }}
+          >
             {thresholdLabel ? <span class="meter__tick-label tnum">{thresholdLabel}</span> : null}
           </div>
         ) : null}
@@ -279,7 +392,11 @@ export function Skeleton({ lines = 3, block = false }: { lines?: number; block?:
   return (
     <div class={`skeleton ${block ? "skeleton--block" : ""}`} aria-hidden="true">
       {Array.from({ length: lines }, (_, i) => (
-        <span key={i} class="skeleton__line" style={{ inlineSize: `${[92, 76, 84, 60, 70][i % 5]}%` }} />
+        <span
+          key={i}
+          class="skeleton__line"
+          style={{ inlineSize: `${[92, 76, 84, 60, 70][i % 5]}%` }}
+        />
       ))}
     </div>
   );
@@ -294,7 +411,15 @@ export function Skeleton({ lines = 3, block = false }: { lines?: number; block?:
  */
 export type LoadingShape = "lines" | "rows" | "table";
 
-export function SkeletonRows({ count = 3, shape = "rows", mark = "square" }: { count?: number; shape?: Exclude<LoadingShape, "lines">; mark?: "square" | "circle" | "none" }) {
+export function SkeletonRows({
+  count = 3,
+  shape = "rows",
+  mark = "square",
+}: {
+  count?: number;
+  shape?: Exclude<LoadingShape, "lines">;
+  mark?: "square" | "circle" | "none";
+}) {
   return (
     <ul class={`skel-rows skel-rows--${shape}`} aria-hidden="true">
       {Array.from({ length: count }, (_, i) => (
@@ -302,7 +427,12 @@ export function SkeletonRows({ count = 3, shape = "rows", mark = "square" }: { c
           {mark !== "none" ? <span class={`skel-mark skel-mark--${mark}`} /> : null}
           <span class="skel-text">
             <span class="skeleton__line" style={{ inlineSize: `${[42, 34, 48, 38][i % 4]}%` }} />
-            {shape === "rows" ? <span class="skeleton__line skel-line--meta" style={{ inlineSize: `${[64, 72, 56, 68][i % 4]}%` }} /> : null}
+            {shape === "rows" ? (
+              <span
+                class="skeleton__line skel-line--meta"
+                style={{ inlineSize: `${[64, 72, 56, 68][i % 4]}%` }}
+              />
+            ) : null}
           </span>
           {shape === "rows" ? <span class="skeleton__line skel-end" /> : null}
         </li>
@@ -320,16 +450,38 @@ export function SkeletonHead({ id }: { id?: string }) {
   );
 }
 
-export function Loading({ label, lines = 4, shape = "lines", mark }: { label: string; lines?: number; shape?: LoadingShape; mark?: "square" | "circle" | "none" }) {
+export function Loading({
+  label,
+  lines = 4,
+  shape = "lines",
+  mark,
+}: {
+  label: string;
+  lines?: number;
+  shape?: LoadingShape;
+  mark?: "square" | "circle" | "none";
+}) {
   return (
     <div class={`loading loading--${shape}`} role="status" aria-live="polite">
       <span class="sr-only">{label}</span>
-      {shape === "lines" ? <Skeleton lines={lines} /> : <SkeletonRows count={lines} shape={shape} mark={mark} />}
+      {shape === "lines" ? (
+        <Skeleton lines={lines} />
+      ) : (
+        <SkeletonRows count={lines} shape={shape} mark={mark} />
+      )}
     </div>
   );
 }
 
-export function ErrorState({ error, what, onRetry }: { error: unknown; what: string; onRetry?: () => void }) {
+export function ErrorState({
+  error,
+  what,
+  onRetry,
+}: {
+  error: unknown;
+  what: string;
+  onRetry?: () => void;
+}) {
   const copy = describeError(error, what);
   return (
     <div class="state state--error" role="alert">
@@ -347,7 +499,17 @@ export function ErrorState({ error, what, onRetry }: { error: unknown; what: str
   );
 }
 
-export function EmptyState({ icon, title, children, action }: { icon: IconId; title: string; children?: ComponentChildren; action?: ComponentChildren }) {
+export function EmptyState({
+  icon,
+  title,
+  children,
+  action,
+}: {
+  icon: IconId;
+  title: string;
+  children?: ComponentChildren;
+  action?: ComponentChildren;
+}) {
   return (
     <div class="state state--empty">
       <Icon name={icon} size={22} />
@@ -362,8 +524,21 @@ export function EmptyState({ icon, title, children, action }: { icon: IconId; ti
 
 // ---------------------------------------------------------------- misc
 
-export function Hash({ value, head = 8, tail = 6, full = false }: { value: string; head?: number; tail?: number; full?: boolean }) {
-  const shown = full || value.length <= head + tail + 1 ? value : `${value.slice(0, head)}…${tail > 0 ? value.slice(-tail) : ""}`;
+export function Hash({
+  value,
+  head = 8,
+  tail = 6,
+  full = false,
+}: {
+  value: string;
+  head?: number;
+  tail?: number;
+  full?: boolean;
+}) {
+  const shown =
+    full || value.length <= head + tail + 1
+      ? value
+      : `${value.slice(0, head)}…${tail > 0 ? value.slice(-tail) : ""}`;
   return (
     <code class="hash" title={value}>
       {shown}

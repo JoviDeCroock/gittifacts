@@ -25,7 +25,15 @@ export function AgentTwin({ call }: { call: string }) {
 }
 
 /** An act that opened inline: what happens, then Cancel and the named action. */
-export function ActPanel({ label, children, error }: { label: string; children: ComponentChildren; error: string | null }) {
+export function ActPanel({
+  label,
+  children,
+  error,
+}: {
+  label: string;
+  children: ComponentChildren;
+  error: string | null;
+}) {
   return (
     <fieldset class="q-act" aria-label={label}>
       {children}
@@ -86,11 +94,24 @@ export function EntryActs({
       <div class="q-acts__buttons">
         {/* Reverts are prioritized automatically; the server ignores a class set by hand. */}
         {e.priority === "revert" ? null : (
-          <Button size="sm" variant="secondary" icon="list-ordered" aria-expanded={open.value === "priority"} onClick={() => toggle("priority")}>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon="list-ordered"
+            aria-expanded={open.value === "priority"}
+            onClick={() => toggle("priority")}
+          >
             Priority…
           </Button>
         )}
-        <Button size="sm" variant="secondary" icon="archive" aria-expanded={open.value === "dequeue"} data-testid="queue-dequeue" onClick={() => toggle("dequeue")}>
+        <Button
+          size="sm"
+          variant="secondary"
+          icon="archive"
+          aria-expanded={open.value === "dequeue"}
+          data-testid="queue-dequeue"
+          onClick={() => toggle("dequeue")}
+        >
           Dequeue…
         </Button>
       </div>
@@ -98,11 +119,18 @@ export function EntryActs({
         <ActPanel label={`Dequeue ${title}`} error={error.value}>
           <p class="q-act__lede">
             Take <b>{title}</b> out of the merge queue?{" "}
-            {dependents.length > 0 ? `${dependents.join(", ")} ${dependents.length === 1 ? "is" : "are"} stacked on it and leave${dependents.length === 1 ? "s" : ""} too. ` : ""}
+            {dependents.length > 0
+              ? `${dependents.join(", ")} ${dependents.length === 1 ? "is" : "are"} stacked on it and leave${dependents.length === 1 ? "s" : ""} too. `
+              : ""}
             It keeps its approval and rejoins only when it is enqueued again.
           </p>
           <div class="q-act__buttons">
-            <Button size="sm" variant="secondary" disabled={busy.value} onClick={() => (open.value = null)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy.value}
+              onClick={() => (open.value = null)}
+            >
               Cancel
             </Button>
             <Button
@@ -111,7 +139,9 @@ export function EntryActs({
               busy={busy.value}
               busyLabel="Dequeuing…"
               data-testid="queue-dequeue-confirm"
-              onClick={() => run((k) => queueActs.dequeue(e.changeId, k), `Took “${title}” out of the queue.`)}
+              onClick={() =>
+                run((k) => queueActs.dequeue(e.changeId, k), `Took “${title}” out of the queue.`)
+              }
             >
               Dequeue
             </Button>
@@ -124,7 +154,13 @@ export function EntryActs({
           <div class="q-act__choices" role="radiogroup" aria-label="Priority">
             {PRIORITY_CHOICES.map((p) => (
               <label key={p} class="check">
-                <input type="radio" name={`prio-${e.changeId}`} value={p} checked={pick.value === p} onChange={() => (pick.value = p)} />
+                <input
+                  type="radio"
+                  name={`prio-${e.changeId}`}
+                  value={p}
+                  checked={pick.value === p}
+                  onChange={() => (pick.value = p)}
+                />
                 <span class="q-choice">
                   {p === "normal" ? "Normal" : PRIORITY[p].label}
                   {e.priority === p ? <span class="q-dim"> (now)</span> : null}
@@ -134,7 +170,12 @@ export function EntryActs({
             ))}
           </div>
           <div class="q-act__buttons">
-            <Button size="sm" variant="secondary" disabled={busy.value} onClick={() => (open.value = null)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy.value}
+              onClick={() => (open.value = null)}
+            >
               Cancel
             </Button>
             <Button
@@ -143,7 +184,12 @@ export function EntryActs({
               busy={busy.value}
               busyLabel="Saving…"
               disabled={pick.value === e.priority}
-              onClick={() => run((k) => queueActs.reprioritize(e.changeId, pick.value, k), `“${title}” is now ${pick.value === "normal" ? "normal priority" : PRIORITY[pick.value].label.toLowerCase()}.`)}
+              onClick={() =>
+                run(
+                  (k) => queueActs.reprioritize(e.changeId, pick.value, k),
+                  `“${title}” is now ${pick.value === "normal" ? "normal priority" : PRIORITY[pick.value].label.toLowerCase()}.`,
+                )
+              }
             >
               Set priority
             </Button>
@@ -203,7 +249,11 @@ export function FreezeForm({
     error.value = null;
     try {
       await queueActs.freeze(repoId, freeze, reason.value.trim(), key.value);
-      onDone(freeze ? "Queue frozen. Only reverts and incident fixes land." : "Queue thawed. Changes land again.");
+      onDone(
+        freeze
+          ? "Queue frozen. Only reverts and incident fixes land."
+          : "Queue thawed. Changes land again.",
+      );
     } catch (err) {
       error.value = inlineError(err);
     } finally {
@@ -212,7 +262,12 @@ export function FreezeForm({
   }
 
   return (
-    <form class="q-act q-act--queue" aria-label={freeze ? "Freeze the queue" : "Thaw the queue"} onSubmit={submit} data-testid={freeze ? "queue-freeze-form" : "queue-thaw-form"}>
+    <form
+      class="q-act q-act--queue"
+      aria-label={freeze ? "Freeze the queue" : "Thaw the queue"}
+      onSubmit={submit}
+      data-testid={freeze ? "queue-freeze-form" : "queue-thaw-form"}
+    >
       <p class="q-act__lede">
         {freeze
           ? "Only reverts and incident fixes land until someone thaws it. Everything else keeps speculating, so the queue picks up where it was."
@@ -224,13 +279,28 @@ export function FreezeForm({
         <label class="field__label" for={id}>
           Why
         </label>
-        <textarea ref={field} id={id} class="textarea q-act__reason" rows={2} maxLength={2000} value={reason.value} onInput={(e) => (reason.value = e.currentTarget.value)} aria-invalid={error.value ? "true" : undefined} />
+        <textarea
+          ref={field}
+          id={id}
+          class="textarea q-act__reason"
+          rows={2}
+          maxLength={2000}
+          value={reason.value}
+          onInput={(e) => (reason.value = e.currentTarget.value)}
+          aria-invalid={error.value ? "true" : undefined}
+        />
       </div>
       <div class="q-act__buttons">
         <Button size="sm" variant="secondary" disabled={busy.value} onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" variant={automatic && !freeze ? "danger" : "primary"} busy={busy.value} busyLabel={freeze ? "Freezing…" : "Thawing…"}>
+        <Button
+          type="submit"
+          size="sm"
+          variant={automatic && !freeze ? "danger" : "primary"}
+          busy={busy.value}
+          busyLabel={freeze ? "Freezing…" : "Thawing…"}
+        >
           {freeze ? "Freeze the queue" : "Thaw the queue"}
         </Button>
       </div>
@@ -245,7 +315,13 @@ export function FreezeForm({
 }
 
 /** Resume after a halt: the operator says they checked main; the queue rebuilds on it. */
-export function ResumeAct({ repoId, onDone }: { repoId: string; onDone: (message: string) => void }) {
+export function ResumeAct({
+  repoId,
+  onDone,
+}: {
+  repoId: string;
+  onDone: (message: string) => void;
+}) {
   const open = useSignal(false);
   const busy = useSignal(false);
   const error = useSignal<string | null>(null);
@@ -267,7 +343,13 @@ export function ResumeAct({ repoId, onDone }: { repoId: string; onDone: (message
   if (!open.value) {
     return (
       <div class="q-banner__acts">
-        <Button size="sm" variant="secondary" icon="redo" data-testid="queue-resume" onClick={() => (open.value = true)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          icon="redo"
+          data-testid="queue-resume"
+          onClick={() => (open.value = true)}
+        >
           Resume the queue…
         </Button>
       </div>
@@ -276,13 +358,26 @@ export function ResumeAct({ repoId, onDone }: { repoId: string; onDone: (message
   return (
     <ActPanel label="Resume the queue" error={error.value}>
       <p class="q-act__lede">
-        Resume only once main is what it should be. The queue rebuilds every batch on main as it is now, and your name goes in the audit log.
+        Resume only once main is what it should be. The queue rebuilds every batch on main as it is
+        now, and your name goes in the audit log.
       </p>
       <div class="q-act__buttons">
-        <Button size="sm" variant="secondary" disabled={busy.value} onClick={() => (open.value = false)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy.value}
+          onClick={() => (open.value = false)}
+        >
           Cancel
         </Button>
-        <Button size="sm" variant="primary" busy={busy.value} busyLabel="Resuming…" data-testid="queue-resume-confirm" onClick={resume}>
+        <Button
+          size="sm"
+          variant="primary"
+          busy={busy.value}
+          busyLabel="Resuming…"
+          data-testid="queue-resume-confirm"
+          onClick={resume}
+        >
           Resume the queue
         </Button>
       </div>

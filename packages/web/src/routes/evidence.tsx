@@ -4,14 +4,22 @@ import { useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 import { api } from "../api/client.js";
 import type { Change, EvidenceResponse, RepoDetail } from "../api/types.js";
-import { RedGreenList, ShotPair, kindIcon } from "../components/EvidenceBits.js";
+import { kindIcon, RedGreenList, ShotPair } from "../components/EvidenceBits.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
 import { Term } from "../components/Term.js";
 import { TriageChart } from "../components/TriageChart.js";
 import { Command, CopyButton, ErrorState, Hash, Loading, Meter } from "../components/ui.js";
 import { compressLines } from "../lib/diff.js";
-import { itemAnchor, itemTitle, splitFailures, stripAnsi, summarize, unmeasuredEffect, verifyCommand } from "../lib/evidence.js";
+import {
+  itemAnchor,
+  itemTitle,
+  splitFailures,
+  stripAnsi,
+  summarize,
+  unmeasuredEffect,
+  verifyCommand,
+} from "../lib/evidence.js";
 import { gitNoteLine } from "../lib/evidence-note.js";
 import { pct } from "../lib/lanes.js";
 import { durationLabel, formatDateTime } from "../lib/time.js";
@@ -25,7 +33,11 @@ function Attestation({ ev, change }: { ev: EvidenceResponse; change: Change }) {
   const raw = useSignal(false);
   const a = ev.evidence.attestation;
   const ok = ev.verification.ok;
-  const payload = JSON.stringify({ changeId: ev.evidence.changeId, headSha: ev.evidence.headSha, items: ev.evidence.items }, null, 2);
+  const payload = JSON.stringify(
+    { changeId: ev.evidence.changeId, headSha: ev.evidence.headSha, items: ev.evidence.items },
+    null,
+    2,
+  );
   const headMatches = ev.evidence.headSha === change.headSha;
   const note = gitNoteLine(ev.evidence, change);
   return (
@@ -37,9 +49,15 @@ function Attestation({ ev, change }: { ev: EvidenceResponse; change: Change }) {
             {ok ? "Signed and verified" : "Signature does not verify"}
           </h2>
           <p class="attest__line">
-            {ok
-              ? <>Every item below is covered by one Ed25519 signature (the <Term id="attestation">attestation</Term>) from {a.signer}, checked against the platform's published key.</>
-              : `${ev.verification.reason ?? "The signature did not match."} The classifier treats every item as unknown, which escalates the lane.`}
+            {ok ? (
+              <>
+                Every item below is covered by one Ed25519 signature (the{" "}
+                <Term id="attestation">attestation</Term>) from {a.signer}, checked against the
+                platform's published key.
+              </>
+            ) : (
+              `${ev.verification.reason ?? "The signature did not match."} The classifier treats every item as unknown, which escalates the lane.`
+            )}
           </p>
         </div>
       </div>
@@ -53,7 +71,12 @@ function Attestation({ ev, change }: { ev: EvidenceResponse; change: Change }) {
         <dt>Head</dt>
         <dd>
           <Hash value={ev.evidence.headSha} head={12} tail={0} />
-          {headMatches ? null : <span class="tone--warn"> · older than the change's current head {shortSha(change.headSha)}</span>}
+          {headMatches ? null : (
+            <span class="tone--warn">
+              {" "}
+              · older than the change's current head {shortSha(change.headSha)}
+            </span>
+          )}
         </dd>
         <dt>Digest</dt>
         <dd>
@@ -71,7 +94,12 @@ function Attestation({ ev, change }: { ev: EvidenceResponse; change: Change }) {
         </dd>
       </dl>
       <div class="attest__actions">
-        <button type="button" class="btn btn--quiet btn--sm" aria-expanded={raw.value} onClick={() => (raw.value = !raw.value)}>
+        <button
+          type="button"
+          class="btn btn--quiet btn--sm"
+          aria-expanded={raw.value}
+          onClick={() => (raw.value = !raw.value)}
+        >
           <Icon name="file-code" />
           <span>{raw.value ? "Hide signed payload" : "View signed payload"}</span>
         </button>
@@ -113,14 +141,18 @@ function TestRunBody({ item }: { item: Item<"test-run"> }) {
       </p>
       {item.selection ? (
         <p class="ev-sub">
-          {item.selection.mode === "all" ? "Ran the whole suite" : `Ran ${plural(item.selection.files ?? 0, "test file")} that reach this change`}: {stripAnsi(item.selection.reason)}
+          {item.selection.mode === "all"
+            ? "Ran the whole suite"
+            : `Ran ${plural(item.selection.files ?? 0, "test file")} that reach this change`}
+          : {stripAnsi(item.selection.reason)}
         </p>
       ) : null}
       <FailureList failures={fresh} />
       {pre.length > 0 ? (
         <>
           <p class="ev-sub">
-            Already failing on main (<code>{shortSha(item.baseline?.sha ?? "")}</code>) in the same way, so not counted against this change:
+            Already failing on main (<code>{shortSha(item.baseline?.sha ?? "")}</code>) in the same
+            way, so not counted against this change:
           </p>
           <FailureList failures={pre} />
         </>
@@ -149,9 +181,16 @@ function CoverageBody({ item, policy }: { item: Item<"coverage">; policy: RepoPo
     <>
       <div class="ev-measure">
         <p>
-          <b class="ev-big tnum">{pct(item.ratio)}</b> of changed lines covered ({item.coveredChangedLines} of {item.changedLines})
+          <b class="ev-big tnum">{pct(item.ratio)}</b> of changed lines covered (
+          {item.coveredChangedLines} of {item.changedLines})
         </p>
-        <Meter value={item.ratio} threshold={t} thresholdLabel={`Auto-merge needs ${pct(t)}`} tone={item.ratio >= t ? "ok" : "warn"} label={`Coverage ${pct(item.ratio)}, policy ${pct(t)}`} />
+        <Meter
+          value={item.ratio}
+          threshold={t}
+          thresholdLabel={`Auto-merge needs ${pct(t)}`}
+          tone={item.ratio >= t ? "ok" : "warn"}
+          label={`Coverage ${pct(item.ratio)}, policy ${pct(t)}`}
+        />
       </div>
       <table class="ev-table">
         <thead>
@@ -187,7 +226,8 @@ function CoverageBody({ item, policy }: { item: Item<"coverage">; policy: RepoPo
       </table>
       {item.unmeasuredFiles && item.unmeasuredFiles.length > 0 ? (
         <p class="ev-warn">
-          <Icon name="triangle-alert" size={15} /> Not in the coverage report at all, probably never loaded by a test: {item.unmeasuredFiles.join(", ")}
+          <Icon name="triangle-alert" size={15} /> Not in the coverage report at all, probably never
+          loaded by a test: {item.unmeasuredFiles.join(", ")}
         </p>
       ) : null}
     </>
@@ -202,7 +242,13 @@ function MutationBody({ item, policy }: { item: Item<"mutation">; policy: RepoPo
         <p>
           <b class="ev-big tnum">{pct(item.score)}</b> mutation score on changed lines ({item.tool})
         </p>
-        <Meter value={item.score} threshold={t} thresholdLabel={`Auto-merge needs ${pct(t)}`} tone={item.score >= t ? "ok" : "warn"} label={`Mutation score ${pct(item.score)}, policy ${pct(t)}`} />
+        <Meter
+          value={item.score}
+          threshold={t}
+          thresholdLabel={`Auto-merge needs ${pct(t)}`}
+          tone={item.score >= t ? "ok" : "warn"}
+          label={`Mutation score ${pct(item.score)}, policy ${pct(t)}`}
+        />
       </div>
       <p class="ev-stats tnum">
         <span>
@@ -249,7 +295,8 @@ function MutationBody({ item, policy }: { item: Item<"mutation">; policy: RepoPo
 }
 
 function ApiBody({ item }: { item: Item<"public-api"> }) {
-  if (item.packages.length === 0) return <p class="ev-sub">No exported symbol changed in any public entry point.</p>;
+  if (item.packages.length === 0)
+    return <p class="ev-sub">No exported symbol changed in any public entry point.</p>;
   return (
     <>
       {item.packages.map((p) => (
@@ -308,7 +355,8 @@ function DepsBody({ item }: { item: Item<"dependencies"> }) {
       {item.newInstallScripts.length > 0 ? (
         <div class="ev-danger">
           <p class="ev-danger__title">
-            <Icon name="triangle-alert" size={16} /> {plural(item.newInstallScripts.length, "new install script")} will run on every install
+            <Icon name="triangle-alert" size={16} />{" "}
+            {plural(item.newInstallScripts.length, "new install script")} will run on every install
           </p>
           <ul>
             {item.newInstallScripts.map((s) => (
@@ -387,7 +435,8 @@ function ItemBody({ item, policy }: { item: EvidenceItem; policy: RepoPolicy }) 
           <RedGreenList item={item} />
           {item.preExisting?.length ? (
             <p class="ev-sub">
-              Already failing on main in the same way (neither proves nor blocks this change): {item.preExisting.map((t) => t.id).join(", ")}.
+              Already failing on main in the same way (neither proves nor blocks this change):{" "}
+              {item.preExisting.map((t) => t.id).join(", ")}.
             </p>
           ) : null}
         </>
@@ -404,7 +453,9 @@ function ItemBody({ item, policy }: { item: EvidenceItem; policy: RepoPolicy }) 
       return <DepsBody item={item} />;
     case "sensitive-paths":
       return item.hits.length === 0 ? (
-        <p class="ev-sub">No changed file matches the repo's {plural(item.patterns.length, "sensitive pattern")}.</p>
+        <p class="ev-sub">
+          No changed file matches the repo's {plural(item.patterns.length, "sensitive pattern")}.
+        </p>
       ) : (
         <>
           <ul class="hits">
@@ -468,12 +519,15 @@ function ItemBody({ item, policy }: { item: EvidenceItem; policy: RepoPolicy }) 
             </dd>
             <dt>Result</dt>
             <dd class={item.verified ? "tone--ok" : "tone--danger"}>
-              {item.verified ? `Reproduced all ${item.files.length} files byte for byte in a clean sandbox` : `${item.mismatchedFiles.length} files did not reproduce`}
+              {item.verified
+                ? `Reproduced all ${item.files.length} files byte for byte in a clean sandbox`
+                : `${item.mismatchedFiles.length} files did not reproduce`}
             </dd>
           </dl>
           <details class="disclosure">
             <summary>
-              {plural(item.files.length, "file")} <Icon name="chevron-down" class="disclosure__chev" />
+              {plural(item.files.length, "file")}{" "}
+              <Icon name="chevron-down" class="disclosure__chev" />
             </summary>
             <ul class="file-list">
               {item.files.map((f) => (
@@ -489,9 +543,7 @@ function ItemBody({ item, policy }: { item: EvidenceItem; policy: RepoPolicy }) 
       return (
         <>
           <p class="ev-prose">{item.rationale}</p>
-          <p class="ev-sub">
-            {item.model}. Model judgments can only raise a lane, never lower it.
-          </p>
+          <p class="ev-sub">{item.model}. Model judgments can only raise a lane, never lower it.</p>
         </>
       );
     case "conflict-resolution":
@@ -499,25 +551,44 @@ function ItemBody({ item, policy }: { item: EvidenceItem; policy: RepoPolicy }) 
         <>
           <p class="ev-prose">{item.rationale}</p>
           <p class="ev-sub">
-            Resolved by {item.resolver.principalId} ({item.resolver.model}) against {item.upstreamChanges.map((u) => u.changeId).join(", ") || "no upstream change"}.
-            {item.semanticConflictWith !== null ? ` Semantic conflict caused by ${item.semanticConflictWith}.` : ""}
-            {item.touchesOutsideConflictHunks ? " Edits lines outside the conflict hunks." : " Only edits lines inside the conflict hunks."}
+            Resolved by {item.resolver.principalId} ({item.resolver.model}) against{" "}
+            {item.upstreamChanges.map((u) => u.changeId).join(", ") || "no upstream change"}.
+            {item.semanticConflictWith !== null
+              ? ` Semantic conflict caused by ${item.semanticConflictWith}.`
+              : ""}
+            {item.touchesOutsideConflictHunks
+              ? " Edits lines outside the conflict hunks."
+              : " Only edits lines inside the conflict hunks."}
           </p>
         </>
       );
     case "quarantine":
       return (
         <p class="ev-sub">
-          {plural(item.tests.length, "quarantined test")}; {item.inAffectedSet.length} in this change's affected set. Quarantined tests never count as passing.
+          {plural(item.tests.length, "quarantined test")}; {item.inAffectedSet.length} in this
+          change's affected set. Quarantined tests never count as passing.
         </p>
       );
   }
 }
 
-function ItemSection({ item, policy, reasons }: { item: EvidenceItem; policy: RepoPolicy; reasons: readonly LaneReason[] }) {
+function ItemSection({
+  item,
+  policy,
+  reasons,
+}: {
+  item: EvidenceItem;
+  policy: RepoPolicy;
+  reasons: readonly LaneReason[];
+}) {
   const s = summarize(item);
   return (
-    <section class="ev-item" id={itemAnchor(item.id)} aria-labelledby={`${itemAnchor(item.id)}-t`} tabIndex={-1}>
+    <section
+      class="ev-item"
+      id={itemAnchor(item.id)}
+      aria-labelledby={`${itemAnchor(item.id)}-t`}
+      tabIndex={-1}
+    >
       <header class="ev-item__head">
         <Icon name={kindIcon(item.kind)} size={20} />
         <h2 class="ev-item__title" id={`${itemAnchor(item.id)}-t`}>
@@ -529,7 +600,8 @@ function ItemSection({ item, policy, reasons }: { item: EvidenceItem; policy: Re
         <p class={`ev-status ev-status--${item.status}`}>
           <Icon name={item.status === "error" ? "x-circle" : "circle-dashed"} size={15} />
           {item.status === "error" ? "Measurement failed" : "Not measured"}
-          {item.note ? `: ${stripAnsi(item.note).replace(/\.$/, "")}.` : "."} {unmeasuredEffect(item.id, reasons)}
+          {item.note ? `: ${stripAnsi(item.note).replace(/\.$/, "")}.` : "."}{" "}
+          {unmeasuredEffect(item.id, reasons)}
         </p>
       ) : (
         <div class="ev-item__body">
@@ -554,7 +626,10 @@ function ItemSection({ item, policy, reasons }: { item: EvidenceItem; policy: Re
  * (30% of the height, at most 280px), as on the walkthrough's station strip. A jump from the index
  * keeps its item current until you scroll again, so a short item at the end can still be current.
  */
-function useItemInView(ids: readonly string[]): { current: string | null; pin: (id: string) => void } {
+function useItemInView(ids: readonly string[]): {
+  current: string | null;
+  pin: (id: string) => void;
+} {
   const current = useSignal<string | null>(null);
   const pinned = useRef<string | null>(null);
   const key = ids.join(" ");
@@ -581,12 +656,14 @@ function useItemInView(ids: readonly string[]): { current: string | null; pin: (
     measure();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll, { passive: true });
-    for (const ev of ["wheel", "touchmove", "keydown"] as const) window.addEventListener(ev, unpin, { passive: true });
+    for (const ev of ["wheel", "touchmove", "keydown"] as const)
+      window.addEventListener(ev, unpin, { passive: true });
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
-      for (const ev of ["wheel", "touchmove", "keydown"] as const) window.removeEventListener(ev, unpin);
+      for (const ev of ["wheel", "touchmove", "keydown"] as const)
+        window.removeEventListener(ev, unpin);
     };
   }, [key, current]);
   return {
@@ -612,7 +689,8 @@ function EvidenceIndex({ items }: { items: readonly EvidenceItem[] }) {
           "Nothing here needs your judgment."
         ) : (
           <>
-            <b class="tnum">{flagged.length}</b> {flagged.length === 1 ? "needs" : "need"} your judgment:{" "}
+            <b class="tnum">{flagged.length}</b> {flagged.length === 1 ? "needs" : "need"} your
+            judgment:{" "}
             {flagged.map((i, n) => (
               <span key={i.id}>
                 {n > 0 ? ", " : null}
@@ -629,7 +707,11 @@ function EvidenceIndex({ items }: { items: readonly EvidenceItem[] }) {
           const s = summarize(i);
           return (
             <li key={i.id}>
-              <a href={`#${itemAnchor(i.id)}`} aria-current={current === i.id ? "location" : undefined} onClick={() => pin(i.id)}>
+              <a
+                href={`#${itemAnchor(i.id)}`}
+                aria-current={current === i.id ? "location" : undefined}
+                onClick={() => pin(i.id)}
+              >
                 <Icon name={kindIcon(i.kind)} size={15} />
                 <span class="ev-index__label">{s.label}</span>
                 <span class={`ev-index__value tone--${s.tone}`}>{s.value}</span>
@@ -669,7 +751,10 @@ export function EvidenceView({ changeId }: { changeId: string }) {
   }
   if (st.status === "error") {
     return (
-      <Page title="Evidence" crumbs={[...crumbs, { href: `/changes/${changeId}`, label: "Change" }]}>
+      <Page
+        title="Evidence"
+        crumbs={[...crumbs, { href: `/changes/${changeId}`, label: "Change" }]}
+      >
         <ErrorState error={st.error} what="the evidence for this change" onRetry={res.reload} />
       </Page>
     );
@@ -681,7 +766,11 @@ export function EvidenceView({ changeId }: { changeId: string }) {
       title={`Evidence for ${change.title}`}
       wide
       class="evidence-page"
-      crumbs={[...crumbs, { href: `/repos/${repo.repo.id}`, label: repo.repo.name }, { href: `/changes/${change.id}`, label: "Walkthrough" }]}
+      crumbs={[
+        ...crumbs,
+        { href: `/repos/${repo.repo.id}`, label: repo.repo.name },
+        { href: `/changes/${change.id}`, label: "Walkthrough" },
+      ]}
     >
       <div class="ev-layout">
         <EvidenceIndex items={items} />
@@ -691,12 +780,22 @@ export function EvidenceView({ changeId }: { changeId: string }) {
               <h2 id="ev-lane-title" class="ev-lane__title">
                 Why this <Term id="lane">review lane</Term>
               </h2>
-              <TriageChart reasons={change.laneReasons} computedLane={change.computedLane} lane={change.lane} changeId={change.id} />
+              <TriageChart
+                reasons={change.laneReasons}
+                computedLane={change.computedLane}
+                lane={change.lane}
+                changeId={change.id}
+              />
             </section>
           ) : null}
           <Attestation ev={ev} change={change} />
           {items.map((i) => (
-            <ItemSection key={i.id} item={i} policy={repo.repo.policy} reasons={change.laneReasons} />
+            <ItemSection
+              key={i.id}
+              item={i}
+              policy={repo.repo.policy}
+              reasons={change.laneReasons}
+            />
           ))}
         </div>
       </div>

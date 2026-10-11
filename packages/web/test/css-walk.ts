@@ -27,7 +27,9 @@ export function cssFiles(dir: string, root: string = dir): string[] {
 }
 
 export function declarations(path: string, label = path): Decl[] {
-  const src = readFileSync(path, "utf8").replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, " "));
+  const src = readFileSync(path, "utf8").replace(/\/\*[\s\S]*?\*\//g, (c) =>
+    c.replace(/[^\n]/g, " "),
+  );
   const out: Decl[] = [];
   const stack: string[] = [];
   let buf = "";
@@ -53,7 +55,10 @@ export function declarations(path: string, label = path): Decl[] {
           selector: stack[stack.length - 1] ?? "",
           context: [...stack],
           property: text.slice(0, colon).trim().toLowerCase(),
-          value: text.slice(colon + 1).trim().replace(/\s+/g, " "),
+          value: text
+            .slice(colon + 1)
+            .trim()
+            .replace(/\s+/g, " "),
         });
       }
       buf = "";

@@ -70,9 +70,9 @@ export { Runner, snapshotName, stepEnv } from "./runner/runner-do.js";
 export {
   CHECKOUT_SCRIPT,
   checkoutEnv,
+  ROOT_USER,
   RUNNER_HOME,
   RUNNER_USER,
-  ROOT_USER,
   shellQuote,
   timedCommandArgv,
   trustCaScript,

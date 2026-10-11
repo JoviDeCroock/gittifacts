@@ -28,9 +28,13 @@ function walk(suite, path) {
       if (t.status === "skipped") {
         const why = (t.annotations ?? []).find((a) => a.type === "skip")?.description ?? "";
         rows.skipped.push(`${name}${why ? `: ${why}` : ""}`);
-      } else if (t.status === "flaky") rows.flaky.push(`${name} (passed on retry ${results.length - 1})`);
+      } else if (t.status === "flaky")
+        rows.flaky.push(`${name} (passed on retry ${results.length - 1})`);
       else if (t.status === "unexpected") {
-        const msg = (last?.error?.message ?? "").split("\n")[0].replace(/\u001b\[[0-9;]*m/g, "").slice(0, 300);
+        const msg = (last?.error?.message ?? "")
+          .split("\n")[0]
+          .replace(/\u001b\[[0-9;]*m/g, "")
+          .slice(0, 300);
         rows.failed.push(`${name}: ${msg}`);
       } else rows.passed.push(`${name} (${(ms / 1000).toFixed(1)} s)`);
     }
@@ -49,7 +53,10 @@ const section = (head, list) => {
   out.push(`**${head}**`, "", ...list.map((l) => `- ${l}`), "");
 };
 section("Failed", rows.failed);
-section("Flaky (passed only on the one allowed retry: fix or quarantine with an owner)", rows.flaky);
+section(
+  "Flaky (passed only on the one allowed retry: fix or quarantine with an owner)",
+  rows.flaky,
+);
 section("Skipped", rows.skipped);
 section("Notes", rows.notes);
 console.log(out.join("\n"));

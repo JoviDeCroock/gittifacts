@@ -14,7 +14,10 @@ export interface RevertLink {
   at: string;
 }
 
-export function findReverts(prs: readonly MergedPr[], repoFullName: string): Map<number, RevertLink> {
+export function findReverts(
+  prs: readonly MergedPr[],
+  repoFullName: string,
+): Map<number, RevertLink> {
   const byNumber = new Map(prs.map((p) => [p.number, p]));
   const byTitle = new Map<string, MergedPr[]>();
   for (const p of prs) byTitle.set(p.title.trim(), [...(byTitle.get(p.title.trim()) ?? []), p]);
@@ -47,7 +50,9 @@ export function findReverts(prs: readonly MergedPr[], repoFullName: string): Map
     }
     const title = /^Revert "(.+)"$/.exec(r.title.trim());
     if (title !== null) {
-      const candidates = (byTitle.get((title[1] ?? "").trim()) ?? []).filter((p) => p.mergedAt <= r.mergedAt);
+      const candidates = (byTitle.get((title[1] ?? "").trim()) ?? []).filter(
+        (p) => p.mergedAt <= r.mergedAt,
+      );
       mark(candidates.at(-1)?.number, r, "title");
     }
   }

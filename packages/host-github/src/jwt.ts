@@ -18,7 +18,9 @@ function b64urlBytes(bytes: Uint8Array): string {
 const b64urlJson = (v: unknown) => b64urlBytes(enc.encode(JSON.stringify(v)));
 
 function pemBody(pem: string): { der: Uint8Array; pkcs1: boolean } {
-  const m = /-----BEGIN (RSA )?PRIVATE KEY-----([\s\S]+?)-----END (RSA )?PRIVATE KEY-----/.exec(pem);
+  const m = /-----BEGIN (RSA )?PRIVATE KEY-----([\s\S]+?)-----END (RSA )?PRIVATE KEY-----/.exec(
+    pem,
+  );
   if (m === null) throw new Error("not a PEM private key");
   const bin = atob((m[2] ?? "").replace(/\s+/g, ""));
   const der = new Uint8Array(bin.length);

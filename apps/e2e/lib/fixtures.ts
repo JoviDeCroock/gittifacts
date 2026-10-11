@@ -13,7 +13,15 @@ import { join } from "node:path";
 import { test as base, expect, type Page } from "@playwright/test";
 import { z } from "zod";
 import { pollUntil } from "./poll.js";
-import { type AgentChange, agentChange, type Human, seedWorld, signInContext, signUp, type World } from "./world.js";
+import {
+  type AgentChange,
+  agentChange,
+  type Human,
+  seedWorld,
+  signInContext,
+  signUp,
+  type World,
+} from "./world.js";
 
 const Quarantine = z.array(
   z.object({
@@ -47,9 +55,14 @@ export const test = base.extend<Fixtures>({
       const q = quarantine.find((e) => title.includes(e.test));
       if (q !== undefined) {
         if (new Date(`${q.expires}T23:59:59Z`).getTime() < Date.now()) {
-          throw new Error(`quarantine for "${q.test}" expired on ${q.expires} (owner ${q.owner}): fix or re-justify it`);
+          throw new Error(
+            `quarantine for "${q.test}" expired on ${q.expires} (owner ${q.owner}): fix or re-justify it`,
+          );
         }
-        testInfo.annotations.push({ type: "quarantined", description: `${q.owner} until ${q.expires}: ${q.reason}` });
+        testInfo.annotations.push({
+          type: "quarantined",
+          description: `${q.owner} until ${q.expires}: ${q.reason}`,
+        });
         testInfo.skip(true, `quarantined (${q.owner}, until ${q.expires}): ${q.reason}`);
       }
       await use();
@@ -61,8 +74,13 @@ export const test = base.extend<Fixtures>({
       const problems: string[] = [];
       page.on("pageerror", (err) => problems.push(`page error: ${err.message}`));
       page.on("response", (res) => {
-        if (res.status() >= 500 && new URL(res.url()).origin === new URL(page.url() || res.url()).origin) {
-          problems.push(`HTTP ${res.status()} ${res.request().method()} ${new URL(res.url()).pathname}`);
+        if (
+          res.status() >= 500 &&
+          new URL(res.url()).origin === new URL(page.url() || res.url()).origin
+        ) {
+          problems.push(
+            `HTTP ${res.status()} ${res.request().method()} ${new URL(res.url()).pathname}`,
+          );
         }
       });
       await use();
@@ -77,7 +95,11 @@ export const test = base.extend<Fixtures>({
     await use(await seedWorld(request, baseURL as string, human, `w-${testInfo.project.name}`));
   },
   agentWork: async ({ request, baseURL, human }, use) => {
-    await use(await agentChange(request, baseURL as string, human, (probe, done, what) => pollUntil(probe, done, { timeoutMs: 45_000, what })));
+    await use(
+      await agentChange(request, baseURL as string, human, (probe, done, what) =>
+        pollUntil(probe, done, { timeoutMs: 45_000, what }),
+      ),
+    );
   },
   authed: async ({ page, context, baseURL, human }, use) => {
     await signInContext(context, baseURL as string, human);

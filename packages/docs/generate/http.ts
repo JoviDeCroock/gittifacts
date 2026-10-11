@@ -34,7 +34,8 @@ const GROUPS: readonly {
     title: "HTTP API: plans and claims",
     nav: "HTTP: plans and claims",
     tags: ["plans", "claims"],
-    blurb: "plans (draft, approve, reject, withdraw, attempts and the pick) and claiming an unclaimed project",
+    blurb:
+      "plans (draft, approve, reject, withdraw, attempts and the pick) and claiming an unclaimed project",
   },
   {
     file: "reference/http-changes.md",

@@ -154,7 +154,10 @@ const ListAuditEventsOutput = {
       properties: {
         verified: { type: "boolean" },
         brokenAt: { type: "integer" },
-        verifiedThrough: { type: "integer", description: "Highest seq verified (it and every earlier event)." },
+        verifiedThrough: {
+          type: "integer",
+          description: "Highest seq verified (it and every earlier event).",
+        },
         headSeq: { type: "integer", description: "Newest seq when checked." },
         complete: { type: "boolean", description: "verifiedThrough reached headSeq." },
       },

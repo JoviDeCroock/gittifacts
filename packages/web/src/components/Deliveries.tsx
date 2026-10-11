@@ -75,7 +75,15 @@ export function DeliveryRow({
   );
 }
 
-function Block({ title, aside, children }: { title: string; aside?: ComponentChildren; children: ComponentChildren }) {
+function Block({
+  title,
+  aside,
+  children,
+}: {
+  title: string;
+  aside?: ComponentChildren;
+  children: ComponentChildren;
+}) {
   return (
     <section class="dlv-block">
       <div class="dlv-block__head">
@@ -146,12 +154,17 @@ export function DeliveryDetailView({
         {d.redeliveryOf ? (
           <>
             <dt>Redelivery of</dt>
-            <dd>{originalHref ? <a href={originalHref}>the original delivery</a> : d.redeliveryOf}</dd>
+            <dd>
+              {originalHref ? <a href={originalHref}>the original delivery</a> : d.redeliveryOf}
+            </dd>
           </>
         ) : null}
       </dl>
 
-      <Block title="Request headers" aside={signature ? <CopyButton text={signature} label="Copy signature" /> : null}>
+      <Block
+        title="Request headers"
+        aside={signature ? <CopyButton text={signature} label="Copy signature" /> : null}
+      >
         <dl class="dlv-headers">
           {Object.entries(d.requestHeaders).map(([k, v]) => (
             <div key={k} class={isSignature(k) ? "is-signature" : undefined}>
@@ -177,7 +190,9 @@ export function DeliveryDetailView({
             <code>{d.responseBody}</code>
           </pre>
         ) : (
-          <p class="ev-sub">{d.responseStatus === null ? "No response was received." : "Empty body."}</p>
+          <p class="ev-sub">
+            {d.responseStatus === null ? "No response was received." : "Empty body."}
+          </p>
         )}
       </Block>
 

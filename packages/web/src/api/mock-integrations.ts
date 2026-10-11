@@ -28,7 +28,12 @@ export interface MockResponse {
 }
 
 const ok = (body: unknown, status = 200): MockResponse => ({ status, body: structuredClone(body) });
-const fail = (status: number, code: string, message: string, explanation: string): MockResponse => ({
+const fail = (
+  status: number,
+  code: string,
+  message: string,
+  explanation: string,
+): MockResponse => ({
   status,
   body: { error: { code, message, fix: { explanation, docsUrl: "/docs/integrations" } } },
 });
@@ -41,8 +46,13 @@ const REPOS: RepoRef[] = fixtureRepos()
   .map((r) => r.repo)
   .filter((r) => r.claim.status === "claimed" && r.claim.ownerId === ME.id)
   // Some fixture names already carry their namespace ("acme/widgets"): never prefix it twice.
-  .map((r) => ({ id: r.id, name: r.name, fullName: r.name.includes("/") ? r.name : `${r.namespace}/${r.name}` }));
-const repo = (id: string): RepoRef => REPOS.find((r) => r.id === id) ?? { id, name: id, fullName: id };
+  .map((r) => ({
+    id: r.id,
+    name: r.name,
+    fullName: r.name.includes("/") ? r.name : `${r.namespace}/${r.name}`,
+  }));
+const repo = (id: string): RepoRef =>
+  REPOS.find((r) => r.id === id) ?? { id, name: id, fullName: id };
 
 const NEVER = [
   "Push code or write any branch",
@@ -79,7 +89,8 @@ const integrations: IntegrationView[] = [
     id: "int_cfwb",
     clientId: "gtic_9c1e4b7a2d",
     name: "Cloudflare Workers Builds",
-    description: "Builds and deploys Workers from gittifacts: production from main, a preview per Change.",
+    description:
+      "Builds and deploys Workers from gittifacts: production from main, a preview per Change.",
     logoUrl: null,
     homepageUrl: "https://workers.cloudflare.com",
     redirectUris: [
@@ -93,10 +104,20 @@ const integrations: IntegrationView[] = [
     webhook: {
       url: "https://builds.workers.example/hooks/gittifacts",
       active: true,
-      events: ["push", "change.created", "change.updated", "change.merged", "installation.created", "installation.deleted"],
+      events: [
+        "push",
+        "change.created",
+        "change.updated",
+        "change.merged",
+        "installation.created",
+        "installation.deleted",
+      ],
       secretSet: true,
     },
-    secrets: [secretView("cfwb-2", 60 * 24 * 3, 2), secretView("cfwb-1", 60 * 24 * 74, 60 * 24 * 3 + 40)],
+    secrets: [
+      secretView("cfwb-2", 60 * 24 * 3, 2),
+      secretView("cfwb-1", 60 * 24 * 74, 60 * 24 * 3 + 40),
+    ],
     installationCount: 3,
     createdAt: ago(60 * 24 * 74),
     updatedAt: ago(60 * 24 * 3),
@@ -167,7 +188,12 @@ function changePayload(s: DeliverySeed, r: RepoRef) {
   return {
     id,
     title: "Cache invoice totals per billing period",
-    status: s.event === "change.merged" ? "merged" : s.event === "change.reverted" ? "reverted" : "awaiting-review",
+    status:
+      s.event === "change.merged"
+        ? "merged"
+        : s.event === "change.reverted"
+          ? "reverted"
+          : "awaiting-review",
     planId: `pln_${b64u(`${s.id}-plan`, 8)}`,
     baseSha: sha(`${s.id}-base`),
     headSha: sha(`${s.id}-head`),
@@ -241,7 +267,9 @@ function payloadFor(s: DeliverySeed, deliveryId: string, createdAt: string): str
       Object.assign(body, {
         zen: "Humans approve intent. Machines prove conformance.",
         integration: it ? { id: it.id, clientId: it.clientId, name: it.name } : null,
-        hook: it ? { url: it.webhook.url, events: it.webhook.events, active: it.webhook.active } : null,
+        hook: it
+          ? { url: it.webhook.url, events: it.webhook.events, active: it.webhook.active }
+          : null,
       });
       break;
     }
@@ -285,7 +313,12 @@ function makeDelivery(s: DeliverySeed): DeliveryDetail {
       ...(s.event === "ping" ? {} : { "x-gittifacts-installation-id": CFWB_INSTALL }),
     },
     payload,
-    responseBody: s.responseBody === undefined ? (s.responseStatus === 200 ? '{"ok":true}' : null) : s.responseBody,
+    responseBody:
+      s.responseBody === undefined
+        ? s.responseStatus === 200
+          ? '{"ok":true}'
+          : null
+        : s.responseBody,
     error: s.error ?? null,
   };
 }
@@ -294,15 +327,120 @@ const BAD_GATEWAY =
   "<html>\r\n<head><title>502 Bad Gateway</title></head>\r\n<body>\r\n<center><h1>502 Bad Gateway</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n";
 
 const deliveries: DeliveryDetail[] = [
-  { id: "dlv_07", integrationId: "int_cfwb", event: "push", repoId: "repo_billing", status: "delivered", attempts: 1, responseStatus: 200, durationMs: 142, createdMin: 3 },
-  { id: "dlv_06", integrationId: "int_cfwb", event: "change.updated", action: "synchronize", repoId: "repo_dashboard", status: "pending", attempts: 2, responseStatus: 503, durationMs: 10_000, createdMin: 9, lastAttemptMin: 2, nextAttemptMin: 4, responseBody: "upstream timed out", error: "Timed out after 10 s waiting for a response (attempt 2 of 8)." },
-  { id: "dlv_05", integrationId: "int_cfwb", event: "change.created", repoId: "repo_dashboard", status: "delivered", attempts: 1, responseStatus: 202, durationMs: 214, createdMin: 18, responseBody: '{"queued":true,"build":"bld_7Hc2"}' },
-  { id: "dlv_04", integrationId: "int_cfwb", event: "push", repoId: "repo_edge", status: "delivered", attempts: 1, responseStatus: 200, durationMs: 388, createdMin: 41, redeliveryOf: "dlv_03" },
-  { id: "dlv_03", integrationId: "int_cfwb", event: "push", repoId: "repo_edge", status: "failed", attempts: 8, responseStatus: 502, durationMs: 1_204, createdMin: 60 * 7, lastAttemptMin: 52, responseBody: BAD_GATEWAY, error: "Gave up after 8 attempts over 6 h. The last answer was 502 Bad Gateway." },
-  { id: "dlv_02", integrationId: "int_cfwb", event: "change.merged", repoId: "repo_billing", status: "cancelled", attempts: 0, responseStatus: null, durationMs: null, createdMin: 60 * 26, lastAttemptMin: null, error: "webhook disabled" },
-  { id: "dlv_01", integrationId: "int_cfwb", event: "installation.created", repoId: null, status: "delivered", attempts: 1, responseStatus: 204, durationMs: 96, createdMin: 60 * 24 * 3, responseBody: "" },
-  { id: "dlv_00", integrationId: "int_cfwb", event: "ping", repoId: null, status: "delivered", attempts: 1, responseStatus: 200, durationMs: 121, createdMin: 60 * 24 * 9 },
-  { id: "dlv_n1", integrationId: "int_netlify_stg", event: "ping", repoId: null, status: "failed", attempts: 3, responseStatus: null, durationMs: 10_000, createdMin: 60 * 24 * 2, lastAttemptMin: 60 * 24 * 2 - 30, error: "Couldn't connect to api.staging.netlify.example: the connection timed out." },
+  {
+    id: "dlv_07",
+    integrationId: "int_cfwb",
+    event: "push",
+    repoId: "repo_billing",
+    status: "delivered",
+    attempts: 1,
+    responseStatus: 200,
+    durationMs: 142,
+    createdMin: 3,
+  },
+  {
+    id: "dlv_06",
+    integrationId: "int_cfwb",
+    event: "change.updated",
+    action: "synchronize",
+    repoId: "repo_dashboard",
+    status: "pending",
+    attempts: 2,
+    responseStatus: 503,
+    durationMs: 10_000,
+    createdMin: 9,
+    lastAttemptMin: 2,
+    nextAttemptMin: 4,
+    responseBody: "upstream timed out",
+    error: "Timed out after 10 s waiting for a response (attempt 2 of 8).",
+  },
+  {
+    id: "dlv_05",
+    integrationId: "int_cfwb",
+    event: "change.created",
+    repoId: "repo_dashboard",
+    status: "delivered",
+    attempts: 1,
+    responseStatus: 202,
+    durationMs: 214,
+    createdMin: 18,
+    responseBody: '{"queued":true,"build":"bld_7Hc2"}',
+  },
+  {
+    id: "dlv_04",
+    integrationId: "int_cfwb",
+    event: "push",
+    repoId: "repo_edge",
+    status: "delivered",
+    attempts: 1,
+    responseStatus: 200,
+    durationMs: 388,
+    createdMin: 41,
+    redeliveryOf: "dlv_03",
+  },
+  {
+    id: "dlv_03",
+    integrationId: "int_cfwb",
+    event: "push",
+    repoId: "repo_edge",
+    status: "failed",
+    attempts: 8,
+    responseStatus: 502,
+    durationMs: 1_204,
+    createdMin: 60 * 7,
+    lastAttemptMin: 52,
+    responseBody: BAD_GATEWAY,
+    error: "Gave up after 8 attempts over 6 h. The last answer was 502 Bad Gateway.",
+  },
+  {
+    id: "dlv_02",
+    integrationId: "int_cfwb",
+    event: "change.merged",
+    repoId: "repo_billing",
+    status: "cancelled",
+    attempts: 0,
+    responseStatus: null,
+    durationMs: null,
+    createdMin: 60 * 26,
+    lastAttemptMin: null,
+    error: "webhook disabled",
+  },
+  {
+    id: "dlv_01",
+    integrationId: "int_cfwb",
+    event: "installation.created",
+    repoId: null,
+    status: "delivered",
+    attempts: 1,
+    responseStatus: 204,
+    durationMs: 96,
+    createdMin: 60 * 24 * 3,
+    responseBody: "",
+  },
+  {
+    id: "dlv_00",
+    integrationId: "int_cfwb",
+    event: "ping",
+    repoId: null,
+    status: "delivered",
+    attempts: 1,
+    responseStatus: 200,
+    durationMs: 121,
+    createdMin: 60 * 24 * 9,
+  },
+  {
+    id: "dlv_n1",
+    integrationId: "int_netlify_stg",
+    event: "ping",
+    repoId: null,
+    status: "failed",
+    attempts: 3,
+    responseStatus: null,
+    durationMs: 10_000,
+    createdMin: 60 * 24 * 2,
+    lastAttemptMin: 60 * 24 * 2 - 30,
+    error: "Couldn't connect to api.staging.netlify.example: the connection timed out.",
+  },
 ].map((s) => makeDelivery(s as DeliverySeed));
 
 function summary(d: DeliveryDetail): DeliverySummary {
@@ -343,7 +481,13 @@ const installations: InstallationView[] = [
       developer: { name: "Render Services" },
     },
     account: { id: ME.id, kind: "human", handle: ME.handle },
-    scopes: explain(["repo:read", "contents:read", "webhooks", "deployments:write", "checks:write"]),
+    scopes: explain([
+      "repo:read",
+      "contents:read",
+      "webhooks",
+      "deployments:write",
+      "checks:write",
+    ]),
     repoSelection: "all",
     repos: [...REPOS],
     eligibleRepos: REPOS.map((r) => ({ ...r })),
@@ -385,8 +529,11 @@ const decided = new Map<string, "approved" | "denied">();
 function installFor(id: string): InstallView | null {
   if (!["demo", "update", "empty", "expired", "decided"].includes(id)) return null;
   const update = id === "update";
-  const existing = update ? installations.find((i) => i.id === CFWB_INSTALL && i.status === "active") : undefined;
-  const status = decided.get(id) ?? (id === "expired" ? "expired" : id === "decided" ? "approved" : "pending");
+  const existing = update
+    ? installations.find((i) => i.id === CFWB_INSTALL && i.status === "active")
+    : undefined;
+  const status =
+    decided.get(id) ?? (id === "expired" ? "expired" : id === "decided" ? "approved" : "pending");
   return {
     id,
     status,
@@ -408,10 +555,16 @@ function installFor(id: string): InstallView | null {
   };
 }
 
-function applyInstall(view: InstallView, repoSelection: "all" | "selected", repoIds: string[]): void {
+function applyInstall(
+  view: InstallView,
+  repoSelection: "all" | "selected",
+  repoIds: string[],
+): void {
   const repos = repoSelection === "all" ? REPOS.map((r) => ({ ...r })) : repoIds.map(repo);
   const now = new Date().toISOString();
-  const current = installations.find((i) => i.integration.id === view.integration.id && i.status === "active");
+  const current = installations.find(
+    (i) => i.integration.id === view.integration.id && i.status === "active",
+  );
   if (current) {
     Object.assign(current, { repoSelection, repos, scopes: view.scopes, updatedAt: now });
     return;
@@ -439,19 +592,38 @@ function applyInstall(view: InstallView, repoSelection: "all" | "selected", repo
 }
 
 /** Body of approve / PATCH installation: an explicit choice, repos you own or maintain. */
-function readSelection(body: unknown): { repoSelection: "all" | "selected"; repoIds: string[] } | MockResponse {
+function readSelection(
+  body: unknown,
+): { repoSelection: "all" | "selected"; repoIds: string[] } | MockResponse {
   const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
   const sel = b.repoSelection;
-  const ids = Array.isArray(b.repoIds) ? b.repoIds.filter((x): x is string => typeof x === "string") : [];
+  const ids = Array.isArray(b.repoIds)
+    ? b.repoIds.filter((x): x is string => typeof x === "string")
+    : [];
   if (sel !== "all" && sel !== "selected") {
-    return fail(400, "invalid-request", "repoSelection must be all or selected", "Choose All repositories or pick some.");
+    return fail(
+      400,
+      "invalid-request",
+      "repoSelection must be all or selected",
+      "Choose All repositories or pick some.",
+    );
   }
   if (sel === "selected" && ids.length === 0) {
-    return fail(400, "invalid-request", "pick at least one repository", "Tick at least one repository, or choose All repositories you own or maintain.");
+    return fail(
+      400,
+      "invalid-request",
+      "pick at least one repository",
+      "Tick at least one repository, or choose All repositories you own or maintain.",
+    );
   }
   const foreign = ids.filter((x) => !REPOS.some((r) => r.id === x));
   if (foreign.length > 0) {
-    return fail(403, "repo-not-installable", `you can't install on ${foreign.join(", ")}`, "Only claimed repositories you own or maintain can be connected. Claim the project first, or ask its owner to make you a maintainer.");
+    return fail(
+      403,
+      "repo-not-installable",
+      `you can't install on ${foreign.join(", ")}`,
+      "Only claimed repositories you own or maintain can be connected. Claim the project first, or ask its owner to make you a maintainer.",
+    );
   }
   return { repoSelection: sel, repoIds: sel === "all" ? [] : ids };
 }
@@ -462,21 +634,41 @@ function readInput(body: unknown, partial: boolean): Partial<IntegrationInput> |
   const b = (typeof body === "object" && body !== null ? body : {}) as Partial<IntegrationInput>;
   if (!partial || b.name !== undefined) {
     if (typeof b.name !== "string" || b.name.trim().length < 2) {
-      return fail(400, "invalid-request", "name is required", "Give the integration a name people will recognise, 2 to 60 characters.");
+      return fail(
+        400,
+        "invalid-request",
+        "name is required",
+        "Give the integration a name people will recognise, 2 to 60 characters.",
+      );
     }
   }
   if (!partial || b.redirectUris !== undefined) {
     if (!Array.isArray(b.redirectUris) || b.redirectUris.length === 0) {
-      return fail(400, "invalid-request", "at least one redirect URI is required", "Add the exact callback URL your OAuth flow returns to.");
+      return fail(
+        400,
+        "invalid-request",
+        "at least one redirect URI is required",
+        "Add the exact callback URL your OAuth flow returns to.",
+      );
     }
   }
   if (!partial || b.scopes !== undefined) {
     if (!Array.isArray(b.scopes) || b.scopes.length === 0) {
-      return fail(400, "invalid-request", "pick at least one permission", "Deploy platforms usually need the first four.");
+      return fail(
+        400,
+        "invalid-request",
+        "pick at least one permission",
+        "Deploy platforms usually need the first four.",
+      );
     }
   }
   if (b.webhook?.url && !b.scopes?.includes("webhooks") && !partial) {
-    return fail(400, "invalid-request", "a webhook needs the webhooks permission", "Tick Receive events, or leave the webhook URL empty.");
+    return fail(
+      400,
+      "invalid-request",
+      "a webhook needs the webhooks permission",
+      "Tick Receive events, or leave the webhook URL empty.",
+    );
   }
   return b;
 }
@@ -503,8 +695,22 @@ function create(body: unknown): MockResponse {
     scopes: i.scopes,
     scopesExplained: explain(i.scopes),
     developer: { name: ME.name },
-    webhook: { url: hookUrl, active: i.webhook?.active ?? true, events: i.webhook?.events ?? [], secretSet: Boolean(hookUrl) },
-    secrets: secret ? [{ id: `sec_${b64u(id, 8)}`, prefix: secret.slice(0, 12), createdAt: now, lastUsedAt: null }] : [],
+    webhook: {
+      url: hookUrl,
+      active: i.webhook?.active ?? true,
+      events: i.webhook?.events ?? [],
+      secretSet: Boolean(hookUrl),
+    },
+    secrets: secret
+      ? [
+          {
+            id: `sec_${b64u(id, 8)}`,
+            prefix: secret.slice(0, 12),
+            createdAt: now,
+            lastUsedAt: null,
+          },
+        ]
+      : [],
     installationCount: 0,
     createdAt: now,
     updatedAt: now,
@@ -538,7 +744,11 @@ function patch(it: IntegrationView, body: unknown): MockResponse {
   return ok({ integration: it });
 }
 
-function queueDelivery(it: IntegrationView, event: WebhookEvent, redeliveryOf: DeliveryDetail | null): DeliveryDetail {
+function queueDelivery(
+  it: IntegrationView,
+  event: WebhookEvent,
+  redeliveryOf: DeliveryDetail | null,
+): DeliveryDetail {
   const d = makeDelivery({
     id: nextId("dlv"),
     integrationId: it.id,
@@ -562,9 +772,19 @@ function queueDelivery(it: IntegrationView, event: WebhookEvent, redeliveryOf: D
   deliveries.unshift(d);
   // The mock receiver answers a moment later: pings and redeliveries succeed while the hook is active.
   setTimeout(() => {
-    Object.assign(d, it.webhook.active
-      ? { status: "delivered", attempts: 1, responseStatus: 200, durationMs: 163, lastAttemptAt: new Date().toISOString(), responseBody: '{"ok":true}' }
-      : { status: "cancelled", error: "webhook disabled" });
+    Object.assign(
+      d,
+      it.webhook.active
+        ? {
+            status: "delivered",
+            attempts: 1,
+            responseStatus: 200,
+            durationMs: 163,
+            lastAttemptAt: new Date().toISOString(),
+            responseBody: '{"ok":true}',
+          }
+        : { status: "cancelled", error: "webhook disabled" },
+    );
   }, 1500);
   return d;
 }
@@ -575,7 +795,8 @@ function wait(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-const notFound = (what: string) => fail(404, "not-found", `no such ${what}`, "Reload the list; it may have been deleted.");
+const notFound = (what: string) =>
+  fail(404, "not-found", `no such ${what}`, "Reload the list; it may have been deleted.");
 
 export async function handle(method: string, path: string, body?: unknown): Promise<MockResponse> {
   await wait(method === "GET" ? 160 : 520);
@@ -588,12 +809,22 @@ export async function handle(method: string, path: string, body?: unknown): Prom
     const id = decodeURIComponent(m[1] ?? "");
     const view = installFor(id);
     if (!view) {
-      return fail(404, "install-request-not-found", "this installation request doesn't exist", "Start the connection again from the integration's site. Requests last 10 minutes.");
+      return fail(
+        404,
+        "install-request-not-found",
+        "this installation request doesn't exist",
+        "Start the connection again from the integration's site. Requests last 10 minutes.",
+      );
     }
     if (method === "GET" && !m[2]) return ok({ install: view });
     if (method !== "POST") return notFound("route");
     if (view.status !== "pending") {
-      return fail(409, "install-request-decided", `this request was already ${view.status}`, `Go back to ${view.integration.name} and connect again for a new request.`);
+      return fail(
+        409,
+        "install-request-decided",
+        `this request was already ${view.status}`,
+        `Go back to ${view.integration.name} and connect again for a new request.`,
+      );
     }
     const back = `https://${view.redirectHost}/api/gittifacts/callback`;
     if (m[2] === "deny") {
@@ -604,7 +835,9 @@ export async function handle(method: string, path: string, body?: unknown): Prom
     if ("status" in sel) return sel;
     decided.set(id, "approved");
     applyInstall(view, sel.repoSelection, sel.repoIds);
-    return ok({ redirectTo: `${back}?code=mock-code&state=mock&installation_id=${view.existing?.installationId ?? "new"}` });
+    return ok({
+      redirectTo: `${back}?code=mock-code&state=mock&installation_id=${view.existing?.installationId ?? "new"}`,
+    });
   }
 
   // installed integrations
@@ -613,7 +846,9 @@ export async function handle(method: string, path: string, body?: unknown): Prom
   }
   m = /^\/api\/v1\/installations\/([^/]+)(\/uninstall)?$/.exec(p);
   if (m) {
-    const inst = installations.find((i) => i.id === decodeURIComponent(m?.[1] ?? "") && i.status === "active");
+    const inst = installations.find(
+      (i) => i.id === decodeURIComponent(m?.[1] ?? "") && i.status === "active",
+    );
     if (!inst) return notFound("installation");
     if (method === "POST" && m[2]) {
       inst.status = "deleted";
@@ -624,7 +859,8 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       const sel = readSelection(body);
       if ("status" in sel) return sel;
       inst.repoSelection = sel.repoSelection;
-      inst.repos = sel.repoSelection === "all" ? REPOS.map((r) => ({ ...r })) : sel.repoIds.map(repo);
+      inst.repos =
+        sel.repoSelection === "all" ? REPOS.map((r) => ({ ...r })) : sel.repoIds.map(repo);
       inst.updatedAt = new Date().toISOString();
       return ok({ installation: inst });
     }
@@ -657,11 +893,21 @@ export async function handle(method: string, path: string, body?: unknown): Prom
     }
     if (rest === "secrets" && method === "POST") {
       if (it.clientType === "public") {
-        return fail(409, "invalid-state", "public clients have no secret", "Public clients prove themselves with PKCE. Switch to confidential to use a secret.");
+        return fail(
+          409,
+          "invalid-state",
+          "public clients have no secret",
+          "Public clients prove themselves with PKCE. Switch to confidential to use a secret.",
+        );
       }
       const id = nextId("sec");
       const clientSecret = secretValue(id);
-      const secret: SecretView = { id, prefix: clientSecret.slice(0, 12), createdAt: new Date().toISOString(), lastUsedAt: null };
+      const secret: SecretView = {
+        id,
+        prefix: clientSecret.slice(0, 12),
+        createdAt: new Date().toISOString(),
+        lastUsedAt: null,
+      };
       it.secrets.unshift(secret);
       return ok({ clientSecret, secret, integration: it }, 201);
     }
@@ -671,7 +917,12 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       if (idx < 0) return notFound("secret");
       if (it.secrets.length === 1) {
         // Exactly `last-secret`: the only active client secret can't be revoked.
-        return fail(409, "last-secret", "can't revoke the only secret", "Generate a new secret first, deploy it, then revoke this one.");
+        return fail(
+          409,
+          "last-secret",
+          "can't revoke the only secret",
+          "Generate a new secret first, deploy it, then revoke this one.",
+        );
       }
       it.secrets.splice(idx, 1);
       return ok({ integration: it });
@@ -681,7 +932,13 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       return ok({ webhookSecret: `whsec_${b64u(nextId("wh"), 32)}`, integration: it });
     }
     if (rest === "ping" && method === "POST") {
-      if (!it.webhook.url) return fail(409, "no-webhook", "no webhook URL is set", "Add a webhook URL first, then send a ping.");
+      if (!it.webhook.url)
+        return fail(
+          409,
+          "no-webhook",
+          "no webhook URL is set",
+          "Add a webhook URL first, then send a ping.",
+        );
       return ok({ delivery: summary(queueDelivery(it, "ping", null)) }, 202);
     }
     if (rest === "deliveries" && method === "GET") {
@@ -697,10 +954,13 @@ export async function handle(method: string, path: string, body?: unknown): Prom
     }
     const dm = /^deliveries\/([^/]+)(\/redeliver)?$/.exec(rest);
     if (dm) {
-      const d = deliveries.find((x) => x.id === decodeURIComponent(dm[1] ?? "") && deliveryOwner(x) === it.id);
+      const d = deliveries.find(
+        (x) => x.id === decodeURIComponent(dm[1] ?? "") && deliveryOwner(x) === it.id,
+      );
       if (!d) return notFound("delivery");
       if (method === "GET" && !dm[2]) return ok({ delivery: d });
-      if (method === "POST" && dm[2]) return ok({ delivery: summary(queueDelivery(it, d.event, d)) }, 202);
+      if (method === "POST" && dm[2])
+        return ok({ delivery: summary(queueDelivery(it, d.event, d)) }, 202);
     }
   }
   return fail(404, "not-found", `No mock route for ${method} ${p}.`, "Reload the page.");

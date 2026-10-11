@@ -7,15 +7,20 @@ import { type Signal, useSignal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import { ApiError, api, describeError } from "../api/client.js";
-import { isMockMode } from "../api/mode.js";
 import { membersApi } from "../api/members.js";
-import { fetchQueueOverview, QUEUE_POLL_MS, type QueueEntryView, type QueueOverviewView } from "../api/queue.js";
+import { isMockMode } from "../api/mode.js";
+import {
+  fetchQueueOverview,
+  QUEUE_POLL_MS,
+  type QueueEntryView,
+  type QueueOverviewView,
+} from "../api/queue.js";
 import { Icon } from "../components/Icon.js";
 import { paletteRepos } from "../components/Palette.js";
 import { EntryActs, FreezeForm, ResumeAct } from "../components/QueueActs.js";
 import { QueueEntries } from "../components/QueueEntries.js";
-import { QueueStalls } from "../components/QueueStalls.js";
 import { DeployTrains, QueueLanes } from "../components/QueueLanes.js";
+import { QueueStalls } from "../components/QueueStalls.js";
 import { Page } from "../components/Shell.js";
 import { Button, ErrorState, Hash, Loading } from "../components/ui.js";
 import {
@@ -118,7 +123,12 @@ function HaltedBanner({
   admin: { act: ComponentChildren } | { ask: string };
 }) {
   return (
-    <section class="q-banner q-banner--danger" role="alert" aria-labelledby="q-halted" data-testid="queue-halted">
+    <section
+      class="q-banner q-banner--danger"
+      role="alert"
+      aria-labelledby="q-halted"
+      data-testid="queue-halted"
+    >
       <Icon name="pause" size={22} class="q-banner__icon" />
       <div class="q-banner__body">
         <h2 id="q-halted" class="q-banner__title">
@@ -132,13 +142,25 @@ function HaltedBanner({
         <p class="q-banner__meta">
           <code>{halted.code}</code> · since {formatWhen(new Date(halted.at).toISOString(), now)}
         </p>
-        {"act" in admin ? admin.act : <p class="q-banner__msg">Ask {admin.ask} to check main and resume the queue.</p>}
+        {"act" in admin ? (
+          admin.act
+        ) : (
+          <p class="q-banner__msg">Ask {admin.ask} to check main and resume the queue.</p>
+        )}
       </div>
     </section>
   );
 }
 
-function FreezeBanner({ q, now, thaw }: { q: QueueOverviewView; now: number; thaw: ComponentChildren }) {
+function FreezeBanner({
+  q,
+  now,
+  thaw,
+}: {
+  q: QueueOverviewView;
+  now: number;
+  thaw: ComponentChildren;
+}) {
   const tone = freezeTone(q.freezeReasons);
   return (
     <section class={`q-banner q-banner--${tone}`} role="status" aria-labelledby="q-frozen">
@@ -231,7 +253,9 @@ function Stats({ q }: { q: QueueOverviewView }) {
             Median wait
             {t.p95 !== null ? <span class="q-fig__sub">p95 {durationShort(t.p95)}</span> : null}
           </dt>
-          <dd class={`tnum ${t.p50 === null ? "tone--warn q-fig__nm" : ""}`}>{durationShort(t.p50)}</dd>
+          <dd class={`tnum ${t.p50 === null ? "tone--warn q-fig__nm" : ""}`}>
+            {durationShort(t.p50)}
+          </dd>
         </div>
         <div class="q-fig">
           <dt>CI run, median</dt>
@@ -298,11 +322,18 @@ function FlakyTests({ q }: { q: QueueOverviewView }) {
 function useAccess(repoId: string) {
   const res = useResource(async () => {
     const [members, mine] = await Promise.all([membersApi.list(repoId), api.principals()]);
-    return { members, mine: new Set(mine.principals.filter((p) => p.kind === "agent").map((p) => p.id)) };
+    return {
+      members,
+      mine: new Set(mine.principals.filter((p) => p.kind === "agent").map((p) => p.id)),
+    };
   }, [repoId]);
   const st = res.state.value;
   const data = st.status === "ok" ? st.data : null;
-  const powers = queuePowers(principal.value, data?.members.viewerRole ?? null, data?.mine ?? new Set());
+  const powers = queuePowers(
+    principal.value,
+    data?.members.viewerRole ?? null,
+    data?.mine ?? new Set(),
+  );
   const owners = data?.members.members.filter((m) => m.role === "owner").map((m) => m.name) ?? [];
   return { powers, owners };
 }
@@ -350,7 +381,9 @@ export function QueueView({ repoId }: { repoId: string }) {
     powers.canAct(e.authorId) ? (
       <EntryActs
         e={e}
-        dependents={q.entries.filter((d) => d.dependsOn.includes(e.changeId) && d.state !== "dequeued").map((d) => titleOf(d.changeId))}
+        dependents={q.entries
+          .filter((d) => d.dependsOn.includes(e.changeId) && d.state !== "dequeued")
+          .map((d) => titleOf(d.changeId))}
         onActed={acted}
       />
     ) : null;
@@ -362,7 +395,12 @@ export function QueueView({ repoId }: { repoId: string }) {
       crumbs={crumbs}
       actions={
         powers.canAdmin && !q.frozen && freezing.value === null ? (
-          <Button size="sm" icon="lock" data-testid="queue-freeze" onClick={() => (freezing.value = "freeze")}>
+          <Button
+            size="sm"
+            icon="lock"
+            data-testid="queue-freeze"
+            onClick={() => (freezing.value = "freeze")}
+          >
             Freeze the queue…
           </Button>
         ) : null
@@ -383,13 +421,23 @@ export function QueueView({ repoId }: { repoId: string }) {
     >
       <div class="q">
         {freezing.value === "freeze" && !q.frozen ? (
-          <FreezeForm repoId={repoId} freeze automatic={false} onDone={acted} onCancel={() => (freezing.value = null)} />
+          <FreezeForm
+            repoId={repoId}
+            freeze
+            automatic={false}
+            onDone={acted}
+            onCancel={() => (freezing.value = null)}
+          />
         ) : null}
         {q.halted ? (
           <HaltedBanner
             halted={q.halted}
             now={now}
-            admin={powers.canAdmin ? { act: <ResumeAct repoId={repoId} onDone={acted} /> } : { ask: ownersLine(owners) }}
+            admin={
+              powers.canAdmin
+                ? { act: <ResumeAct repoId={repoId} onDone={acted} /> }
+                : { ask: ownersLine(owners) }
+            }
           />
         ) : null}
         {q.frozen ? (
@@ -398,10 +446,21 @@ export function QueueView({ repoId }: { repoId: string }) {
             now={now}
             thaw={
               !powers.canAdmin ? null : freezing.value === "thaw" ? (
-                <FreezeForm repoId={repoId} freeze={false} automatic={automatic} onDone={acted} onCancel={() => (freezing.value = null)} />
+                <FreezeForm
+                  repoId={repoId}
+                  freeze={false}
+                  automatic={automatic}
+                  onDone={acted}
+                  onCancel={() => (freezing.value = null)}
+                />
               ) : (
                 <div class="q-banner__acts">
-                  <Button size="sm" icon="lock" data-testid="queue-thaw" onClick={() => (freezing.value = "thaw")}>
+                  <Button
+                    size="sm"
+                    icon="lock"
+                    data-testid="queue-thaw"
+                    onClick={() => (freezing.value = "thaw")}
+                  >
                     Thaw the queue…
                   </Button>
                 </div>

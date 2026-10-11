@@ -259,7 +259,10 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
       title: 'Wait for the lane (call again while reason is "timeout")',
       call: call("wait_for_change", { changeId: CH, until: "lane_assigned", timeoutSec: 50 }),
     },
-    { title: "Ask a human to review (quick or full review, Lane 1/2)", call: call("request_review", { changeId: CH }) },
+    {
+      title: "Ask a human to review (quick or full review, Lane 1/2)",
+      call: call("request_review", { changeId: CH }),
+    },
     {
       title: 'Wait until merged (call again while reason is "timeout")',
       call: call("wait_for_change", { changeId: CH, until: "merged", timeoutSec: 50 }),

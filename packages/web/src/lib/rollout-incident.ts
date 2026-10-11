@@ -47,9 +47,21 @@ const DETECTIONS: Record<string, DetectionSignal | "from-summary"> = {
 };
 
 const STEPS: { key: IncidentStep["key"]; label: string; actions: string[] }[] = [
-  { key: "flag", label: "Flag turned off", actions: ["deploy.flag-off", "rollout.flag-off", "flag.disabled"] },
-  { key: "rollback", label: "Traffic back on the previous version", actions: ["rollout.rolled-back"] },
-  { key: "revert", label: "Revert change opened", actions: ["change.revert-opened", "revert.opened", "rollout.reverted"] },
+  {
+    key: "flag",
+    label: "Flag turned off",
+    actions: ["deploy.flag-off", "rollout.flag-off", "flag.disabled"],
+  },
+  {
+    key: "rollback",
+    label: "Traffic back on the previous version",
+    actions: ["rollout.rolled-back"],
+  },
+  {
+    key: "revert",
+    label: "Revert change opened",
+    actions: ["change.revert-opened", "revert.opened", "rollout.reverted"],
+  },
 ];
 
 /** How long after the detection an event still belongs to the incident. */
@@ -75,15 +87,28 @@ export function signalOf(e: TimelineEvent): DetectionSignal | null {
   return null;
 }
 
-export function findIncident(events: readonly TimelineEvent[], issues: readonly LinkedIssue[]): Incident | null {
+export function findIncident(
+  events: readonly TimelineEvent[],
+  issues: readonly LinkedIssue[],
+): Incident | null {
   const ordered = [...events].sort(byTime);
   const detection = ordered.find((e) => DETECTIONS[e.action] !== undefined);
   if (detection === undefined) return null;
   const t0 = ms(detection.at);
   const steps: IncidentStep[] = [];
   for (const step of STEPS) {
-    const e = ordered.find((x) => step.actions.includes(x.action) && ms(x.at) >= t0 && ms(x.at) - t0 <= INCIDENT_WINDOW_MS);
-    if (e) steps.push({ key: step.key, label: step.label, at: e.at, afterMs: ms(e.at) - t0, seq: e.seq });
+    const e = ordered.find(
+      (x) =>
+        step.actions.includes(x.action) && ms(x.at) >= t0 && ms(x.at) - t0 <= INCIDENT_WINDOW_MS,
+    );
+    if (e)
+      steps.push({
+        key: step.key,
+        label: step.label,
+        at: e.at,
+        afterMs: ms(e.at) - t0,
+        seq: e.seq,
+      });
   }
   // The first occurrence Workers Issues saw, if it came before the detection (and not long before:
   // an older issue group is not this regression's first error).
@@ -127,7 +152,10 @@ const STAGE_DONE = new Set(["rollout.stage.completed"]);
  * the server's summary names ("Stage 25% started"); without one, the nth started (or finished)
  * event is the rollout's nth stage. Null when neither says which stage it was.
  */
-export function stageLabels(events: readonly TimelineEvent[], stages: readonly { percent: number }[]): Map<number, string> {
+export function stageLabels(
+  events: readonly TimelineEvent[],
+  stages: readonly { percent: number }[],
+): Map<number, string> {
   const out = new Map<number, string>();
   let started = 0;
   let done = 0;
@@ -139,13 +167,26 @@ export function stageLabels(events: readonly TimelineEvent[], stages: readonly {
     const percent = named !== undefined ? Number(named) : stages[n]?.percent;
     if (percent === undefined) continue;
     const first = stages[0] ? percent === stages[0].percent : n === 0;
-    out.set(e.seq, isStart ? (first ? `Started at ${percent}%` : `Moved to ${percent}%`) : `Finished ${percent}%`);
+    out.set(
+      e.seq,
+      isStart
+        ? first
+          ? `Started at ${percent}%`
+          : `Moved to ${percent}%`
+        : `Finished ${percent}%`,
+    );
   }
   return out;
 }
 
 /** Actions whose summary names something the label can't (the signal, an error, a reason). */
-const DETAIL_ACTIONS = new Set(["deploy.regression-attributed", "rollout.regression", "deploy.revert-failed", "rollout.skipped", "deploy.revert-skipped"]);
+const DETAIL_ACTIONS = new Set([
+  "deploy.regression-attributed",
+  "rollout.regression",
+  "deploy.revert-failed",
+  "rollout.skipped",
+  "deploy.revert-skipped",
+]);
 
 /** What of the revert's own timeline continues this one: it merging and shipping. */
 const REVERT_ACTIONS: Record<string, string> = {
@@ -165,7 +206,8 @@ export function timelineRows(
 ): TimelineRow[] {
   const t0 = incident ? ms(incident.detectedAt) : null;
   const stage = stageLabels(events, stages);
-  const after = (at: string) => (t0 !== null && ms(at) >= t0 && ms(at) - t0 <= INCIDENT_WINDOW_MS ? ms(at) - t0 : null);
+  const after = (at: string) =>
+    t0 !== null && ms(at) >= t0 && ms(at) - t0 <= INCIDENT_WINDOW_MS ? ms(at) - t0 : null;
   const rows: TimelineRow[] = events.map((e) => ({
     key: `c${e.seq}`,
     at: e.at,
@@ -182,10 +224,34 @@ export function timelineRows(
   for (const e of revertEvents) {
     const label = REVERT_ACTIONS[e.action];
     if (label === undefined || (t0 !== null && ms(e.at) < t0)) continue;
-    rows.push({ key: `r${e.seq}`, at: e.at, label, action: e.action, detail: null, seq: e.seq, subject: e.subject, bad: false, afterMs: after(e.at), source: "revert", actorId: e.principalId });
+    rows.push({
+      key: `r${e.seq}`,
+      at: e.at,
+      label,
+      action: e.action,
+      detail: null,
+      seq: e.seq,
+      subject: e.subject,
+      bad: false,
+      afterMs: after(e.at),
+      source: "revert",
+      actorId: e.principalId,
+    });
   }
   if (incident?.firstError) {
-    rows.push({ key: "first-error", at: incident.firstError.at, label: "First error in production", action: null, detail: incident.firstError.title, seq: null, subject: null, bad: true, afterMs: null, source: "issue", actorId: null });
+    rows.push({
+      key: "first-error",
+      at: incident.firstError.at,
+      label: "First error in production",
+      action: null,
+      detail: incident.firstError.title,
+      seq: null,
+      subject: null,
+      bad: true,
+      afterMs: null,
+      source: "issue",
+      actorId: null,
+    });
   }
   return rows.sort((a, b) => ms(b.at) - ms(a.at) || (b.seq ?? -1) - (a.seq ?? -1));
 }
@@ -198,7 +264,10 @@ function capitalize(s: string): string {
 export function detectionSentence(incident: Incident, span: (ms: number) => string): string {
   if (incident.signal === "person") return "A person switched the change off.";
   const who = incident.signal ? capitalize(SIGNAL_LABEL[incident.signal]) : "Health monitoring";
-  const when = incident.detectedAfterMs !== null ? ` ${span(incident.detectedAfterMs)} after the first error` : "";
+  const when =
+    incident.detectedAfterMs !== null
+      ? ` ${span(incident.detectedAfterMs)} after the first error`
+      : "";
   return `${who} detected the regression${when}.`;
 }
 
@@ -208,7 +277,10 @@ export function detectionSentence(incident: Incident, span: (ms: number) => stri
  */
 export function healthGapCopy(incident: Incident, clock: (iso: string) => string): string {
   const at = clock(incident.detectedAt);
-  if (incident.signal === "person") return `A person stopped this rollout at ${at}, before an error-rate check was kept.`;
-  const by = incident.signal ? `: ${SIGNAL_LABEL[incident.signal]} reported the regression at ${at}` : ` at ${at}`;
+  if (incident.signal === "person")
+    return `A person stopped this rollout at ${at}, before an error-rate check was kept.`;
+  const by = incident.signal
+    ? `: ${SIGNAL_LABEL[incident.signal]} reported the regression at ${at}`
+    : ` at ${at}`;
   return `Health monitoring stopped this rollout${by}. No error-rate sample was kept with it, so there are no rates to compare. The timeline has each step.`;
 }

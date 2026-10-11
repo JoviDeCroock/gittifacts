@@ -8,13 +8,33 @@
 import { type Signal, useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 import { ApiError, api } from "../api/client.js";
-import { fetchMission, MISSION_MOCK_POLL_MS, MISSION_POLL_MS, type MissionData } from "../api/mission.js";
+import {
+  fetchMission,
+  MISSION_MOCK_POLL_MS,
+  MISSION_POLL_MS,
+  type MissionData,
+} from "../api/mission.js";
 import { isMockMode } from "../api/mode.js";
 import type { QueueOverviewView } from "../api/queue.js";
 import { Icon, type IconId } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
-import { EmptyState, ErrorState, LaneTag, LinkButton, Loading, StatusChip } from "../components/ui.js";
-import { type MissionCounts, type MissionRow, missionFrom, STAGE, type Stage, STATIONS, stageClock } from "../lib/mission.js";
+import {
+  EmptyState,
+  ErrorState,
+  LaneTag,
+  LinkButton,
+  Loading,
+  StatusChip,
+} from "../components/ui.js";
+import {
+  type MissionCounts,
+  type MissionRow,
+  missionFrom,
+  STAGE,
+  STATIONS,
+  type Stage,
+  stageClock,
+} from "../lib/mission.js";
 import { BATCH_STATE, orderTracks, trackLabel, updatedLabel } from "../lib/queue.js";
 import { useTick } from "../state/clock.js";
 import { useResource } from "../state/resource.js";
@@ -39,7 +59,8 @@ function useMission(repoId: string): { state: Signal<BoardState>; retry: () => v
     let timer: number | undefined;
     const mock = isMockMode();
     const every = mock ? MISSION_MOCK_POLL_MS : MISSION_POLL_MS;
-    if (state.peek().data?.repoId !== repoId) state.value = { data: null, error: null, fetchedAt: null };
+    if (state.peek().data?.repoId !== repoId)
+      state.value = { data: null, error: null, fetchedAt: null };
     const schedule = () => {
       window.clearTimeout(timer);
       if (live) timer = window.setTimeout(load, every);
@@ -111,7 +132,13 @@ function Tracks({ q, repoId }: { q: QueueOverviewView; repoId: string }) {
             </a>
             <span class="mission__batches">
               {t.batches.map((b) => (
-                <StatusChip key={b.id} meta={{ ...BATCH_STATE[b.state], label: `${b.id} · ${BATCH_STATE[b.state].label} · ${b.entries.length}` }} />
+                <StatusChip
+                  key={b.id}
+                  meta={{
+                    ...BATCH_STATE[b.state],
+                    label: `${b.id} · ${BATCH_STATE[b.state].label} · ${b.entries.length}`,
+                  }}
+                />
               ))}
             </span>
           </li>
@@ -151,7 +178,12 @@ function Stations({ stage }: { stage: Stage }) {
   return (
     <ol class="mission__stations" aria-hidden="true">
       {STATIONS.map((s, i) => (
-        <li key={s} class="mission__station" data-at={i < at ? "done" : i === at ? "now" : "todo"} title={s} />
+        <li
+          key={s}
+          class="mission__station"
+          data-at={i < at ? "done" : i === at ? "now" : "todo"}
+          title={s}
+        />
       ))}
     </ol>
   );
@@ -164,19 +196,29 @@ function Row({ r, now }: { r: MissionRow; now: number }) {
   useEffect(() => {
     const el = ref.current;
     if (!el || !meta.working || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([e]) => el.toggleAttribute("data-onscreen", !!e?.isIntersecting));
+    const io = new IntersectionObserver(([e]) =>
+      el.toggleAttribute("data-onscreen", !!e?.isIntersecting),
+    );
     io.observe(el);
     return () => io.disconnect();
   }, [meta.working]);
   const station = meta.step < STATIONS.length ? STATIONS[meta.step] : "Done";
   return (
-    <li ref={ref} class={`mission__row${meta.working ? " mission__row--working" : ""}`} data-testid="mission-row" data-stage={r.stage} data-agent={r.agent.name}>
+    <li
+      ref={ref}
+      class={`mission__row${meta.working ? " mission__row--working" : ""}`}
+      data-testid="mission-row"
+      data-stage={r.stage}
+      data-agent={r.agent.name}
+    >
       <span class="mission__avatar" aria-hidden="true">
         {initials(r.agent.name)}
       </span>
       <span class="mission__who">
         <span class="mission__name">{r.agent.name}</span>
-        <span class="mission__owner">{r.agent.ownerName ? `agent of ${r.agent.ownerName}` : "agent"}</span>
+        <span class="mission__owner">
+          {r.agent.ownerName ? `agent of ${r.agent.ownerName}` : "agent"}
+        </span>
       </span>
       <span class="mission__change">
         <a class="mission__title" href={`/changes/${encodeURIComponent(r.change.id)}`}>
@@ -201,19 +243,40 @@ function Row({ r, now }: { r: MissionRow; now: number }) {
         <LaneTag lane={r.lane} shadow={r.calibrating} size="sm" label="name" />
       </span>
       <span class="mission__queue tnum">
-        {r.queue?.position != null ? <b>#{r.queue.position}</b> : <span class="mission__none">–</span>}
+        {r.queue?.position != null ? (
+          <b>#{r.queue.position}</b>
+        ) : (
+          <span class="mission__none">–</span>
+        )}
         {r.queue?.batchId ? <span class="mission__batch">{r.queue.batchId}</span> : null}
       </span>
-      <time class="mission__clock tnum" dateTime={new Date(r.since).toISOString()} title={`In this stage since ${new Date(r.since).toLocaleTimeString()}`}>
+      <time
+        class="mission__clock tnum"
+        dateTime={new Date(r.since).toISOString()}
+        title={`In this stage since ${new Date(r.since).toLocaleTimeString()}`}
+      >
         {stageClock(r.since, now)}
       </time>
     </li>
   );
 }
 
-function Board({ data, repoId, fetchedAt }: { data: MissionData; repoId: string; fetchedAt: number }) {
+function Board({
+  data,
+  repoId,
+  fetchedAt,
+}: {
+  data: MissionData;
+  repoId: string;
+  fetchedAt: number;
+}) {
   const now = useTick(1000).value;
-  const { rows, counts } = missionFrom({ changes: data.changes, queue: data.queue, owners: data.owners, now });
+  const { rows, counts } = missionFrom({
+    changes: data.changes,
+    queue: data.queue,
+    owners: data.owners,
+    now,
+  });
   return (
     <div class="mission" data-testid="mission">
       <div class="mission__top">
@@ -231,7 +294,8 @@ function Board({ data, repoId, fetchedAt }: { data: MissionData; repoId: string;
         {rows.length === 0 ? (
           <EmptyState icon="bot" title="No agent is working on this repo">
             <p>
-              Agents show up here once they start a change. Tell yours: <code>use {window.location.origin}/start</code>
+              Agents show up here once they start a change. Tell yours:{" "}
+              <code>use {window.location.origin}/start</code>
             </p>
           </EmptyState>
         ) : (
@@ -272,7 +336,11 @@ export function MissionView({ repoId }: { repoId: string }) {
         { href: `/repos/${encodeURIComponent(repoId)}`, label: name },
       ]}
       actions={
-        <LinkButton href={`/repos/${encodeURIComponent(repoId)}/queue`} size="sm" icon="list-ordered">
+        <LinkButton
+          href={`/repos/${encodeURIComponent(repoId)}/queue`}
+          size="sm"
+          icon="list-ordered"
+        >
           Merge queue
         </LinkButton>
       }
@@ -287,7 +355,8 @@ export function MissionView({ repoId }: { repoId: string }) {
       )}
       {st.data && st.error ? (
         <p class="mission__stale" role="status">
-          <Icon name="info" size={14} /> The last refresh failed; showing the board from before. It retries on its own.
+          <Icon name="info" size={14} /> The last refresh failed; showing the board from before. It
+          retries on its own.
         </p>
       ) : null}
     </Page>

@@ -12,8 +12,9 @@
  *
  * Nothing here approves or blocks. Words come from `terms.ts`.
  */
-import type { LaneVerdict } from "@app/host";
+
 import type { LaneReason, Tour, TourStop } from "@app/domain";
+import type { LaneVerdict } from "@app/host";
 import { cut, laneLabel, laneWhy, plural, reasonPhrase, short, TERMS } from "./terms.js";
 
 export const MAX_INLINE_STOPS = 3;
@@ -82,7 +83,12 @@ export function tourReview(tour: Tour, detailsUrl: string, opts: { inline?: bool
       const where = h === undefined ? "" : `\`${h.file}:${h.endLine}\` · `;
       return `> ${where}${stopBody(stop, index, n, detailsUrl).replace(/\n/g, "\n> ")}`;
     });
-    return { commit_id: tour.headSha, event: "COMMENT" as const, body: cut([lead, "", ...quoted].join("\n\n"), BODY_MAX), comments: [] as ReviewComment[] };
+    return {
+      commit_id: tour.headSha,
+      event: "COMMENT" as const,
+      body: cut([lead, "", ...quoted].join("\n\n"), BODY_MAX),
+      comments: [] as ReviewComment[],
+    };
   }
   const comments: ReviewComment[] = [];
   for (const { stop, index } of flagged) {
@@ -100,7 +106,12 @@ export interface SummaryQa {
 
 export interface SummaryState {
   headSha: string;
-  verdict: (Pick<LaneVerdict, "lane" | "computedLane" | "shadow" | "blocked" | "requiresHumanApproval"> & { reasons: LaneReason[] }) | null;
+  verdict:
+    | (Pick<
+        LaneVerdict,
+        "lane" | "computedLane" | "shadow" | "blocked" | "requiresHumanApproval"
+      > & { reasons: LaneReason[] })
+    | null;
   tour: "ready" | "pending" | "not-needed" | "failed";
   stops: number;
   /** Stops worth a look (what the review would show on the diff). */
@@ -118,26 +129,34 @@ export interface SummaryState {
 
 const oneLine = (x: string) => x.replace(/\r?\n/g, " ");
 /** Text from elsewhere can't fake our markers or mention anyone (a mention notifies). */
-const quiet = (x: string) => x.replace(/<!--/g, "&lt;!--").replace(/(^|[^\w`])@(?=[A-Za-z0-9])/g, "$1@\u200b");
+const quiet = (x: string) =>
+  x.replace(/<!--/g, "&lt;!--").replace(/(^|[^\w`])@(?=[A-Za-z0-9])/g, "$1@\u200b");
 
-const who = (xs: { by: string; via?: string }[]) => xs.map((x) => (x.via === undefined ? x.by : `${x.by} (${x.via})`)).join(", ");
+const who = (xs: { by: string; via?: string }[]) =>
+  xs.map((x) => (x.via === undefined ? x.by : `${x.by} (${x.via})`)).join(", ");
 
 /** The 3–5 lines a reader sees without opening anything. */
 function headlineLines(s: SummaryState): string[] {
   const url = s.detailsUrl;
   const v = s.verdict;
-  if (v === null) return [`**${TERMS.product}** is grading \`${short(s.headSha)}\`. The lane follows in about two minutes. [Follow it on gittifacts](${url})`];
+  if (v === null)
+    return [
+      `**${TERMS.product}** is grading \`${short(s.headSha)}\`. The lane follows in about two minutes. [Follow it on gittifacts](${url})`,
+    ];
   const out: string[] = [];
   if (v.blocked) {
     const why = v.reasons.find((r) => r.code === "ci.failed" || r.code === "evidence.unverified");
-    out.push(`**Blocked: ${why === undefined ? TERMS.blockedWhy : reasonPhrase(why)}.** Nothing can merge until it is fixed.`);
+    out.push(
+      `**Blocked: ${why === undefined ? TERMS.blockedWhy : reasonPhrase(why)}.** Nothing can merge until it is fixed.`,
+    );
   } else {
     out.push(`**${laneLabel(v.lane)}** · ${laneWhy(v, { long: true })}.`);
     out.push(v.lane === 0 && v.requiresHumanApproval ? TERMS.policyAsk : TERMS.laneAsk[v.lane]);
   }
   const status: string[] = [];
   if (s.approvals.length > 0) status.push(`Approved by ${who(s.approvals)}.`);
-  if (s.changesRequested.length > 0) status.push(`Changes requested by ${who(s.changesRequested)}.`);
+  if (s.changesRequested.length > 0)
+    status.push(`Changes requested by ${who(s.changesRequested)}.`);
   if (s.fullReview.length > 0) status.push(`Full review requested by ${who(s.fullReview)}.`);
   if (status.length > 0) out.push(status.join(" "));
   const tour = {
@@ -153,22 +172,45 @@ function headlineLines(s: SummaryState): string[] {
 
 /** The one summary comment (`issues/{n}/comments`), edited in place only when this text changes. */
 export function summaryBody(s: SummaryState): string {
-  const lines = [SUMMARY_MARKER, ...headlineLines(s).map((l, i, a) => (i < a.length - 1 ? `${l}  ` : l))];
+  const lines = [
+    SUMMARY_MARKER,
+    ...headlineLines(s).map((l, i, a) => (i < a.length - 1 ? `${l}  ` : l)),
+  ];
   const details: string[] = [];
-  const raised = s.verdict?.reasons.filter((r) => r.lane > 0 && !r.code.startsWith("shadow.")) ?? [];
+  const raised =
+    s.verdict?.reasons.filter((r) => r.lane > 0 && !r.code.startsWith("shadow.")) ?? [];
   if (raised.length > 0) {
-    details.push("**Why this lane**", ...raised.slice(0, 12).map((r) => `- ${TERMS.laneBadge(r.lane)} · ${reasonPhrase(r)}`));
+    details.push(
+      "**Why this lane**",
+      ...raised.slice(0, 12).map((r) => `- ${TERMS.laneBadge(r.lane)} · ${reasonPhrase(r)}`),
+    );
     if (raised.length > 12) details.push(`- and ${raised.length - 12} more on gittifacts`);
     details.push("");
   }
-  details.push(`**${TERMS.plan}**: ${s.plan === null ? "none linked" : `${cut(s.plan.title, 120)} (${s.plan.approved ? "approved" : "not approved yet"})`}  `);
+  details.push(
+    `**${TERMS.plan}**: ${s.plan === null ? "none linked" : `${cut(s.plan.title, 120)} (${s.plan.approved ? "approved" : "not approved yet"})`}  `,
+  );
   details.push(`**Approved by**: ${s.approvals.length === 0 ? "nobody yet" : who(s.approvals)}  `);
   details.push(`**Graded commit**: \`${short(s.headSha)}\``);
   if (s.tour === "ready" && s.flagged > 0 && !s.inline) details.push("", TERMS.inlineHow);
   if (s.shadow) details.push("", TERMS.reportOnlyNote);
-  lines.push("", "<details><summary>Why, Plan and approvals</summary>", "", ...details, "", "</details>");
+  lines.push(
+    "",
+    "<details><summary>Why, Plan and approvals</summary>",
+    "",
+    ...details,
+    "",
+    "</details>",
+  );
   if (s.qa?.details != null && s.qa.details !== "") {
-    lines.push("", `<details><summary>${TERMS.qa} details</summary>`, "", quiet(cut(s.qa.details, 20_000)), "", "</details>");
+    lines.push(
+      "",
+      `<details><summary>${TERMS.qa} details</summary>`,
+      "",
+      quiet(cut(s.qa.details, 20_000)),
+      "",
+      "</details>",
+    );
   }
   return lines.join("\n");
 }

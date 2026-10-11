@@ -51,7 +51,11 @@ function RepoEditor({
   }
 
   return (
-    <form class="inst__editor" onSubmit={save} aria-label={`Repositories for ${inst.integration.name}`}>
+    <form
+      class="inst__editor"
+      onSubmit={save}
+      aria-label={`Repositories for ${inst.integration.name}`}
+    >
       <RepoPicker
         name={`repos-${inst.id}`}
         repos={inst.eligibleRepos}
@@ -139,7 +143,9 @@ function InstallationRow({
         <p class="inst__repos">
           <Icon name="layers" size={16} />
           <span>
-            {inst.repoSelection === "all" ? "All repositories you own or maintain" : repoLine("selected", inst.repos)}
+            {inst.repoSelection === "all"
+              ? "All repositories you own or maintain"
+              : repoLine("selected", inst.repos)}
           </span>
           {!editing.value ? (
             <button type="button" class="inst__change" onClick={() => (editing.value = true)}>
@@ -173,9 +179,7 @@ function InstallationRow({
           confirmLabel="Uninstall now"
           busyLabel="Uninstalling…"
           consequence={
-            <>
-              Uninstall {it.name}? Its tokens stop working now and it receives no more events.
-            </>
+            <>Uninstall {it.name}? Its tokens stop working now and it receives no more events.</>
           }
           onConfirm={async () => {
             error.value = null;
@@ -213,7 +217,12 @@ export function InstalledIntegrations() {
     <Page
       title="Integrations"
       actions={
-        <LinkButton href="/settings/integrations/developer" variant="secondary" size="sm" icon="plug">
+        <LinkButton
+          href="/settings/integrations/developer"
+          variant="secondary"
+          size="sm"
+          icon="plug"
+        >
           Developer portal
         </LinkButton>
       }
@@ -229,7 +238,9 @@ export function InstalledIntegrations() {
           <Icon name="check-circle" size={16} /> {notice.value}
         </p>
       ) : null}
-      {st.status === "loading" ? <Loading label="Loading installed integrations" lines={6} /> : null}
+      {st.status === "loading" ? (
+        <Loading label="Loading installed integrations" lines={6} />
+      ) : null}
       {st.status === "error" ? (
         <ErrorState error={st.error} what="your integrations" onRetry={res.reload} />
       ) : null}
@@ -277,8 +288,7 @@ export function InstalledIntegrations() {
         <Icon name="shield-check" size={16} />
         <span>
           Integrations never see your agents' push tokens and can't connect to unclaimed repos.
-          Every install, uninstall and deployment report is in the{" "}
-          <a href="/audit">audit log</a>.
+          Every install, uninstall and deployment report is in the <a href="/audit">audit log</a>.
         </span>
       </p>
     </Page>

@@ -23,10 +23,19 @@ describe("GitHub shadow mode (recorded fixtures)", () => {
     const runs = [...host.gh.checkRuns.values()];
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
-    expect(run).toMatchObject({ head_sha: headSha, name: "gittifacts/lane", status: "completed", updates: 2 });
+    expect(run).toMatchObject({
+      head_sha: headSha,
+      name: "gittifacts/lane",
+      status: "completed",
+      updates: 2,
+    });
     // Opened while grading, the classifier's lane while the tour is written (still in progress,
     // no conclusion), then the verdict. Never success before the tour.
-    expect(run.history.map((h) => [h.status, h.conclusion])).toEqual([["in_progress", null], ["in_progress", null], ["completed", "neutral"]]);
+    expect(run.history.map((h) => [h.status, h.conclusion])).toEqual([
+      ["in_progress", null],
+      ["in_progress", null],
+      ["completed", "neutral"],
+    ]);
     expect(run.history[1]?.title).toBe("Quick review (Lane 1) so far · walkthrough coming");
     expect(run.output.title).toBe("Quick review (Lane 1) · auto-merge is calibrating");
     expect(run.output.summary).toContain("Report-only");
@@ -37,9 +46,15 @@ describe("GitHub shadow mode (recorded fixtures)", () => {
     expect(host.gh.tokens.minted).toBeGreaterThan(0);
     expect(host.gh.tokens.revoked).toBe(host.gh.tokens.minted);
     // The mirror fetched with a token; it is a mirror, not a fork per PR.
-    expect(host.env.ports.git.externalFetches.every((f) => f.authed && f.toRepo === "ghm-9001")).toBe(true);
+    expect(
+      host.env.ports.git.externalFetches.every((f) => f.authed && f.toRepo === "ghm-9001"),
+    ).toBe(true);
     const change = await host.env.ports.store.getChange(changeIdFor(9001, 1));
-    expect(change).toMatchObject({ forkName: "ghm-9001", status: "awaiting-review", host: { kind: "github", number: 1, fork: false } });
+    expect(change).toMatchObject({
+      forkName: "ghm-9001",
+      status: "awaiting-review",
+      host: { kind: "github", number: 1, fork: false },
+    });
   });
 
   it("a replaced head's run is cancelled, never left in progress", async () => {
@@ -48,15 +63,26 @@ describe("GitHub shadow mode (recorded fixtures)", () => {
     const first = loadFixture(s.firstFixture ?? s.fixture);
     const host = new GithubContractHost(contractReviewer());
     await host.holdRuns(true);
-    const opened = await host.open({ scenario: s, base: fx.base, push: first.push, title: fx.title });
+    const opened = await host.open({
+      scenario: s,
+      base: fx.base,
+      push: first.push,
+      title: fx.title,
+    });
     await host.settle();
     const head = await host.push(opened.ref, fx.push, { force: true });
     await host.holdRuns(false);
     await host.settle();
-    expect(host.gh.laneRun(opened.headSha)).toMatchObject({ status: "completed", conclusion: "cancelled" });
+    expect(host.gh.laneRun(opened.headSha)).toMatchObject({
+      status: "completed",
+      conclusion: "cancelled",
+    });
     expect(host.gh.laneRun(head)).toMatchObject({ status: "completed", updates: 2 });
     // The replaced head's run was never reopened by an early lane.
-    expect(host.gh.laneRun(opened.headSha)?.history.at(-1)).toMatchObject({ status: "completed", conclusion: "cancelled" });
+    expect(host.gh.laneRun(opened.headSha)?.history.at(-1)).toMatchObject({
+      status: "completed",
+      conclusion: "cancelled",
+    });
   });
 
   it("fork PRs: untrusted code runs with registries-only egress, read from the base repo", async () => {
@@ -72,12 +98,16 @@ describe("GitHub shadow mode (recorded fixtures)", () => {
 
   it("merge in shadow mode: a stale head is refused with the new head, a current one is not allowed", async () => {
     const { host, ref, headSha } = await graded("pure-bugfix-with-regression-test");
-    expect(await host.adapter.merge(ref, { expectedHeadSha: headSha, method: "squash" })).toMatchObject({
+    expect(
+      await host.adapter.merge(ref, { expectedHeadSha: headSha, method: "squash" }),
+    ).toMatchObject({
       status: "refused",
       reason: "not-allowed",
     });
     const next = await host.push(ref, { "README.md": "# again\n" }, { force: false });
-    expect(await host.adapter.merge(ref, { expectedHeadSha: headSha, method: "squash" })).toMatchObject({
+    expect(
+      await host.adapter.merge(ref, { expectedHeadSha: headSha, method: "squash" }),
+    ).toMatchObject({
       status: "refused",
       reason: "stale-head",
       currentHeadSha: next,

@@ -106,7 +106,10 @@ function state(): GettingStarted {
           msToFirstGreen: now - latest.createdAt >= RUN_MS ? RUN_MS : null,
         }
       : null,
-    repo: s === "done" ? { connected: true, via: GITHUB_SURFACES ? "github-app" : "import" } : { connected: false, via: null },
+    repo:
+      s === "done"
+        ? { connected: true, via: GITHUB_SURFACES ? "github-app" : "import" }
+        : { connected: false, via: null },
     plan: latest
       ? samplePlan(latest.id, latest.name, false)
       : s === "new"
@@ -114,7 +117,13 @@ function state(): GettingStarted {
         : samplePlan("r_billing", "billing-api", s === "done"),
     review:
       s === "done"
-        ? { approved: true, changeId: "chdemo2", title: "Add GET /version", status: "merged", repoId: "r_billing" }
+        ? {
+            approved: true,
+            changeId: "chdemo2",
+            title: "Add GET /version",
+            status: "merged",
+            repoId: "r_billing",
+          }
         : null,
     firstMerge:
       s === "done" && latest === undefined

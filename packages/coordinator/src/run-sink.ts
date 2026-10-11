@@ -169,7 +169,9 @@ export function createRunSink(
       // Only the full run of a ChangeWorkflow instance is forwarded (not merge-queue re-checks):
       // the head's instance, or a re-grade of it (`<instance>-r<n>`, GitHub mode's edits).
       const base = changeWorkflowId(summary.changeId, summary.headSha);
-      const suffix = summary.id.startsWith(ciRunIdFor(base)) ? summary.id.slice(ciRunIdFor(base).length) : null;
+      const suffix = summary.id.startsWith(ciRunIdFor(base))
+        ? summary.id.slice(ciRunIdFor(base).length)
+        : null;
       if (suffix === null || !/^(-r\d{1,6})?$/.test(suffix))
         return { accepted: true, forwarded: false, reason: "not a change workflow run" };
       const instanceId = `${base}${suffix}`;

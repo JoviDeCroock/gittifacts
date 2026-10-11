@@ -7,7 +7,10 @@
  */
 import { expect, expectNoHorizontalScroll, test } from "../../lib/fixtures.js";
 
-test("dashboard: the agent band shows the agent that just worked", async ({ authed: page, agentWork }) => {
+test("dashboard: the agent band shows the agent that just worked", async ({
+  authed: page,
+  agentWork,
+}) => {
   await page.goto("/dashboard");
   const band = page.getByTestId("fleet");
   await expect(band).toBeVisible();
@@ -15,10 +18,15 @@ test("dashboard: the agent band shows the agent that just worked", async ({ auth
   await expect(row).toHaveAttribute("data-state", /^(waiting|working)$/);
   await expectNoHorizontalScroll(page);
   await row.getByRole("link").click();
-  await expect(page).toHaveURL(new RegExp(`/(changes/${agentWork.changeId}|repos/${agentWork.repoId})`));
+  await expect(page).toHaveURL(
+    new RegExp(`/(changes/${agentWork.changeId}|repos/${agentWork.repoId})`),
+  );
 });
 
-test("palette: a person runs a command, an agent gets its twin, approving stays a person's", async ({ authed: page, agentWork }) => {
+test("palette: a person runs a command, an agent gets its twin, approving stays a person's", async ({
+  authed: page,
+  agentWork,
+}) => {
   await page.goto(`/changes/${agentWork.changeId}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   // The sidebar field on desktop, the top bar's search button on phones.
@@ -28,10 +36,15 @@ test("palette: a person runs a command, an agent gets its twin, approving stays 
 
   await palette.getByTestId("palette-mode-agent").click();
   await expect(palette).toHaveAttribute("data-mode", "agent");
-  await expect(palette.locator('[data-command="change.approve"]')).toHaveAttribute("aria-disabled", "true");
+  await expect(palette.locator('[data-command="change.approve"]')).toHaveAttribute(
+    "aria-disabled",
+    "true",
+  );
   await expect(palette.locator('[data-command="change.rerun"]')).toBeVisible();
   await page.keyboard.type("evidence");
-  await expect(palette.getByTestId("palette-mcp")).toHaveText(`get_evidence({ "changeId": "${agentWork.changeId}" })`);
+  await expect(palette.getByTestId("palette-mcp")).toHaveText(
+    `get_evidence({ "changeId": "${agentWork.changeId}" })`,
+  );
 
   await palette.getByTestId("palette-mode-me").click();
   await expect(palette.locator('[data-command="change.rerun"]')).toHaveCount(0);
@@ -46,7 +59,9 @@ test("palette: a person runs a command, an agent gets its twin, approving stays 
   await expect(palette).toBeHidden();
 });
 
-test("walkthrough keys: J and K step through the stops and the strip follows (demo data: four stops)", async ({ authed: page }) => {
+test("walkthrough keys: J and K step through the stops and the strip follows (demo data: four stops)", async ({
+  authed: page,
+}) => {
   // The gate's fake reviewer writes one stop; the UI's demo backend has a four-stop walkthrough.
   await page.goto("/changes/chg_pd2n6?mock");
   await expect(page.getByTestId("decision-approve").first()).toBeVisible();
@@ -63,7 +78,10 @@ test("walkthrough keys: J and K step through the stops and the strip follows (de
   await expect(page.locator("#stop-2")).toBeInViewport();
 });
 
-test("walkthrough keys: A opens the decision and never signs; then the next change", async ({ authed: page, agentWork }) => {
+test("walkthrough keys: A opens the decision and never signs; then the next change", async ({
+  authed: page,
+  agentWork,
+}) => {
   await page.goto(`/changes/${agentWork.changeId}`);
   // The loading state has an h1 too ("Change"): wait for the decision, which comes with the walkthrough.
   await expect(page.getByTestId("decision-approve").first()).toBeVisible();
@@ -79,7 +97,9 @@ test("walkthrough keys: A opens the decision and never signs; then the next chan
   await expectNoHorizontalScroll(page);
 });
 
-test("rollout: on a phone the switch-off rides in the thumb zone and opens the form (demo data)", async ({ authed: page }, testInfo) => {
+test("rollout: on a phone the switch-off rides in the thumb zone and opens the form (demo data)", async ({
+  authed: page,
+}, testInfo) => {
   await page.goto("/changes/chg_fx2r7/rollout?mock");
   await expect(page.getByRole("heading", { level: 2, name: /Switch off/ })).toBeAttached();
   const bar = page.getByTestId("kill-bar");

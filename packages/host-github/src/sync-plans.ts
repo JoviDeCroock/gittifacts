@@ -8,10 +8,18 @@
 import { SYSTEM_PRINCIPAL_ID } from "@app/coordinator";
 import type { Plan } from "@app/domain";
 import type { Identity } from "@app/host";
-import { planRefOf, type GitHubHost } from "./adapter.js";
+import { type GitHubHost, planRefOf } from "./adapter.js";
 import { classifyAuthor } from "./identity.js";
 import type { PullRequest } from "./payloads.js";
-import { closingIssues, filePlanId, issuePlanId, PLAN_FILE_ID, PLAN_LABEL, parsePlanMarkdown, planFrom } from "./plans.js";
+import {
+  closingIssues,
+  filePlanId,
+  issuePlanId,
+  PLAN_FILE_ID,
+  PLAN_LABEL,
+  parsePlanMarkdown,
+  planFrom,
+} from "./plans.js";
 import type { GithubSyncDeps } from "./sync.js";
 
 export interface PlanLink {
@@ -36,7 +44,8 @@ export async function resolvePlan(
   const ref = planRefOf(pr.body);
   if (ref !== null) {
     const platform = await store.getPlan(ref);
-    if (platform !== null && platform.repoId === repoId) return { planId: platform.id, issueRefs, source: "platform" };
+    if (platform !== null && platform.repoId === repoId)
+      return { planId: platform.id, issueRefs, source: "platform" };
     if (PLAN_FILE_ID.test(ref) && deps.plans !== undefined) {
       const id = filePlanId(input.githubRepoId, ref);
       if ((await store.getPlan(id)) !== null) return { planId: id, issueRefs, source: "file" };
@@ -44,7 +53,14 @@ export async function resolvePlan(
       const bytes = await git.readFile(input.mirror, input.baseSha, `.platform/plans/${ref}.md`);
       if (bytes !== null) {
         const text = parsePlanMarkdown(new TextDecoder().decode(bytes), ref);
-        await deps.plans.upsert(planFrom(text, { id, repoId, authorId: SYSTEM_PRINCIPAL_ID, createdAt: clock.now().toISOString() }));
+        await deps.plans.upsert(
+          planFrom(text, {
+            id,
+            repoId,
+            authorId: SYSTEM_PRINCIPAL_ID,
+            createdAt: clock.now().toISOString(),
+          }),
+        );
         return { planId: id, issueRefs, source: "file" };
       }
     }
@@ -85,8 +101,16 @@ async function issuePlan(
   const text = parsePlanMarkdown(`# ${issue.title}\n\n${issue.body ?? ""}`, issue.title);
   const fresh = planFrom(text, { id, repoId: input.repoId, authorId, createdAt: now });
   const existing = await deps.ports.store.getPlan(id);
-  if (existing !== null && sameContent(existing, fresh) && (existing.status === "approved") === approves) return id;
-  const approver = approves && labeler !== null ? await (deps.reviewerPrincipal ?? deps.authorPrincipal)(who(labeler)) : null;
+  if (
+    existing !== null &&
+    sameContent(existing, fresh) &&
+    (existing.status === "approved") === approves
+  )
+    return id;
+  const approver =
+    approves && labeler !== null
+      ? await (deps.reviewerPrincipal ?? deps.authorPrincipal)(who(labeler))
+      : null;
   await plans.upsert(
     approver === null
       ? fresh

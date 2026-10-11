@@ -132,7 +132,10 @@ export async function removeRepos(db: Db, installationId: number, repoIds: numbe
       db
         .delete(githubLinkRepos)
         .where(
-          and(eq(githubLinkRepos.installationId, installationId), inArray(githubLinkRepos.repoId, ids)),
+          and(
+            eq(githubLinkRepos.installationId, installationId),
+            inArray(githubLinkRepos.repoId, ids),
+          ),
         ),
     ]);
   }
@@ -197,7 +200,13 @@ export async function setLinkRepos(
   for (let i = 0; i < repos.length; i += 20) {
     const rows = repos
       .slice(i, i + 20)
-      .map((r) => ({ installationId, principalId, repoId: r.repoId, access: r.access, recordedAt: at }));
+      .map((r) => ({
+        installationId,
+        principalId,
+        repoId: r.repoId,
+        access: r.access,
+        recordedAt: at,
+      }));
     inserts.push(db.insert(githubLinkRepos).values(rows));
   }
   await db.batch([db.delete(githubLinkRepos).where(mine), ...inserts]);
@@ -219,7 +228,9 @@ export async function linksSeeingRepo(db: Db, installationId: number, repoId: nu
         eq(githubInstallationLinks.principalId, githubLinkRepos.principalId),
       ),
     )
-    .where(and(eq(githubLinkRepos.installationId, installationId), eq(githubLinkRepos.repoId, repoId)))
+    .where(
+      and(eq(githubLinkRepos.installationId, installationId), eq(githubLinkRepos.repoId, repoId)),
+    )
     .orderBy(githubInstallationLinks.linkedAt)
     .all();
 }
@@ -230,7 +241,10 @@ export async function linkRepos(db: Db, installationId: number, principalId: str
     .select({ repoId: githubLinkRepos.repoId, access: githubLinkRepos.access })
     .from(githubLinkRepos)
     .where(
-      and(eq(githubLinkRepos.installationId, installationId), eq(githubLinkRepos.principalId, principalId)),
+      and(
+        eq(githubLinkRepos.installationId, installationId),
+        eq(githubLinkRepos.principalId, principalId),
+      ),
     )
     .all();
 }

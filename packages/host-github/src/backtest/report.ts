@@ -27,10 +27,13 @@ export interface GradedPr {
 const SET_ASIDE = /^(plan|scope|shadow)\./;
 
 export function evidenceLane(g: Pick<GradedPr, "reasons">): 0 | 1 | 2 {
-  return g.reasons.filter((r) => !SET_ASIDE.test(r.code)).reduce<0 | 1 | 2>((m, r) => (r.lane > m ? r.lane : m), 0);
+  return g.reasons
+    .filter((r) => !SET_ASIDE.test(r.code))
+    .reduce<0 | 1 | 2>((m, r) => (r.lane > m ? r.lane : m), 0);
 }
 
-export const wouldAutoMerge = (g: GradedPr) => !g.blocked && !g.requiresHumanApproval && evidenceLane(g) === 0;
+export const wouldAutoMerge = (g: GradedPr) =>
+  !g.blocked && !g.requiresHumanApproval && evidenceLane(g) === 0;
 
 export const CALIBRATION = { minSamples: 25, minCandidates: 5, maxFalseRate: 0.02 } as const;
 
@@ -96,14 +99,19 @@ export function backtestReport(input: {
     .map((p) => ({
       number: p.number,
       title: p.title,
-      hoursToMerge: Math.round(((Date.parse(p.mergedAt) - Date.parse(p.createdAt)) / 3_600_000) * 10) / 10,
-      reasons: (input.graded.get(p.number) as GradedPr).reasons.filter((r) => r.lane === 2).map((r) => r.code),
+      hoursToMerge:
+        Math.round(((Date.parse(p.mergedAt) - Date.parse(p.createdAt)) / 3_600_000) * 10) / 10,
+      reasons: (input.graded.get(p.number) as GradedPr).reasons
+        .filter((r) => r.lane === 2)
+        .map((r) => r.code),
     }))
     .sort((a, b) => a.hoursToMerge - b.hoursToMerge)
     .slice(0, 3);
   const known = candidates.length - unknown;
   const bad = reverted.length + patched.length;
-  const samples = graded.filter((p) => input.reverts.has(p.number) || (input.patches.get(p.number) ?? "unknown") !== "unknown").length;
+  const samples = graded.filter(
+    (p) => input.reverts.has(p.number) || (input.patches.get(p.number) ?? "unknown") !== "unknown",
+  ).length;
   const falseRate = known === 0 ? null : bad / known;
   const c = CALIBRATION;
   const reason =
@@ -115,7 +123,11 @@ export function backtestReport(input: {
           ? `${bad} of ${known} Lane 0 candidates were reverted or patched within 14 days: tighten the policy first`
           : `${known} Lane 0 candidates, ${bad} reverted or patched`;
   return {
-    window: { since: input.since.toISOString(), until: input.until.toISOString(), days: Math.round((input.until.getTime() - input.since.getTime()) / 86_400_000) },
+    window: {
+      since: input.since.toISOString(),
+      until: input.until.toISOString(),
+      days: Math.round((input.until.getTime() - input.since.getTime()) / 86_400_000),
+    },
     listed: input.listed.length,
     graded: graded.length,
     skipped: [...input.skipped],
@@ -130,7 +142,8 @@ export function backtestReport(input: {
       candidates: known,
       bad,
       falseRate,
-      eligible: samples >= c.minSamples && known >= c.minCandidates && (falseRate ?? 1) <= c.maxFalseRate,
+      eligible:
+        samples >= c.minSamples && known >= c.minCandidates && (falseRate ?? 1) <= c.maxFalseRate,
       reason,
     },
   };

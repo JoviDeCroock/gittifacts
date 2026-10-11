@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { countdown, countdownWords, durationLabel, elapsedFraction, shortAge, stepTime } from "../src/lib/time.js";
+import {
+  countdown,
+  countdownWords,
+  durationLabel,
+  elapsedFraction,
+  shortAge,
+  stepTime,
+} from "../src/lib/time.js";
 
 const now = Date.parse("2026-10-01T12:00:00Z");
 const at = (secondsFromNow: number) => new Date(now + secondsFromNow * 1000).toISOString();
@@ -57,7 +64,9 @@ describe("durationLabel", () => {
 describe("stepTime", () => {
   it("shows a passed step's duration, a running step's elapsed time, else its status", () => {
     expect(stepTime({ status: "passed", durationMs: 4200 })).toBe("4.2 s");
-    expect(stepTime({ status: "running", durationMs: null, elapsedMs: 95_000 })).toBe("running 1 min 35 s");
+    expect(stepTime({ status: "running", durationMs: null, elapsedMs: 95_000 })).toBe(
+      "running 1 min 35 s",
+    );
     expect(stepTime({ status: "running", durationMs: null })).toBe("running");
     expect(stepTime({ status: "pending", durationMs: null })).toBe("queued");
     expect(stepTime({ status: "failed", durationMs: 10 })).toBe("failed");

@@ -87,7 +87,8 @@ export function renderMarkdown(body: string, file: string): Rendered {
         // "## 2. Wait for the first green" is a step: its number becomes a badge.
         const step = depth === 2 ? STEP.exec(inner) : null;
         const cls = step ? ' class="step"' : "";
-        if (step) inner = `<span class="step__n" aria-hidden="true">${step[1]}</span><span class="sr-only">Step ${step[1]}: </span>${inner.slice(step[0].length)}`;
+        if (step)
+          inner = `<span class="step__n" aria-hidden="true">${step[1]}</span><span class="sr-only">Step ${step[1]}: </span>${inner.slice(step[0].length)}`;
         return `<h${depth} id="${id}"${cls}><a class="anchor" href="#${id}" aria-hidden="true" tabindex="-1">#</a>${inner}</h${depth}>\n`;
       },
       code({ text, lang }: Tokens.Code) {
@@ -114,7 +115,10 @@ export function renderMarkdown(body: string, file: string): Rendered {
     .replace(/<\/table>/g, "</table></div>")
     .replace(/<strong>Coming soon([.:]?)<\/strong>/g, '<span class="soon">Coming soon</span>')
     // The page's promise ("**You'll have:** …") opens the page as its outcome line.
-    .replace(/<p><strong>You(?:'|&#39;|’)ll have:<\/strong>/g, `<p class="outcome"><strong>You'll have:</strong>`)
+    .replace(
+      /<p><strong>You(?:'|&#39;|’)ll have:<\/strong>/g,
+      `<p class="outcome"><strong>You'll have:</strong>`,
+    )
     // A list right after `<!-- cards -->` renders as cards (the docs home's paths).
     .replace(/<!-- cards -->\s*<ul>/g, '<ul class="cards">')
     .replace(/<details>/g, '<details class="more">');

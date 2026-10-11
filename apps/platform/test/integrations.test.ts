@@ -142,7 +142,6 @@ describe("external integrations (acceptance)", () => {
     );
   });
 
-
   it("register → install one repo → clone (push refused) → signed push webhook → preview evidence → uninstall", async () => {
     const seen = mockPlatform();
     const { app } = makeApp();
@@ -224,7 +223,12 @@ describe("external integrations (acceptance)", () => {
       expect(header.code).toBe("push-to-main");
     }
     // Without credentials too: git's first request carries none, and must not get a prompt.
-    const anonPush = await raw(app, "GET", `${cloneUrl.pathname}/info/refs?service=git-receive-pack`, {});
+    const anonPush = await raw(
+      app,
+      "GET",
+      `${cloneUrl.pathname}/info/refs?service=git-receive-pack`,
+      {},
+    );
     expect(anonPush.status).toBe(403);
     expect(await anonPush.text()).toContain("push-to-main");
     expect(

@@ -63,9 +63,14 @@ export function stagingConfig(prod: Json, d1Id: string): Json {
     // No Turnstile secret on staging: claims use Cloudflare's always-pass test keys (opt-in, audit M11).
     TURNSTILE_TEST_KEYS: "1",
   };
-  cfg.d1_databases = [{ binding: "DB", database_name: STAGING.d1, database_id: d1Id, migrations_dir: "migrations" }];
+  cfg.d1_databases = [
+    { binding: "DB", database_name: STAGING.d1, database_id: d1Id, migrations_dir: "migrations" },
+  ];
   cfg.r2_buckets = (cfg.r2_buckets as Json[]).map((b) => ({ ...b, bucket_name: STAGING.bucket }));
-  cfg.artifacts = (cfg.artifacts as Json[]).map((a) => ({ ...a, namespace: STAGING.artifactsNamespace }));
+  cfg.artifacts = (cfg.artifacts as Json[]).map((a) => ({
+    ...a,
+    namespace: STAGING.artifactsNamespace,
+  }));
   cfg.analytics_engine_datasets = [{ binding: "METRICS", dataset: STAGING.metricsDataset }];
   cfg.ratelimits = (cfg.ratelimits as Json[]).map((r) => ({
     ...r,
@@ -75,7 +80,11 @@ export function stagingConfig(prod: Json, d1Id: string): Json {
   const rename = (n: unknown) => STAGING.queues[String(n)] ?? `${STAGING.name}-${String(n)}`;
   cfg.queues = {
     producers: q.producers.map((p) => ({ ...p, queue: rename(p.queue) })),
-    consumers: q.consumers.map((c) => ({ ...c, queue: rename(c.queue), dead_letter_queue: rename(c.dead_letter_queue) })),
+    consumers: q.consumers.map((c) => ({
+      ...c,
+      queue: rename(c.queue),
+      dead_letter_queue: rename(c.dead_letter_queue),
+    })),
   };
   // Container application names are account-wide: production owns runner / preview / workspace.
   const containerName = (n: unknown) => `${STAGING.name}-${String(n)}`;
@@ -112,20 +121,29 @@ export function assertNothingShared(prod: Json, staging: Json): void {
     ...((c.containers as Json[] | undefined) ?? []).map((x) => `container:${String(x.name)}`),
     ...((c.d1_databases as Json[] | undefined) ?? []).map((d) => `d1:${String(d.database_name)}`),
     ...((c.r2_buckets as Json[] | undefined) ?? []).map((b) => `r2:${String(b.bucket_name)}`),
-    ...(((c.queues as { producers?: Json[] } | undefined)?.producers ?? []).map((q) => `queue:${String(q.queue)}`)),
-    ...((c.ratelimits as Json[] | undefined) ?? []).map((r) => `ratelimit:${String(r.namespace_id)}`),
+    ...((c.queues as { producers?: Json[] } | undefined)?.producers ?? []).map(
+      (q) => `queue:${String(q.queue)}`,
+    ),
+    ...((c.ratelimits as Json[] | undefined) ?? []).map(
+      (r) => `ratelimit:${String(r.namespace_id)}`,
+    ),
     `worker:${String(c.name)}`,
   ];
   const prodNames = new Set(names(prod));
   const shared = names(staging).filter((n) => prodNames.has(n));
-  if (shared.length > 0) throw new Error(`staging config shares account-wide names with production: ${shared.join(", ")}`);
+  if (shared.length > 0)
+    throw new Error(
+      `staging config shares account-wide names with production: ${shared.join(", ")}`,
+    );
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { values } = parseArgs({ options: { "d1-id": { type: "string" } } });
   const d1Id = values["d1-id"] ?? process.env.STAGING_D1_ID ?? STAGING.d1Id;
   const platform = resolve(import.meta.dirname, "../../apps/platform");
-  const prod = JSON.parse(stripJsonc(readFileSync(join(platform, "wrangler.jsonc"), "utf8"))) as Json;
+  const prod = JSON.parse(
+    stripJsonc(readFileSync(join(platform, "wrangler.jsonc"), "utf8")),
+  ) as Json;
   const out = join(platform, "wrangler.staging.json");
   writeFileSync(out, `${JSON.stringify(stagingConfig(prod, d1Id), null, 2)}\n`);
   console.log(out);

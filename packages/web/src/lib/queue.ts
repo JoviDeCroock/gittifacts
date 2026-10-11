@@ -283,11 +283,14 @@ export function queuePowers(
 ): { canAct: (authorId: string) => boolean; canAdmin: boolean } {
   const human = viewer?.kind === "human";
   const has = (s: string) => viewer?.scopes.includes(s) ?? false;
-  const contributes = role !== null && ROLE_RANK[role] >= ROLE_RANK.reviewer && has("change:create");
+  const contributes =
+    role !== null && ROLE_RANK[role] >= ROLE_RANK.reviewer && has("change:create");
   const reviews = human && has("change:review");
   return {
     canAct: (authorId) =>
-      viewer !== null && contributes && (reviews || authorId === viewer.id || myAgents.has(authorId)),
+      viewer !== null &&
+      contributes &&
+      (reviews || authorId === viewer.id || myAgents.has(authorId)),
     canAdmin: human && role === "owner" && (has("repo:admin") || has("policy:admin")),
   };
 }

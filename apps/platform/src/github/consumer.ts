@@ -3,15 +3,15 @@
  * At least once, so every handler is idempotent. Installation events keep the installation and
  * repo lists in sync; change events go to grading (M2 phase B).
  */
+
+import { GithubRateLimited, repoIdFor } from "@app/host-github";
 import { z } from "zod";
 import type { Bindings } from "../app-env.js";
 import { D1Store, type Db } from "../store/d1-store.js";
-import { GithubRateLimited } from "@app/host-github";
-import { InstallationInfo, RepoInfo } from "./api.js";
-import { repoIdFor } from "@app/host-github";
-import { AUTO_REPOS, latestBacktest, startBacktest } from "./backtests.js";
 import { repoAllowed } from "./allowlist.js";
+import { InstallationInfo, RepoInfo } from "./api.js";
 import { githubApp } from "./app-config.js";
+import { AUTO_REPOS, latestBacktest, startBacktest } from "./backtests.js";
 import { onChangeDelivery } from "./grading.js";
 import {
   addRepos,

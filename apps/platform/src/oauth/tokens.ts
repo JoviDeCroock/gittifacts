@@ -33,7 +33,7 @@ import {
 import type { RedeemedDeviceCode } from "./device.js";
 import { OAuthProtocolError } from "./errors.js";
 import { DELEGABLE_SCOPES, parseRequestedScopes, scopeString } from "./scopes.js";
-import { canonicalResource, } from "./urls.js";
+import { canonicalResource } from "./urls.js";
 
 export const ACCESS_TOKEN_TTL_SEC = 3600;
 const DAY_MS = 86_400_000;

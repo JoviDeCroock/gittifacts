@@ -68,7 +68,10 @@ describe("PATCH /api/v1/repos/{repoId}/deploy-target", () => {
     const maintainer = await signUpHuman(app, "Max");
     await addMember(s, repo.id, maintainer.principal.id, "maintainer");
     const body = await expectError(
-      await call(app, "PATCH", path(repo.id), { cookie: maintainer.cookie, body: { script: "api" } }),
+      await call(app, "PATCH", path(repo.id), {
+        cookie: maintainer.cookie,
+        body: { script: "api" },
+      }),
       403,
       "insufficient-role",
     );

@@ -109,7 +109,15 @@ export function GettingStarted({ state, view, onDismiss, onChanged }: Props) {
   );
 }
 
-function Step({ id, state, children }: { id: StepId; state: StepState; children: ComponentChildren }) {
+function Step({
+  id,
+  state,
+  children,
+}: {
+  id: StepId;
+  state: StepState;
+  children: ComponentChildren;
+}) {
   const mark = MARK[state];
   return (
     <li class="gs-step" data-state={state} data-step={id}>
@@ -177,13 +185,20 @@ function RepoDone({ state }: { state: State }) {
   }
   return (
     <p class="gs-step__line">
-      You have <span class="tnum">{state.projects}</span>{" "}
-      {state.projects === 1 ? "repo" : "repos"}.
+      You have <span class="tnum">{state.projects}</span> {state.projects === 1 ? "repo" : "repos"}.
     </p>
   );
 }
 
-function RepoBody({ state, primary, onChanged }: { state: State; primary: boolean; onChanged: () => void }) {
+function RepoBody({
+  state,
+  primary,
+  onChanged,
+}: {
+  state: State;
+  primary: boolean;
+  onChanged: () => void;
+}) {
   const template = useSignal<string>(TEMPLATES[0].id);
   const busy = useSignal(false);
   const error = useSignal<string | null>(null);
@@ -211,7 +226,11 @@ function RepoBody({ state, primary, onChanged }: { state: State; primary: boolea
       <form class="gs-try" onSubmit={create}>
         <label class="field gs-try__field">
           <span class="field__label">Template</span>
-          <select class="input" value={template.value} onChange={(e) => (template.value = e.currentTarget.value)}>
+          <select
+            class="input"
+            value={template.value}
+            onChange={(e) => (template.value = e.currentTarget.value)}
+          >
             {TEMPLATES.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.label}
@@ -219,7 +238,13 @@ function RepoBody({ state, primary, onChanged }: { state: State; primary: boolea
             ))}
           </select>
         </label>
-        <Button type="submit" variant={primary ? "primary" : "secondary"} icon="rocket" busy={busy.value} busyLabel="Creating…">
+        <Button
+          type="submit"
+          variant={primary ? "primary" : "secondary"}
+          icon="rocket"
+          busy={busy.value}
+          busyLabel="Creating…"
+        >
           Create repo
         </Button>
       </form>
@@ -236,7 +261,9 @@ function RepoBody({ state, primary, onChanged }: { state: State; primary: boolea
   );
 }
 
-const EXAMPLE_URL = GITHUB_SURFACES ? "https://github.com/you/repo" : "https://git.example.com/you/repo";
+const EXAMPLE_URL = GITHUB_SURFACES
+  ? "https://github.com/you/repo"
+  : "https://git.example.com/you/repo";
 
 function ImportForm({ onChanged }: { onChanged: () => void }) {
   const url = useSignal("");
@@ -279,7 +306,13 @@ function ImportForm({ onChanged }: { onChanged: () => void }) {
             aria-describedby={error.value ? "gs-import-error" : undefined}
           />
         </label>
-        <Button type="submit" variant="secondary" icon="git-merge" busy={busy.value} busyLabel="Importing…">
+        <Button
+          type="submit"
+          variant="secondary"
+          icon="git-merge"
+          busy={busy.value}
+          busyLabel="Importing…"
+        >
           Import
         </Button>
       </form>
@@ -304,7 +337,9 @@ function AgentBody({ state }: { state: State }) {
   }
   return (
     <>
-      <p class="gs-step__line">Add this platform to your agent's MCP client. It signs in on first use and you approve it.</p>
+      <p class="gs-step__line">
+        Add this platform to your agent's MCP client. It signs in on first use and you approve it.
+      </p>
       <McpSetup idPrefix="gs-mcp" />
     </>
   );
@@ -336,7 +371,11 @@ function PlanBody({ state, primary }: { state: State; primary: boolean }) {
         <b>{p.repoName}</b>: <b>{p.title}</b>.
       </p>
       <div>
-        <LinkButton href={`/plans/${p.planId}`} variant={primary ? "primary" : "secondary"} icon="file-text">
+        <LinkButton
+          href={`/plans/${p.planId}`}
+          variant={primary ? "primary" : "secondary"}
+          icon="file-text"
+        >
           Read and approve the plan
         </LinkButton>
       </div>
@@ -364,7 +403,11 @@ function ReviewBody({ state, primary }: { state: State; primary: boolean }) {
           review.
         </p>
         <div>
-          <LinkButton href={`/changes/${r.changeId}`} variant={primary ? "primary" : "secondary"} icon="eye">
+          <LinkButton
+            href={`/changes/${r.changeId}`}
+            variant={primary ? "primary" : "secondary"}
+            icon="eye"
+          >
             Review the Change
           </LinkButton>
         </div>
@@ -444,7 +487,12 @@ function DoneBanner({ state, onDismiss }: { state: State; onDismiss: () => void 
         ) : null}
         .
       </p>
-      <button type="button" class="icon-btn gs-banner__close" aria-label="Dismiss getting started" onClick={onDismiss}>
+      <button
+        type="button"
+        class="icon-btn gs-banner__close"
+        aria-label="Dismiss getting started"
+        onClick={onDismiss}
+      >
         <Icon name="x" size={18} />
       </button>
     </div>

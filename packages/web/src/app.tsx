@@ -26,17 +26,31 @@ const OAuthConsent = lazy(() => import("./routes/oauth-consent.js").then((m) => 
 const DeviceView = lazy(() => import("./routes/device.js").then((m) => m.DeviceView));
 const ClaimPage = lazy(() => import("./routes/claim.js").then((m) => m.ClaimPage));
 const InvitePage = lazy(() => import("./routes/invite.js").then((m) => m.InvitePage));
-const ForgotPassword = lazy(() => import("./routes/password-reset.js").then((m) => m.ForgotPassword));
+const ForgotPassword = lazy(() =>
+  import("./routes/password-reset.js").then((m) => m.ForgotPassword),
+);
 const ResetPassword = lazy(() => import("./routes/password-reset.js").then((m) => m.ResetPassword));
-const InstalledIntegrations = lazy(() => import("./routes/integrations.js").then((m) => m.InstalledIntegrations));
-const IntegrationInstall = lazy(() => import("./routes/integration-install.js").then((m) => m.IntegrationInstall));
-const IntegrationsDeveloper = lazy(() => import("./routes/integrations-developer.js").then((m) => m.IntegrationsDeveloper));
-const IntegrationDetail = lazy(() => import("./routes/integration-detail.js").then((m) => m.IntegrationDetail));
+const InstalledIntegrations = lazy(() =>
+  import("./routes/integrations.js").then((m) => m.InstalledIntegrations),
+);
+const IntegrationInstall = lazy(() =>
+  import("./routes/integration-install.js").then((m) => m.IntegrationInstall),
+);
+const IntegrationsDeveloper = lazy(() =>
+  import("./routes/integrations-developer.js").then((m) => m.IntegrationsDeveloper),
+);
+const IntegrationDetail = lazy(() =>
+  import("./routes/integration-detail.js").then((m) => m.IntegrationDetail),
+);
 const GithubSettings = lazy(() => import("./routes/github.js").then((m) => m.GithubSettings));
-const IntegrationDeliveries = lazy(() => import("./routes/integration-deliveries.js").then((m) => m.IntegrationDeliveries));
+const IntegrationDeliveries = lazy(() =>
+  import("./routes/integration-deliveries.js").then((m) => m.IntegrationDeliveries),
+);
 
 /** GitHub surfaces off (@app/domain/surfaces): /settings/github falls through to not found. */
-const GITHUB_ROUTES = GITHUB_SURFACES ? [<Route key="github" path="/settings/github" component={GithubSettings} />] : [];
+const GITHUB_ROUTES = GITHUB_SURFACES
+  ? [<Route key="github" path="/settings/github" component={GithubSettings} />]
+  : [];
 
 /** Agent consent screens: one decision, no navigation to wander off to. */
 const FOCUSED = /^\/(oauth\/consent|device|integrations\/install)\/?$/;
@@ -54,7 +68,8 @@ const BOOT_PATH = typeof window === "undefined" ? "" : window.location.pathname;
 /** Leaving one of these is still the first load: they only redirect (`/` in dev, `/signin` once signed in). */
 const REDIRECTS = new Set(["/", "/signin"]);
 
-const pathOf = (url: string) => new URL(url, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+const pathOf = (url: string) =>
+  new URL(url, window.location.origin).pathname.replace(/\/+$/, "") || "/";
 
 /**
  * After an in-app navigation the new page's `<main id="main">` takes focus (without scrolling), so a
@@ -106,8 +121,14 @@ function AuthedApp() {
           <Route path="/agents" component={AgentsView} />
           <Route path="/settings/integrations" component={InstalledIntegrations} />
           <Route path="/settings/integrations/developer" component={IntegrationsDeveloper} />
-          <Route path="/settings/integrations/developer/:integrationId" component={IntegrationDetail} />
-          <Route path="/settings/integrations/developer/:integrationId/deliveries/:deliveryId?" component={IntegrationDeliveries} />
+          <Route
+            path="/settings/integrations/developer/:integrationId"
+            component={IntegrationDetail}
+          />
+          <Route
+            path="/settings/integrations/developer/:integrationId/deliveries/:deliveryId?"
+            component={IntegrationDeliveries}
+          />
           {GITHUB_ROUTES}
           <Route path="/internal/onboarding" component={OnboardingView} />
           <Route path="/signin" component={RedirectHome} />

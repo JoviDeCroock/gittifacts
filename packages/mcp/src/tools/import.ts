@@ -167,7 +167,8 @@ export function proposalNextSteps(p: ProposalView) {
   }
   const steps: Array<{ title: string; call?: string; why?: string }> = [
     {
-      title: "A human approves the Plan and reviews the Change (full review, Lane 2: it changes .platform/**)",
+      title:
+        "A human approves the Plan and reviews the Change (full review, Lane 2: it changes .platform/**)",
       why: "You can't approve either; the proposal lists every guess detection made as a risk.",
     },
   ];

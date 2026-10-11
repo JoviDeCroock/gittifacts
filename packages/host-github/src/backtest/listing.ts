@@ -33,11 +33,23 @@ const Node = z.object({
   updatedAt: z.string(),
   headRefName: z.string(),
   baseRefName: z.string(),
-  author: z.object({ __typename: z.string(), login: z.string(), databaseId: z.number().int().nullable().optional() }).nullable(),
+  author: z
+    .object({
+      __typename: z.string(),
+      login: z.string(),
+      databaseId: z.number().int().nullable().optional(),
+    })
+    .nullable(),
   mergeCommit: z.object({ oid: z.string().regex(/^[0-9a-f]{40}$/) }).nullable(),
-  files: z.object({ nodes: z.array(z.object({ path: z.string(), additions: z.number(), deletions: z.number() })) }).nullable(),
+  files: z
+    .object({
+      nodes: z.array(z.object({ path: z.string(), additions: z.number(), deletions: z.number() })),
+    })
+    .nullable(),
   labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }).nullable(),
-  closingIssuesReferences: z.object({ nodes: z.array(z.object({ number: z.number() })) }).nullable(),
+  closingIssuesReferences: z
+    .object({ nodes: z.array(z.object({ number: z.number() })) })
+    .nullable(),
 });
 
 const Page = z.object({
@@ -74,7 +86,14 @@ export interface Listing {
 
 export async function listMergedPrs(
   api: Pick<GithubApi, "graphql">,
-  input: { owner: string; repo: string; defaultBranch: string; since: Date; until: Date; maxPages?: number },
+  input: {
+    owner: string;
+    repo: string;
+    defaultBranch: string;
+    since: Date;
+    until: Date;
+    maxPages?: number;
+  },
 ): Promise<Listing> {
   const prs: MergedPr[] = [];
   let after: string | null = null;
@@ -90,7 +109,8 @@ export async function listMergedPrs(
     let older = false;
     for (const n of conn.nodes) {
       if (Date.parse(n.updatedAt) < input.since.getTime()) older = true;
-      if (n.mergedAt === null || n.mergeCommit === null || n.baseRefName !== input.defaultBranch) continue;
+      if (n.mergedAt === null || n.mergeCommit === null || n.baseRefName !== input.defaultBranch)
+        continue;
       const merged = Date.parse(n.mergedAt);
       if (merged < input.since.getTime() || merged > input.until.getTime()) continue;
       prs.push({
@@ -100,7 +120,10 @@ export async function listMergedPrs(
         createdAt: n.createdAt,
         mergedAt: n.mergedAt,
         headRefName: n.headRefName,
-        author: n.author === null ? null : { login: n.author.login, id: n.author.databaseId ?? null, type: n.author.__typename },
+        author:
+          n.author === null
+            ? null
+            : { login: n.author.login, id: n.author.databaseId ?? null, type: n.author.__typename },
         mergeSha: n.mergeCommit.oid,
         files: n.files?.nodes ?? [],
         labels: (n.labels?.nodes ?? []).map((l) => l.name),
@@ -108,9 +131,20 @@ export async function listMergedPrs(
       });
     }
     if (older || !conn.pageInfo.hasNextPage || conn.pageInfo.endCursor === null) {
-      return { prs: prs.sort((a, b) => a.mergedAt.localeCompare(b.mergedAt)), pages, points, truncated: false };
+      return {
+        prs: prs.sort((a, b) => a.mergedAt.localeCompare(b.mergedAt)),
+        pages,
+        points,
+        truncated: false,
+      };
     }
-    if (pages >= maxPages) return { prs: prs.sort((a, b) => a.mergedAt.localeCompare(b.mergedAt)), pages, points, truncated: true };
+    if (pages >= maxPages)
+      return {
+        prs: prs.sort((a, b) => a.mergedAt.localeCompare(b.mergedAt)),
+        pages,
+        points,
+        truncated: true,
+      };
     after = conn.pageInfo.endCursor;
   }
 }

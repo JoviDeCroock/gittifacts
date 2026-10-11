@@ -12,7 +12,10 @@
 import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const names = (process.env.SECRET_ENV ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+const names = (process.env.SECRET_ENV ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 const args = process.argv.slice(2);
 const allowTraces = args.includes("--allow-traces");
 const paths = args.filter((a) => !a.startsWith("--") && existsSync(a));
@@ -20,7 +23,12 @@ const secrets = [];
 for (const name of names) {
   const v = process.env[name] ?? "";
   if (v.length < 8) continue;
-  const forms = new Set([v, encodeURIComponent(v), JSON.stringify(v).slice(1, -1), Buffer.from(v).toString("base64")]);
+  const forms = new Set([
+    v,
+    encodeURIComponent(v),
+    JSON.stringify(v).slice(1, -1),
+    Buffer.from(v).toString("base64"),
+  ]);
   for (const f of forms) secrets.push({ name, needle: Buffer.from(f) });
 }
 
@@ -39,7 +47,9 @@ for (const root of paths) {
   for (const file of files(root)) {
     scanned++;
     if (file.endsWith(".zip") && secrets.length > 0 && !allowTraces) {
-      problems.push(`${file}: a trace archive in a report that ran with real credentials (traces must be off)`);
+      problems.push(
+        `${file}: a trace archive in a report that ran with real credentials (traces must be off)`,
+      );
       continue;
     }
     const bytes = readFileSync(file);
@@ -56,7 +66,11 @@ const checked = [...new Set(secrets.map((s) => s.name))];
 if (problems.length > 0) {
   for (const p of problems) console.error(`secret leak: ${p}`);
   for (const root of paths) rmSync(root, { recursive: true, force: true });
-  console.error(`check-report-secrets: ${problems.length} problem(s); deleted ${paths.join(", ")} so nothing is uploaded`);
+  console.error(
+    `check-report-secrets: ${problems.length} problem(s); deleted ${paths.join(", ")} so nothing is uploaded`,
+  );
   process.exit(1);
 }
-console.log(`check-report-secrets: ${scanned} file(s) clean of ${checked.length ? checked.join(", ") : "no configured secrets"}`);
+console.log(
+  `check-report-secrets: ${scanned} file(s) clean of ${checked.length ? checked.join(", ") : "no configured secrets"}`,
+);

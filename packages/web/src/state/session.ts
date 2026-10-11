@@ -38,7 +38,9 @@ session.subscribe((s) => {
   hintSignedIn(s.status === "authed");
 });
 
-export const principal = computed(() => (session.value.status === "authed" ? session.value.me.principal : null));
+export const principal = computed(() =>
+  session.value.status === "authed" ? session.value.me.principal : null,
+);
 export const userName = computed(() => {
   const s = session.value;
   if (s.status !== "authed") return "";
@@ -51,7 +53,11 @@ export async function loadSession(): Promise<void> {
     session.value = { status: "authed", me };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) session.value = { status: "anon" };
-    else session.value = { status: "error", message: err instanceof Error ? err.message : "Unknown error" };
+    else
+      session.value = {
+        status: "error",
+        message: err instanceof Error ? err.message : "Unknown error",
+      };
   }
 }
 
@@ -84,7 +90,11 @@ export async function signInWithEmail(email: string, password: string): Promise<
   return { ok: true };
 }
 
-export async function signUpWithEmail(name: string, email: string, password: string): Promise<AuthResult> {
+export async function signUpWithEmail(
+  name: string,
+  email: string,
+  password: string,
+): Promise<AuthResult> {
   if (isMockMode()) return signInWithEmail(email, password);
   const client = await authClient();
   const { error } = await client.signUp.email({ name, email, password });

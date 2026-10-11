@@ -46,7 +46,11 @@ export function IntegrationLogo({
     );
   }
   return (
-    <span class="int-logo" style={{ ...style, fontSize: `${Math.round(size * 0.38)}px` }} aria-hidden="true">
+    <span
+      class="int-logo"
+      style={{ ...style, fontSize: `${Math.round(size * 0.38)}px` }}
+      aria-hidden="true"
+    >
       {monogram(name)}
     </span>
   );
@@ -140,7 +144,12 @@ export function ConfirmAction({
     <fieldset class="confirm" aria-label={confirmLabel}>
       <p class="confirm__text">{consequence}</p>
       <div class="confirm__actions">
-        <Button variant="secondary" size={size} disabled={busy.value} onClick={() => (open.value = false)}>
+        <Button
+          variant="secondary"
+          size={size}
+          disabled={busy.value}
+          onClick={() => (open.value = false)}
+        >
           Cancel
         </Button>
         <Button
@@ -251,7 +260,7 @@ export function RepoPicker({
           ))}
         </ul>
       ) : (
-        allNote ?? null
+        (allNote ?? null)
       )}
     </div>
   );
@@ -284,7 +293,9 @@ export function ScopeChecklist({
             onChange={(e) =>
               onChange(
                 sortScopes(
-                  e.currentTarget.checked ? [...value, s.scope] : value.filter((x) => x !== s.scope),
+                  e.currentTarget.checked
+                    ? [...value, s.scope]
+                    : value.filter((x) => x !== s.scope),
                 ),
               )
             }

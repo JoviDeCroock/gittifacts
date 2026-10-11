@@ -33,9 +33,20 @@ export interface ImportGrantStatus {
 const enc = encodeURIComponent;
 
 export const importApi = {
-  start: (name: string, key?: string) => request<ImportStarted>("POST", "/api/v1/projects", { name, importMode: "push" }, key),
-  status: (repoId: string) => request<{ grant: ImportGrantStatus | null }>("GET", `/api/v1/repos/${enc(repoId)}/import-grant`),
-  reopen: (repoId: string, key?: string) => request<{ grant: ImportGrant; status: ImportGrantStatus }>("POST", `/api/v1/repos/${enc(repoId)}/import-grant`, {}, key),
+  start: (name: string, key?: string) =>
+    request<ImportStarted>("POST", "/api/v1/projects", { name, importMode: "push" }, key),
+  status: (repoId: string) =>
+    request<{ grant: ImportGrantStatus | null }>(
+      "GET",
+      `/api/v1/repos/${enc(repoId)}/import-grant`,
+    ),
+  reopen: (repoId: string, key?: string) =>
+    request<{ grant: ImportGrant; status: ImportGrantStatus }>(
+      "POST",
+      `/api/v1/repos/${enc(repoId)}/import-grant`,
+      {},
+      key,
+    ),
 };
 
 /** The env var the grant's command reads the token from (src/import/push-grant.ts). */

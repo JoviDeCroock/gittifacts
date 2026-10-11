@@ -31,7 +31,14 @@ const page = (events: ReturnType<typeof ev>[]): AuditPage => ({
 
 describe("fleetFrom", () => {
   it("one row per agent, its latest event, people left out", () => {
-    const rows = fleetFrom(page([ev("a1", "change.pushed", 60_000), ev("a1", "change.review-requested", 30_000), ev("h1", "change.approved", 10_000)]), NOW);
+    const rows = fleetFrom(
+      page([
+        ev("a1", "change.pushed", 60_000),
+        ev("a1", "change.review-requested", 30_000),
+        ev("h1", "change.approved", 10_000),
+      ]),
+      NOW,
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.last.action).toBe("change.review-requested");
     expect(rows[0]?.events).toBe(2);
@@ -40,7 +47,11 @@ describe("fleetFrom", () => {
 
   it("orders waiting on a person, failing, working, quiet", () => {
     const rows = fleetFrom(
-      page([ev("a1", "change.pushed", WORKING_MS + 60_000), ev("a2", "change.ci-failed", 120_000), ev("a3", "plan.created", 5 * 60_000, "plan:p1")]),
+      page([
+        ev("a1", "change.pushed", WORKING_MS + 60_000),
+        ev("a2", "change.ci-failed", 120_000),
+        ev("a3", "plan.created", 5 * 60_000, "plan:p1"),
+      ]),
       NOW,
     );
     expect(rows.map((r) => [r.agent.id, r.state])).toEqual([
@@ -52,7 +63,9 @@ describe("fleetFrom", () => {
   });
 
   it("an event in the last 15 minutes is working; past the window the agent isn't listed", () => {
-    expect(fleetFrom(page([ev("a1", "change.pushed", WORKING_MS - 1000)]), NOW)[0]?.state).toBe("working");
+    expect(fleetFrom(page([ev("a1", "change.pushed", WORKING_MS - 1000)]), NOW)[0]?.state).toBe(
+      "working",
+    );
     expect(fleetFrom(page([ev("a1", "change.pushed", WINDOW_MS + 1000)]), NOW)).toEqual([]);
   });
 

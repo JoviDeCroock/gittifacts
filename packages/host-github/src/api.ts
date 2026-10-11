@@ -60,16 +60,28 @@ export class GithubApi {
    * governed). Errors in the body throw. Mutations go through `write("POST", "/graphql", …)`.
    */
   async graphql<T = unknown>(query: string, variables: Record<string, unknown>): Promise<T> {
-    const out = (await this.call("POST", "/graphql", { query, variables })) as { data?: T; errors?: { message?: string }[] };
+    const out = (await this.call("POST", "/graphql", { query, variables })) as {
+      data?: T;
+      errors?: { message?: string }[];
+    };
     if (out.errors !== undefined && out.errors.length > 0) {
-      throw new GithubHttpError(502, "/graphql", `GitHub GraphQL: ${String(out.errors[0]?.message ?? "error").slice(0, 200)}`);
+      throw new GithubHttpError(
+        502,
+        "/graphql",
+        `GitHub GraphQL: ${String(out.errors[0]?.message ?? "error").slice(0, 200)}`,
+      );
     }
-    if (out.data === undefined) throw new GithubHttpError(502, "/graphql", "GitHub GraphQL: no data");
+    if (out.data === undefined)
+      throw new GithubHttpError(502, "/graphql", "GitHub GraphQL: no data");
     return out.data;
   }
 
   /** A content-creating or updating request (POST/PATCH/PUT/DELETE), governed. */
-  async write<T = unknown>(method: Exclude<Method, "GET">, path: string, body?: unknown): Promise<T> {
+  async write<T = unknown>(
+    method: Exclude<Method, "GET">,
+    path: string,
+    body?: unknown,
+  ): Promise<T> {
     return (await this.governor.run(() => this.call(method, path, body))) as T;
   }
 
@@ -108,7 +120,11 @@ export class GithubApi {
       } catch {
         // not JSON
       }
-      throw new GithubHttpError(res.status, path, `GitHub ${method} ${path}: ${res.status}${msg ? ` ${msg.slice(0, 200)}` : ""}`);
+      throw new GithubHttpError(
+        res.status,
+        path,
+        `GitHub ${method} ${path}: ${res.status}${msg ? ` ${msg.slice(0, 200)}` : ""}`,
+      );
     }
     const out: unknown = text === "" ? null : JSON.parse(text);
     const etag = res.headers.get("etag");
@@ -120,7 +136,8 @@ export class GithubApi {
 /** A 403/429 that is a rate limit (primary or secondary), as a retry-after. */
 export function rateLimitOf(res: Response, nowMs: number): GithubRateLimited | null {
   const retryAfter = res.headers.get("retry-after");
-  if (retryAfter !== null && /^\d+$/.test(retryAfter)) return new GithubRateLimited(Number(retryAfter));
+  if (retryAfter !== null && /^\d+$/.test(retryAfter))
+    return new GithubRateLimited(Number(retryAfter));
   if (res.headers.get("x-ratelimit-remaining") === "0") {
     const reset = Number(res.headers.get("x-ratelimit-reset") ?? "0") * 1000;
     return new GithubRateLimited(Math.max(1, Math.ceil((reset - nowMs) / 1000)));

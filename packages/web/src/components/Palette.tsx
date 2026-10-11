@@ -7,8 +7,8 @@
  * themselves (changes, plans, agents), fetched once per opening.
  */
 import { signal, useComputed, useSignal } from "@preact/signals";
-import { useLocation } from "preact-iso";
 import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
+import { useLocation } from "preact-iso";
 import { api } from "../api/client.js";
 import { oauthApi } from "../api/oauth.js";
 import { cliCommand } from "../lib/cli.js";
@@ -19,16 +19,16 @@ import {
   contextOf,
   forMode,
   jumpCommand,
+  type Mode,
   match,
   mcpText,
-  type Mode,
   objectCommands,
   type PaletteObjects,
   type RepoRef,
 } from "../lib/commands.js";
 import { prefersReducedMotion } from "../state/media.js";
-import { principal } from "../state/session.js";
 import { themePref } from "../state/prefs.js";
+import { principal } from "../state/session.js";
 import { Icon } from "./Icon.js";
 
 export const paletteOpen = signal(false);
@@ -54,18 +54,36 @@ const MAX_REPOS = 12;
  * screens already read. Each source may fail on its own; the palette shows what came back.
  */
 async function loadObjects(): Promise<PaletteObjects> {
-  const repos = paletteRepos.value.length > 0 ? paletteRepos.value : (await api.repos().catch(() => ({ repos: [] }))).repos;
+  const repos =
+    paletteRepos.value.length > 0
+      ? paletteRepos.value
+      : (await api.repos().catch(() => ({ repos: [] }))).repos;
   const ids = repos.slice(0, MAX_REPOS).map((r) => r.id);
   const [changes, plans, sessions] = await Promise.all([
     Promise.allSettled(ids.map((id) => api.changes(id))),
     Promise.allSettled(ids.map((id) => api.repoPlans(id))),
     oauthApi.sessions().catch(() => ({ sessions: [] })),
   ]);
-  const ok = <T,>(r: PromiseSettledResult<T>[]): T[] => r.flatMap((x) => (x.status === "fulfilled" ? [x.value] : []));
+  const ok = <T,>(r: PromiseSettledResult<T>[]): T[] =>
+    r.flatMap((x) => (x.status === "fulfilled" ? [x.value] : []));
   return {
-    changes: ok(changes).flatMap((r) => r.changes).filter((c) => !ENDED.has(c.status)).map((c) => ({ id: c.id, title: c.title, repoId: c.repoId, status: c.status })),
-    plans: ok(plans).flatMap((r) => r.plans).filter((p) => p.status === "draft" || p.status === "approved").map((p) => ({ id: p.id, title: p.title, repoId: p.repoId, status: p.status, authorId: p.authorId })),
-    agents: sessions.sessions.filter((a) => a.status === "active").map((a) => ({ id: a.principalId, name: a.name })),
+    changes: ok(changes)
+      .flatMap((r) => r.changes)
+      .filter((c) => !ENDED.has(c.status))
+      .map((c) => ({ id: c.id, title: c.title, repoId: c.repoId, status: c.status })),
+    plans: ok(plans)
+      .flatMap((r) => r.plans)
+      .filter((p) => p.status === "draft" || p.status === "approved")
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        repoId: p.repoId,
+        status: p.status,
+        authorId: p.authorId,
+      })),
+    agents: sessions.sessions
+      .filter((a) => a.status === "active")
+      .map((a) => ({ id: a.principalId, name: a.name })),
   };
 }
 
@@ -97,7 +115,14 @@ export function usePaletteShortcut(): void {
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
         paletteOpen.value = !paletteOpen.value;
-      } else if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !editable(e.target) && !paletteOpen.value) {
+      } else if (
+        e.key === "/" &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !editable(e.target) &&
+        !paletteOpen.value
+      ) {
         e.preventDefault();
         paletteOpen.value = true;
       }
@@ -112,16 +137,31 @@ export function PaletteButton({ compact = false }: { compact?: boolean }) {
   const mac = isMac();
   if (compact) {
     return (
-      <button type="button" class="icon-btn" aria-label="Search, act or hand to an agent" aria-haspopup="dialog" onClick={() => (paletteOpen.value = true)} data-testid="palette-open">
+      <button
+        type="button"
+        class="icon-btn"
+        aria-label="Search, act or hand to an agent"
+        aria-haspopup="dialog"
+        onClick={() => (paletteOpen.value = true)}
+        data-testid="palette-open"
+      >
         <Icon name="search" size={21} />
       </button>
     );
   }
   return (
-    <button type="button" class="palette-trigger" aria-haspopup="dialog" onClick={() => (paletteOpen.value = true)} data-testid="palette-open">
+    <button
+      type="button"
+      class="palette-trigger"
+      aria-haspopup="dialog"
+      onClick={() => (paletteOpen.value = true)}
+      data-testid="palette-open"
+    >
       <Icon name="search" size={16} />
       <span class="palette-trigger__label">Search or act</span>
-      <kbd class="kbd" aria-label={mac ? "Command K" : "Control K"}>{mac ? "⌘K" : "Ctrl K"}</kbd>
+      <kbd class="kbd" aria-label={mac ? "Command K" : "Control K"}>
+        {mac ? "⌘K" : "Ctrl K"}
+      </kbd>
     </button>
   );
 }
@@ -145,7 +185,15 @@ async function copy(text: string): Promise<boolean> {
   }
 }
 
-function TwinPane({ cmd, copied, onCopy }: { cmd: Command | null; copied: string | null; onCopy: (kind: "mcp" | "cli") => void }) {
+function TwinPane({
+  cmd,
+  copied,
+  onCopy,
+}: {
+  cmd: Command | null;
+  copied: string | null;
+  onCopy: (kind: "mcp" | "cli") => void;
+}) {
   if (!cmd) return null;
   if (!cmd.twin) {
     return (
@@ -161,15 +209,28 @@ function TwinPane({ cmd, copied, onCopy }: { cmd: Command | null; copied: string
     <div class="palette__twin" data-testid="palette-twin">
       <div class="palette__twinrow">
         <span class="palette__twinlabel">MCP</span>
-        <code class="palette__code" data-testid="palette-mcp">{mcp}</code>
-        <button type="button" class="btn btn--quiet btn--sm" onClick={() => onCopy("mcp")} aria-label="Copy the MCP call">
+        <code class="palette__code" data-testid="palette-mcp">
+          {mcp}
+        </code>
+        <button
+          type="button"
+          class="btn btn--quiet btn--sm"
+          onClick={() => onCopy("mcp")}
+          aria-label="Copy the MCP call"
+        >
           <Icon name={copied === "mcp" ? "check" : "copy"} size={15} />
         </button>
       </div>
       <div class="palette__twinrow">
         <span class="palette__twinlabel">CLI</span>
         <code class="palette__code">gittifacts {cliArgs(cmd.twin)}</code>
-        <button type="button" class="btn btn--quiet btn--sm" onClick={() => onCopy("cli")} aria-label="Copy the CLI command" title={cli}>
+        <button
+          type="button"
+          class="btn btn--quiet btn--sm"
+          onClick={() => onCopy("cli")}
+          aria-label="Copy the CLI command"
+          title={cli}
+        >
           <Icon name={copied === "cli" ? "check" : "copy"} size={15} />
         </button>
       </div>
@@ -194,12 +255,21 @@ export function Palette() {
 
   const list = useComputed(() => {
     const ctx = contextOf(path);
-    const plan = ctx?.kind === "plan" ? objects.value.plans.find((p) => p.id === ctx.id) : undefined;
+    const plan =
+      ctx?.kind === "plan" ? objects.value.plans.find((p) => p.id === ctx.id) : undefined;
     const here =
       ctx?.kind === "change"
-        ? (({ status, repoId }) => ({ status, repoId }))(objects.value.changes.find((c) => c.id === ctx.id) ?? { status: undefined, repoId: undefined })
+        ? (({ status, repoId }) => ({ status, repoId }))(
+            objects.value.changes.find((c) => c.id === ctx.id) ?? {
+              status: undefined,
+              repoId: undefined,
+            },
+          )
         : plan
-          ? { status: plan.status, mine: plan.authorId !== undefined && plan.authorId === principal.value?.id }
+          ? {
+              status: plan.status,
+              mine: plan.authorId !== undefined && plan.authorId === principal.value?.id,
+            }
           : {};
     const cmds = commandsFor(path, paletteRepos.value, here);
     // Objects only while typing: unasked, they would bury the commands for the screen in view.
@@ -250,9 +320,14 @@ export function Palette() {
       };
       // Leave with the exit animation when there is one; a fallback timer when it never fires.
       const onEnd = () => (window.clearTimeout(t), done());
-      const t = window.setTimeout(() => (d.removeEventListener("animationend", onEnd), done()), 260);
+      const t = window.setTimeout(
+        () => (d.removeEventListener("animationend", onEnd), done()),
+        260,
+      );
       d.addEventListener("animationend", onEnd, { once: true });
-      cancelClose.current = () => (window.clearTimeout(t), d.removeEventListener("animationend", onEnd));
+      cancelClose.current = () => (
+        window.clearTimeout(t), d.removeEventListener("animationend", onEnd)
+      );
     }
   }, [paletteOpen.value]);
 
@@ -272,7 +347,9 @@ export function Palette() {
     const text = kind === "mcp" ? mcpText(cmd.twin) : cliCommand(cliArgs(cmd.twin));
     const ok = await copy(text);
     copied.value = ok ? kind : null;
-    status.value = ok ? `Copied the ${kind === "mcp" ? "MCP call" : "CLI command"}. Paste it to your agent.` : "Couldn't copy. Select the text and copy it.";
+    status.value = ok
+      ? `Copied the ${kind === "mcp" ? "MCP call" : "CLI command"}. Paste it to your agent.`
+      : "Couldn't copy. Select the text and copy it.";
   }
 
   /** Why this row can't go to an agent: its rule or reason, said in the status line. */
@@ -311,14 +388,16 @@ export function Palette() {
     copied.value = null;
     status.value = "";
     if (focus === "input") input.current?.focus();
-    else modes.current?.querySelector<HTMLButtonElement>(`[data-testid="palette-mode-${m}"]`)?.focus();
+    else
+      modes.current?.querySelector<HTMLButtonElement>(`[data-testid="palette-mode-${m}"]`)?.focus();
   }
 
   /** The two hands are a radio group: one Tab stop, arrows move the choice. */
   function onModeKey(e: KeyboardEvent) {
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) return;
     e.preventDefault();
-    const next: Mode = e.key === "Home" ? "me" : e.key === "End" ? "agent" : mode.value === "me" ? "agent" : "me";
+    const next: Mode =
+      e.key === "Home" ? "me" : e.key === "End" ? "agent" : mode.value === "me" ? "agent" : "me";
     setMode(next, "radio");
   }
 
@@ -346,7 +425,9 @@ export function Palette() {
 
   // The active row stays in view while arrowing through a long list.
   useEffect(() => {
-    ref.current?.querySelector(`[data-index="${active.value}"]`)?.scrollIntoView({ block: "nearest" });
+    ref.current
+      ?.querySelector(`[data-index="${active.value}"]`)
+      ?.scrollIntoView({ block: "nearest" });
   }, [active.value]);
 
   let lastGroup = "";
@@ -379,7 +460,13 @@ export function Palette() {
           autocomplete="off"
           spellcheck={false}
         />
-        <div class="palette__modes" role="radiogroup" aria-label="Who does it" ref={modes} title={isMac() ? "⌥A switches" : "Alt+A switches"}>
+        <div
+          class="palette__modes"
+          role="radiogroup"
+          aria-label="Who does it"
+          ref={modes}
+          title={isMac() ? "⌥A switches" : "Alt+A switches"}
+        >
           {(["me", "agent"] as const).map((m) => (
             <button
               key={m}
@@ -398,8 +485,15 @@ export function Palette() {
           ))}
         </div>
       </div>
-      <ul id="palette-list" class="palette__list" role="listbox" aria-label={agent ? "Hand to an agent" : "Commands"}>
-        {items.length === 0 ? <li class="palette__empty">Nothing matches “{query.value}”.</li> : null}
+      <ul
+        id="palette-list"
+        class="palette__list"
+        role="listbox"
+        aria-label={agent ? "Hand to an agent" : "Commands"}
+      >
+        {items.length === 0 ? (
+          <li class="palette__empty">Nothing matches “{query.value}”.</li>
+        ) : null}
         {items.map((c, i) => {
           const head = c.group !== lastGroup ? c.group : null;
           lastGroup = c.group;
@@ -435,21 +529,42 @@ export function Palette() {
                 c.twin ? (
                   <code class="palette__tool">{c.twin.tool}</code>
                 ) : c.personOnly ? (
-                  <span class="palette__person"><Icon name="lock" size={13} /> Only a person</span>
+                  <span class="palette__person">
+                    <Icon name="lock" size={13} /> Only a person
+                  </span>
                 ) : (
                   <span class="palette__person">No agent tool</span>
                 )
               ) : c.keys ? (
-                <span class="palette__keys">{c.keys.map((k) => <kbd key={k} class="kbd">{k}</kbd>)}</span>
+                <span class="palette__keys">
+                  {c.keys.map((k) => (
+                    <kbd key={k} class="kbd">
+                      {k}
+                    </kbd>
+                  ))}
+                </span>
               ) : null}
             </li>,
           ];
         })}
       </ul>
-      {agent ? <TwinPane cmd={current} copied={copied.value} onCopy={(k) => current && void handOff(current, k)} /> : null}
+      {agent ? (
+        <TwinPane
+          cmd={current}
+          copied={copied.value}
+          onCopy={(k) => current && void handOff(current, k)}
+        />
+      ) : null}
       <p class="palette__foot">
-        <span class="sr-only" role="status">{status.value}</span>
-        <span aria-hidden="true">{status.value || (agent ? `↵ copy MCP call · ⇧↵ copy CLI · ${isMac() ? "⌥A" : "Alt+A"} myself · esc close` : `↵ run · ${isMac() ? "⌘↵" : "Ctrl+↵"} copy for an agent · ${isMac() ? "⌥A" : "Alt+A"} an agent · esc close`)}</span>
+        <span class="sr-only" role="status">
+          {status.value}
+        </span>
+        <span aria-hidden="true">
+          {status.value ||
+            (agent
+              ? `↵ copy MCP call · ⇧↵ copy CLI · ${isMac() ? "⌥A" : "Alt+A"} myself · esc close`
+              : `↵ run · ${isMac() ? "⌘↵" : "Ctrl+↵"} copy for an agent · ${isMac() ? "⌥A" : "Alt+A"} an agent · esc close`)}
+        </span>
       </p>
     </dialog>
   );

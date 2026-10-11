@@ -25,20 +25,23 @@ export function useResource<T>(load: () => Promise<T>, deps: unknown[]): Resourc
   const loadRef = useRef(load);
   loadRef.current = load;
 
-  const run = useCallback((keepData: boolean) => {
-    const mine = ++token.current;
-    if (!keepData || state.peek().status !== "ok") state.value = { status: "loading" };
-    loadRef.current().then(
-      (data) => {
-        if (token.current === mine) state.value = { status: "ok", data };
-      },
-      (error: unknown) => {
-        if (token.current !== mine) return;
-        if (error instanceof ApiError && error.status === 401) sessionExpired();
-        state.value = { status: "error", error };
-      },
-    );
-  }, [state]);
+  const run = useCallback(
+    (keepData: boolean) => {
+      const mine = ++token.current;
+      if (!keepData || state.peek().status !== "ok") state.value = { status: "loading" };
+      loadRef.current().then(
+        (data) => {
+          if (token.current === mine) state.value = { status: "ok", data };
+        },
+        (error: unknown) => {
+          if (token.current !== mine) return;
+          if (error instanceof ApiError && error.status === 401) sessionExpired();
+          state.value = { status: "error", error };
+        },
+      );
+    },
+    [state],
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps are the caller's cache key
   useEffect(() => {

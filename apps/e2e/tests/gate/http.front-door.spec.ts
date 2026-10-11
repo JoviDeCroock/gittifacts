@@ -4,10 +4,14 @@
  * the GitHub webhook refusing an unsigned delivery. Shared with the post-deploy smoke
  * (lib/front-door.ts) so production is checked with the same expectations.
  */
-import { checkFrontDoor, checkWebhookRejectsBadSignature } from "../../lib/front-door.js";
-import { expect, test } from "../../lib/fixtures.js";
 
-test("front door: /start, /llms.txt, OpenAPI, MCP card, docs machine files", async ({ request, baseURL }) => {
+import { expect, test } from "../../lib/fixtures.js";
+import { checkFrontDoor, checkWebhookRejectsBadSignature } from "../../lib/front-door.js";
+
+test("front door: /start, /llms.txt, OpenAPI, MCP card, docs machine files", async ({
+  request,
+  baseURL,
+}) => {
   const failures = await checkFrontDoor(request, baseURL as string);
   expect(failures).toEqual([]);
 });
@@ -24,13 +28,18 @@ test("health names the running version", async ({ request, baseURL }) => {
   expect(typeof body.version).toBe("string");
 });
 
-test("an unknown API route is a JSON 404 with a fix, an unknown app path is the SPA", async ({ request, baseURL }) => {
+test("an unknown API route is a JSON 404 with a fix, an unknown app path is the SPA", async ({
+  request,
+  baseURL,
+}) => {
   const api = await request.get(`${baseURL}/api/v1/does-not-exist`);
   expect(api.status()).toBe(404);
   const body = (await api.json()) as { error: { code: string; fix: { explanation: string } } };
   expect(body.error.code).toBe("not-found");
   expect(body.error.fix.explanation.length).toBeGreaterThan(0);
-  const app = await request.get(`${baseURL}/changes/chg_unknown`, { headers: { accept: "text/html" } });
+  const app = await request.get(`${baseURL}/changes/chg_unknown`, {
+    headers: { accept: "text/html" },
+  });
   expect(app.status()).toBe(200);
   expect(app.headers()["content-type"]).toContain("text/html");
 });

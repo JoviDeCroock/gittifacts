@@ -1,12 +1,30 @@
 /**
  * Builders that turn compact scenario descriptions into full API-shaped records.
  */
-import type { Change, ClaimedCategory, Evidence, Lane, LaneReason, RolloutState, Tour, TourStop } from "@app/domain";
+import type {
+  Change,
+  ClaimedCategory,
+  Evidence,
+  Lane,
+  LaneReason,
+  RolloutState,
+  Tour,
+  TourStop,
+} from "@app/domain";
 import type { EvidenceItem } from "@app/evidence";
 import { fileStats, hunkFromText } from "../lib/diff.js";
-import { NOW, PLATFORM_KEY_ID, ago, b64u, passedRun, sha } from "./fixture-kit.js";
+import { ago, b64u, NOW, PLATFORM_KEY_ID, passedRun, sha } from "./fixture-kit.js";
 import type { ResolutionView } from "./resolution.js";
-import type { ChangeDiff, DiffFile, DiffFileStatus, DiffHunk, EvidenceVerification, LinkedIssue, PipelineRun, TimelineEvent } from "./types.js";
+import type {
+  ChangeDiff,
+  DiffFile,
+  DiffFileStatus,
+  DiffHunk,
+  EvidenceVerification,
+  LinkedIssue,
+  PipelineRun,
+  TimelineEvent,
+} from "./types.js";
 
 export interface Scenario {
   change: Change;
@@ -68,7 +86,13 @@ export interface ScenarioInput {
   revertedBy?: string | null;
   agentTrace?: boolean;
   /** Tour stops, least-confident and not-done lists. Omit when no tour exists yet. */
-  tour?: { stops: TourStop[]; leastConfident: string[]; notDone: string[]; attempts?: number; costUsd?: number };
+  tour?: {
+    stops: TourStop[];
+    leastConfident: string[];
+    notDone: string[];
+    attempts?: number;
+    costUsd?: number;
+  };
   items?: EvidenceItem[];
   verification?: EvidenceVerification;
   runs?: PipelineRun[];
@@ -164,7 +188,9 @@ export function scenario(s: ScenarioInput): Scenario {
     },
     tour,
     evidence,
-    verification: s.verification ?? (evidence ? { ok: true, keyId: PLATFORM_KEY_ID } : { ok: false, reason: "No evidence yet." }),
+    verification:
+      s.verification ??
+      (evidence ? { ok: true, keyId: PLATFORM_KEY_ID } : { ok: false, reason: "No evidence yet." }),
     runs: s.runs ?? (headSha ? [passedRun(s.id, headSha, s.updatedMin + 3)] : []),
     issues: s.issues ?? [],
   };
@@ -188,7 +214,12 @@ export function stop(
   };
 }
 
-export function reason(code: string, lane: Lane, message: string, evidenceRef?: string): LaneReason {
+export function reason(
+  code: string,
+  lane: Lane,
+  message: string,
+  evidenceRef?: string,
+): LaneReason {
   return evidenceRef ? { code, lane, message, evidenceRef } : { code, lane, message };
 }
 
@@ -209,14 +240,25 @@ export function redGreen(
     kind: "red-green",
     status: "ok",
     tests: refs,
-    base: { sha: sha(`${changeId}:base`), results: refs.map((t, i) => ({ id: t.id, outcome: base[i] ?? "missing" })) },
-    head: { sha: sha(`${changeId}:head`), results: refs.map((t, i) => ({ id: t.id, outcome: head[i] ?? "missing" })) },
+    base: {
+      sha: sha(`${changeId}:base`),
+      results: refs.map((t, i) => ({ id: t.id, outcome: base[i] ?? "missing" })),
+    },
+    head: {
+      sha: sha(`${changeId}:head`),
+      results: refs.map((t, i) => ({ id: t.id, outcome: head[i] ?? "missing" })),
+    },
     verdict,
     ...(verdict === "no-tests" ? { note: "The change adds or edits no test files." } : {}),
   };
 }
 
-export function testRun(changeId: string, passed: number, failures: { name: string; message: string }[] = [], skipped = 3): EvidenceItem {
+export function testRun(
+  changeId: string,
+  passed: number,
+  failures: { name: string; message: string }[] = [],
+  skipped = 3,
+): EvidenceItem {
   return {
     id: "test-run:unit",
     kind: "test-run",
@@ -232,7 +274,11 @@ export function testRun(changeId: string, passed: number, failures: { name: stri
   };
 }
 
-export function coverage(changed: number, covered: number, files: { path: string; changed: number; covered: number; uncoveredLines: number[] }[]): EvidenceItem {
+export function coverage(
+  changed: number,
+  covered: number,
+  files: { path: string; changed: number; covered: number; uncoveredLines: number[] }[],
+): EvidenceItem {
   return {
     id: "coverage",
     kind: "coverage",
@@ -245,17 +291,47 @@ export function coverage(changed: number, covered: number, files: { path: string
 }
 
 export function apiNone(): EvidenceItem {
-  return { id: "public-api", kind: "public-api", status: "ok", classification: "none", packages: [] };
+  return {
+    id: "public-api",
+    kind: "public-api",
+    status: "ok",
+    classification: "none",
+    packages: [],
+  };
 }
 
 export function depsNone(): EvidenceItem {
-  return { id: "dependencies", kind: "dependencies", status: "ok", added: [], removed: [], changed: [], newInstallScripts: [], lockfileChanged: false };
+  return {
+    id: "dependencies",
+    kind: "dependencies",
+    status: "ok",
+    added: [],
+    removed: [],
+    changed: [],
+    newInstallScripts: [],
+    lockfileChanged: false,
+  };
 }
 
-export const DEFAULT_SENSITIVE = ["**/auth/**", "**/payments/**", "**/billing/**", "**/migrations/**", "**/*.sql", ".platform/**", ".github/workflows/**", "**/wrangler.jsonc"];
+export const DEFAULT_SENSITIVE = [
+  "**/auth/**",
+  "**/payments/**",
+  "**/billing/**",
+  "**/migrations/**",
+  "**/*.sql",
+  ".platform/**",
+  ".github/workflows/**",
+  "**/wrangler.jsonc",
+];
 
 export function sensitive(hits: { path: string; pattern: string }[]): EvidenceItem {
-  return { id: "sensitive-paths", kind: "sensitive-paths", status: "ok", patterns: DEFAULT_SENSITIVE, hits };
+  return {
+    id: "sensitive-paths",
+    kind: "sensitive-paths",
+    status: "ok",
+    patterns: DEFAULT_SENSITIVE,
+    hits,
+  };
 }
 
 export function preview(changeId: string, repo: string): EvidenceItem {
@@ -284,7 +360,15 @@ export function judgment(
   outcome: "no-concern" | "concern" | "unsure",
   rationale: string,
 ): EvidenceItem {
-  return { id: `llm-judgment:${question}`, kind: "llm-judgment", status: "ok", question, outcome, rationale, model: "judge-small-2026-07" };
+  return {
+    id: `llm-judgment:${question}`,
+    kind: "llm-judgment",
+    status: "ok",
+    question,
+    outcome,
+    rationale,
+    model: "judge-small-2026-07",
+  };
 }
 
 export { NOW };

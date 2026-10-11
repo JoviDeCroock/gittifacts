@@ -6,10 +6,10 @@
  */
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
+import { conflictResolutionItem } from "@app/evidence";
 import { parseToolError } from "@app/mcp";
 import { createPlatformClient } from "@app/mcp/client";
 import { describe, expect, it } from "vitest";
-import { conflictResolutionItem } from "@app/evidence";
 import { DoAudit } from "../src/audit/audit.js";
 import {
   changeFixture,
@@ -171,7 +171,12 @@ describe("the audit log names who is accountable and filters by actor, action an
       // More new entries than one read verifies (VERIFY_BATCH = 200).
       const audit = new DoAudit(env);
       for (let i = 0; i < 205; i++) {
-        await audit.append({ principalId: "system", action: "test.bulk", subject: "repo:bulk", payload: { i } });
+        await audit.append({
+          principalId: "system",
+          action: "test.bulk",
+          subject: "repo:bulk",
+          payload: { i },
+        });
       }
       const r = await mcp.tools.list_audit_events({ actor: agent.principal.id, limit: 1 });
       if (r.isError) throw new Error(JSON.stringify(r.content));
@@ -179,7 +184,9 @@ describe("the audit log names who is accountable and filters by actor, action an
       expect(chain).toMatchObject({ verified: false, complete: false });
       expect(chain.brokenAt).toBeUndefined();
       expect(chain.verifiedThrough).toBeLessThan(chain.headSeq ?? 0);
-      expect(nextSteps.map((s) => s.title).join("\n")).toMatch(/verified through event \d+ of \d+ so far/);
+      expect(nextSteps.map((s) => s.title).join("\n")).toMatch(
+        /verified through event \d+ of \d+ so far/,
+      );
       expect(nextSteps.map((s) => s.title).join("\n")).not.toMatch(/does not verify/);
       // The next read picks up where this one stopped.
       const again = await mcp.tools.list_audit_events({ actor: agent.principal.id, limit: 1 });

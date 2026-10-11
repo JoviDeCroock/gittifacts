@@ -8,26 +8,33 @@
  * memberships for the humans who linked the installation, and check-run buttons (intent only
  * until M3).
  */
-import { githubQaPort } from "../qa/github.js";
+
 import { resolveRuntime } from "@app/coordinator";
 import type { GithubRepoHost, Repo } from "@app/domain";
 import type { Identity } from "@app/host";
-import { GithubRepo, GithubSync, InstallationTokens, principalIdFor, repoIdFor } from "@app/host-github";
+import {
+  GithubRepo,
+  GithubSync,
+  InstallationTokens,
+  principalIdFor,
+  repoIdFor,
+} from "@app/host-github";
 import { z } from "zod";
 import { memberRole, putMember } from "../access/members-store.js";
 import { type RepoRole, roleAtLeast } from "../access/roles.js";
 import type { Bindings } from "../app-env.js";
 import { principals } from "../db/app-schema.js";
+import { githubQaPort } from "../qa/github.js";
 import { D1Store } from "../store/d1-store.js";
+import { repoAllowed } from "./allowlist.js";
+import { appInstallation, type RepoInfo } from "./api.js";
+import { githubApp } from "./app-config.js";
 import { githubActorPrincipal, upsertGithubPlan } from "./plans.js";
 import { githubHostFor, githubReadSource } from "./runtime.js";
-import { repoAllowed } from "./allowlist.js";
-import { githubApp } from "./app-config.js";
-import { appInstallation, type RepoInfo } from "./api.js";
 import {
   addRepos,
-  getInstallation,
   type GithubAccess,
+  getInstallation,
   linkRepos,
   linksSeeingRepo,
   upsertInstallation,
@@ -72,12 +79,22 @@ export function accessOf(
   return "read";
 }
 
-const ROLE_OF: Record<GithubAccess, RepoRole> = { admin: "maintainer", write: "maintainer", read: "reader" };
+const ROLE_OF: Record<GithubAccess, RepoRole> = {
+  admin: "maintainer",
+  write: "maintainer",
+  read: "reader",
+};
 
 /** Raise a membership to at least `role`. Never lowers one a person (or an earlier grant) set. */
 async function grantAtLeast(store: D1Store, repoId: string, principalId: string, role: RepoRole) {
   if (roleAtLeast(await memberRole(store, repoId, principalId), role)) return;
-  await putMember(store, { repoId, principalId, role, addedBy: "system", addedAt: new Date().toISOString() });
+  await putMember(store, {
+    repoId,
+    principalId,
+    role,
+    addedBy: "system",
+    addedAt: new Date().toISOString(),
+  });
 }
 
 /** One link's access to one graded repo → its claim or membership. Returns the owner after. */
@@ -91,7 +108,9 @@ async function grantFromLink(
   if (ownerId === principalId) return ownerId;
   if (ownerId === null && access === "admin") {
     // A claimed repo's owner becomes an `owner` member (d1-store updateRepo).
-    await store.updateRepo(repo.id, { claim: { status: "claimed", ownerId: principalId, expiresAt: null } });
+    await store.updateRepo(repo.id, {
+      claim: { status: "claimed", ownerId: principalId, expiresAt: null },
+    });
     return principalId;
   }
   await grantAtLeast(store, repo.id, principalId, ROLE_OF[access]);
@@ -164,8 +183,15 @@ export async function adoptInstallation(
     },
     now,
   );
-  await addRepos(store.db, i.id, [{ id: repo.id, fullName: repo.full_name, private: repo.private }], now);
-  console.log(JSON.stringify({ github: "installation.adopted", installationId: i.id, repo: repo.full_name }));
+  await addRepos(
+    store.db,
+    i.id,
+    [{ id: repo.id, fullName: repo.full_name, private: repo.private }],
+    now,
+  );
+  console.log(
+    JSON.stringify({ github: "installation.adopted", installationId: i.id, repo: repo.full_name }),
+  );
   return getInstallation(store.db, i.id);
 }
 

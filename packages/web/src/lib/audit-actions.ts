@@ -107,13 +107,23 @@ const LABEL: Record<string, string> = {
 };
 
 /** Words that read wrong when only the first letter is capitalised. */
-const ACRONYM: Record<string, string> = { ci: "CI", api: "API", mcp: "MCP", oauth: "OAuth", llm: "model", pr: "PR" };
+const ACRONYM: Record<string, string> = {
+  ci: "CI",
+  api: "API",
+  mcp: "MCP",
+  oauth: "OAuth",
+  llm: "model",
+  pr: "PR",
+};
 
 export function actionLabel(action: string): string {
   const known = LABEL[action];
   if (known) return known;
   // Unknown action: spell it out; "change." adds nothing next to a change, so it goes.
-  const tail = action.replace(/^change\./, "").replace(/[._-]+/g, " ").trim();
+  const tail = action
+    .replace(/^change\./, "")
+    .replace(/[._-]+/g, " ")
+    .trim();
   const words = tail.split(" ").map((w) => ACRONYM[w] ?? w);
   const text = words.join(" ");
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -121,5 +131,7 @@ export function actionLabel(action: string): string {
 
 /** Actions a reader should notice: something failed, was undone or was stopped. */
 export function isBadAction(action: string): boolean {
-  return /failed|rolled-back|killed|regression|alarm-error|refused|undelivered|dropped|errored|timed-out|gave-up|run-lost|impossible|blocked/.test(action);
+  return /failed|rolled-back|killed|regression|alarm-error|refused|undelivered|dropped|errored|timed-out|gave-up|run-lost|impossible|blocked/.test(
+    action,
+  );
 }

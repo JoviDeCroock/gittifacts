@@ -180,7 +180,9 @@ describe("queuePowers", () => {
     const p = queuePowers(reviewer, "reviewer", new Set());
     expect(p.canAct("prn_someone")).toBe(true);
     expect(p.canAdmin).toBe(false);
-    expect(queuePowers(human(["change:create", "repo:admin"]), "owner", new Set()).canAdmin).toBe(true);
+    expect(queuePowers(human(["change:create", "repo:admin"]), "owner", new Set()).canAdmin).toBe(
+      true,
+    );
   });
 
   it("lets an author or an agent's owner act on their own entries only", () => {
@@ -194,12 +196,18 @@ describe("queuePowers", () => {
     expect(queuePowers(null, "owner", new Set()).canAct("x")).toBe(false);
     expect(queuePowers(reviewer, null, new Set()).canAct("x")).toBe(false);
     expect(queuePowers(reviewer, "reader", new Set()).canAct("x")).toBe(false);
-    const agent = { id: "prn_bot", kind: "agent", scopes: ["change:create", "change:review", "repo:admin"] };
+    const agent = {
+      id: "prn_bot",
+      kind: "agent",
+      scopes: ["change:create", "change:review", "repo:admin"],
+    };
     expect(queuePowers(agent, "owner", new Set()).canAct("prn_other")).toBe(false);
     expect(queuePowers(agent, "owner", new Set()).canAdmin).toBe(false);
   });
 
   it("prints the agent twin the MCP tool takes", () => {
-    expect(reprioritizeTwin("chg_1", "security")).toBe('reprioritize({ changeId: "chg_1", priority: "security" })');
+    expect(reprioritizeTwin("chg_1", "security")).toBe(
+      'reprioritize({ changeId: "chg_1", priority: "security" })',
+    );
   });
 });

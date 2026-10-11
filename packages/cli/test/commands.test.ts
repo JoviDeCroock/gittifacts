@@ -138,8 +138,18 @@ describe("command table generated from the MCP tool definitions", () => {
     const status = byName("get-change-status");
     // By id (positional) or, in GitHub mode, by pull request: neither alone is required.
     expect(status.flags).toEqual([
-      expect.objectContaining({ flag: "--change-id", property: "changeId", kind: "string", required: false }),
-      expect.objectContaining({ flag: "--github", property: "github", kind: "string", required: false }),
+      expect.objectContaining({
+        flag: "--change-id",
+        property: "changeId",
+        kind: "string",
+        required: false,
+      }),
+      expect.objectContaining({
+        flag: "--github",
+        property: "github",
+        kind: "string",
+        required: false,
+      }),
     ]);
     expect(status.positional).toBe("changeId");
     expect(status.mutating).toBe(false);

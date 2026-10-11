@@ -19,12 +19,18 @@ import {
   EventChecklist,
   IntegrationLogo,
   ScopeChecklist,
-  SecretReveal,
   type SecretItem,
+  SecretReveal,
 } from "../components/Integrations.js";
 import { Page } from "../components/Shell.js";
 import { Button, EmptyState, ErrorState, LinkButton, Loading } from "../components/ui.js";
-import { DEPLOY_SCOPES, hostOf, lines, redirectUrisProblem, urlProblem } from "../lib/integrations.js";
+import {
+  DEPLOY_SCOPES,
+  hostOf,
+  lines,
+  redirectUrisProblem,
+  urlProblem,
+} from "../lib/integrations.js";
 import { relative } from "../lib/time.js";
 import { plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
@@ -64,13 +70,27 @@ const FIELD_ORDER: { field: Field; id: string; label: string }[] = [
 
 function focusField(id: string) {
   const el = document.getElementById(id);
-  const target = el?.matches("input, textarea") ? el : el?.querySelector<HTMLElement>("input, textarea");
+  const target = el?.matches("input, textarea")
+    ? el
+    : el?.querySelector<HTMLElement>("input, textarea");
   target?.focus();
   target?.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
 }
 
 /** One numbered step of the form: what it is for on the left, its fields on the right. */
-function Step({ n, title, lede, children, disabled }: { n: number; title: string; lede: string; children: ComponentChildren; disabled?: boolean }) {
+function Step({
+  n,
+  title,
+  lede,
+  children,
+  disabled,
+}: {
+  n: number;
+  title: string;
+  lede: string;
+  children: ComponentChildren;
+  disabled?: boolean;
+}) {
   return (
     <fieldset class="int-step" disabled={disabled}>
       <legend class="sr-only">
@@ -86,7 +106,13 @@ function Step({ n, title, lede, children, disabled }: { n: number; title: string
   );
 }
 
-function RegisterForm({ onCreated, onCancel }: { onCreated: (r: CreatedIntegration) => void; onCancel: () => void }) {
+function RegisterForm({
+  onCreated,
+  onCancel,
+}: {
+  onCreated: (r: CreatedIntegration) => void;
+  onCancel: () => void;
+}) {
   const name = useSignal("");
   const description = useSignal("");
   const homepageUrl = useSignal("");
@@ -108,7 +134,8 @@ function RegisterForm({ onCreated, onCancel }: { onCreated: (r: CreatedIntegrati
     const n = name.value.trim();
     if (n.length < 2 || n.length > 60) p.name = "Use 2 to 60 characters.";
     p.homepageUrl = urlProblem(homepageUrl.value.trim(), "The homepage") ?? undefined;
-    if (logoUrl.value.trim()) p.logoUrl = urlProblem(logoUrl.value.trim(), "The logo URL") ?? undefined;
+    if (logoUrl.value.trim())
+      p.logoUrl = urlProblem(logoUrl.value.trim(), "The logo URL") ?? undefined;
     p.redirectUris = redirectUrisProblem(lines(redirects.value)) ?? undefined;
     if (scopes.value.length === 0) p.scopes = "Pick at least one permission.";
     if (hooks && webhookUrl.value.trim()) {
@@ -178,11 +205,12 @@ function RegisterForm({ onCreated, onCancel }: { onCreated: (r: CreatedIntegrati
 
   return (
     <form class="int-form" onSubmit={submit} aria-label="Register an integration" noValidate>
-
       {listed.length > 0 ? (
         <div class="int-form__problems" role="alert" data-testid="register-problems">
           <p>
-            <b>{listed.length === 1 ? "One field needs a fix" : `${listed.length} fields need a fix`}</b>
+            <b>
+              {listed.length === 1 ? "One field needs a fix" : `${listed.length} fields need a fix`}
+            </b>
           </p>
           <ul>
             {listed.map((f) => (
@@ -206,34 +234,88 @@ function RegisterForm({ onCreated, onCancel }: { onCreated: (r: CreatedIntegrati
       <Step n={1} title="About" lede="What people see when they install it.">
         <label class="field">
           <span class="field__label">Name</span>
-          <input id="f-name" class="input" {...bind(name)} autoComplete="off" spellcheck={false} placeholder="Acme Deploy" aria-invalid={inv("name")} aria-describedby="f-name-err" />
+          <input
+            id="f-name"
+            class="input"
+            {...bind(name)}
+            autoComplete="off"
+            spellcheck={false}
+            placeholder="Acme Deploy"
+            aria-invalid={inv("name")}
+            aria-describedby="f-name-err"
+          />
           <FieldError id="f-name-err" msg={pr.name} />
         </label>
         <label class="field">
           <span class="field__label">
             Description <span class="int-form__opt">optional</span>
           </span>
-          <textarea class="textarea" rows={2} {...bind(description)} placeholder="Deploys every push to main and a preview per Change." />
+          <textarea
+            class="textarea"
+            rows={2}
+            {...bind(description)}
+            placeholder="Deploys every push to main and a preview per Change."
+          />
         </label>
         <label class="field">
           <span class="field__label">Homepage URL</span>
-          <input id="f-home" class="input" type="url" inputMode="url" autoComplete="off" autoCapitalize="off" spellcheck={false} {...bind(homepageUrl)} placeholder="https://deploy.example" aria-invalid={inv("homepageUrl")} aria-describedby="f-home-err" />
+          <input
+            id="f-home"
+            class="input"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellcheck={false}
+            {...bind(homepageUrl)}
+            placeholder="https://deploy.example"
+            aria-invalid={inv("homepageUrl")}
+            aria-describedby="f-home-err"
+          />
           <FieldError id="f-home-err" msg={pr.homepageUrl} />
         </label>
         <label class="field">
           <span class="field__label">
             Logo URL <span class="int-form__opt">optional</span>
           </span>
-          <input id="f-logo" class="input" type="url" inputMode="url" autoComplete="off" autoCapitalize="off" spellcheck={false} {...bind(logoUrl)} placeholder="https://deploy.example/logo.svg" aria-invalid={inv("logoUrl")} aria-describedby="f-logo-hint f-logo-err" />
-          <span class="field__hint" id="f-logo-hint">A square image. Without one, people see its initials.</span>
+          <input
+            id="f-logo"
+            class="input"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellcheck={false}
+            {...bind(logoUrl)}
+            placeholder="https://deploy.example/logo.svg"
+            aria-invalid={inv("logoUrl")}
+            aria-describedby="f-logo-hint f-logo-err"
+          />
+          <span class="field__hint" id="f-logo-hint">
+            A square image. Without one, people see its initials.
+          </span>
           <FieldError id="f-logo-err" msg={pr.logoUrl} />
         </label>
       </Step>
 
-      <Step n={2} title="Sign-in" lede="Where people return after they approve, and how your app proves itself.">
+      <Step
+        n={2}
+        title="Sign-in"
+        lede="Where people return after they approve, and how your app proves itself."
+      >
         <label class="field">
           <span class="field__label">Redirect URIs</span>
-          <textarea id="f-redir" class="textarea mono" rows={3} autoCapitalize="off" spellcheck={false} {...bind(redirects)} placeholder="https://deploy.example/oauth/callback" aria-invalid={inv("redirectUris")} aria-describedby="f-redir-hint f-redir-err" />
+          <textarea
+            id="f-redir"
+            class="textarea mono"
+            rows={3}
+            autoCapitalize="off"
+            spellcheck={false}
+            {...bind(redirects)}
+            placeholder="https://deploy.example/oauth/callback"
+            aria-invalid={inv("redirectUris")}
+            aria-describedby="f-redir-hint f-redir-err"
+          />
           <span class="field__hint" id="f-redir-hint">
             One per line. The callback must match one exactly, including path and trailing slash.
             http:// only for localhost.
@@ -241,41 +323,93 @@ function RegisterForm({ onCreated, onCancel }: { onCreated: (r: CreatedIntegrati
           <FieldError id="f-redir-err" msg={pr.redirectUris} />
         </label>
         <div class="int-checks" role="radiogroup" aria-labelledby="f-client-label">
-          <span class="field__label" id="f-client-label">Client type</span>
+          <span class="field__label" id="f-client-label">
+            Client type
+          </span>
           <label class="check">
-            <input type="radio" name="client-type" checked={clientType.value === "confidential"} onChange={() => (clientType.value = "confidential")} />
+            <input
+              type="radio"
+              name="client-type"
+              checked={clientType.value === "confidential"}
+              onChange={() => (clientType.value = "confidential")}
+            />
             <span>Confidential</span>
-            <span class="check__hint">Your server keeps a client secret. Use this for a hosted platform.</span>
+            <span class="check__hint">
+              Your server keeps a client secret. Use this for a hosted platform.
+            </span>
           </label>
           <label class="check">
-            <input type="radio" name="client-type" checked={clientType.value === "public"} onChange={() => (clientType.value = "public")} />
+            <input
+              type="radio"
+              name="client-type"
+              checked={clientType.value === "public"}
+              onChange={() => (clientType.value = "public")}
+            />
             <span>Public</span>
-            <span class="check__hint">No secret; proves itself with PKCE. For CLIs and apps that can't keep one.</span>
+            <span class="check__hint">
+              No secret; proves itself with PKCE. For CLIs and apps that can't keep one.
+            </span>
           </label>
         </div>
       </Step>
 
-      <Step n={3} title="Permissions" lede="What it asks for when people install it. Deploy platforms need only the first four.">
+      <Step
+        n={3}
+        title="Permissions"
+        lede="What it asks for when people install it. Deploy platforms need only the first four."
+      >
         <div id="f-scopes">
           <ScopeChecklist value={scopes.value} onChange={(v) => (scopes.value = v)} />
         </div>
         <FieldError id="f-scopes-err" msg={pr.scopes} />
       </Step>
 
-      <Step n={4} title="Webhook" lede={hooks ? "Where events go, and the secret that signs them." : "Needs the Receive events permission."} disabled={!hooks}>
+      <Step
+        n={4}
+        title="Webhook"
+        lede={
+          hooks
+            ? "Where events go, and the secret that signs them."
+            : "Needs the Receive events permission."
+        }
+        disabled={!hooks}
+      >
         <label class="field">
           <span class="field__label">
             Webhook URL <span class="int-form__opt">optional</span>
           </span>
-          <input id="f-hook" class="input" type="url" inputMode="url" autoComplete="off" autoCapitalize="off" spellcheck={false} {...bind(webhookUrl)} placeholder="https://deploy.example/hooks/gittifacts" aria-invalid={inv("webhookUrl")} aria-describedby="f-hook-err" />
+          <input
+            id="f-hook"
+            class="input"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellcheck={false}
+            {...bind(webhookUrl)}
+            placeholder="https://deploy.example/hooks/gittifacts"
+            aria-invalid={inv("webhookUrl")}
+            aria-describedby="f-hook-err"
+          />
           <FieldError id="f-hook-err" msg={pr.webhookUrl} />
         </label>
-        <EventChecklist value={events.value} onChange={(v) => (events.value = v)} disabled={!hooks || !webhookUrl.value.trim()} />
+        <EventChecklist
+          value={events.value}
+          onChange={(v) => (events.value = v)}
+          disabled={!hooks || !webhookUrl.value.trim()}
+        />
         <label class="field">
           <span class="field__label">
             Webhook secret <span class="int-form__opt">optional</span>
           </span>
-          <input class="input mono" type="password" autoComplete="new-password" {...bind(webhookSecret)} disabled={!hooks || !webhookUrl.value.trim()} aria-describedby="f-secret-hint" />
+          <input
+            class="input mono"
+            type="password"
+            autoComplete="new-password"
+            {...bind(webhookSecret)}
+            disabled={!hooks || !webhookUrl.value.trim()}
+            aria-describedby="f-secret-hint"
+          />
           <span class="field__hint" id="f-secret-hint">
             Leave it empty and we generate one and show it once. Every delivery is signed with it in
             X-Gittifacts-Signature-256.
@@ -289,7 +423,13 @@ function RegisterForm({ onCreated, onCancel }: { onCreated: (r: CreatedIntegrati
         </p>
       ) : null}
       <div class="int-form__actions">
-        <Button type="submit" variant="primary" icon="plus" busy={busy.value} busyLabel="Registering…">
+        <Button
+          type="submit"
+          variant="primary"
+          icon="plus"
+          busy={busy.value}
+          busyLabel="Registering…"
+        >
           Register integration
         </Button>
         <Button variant="secondary" onClick={onCancel} disabled={busy.value}>
@@ -313,12 +453,16 @@ function IntegrationRow({ it }: { it: IntegrationView }) {
             by {it.developer.name} · {hostOf(it.homepageUrl, it.homepageUrl)}
           </span>
           <span class="dev-int__meta">
-            <code>{it.clientId}</code> · {it.clientType === "public" ? "Public client" : "Confidential"}
+            <code>{it.clientId}</code> ·{" "}
+            {it.clientType === "public" ? "Public client" : "Confidential"}
           </span>
           <span class="dev-int__meta">
-            {it.installationCount === 0 ? "Not installed yet" : `Installed on ${plural(it.installationCount, "account")}`}{" "}
-            · {it.webhook.url ? (it.webhook.active ? "Webhook on" : "Webhook paused") : "No webhook"} · created{" "}
-            {relative(it.createdAt, now)}
+            {it.installationCount === 0
+              ? "Not installed yet"
+              : `Installed on ${plural(it.installationCount, "account")}`}{" "}
+            ·{" "}
+            {it.webhook.url ? (it.webhook.active ? "Webhook on" : "Webhook paused") : "No webhook"}{" "}
+            · created {relative(it.createdAt, now)}
           </span>
         </span>
         <Icon name="chevron-right" class="dev-int__chev" />
@@ -328,12 +472,24 @@ function IntegrationRow({ it }: { it: IntegrationView }) {
 }
 
 function revealItems(r: CreatedIntegration): SecretItem[] {
-  const items: SecretItem[] = [{ label: "Client ID", value: r.integration.clientId, secret: false }];
+  const items: SecretItem[] = [
+    { label: "Client ID", value: r.integration.clientId, secret: false },
+  ];
   if (r.clientSecret) {
-    items.push({ label: "Client secret", value: r.clientSecret, secret: true, hint: "Send it from your server only, never from a browser or an app." });
+    items.push({
+      label: "Client secret",
+      value: r.clientSecret,
+      secret: true,
+      hint: "Send it from your server only, never from a browser or an app.",
+    });
   }
   if (r.webhookSecret) {
-    items.push({ label: "Webhook secret", value: r.webhookSecret, secret: true, hint: "Verify X-Gittifacts-Signature-256 (HMAC-SHA256 of the raw body) with it." });
+    items.push({
+      label: "Webhook secret",
+      value: r.webhookSecret,
+      secret: true,
+      hint: "Verify X-Gittifacts-Signature-256 (HMAC-SHA256 of the raw body) with it.",
+    });
   }
   return items;
 }
@@ -359,7 +515,12 @@ export function IntegrationsDeveloper() {
       ]}
       actions={
         registering ? undefined : (
-          <LinkButton href={`${PATH}?register`} variant="primary" icon="plus" data-testid="register-open">
+          <LinkButton
+            href={`${PATH}?register`}
+            variant="primary"
+            icon="plus"
+            data-testid="register-open"
+          >
             Register an integration
           </LinkButton>
         )
@@ -415,7 +576,9 @@ export function IntegrationsDeveloper() {
         <section class="dev-main" aria-labelledby="mine-title">
           <h2 id="mine-title" class="int-section__title">
             Your integrations
-            {st.status === "ok" ? <span class="tnum int-n">{st.data.integrations.length}</span> : null}
+            {st.status === "ok" ? (
+              <span class="tnum int-n">{st.data.integrations.length}</span>
+            ) : null}
           </h2>
           {st.status === "loading" ? <Loading label="Loading your integrations" lines={5} /> : null}
           {st.status === "error" ? (
@@ -424,8 +587,8 @@ export function IntegrationsDeveloper() {
           {st.status === "ok" && st.data.integrations.length === 0 ? (
             <EmptyState icon="plug" title="You haven't registered an integration">
               <p>
-                Register one to get a client ID and secret. Then send people to install it from
-                your platform's "connect a git provider" flow.
+                Register one to get a client ID and secret. Then send people to install it from your
+                platform's "connect a git provider" flow.
               </p>
               <Button variant="primary" icon="plus" onClick={open}>
                 Register an integration

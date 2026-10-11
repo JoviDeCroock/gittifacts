@@ -4,9 +4,9 @@ import { PlanDraftInput } from "@app/domain";
 import { describe, expect, it } from "vitest";
 import {
   PLACEHOLDER_NAMES,
-  SamplePlan,
   projectSlug,
   renderPlaceholders,
+  SamplePlan,
   TEMPLATE_IDS,
   TEMPLATES,
   TemplateManifest,
@@ -155,13 +155,16 @@ describe("placeholders", () => {
 });
 
 describe("sample plans", () => {
-  it.each(TEMPLATE_IDS)("%s: a valid create_plan input that stays inside the template's files", (id) => {
-    const plan = SamplePlan.parse(TEMPLATES[id].samplePlan);
-    expect(() => PlanDraftInput.parse({ ...plan, repoId: "rep_1" })).not.toThrow();
-    // Every scope glob names a directory the template already has (the work fits the repo).
-    for (const glob of plan.scopePaths) {
-      const dir = glob.replace(/\/\*\*$/, "");
-      expect(existsSync(join(TEMPLATES_DIR, id, dir)), `${id}: ${glob}`).toBe(true);
-    }
-  });
+  it.each(TEMPLATE_IDS)(
+    "%s: a valid create_plan input that stays inside the template's files",
+    (id) => {
+      const plan = SamplePlan.parse(TEMPLATES[id].samplePlan);
+      expect(() => PlanDraftInput.parse({ ...plan, repoId: "rep_1" })).not.toThrow();
+      // Every scope glob names a directory the template already has (the work fits the repo).
+      for (const glob of plan.scopePaths) {
+        const dir = glob.replace(/\/\*\*$/, "");
+        expect(existsSync(join(TEMPLATES_DIR, id, dir)), `${id}: ${glob}`).toBe(true);
+      }
+    },
+  );
 });

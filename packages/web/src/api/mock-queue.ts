@@ -8,7 +8,13 @@
  */
 import { ApiError } from "./client.js";
 import { b64u, NOW, sha } from "./fixture-kit.js";
-import type { Priority, QueueEntryView, QueueOverlap, QueueOverviewView, QueueStall } from "./queue.js";
+import type {
+  Priority,
+  QueueEntryView,
+  QueueOverlap,
+  QueueOverviewView,
+  QueueStall,
+} from "./queue.js";
 
 const MIN = 60_000;
 const KNOWN = new Set(["repo_billing", "repo_edge", "repo_dashboard", "repo_ios", "repo_widget"]);
@@ -92,10 +98,14 @@ function billingEntries(): QueueEntryView[] {
       predictedPassProbability: 0.91,
       reason: "In batch b_41 with 1 other change. CI is running on main plus both changes.",
       overlaps: [
-        sharedFormat("chg_lc3m9", "Fall back to en-US when a customer's receipt locale is missing", {
-          id: "prn_coder12",
-          name: "fleet-coder-12",
-        }),
+        sharedFormat(
+          "chg_lc3m9",
+          "Fall back to en-US when a customer's receipt locale is missing",
+          {
+            id: "prn_coder12",
+            name: "fleet-coder-12",
+          },
+        ),
       ],
       enqueuedMin: 19,
     }),
@@ -112,10 +122,14 @@ function billingEntries(): QueueEntryView[] {
       predictedPassProbability: 0.88,
       reason: "In batch b_41 with 1 other change. CI is running on main plus both changes.",
       overlaps: [
-        sharedFormat("chg_tz7k2", "Fix invoice due dates drifting a day for customers far from UTC", {
-          id: "prn_coder07",
-          name: "fleet-coder-07",
-        }),
+        sharedFormat(
+          "chg_tz7k2",
+          "Fix invoice due dates drifting a day for customers far from UTC",
+          {
+            id: "prn_coder07",
+            name: "fleet-coder-07",
+          },
+        ),
       ],
       enqueuedMin: 17,
     }),
@@ -303,7 +317,10 @@ function billingStalls(): QueueStall[] {
       changeIds: ["chg_wr5p8"],
       attempts: 2,
       maxAttempts: 6,
-      error: { errorClass: "TypeError", message: "fetch failed: https://[redacted]@artifacts.example/billing.git" },
+      error: {
+        errorClass: "TypeError",
+        message: "fetch failed: https://[redacted]@artifacts.example/billing.git",
+      },
       since: null,
       next: { kind: "retry", at: NOW + 40_000 },
     },
@@ -327,7 +344,11 @@ function withStalls(entries: QueueEntryView[], stalls: QueueStall[]): QueueEntry
   });
 }
 
-function billing(variant: { frozen: boolean; halted: boolean; stalled: boolean }): QueueOverviewView {
+function billing(variant: {
+  frozen: boolean;
+  halted: boolean;
+  stalled: boolean;
+}): QueueOverviewView {
   const freezes = variant.frozen;
   const stalls = variant.stalled ? billingStalls() : [];
   const entries = withStalls([...billingEntries(), ...billingWaitingAndDone()], stalls).map((e) => {
@@ -503,25 +524,62 @@ function overviewWithActs(
   const out = new Set([...acts.dequeued].filter((id) => q.entries.some((e) => e.changeId === id)));
   q.entries = q.entries.map((e) => {
     if (out.has(e.changeId) && !["merged", "ejected"].includes(e.state)) {
-      return { ...e, state: "dequeued", hold: null, trackId: null, batch: null, position: null, etaSeconds: null, blocking: [], stall: null, reason: "Taken out of the queue by Maya Okafor. It rejoins only when someone enqueues it again." };
+      return {
+        ...e,
+        state: "dequeued",
+        hold: null,
+        trackId: null,
+        batch: null,
+        position: null,
+        etaSeconds: null,
+        blocking: [],
+        stall: null,
+        reason:
+          "Taken out of the queue by Maya Okafor. It rejoins only when someone enqueues it again.",
+      };
     }
     const p = acts.priority.get(e.changeId);
     return p === undefined ? e : { ...e, priority: p };
   });
   // Active entries first, then finished ones (the server's order).
-  q.entries = [...q.entries.filter((e) => e.state !== "dequeued"), ...q.entries.filter((e) => e.state === "dequeued")];
-  q.tracks = q.tracks.map((t) => ({ ...t, batches: t.batches.map((b) => ({ ...b, entries: b.entries.filter((id) => !out.has(id)) })).filter((b) => b.entries.length > 0) }));
-  q.landing = q.landing.map((l) => ({ ...l, members: l.members.filter((id) => !out.has(id)) })).filter((l) => l.members.length > 0);
+  q.entries = [
+    ...q.entries.filter((e) => e.state !== "dequeued"),
+    ...q.entries.filter((e) => e.state === "dequeued"),
+  ];
+  q.tracks = q.tracks.map((t) => ({
+    ...t,
+    batches: t.batches
+      .map((b) => ({ ...b, entries: b.entries.filter((id) => !out.has(id)) }))
+      .filter((b) => b.entries.length > 0),
+  }));
+  q.landing = q.landing
+    .map((l) => ({ ...l, members: l.members.filter((id) => !out.has(id)) }))
+    .filter((l) => l.members.length > 0);
   if (typeof freeze === "object") {
     q.frozen = true;
     q.freezeReasons = [
       ...q.freezeReasons,
-      { kind: "manual", at: freeze.at, sha: q.mainSha, changeId: null, signer: { principalId: "prn_maya", signature: b64u(`freeze-${freeze.at}`, 86) }, message: freeze.reason },
+      {
+        kind: "manual",
+        at: freeze.at,
+        sha: q.mainSha,
+        changeId: null,
+        signer: { principalId: "prn_maya", signature: b64u(`freeze-${freeze.at}`, 86) },
+        message: freeze.reason,
+      },
     ];
     q.entries = q.entries.map((e) =>
-      e.frozen || e.priority === "revert" || e.priority === "incident" || ["merged", "ejected", "dequeued"].includes(e.state)
+      e.frozen ||
+      e.priority === "revert" ||
+      e.priority === "incident" ||
+      ["merged", "ejected", "dequeued"].includes(e.state)
         ? e
-        : { ...e, frozen: true, etaSeconds: null, reason: `Frozen by hand; it keeps speculating meanwhile. ${e.reason}` },
+        : {
+            ...e,
+            frozen: true,
+            etaSeconds: null,
+            reason: `Frozen by hand; it keeps speculating meanwhile. ${e.reason}`,
+          },
     );
   }
   return q;
@@ -543,19 +601,28 @@ function queued(changeId: string): QueueEntryView | undefined {
 export async function mockDequeue(changeId: string): Promise<{ removed: boolean }> {
   await wait(420);
   const e = queued(changeId);
-  if (e === undefined || acts.dequeued.has(changeId) || ["merged", "ejected"].includes(e.state)) return { removed: false };
+  if (e === undefined || acts.dequeued.has(changeId) || ["merged", "ejected"].includes(e.state))
+    return { removed: false };
   acts.dequeued.add(changeId);
   return { removed: true };
 }
 
-export async function mockReprioritize(changeId: string, priority: Priority): Promise<{ status: null }> {
+export async function mockReprioritize(
+  changeId: string,
+  priority: Priority,
+): Promise<{ status: null }> {
   await wait(420);
-  if (queued(changeId) === undefined) throw new ApiError(404, "not_found", "That change is not in the queue.");
+  if (queued(changeId) === undefined)
+    throw new ApiError(404, "not_found", "That change is not in the queue.");
   acts.priority.set(changeId, priority);
   return { status: null };
 }
 
-export async function mockSetFrozen(repoId: string, frozen: boolean, reason: string): Promise<{ frozen: boolean }> {
+export async function mockSetFrozen(
+  repoId: string,
+  frozen: boolean,
+  reason: string,
+): Promise<{ frozen: boolean }> {
   await wait(420);
   if (!KNOWN.has(repoId)) throw notFound();
   acts.freeze.set(repoId, frozen ? { reason, at: Date.now() } : "thawed");

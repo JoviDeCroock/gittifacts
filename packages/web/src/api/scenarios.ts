@@ -4,7 +4,6 @@
  */
 import { ago, ahead, partialRun, sha } from "./fixture-kit.js";
 import {
-  type Scenario,
   apiNone,
   coverage,
   depsNone,
@@ -14,6 +13,7 @@ import {
   preview,
   reason,
   redGreen,
+  type Scenario,
   scenario,
   sensitive,
   stop,
@@ -50,7 +50,11 @@ const tz = scenario({
     reason("mutation.score", 0, "Mutation score 86% on changed lines (policy: 60%).", "mutation"),
     reason("size.small", 0, "34 changed lines in 3 files (Lane 0 allows 150 lines, 8 files)."),
     reason("plan.in-scope", 0, "Every file is inside the plan's scope paths."),
-    reason("shadow.lane0-disabled", 1, "Lane 0 is in shadow mode for this repo, so the change is routed to Lane 1."),
+    reason(
+      "shadow.lane0-disabled",
+      1,
+      "Lane 0 is in shadow mode for this repo, so the change is routed to Lane 1.",
+    ),
   ],
   files: [
     file("src/invoices/due-date.ts", "modified", [
@@ -149,7 +153,7 @@ const tz = scenario({
         "behavior",
         "proven",
         "Invoice inv_2041 now says due Oct 30, not Oct 31",
-        "For a customer in Pacific/Pitcairn (UTC−8), an invoice issued on Sep 30 at 21:30 local time printed \"Due Oct 31\". It now prints \"Due Oct 30\". Both new tests pin the local day, one on each side of UTC.",
+        'For a customer in Pacific/Pitcairn (UTC−8), an invoice issued on Sep 30 at 21:30 local time printed "Due Oct 31". It now prints "Due Oct 30". Both new tests pin the local day, one on each side of UTC.',
         [],
         ["red-green", "screenshots"],
       ),
@@ -188,10 +192,20 @@ const tz = scenario({
     ],
   },
   items: [
-    redGreen("chg_tz7k2", [
-      { file: "test/invoices/due-date.test.ts", name: "dueDate in the customer's zone › lands on the local calendar day for UTC−8 customers" },
-      { file: "test/invoices/due-date.test.ts", name: "dueDate in the customer's zone › lands on the local calendar day for UTC+13 customers" },
-    ], "proven"),
+    redGreen(
+      "chg_tz7k2",
+      [
+        {
+          file: "test/invoices/due-date.test.ts",
+          name: "dueDate in the customer's zone › lands on the local calendar day for UTC−8 customers",
+        },
+        {
+          file: "test/invoices/due-date.test.ts",
+          name: "dueDate in the customer's zone › lands on the local calendar day for UTC+13 customers",
+        },
+      ],
+      "proven",
+    ),
     testRun("chg_tz7k2", 412),
     coverage(34, 33, [
       { path: "src/invoices/due-date.ts", changed: 6, covered: 6, uncoveredLines: [] },
@@ -208,7 +222,14 @@ const tz = scenario({
       timedOut: 0,
       noCoverage: 2,
       score: 19 / 22,
-      survivors: [{ file: "src/time/zoned.ts", line: 26, mutator: "ConditionalExpression", replacement: "if (true) return naive;" }],
+      survivors: [
+        {
+          file: "src/time/zoned.ts",
+          line: 26,
+          mutator: "ConditionalExpression",
+          replacement: "if (true) return naive;",
+        },
+      ],
     },
     apiNone(),
     depsNone(),
@@ -219,11 +240,21 @@ const tz = scenario({
       kind: "screenshots",
       status: "ok",
       shots: [
-        { route: "/invoices/inv_2041", viewport: "mobile", beforeRef: "shot:invoice-before", afterRef: "shot:invoice-after", diffRatio: 0.012 },
+        {
+          route: "/invoices/inv_2041",
+          viewport: "mobile",
+          beforeRef: "shot:invoice-before",
+          afterRef: "shot:invoice-after",
+          diffRatio: 0.012,
+        },
       ],
     },
     trace("chg_tz7k2"),
-    judgment("plan-conformance", "no-concern", "The diff implements the plan's first acceptance criterion (due dates computed in the billing time zone) and touches only files under src/invoices, src/time and test/invoices."),
+    judgment(
+      "plan-conformance",
+      "no-concern",
+      "The diff implements the plan's first acceptance criterion (due dates computed in the billing time zone) and touches only files under src/invoices, src/time and test/invoices.",
+    ),
     judgment("scope-drift", "no-concern", "All three files are inside the declared scope paths."),
   ],
 });
@@ -245,7 +276,12 @@ const locale = scenario({
   reasons: [
     reason("proof.no-tests", 1, "No new or changed tests. Nothing proves the fix.", "red-green"),
     reason("coverage.changed-lines", 1, "40% of changed lines covered (policy: 80%).", "coverage"),
-    reason("signal.missing.mutation", 1, "Mutation testing skipped: no tests reach the changed lines.", "mutation"),
+    reason(
+      "signal.missing.mutation",
+      1,
+      "Mutation testing skipped: no tests reach the changed lines.",
+      "mutation",
+    ),
     reason("size.small", 0, "6 changed lines in 1 file."),
   ],
   files: [
@@ -274,7 +310,7 @@ const locale = scenario({
         "intent",
         "proven",
         "Receipts no longer depend on a customer locale being set",
-        "The plan lists \"receipt emails fail for customers created through the partner API\" as the first bug. Those customers have no locale, and Intl throws a RangeError on undefined in some runtimes.",
+        'The plan lists "receipt emails fail for customers created through the partner API" as the first bug. Those customers have no locale, and Intl throws a RangeError on undefined in some runtimes.',
         [{ file: "src/emails/receipt.ts", startLine: 19, endLine: 20 }],
         ["llm-judgment:plan-conformance"],
       ),
@@ -307,7 +343,9 @@ const locale = scenario({
   items: [
     redGreen("chg_lc3m9", [], "no-tests"),
     testRun("chg_lc3m9", 409),
-    coverage(5, 2, [{ path: "src/emails/receipt.ts", changed: 5, covered: 2, uncoveredLines: [19, 20, 24] }]),
+    coverage(5, 2, [
+      { path: "src/emails/receipt.ts", changed: 5, covered: 2, uncoveredLines: [19, 20, 24] },
+    ]),
     {
       id: "mutation",
       kind: "mutation",
@@ -327,7 +365,11 @@ const locale = scenario({
     sensitive([]),
     trace("chg_lc3m9"),
     judgment("plan-conformance", "no-concern", "Matches the plan's first listed bug."),
-    judgment("hidden-behavior-change", "unsure", "Customers whose locale was previously undefined but whose account locale is set will see receipts formatted differently from before. That may be intended."),
+    judgment(
+      "hidden-behavior-change",
+      "unsure",
+      "Customers whose locale was previously undefined but whose account locale is set will see receipts formatted differently from before. That may be intended.",
+    ),
   ],
 });
 
@@ -346,7 +388,12 @@ const paginate = scenario({
   createdMin: 300,
   updatedMin: 75,
   reasons: [
-    reason("api.additive", 1, "Public API grows: 2 added and 1 widened symbol in @acme/billing-sdk.", "public-api"),
+    reason(
+      "api.additive",
+      1,
+      "Public API grows: 2 added and 1 widened symbol in @acme/billing-sdk.",
+      "public-api",
+    ),
     reason("proof.red-green", 0, "2 new tests fail on main and pass on this change.", "red-green"),
     reason("coverage.changed-lines", 0, "100% of changed lines covered.", "coverage"),
     reason("size.small", 0, "41 changed lines in 2 files."),
@@ -407,22 +454,78 @@ const paginate = scenario({
   ],
   tour: {
     stops: [
-      stop("intent", "proven", "listInvoices pages through results with a cursor", "The SDK v3 plan asks for cursor pagination on every list call, starting with invoices. This change adds it without breaking existing callers.", [{ file: "packages/sdk/src/invoices.ts", startLine: 40, endLine: 50 }], ["llm-judgment:plan-conformance"]),
-      stop("behavior", "proven", "A 120-invoice account now comes back in pages of 50", "The first call returns 50 invoices and cursor c_50; the last returns 20 and a null cursor.", [{ file: "packages/sdk/test/invoices.test.ts", startLine: 14, endLine: 24 }], ["red-green"]),
-      stop("risk", "proven", "The return type widens instead of changing", "Existing callers that treat the result as Invoice[] keep compiling and keep working, because the result is still that array with two extra fields. The API diff classifies this as additive.", [{ file: "packages/sdk/src/invoices.ts", startLine: 52, endLine: 59 }], ["public-api"]),
-      stop("uncovered", "unproven", "The 100-item limit is not enforced in the SDK", "The docstring says 1 to 100, but the SDK passes any number through. The server clamps it; no test checks what the SDK does with 500.", [{ file: "packages/sdk/src/invoices.ts", startLine: 43, endLine: 44 }]),
+      stop(
+        "intent",
+        "proven",
+        "listInvoices pages through results with a cursor",
+        "The SDK v3 plan asks for cursor pagination on every list call, starting with invoices. This change adds it without breaking existing callers.",
+        [{ file: "packages/sdk/src/invoices.ts", startLine: 40, endLine: 50 }],
+        ["llm-judgment:plan-conformance"],
+      ),
+      stop(
+        "behavior",
+        "proven",
+        "A 120-invoice account now comes back in pages of 50",
+        "The first call returns 50 invoices and cursor c_50; the last returns 20 and a null cursor.",
+        [{ file: "packages/sdk/test/invoices.test.ts", startLine: 14, endLine: 24 }],
+        ["red-green"],
+      ),
+      stop(
+        "risk",
+        "proven",
+        "The return type widens instead of changing",
+        "Existing callers that treat the result as Invoice[] keep compiling and keep working, because the result is still that array with two extra fields. The API diff classifies this as additive.",
+        [{ file: "packages/sdk/src/invoices.ts", startLine: 52, endLine: 59 }],
+        ["public-api"],
+      ),
+      stop(
+        "uncovered",
+        "unproven",
+        "The 100-item limit is not enforced in the SDK",
+        "The docstring says 1 to 100, but the SDK passes any number through. The server clamps it; no test checks what the SDK does with 500.",
+        [{ file: "packages/sdk/src/invoices.ts", startLine: 43, endLine: 44 }],
+      ),
     ],
-    leastConfident: ["Whether returning an array with extra properties survives JSON serialization in callers that cache results; the extra fields would be dropped."],
-    notDone: ["No pagination for listCustomers or listPayments yet; the plan sequences them later.", "README examples still show the unpaginated call."],
+    leastConfident: [
+      "Whether returning an array with extra properties survives JSON serialization in callers that cache results; the extra fields would be dropped.",
+    ],
+    notDone: [
+      "No pagination for listCustomers or listPayments yet; the plan sequences them later.",
+      "README examples still show the unpaginated call.",
+    ],
   },
   items: [
-    redGreen("chg_pg5q1", [
-      { file: "packages/sdk/test/invoices.test.ts", name: "returns the next cursor when more invoices exist" },
-      { file: "packages/sdk/test/invoices.test.ts", name: "stops with a null cursor on the last page" },
-    ], "proven"),
+    redGreen(
+      "chg_pg5q1",
+      [
+        {
+          file: "packages/sdk/test/invoices.test.ts",
+          name: "returns the next cursor when more invoices exist",
+        },
+        {
+          file: "packages/sdk/test/invoices.test.ts",
+          name: "stops with a null cursor on the last page",
+        },
+      ],
+      "proven",
+    ),
     testRun("chg_pg5q1", 188),
-    coverage(19, 19, [{ path: "packages/sdk/src/invoices.ts", changed: 19, covered: 19, uncoveredLines: [] }]),
-    { id: "mutation", kind: "mutation", status: "ok", tool: "Stryker 9", files: ["packages/sdk/src/invoices.ts"], killed: 9, survived: 0, timedOut: 0, noCoverage: 0, score: 1, survivors: [] },
+    coverage(19, 19, [
+      { path: "packages/sdk/src/invoices.ts", changed: 19, covered: 19, uncoveredLines: [] },
+    ]),
+    {
+      id: "mutation",
+      kind: "mutation",
+      status: "ok",
+      tool: "Stryker 9",
+      files: ["packages/sdk/src/invoices.ts"],
+      killed: 9,
+      survived: 0,
+      timedOut: 0,
+      noCoverage: 0,
+      score: 1,
+      survivors: [],
+    },
     {
       id: "public-api",
       kind: "public-api",
@@ -433,15 +536,22 @@ const paginate = scenario({
           name: "@acme/billing-sdk",
           entry: "packages/sdk/src/index.ts",
           added: [
-            { symbol: "ListInvoicesOptions", after: "interface ListInvoicesOptions { cursor?: string; limit?: number }" },
-            { symbol: "Page", after: "interface Page<T> { items: T[]; nextCursor: string | null }" },
+            {
+              symbol: "ListInvoicesOptions",
+              after: "interface ListInvoicesOptions { cursor?: string; limit?: number }",
+            },
+            {
+              symbol: "Page",
+              after: "interface Page<T> { items: T[]; nextCursor: string | null }",
+            },
           ],
           removed: [],
           changed: [
             {
               symbol: "listInvoices",
               before: "listInvoices(client: Client): Promise<Invoice[]>",
-              after: "listInvoices(client: Client, options?: ListInvoicesOptions): Promise<Invoice[] & Page<Invoice>>",
+              after:
+                "listInvoices(client: Client, options?: ListInvoicesOptions): Promise<Invoice[] & Page<Invoice>>",
             },
           ],
         },
@@ -469,7 +579,12 @@ const breaking = scenario({
   createdMin: 260,
   updatedMin: 22,
   reasons: [
-    reason("api.breaking", 2, "Breaking change to @acme/billing-sdk: 1 removed field, 1 narrowed signature.", "public-api"),
+    reason(
+      "api.breaking",
+      2,
+      "Breaking change to @acme/billing-sdk: 1 removed field, 1 narrowed signature.",
+      "public-api",
+    ),
     reason("proof.red-green", 0, "Type tests fail on main and pass on this change.", "red-green"),
     reason("coverage.changed-lines", 0, "92% of changed lines covered.", "coverage"),
     reason("size.small", 0, "27 changed lines in 3 files."),
@@ -525,7 +640,14 @@ const breaking = scenario({
   ],
   tour: {
     stops: [
-      stop("intent", "proven", "Finish the v3 migration from total to amount", "The SDK v3 plan removes Invoice.total after its deprecation window. `total` has been deprecated since 2.14.0, released 41 days ago.", [], ["llm-judgment:plan-conformance"]),
+      stop(
+        "intent",
+        "proven",
+        "Finish the v3 migration from total to amount",
+        "The SDK v3 plan removes Invoice.total after its deprecation window. `total` has been deprecated since 2.14.0, released 41 days ago.",
+        [],
+        ["llm-judgment:plan-conformance"],
+      ),
       stop(
         "risk",
         "risk",
@@ -537,24 +659,70 @@ const breaking = scenario({
         ],
         ["public-api"],
       ),
-      stop("behavior", "proven", "Revenue reports now sum amount.value", "monthlyRevenue was the last internal reader of total. The revenue report test still passes with the same numbers.", [{ file: "src/reports/revenue.ts", startLine: 27, endLine: 29 }], ["test-run:unit"]),
-      stop("proof", "proven", "Type tests pin the new shape", "Two type-level tests fail on main (total exists, useTotal accepted) and pass here.", [{ file: "packages/sdk/test/types.test-d.ts", startLine: 9, endLine: 10 }], ["red-green"]),
-      stop("uncovered", "unproven", "Consumers outside this repository", "The platform can only see this repository. Partner integrations and the mobile app pin @acme/billing-sdk separately and may still read total.", [], []),
+      stop(
+        "behavior",
+        "proven",
+        "Revenue reports now sum amount.value",
+        "monthlyRevenue was the last internal reader of total. The revenue report test still passes with the same numbers.",
+        [{ file: "src/reports/revenue.ts", startLine: 27, endLine: 29 }],
+        ["test-run:unit"],
+      ),
+      stop(
+        "proof",
+        "proven",
+        "Type tests pin the new shape",
+        "Two type-level tests fail on main (total exists, useTotal accepted) and pass here.",
+        [{ file: "packages/sdk/test/types.test-d.ts", startLine: 9, endLine: 10 }],
+        ["red-green"],
+      ),
+      stop(
+        "uncovered",
+        "unproven",
+        "Consumers outside this repository",
+        "The platform can only see this repository. Partner integrations and the mobile app pin @acme/billing-sdk separately and may still read total.",
+        [],
+        [],
+      ),
     ],
     leastConfident: [
       "Whether any partner integration still reads total. The SDK has no usage telemetry, so this is a guess from the deprecation date alone.",
-      "The changelog entry says \"removed\", but the package version stays 2.x. Publishing this as a minor release would break consumers on a caret range.",
+      'The changelog entry says "removed", but the package version stays 2.x. Publishing this as a minor release would break consumers on a caret range.',
     ],
-    notDone: ["No major version bump of @acme/billing-sdk.", "No codemod or migration note for SDK consumers."],
+    notDone: [
+      "No major version bump of @acme/billing-sdk.",
+      "No codemod or migration note for SDK consumers.",
+    ],
   },
   items: [
-    redGreen("chg_br8w4", [
-      { file: "packages/sdk/test/types.test-d.ts", name: "Invoice has no total property" },
-      { file: "packages/sdk/test/types.test-d.ts", name: "formatInvoice takes exactly one parameter" },
-    ], "proven"),
+    redGreen(
+      "chg_br8w4",
+      [
+        { file: "packages/sdk/test/types.test-d.ts", name: "Invoice has no total property" },
+        {
+          file: "packages/sdk/test/types.test-d.ts",
+          name: "formatInvoice takes exactly one parameter",
+        },
+      ],
+      "proven",
+    ),
     testRun("chg_br8w4", 190),
-    coverage(12, 11, [{ path: "packages/sdk/src/invoice.ts", changed: 4, covered: 4, uncoveredLines: [] }, { path: "src/reports/revenue.ts", changed: 1, covered: 1, uncoveredLines: [] }]),
-    { id: "mutation", kind: "mutation", status: "ok", tool: "Stryker 9", files: ["packages/sdk/src/invoice.ts", "src/reports/revenue.ts"], killed: 6, survived: 0, timedOut: 0, noCoverage: 0, score: 1, survivors: [] },
+    coverage(12, 11, [
+      { path: "packages/sdk/src/invoice.ts", changed: 4, covered: 4, uncoveredLines: [] },
+      { path: "src/reports/revenue.ts", changed: 1, covered: 1, uncoveredLines: [] },
+    ]),
+    {
+      id: "mutation",
+      kind: "mutation",
+      status: "ok",
+      tool: "Stryker 9",
+      files: ["packages/sdk/src/invoice.ts", "src/reports/revenue.ts"],
+      killed: 6,
+      survived: 0,
+      timedOut: 0,
+      noCoverage: 0,
+      score: 1,
+      survivors: [],
+    },
     {
       id: "public-api",
       kind: "public-api",
@@ -580,7 +748,11 @@ const breaking = scenario({
     sensitive([]),
     trace("chg_br8w4"),
     judgment("plan-conformance", "no-concern", "Removing `total` is listed in the SDK v3 plan."),
-    judgment("hidden-behavior-change", "concern", "formatInvoice previously honoured useTotal; callers passing it get a compile error rather than a behavior change, which is the safer failure. Flagged so a human confirms the release plan."),
+    judgment(
+      "hidden-behavior-change",
+      "concern",
+      "formatInvoice previously honoured useTotal; callers passing it get a compile error rather than a behavior change, which is the safer failure. Flagged so a human confirms the release plan.",
+    ),
   ],
 });
 
@@ -599,9 +771,19 @@ const pdf = scenario({
   createdMin: 410,
   updatedMin: 64,
   reasons: [
-    reason("deps.install-script", 2, "New dependency sharp runs an install script.", "dependencies"),
+    reason(
+      "deps.install-script",
+      2,
+      "New dependency sharp runs an install script.",
+      "dependencies",
+    ),
     reason("deps.added", 1, "2 new runtime dependencies.", "dependencies"),
-    reason("proof.red-green", 0, "1 new test fails on main and passes on this change.", "red-green"),
+    reason(
+      "proof.red-green",
+      0,
+      "1 new test fails on main and passes on this change.",
+      "red-green",
+    ),
     reason("coverage.changed-lines", 0, "88% of changed lines covered.", "coverage"),
   ],
   files: [
@@ -641,19 +823,81 @@ const pdf = scenario({
   ],
   tour: {
     stops: [
-      stop("intent", "proven", "Customers can download a PDF of any invoice", "The PDF export plan asks for a downloadable invoice that matches the web view, logo included.", [{ file: "src/invoices/pdf.ts", startLine: 5, endLine: 13 }], ["llm-judgment:plan-conformance"]),
-      stop("risk", "risk", "sharp is a native module, and this service runs on Workers", "sharp ships prebuilt native binaries and runs an install script to fetch them. The deploy target is a Cloudflare Worker, which cannot load native modules, so line 9 will fail in production even though tests pass in Node.", [{ file: "src/invoices/pdf.ts", startLine: 2, endLine: 2 }, { file: "src/invoices/pdf.ts", startLine: 9, endLine: 9 }], ["dependencies"]),
-      stop("behavior", "proven", "A sample invoice renders to a one-page PDF", "The new test renders inv_2041 and checks the page count and title text.", [], ["red-green", "screenshots"]),
-      stop("uncovered", "unproven", "The PDF was never rendered in the Workers runtime", "The preview deploy built, but no screenshot or test hit the PDF route in the preview.", [], ["preview"]),
+      stop(
+        "intent",
+        "proven",
+        "Customers can download a PDF of any invoice",
+        "The PDF export plan asks for a downloadable invoice that matches the web view, logo included.",
+        [{ file: "src/invoices/pdf.ts", startLine: 5, endLine: 13 }],
+        ["llm-judgment:plan-conformance"],
+      ),
+      stop(
+        "risk",
+        "risk",
+        "sharp is a native module, and this service runs on Workers",
+        "sharp ships prebuilt native binaries and runs an install script to fetch them. The deploy target is a Cloudflare Worker, which cannot load native modules, so line 9 will fail in production even though tests pass in Node.",
+        [
+          { file: "src/invoices/pdf.ts", startLine: 2, endLine: 2 },
+          { file: "src/invoices/pdf.ts", startLine: 9, endLine: 9 },
+        ],
+        ["dependencies"],
+      ),
+      stop(
+        "behavior",
+        "proven",
+        "A sample invoice renders to a one-page PDF",
+        "The new test renders inv_2041 and checks the page count and title text.",
+        [],
+        ["red-green", "screenshots"],
+      ),
+      stop(
+        "uncovered",
+        "unproven",
+        "The PDF was never rendered in the Workers runtime",
+        "The preview deploy built, but no screenshot or test hit the PDF route in the preview.",
+        [],
+        ["preview"],
+      ),
     ],
-    leastConfident: ["Whether sharp can be replaced by embedding the logo as a pre-rendered PNG, which would remove the native dependency entirely."],
-    notDone: ["No route exposes the PDF yet; the plan's download button is a follow-up.", "Fonts are Helvetica only; non-Latin customer names will not render."],
+    leastConfident: [
+      "Whether sharp can be replaced by embedding the logo as a pre-rendered PNG, which would remove the native dependency entirely.",
+    ],
+    notDone: [
+      "No route exposes the PDF yet; the plan's download button is a follow-up.",
+      "Fonts are Helvetica only; non-Latin customer names will not render.",
+    ],
   },
   items: [
-    redGreen("chg_pd2n6", [{ file: "test/invoices/pdf.test.ts", name: "renders a one-page PDF with the invoice number" }], "proven"),
+    redGreen(
+      "chg_pd2n6",
+      [
+        {
+          file: "test/invoices/pdf.test.ts",
+          name: "renders a one-page PDF with the invoice number",
+        },
+      ],
+      "proven",
+    ),
     testRun("chg_pd2n6", 413),
-    coverage(17, 15, [{ path: "src/invoices/pdf.ts", changed: 13, covered: 11, uncoveredLines: [10, 11] }]),
-    { id: "mutation", kind: "mutation", status: "ok", tool: "Stryker 9", files: ["src/invoices/pdf.ts"], killed: 7, survived: 2, timedOut: 0, noCoverage: 1, score: 0.7, survivors: [{ file: "src/invoices/pdf.ts", line: 10, mutator: "ObjectLiteral", replacement: "{}" }, { file: "src/invoices/pdf.ts", line: 11, mutator: "StringLiteral", replacement: "``" }] },
+    coverage(17, 15, [
+      { path: "src/invoices/pdf.ts", changed: 13, covered: 11, uncoveredLines: [10, 11] },
+    ]),
+    {
+      id: "mutation",
+      kind: "mutation",
+      status: "ok",
+      tool: "Stryker 9",
+      files: ["src/invoices/pdf.ts"],
+      killed: 7,
+      survived: 2,
+      timedOut: 0,
+      noCoverage: 1,
+      score: 0.7,
+      survivors: [
+        { file: "src/invoices/pdf.ts", line: 10, mutator: "ObjectLiteral", replacement: "{}" },
+        { file: "src/invoices/pdf.ts", line: 11, mutator: "StringLiteral", replacement: "``" },
+      ],
+    },
     apiNone(),
     {
       id: "dependencies",
@@ -670,7 +914,13 @@ const pdf = scenario({
     },
     sensitive([]),
     preview("chg_pd2n6", "billing-api"),
-    { id: "screenshots", kind: "screenshots", status: "skipped", note: "The plan declares no affected routes for this change.", shots: [] },
+    {
+      id: "screenshots",
+      kind: "screenshots",
+      status: "skipped",
+      note: "The plan declares no affected routes for this change.",
+      shots: [],
+    },
     trace("chg_pd2n6"),
     judgment("plan-conformance", "no-concern", "Implements PDF rendering as described."),
   ],
@@ -692,7 +942,12 @@ const session = scenario({
   createdMin: 520,
   updatedMin: 110,
   reasons: [
-    reason("sensitive.path", 2, "Touches src/auth/session.ts (matches **/auth/**).", "sensitive-paths"),
+    reason(
+      "sensitive.path",
+      2,
+      "Touches src/auth/session.ts (matches **/auth/**).",
+      "sensitive-paths",
+    ),
     reason("proof.red-green", 0, "2 new tests fail on main and pass on this change.", "red-green"),
     reason("coverage.changed-lines", 0, "100% of changed lines covered.", "coverage"),
     reason("size.small", 0, "22 changed lines in 2 files."),
@@ -717,26 +972,79 @@ const session = scenario({
   ],
   tour: {
     stops: [
-      stop("intent", "proven", "Shorter sessions, and none survive a role change", "The session-hardening plan sets a 12-hour lifetime and requires that a demoted user loses access immediately.", [{ file: "src/auth/session.ts", startLine: 8, endLine: 8 }], []),
-      stop("risk", "risk", "Every session older than 12 hours ends at deploy", "Sessions are validated against the new TTL on their next request. Anyone signed in for more than 12 hours, which today includes most of support, is signed out the moment this rolls out.", [{ file: "src/auth/session.ts", startLine: 8, endLine: 8 }], ["sensitive-paths"]),
-      stop("behavior", "proven", "Role changes now sign the user out everywhere", "The second new test demotes a user with two live sessions and checks both are rejected.", [{ file: "src/auth/session.ts", startLine: 10, endLine: 14 }], ["red-green"]),
-      stop("uncovered", "unproven", "Requests in flight during a role change", "A request authenticated just before the delete can still complete with the old role. The plan does not say whether that window matters.", [], []),
+      stop(
+        "intent",
+        "proven",
+        "Shorter sessions, and none survive a role change",
+        "The session-hardening plan sets a 12-hour lifetime and requires that a demoted user loses access immediately.",
+        [{ file: "src/auth/session.ts", startLine: 8, endLine: 8 }],
+        [],
+      ),
+      stop(
+        "risk",
+        "risk",
+        "Every session older than 12 hours ends at deploy",
+        "Sessions are validated against the new TTL on their next request. Anyone signed in for more than 12 hours, which today includes most of support, is signed out the moment this rolls out.",
+        [{ file: "src/auth/session.ts", startLine: 8, endLine: 8 }],
+        ["sensitive-paths"],
+      ),
+      stop(
+        "behavior",
+        "proven",
+        "Role changes now sign the user out everywhere",
+        "The second new test demotes a user with two live sessions and checks both are rejected.",
+        [{ file: "src/auth/session.ts", startLine: 10, endLine: 14 }],
+        ["red-green"],
+      ),
+      stop(
+        "uncovered",
+        "unproven",
+        "Requests in flight during a role change",
+        "A request authenticated just before the delete can still complete with the old role. The plan does not say whether that window matters.",
+        [],
+        [],
+      ),
     ],
-    leastConfident: ["Whether support's tooling handles a forced sign-out gracefully; it holds sessions for days today."],
-    notDone: ["No announcement or banner before the forced sign-out.", "Refresh tokens for the mobile app are unchanged."],
+    leastConfident: [
+      "Whether support's tooling handles a forced sign-out gracefully; it holds sessions for days today.",
+    ],
+    notDone: [
+      "No announcement or banner before the forced sign-out.",
+      "Refresh tokens for the mobile app are unchanged.",
+    ],
   },
   items: [
-    redGreen("chg_ss4h8", [
-      { file: "test/auth/session.test.ts", name: "expires sessions after 12 hours" },
-      { file: "test/auth/session.test.ts", name: "rejects every session after a role change" },
-    ], "proven"),
+    redGreen(
+      "chg_ss4h8",
+      [
+        { file: "test/auth/session.test.ts", name: "expires sessions after 12 hours" },
+        { file: "test/auth/session.test.ts", name: "rejects every session after a role change" },
+      ],
+      "proven",
+    ),
     testRun("chg_ss4h8", 414),
     coverage(4, 4, [{ path: "src/auth/session.ts", changed: 4, covered: 4, uncoveredLines: [] }]),
-    { id: "mutation", kind: "mutation", status: "ok", tool: "Stryker 9", files: ["src/auth/session.ts"], killed: 5, survived: 0, timedOut: 0, noCoverage: 0, score: 1, survivors: [] },
+    {
+      id: "mutation",
+      kind: "mutation",
+      status: "ok",
+      tool: "Stryker 9",
+      files: ["src/auth/session.ts"],
+      killed: 5,
+      survived: 0,
+      timedOut: 0,
+      noCoverage: 0,
+      score: 1,
+      survivors: [],
+    },
     apiNone(),
     depsNone(),
     sensitive([{ path: "src/auth/session.ts", pattern: "**/auth/**" }]),
-    judgment("hidden-behavior-change", "concern", "Existing long-lived sessions end on deploy. The plan approves the shorter TTL but does not mention the forced sign-out."),
+    judgment(
+      "hidden-behavior-change",
+      "concern",
+      "Existing long-lived sessions end on deploy. The plan approves the shorter TTL but does not mention the forced sign-out.",
+    ),
   ],
 });
 
@@ -755,28 +1063,82 @@ const codemod = scenario({
   createdMin: 48,
   updatedMin: 31,
   reasons: [
-    reason("transform.verified", 0, "Re-running rename-symbol on main reproduced all 23 files byte for byte.", "transform"),
+    reason(
+      "transform.verified",
+      0,
+      "Re-running rename-symbol on main reproduced all 23 files byte for byte.",
+      "transform",
+    ),
     reason("plan.planless-allowed", 0, "Repo policy allows verified transforms without a plan."),
     reason("api.none", 0, "No change to the public API.", "public-api"),
-    reason("shadow.lane0-disabled", 1, "Lane 0 is in shadow mode for this repo, so the change is routed to Lane 1."),
+    reason(
+      "shadow.lane0-disabled",
+      1,
+      "Lane 0 is in shadow mode for this repo, so the change is routed to Lane 1.",
+    ),
   ],
   files: [
-    file("src/invoices/repository.ts", "modified", [hunk(22, 22, `
+    file(
+      "src/invoices/repository.ts",
+      "modified",
+      [
+        hunk(
+          22,
+          22,
+          `
 -export async function fetchInvoice(db: Db, id: string): Promise<Invoice | null> {
 +export async function getInvoice(db: Db, id: string): Promise<Invoice | null> {
-   return db.invoices.find(id);`)], { transformVerified: true }),
-    file("src/routes/invoices.ts", "modified", [hunk(9, 9, `
+   return db.invoices.find(id);`,
+        ),
+      ],
+      { transformVerified: true },
+    ),
+    file(
+      "src/routes/invoices.ts",
+      "modified",
+      [
+        hunk(
+          9,
+          9,
+          `
 -import { fetchInvoice } from "../invoices/repository.js";
-+import { getInvoice } from "../invoices/repository.js";`), hunk(31, 31, `
++import { getInvoice } from "../invoices/repository.js";`,
+        ),
+        hunk(
+          31,
+          31,
+          `
 -  const invoice = await fetchInvoice(c.env.DB, c.req.param("id"));
-+  const invoice = await getInvoice(c.env.DB, c.req.param("id"));`)], { transformVerified: true }),
-    file("src/emails/receipt-job.ts", "modified", [hunk(4, 4, `
++  const invoice = await getInvoice(c.env.DB, c.req.param("id"));`,
+        ),
+      ],
+      { transformVerified: true },
+    ),
+    file(
+      "src/emails/receipt-job.ts",
+      "modified",
+      [
+        hunk(
+          4,
+          4,
+          `
 -import { fetchInvoice } from "../invoices/repository.js";
-+import { getInvoice } from "../invoices/repository.js";`)], { transformVerified: true }),
++import { getInvoice } from "../invoices/repository.js";`,
+        ),
+      ],
+      { transformVerified: true },
+    ),
   ],
   tour: {
     stops: [
-      stop("intent", "proven", "A mechanical rename, nothing else", "Renames fetchInvoice to getInvoice to match the repository naming convention. The author declared it a transform, and the platform checked that claim instead of trusting it.", [], ["transform"]),
+      stop(
+        "intent",
+        "proven",
+        "A mechanical rename, nothing else",
+        "Renames fetchInvoice to getInvoice to match the repository naming convention. The author declared it a transform, and the platform checked that claim instead of trusting it.",
+        [],
+        ["transform"],
+      ),
       stop(
         "transform",
         "proven",
@@ -785,9 +1147,18 @@ const codemod = scenario({
         [{ file: "src/invoices/repository.ts", startLine: 22, endLine: 23 }],
         ["transform", "test-run:unit"],
       ),
-      stop("uncovered", "unproven", "String-keyed lookups are outside the transform", "A rename tool rewrites identifiers, not strings. A text search found no `\"fetchInvoice\"` literals, but generated clients under gen/ were not searched.", [], []),
+      stop(
+        "uncovered",
+        "unproven",
+        "String-keyed lookups are outside the transform",
+        'A rename tool rewrites identifiers, not strings. A text search found no `"fetchInvoice"` literals, but generated clients under gen/ were not searched.',
+        [],
+        [],
+      ),
     ],
-    leastConfident: ["Generated code under gen/ is excluded from the transform and from the text search."],
+    leastConfident: [
+      "Generated code under gen/ is excluded from the transform and from the text search.",
+    ],
     notDone: ["Two docs pages still mention fetchInvoice."],
   },
   items: [
@@ -799,13 +1170,29 @@ const codemod = scenario({
       command: "pnpm platform transform rename-symbol fetchInvoice getInvoice",
       verified: true,
       files: [
-        "src/invoices/repository.ts", "src/routes/invoices.ts", "src/emails/receipt-job.ts", "src/emails/dunning-job.ts",
-        "src/reports/revenue.ts", "src/reports/aging.ts", "src/webhooks/invoice-paid.ts", "src/webhooks/invoice-voided.ts",
-        "src/admin/invoices.ts", "src/admin/refunds.ts", "src/jobs/reconcile.ts", "src/jobs/close-month.ts",
-        "test/invoices/repository.test.ts", "test/routes/invoices.test.ts", "test/emails/receipt-job.test.ts",
-        "test/emails/dunning-job.test.ts", "test/reports/revenue.test.ts", "test/reports/aging.test.ts",
-        "test/webhooks/invoice-paid.test.ts", "test/webhooks/invoice-voided.test.ts", "test/admin/invoices.test.ts",
-        "test/jobs/reconcile.test.ts", "test/jobs/close-month.test.ts",
+        "src/invoices/repository.ts",
+        "src/routes/invoices.ts",
+        "src/emails/receipt-job.ts",
+        "src/emails/dunning-job.ts",
+        "src/reports/revenue.ts",
+        "src/reports/aging.ts",
+        "src/webhooks/invoice-paid.ts",
+        "src/webhooks/invoice-voided.ts",
+        "src/admin/invoices.ts",
+        "src/admin/refunds.ts",
+        "src/jobs/reconcile.ts",
+        "src/jobs/close-month.ts",
+        "test/invoices/repository.test.ts",
+        "test/routes/invoices.test.ts",
+        "test/emails/receipt-job.test.ts",
+        "test/emails/dunning-job.test.ts",
+        "test/reports/revenue.test.ts",
+        "test/reports/aging.test.ts",
+        "test/webhooks/invoice-paid.test.ts",
+        "test/webhooks/invoice-voided.test.ts",
+        "test/admin/invoices.test.ts",
+        "test/jobs/reconcile.test.ts",
+        "test/jobs/close-month.test.ts",
       ],
       mismatchedFiles: [],
     },
@@ -833,7 +1220,12 @@ const policy = scenario({
   createdMin: 180,
   updatedMin: 90,
   reasons: [
-    reason("policy.modified", 2, "Changes .platform/policy.ts. Policy changes always need a full review by someone other than the author.", "sensitive-paths"),
+    reason(
+      "policy.modified",
+      2,
+      "Changes .platform/policy.ts. Policy changes always need a full review by someone other than the author.",
+      "sensitive-paths",
+    ),
     reason("size.small", 0, "4 changed lines in 1 file."),
   ],
   files: [
@@ -854,11 +1246,34 @@ const policy = scenario({
   ],
   tour: {
     stops: [
-      stop("intent", "proven", "Stricter proof before anything reaches Lane 0", "The plan raises the bar for billing after two reverted changes in September both passed at 60% mutation score.", [{ file: ".platform/policy.ts", startLine: 12, endLine: 13 }], []),
-      stop("behavior", "risk", "3 of the last 20 changes would have needed a human", "Replaying the classifier over the last 20 billing changes with the new thresholds moves 3 from Lane 0 to Lane 1. That is the intended cost, but it slows shadow-mode agreement too.", [], []),
-      stop("other", "proven", "The new policy applies from the merge commit onward", "Policy is always read from main. Changes already in flight keep the policy of their base commit until they rebase.", [], []),
+      stop(
+        "intent",
+        "proven",
+        "Stricter proof before anything reaches Lane 0",
+        "The plan raises the bar for billing after two reverted changes in September both passed at 60% mutation score.",
+        [{ file: ".platform/policy.ts", startLine: 12, endLine: 13 }],
+        [],
+      ),
+      stop(
+        "behavior",
+        "risk",
+        "3 of the last 20 changes would have needed a human",
+        "Replaying the classifier over the last 20 billing changes with the new thresholds moves 3 from Lane 0 to Lane 1. That is the intended cost, but it slows shadow-mode agreement too.",
+        [],
+        [],
+      ),
+      stop(
+        "other",
+        "proven",
+        "The new policy applies from the merge commit onward",
+        "Policy is always read from main. Changes already in flight keep the policy of their base commit until they rebase.",
+        [],
+        [],
+      ),
     ],
-    leastConfident: ["Whether 85% changed-line coverage is reachable for the PDF work, which has native-module code paths that are hard to test."],
+    leastConfident: [
+      "Whether 85% changed-line coverage is reachable for the PDF work, which has native-module code paths that are hard to test.",
+    ],
     notDone: ["The same thresholds were not proposed for edge-router."],
   },
   items: [
@@ -885,8 +1300,18 @@ const drift = scenario({
   updatedMin: 15,
   reasons: [
     reason("scope.drift", 2, "1 file outside the plan's scope: src/auth/signing-keys.ts."),
-    reason("sensitive.path", 2, "Touches src/auth/signing-keys.ts (matches **/auth/**).", "sensitive-paths"),
-    reason("llm.scope-drift", 2, "The model found a change unrelated to the plan's intent.", "llm-judgment:scope-drift"),
+    reason(
+      "sensitive.path",
+      2,
+      "Touches src/auth/signing-keys.ts (matches **/auth/**).",
+      "sensitive-paths",
+    ),
+    reason(
+      "llm.scope-drift",
+      2,
+      "The model found a change unrelated to the plan's intent.",
+      "llm-judgment:scope-drift",
+    ),
     reason("proof.red-green", 0, "2 new tests fail on main and pass on this change.", "red-green"),
   ],
   files: [
@@ -915,7 +1340,14 @@ const drift = scenario({
   ],
   tour: {
     stops: [
-      stop("intent", "proven", "Retries spread out instead of arriving in waves", "The webhook reliability plan asks for jittered exponential backoff so recovering customer endpoints are not hit by synchronized retries.", [{ file: "src/webhooks/retry.ts", startLine: 5, endLine: 9 }], ["llm-judgment:plan-conformance"]),
+      stop(
+        "intent",
+        "proven",
+        "Retries spread out instead of arriving in waves",
+        "The webhook reliability plan asks for jittered exponential backoff so recovering customer endpoints are not hit by synchronized retries.",
+        [{ file: "src/webhooks/retry.ts", startLine: 5, endLine: 9 }],
+        ["llm-judgment:plan-conformance"],
+      ),
       stop(
         "risk",
         "risk",
@@ -924,25 +1356,55 @@ const drift = scenario({
         [{ file: "src/auth/signing-keys.ts", startLine: 3, endLine: 3 }],
         ["sensitive-paths", "llm-judgment:scope-drift"],
       ),
-      stop("proof", "proven", "Jitter stays within the exponential ceiling", "Both new tests fail on main and pass here: delays never exceed the ceiling, and two clients with the same attempt number get different delays.", [], ["red-green"]),
-      stop("uncovered", "unproven", "The TTL change has no test and no stated reason", "If the longer cache was deliberate it belongs in its own change with its own plan.", [], []),
+      stop(
+        "proof",
+        "proven",
+        "Jitter stays within the exponential ceiling",
+        "Both new tests fail on main and pass here: delays never exceed the ceiling, and two clients with the same attempt number get different delays.",
+        [],
+        ["red-green"],
+      ),
+      stop(
+        "uncovered",
+        "unproven",
+        "The TTL change has no test and no stated reason",
+        "If the longer cache was deliberate it belongs in its own change with its own plan.",
+        [],
+        [],
+      ),
     ],
-    leastConfident: ["Why the signing-key TTL changed. The agent trace shows it was edited while debugging a flaky test and never reverted."],
+    leastConfident: [
+      "Why the signing-key TTL changed. The agent trace shows it was edited while debugging a flaky test and never reverted.",
+    ],
     notDone: ["Retry budgets per endpoint, which the plan lists as a second step."],
   },
   items: [
-    redGreen("chg_dr1x5", [
-      { file: "test/webhooks/retry.test.ts", name: "never waits longer than the exponential ceiling" },
-      { file: "test/webhooks/retry.test.ts", name: "spreads two clients on the same attempt" },
-    ], "proven"),
+    redGreen(
+      "chg_dr1x5",
+      [
+        {
+          file: "test/webhooks/retry.test.ts",
+          name: "never waits longer than the exponential ceiling",
+        },
+        { file: "test/webhooks/retry.test.ts", name: "spreads two clients on the same attempt" },
+      ],
+      "proven",
+    ),
     testRun("chg_dr1x5", 414),
-    coverage(4, 3, [{ path: "src/webhooks/retry.ts", changed: 3, covered: 3, uncoveredLines: [] }, { path: "src/auth/signing-keys.ts", changed: 1, covered: 0, uncoveredLines: [3] }]),
+    coverage(4, 3, [
+      { path: "src/webhooks/retry.ts", changed: 3, covered: 3, uncoveredLines: [] },
+      { path: "src/auth/signing-keys.ts", changed: 1, covered: 0, uncoveredLines: [3] },
+    ]),
     apiNone(),
     depsNone(),
     sensitive([{ path: "src/auth/signing-keys.ts", pattern: "**/auth/**" }]),
     trace("chg_dr1x5"),
     judgment("plan-conformance", "no-concern", "The retry change matches the plan."),
-    judgment("scope-drift", "concern", "src/auth/signing-keys.ts is outside the plan's scope paths (src/webhooks/**, test/webhooks/**) and changes key-rotation behavior, which the plan does not mention."),
+    judgment(
+      "scope-drift",
+      "concern",
+      "src/auth/signing-keys.ts is outside the plan's scope paths (src/webhooks/**, test/webhooks/**) and changes key-rotation behavior, which the plan does not mention.",
+    ),
   ],
 });
 
@@ -973,14 +1435,30 @@ const fx = scenario({
     ],
     watchUntil: null,
     flagKey: "chg_fx2r7.cache-fx-rates",
-    lastCheck: { at: ago(0.5), errorRate: 0.0042, baselineErrorRate: 0.0039, requests: 18_240, newIssueGroups: 0 },
+    lastCheck: {
+      at: ago(0.5),
+      errorRate: 0.0042,
+      baselineErrorRate: 0.0039,
+      requests: 18_240,
+      newIssueGroups: 0,
+    },
   },
   reasons: [
     reason("api.none", 0, "No change to the public API.", "public-api"),
     reason("coverage.changed-lines", 0, "91% of changed lines covered.", "coverage"),
-    reason("llm.hidden-behavior-change", 1, "Totals can use a rate up to 60 seconds old.", "llm-judgment:hidden-behavior-change"),
+    reason(
+      "llm.hidden-behavior-change",
+      1,
+      "Totals can use a rate up to 60 seconds old.",
+      "llm-judgment:hidden-behavior-change",
+    ),
   ],
-  files: [file("src/fx/rates.ts", "modified", [hunk(6, 6, `
+  files: [
+    file("src/fx/rates.ts", "modified", [
+      hunk(
+        6,
+        6,
+        `
 -export async function rateFor(currency: string, env: Env): Promise<number> {
 -  return fetchRate(currency, env);
 +const cache = new Map<string, { rate: number; at: number }>();
@@ -991,16 +1469,46 @@ const fx = scenario({
 +  const rate = await fetchRate(currency, env);
 +  cache.set(currency, { rate, at: now });
 +  return rate;
- }`)])],
+ }`,
+      ),
+    ]),
+  ],
   tour: {
     stops: [
-      stop("intent", "proven", "Fewer FX lookups per invoice total", "Totalling a 200-line invoice made 200 rate lookups. The plan caps that at one per currency per minute.", [{ file: "src/fx/rates.ts", startLine: 6, endLine: 15 }], []),
-      stop("risk", "unproven", "Totals can use a rate up to 60 seconds old", "Accepted in the plan as a trade-off.", [], ["llm-judgment:hidden-behavior-change"]),
+      stop(
+        "intent",
+        "proven",
+        "Fewer FX lookups per invoice total",
+        "Totalling a 200-line invoice made 200 rate lookups. The plan caps that at one per currency per minute.",
+        [{ file: "src/fx/rates.ts", startLine: 6, endLine: 15 }],
+        [],
+      ),
+      stop(
+        "risk",
+        "unproven",
+        "Totals can use a rate up to 60 seconds old",
+        "Accepted in the plan as a trade-off.",
+        [],
+        ["llm-judgment:hidden-behavior-change"],
+      ),
     ],
-    leastConfident: ["The cache is per isolate, so hit rates in production will be lower than in tests."],
+    leastConfident: [
+      "The cache is per isolate, so hit rates in production will be lower than in tests.",
+    ],
     notDone: ["No metric for cache hit rate."],
   },
-  items: [testRun("chg_fx2r7", 418), coverage(11, 10, [{ path: "src/fx/rates.ts", changed: 11, covered: 10, uncoveredLines: [12] }]), apiNone(), depsNone(), sensitive([]), judgment("hidden-behavior-change", "concern", "Invoice totals may use a rate up to 60 seconds stale.")],
+  items: [
+    testRun("chg_fx2r7", 418),
+    coverage(11, 10, [{ path: "src/fx/rates.ts", changed: 11, covered: 10, uncoveredLines: [12] }]),
+    apiNone(),
+    depsNone(),
+    sensitive([]),
+    judgment(
+      "hidden-behavior-change",
+      "concern",
+      "Invoice totals may use a rate up to 60 seconds stale.",
+    ),
+  ],
 });
 
 // ================================================================ 11. auto-reverted change + its verified revert
@@ -1031,26 +1539,72 @@ const ledger = scenario({
     ],
     watchUntil: null,
     flagKey: "chg_lg8b0.batch-ledger",
-    lastCheck: { at: ago(209), errorRate: 0.031, baselineErrorRate: 0.004, requests: 9_812, newIssueGroups: 2 },
+    lastCheck: {
+      at: ago(209),
+      errorRate: 0.031,
+      baselineErrorRate: 0.004,
+      requests: 9_812,
+      newIssueGroups: 2,
+    },
   },
   issues: [
-    { id: "iss_4518", changeId: "chg_lg8b0", title: "TypeError: Cannot read properties of undefined (reading 'tenantId') at flushBatch", count: 214, firstSeen: ago(215), lastSeen: ago(209), versionId: "v-c41e9b2", url: "https://dash.cloudflare.com/" },
-    { id: "iss_4519", changeId: "chg_lg8b0", title: "D1_ERROR: too many SQL variables at insertLedgerRows", count: 37, firstSeen: ago(213), lastSeen: ago(209), versionId: "v-c41e9b2", url: "https://dash.cloudflare.com/" },
+    {
+      id: "iss_4518",
+      changeId: "chg_lg8b0",
+      title: "TypeError: Cannot read properties of undefined (reading 'tenantId') at flushBatch",
+      count: 214,
+      firstSeen: ago(215),
+      lastSeen: ago(209),
+      versionId: "v-c41e9b2",
+      url: "https://dash.cloudflare.com/",
+    },
+    {
+      id: "iss_4519",
+      changeId: "chg_lg8b0",
+      title: "D1_ERROR: too many SQL variables at insertLedgerRows",
+      count: 37,
+      firstSeen: ago(213),
+      lastSeen: ago(209),
+      versionId: "v-c41e9b2",
+      url: "https://dash.cloudflare.com/",
+    },
   ],
   reasons: [
     reason("proof.red-green", 0, "3 new tests fail on main and pass on this change.", "red-green"),
     reason("size.medium", 1, "212 changed lines in 6 files (Lane 0 allows 150)."),
   ],
-  files: [file("src/ledger/writer.ts", "modified", [hunk(10, 10, `
+  files: [
+    file("src/ledger/writer.ts", "modified", [
+      hunk(
+        10,
+        10,
+        `
 -export async function writeEntry(db: Db, entry: LedgerEntry): Promise<void> {
 -  await db.ledger.insert(entry);
 +export async function writeEntry(batcher: Batcher<LedgerEntry>, entry: LedgerEntry): Promise<void> {
 +  batcher.add(entry.tenantId, entry);
- }`)])],
+ }`,
+      ),
+    ]),
+  ],
   tour: {
     stops: [
-      stop("intent", "proven", "One D1 write per tenant per flush", "Ledger writes were one statement per entry. Batching cuts write volume by about 40× in staging.", [], ["test-run:unit"]),
-      stop("risk", "risk", "Batch size is not bounded by D1's variable limit", "A large tenant can exceed 100 bound variables per statement.", [], []),
+      stop(
+        "intent",
+        "proven",
+        "One D1 write per tenant per flush",
+        "Ledger writes were one statement per entry. Batching cuts write volume by about 40× in staging.",
+        [],
+        ["test-run:unit"],
+      ),
+      stop(
+        "risk",
+        "risk",
+        "Batch size is not bounded by D1's variable limit",
+        "A large tenant can exceed 100 bound variables per statement.",
+        [],
+        [],
+      ),
     ],
     leastConfident: ["Behavior for tenants with thousands of entries per second."],
     notDone: ["No limit on batch size."],
@@ -1080,21 +1634,57 @@ const ledgerRevert = scenario({
     stages: [{ percent: 100, startedAt: ago(205), completedAt: ago(205) }],
     watchUntil: ago(175),
     flagKey: null,
-    lastCheck: { at: ago(175), errorRate: 0.0038, baselineErrorRate: 0.004, requests: 61_002, newIssueGroups: 0 },
+    lastCheck: {
+      at: ago(175),
+      errorRate: 0.0038,
+      baselineErrorRate: 0.004,
+      requests: 61_002,
+      newIssueGroups: 0,
+    },
   },
-  reasons: [reason("revert.verified", 0, "Exact inverse of merged change chg_lg8b0. Policy auto-merges verified reverts, even in shadow mode.")],
-  files: [file("src/ledger/writer.ts", "modified", [hunk(10, 10, `
+  reasons: [
+    reason(
+      "revert.verified",
+      0,
+      "Exact inverse of merged change chg_lg8b0. Policy auto-merges verified reverts, even in shadow mode.",
+    ),
+  ],
+  files: [
+    file("src/ledger/writer.ts", "modified", [
+      hunk(
+        10,
+        10,
+        `
 -export async function writeEntry(batcher: Batcher<LedgerEntry>, entry: LedgerEntry): Promise<void> {
 -  batcher.add(entry.tenantId, entry);
 +export async function writeEntry(db: Db, entry: LedgerEntry): Promise<void> {
 +  await db.ledger.insert(entry);
- }`)])],
+ }`,
+      ),
+    ]),
+  ],
   tour: {
     stops: [
-      stop("intent", "proven", "Restore the last approved ledger writer", "Opened automatically when the 25% stage of chg_lg8b0 crossed the error-rate limit: 3.1% against a 0.4% baseline, with a 1.0-point allowance.", [], []),
-      stop("transform", "proven", "The diff is the exact inverse of the reverted change", "The platform checked that applying this diff to main yields the tree of the commit before chg_lg8b0 merged.", [{ file: "src/ledger/writer.ts", startLine: 10, endLine: 12 }], []),
+      stop(
+        "intent",
+        "proven",
+        "Restore the last approved ledger writer",
+        "Opened automatically when the 25% stage of chg_lg8b0 crossed the error-rate limit: 3.1% against a 0.4% baseline, with a 1.0-point allowance.",
+        [],
+        [],
+      ),
+      stop(
+        "transform",
+        "proven",
+        "The diff is the exact inverse of the reverted change",
+        "The platform checked that applying this diff to main yields the tree of the commit before chg_lg8b0 merged.",
+        [{ file: "src/ledger/writer.ts", startLine: 10, endLine: 12 }],
+        [],
+      ),
     ],
-    leastConfident: ["Ledger rows written in batched form during the 21 minutes at 5–25% stay batched; the revert does not rewrite them."],
+    leastConfident: [
+      "Ledger rows written in batched form during the 21 minutes at 5–25% stay batched; the revert does not rewrite them.",
+    ],
     notDone: ["Data written by the reverted version was not migrated back."],
   },
   items: [testRun("chg_rv8b1", 418), apiNone(), depsNone(), sensitive([])],
@@ -1162,20 +1752,70 @@ const undici = scenario({
     ],
     watchUntil: ago(800),
     flagKey: null,
-    lastCheck: { at: ago(800), errorRate: 0.0011, baselineErrorRate: 0.0012, requests: 402_118, newIssueGroups: 0 },
+    lastCheck: {
+      at: ago(800),
+      errorRate: 0.0011,
+      baselineErrorRate: 0.0012,
+      requests: 402_118,
+      newIssueGroups: 0,
+    },
   },
-  reasons: [reason("deps.patch-bump", 0, "Semver patch bump of an existing dependency; allowed in Lane 0.", "dependencies")],
-  files: [file("package.json", "modified", [hunk(9, 9, `
+  reasons: [
+    reason(
+      "deps.patch-bump",
+      0,
+      "Semver patch bump of an existing dependency; allowed in Lane 0.",
+      "dependencies",
+    ),
+  ],
+  files: [
+    file("package.json", "modified", [
+      hunk(
+        9,
+        9,
+        `
 -    "undici": "6.21.1",
-+    "undici": "6.21.2",`)])],
++    "undici": "6.21.2",`,
+      ),
+    ]),
+  ],
   tour: {
-    stops: [stop("intent", "proven", "Patch release of undici", "Fixes a header-parsing bug upstream. No API or install-script changes.", [], ["dependencies"])],
-    leastConfident: ["Upstream changelog lists one fix; no transitive changes were inspected beyond the lockfile."],
+    stops: [
+      stop(
+        "intent",
+        "proven",
+        "Patch release of undici",
+        "Fixes a header-parsing bug upstream. No API or install-script changes.",
+        [],
+        ["dependencies"],
+      ),
+    ],
+    leastConfident: [
+      "Upstream changelog lists one fix; no transitive changes were inspected beyond the lockfile.",
+    ],
     notDone: ["None beyond the bump."],
   },
   items: [
     testRun("chg_un2d6", 233),
-    { id: "dependencies", kind: "dependencies", status: "ok", added: [], removed: [], changed: [{ name: "undici", from: "6.21.1", to: "6.21.2", bump: "patch", dev: false, manifest: "package.json" }], newInstallScripts: [], lockfileChanged: true },
+    {
+      id: "dependencies",
+      kind: "dependencies",
+      status: "ok",
+      added: [],
+      removed: [],
+      changed: [
+        {
+          name: "undici",
+          from: "6.21.1",
+          to: "6.21.2",
+          bump: "patch",
+          dev: false,
+          manifest: "package.json",
+        },
+      ],
+      newInstallScripts: [],
+      lockfileChanged: true,
+    },
     sensitive([]),
   ],
 });
@@ -1194,23 +1834,54 @@ const cors = scenario({
   updatedMin: 27,
   reasons: [
     reason("coverage.changed-lines", 1, "67% of changed lines covered (policy: 80%).", "coverage"),
-    reason("proof.red-green", 0, "1 new test fails on main and passes on this change.", "red-green"),
+    reason(
+      "proof.red-green",
+      0,
+      "1 new test fails on main and passes on this change.",
+      "red-green",
+    ),
   ],
-  files: [file("src/cors.ts", "modified", [hunk(3, 3, `
+  files: [
+    file("src/cors.ts", "modified", [
+      hunk(
+        3,
+        3,
+        `
  const ALLOWED = new Set([
    "https://app.acme.dev",
 +  "https://dashboard.acme.dev",
- ]);`)])],
+ ]);`,
+      ),
+    ]),
+  ],
   tour: {
     stops: [
-      stop("intent", "proven", "The new dashboard can call the edge API", "Adds one origin to the allow-list, as the plan describes.", [{ file: "src/cors.ts", startLine: 3, endLine: 6 }], ["red-green"]),
-      stop("uncovered", "unproven", "Preflight caching is unchanged and untested", "Browsers may cache the old preflight response for up to 10 minutes.", [], ["coverage"]),
+      stop(
+        "intent",
+        "proven",
+        "The new dashboard can call the edge API",
+        "Adds one origin to the allow-list, as the plan describes.",
+        [{ file: "src/cors.ts", startLine: 3, endLine: 6 }],
+        ["red-green"],
+      ),
+      stop(
+        "uncovered",
+        "unproven",
+        "Preflight caching is unchanged and untested",
+        "Browsers may cache the old preflight response for up to 10 minutes.",
+        [],
+        ["coverage"],
+      ),
     ],
     leastConfident: ["Whether staging should also be allowed; the plan names only production."],
     notDone: ["No allow-list entry for the staging dashboard."],
   },
   items: [
-    redGreen("chg_co7r1", [{ file: "test/cors.test.ts", name: "allows dashboard.acme.dev" }], "proven"),
+    redGreen(
+      "chg_co7r1",
+      [{ file: "test/cors.test.ts", name: "allows dashboard.acme.dev" }],
+      "proven",
+    ),
     testRun("chg_co7r1", 231),
     coverage(3, 2, [{ path: "src/cors.ts", changed: 3, covered: 2, uncoveredLines: [7] }]),
     apiNone(),
@@ -1246,19 +1917,54 @@ const laneTags = scenario({
     ],
     watchUntil: ahead(18),
     flagKey: "chg_lt4v9.lane-tags",
-    lastCheck: { at: ago(0.4), errorRate: 0.0009, baselineErrorRate: 0.0011, requests: 52_910, newIssueGroups: 0 },
+    lastCheck: {
+      at: ago(0.4),
+      errorRate: 0.0009,
+      baselineErrorRate: 0.0011,
+      requests: 52_910,
+      newIssueGroups: 0,
+    },
   },
-  reasons: [reason("coverage.changed-lines", 1, "72% of changed lines covered (policy: 80%).", "coverage")],
-  files: [file("src/components/ChangeRow.tsx", "modified", [hunk(14, 14, `
+  reasons: [
+    reason("coverage.changed-lines", 1, "72% of changed lines covered (policy: 80%).", "coverage"),
+  ],
+  files: [
+    file("src/components/ChangeRow.tsx", "modified", [
+      hunk(
+        14,
+        14,
+        `
    <li class="change-row">
 +    <LaneTag lane={change.lane} />
-     <a href={href}>{change.title}</a>`)])],
+     <a href={href}>{change.title}</a>`,
+      ),
+    ]),
+  ],
   tour: {
-    stops: [stop("intent", "proven", "Lane tags beside each change", "Matches the dashboard plan.", [], [])],
-    leastConfident: ["Color-only lane encoding on the old list style; the tag includes the numeral."],
+    stops: [
+      stop(
+        "intent",
+        "proven",
+        "Lane tags beside each change",
+        "Matches the dashboard plan.",
+        [],
+        [],
+      ),
+    ],
+    leastConfident: [
+      "Color-only lane encoding on the old list style; the tag includes the numeral.",
+    ],
     notDone: ["No filter by lane yet."],
   },
-  items: [testRun("chg_lt4v9", 120), coverage(7, 5, [{ path: "src/components/ChangeRow.tsx", changed: 7, covered: 5, uncoveredLines: [19, 20] }]), apiNone(), depsNone(), sensitive([])],
+  items: [
+    testRun("chg_lt4v9", 120),
+    coverage(7, 5, [
+      { path: "src/components/ChangeRow.tsx", changed: 7, covered: 5, uncoveredLines: [19, 20] },
+    ]),
+    apiNone(),
+    depsNone(),
+    sensitive([]),
+  ],
 });
 
 const darkMode = scenario({
@@ -1274,20 +1980,56 @@ const darkMode = scenario({
   createdMin: 85,
   updatedMin: 44,
   reasons: [
-    reason("proof.red-green", 0, "1 new test fails on main and passes on this change.", "red-green"),
+    reason(
+      "proof.red-green",
+      0,
+      "1 new test fails on main and passes on this change.",
+      "red-green",
+    ),
     reason("size.small", 0, "18 changed lines in 2 files."),
-    reason("shadow.lane0-disabled", 1, "Lane 0 is in shadow mode for this repo, so the change is routed to Lane 1."),
+    reason(
+      "shadow.lane0-disabled",
+      1,
+      "Lane 0 is in shadow mode for this repo, so the change is routed to Lane 1.",
+    ),
   ],
-  files: [file("src/styles/theme.css", "modified", [hunk(1, 1, `
+  files: [
+    file("src/styles/theme.css", "modified", [
+      hunk(
+        1,
+        1,
+        `
 +@media (prefers-color-scheme: dark) {
 +  :root { --bg: oklch(18% 0.02 258); --fg: oklch(94% 0.01 250); }
-+}`)])],
++}`,
+      ),
+    ]),
+  ],
   tour: {
-    stops: [stop("intent", "proven", "The dashboard follows the OS theme", "Adds a dark palette under prefers-color-scheme.", [{ file: "src/styles/theme.css", startLine: 1, endLine: 3 }], ["red-green"])],
+    stops: [
+      stop(
+        "intent",
+        "proven",
+        "The dashboard follows the OS theme",
+        "Adds a dark palette under prefers-color-scheme.",
+        [{ file: "src/styles/theme.css", startLine: 1, endLine: 3 }],
+        ["red-green"],
+      ),
+    ],
     leastConfident: ["Chart colors were not checked for contrast on the dark ground."],
     notDone: ["No manual theme override."],
   },
-  items: [redGreen("chg_dk6m2", [{ file: "test/theme.test.ts", name: "uses the dark palette when the OS prefers dark" }], "proven"), testRun("chg_dk6m2", 121), apiNone(), depsNone(), sensitive([])],
+  items: [
+    redGreen(
+      "chg_dk6m2",
+      [{ file: "test/theme.test.ts", name: "uses the dark palette when the OS prefers dark" }],
+      "proven",
+    ),
+    testRun("chg_dk6m2", 121),
+    apiNone(),
+    depsNone(),
+    sensitive([]),
+  ],
 });
 
 // ================================================================ acme/widgets (GitHub mode, shadow)
@@ -1317,21 +2059,70 @@ const ghTotal = scenario({
     url: "https://github.com/acme/widgets/pull/7",
   },
   reasons: [
-    reason("proof.red-green", 0, "1 new test fails on main and passes on this change.", "red-green"),
+    reason(
+      "proof.red-green",
+      0,
+      "1 new test fails on main and passes on this change.",
+      "red-green",
+    ),
     reason("plan.missing", 1, "No approved Plan is linked, so Lane 0 is not available."),
   ],
-  files: [file("src/total.ts", "modified", [hunk(1, 1, `
+  files: [
+    file("src/total.ts", "modified", [
+      hunk(
+        1,
+        1,
+        `
 -export const total = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
-+export const total = (xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0));`)])],
++export const total = (xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0));`,
+      ),
+    ]),
+  ],
   tour: {
-    stops: [stop("intent", "proven", "total() rounds the sum once", "The sum is rounded at the end, not per item.", [{ file: "src/total.ts", startLine: 1, endLine: 1 }], ["red-green"])],
+    stops: [
+      stop(
+        "intent",
+        "proven",
+        "total() rounds the sum once",
+        "The sum is rounded at the end, not per item.",
+        [{ file: "src/total.ts", startLine: 1, endLine: 1 }],
+        ["red-green"],
+      ),
+    ],
     leastConfident: ["Negative totals were not covered by the new test."],
     notDone: ["No change to the currency formatting."],
   },
-  items: [redGreen("gh-31337-7", [{ file: "test/total.test.ts", name: "keeps the last cent" }], "proven"), testRun("gh-31337-7", 34), apiNone(), depsNone(), sensitive([])],
+  items: [
+    redGreen("gh-31337-7", [{ file: "test/total.test.ts", name: "keeps the last cent" }], "proven"),
+    testRun("gh-31337-7", 34),
+    apiNone(),
+    depsNone(),
+    sensitive([]),
+  ],
 });
 
 export const SCENARIOS: Scenario[] = [
-  tz, locale, paginate, breaking, pdf, session, codemod, policy, drift, fx, ledger, ledgerRevert, numbering, wrangler,
-  undici, cors, laneTags, darkMode, ghTotal, ...TRAIN_SCENARIOS, ...RESOLUTION_SCENARIOS, ...MISSION_SCENARIOS, ...ATTEMPT_SCENARIOS,
+  tz,
+  locale,
+  paginate,
+  breaking,
+  pdf,
+  session,
+  codemod,
+  policy,
+  drift,
+  fx,
+  ledger,
+  ledgerRevert,
+  numbering,
+  wrangler,
+  undici,
+  cors,
+  laneTags,
+  darkMode,
+  ghTotal,
+  ...TRAIN_SCENARIOS,
+  ...RESOLUTION_SCENARIOS,
+  ...MISSION_SCENARIOS,
+  ...ATTEMPT_SCENARIOS,
 ];

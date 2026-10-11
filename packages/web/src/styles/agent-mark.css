@@ -28,6 +28,11 @@
 }
 .avatar.agent-mark--outline.agent-mark--notched {
   background:
-    linear-gradient(225deg, transparent calc(14% - 1px), var(--text) calc(14% - 1px) calc(14% + 0.75px), transparent calc(14% + 0.75px)),
+    linear-gradient(
+      225deg,
+      transparent calc(14% - 1px),
+      var(--text) calc(14% - 1px) calc(14% + 0.75px),
+      transparent calc(14% + 0.75px)
+    ),
     var(--surface);
 }

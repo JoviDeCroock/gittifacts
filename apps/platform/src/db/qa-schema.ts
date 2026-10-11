@@ -34,7 +34,9 @@ export const qaRuns = sqliteTable(
     wallMs: integer("wall_ms"),
     error: text("error"),
     /** Approvals this run withdrew (a failed criterion): reviewer ids and names. */
-    withdrawn: text("withdrawn", { mode: "json" }).$type<Array<{ reviewId: string; reviewerId: string; name: string }>>(),
+    withdrawn: text("withdrawn", { mode: "json" }).$type<
+      Array<{ reviewId: string; reviewerId: string; name: string }>
+    >(),
     createdAt: text("created_at").notNull(),
     startedAt: text("started_at"),
     finishedAt: text("finished_at"),

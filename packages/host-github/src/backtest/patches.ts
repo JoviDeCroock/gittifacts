@@ -60,7 +60,11 @@ const added = (diff: ChangeDiff, path: string): Set<number> | "truncated" | null
   const f = diff.files.find((x) => x.path === path);
   if (f === undefined) return null;
   if (f.truncated) return "truncated";
-  return new Set(f.hunks.flatMap((h) => h.lines.filter((l) => l.kind === "add" && l.newNo !== null).map((l) => l.newNo as number)));
+  return new Set(
+    f.hunks.flatMap((h) =>
+      h.lines.filter((l) => l.kind === "add" && l.newNo !== null).map((l) => l.newNo as number),
+    ),
+  );
 };
 
 export async function findPatches(
@@ -120,11 +124,17 @@ export async function findPatches(
         }
         if (lines === null) continue;
         const moved = between.files.find((f) => f.path === path)?.hunks ?? [];
-        const atBase = new Set([...lines].map((n) => carryLine(n, moved)).filter((n): n is number => n !== null));
+        const atBase = new Set(
+          [...lines].map((n) => carryLine(n, moved)).filter((n): n is number => n !== null),
+        );
         const qFile = theirs.files.find((f) => f.path === path);
         if (qFile === undefined || atBase.size === 0) continue;
         const { dels, insertsAfter } = touched(qFile.hunks);
-        if ([...dels].some((n) => atBase.has(n)) || [...insertsAfter].some((n) => atBase.has(n) && atBase.has(n + 1))) hit = true;
+        if (
+          [...dels].some((n) => atBase.has(n)) ||
+          [...insertsAfter].some((n) => atBase.has(n) && atBase.has(n + 1))
+        )
+          hit = true;
       }
       if (hit) {
         outcome = { by: q.number, at: q.mergedAt };

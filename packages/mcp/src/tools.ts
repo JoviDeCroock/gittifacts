@@ -30,7 +30,6 @@ import type { ChangeReviewData, McpBackend, McpCaller, ResolutionData } from "./
 import {
   ChangeIdInput,
   ChangeRefInput,
-  GITHUB_REF_PATTERN,
   ChangeStatusOutput,
   CloseChangeInput,
   CloseChangeOutput,
@@ -40,6 +39,7 @@ import {
   CreateProjectOutput,
   EmptyInput,
   EvidenceOutput,
+  GITHUB_REF_PATTERN,
   IssuesOutput,
   ListMembersOutput,
   ListReposOutput,

@@ -9,7 +9,10 @@ import type { HunkRef } from "@app/domain";
 import type { ChangeDiff, DiffFile, DiffHunk, DiffLine } from "../api/types.js";
 
 export function hunkFromText(oldStart: number, newStart: number, body: string): DiffHunk {
-  const raw = body.replace(/^\n/, "").replace(/\n\s*$/, "").split("\n");
+  const raw = body
+    .replace(/^\n/, "")
+    .replace(/\n\s*$/, "")
+    .split("\n");
   let oldNo = oldStart;
   let newNo = newStart;
   const lines: DiffLine[] = raw.map((row) => {
@@ -21,7 +24,14 @@ export function hunkFromText(oldStart: number, newStart: number, body: string): 
   });
   const oldLines = lines.filter((l) => l.kind !== "add").length;
   const newLines = lines.filter((l) => l.kind !== "del").length;
-  return { header: `@@ -${oldStart},${oldLines} +${newStart},${newLines} @@`, oldStart, oldLines, newStart, newLines, lines };
+  return {
+    header: `@@ -${oldStart},${oldLines} +${newStart},${newLines} @@`,
+    oldStart,
+    oldLines,
+    newStart,
+    newLines,
+    lines,
+  };
 }
 
 export function fileStats(hunks: DiffHunk[]): { additions: number; deletions: number } {
@@ -92,7 +102,10 @@ export function excerptForRef(diff: ChangeDiff, ref: HunkRef, context = 2): Exce
     for (let i = from; i <= to; i++) {
       const line = lines[i]!;
       const n = lineNo(line, side);
-      const cited = i >= first && i <= last && (line.kind !== "ctx" || (n !== null && n >= ref.startLine && n <= ref.endLine));
+      const cited =
+        i >= first &&
+        i <= last &&
+        (line.kind !== "ctx" || (n !== null && n >= ref.startLine && n <= ref.endLine));
       rows.push({ type: "line", line, cited });
     }
     for (let i = to; i >= from; i--) {
@@ -116,11 +129,55 @@ export interface Token {
 }
 
 const KEYWORDS = new Set([
-  "as", "async", "await", "break", "case", "catch", "class", "const", "continue", "default", "delete",
-  "else", "enum", "export", "extends", "false", "finally", "for", "from", "function", "if", "implements",
-  "import", "in", "instanceof", "interface", "let", "new", "null", "of", "private", "protected", "public",
-  "readonly", "return", "static", "super", "switch", "this", "throw", "true", "try", "type", "typeof",
-  "undefined", "var", "void", "while", "yield",
+  "as",
+  "async",
+  "await",
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "default",
+  "delete",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "from",
+  "function",
+  "if",
+  "implements",
+  "import",
+  "in",
+  "instanceof",
+  "interface",
+  "let",
+  "new",
+  "null",
+  "of",
+  "private",
+  "protected",
+  "public",
+  "readonly",
+  "return",
+  "static",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "type",
+  "typeof",
+  "undefined",
+  "var",
+  "void",
+  "while",
+  "yield",
 ]);
 
 const TOKEN_RE =
@@ -146,7 +203,8 @@ export function tokenize(text: string, opts: { hashComments?: boolean } = {}): T
       }
     } else if (str !== undefined) tokens.push({ kind: "string", text: whole });
     else if (num !== undefined) tokens.push({ kind: "number", text: whole });
-    else if (word !== undefined) tokens.push({ kind: KEYWORDS.has(word) ? "keyword" : "plain", text: whole });
+    else if (word !== undefined)
+      tokens.push({ kind: KEYWORDS.has(word) ? "keyword" : "plain", text: whole });
     last = m.index + whole.length;
     if (whole.length === 0) TOKEN_RE.lastIndex++;
   }

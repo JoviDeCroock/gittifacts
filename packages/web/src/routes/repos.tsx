@@ -1,18 +1,26 @@
-import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import type { Lane } from "@app/domain";
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import { useSignal } from "@preact/signals";
-import { useLocation } from "preact-iso";
 import { useEffect } from "preact/hooks";
+import { useLocation } from "preact-iso";
 import { api } from "../api/client.js";
 import { gettingStartedApi } from "../api/getting-started.js";
 import type { RepoSummary } from "../api/types.js";
-import { Icon } from "../components/Icon.js";
-import { GettingStarted } from "../components/GettingStarted.js";
 import { Fleet, fleetRows, rememberedFleet } from "../components/Fleet.js";
+import { GettingStarted } from "../components/GettingStarted.js";
+import { Icon } from "../components/Icon.js";
 import { ImportRepo } from "../components/ImportRepo.js";
 import { Page } from "../components/Shell.js";
 import { Term } from "../components/Term.js";
-import { Button, EmptyState, ErrorState, LaneTag, Meter, SkeletonHead, SkeletonRows } from "../components/ui.js";
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  LaneTag,
+  Meter,
+  SkeletonHead,
+  SkeletonRows,
+} from "../components/ui.js";
 import { checklistView, POLL_MS, readDismissed, writeDismissed } from "../lib/getting-started.js";
 import { LANES, pct, shadowProgress } from "../lib/lanes.js";
 import { relative } from "../lib/time.js";
@@ -22,10 +30,21 @@ import { useResource } from "../state/resource.js";
 import { principal } from "../state/session.js";
 import "../styles/repos.css";
 
-function LaneCount({ lane, count, shadow = false }: { lane: Lane; count: number; shadow?: boolean }) {
+function LaneCount({
+  lane,
+  count,
+  shadow = false,
+}: {
+  lane: Lane;
+  count: number;
+  shadow?: boolean;
+}) {
   const word = shadow ? "calibrating" : LANES[lane].name.toLowerCase();
   return (
-    <span class={`lane-count ${count === 0 ? "is-zero" : ""}`} aria-label={`${LANES[lane].name} (Lane ${lane})${shadow ? ", calibrating" : ""}: ${count} open`}>
+    <span
+      class={`lane-count ${count === 0 ? "is-zero" : ""}`}
+      aria-label={`${LANES[lane].name} (Lane ${lane})${shadow ? ", calibrating" : ""}: ${count} open`}
+    >
       <LaneTag lane={lane} size="sm" shadow={shadow} />
       <span aria-hidden="true">
         <b class="tnum">{count}</b> {word}
@@ -44,8 +63,10 @@ export function ShadowLine({
 }) {
   const p = shadowProgress(repo.shadow);
   const enabled = repo.policy.lane0Enabled;
-  const fill = p.state === "collecting" ? p.samples / Math.max(1, p.samples + p.needed) : (p.ratio ?? 0);
-  const value = p.state === "collecting" ? `${p.samples}/${p.samples + p.needed}` : pct(p.ratio ?? 0, 1);
+  const fill =
+    p.state === "collecting" ? p.samples / Math.max(1, p.samples + p.needed) : (p.ratio ?? 0);
+  const value =
+    p.state === "collecting" ? `${p.samples}/${p.samples + p.needed}` : pct(p.ratio ?? 0, 1);
   // Auto-merge on: the agreement no longer decides anything, so the list row says only that.
   if (enabled && !detail) {
     return (
@@ -74,7 +95,13 @@ export function ShadowLine({
           {value}
         </span>
       </div>
-      {detail ? <p class="shadow-line__detail">{enabled ? `Agreement held at ${pct(p.ratio ?? 0, 1)} over ${p.samples} reviews.` : p.detail}</p> : null}
+      {detail ? (
+        <p class="shadow-line__detail">
+          {enabled
+            ? `Agreement held at ${pct(p.ratio ?? 0, 1)} over ${p.samples} reviews.`
+            : p.detail}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -90,14 +117,25 @@ function RepoRow({ repo }: { repo: RepoSummary }) {
         <div class="repo-row__id">
           <span class="repo-row__name">{repo.name}</span>
           <span class="repo-row__sub">
-            {repo.host ? `on GitHub (mirrored) · ${repo.defaultBranch}` : `${repo.namespace} · ${repo.defaultBranch}`}
-            {repo.host ? "" : repo.deployTarget ? ` · deploys ${repo.deployTarget}` : " · no deploy target"}
+            {repo.host
+              ? `on GitHub (mirrored) · ${repo.defaultBranch}`
+              : `${repo.namespace} · ${repo.defaultBranch}`}
+            {repo.host
+              ? ""
+              : repo.deployTarget
+                ? ` · deploys ${repo.deployTarget}`
+                : " · no deploy target"}
             <span class="repo-row__juris" title="Data jurisdiction">
-              {repo.jurisdiction === "unrestricted" ? "any region" : repo.jurisdiction.toUpperCase()}
+              {repo.jurisdiction === "unrestricted"
+                ? "any region"
+                : repo.jurisdiction.toUpperCase()}
             </span>
             {repo.claim.status === "unclaimed" ? (
               <span class="repo-row__unclaimed">
-                Unclaimed{repo.claim.expiresAt ? `, deleted ${relative(repo.claim.expiresAt, minuteClock.value)}` : ""}
+                Unclaimed
+                {repo.claim.expiresAt
+                  ? `, deleted ${relative(repo.claim.expiresAt, minuteClock.value)}`
+                  : ""}
               </span>
             ) : null}
           </span>
@@ -113,7 +151,9 @@ function RepoRow({ repo }: { repo: RepoSummary }) {
               <b>{plans}</b> {plans === 1 ? "plan" : "plans"} to approve
             </span>
           ) : null}
-          {c.awaitingReview === 0 && plans === 0 ? <span class="waiting waiting--none">Nothing to review</span> : null}
+          {c.awaitingReview === 0 && plans === 0 ? (
+            <span class="waiting waiting--none">Nothing to review</span>
+          ) : null}
           <span class="repo-row__flight">
             {c.rollingOut > 0 ? (
               <span class="flight">
@@ -142,9 +182,14 @@ function RepoRow({ repo }: { repo: RepoSummary }) {
 }
 
 function byAttention(a: RepoSummary, b: RepoSummary): number {
-  const waiting = (r: RepoSummary) => r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0);
+  const waiting = (r: RepoSummary) =>
+    r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0);
   const live = (r: RepoSummary) => r.counts.failing + r.counts.rollingOut;
-  return waiting(b) - waiting(a) || Number(live(b) > 0) - Number(live(a) > 0) || a.name.localeCompare(b.name);
+  return (
+    waiting(b) - waiting(a) ||
+    Number(live(b) > 0) - Number(live(a) > 0) ||
+    a.name.localeCompare(b.name)
+  );
 }
 
 /** The signed-in home (`/dashboard`): the getting-started checklist, then repositories by attention. */
@@ -186,13 +231,20 @@ export function Repos() {
   const waiting = repos.reduce((n, r) => n + r.counts.awaitingReview, 0);
   const plansWaiting = repos.reduce((n, r) => n + (r.counts.plansAwaitingApproval ?? 0), 0);
   const rolling = repos.reduce((n, r) => n + r.counts.rollingOut, 0);
-  const withWaiting = repos.filter((r) => r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0) > 0).length;
+  const withWaiting = repos.filter(
+    (r) => r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0) > 0,
+  ).length;
   // One arrival, not three: the checklist, the band and the list each load on their own, so the
   // page holds a skeleton shaped like itself until all three have answered (errors count).
-  const settled = st.status !== "loading" && gs.state.value.status !== "loading" && audit.state.value.status !== "loading";
+  const settled =
+    st.status !== "loading" &&
+    gs.state.value.status !== "loading" &&
+    audit.state.value.status !== "loading";
   const fleet = audit.state.value;
   // Triage order: when an agent waits on a person, the band leads; otherwise the list does.
-  const bandFirst = settled ? fleetRows(fleet, minuteClock.value).some((r) => r.state === "waiting") : rememberedFleet().waiting;
+  const bandFirst = settled
+    ? fleetRows(fleet, minuteClock.value).some((r) => r.state === "waiting")
+    : rememberedFleet().waiting;
   const band = <Fleet state={settled ? fleet : { status: "loading" }} me={me?.id ?? null} />;
 
   return (
@@ -201,7 +253,12 @@ export function Repos() {
       wide
       actions={
         importing.value ? null : (
-          <Button size="sm" icon="upload" onClick={() => (importing.value = true)} data-testid="import-open-panel">
+          <Button
+            size="sm"
+            icon="upload"
+            onClick={() => (importing.value = true)}
+            data-testid="import-open-panel"
+          >
             Import a private repo
           </Button>
         )
@@ -237,7 +294,8 @@ export function Repos() {
         <ImportRepo
           onClose={() => {
             importing.value = false;
-            if (window.location.hash === "#import") history.replaceState(null, "", window.location.pathname + window.location.search);
+            if (window.location.hash === "#import")
+              history.replaceState(null, "", window.location.pathname + window.location.search);
           }}
           onImported={() => res.reload()}
         />
@@ -252,9 +310,18 @@ export function Repos() {
         </div>
       ) : (
         <>
-          {gsState && view ? <GettingStarted state={gsState} view={view} onDismiss={onDismiss} onChanged={onChanged} /> : null}
+          {gsState && view ? (
+            <GettingStarted
+              state={gsState}
+              view={view}
+              onDismiss={onDismiss}
+              onChanged={onChanged}
+            />
+          ) : null}
           {bandFirst ? band : null}
-          {st.status === "error" ? <ErrorState error={st.error} what="your repositories" onRetry={res.reload} /> : null}
+          {st.status === "error" ? (
+            <ErrorState error={st.error} what="your repositories" onRetry={res.reload} />
+          ) : null}
           {st.status === "ok" && repos.length === 0 && view?.mode !== "full" ? (
             <EmptyState icon="git-branch" title="No repositories yet">
               <p>

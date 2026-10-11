@@ -20,7 +20,15 @@ export const WORD_BUDGET: readonly { section: string; max: number }[] = [
 export function visibleWords(x: Extracted): number {
   return x.paragraphs
     .filter((p) => !p.folded)
-    .reduce((n, p) => n + p.text.replace(/`code`/g, " ").split(/\s+/).filter((w) => /\w/.test(w)).length, 0);
+    .reduce(
+      (n, p) =>
+        n +
+        p.text
+          .replace(/`code`/g, " ")
+          .split(/\s+/)
+          .filter((w) => /\w/.test(w)).length,
+      0,
+    );
 }
 
 const FILLER = /\b(simply|just|easily|obviously|basically|of course|clearly)\b/i;
@@ -80,7 +88,12 @@ export function checkStyle(page: Page, x: Extracted): Problem[] {
       for (const b of BANNED_TERMS) {
         const hit = b.term.exec(p.text);
         if (hit !== null) {
-          problems.push({ file: page.file, line: p.line, rule: "style", message: `retired term "${hit[0]}": say "${b.use}"` });
+          problems.push({
+            file: page.file,
+            line: p.line,
+            rule: "style",
+            message: `retired term "${hit[0]}": say "${b.use}"`,
+          });
         }
       }
     }

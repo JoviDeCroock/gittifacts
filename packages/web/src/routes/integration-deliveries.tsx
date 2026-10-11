@@ -7,11 +7,7 @@ import { useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 import { useRoute } from "preact-iso";
 import { inlineError, newIdempotencyKey } from "../api/client.js";
-import {
-  type DeliveryStatus,
-  integrationsApi,
-  type WebhookEvent,
-} from "../api/integrations.js";
+import { type DeliveryStatus, integrationsApi, type WebhookEvent } from "../api/integrations.js";
 import { DeliveryDetailView, DeliveryRow } from "../components/Deliveries.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
@@ -22,13 +18,21 @@ import "../styles/integrations.css";
 
 type Filter = "all" | DeliveryStatus;
 
-function DetailPane({ integrationId, deliveryId, base, onRedelivered }: {
+function DetailPane({
+  integrationId,
+  deliveryId,
+  base,
+  onRedelivered,
+}: {
   integrationId: string;
   deliveryId: string;
   base: string;
   onRedelivered: () => void;
 }) {
-  const res = useResource(() => integrationsApi.delivery(integrationId, deliveryId), [integrationId, deliveryId]);
+  const res = useResource(
+    () => integrationsApi.delivery(integrationId, deliveryId),
+    [integrationId, deliveryId],
+  );
   const busy = useSignal(false);
   const result = useSignal<{ ok: boolean; text: string; href?: string } | null>(null);
   const key = useSignal(newIdempotencyKey());
@@ -46,7 +50,11 @@ function DetailPane({ integrationId, deliveryId, base, onRedelivered }: {
     try {
       const { delivery } = await integrationsApi.redeliver(integrationId, deliveryId, key.value);
       key.value = newIdempotencyKey();
-      result.value = { ok: true, text: "Redelivery queued.", href: `${base}/${encodeURIComponent(delivery.id)}` };
+      result.value = {
+        ok: true,
+        text: "Redelivery queued.",
+        href: `${base}/${encodeURIComponent(delivery.id)}`,
+      };
       onRedelivered();
     } catch (err) {
       result.value = { ok: false, text: inlineError(err) };
@@ -56,7 +64,8 @@ function DetailPane({ integrationId, deliveryId, base, onRedelivered }: {
   }
 
   if (st.status === "loading") return <Loading label="Loading the delivery" lines={10} />;
-  if (st.status === "error") return <ErrorState error={st.error} what="this delivery" onRetry={res.reload} />;
+  if (st.status === "error")
+    return <ErrorState error={st.error} what="this delivery" onRetry={res.reload} />;
   const d = st.data.delivery;
   return (
     <DeliveryDetailView
@@ -70,10 +79,18 @@ function DetailPane({ integrationId, deliveryId, base, onRedelivered }: {
               {result.value.href ? <a href={result.value.href}>Open it</a> : null}
             </p>
           ) : null}
-          <Button variant="primary" icon="redo" busy={busy.value} busyLabel="Queuing…" onClick={redeliver}>
+          <Button
+            variant="primary"
+            icon="redo"
+            busy={busy.value}
+            busyLabel="Queuing…"
+            onClick={redeliver}
+          >
             Redeliver
           </Button>
-          <span class="dlv-detail__note">Sends the same payload again with the same X-Gittifacts-Delivery ID.</span>
+          <span class="dlv-detail__note">
+            Sends the same payload again with the same X-Gittifacts-Delivery ID.
+          </span>
         </>
       }
     />
@@ -96,7 +113,8 @@ export function IntegrationDeliveries() {
       }),
     [integrationId, filter.value, event.value],
   );
-  const it = integration.state.value.status === "ok" ? integration.state.value.data.integration : null;
+  const it =
+    integration.state.value.status === "ok" ? integration.state.value.data.integration : null;
   const st = list.state.value;
   const detailHref = `/settings/integrations/developer/${encodeURIComponent(integrationId)}`;
   const base = `${detailHref}/deliveries`;
@@ -146,7 +164,11 @@ export function IntegrationDeliveries() {
             />
             <label class="dlv-filters__event">
               <span class="sr-only">Filter by event</span>
-              <select class="input dlv-select" value={event.value} onChange={(e) => (event.value = e.currentTarget.value as WebhookEvent | "")}>
+              <select
+                class="input dlv-select"
+                value={event.value}
+                onChange={(e) => (event.value = e.currentTarget.value as WebhookEvent | "")}
+              >
                 <option value="">All events</option>
                 {[...ALL_EVENTS, "ping" as const].map((ev) => (
                   <option key={ev} value={ev}>
@@ -157,37 +179,61 @@ export function IntegrationDeliveries() {
             </label>
           </div>
           {st.status === "loading" ? <Loading label="Loading deliveries" lines={8} /> : null}
-          {st.status === "error" ? <ErrorState error={st.error} what="the delivery log" onRetry={list.reload} /> : null}
+          {st.status === "error" ? (
+            <ErrorState error={st.error} what="the delivery log" onRetry={list.reload} />
+          ) : null}
           {st.status === "ok" && st.data.deliveries.length === 0 ? (
             filter.value !== "all" || event.value ? (
               <EmptyState
                 icon="search"
                 title="No deliveries match"
                 action={
-                  <Button size="sm" onClick={() => { filter.value = "all"; event.value = ""; }}>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      filter.value = "all";
+                      event.value = "";
+                    }}
+                  >
                     Clear filters
                   </Button>
                 }
               >
-                <p>Nothing {filter.value !== "all" ? filter.value : "sent"}{event.value ? ` for ${event.value}` : ""} in the recent log.</p>
+                <p>
+                  Nothing {filter.value !== "all" ? filter.value : "sent"}
+                  {event.value ? ` for ${event.value}` : ""} in the recent log.
+                </p>
               </EmptyState>
             ) : (
               <EmptyState icon="webhook" title="No deliveries yet">
-                <p>Deliveries appear when someone installs the integration and pushes. Send a ping from the integration's settings to test your endpoint.</p>
+                <p>
+                  Deliveries appear when someone installs the integration and pushes. Send a ping
+                  from the integration's settings to test your endpoint.
+                </p>
               </EmptyState>
             )
           ) : null}
           {st.status === "ok" && st.data.deliveries.length > 0 ? (
             <ul class="dlvs">
               {st.data.deliveries.map((d) => (
-                <DeliveryRow key={d.id} d={d} href={`${base}/${encodeURIComponent(d.id)}`} current={d.id === deliveryId} />
+                <DeliveryRow
+                  key={d.id}
+                  d={d}
+                  href={`${base}/${encodeURIComponent(d.id)}`}
+                  current={d.id === deliveryId}
+                />
               ))}
             </ul>
           ) : null}
         </section>
         <section class="dlv-pane" aria-label="Delivery">
           {deliveryId ? (
-            <DetailPane integrationId={integrationId} deliveryId={deliveryId} base={base} onRedelivered={list.reload} />
+            <DetailPane
+              integrationId={integrationId}
+              deliveryId={deliveryId}
+              base={base}
+              onRedelivered={list.reload}
+            />
           ) : (
             <p class="dlv-pane__empty">
               <Icon name="webhook" size={20} />

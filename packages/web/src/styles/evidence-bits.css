@@ -12,7 +12,9 @@
   color: var(--text);
   font-size: var(--text-small);
   text-decoration: none;
-  transition: background-color var(--dur-feedback) var(--ease-out), border-color var(--dur-feedback) var(--ease-out);
+  transition:
+    background-color var(--dur-feedback) var(--ease-out),
+    border-color var(--dur-feedback) var(--ease-out);
 }
 @media (pointer: coarse) {
   .ev-chip {
@@ -178,4 +180,3 @@ a.ev-chip:hover {
     inline-size: 100%;
   }
 }
-

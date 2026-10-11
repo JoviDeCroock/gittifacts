@@ -64,7 +64,11 @@ export function normalizeGithubDelivery(
     const p = PullRequestEvent.safeParse(payload);
     if (!p.success) return [];
     const pr = p.data.pull_request;
-    const ref = { host: "github" as const, ...ownerRepo(p.data.repository.full_name), number: pr.number };
+    const ref = {
+      host: "github" as const,
+      ...ownerRepo(p.data.repository.full_name),
+      number: pr.number,
+    };
     switch (p.data.action) {
       case "opened":
       case "reopened":
@@ -92,9 +96,10 @@ export function normalizeGithubDelivery(
       case "labeled":
       case "unlabeled": {
         const changes = (p.data as { changes?: Record<string, unknown> }).changes ?? {};
-        const what: ("title" | "body" | "labels")[] = p.data.action === "edited"
-          ? (["title", "body"] as const).filter((k) => k in changes)
-          : ["labels"];
+        const what: ("title" | "body" | "labels")[] =
+          p.data.action === "edited"
+            ? (["title", "body"] as const).filter((k) => k in changes)
+            : ["labels"];
         return what.length === 0 ? [] : [{ type: "change.edited", ref, what }];
       }
       case "closed":
@@ -118,7 +123,11 @@ export function normalizeGithubDelivery(
     return [
       {
         type: "review.submitted",
-        ref: { host: "github", ...ownerRepo(p.data.repository.full_name), number: p.data.pull_request.number },
+        ref: {
+          host: "github",
+          ...ownerRepo(p.data.repository.full_name),
+          number: p.data.pull_request.number,
+        },
         headSha: p.data.review.commit_id,
         reviewer: identityOf(p.data.review.user, opts),
         decision,
@@ -152,7 +161,12 @@ export function normalizeGithubDelivery(
         groupId: mg.head_ref,
         headSha: mg.head_sha,
         baseSha: mg.base_sha,
-        changes: mergeGroupPrNumbers(mg.head_ref).map((number) => ({ host: "github", owner, repo, number })),
+        changes: mergeGroupPrNumbers(mg.head_ref).map((number) => ({
+          host: "github",
+          owner,
+          repo,
+          number,
+        })),
       },
     ];
   }

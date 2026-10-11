@@ -16,21 +16,39 @@ import { ensureGithubPrincipal, grantInstallationMembers } from "./grading.js";
 import { githubActorPrincipal } from "./plans.js";
 import { githubHostFor, githubReadSource } from "./runtime.js";
 
-const STEP = { retries: { limit: 3, delay: "10 seconds", backoff: "exponential" }, timeout: "10 minutes" } as const;
+const STEP = {
+  retries: { limit: 3, delay: "10 seconds", backoff: "exponential" },
+  timeout: "10 minutes",
+} as const;
 
 export class GithubBacktestWorkflow extends WorkflowEntrypoint<Bindings, unknown> {
-  override async run(event: Readonly<WorkflowEvent<unknown>>, step: WorkflowStep): Promise<{ status: string }> {
+  override async run(
+    event: Readonly<WorkflowEvent<unknown>>,
+    step: WorkflowStep,
+  ): Promise<{ status: string }> {
     const p = BacktestParams.parse(event.payload);
     const env = this.env;
     const { ports, bindings } = resolveRuntime(env, "github");
     const store = new D1Store(env.DB, env.BLOBS);
     const row = await step.do("load", STEP, async () => {
-      const r = await store.db.select().from(githubBacktests).where(eq(githubBacktests.id, p.backtestId)).get();
+      const r = await store.db
+        .select()
+        .from(githubBacktests)
+        .where(eq(githubBacktests.id, p.backtestId))
+        .get();
       if (r === undefined) throw new Error(`backtest ${p.backtestId} not found`);
       return { since: r.since, until: r.until, maxPrs: r.maxPrs };
     });
     const [owner = "", name = ""] = p.fullName.split("/");
-    let repoHost: GithubRepoHost = { kind: "github", owner, repo: name, githubRepoId: p.githubRepoId, installationId: p.installationId, appId: p.appId, private: true };
+    let repoHost: GithubRepoHost = {
+      kind: "github",
+      owner,
+      repo: name,
+      githubRepoId: p.githubRepoId,
+      installationId: p.installationId,
+      appId: p.appId,
+      private: true,
+    };
     const { host, api, release } = githubHostFor(env, ports, repoHost);
     try {
       // The repo row and mirror (a repo nobody opened a PR on yet is created here).
@@ -38,7 +56,11 @@ export class GithubBacktestWorkflow extends WorkflowEntrypoint<Bindings, unknown
         if ((await ports.store.getRepo(repoIdFor(p.githubRepoId))) !== null) return true;
         const gh = GithubRepo.parse(await api.get(`/repos/${p.fullName}`));
         const sync = new GithubSync({
-          ports, coordinator: (id) => bindings.changeCoordinator(id), host, installationId: p.installationId, appId: p.appId,
+          ports,
+          coordinator: (id) => bindings.changeCoordinator(id),
+          host,
+          installationId: p.installationId,
+          appId: p.appId,
           source: () => githubReadSource(env, repoHost),
           authorPrincipal: (who) => ensureGithubPrincipal(store, who),
           onRepoCreated: (repo) => grantInstallationMembers(store, repo, p.installationId),
@@ -51,11 +73,14 @@ export class GithubBacktestWorkflow extends WorkflowEntrypoint<Bindings, unknown
       repoHost = repo.host;
       const report = await runBacktest(
         {
-          ports, api, repo,
+          ports,
+          api,
+          repo,
           coordinator: (id) => bindings.changeCoordinator(id),
           source: () => githubReadSource(env, repoHost),
           authorPrincipal: (who) => githubActorPrincipal(store, who),
-          step: <T>(stepName: string, fn: () => Promise<T>) => step.do(stepName, STEP, async () => (await fn()) as Rpc.Serializable<T>) as Promise<T>,
+          step: <T>(stepName: string, fn: () => Promise<T>) =>
+            step.do(stepName, STEP, async () => (await fn()) as Rpc.Serializable<T>) as Promise<T>,
           sleep: (stepName, ms) => step.sleep(stepName, ms),
         },
         { since: row.since, until: row.until, maxPrs: row.maxPrs },
@@ -63,16 +88,34 @@ export class GithubBacktestWorkflow extends WorkflowEntrypoint<Bindings, unknown
       await step.do("save", STEP, async () => {
         await store.db
           .update(githubBacktests)
-          .set({ status: "done", report, eligible: report.calibration.eligible, finishedAt: new Date().toISOString() })
+          .set({
+            status: "done",
+            report,
+            eligible: report.calibration.eligible,
+            finishedAt: new Date().toISOString(),
+          })
           .where(eq(githubBacktests.id, p.backtestId));
-        await ports.audit.append({ principalId: "system", action: "github.backtest-done", subject: `repo:${repo.id}`, payload: { backtestId: p.backtestId, graded: report.graded, wouldAutoMerge: report.wouldAutoMerge, calibration: report.calibration } });
+        await ports.audit.append({
+          principalId: "system",
+          action: "github.backtest-done",
+          subject: `repo:${repo.id}`,
+          payload: {
+            backtestId: p.backtestId,
+            graded: report.graded,
+            wouldAutoMerge: report.wouldAutoMerge,
+            calibration: report.calibration,
+          },
+        });
         return true;
       });
       return { status: "done" };
     } catch (e) {
       const error = (e as Error).message.slice(0, 2000);
       await step.do("failed", STEP, async () => {
-        await store.db.update(githubBacktests).set({ status: "failed", error, finishedAt: new Date().toISOString() }).where(eq(githubBacktests.id, p.backtestId));
+        await store.db
+          .update(githubBacktests)
+          .set({ status: "failed", error, finishedAt: new Date().toISOString() })
+          .where(eq(githubBacktests.id, p.backtestId));
         return true;
       });
       return { status: "failed" };

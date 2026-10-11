@@ -14,7 +14,9 @@ export const PLAN_LABEL = "gittifacts:plan";
 /** `#N` from closing keywords in a PR body (GitHub's own list), same repo only. */
 export function closingIssues(body: string | null): number[] {
   const out = new Set<number>();
-  for (const m of (body ?? "").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d{1,9})\b/gi)) {
+  for (const m of (body ?? "").matchAll(
+    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d{1,9})\b/gi,
+  )) {
     out.add(Number(m[1]));
   }
   return [...out];
@@ -57,21 +59,38 @@ export interface PlanText {
 export function parsePlanMarkdown(md: string, fallbackTitle: string): PlanText {
   const title = (/^#\s+(.+)$/m.exec(md)?.[1] ?? fallbackTitle).trim().slice(0, 200);
   const intentSection = section(md, /intent|why/i);
-  const lead = md.replace(/^#\s+.+$/m, "").split(/^##\s/m)[0]?.trim() ?? "";
+  const lead =
+    md
+      .replace(/^#\s+.+$/m, "")
+      .split(/^##\s/m)[0]
+      ?.trim() ?? "";
   const intent = (intentSection ?? lead).trim();
   const criteria = bullets(section(md, /acceptance|done when|criteria/i));
   const tasks = [...md.matchAll(/^\s*[-*]\s+\[[ xX]\]\s+(.+)$/gm)].map((m) => (m[1] ?? "").trim());
   return {
     title: title.length >= 3 ? title : `${title} plan`,
-    intent: (intent.length >= 10 ? intent : `${title}: ${intent || "see the linked description"}`).slice(0, 10_000),
-    acceptanceCriteria: (criteria.length > 0 ? criteria : tasks.length > 0 ? tasks : [`Done as described: ${title}`]).slice(0, 50),
+    intent: (intent.length >= 10
+      ? intent
+      : `${title}: ${intent || "see the linked description"}`
+    ).slice(0, 10_000),
+    acceptanceCriteria: (criteria.length > 0
+      ? criteria
+      : tasks.length > 0
+        ? tasks
+        : [`Done as described: ${title}`]
+    ).slice(0, 50),
     outOfScope: bullets(section(md, /out of scope|non-goals/i)),
-    scopePaths: bullets(section(md, /^#{2,3}\s+scope\b/i)).filter((p) => !/\s/.test(p)).slice(0, 100),
+    scopePaths: bullets(section(md, /^#{2,3}\s+scope\b/i))
+      .filter((p) => !/\s/.test(p))
+      .slice(0, 100),
   };
 }
 
 /** A Plan row from parsed text (approval fields set by the caller). */
-export function planFrom(text: PlanText, input: { id: string; repoId: string; authorId: string; createdAt: string }): Plan {
+export function planFrom(
+  text: PlanText,
+  input: { id: string; repoId: string; authorId: string; createdAt: string },
+): Plan {
   return {
     id: input.id,
     repoId: input.repoId,

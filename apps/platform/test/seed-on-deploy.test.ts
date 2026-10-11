@@ -88,7 +88,9 @@ describe("seedOnDeploy", () => {
     expect(failing.marker).toBeNull();
     await seedOnDeploy({ ...failing.deps, git: t.git, engine });
     // The retry seeds the same commits (no second commit for the same version).
-    expect(calls.slice(TEMPLATE_IDS.length).sort()).toEqual(calls.slice(0, TEMPLATE_IDS.length).sort());
+    expect(calls.slice(TEMPLATE_IDS.length).sort()).toEqual(
+      calls.slice(0, TEMPLATE_IDS.length).sort(),
+    );
   });
 
   it("does nothing without version metadata", async () => {

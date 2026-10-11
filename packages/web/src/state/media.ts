@@ -3,7 +3,9 @@ import { useEffect } from "preact/hooks";
 
 /** Reactive media query. Layout stays CSS-driven; this is only for choosing which control to mount. */
 export function useMedia(query: string): boolean {
-  const matches = useSignal(typeof window !== "undefined" ? window.matchMedia(query).matches : false);
+  const matches = useSignal(
+    typeof window !== "undefined" ? window.matchMedia(query).matches : false,
+  );
   useEffect(() => {
     const mql = window.matchMedia(query);
     const on = () => {
@@ -17,5 +19,7 @@ export function useMedia(query: string): boolean {
 }
 
 export function prefersReducedMotion(): boolean {
-  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return (
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
 }

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleGithubEvent } from "../src/github/consumer.js";
 import { getInstallation, reposOf } from "../src/github/store.js";
 import type { GithubEventMessage } from "../src/github/webhook.js";
+import { store } from "./fixtures.js";
 import {
   APP_ID,
   CLIENT_ID,
@@ -12,7 +13,6 @@ import {
   stubGithub,
 } from "./github-helpers.js";
 import { makeApp, signUpHuman } from "./http.js";
-import { store } from "./fixtures.js";
 
 afterEach(() => vi.restoreAllMocks());
 

@@ -137,7 +137,11 @@ describe("AiBindingClient", () => {
       }).buildRun(REQ).inputs;
     expect(glm().reasoning_effort).toBe("low");
     expect(glm("high").reasoning_effort).toBe("high");
-    const kimi = new AiBindingClient({ ai: new FakeAi([]), gatewayId: "gw", model: "@cf/moonshotai/kimi-k2.7-code" });
+    const kimi = new AiBindingClient({
+      ai: new FakeAi([]),
+      gatewayId: "gw",
+      model: "@cf/moonshotai/kimi-k2.7-code",
+    });
     expect(kimi.buildRun(REQ).inputs).not.toHaveProperty("reasoning_effort");
   });
 

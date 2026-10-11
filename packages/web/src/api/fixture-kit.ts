@@ -62,7 +62,11 @@ const STANDARD_STEPS: [name: string, kind: "user" | "evidence", ms: number][] = 
 
 const slug = (name: string) => name.replace(/\s+/g, "-");
 
-export function passedRun(changeId: string, headSha: string, finishedMinutesAgo: number): PipelineRun {
+export function passedRun(
+  changeId: string,
+  headSha: string,
+  finishedMinutesAgo: number,
+): PipelineRun {
   const total = STANDARD_STEPS.reduce((s, [, , d]) => s + d, 0);
   return {
     id: `run_${changeId.slice(4)}`,
@@ -72,7 +76,13 @@ export function passedRun(changeId: string, headSha: string, finishedMinutesAgo:
     status: "passed",
     startedAt: new Date(NOW - finishedMinutesAgo * 60_000 - total).toISOString(),
     finishedAt: ago(finishedMinutesAgo),
-    steps: STANDARD_STEPS.map(([name, kind, durationMs]) => ({ name, kind, status: "passed", durationMs, logRef: `logs/${changeId}/${slug(name)}` })),
+    steps: STANDARD_STEPS.map(([name, kind, durationMs]) => ({
+      name,
+      kind,
+      status: "passed",
+      durationMs,
+      logRef: `logs/${changeId}/${slug(name)}`,
+    })),
   };
 }
 

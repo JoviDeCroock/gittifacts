@@ -29,11 +29,7 @@ export const MAX_PUSH_ISSUES = 5;
 
 const branchOf = (ref: string) => ref.replace(/^refs\/heads\//, "");
 
-export function describePushIssue(
-  kind: PushIssueKind,
-  ref: string,
-  expectedRef: string,
-): string {
+export function describePushIssue(kind: PushIssueKind, ref: string, expectedRef: string): string {
   switch (kind) {
     case "tag":
       return `Pushed tag ${ref}: tags are ignored; only ${expectedRef} on the fork grades the Change.`;

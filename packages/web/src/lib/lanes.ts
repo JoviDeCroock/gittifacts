@@ -4,7 +4,7 @@
  */
 import type { Change, ChangeStatus, Lane, LaneReason } from "@app/domain";
 import { groupLaneReasons } from "@app/domain/lane-reasons";
-import { LANE_LABELS, laneLabel, type LaneLabel } from "@app/domain/vocabulary";
+import { LANE_LABELS, type LaneLabel, laneLabel } from "@app/domain/vocabulary";
 import type { ShadowStats } from "../api/types.js";
 
 /** The lane's name ("Quick review"), its badge ("Lane 1") and one line on what a person does. */
@@ -53,11 +53,15 @@ const STATUS_RANK: Partial<Record<ChangeStatus, number>> = {
  * Lane 2 first, then Lane 1, then Lane 0 (shadow), then changes not routed yet.
  * Inside a group: awaiting review first, then most recently updated.
  */
-export function groupByLane<T extends Groupable>(changes: T[], lane0Enabled: boolean): LaneGroup<T>[] {
+export function groupByLane<T extends Groupable>(
+  changes: T[],
+  lane0Enabled: boolean,
+): LaneGroup<T>[] {
   const buckets: Record<LaneGroupKey, T[]> = { lane2: [], lane1: [], lane0: [], unrouted: [] };
   for (const c of changes) buckets[groupKeyFor(c)].push(c);
   const sort = (a: T, b: T) =>
-    (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
+    (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9) ||
+    Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
   const groups: LaneGroup<T>[] = [
     { key: "lane2", lane: 2, shadow: false, items: buckets.lane2.sort(sort) },
     { key: "lane1", lane: 1, shadow: false, items: buckets.lane1.sort(sort) },
@@ -78,7 +82,15 @@ export const FILTERS: { id: ChangeFilter; label: string }[] = [
   { id: "all", label: "All" },
 ];
 
-const ACTIVE: ChangeStatus[] = ["awaiting-push", "running", "failing", "approved", "queued", "merged", "rolling-out"];
+const ACTIVE: ChangeStatus[] = [
+  "awaiting-push",
+  "running",
+  "failing",
+  "approved",
+  "queued",
+  "merged",
+  "rolling-out",
+];
 const CLOSED: ChangeStatus[] = ["released", "reverted", "rejected", "abandoned"];
 
 export function matchesFilter(status: ChangeStatus, filter: ChangeFilter): boolean {
@@ -100,11 +112,20 @@ export function matchesFilter(status: ChangeStatus, filter: ChangeFilter): boole
  */
 export function unroutedCopy(status: ChangeStatus, id: string): { title: string; line: string } {
   if (id.startsWith("bs-"))
-    return { title: "Not routed", line: "The platform's first change merges without review, so it has no lane." };
+    return {
+      title: "Not routed",
+      line: "The platform's first change merges without review, so it has no lane.",
+    };
   if (status === "failing")
-    return { title: "Not routed yet", line: "The lane is computed once the author pushes a fix and checks pass." };
+    return {
+      title: "Not routed yet",
+      line: "The lane is computed once the author pushes a fix and checks pass.",
+    };
   if (status === "awaiting-push" || status === "running" || status === "awaiting-review")
-    return { title: "Not routed yet", line: "The lane is computed once checks pass and evidence is signed." };
+    return {
+      title: "Not routed yet",
+      line: "The lane is computed once checks pass and evidence is signed.",
+    };
   return { title: "Not routed", line: "This change closed before a lane was computed." };
 }
 
@@ -113,31 +134,71 @@ export function unroutedCopy(status: ChangeStatus, id: string): { title: string;
  * (`runStatus`: the latest pipeline run's status, if any).
  */
 export function noTourCopy(
-  change: { id: string; status: ChangeStatus; lane: Lane | null; laneReasons: readonly { code: string }[]; headSha?: string | null },
+  change: {
+    id: string;
+    status: ChangeStatus;
+    lane: Lane | null;
+    laneReasons: readonly { code: string }[];
+    headSha?: string | null;
+  },
   runStatus?: string,
 ): { title: string; body: string; showDiff: boolean } {
   const tourFailed = change.laneReasons.some((r) => r.code === "tour.failed");
   // Awaiting a push with a head already there: a reviewer sent it back (the agent reads the comment
   // with get_change_status and its wait answers changes-requested).
   if (change.status === "awaiting-push" && change.headSha)
-    return { title: "Sent back to the author", body: "A reviewer requested changes on this head. The author has the comment and pushes a new head; checks, evidence and a new walkthrough follow.", showDiff: true };
+    return {
+      title: "Sent back to the author",
+      body: "A reviewer requested changes on this head. The author has the comment and pushes a new head; checks, evidence and a new walkthrough follow.",
+      showDiff: true,
+    };
   if (change.status === "awaiting-push")
-    return { title: "Waiting for the first push", body: "The author has not pushed a head yet. Checks, evidence and the walkthrough follow the push.", showDiff: false };
+    return {
+      title: "Waiting for the first push",
+      body: "The author has not pushed a head yet. Checks, evidence and the walkthrough follow the push.",
+      showDiff: false,
+    };
   if (change.status === "running" || runStatus === "running" || runStatus === "queued")
-    return { title: "The walkthrough is not written yet", body: "The reviewer agent writes the walkthrough once the checks pass and the evidence is signed. Nothing can be approved until then.", showDiff: false };
+    return {
+      title: "The walkthrough is not written yet",
+      body: "The reviewer agent writes the walkthrough once the checks pass and the evidence is signed. Nothing can be approved until then.",
+      showDiff: false,
+    };
   if (change.status === "failing")
     // The chip and the decision bar already say "checks failed"; this section says what it holds.
-    return { title: "What failed", body: "There is nothing to review until the author pushes a fix. The failing step is below.", showDiff: false };
+    return {
+      title: "What failed",
+      body: "There is nothing to review until the author pushes a fix. The failing step is below.",
+      showDiff: false,
+    };
   if (change.status === "awaiting-review")
     return tourFailed
-      ? { title: "No walkthrough: the reviewer agent could not write one", body: "Review the change itself. Every changed file is below, the evidence is one step away, and the lane panel lists what was and was not measured.", showDiff: true }
-      : { title: "The reviewer agent is writing the walkthrough", body: "You can already read the diff below and the signed evidence. The walkthrough usually follows within a minute.", showDiff: true };
+      ? {
+          title: "No walkthrough: the reviewer agent could not write one",
+          body: "Review the change itself. Every changed file is below, the evidence is one step away, and the lane panel lists what was and was not measured.",
+          showDiff: true,
+        }
+      : {
+          title: "The reviewer agent is writing the walkthrough",
+          body: "You can already read the diff below and the signed evidence. The walkthrough usually follows within a minute.",
+          showDiff: true,
+        };
   if (change.id.startsWith("bs-"))
-    return { title: "No walkthrough for the first change", body: "The platform's first commit sets up CI and the first preview. It merges without review, so no walkthrough is written.", showDiff: false };
+    return {
+      title: "No walkthrough for the first change",
+      body: "The platform's first commit sets up CI and the first preview. It merges without review, so no walkthrough is written.",
+      showDiff: false,
+    };
   if (change.lane === 0)
-    return { title: "No walkthrough: this change auto-merged", body: "In auto-merge (Lane 0) the evidence alone decides and nobody reviews, so no walkthrough is written. The diff and the signed evidence are the record.", showDiff: true };
+    return {
+      title: "No walkthrough: this change auto-merged",
+      body: "In auto-merge (Lane 0) the evidence alone decides and nobody reviews, so no walkthrough is written. The diff and the signed evidence are the record.",
+      showDiff: true,
+    };
   return {
-    title: tourFailed ? "No walkthrough: the reviewer agent could not write one" : "No walkthrough for this change",
+    title: tourFailed
+      ? "No walkthrough: the reviewer agent could not write one"
+      : "No walkthrough for this change",
     body: "It was decided without a walkthrough. The diff and the signed evidence are the record.",
     showDiff: true,
   };
@@ -233,7 +294,8 @@ const MEASUREMENT_LABEL: Record<string, string> = {
 export function reasonFamily(code: string): ReasonFamily {
   const head = code.split(".")[0] ?? "";
   if (code.startsWith("signal.missing") || code.startsWith("signal.error")) return "missing";
-  if (code.startsWith("signal.skip-accepted.")) return MEASUREMENT_FAMILY[code.split(".")[2] ?? ""] ?? "other";
+  if (code.startsWith("signal.skip-accepted."))
+    return MEASUREMENT_FAMILY[code.split(".")[2] ?? ""] ?? "other";
   switch (head) {
     case "proof":
     case "tests":
@@ -327,7 +389,11 @@ function maxLane(a: Lane, b: Lane): Lane {
   return a >= b ? a : b;
 }
 
-export function triageChart(reasons: LaneReason[], computed: Lane | null, routed: Lane | null): TriageChart {
+export function triageChart(
+  reasons: LaneReason[],
+  computed: Lane | null,
+  routed: Lane | null,
+): TriageChart {
   const shadowReason = reasons.find((r) => reasonFamily(r.code) === "shadow") ?? null;
   const signals = reasons.filter((r) => reasonFamily(r.code) !== "shadow");
   const fromSignals = signals.reduce<Lane>((acc, r) => maxLane(acc, r.lane), 0);
@@ -358,9 +424,13 @@ export function triageChart(reasons: LaneReason[], computed: Lane | null, routed
 export function foldChart(rows: readonly ChartRow[]): { shown: ChartRow[]; passing: ChartRow[] } {
   const byReason = new Map(rows.map((r) => [r.reason, r] as const));
   const g = groupLaneReasons(rows.map((r) => r.reason));
-  const pick = (reasons: readonly LaneReason[]) => reasons.map((x) => byReason.get(x)).filter((r): r is ChartRow => r !== undefined);
+  const pick = (reasons: readonly LaneReason[]) =>
+    reasons.map((x) => byReason.get(x)).filter((r): r is ChartRow => r !== undefined);
   const passed = pick(g.passing);
-  return { shown: [...pick(g.deciding), ...pick(g.raising), ...passed.filter((r) => r.unknown)], passing: passed.filter((r) => !r.unknown) };
+  return {
+    shown: [...pick(g.deciding), ...pick(g.raising), ...passed.filter((r) => r.unknown)],
+    passing: passed.filter((r) => !r.unknown),
+  };
 }
 
 // ---------------------------------------------------------------- shadow agreement
@@ -386,7 +456,13 @@ export function pct(x: number, digits = 0): string {
 }
 
 export function shadowProgress(s: ShadowStats): ShadowProgress {
-  const base = { ratio: s.ratio, threshold: s.threshold, samples: s.samples, agreed: s.agreed, needed: s.needed };
+  const base = {
+    ratio: s.ratio,
+    threshold: s.threshold,
+    samples: s.samples,
+    agreed: s.agreed,
+    needed: s.needed,
+  };
   if (s.needed > 0 || s.ratio === null) {
     return {
       ...base,
@@ -413,10 +489,19 @@ export function shadowProgress(s: ShadowStats): ShadowProgress {
 }
 
 /** The one reason that best explains a change's lane, for list rows. */
-export function topReason(reasons: LaneReason[], computed: Lane | null, routed: Lane | null): { label: string; message: string; shadow: boolean } | null {
+export function topReason(
+  reasons: LaneReason[],
+  computed: Lane | null,
+  routed: Lane | null,
+): { label: string; message: string; shadow: boolean } | null {
   if (reasons.length === 0) return null;
   const chart = triageChart(reasons, computed, routed);
-  if (chart.shadowRaised) return { label: "Calibrating", message: `The evidence alone says ${LANES[chart.computedLane].name.toLowerCase()}; auto-merge is calibrating, so it is routed to you.`, shadow: true };
+  if (chart.shadowRaised)
+    return {
+      label: "Calibrating",
+      message: `The evidence alone says ${LANES[chart.computedLane].name.toLowerCase()}; auto-merge is calibrating, so it is routed to you.`,
+      shadow: true,
+    };
   const row = chart.rows.find((r) => r.decisive) ?? chart.rows[0];
   return row ? { label: row.label, message: row.reason.message, shadow: false } : null;
 }

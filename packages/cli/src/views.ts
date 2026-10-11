@@ -61,7 +61,9 @@ function laneLine(change: Doc, classification: Doc | null, bootstrap: boolean): 
     typeof computed === "number" && computed !== lane
       ? `; the evidence alone says ${(computed === 0 || computed === 1 || computed === 2 ? LANE_LABELS[computed].name : String(computed)).toLowerCase()}`
       : "";
-  return label ? `${label.name} (${label.badge})${extra}${shadow}` : `Lane ${lane}${extra}${shadow}`;
+  return label
+    ? `${label.name} (${label.badge})${extra}${shadow}`
+    : `Lane ${lane}${extra}${shadow}`;
 }
 
 /** `get_change_status` for people. */

@@ -8,7 +8,7 @@
  * job needs, revoked when the job ends; never logged, never handed to a sandbox (the sandbox
  * reads the Artifacts mirror with an Artifacts read token).
  */
-import { qaSectionFor } from "../qa/github.js";
+
 import type { Ports } from "@app/coordinator";
 import type { GithubRepoHost } from "@app/domain";
 import {
@@ -28,6 +28,7 @@ import { and, eq } from "drizzle-orm";
 import type { Bindings } from "../app-env.js";
 import { githubCheckRuns } from "../db/github-schema.js";
 import { platformOrigin } from "../integrations/runtime.js";
+import { qaSectionFor } from "../qa/github.js";
 import { D1Store, type Db } from "../store/d1-store.js";
 import { appForId } from "./app-config.js";
 import { d1PrIndex, prWritesEnabled } from "./pr-index.js";

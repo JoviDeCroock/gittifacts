@@ -60,7 +60,9 @@ export function CaseTag() {
             <b>
               Quick review: still owed<span class="sr-only"> (Lane 1)</span>
             </b>
-            <span>A model check found a behavior change, so a person approves the walkthrough.</span>
+            <span>
+              A model check found a behavior change, so a person approves the walkthrough.
+            </span>
           </span>
         </div>
         <div class="case__strip case__strip--2">

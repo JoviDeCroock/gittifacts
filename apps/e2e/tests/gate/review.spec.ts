@@ -15,7 +15,10 @@ test("dashboard: the first-run checklist and the human's repo", async ({ authed:
   await expect(checklist.locator("li[data-state]")).toHaveCount(5);
   // The seeded repo makes "Create a repo" done from real state.
   await expect(checklist.locator('li[data-state="done"]')).not.toHaveCount(0);
-  const repoLink = page.getByRole("main").getByRole("link", { name: new RegExp(world.repoName) }).first();
+  const repoLink = page
+    .getByRole("main")
+    .getByRole("link", { name: new RegExp(world.repoName) })
+    .first();
   await expect(repoLink).toBeVisible();
   await expectNoHorizontalScroll(page);
   await repoLink.click();
@@ -23,7 +26,13 @@ test("dashboard: the first-run checklist and the human's repo", async ({ authed:
   await expect(page.getByRole("link", { name: /Rate limit logins/ }).first()).toBeVisible();
 });
 
-test("change: evidence page verifies the platform's signature", async ({ authed: page, world, request, baseURL, human }) => {
+test("change: evidence page verifies the platform's signature", async ({
+  authed: page,
+  world,
+  request,
+  baseURL,
+  human,
+}) => {
   await page.goto(`/changes/${world.changeId}`);
   await expect(page.getByRole("heading", { level: 1, name: "Rate limit logins" })).toBeVisible();
   await expect(page.getByText("src/auth/login.ts").first()).toBeVisible();
@@ -31,11 +40,18 @@ test("change: evidence page verifies the platform's signature", async ({ authed:
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByText("verify-attestation", { exact: false }).first()).toBeVisible();
   await expectNoHorizontalScroll(page);
-  const ev = await request.get(`${baseURL}/api/v1/changes/${world.changeId}/evidence`, { headers: { cookie: human.cookie } });
+  const ev = await request.get(`${baseURL}/api/v1/changes/${world.changeId}/evidence`, {
+    headers: { cookie: human.cookie },
+  });
   expect(((await ev.json()) as { verification: { ok: boolean } }).verification.ok).toBe(true);
 });
 
-test("agent push → walkthrough → the owner approves → the merge queue takes it", async ({ authed: page, agentWork, request, baseURL }) => {
+test("agent push → walkthrough → the owner approves → the merge queue takes it", async ({
+  authed: page,
+  agentWork,
+  request,
+  baseURL,
+}) => {
   await page.goto(`/changes/${agentWork.changeId}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expectNoHorizontalScroll(page);
@@ -49,7 +65,9 @@ test("agent push → walkthrough → the owner approves → the merge queue take
   const auth = { authorization: `Bearer ${agentWork.agentToken}` };
   await pollUntil(
     async () => {
-      const res = await request.get(`${baseURL}/api/v1/changes/${agentWork.changeId}`, { headers: auth });
+      const res = await request.get(`${baseURL}/api/v1/changes/${agentWork.changeId}`, {
+        headers: auth,
+      });
       return ((await res.json()) as { change: { status: string } }).change.status;
     },
     (status) => status !== "awaiting-review",
@@ -66,7 +84,9 @@ test("plan: read, sign and approve", async ({ authed: page, world, request, base
   await expect(submit).toBeEnabled();
   await submit.click();
   await expect(page.getByTestId("plan-decided")).toHaveAttribute("data-status", "approved");
-  const res = await request.get(`${baseURL}/api/v1/plans/${world.planId}`, { headers: { cookie: human.cookie } });
+  const res = await request.get(`${baseURL}/api/v1/plans/${world.planId}`, {
+    headers: { cookie: human.cookie },
+  });
   const body = (await res.json()) as { plan: { status: string; approvedBy: string | null } };
   expect(body.plan).toMatchObject({ status: "approved", approvedBy: human.principalId });
   await expectNoHorizontalScroll(page);

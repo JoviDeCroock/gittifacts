@@ -3,13 +3,32 @@ import { useLocation } from "preact-iso";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { ChangeSummary, Plan, PrincipalRef, RepoDetail } from "../api/types.js";
 import { BacktestCard } from "../components/BacktestCard.js";
-import { IntentPanel } from "../components/IntentPanel.js";
 import { Icon } from "../components/Icon.js";
+import { IntentPanel } from "../components/IntentPanel.js";
 import { paletteRepos } from "../components/Palette.js";
 import { Page } from "../components/Shell.js";
 import { Term } from "../components/Term.js";
-import { Button, Command, EmptyState, ErrorState, LaneTag, LinkButton, Loading, Segmented, StatusChip, Who } from "../components/ui.js";
-import { type ChangeFilter, FILTERS, LANES, type LaneGroup, groupByLane, matchesFilter, topReason } from "../lib/lanes.js";
+import {
+  Button,
+  Command,
+  EmptyState,
+  ErrorState,
+  LaneTag,
+  LinkButton,
+  Loading,
+  Segmented,
+  StatusChip,
+  Who,
+} from "../components/ui.js";
+import {
+  type ChangeFilter,
+  FILTERS,
+  groupByLane,
+  LANES,
+  type LaneGroup,
+  matchesFilter,
+  topReason,
+} from "../lib/lanes.js";
 import { cloneCommand } from "../lib/start.js";
 import { relative, shortAge } from "../lib/time.js";
 import { CATEGORY_LABEL, CHANGE_STATUS, PLAN_STATUS, plural } from "../lib/vocab.js";
@@ -19,7 +38,15 @@ import { principal } from "../state/session.js";
 import { ShadowLine } from "./repos.js";
 import "../styles/repo.css";
 
-function ChangeRow({ change, now, showStatus }: { change: ChangeSummary; now: number; showStatus: boolean }) {
+function ChangeRow({
+  change,
+  now,
+  showStatus,
+}: {
+  change: ChangeSummary;
+  now: number;
+  showStatus: boolean;
+}) {
   const status = CHANGE_STATUS[change.status];
   const why = topReason(change.laneReasons, change.computedLane, change.lane);
   return (
@@ -48,10 +75,16 @@ function ChangeRow({ change, now, showStatus }: { change: ChangeSummary; now: nu
               <span class="change-row__plan-title">{change.planTitle}</span>
             </>
           ) : (
-            <span class="change-row__noplan">{CATEGORY_LABEL[change.claim.category] ?? change.claim.category}, no plan</span>
+            <span class="change-row__noplan">
+              {CATEGORY_LABEL[change.claim.category] ?? change.claim.category}, no plan
+            </span>
           )}
         </span>
-        <time class="change-row__age tnum" dateTime={change.updatedAt} title={new Date(change.updatedAt).toLocaleString()}>
+        <time
+          class="change-row__age tnum"
+          dateTime={change.updatedAt}
+          title={new Date(change.updatedAt).toLocaleString()}
+        >
           {shortAge(change.updatedAt, now)}
         </time>
       </a>
@@ -59,20 +92,37 @@ function ChangeRow({ change, now, showStatus }: { change: ChangeSummary; now: nu
   );
 }
 
-function groupTitle(group: LaneGroup<ChangeSummary>): { title: string; detail: string; calibrating?: boolean } {
-  if (group.lane === null) return { title: "Not routed yet", detail: "Checks are still running or failing, so there is no lane or walkthrough yet." };
+function groupTitle(group: LaneGroup<ChangeSummary>): {
+  title: string;
+  detail: string;
+  calibrating?: boolean;
+} {
+  if (group.lane === null)
+    return {
+      title: "Not routed yet",
+      detail: "Checks are still running or failing, so there is no lane or walkthrough yet.",
+    };
   const meta = LANES[group.lane];
   if (group.lane === 0 && group.shadow) {
     return {
       title: `${meta.name} (${meta.badge})`,
       calibrating: true,
-      detail: "The evidence alone would auto-merge these. Auto-merge is calibrating, so they come to you, and your lane pick counts toward agreement.",
+      detail:
+        "The evidence alone would auto-merge these. Auto-merge is calibrating, so they come to you, and your lane pick counts toward agreement.",
     };
   }
   return { title: `${meta.name} (${meta.badge})`, detail: meta.description };
 }
 
-function LaneSection({ group, now, showStatus }: { group: LaneGroup<ChangeSummary>; now: number; showStatus: boolean }) {
+function LaneSection({
+  group,
+  now,
+  showStatus,
+}: {
+  group: LaneGroup<ChangeSummary>;
+  now: number;
+  showStatus: boolean;
+}) {
   const { title, detail, calibrating } = groupTitle(group);
   const id = `group-${group.key}`;
   return (
@@ -113,12 +163,24 @@ function PlanRow({ plan, author, now }: { plan: Plan; author: PrincipalRef | nul
         <Icon name="file-text" size={20} class="plan-row__icon" />
         <span class="plan-row__title">{plan.title}</span>
         <span class="plan-row__meta">
-          {author ? <Who kind={author.kind} name={author.name} id={author.id} owner={author.ownerName ?? null} size={20} /> : null}
+          {author ? (
+            <Who
+              kind={author.kind}
+              name={author.name}
+              id={author.id}
+              owner={author.ownerName ?? null}
+              size={20}
+            />
+          ) : null}
           <span>
-            {plural(plan.acceptanceCriteria.length, "criterion", "criteria")} · {plural(plan.scopePaths.length, "scope path")}
+            {plural(plan.acceptanceCriteria.length, "criterion", "criteria")} ·{" "}
+            {plural(plan.scopePaths.length, "scope path")}
           </span>
           <span>
-            waiting <time dateTime={plan.createdAt}>{relative(plan.createdAt, now).replace(/ ago$/, "")}</time>
+            waiting{" "}
+            <time dateTime={plan.createdAt}>
+              {relative(plan.createdAt, now).replace(/ ago$/, "")}
+            </time>
           </span>
         </span>
       </a>
@@ -135,16 +197,29 @@ function useAuthors(plans: Plan[], changes: ChangeSummary[]): Map<string, Princi
         ids.map(async (id): Promise<PrincipalRef | null> => {
           const c = changes.find((x) => x.authorId === id);
           const fallback = c ? { id, kind: c.authorKind, name: c.authorName, ownerId: null } : null;
-          return api.principal(id).then((r) => r.principal, () => fallback);
+          return api.principal(id).then(
+            (r) => r.principal,
+            () => fallback,
+          );
         }),
       ),
     [ids.join(",")],
   );
   const st = res.state.value;
-  return new Map(st.status === "ok" ? st.data.filter((p): p is PrincipalRef => p !== null).map((p) => [p.id, p]) : []);
+  return new Map(
+    st.status === "ok"
+      ? st.data.filter((p): p is PrincipalRef => p !== null).map((p) => [p.id, p])
+      : [],
+  );
 }
 
-function Lane0Control({ detail, onChange }: { detail: RepoDetail; onChange: (d: RepoDetail) => void }) {
+function Lane0Control({
+  detail,
+  onChange,
+}: {
+  detail: RepoDetail;
+  onChange: (d: RepoDetail) => void;
+}) {
   const busy = useSignal(false);
   const error = useSignal<string | null>(null);
   const confirm = useSignal(false);
@@ -183,16 +258,32 @@ function Lane0Control({ detail, onChange }: { detail: RepoDetail; onChange: (d: 
                   : "Changes the evidence qualifies for auto-merge will merge without a person. Each still rolls out behind a flag with automatic revert."}
               </p>
               <div class="lane0__buttons">
-                <Button variant="secondary" size="sm" onClick={() => (confirm.value = false)} disabled={busy.value}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => (confirm.value = false)}
+                  disabled={busy.value}
+                >
                   Cancel
                 </Button>
-                <Button variant={enabled ? "danger-outline" : "primary"} size="sm" busy={busy.value} busyLabel="Saving…" onClick={() => apply(!enabled)}>
+                <Button
+                  variant={enabled ? "danger-outline" : "primary"}
+                  size="sm"
+                  busy={busy.value}
+                  busyLabel="Saving…"
+                  onClick={() => apply(!enabled)}
+                >
                   {enabled ? "Turn auto-merge off (calibrate again)" : "Turn on auto-merge"}
                 </Button>
               </div>
             </div>
           ) : (
-            <Button variant={enabled ? "secondary" : "primary"} size="sm" icon={enabled ? "pause" : "power"} onClick={() => (confirm.value = true)}>
+            <Button
+              variant={enabled ? "secondary" : "primary"}
+              size="sm"
+              icon={enabled ? "pause" : "power"}
+              onClick={() => (confirm.value = true)}
+            >
               {enabled ? "Turn auto-merge off" : "Turn on auto-merge"}
             </Button>
           )}
@@ -213,14 +304,26 @@ interface RailPlan {
   note: string;
 }
 
-const OPEN_CHANGE: ReadonlySet<ChangeSummary["status"]> = new Set(["awaiting-push", "running", "failing", "awaiting-review", "approved", "queued", "merged", "rolling-out"]);
+const OPEN_CHANGE: ReadonlySet<ChangeSummary["status"]> = new Set([
+  "awaiting-push",
+  "running",
+  "failing",
+  "awaiting-review",
+  "approved",
+  "queued",
+  "merged",
+  "rolling-out",
+]);
 
 /**
  * The side rail puts plans with work in flight first, then approved plans nobody has started,
  * and folds the finished and withdrawn ones away (finding 20: a wall of green said nothing).
  * Drafts are listed above the changes instead.
  */
-function planRail(plans: Plan[], changes: ChangeSummary[]): { open: RailPlan[]; ready: RailPlan[]; done: RailPlan[] } {
+function planRail(
+  plans: Plan[],
+  changes: ChangeSummary[],
+): { open: RailPlan[]; ready: RailPlan[]; done: RailPlan[] } {
   const open: RailPlan[] = [];
   const ready: RailPlan[] = [];
   const done: RailPlan[] = [];
@@ -233,7 +336,11 @@ function planRail(plans: Plan[], changes: ChangeSummary[]): { open: RailPlan[]; 
     const mine = changes.filter((c) => c.planId === plan.id);
     const live = mine.filter((c) => OPEN_CHANGE.has(c.status));
     const review = live.filter((c) => c.status === "awaiting-review").length;
-    if (live.length > 0) open.push({ plan, note: `${plural(live.length, "change")} open${review > 0 ? ` · ${review} to review` : ""}` });
+    if (live.length > 0)
+      open.push({
+        plan,
+        note: `${plural(live.length, "change")} open${review > 0 ? ` · ${review} to review` : ""}`,
+      });
     else if (mine.length === 0) ready.push({ plan, note: "Approved, no changes yet" });
     else done.push({ plan, note: `Done: ${plural(mine.length, "change")}` });
   }
@@ -256,7 +363,9 @@ function PlanMini({ plans }: { plans: RailPlan[] }) {
 
 export function RepoChanges({ repoId }: { repoId: string }) {
   const { query, route } = useLocation();
-  const filter = (FILTERS.some((f) => f.id === query.filter) ? query.filter : "review") as ChangeFilter;
+  const filter = (
+    FILTERS.some((f) => f.id === query.filter) ? query.filter : "review"
+  ) as ChangeFilter;
   const res = useResource(async () => {
     const [detail, list] = await Promise.all([api.repo(repoId), api.changes(repoId)]);
     return { detail, changes: list.changes };
@@ -281,7 +390,12 @@ export function RepoChanges({ repoId }: { repoId: string }) {
                 <h2 id="changes-title" class="changes__title">
                   Changes
                 </h2>
-                <Segmented label="Filter changes" value={filter} options={FILTERS.map((f) => ({ id: f.id, label: f.label }))} onChange={() => undefined} />
+                <Segmented
+                  label="Filter changes"
+                  value={filter}
+                  options={FILTERS.map((f) => ({ id: f.id, label: f.label }))}
+                  onChange={() => undefined}
+                />
               </div>
               <Loading label="Loading changes" lines={8} />
             </section>
@@ -306,11 +420,15 @@ export function RepoChanges({ repoId }: { repoId: string }) {
 
   const { detail, changes } = st.data;
   const repo = detail.repo;
-  const counts = Object.fromEntries(FILTERS.map((f) => [f.id, changes.filter((c) => matchesFilter(c.status, f.id)).length])) as Record<ChangeFilter, number>;
+  const counts = Object.fromEntries(
+    FILTERS.map((f) => [f.id, changes.filter((c) => matchesFilter(c.status, f.id)).length]),
+  ) as Record<ChangeFilter, number>;
   const visible = changes.filter((c) => matchesFilter(c.status, filter));
   const groups = groupByLane(visible, repo.policy.lane0Enabled);
   const rail = planRail(pl.status === "ok" ? pl.data.plans : [], changes);
-  const agentsAtWork = changes.some((c) => c.authorKind === "agent" && !matchesFilter(c.status, "closed"));
+  const agentsAtWork = changes.some(
+    (c) => c.authorKind === "agent" && !matchesFilter(c.status, "closed"),
+  );
   const clone = cloneCommand(window.location.origin, repo.id);
 
   return (
@@ -342,7 +460,11 @@ export function RepoChanges({ repoId }: { repoId: string }) {
           <span>
             {repo.namespace} · {repo.defaultBranch}
           </span>
-          <span>{repo.jurisdiction === "unrestricted" ? "Any region" : `Data stays in ${repo.jurisdiction.toUpperCase()}`}</span>
+          <span>
+            {repo.jurisdiction === "unrestricted"
+              ? "Any region"
+              : `Data stays in ${repo.jurisdiction.toUpperCase()}`}
+          </span>
           {repo.deployTarget ? (
             <span>
               Deploys <code>{repo.deployTarget}</code>
@@ -351,7 +473,8 @@ export function RepoChanges({ repoId }: { repoId: string }) {
           {repo.claim.status === "unclaimed" ? (
             <span class="repo-unclaimed" data-testid="repo-unclaimed">
               <Term id="unclaimed" />: previews only and no auto-merge
-              {repo.claim.expiresAt ? `, deleted ${relative(repo.claim.expiresAt, now)}` : ""} unless a person claims it with the claim link its agent was given.{" "}
+              {repo.claim.expiresAt ? `, deleted ${relative(repo.claim.expiresAt, now)}` : ""}{" "}
+              unless a person claims it with the claim link its agent was given.{" "}
               <a href="/docs/guides/claim-a-project">How to claim</a>
             </span>
           ) : null}
@@ -371,7 +494,9 @@ export function RepoChanges({ repoId }: { repoId: string }) {
               <h2 id="plans-waiting" class="plans-waiting__title">
                 {plural(drafts.length, "plan")} {drafts.length === 1 ? "needs" : "need"} approval
               </h2>
-              <p class="plans-waiting__lede">Agents cannot start work on a plan until a person other than its author approves it.</p>
+              <p class="plans-waiting__lede">
+                Agents cannot start work on a plan until a person other than its author approves it.
+              </p>
               <ul class="plan-list">
                 {drafts.map((p) => (
                   <PlanRow key={p.id} plan={p} author={authors.get(p.authorId) ?? null} now={now} />
@@ -389,41 +514,61 @@ export function RepoChanges({ repoId }: { repoId: string }) {
                 label="Filter changes"
                 value={filter}
                 options={FILTERS.map((f) => ({ id: f.id, label: f.label, count: counts[f.id] }))}
-                onChange={(id) => route(`/repos/${repoId}${id === "review" ? "" : `?filter=${id}`}`, true)}
+                onChange={(id) =>
+                  route(`/repos/${repoId}${id === "review" ? "" : `?filter=${id}`}`, true)
+                }
               />
             </div>
             {changes.length === 0 ? (
               <EmptyState icon="git-branch" title="No changes yet">
                 <p data-testid="changes-empty">
-                  Tell your agent what should change (above). It drafts a Plan for you to approve, then starts a Change in this repo. Each Change shows up here with its review
-                  lane once its checks pass and the reviewer agent has written a walkthrough.
+                  Tell your agent what should change (above). It drafts a Plan for you to approve,
+                  then starts a Change in this repo. Each Change shows up here with its review lane
+                  once its checks pass and the reviewer agent has written a walkthrough.
                 </p>
               </EmptyState>
             ) : groups.length === 0 ? (
               <EmptyState
                 icon="check-circle"
-                title={filter === "review" ? "Nothing waits for your review" : `No ${FILTERS.find((f) => f.id === filter)?.label.toLowerCase()} changes`}
+                title={
+                  filter === "review"
+                    ? "Nothing waits for your review"
+                    : `No ${FILTERS.find((f) => f.id === filter)?.label.toLowerCase()} changes`
+                }
                 action={
-                  <Button variant="secondary" size="sm" onClick={() => route(`/repos/${repoId}?filter=all`, true)}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => route(`/repos/${repoId}?filter=all`, true)}
+                  >
                     Show all changes
                   </Button>
                 }
               />
             ) : (
-              groups.map((g) => <LaneSection key={g.key} group={g} now={now} showStatus={filter !== "review"} />)
+              groups.map((g) => (
+                <LaneSection key={g.key} group={g} now={now} showStatus={filter !== "review"} />
+              ))
             )}
           </section>
         </div>
 
         <aside class="repo-layout__side">
           <Lane0Control detail={detail} onChange={(d) => res.set({ detail: d, changes })} />
-          {repo.host ? <BacktestCard repoId={repo.id} repoUrl={`https://github.com/${repo.host.owner}/${repo.host.repo}`} /> : null}
+          {repo.host ? (
+            <BacktestCard
+              repoId={repo.id}
+              repoUrl={`https://github.com/${repo.host.owner}/${repo.host.repo}`}
+            />
+          ) : null}
           <section class="side-block" aria-labelledby="all-plans">
             <h2 id="all-plans" class="side-block__title">
               <Term id="plan">Plans</Term>
             </h2>
             {pl.status === "loading" ? <Loading label="Loading plans" lines={3} /> : null}
-            {pl.status === "error" ? <ErrorState error={pl.error} what="plans" onRetry={plans.reload} /> : null}
+            {pl.status === "error" ? (
+              <ErrorState error={pl.error} what="plans" onRetry={plans.reload} />
+            ) : null}
             {pl.status === "ok" && rail.open.length + rail.ready.length + rail.done.length === 0 ? (
               <p class="side-block__empty">
                 {drafts.length === 0

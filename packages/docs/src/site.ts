@@ -18,7 +18,12 @@ const require = createRequire(import.meta.url);
 
 /** The page's markdown as served: the pages marker expanded and relative links made absolute. */
 export function markdownTwin(pages: readonly Page[], page: Page): string {
-  let body = githubBlocks(page.body).replace(PAGES_MARKER, () => pagesList(pages.filter((p) => listed(p)), page));
+  let body = githubBlocks(page.body).replace(PAGES_MARKER, () =>
+    pagesList(
+      pages.filter((p) => listed(p)),
+      page,
+    ),
+  );
   body = body.replace(
     /\]\((?!https?:|mailto:|\/|#)([^)\s]+)\)/g,
     (_m, href: string) => `](${resolveHref(href, page.file)})`,
@@ -138,14 +143,15 @@ export function buildSite(pages: readonly Page[]): Site {
       generated: page.fm.generated,
       headings: rendered.headings.map((h) => ({ depth: h.depth, id: h.id, text: h.text })),
     });
-    if (listed(page)) search.push({
-      u: page.url,
-      t: page.fm.title,
-      s: sectionTitle(page.section),
-      d: page.fm.description,
-      h: rendered.headings.map((h) => [h.id, h.text]),
-      x: stripMarkdown(md).slice(0, 4000),
-    });
+    if (listed(page))
+      search.push({
+        u: page.url,
+        t: page.fm.title,
+        s: sectionTitle(page.section),
+        d: page.fm.description,
+        h: rendered.headings.map((h) => [h.id, h.text]),
+        x: stripMarkdown(md).slice(0, 4000),
+      });
   }
 
   const missing = notFoundPage();

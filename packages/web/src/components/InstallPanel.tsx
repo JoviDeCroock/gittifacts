@@ -57,7 +57,9 @@ export function InstallPanel({ view, onApprove, onDeny, expired }: InstallPanelP
   const existingRepos = existing
     ? repoLine(
         existing.repoSelection,
-        existing.repoIds.map((id) => ({ name: view.repos.find((r) => r.id === id)?.fullName ?? id })),
+        existing.repoIds.map((id) => ({
+          name: view.repos.find((r) => r.id === id)?.fullName ?? id,
+        })),
       )
     : "";
 
@@ -167,7 +169,8 @@ export function InstallPanel({ view, onApprove, onDeny, expired }: InstallPanelP
         </ul>
         {removed.length > 0 ? (
           <p class="int-install__removed">
-            No longer asks for: {removed.join(", ")}. Updating removes {removed.length === 1 ? "it" : "them"}.
+            No longer asks for: {removed.join(", ")}. Updating removes{" "}
+            {removed.length === 1 ? "it" : "them"}.
           </p>
         ) : null}
       </section>
@@ -234,7 +237,12 @@ export function InstallPanel({ view, onApprove, onDeny, expired }: InstallPanelP
           </Button>
         </div>
         {missing ? (
-          <button type="button" class="consent-bar__missing" id="install-missing" onClick={goToMissing}>
+          <button
+            type="button"
+            class="consent-bar__missing"
+            id="install-missing"
+            onClick={goToMissing}
+          >
             <Icon name="arrow-up-right" size={14} />
             {missing}
           </button>

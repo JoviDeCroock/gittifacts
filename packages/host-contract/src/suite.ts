@@ -159,7 +159,12 @@ const RUNNERS: Record<ContractKind, Runner> = {
 
 const approvalRunner: Runner = async (host, s) => {
   const fx = loadFixture(s.fixture);
-  const { ref, headSha: first } = await host.open({ scenario: s, base: fx.base, push: fx.push, title: fx.title });
+  const { ref, headSha: first } = await host.open({
+    scenario: s,
+    base: fx.base,
+    push: fx.push,
+    title: fx.title,
+  });
   await host.settle();
   await expectGraded(host, ref, first, s, fx);
   await host.review(ref, first, "author");
@@ -167,7 +172,11 @@ const approvalRunner: Runner = async (host, s) => {
   expect((await host.observe(ref, first)).approved).toBe(false);
   // A new head: an approval of the old one does nothing.
   const path = "test/allocate.test.ts";
-  const second = await host.push(ref, { [path]: `${fx.head[path] ?? ""}// re-pushed\n` }, { force: false });
+  const second = await host.push(
+    ref,
+    { [path]: `${fx.head[path] ?? ""}// re-pushed\n` },
+    { force: false },
+  );
   await host.settle();
   await host.review(ref, first, "maintainer");
   expect((await host.observe(ref, second)).approved).toBe(false);

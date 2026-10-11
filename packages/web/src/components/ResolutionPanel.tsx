@@ -5,7 +5,13 @@
  * with each landed line tagged by where it came from and the resolver's own lines marked.
  */
 import type { ResolutionView } from "../api/resolution.js";
-import { type LandedLine, type LineOrigin, parseResolution, type ResolvedFile, resolverLineCount } from "../lib/resolution.js";
+import {
+  type LandedLine,
+  type LineOrigin,
+  parseResolution,
+  type ResolvedFile,
+  resolverLineCount,
+} from "../lib/resolution.js";
 import { plural, shortSha } from "../lib/vocab.js";
 import { Icon } from "./Icon.js";
 import "../styles/resolution.css";
@@ -32,7 +38,8 @@ function Lines({ lines, empty }: { lines: string[]; empty: string }) {
 }
 
 function Landed({ lines, hidden }: { lines: LandedLine[]; hidden: number }) {
-  if (lines.length === 0) return <p class="res-lines res-lines--empty">Nothing: the region was removed.</p>;
+  if (lines.length === 0)
+    return <p class="res-lines res-lines--empty">Nothing: the region was removed.</p>;
   return (
     <ol class="res-lines res-landed">
       {lines.map((l, i) => (
@@ -44,7 +51,9 @@ function Landed({ lines, hidden }: { lines: LandedLine[]; hidden: number }) {
           <code class="res-text">{l.text === "" ? " " : l.text}</code>
         </li>
       ))}
-      {hidden > 0 ? <li class="res-line res-line--hidden">{plural(hidden, "unchanged line")} not shown</li> : null}
+      {hidden > 0 ? (
+        <li class="res-line res-line--hidden">{plural(hidden, "unchanged line")} not shown</li>
+      ) : null}
     </ol>
   );
 }
@@ -56,7 +65,12 @@ function FileRegions({ f, upstreamName }: { f: ResolvedFile; upstreamName: strin
         <div key={i} class="res-region">
           <h3 class="res-region__title">
             <code>{f.path}</code>
-            {f.regions.length > 1 ? <span class="res-dim"> · conflict {i + 1} of {f.regions.length}</span> : null}
+            {f.regions.length > 1 ? (
+              <span class="res-dim">
+                {" "}
+                · conflict {i + 1} of {f.regions.length}
+              </span>
+            ) : null}
           </h3>
           <div class="res-sides">
             <div class="res-side">
@@ -75,7 +89,8 @@ function FileRegions({ f, upstreamName }: { f: ResolvedFile; upstreamName: strin
           {r.base !== null ? (
             <details class="disclosure res-base">
               <summary>
-                Common base before both <Icon name="chevron-down" size={16} class="disclosure__chev" />
+                Common base before both{" "}
+                <Icon name="chevron-down" size={16} class="disclosure__chev" />
               </summary>
               <Lines lines={r.base} empty="Nothing" />
             </details>
@@ -85,7 +100,8 @@ function FileRegions({ f, upstreamName }: { f: ResolvedFile; upstreamName: strin
       {f.outside.length > 0 ? (
         <div class="res-outside" role="note">
           <p class="res-outside__title">
-            <Icon name="triangle-alert" size={16} /> Edited outside the conflict in <code>{f.path}</code>: no one approved these lines
+            <Icon name="triangle-alert" size={16} /> Edited outside the conflict in{" "}
+            <code>{f.path}</code>: no one approved these lines
           </p>
           <ol class="res-lines">
             {f.outside.map((o, i) => (
@@ -110,14 +126,21 @@ export function ResolutionPanel({ r, awaiting }: { r: ResolutionView; awaiting: 
   const upstreamName = r.upstream.length === 1 && upstream ? upstream.changeId : "upstream";
   const ask = awaiting && r.approvalRequested;
   return (
-    <section class={`resolution ${ask ? "resolution--ask" : ""}`} aria-labelledby="resolution-title">
+    <section
+      class={`resolution ${ask ? "resolution--ask" : ""}`}
+      aria-labelledby="resolution-title"
+    >
       <h2 id="resolution-title" class="resolution__title">
         <Icon name="git-merge" size={20} />
-        {ask ? "Approve the resolution, not only the diff" : "The merge queue resolved a conflict in this change"}
+        {ask
+          ? "Approve the resolution, not only the diff"
+          : "The merge queue resolved a conflict in this change"}
       </h2>
       <p class="resolution__lede">
-        What lands is the resolver agent's version (head <code>{shortSha(r.headSha)}</code>), not the head the agent pushed (
-        <code>{shortSha(r.originalHeadSha)}</code>){r.approvalRequested ? ", so the earlier approval no longer covers it" : ""}. It resolved a {r.kind} conflict with{" "}
+        What lands is the resolver agent's version (head <code>{shortSha(r.headSha)}</code>), not
+        the head the agent pushed (<code>{shortSha(r.originalHeadSha)}</code>)
+        {r.approvalRequested ? ", so the earlier approval no longer covers it" : ""}. It resolved a{" "}
+        {r.kind} conflict with{" "}
         {r.upstream.length === 0
           ? "upstream changes"
           : r.upstream.map((u, i) => (
@@ -131,7 +154,9 @@ export function ResolutionPanel({ r, awaiting }: { r: ResolutionView; awaiting: 
       <ul class="resolution__facts">
         <li class={written > 0 ? "tone--warn" : "tone--ok"}>
           <Icon name={written > 0 ? "bot" : "check"} size={16} />
-          {written > 0 ? `${plural(written, "line")} written by the resolver (found on neither side)` : "Every landed line comes from one of the sides"}
+          {written > 0
+            ? `${plural(written, "line")} written by the resolver (found on neither side)`
+            : "Every landed line comes from one of the sides"}
         </li>
         <li class={outside ? "tone--danger" : "tone--ok"}>
           <Icon name={outside ? "triangle-alert" : "check"} size={16} />
@@ -139,18 +164,27 @@ export function ResolutionPanel({ r, awaiting }: { r: ResolutionView; awaiting: 
         </li>
       </ul>
       {item === null ? (
-        <p class="res-dim">The resolution's evidence could not be read, so its lines can't be shown. Treat it as unreviewed.</p>
+        <p class="res-dim">
+          The resolution's evidence could not be read, so its lines can't be shown. Treat it as
+          unreviewed.
+        </p>
       ) : files.length === 0 ? (
-        <p class="res-dim">The resolution has no line diff to show (it changed no text, or the diff could not be read).</p>
+        <p class="res-dim">
+          The resolution has no line diff to show (it changed no text, or the diff could not be
+          read).
+        </p>
       ) : (
         files.map((f) => <FileRegions key={f.path} f={f} upstreamName={upstreamName} />)
       )}
-      {item?.truncated ? <p class="res-dim">The resolution diff was cut at 64 KB; the rest is in the evidence.</p> : null}
+      {item?.truncated ? (
+        <p class="res-dim">The resolution diff was cut at 64 KB; the rest is in the evidence.</p>
+      ) : null}
       {item && item.rationale.trim() !== "" ? (
         <blockquote class="resolution__why">
           <p>{item.rationale}</p>
           <footer>
-            The resolver's own explanation ({item.resolver.model}). It is model text: it can only raise risk.
+            The resolver's own explanation ({item.resolver.model}). It is model text: it can only
+            raise risk.
           </footer>
         </blockquote>
       ) : null}

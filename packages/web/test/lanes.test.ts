@@ -1,9 +1,26 @@
 import type { Change, LaneReason } from "@app/domain";
 import { describe, expect, it } from "vitest";
-import { familyLabel, foldChart, groupByLane, matchesFilter, noTourCopy, pct, reasonFamily, shadowProgress, triageChart, unroutedCopy } from "../src/lib/lanes.js";
+import {
+  familyLabel,
+  foldChart,
+  groupByLane,
+  matchesFilter,
+  noTourCopy,
+  pct,
+  reasonFamily,
+  shadowProgress,
+  triageChart,
+  unroutedCopy,
+} from "../src/lib/lanes.js";
 
 type C = Pick<Change, "lane" | "computedLane" | "status" | "updatedAt"> & { id: string };
-const c = (id: string, lane: C["lane"], computedLane: C["computedLane"], status: C["status"] = "awaiting-review", updatedAt = "2026-10-01T10:00:00Z"): C => ({
+const c = (
+  id: string,
+  lane: C["lane"],
+  computedLane: C["computedLane"],
+  status: C["status"] = "awaiting-review",
+  updatedAt = "2026-10-01T10:00:00Z",
+): C => ({
   id,
   lane,
   computedLane,
@@ -62,8 +79,14 @@ describe("triageChart", () => {
 
   it("sorts rows by forced lane and marks the decisive ones", () => {
     const chart = triageChart(reasons, 2, 2);
-    expect(chart.rows.map((r) => r.reason.code)).toEqual(["api.breaking", "signal.missing.mutation", "size.small"]);
-    expect(chart.rows.filter((r) => r.decisive).map((r) => r.reason.code)).toEqual(["api.breaking"]);
+    expect(chart.rows.map((r) => r.reason.code)).toEqual([
+      "api.breaking",
+      "signal.missing.mutation",
+      "size.small",
+    ]);
+    expect(chart.rows.filter((r) => r.decisive).map((r) => r.reason.code)).toEqual([
+      "api.breaking",
+    ]);
     expect(chart.rows.find((r) => r.reason.code === "signal.missing.mutation")?.unknown).toBe(true);
     expect(chart.shadowRaised).toBe(false);
   });
@@ -101,7 +124,18 @@ describe("triageChart", () => {
   });
 
   it("names every family the live classifier sends (no row reads 'Other')", () => {
-    const live = ["ci.passed", "budget.ok", "evidence.verified", "dependency.none", "migration.none", "red-green.not-required", "tour.failed", "informational.ok", "resolution.semantic", "lane0.enabled"];
+    const live = [
+      "ci.passed",
+      "budget.ok",
+      "evidence.verified",
+      "dependency.none",
+      "migration.none",
+      "red-green.not-required",
+      "tour.failed",
+      "informational.ok",
+      "resolution.semantic",
+      "lane0.enabled",
+    ];
     for (const code of live) expect(familyLabel(code), code).not.toBe("Other");
     expect(reasonFamily("dependency.none")).toBe("dependencies");
     expect(reasonFamily("red-green.proven")).toBe("proof");
@@ -112,7 +146,11 @@ describe("triageChart", () => {
     expect(familyLabel("signal.missing.test-run")).toBe("Test run missing");
     expect(familyLabel("signal.error.llm-judgment")).toBe("Model judgment failed");
     expect(familyLabel("signal.error.something-new")).toBe("Missing measurement");
-    const chart = triageChart([{ code: "signal.error.screenshots", lane: 1, message: "Screenshots errored." }], 1, 1);
+    const chart = triageChart(
+      [{ code: "signal.error.screenshots", lane: 1, message: "Screenshots errored." }],
+      1,
+      1,
+    );
     expect(chart.rows[0]?.label).toBe("Screenshots failed");
     expect(chart.rows[0]?.unknown).toBe(true);
   });
@@ -120,20 +158,41 @@ describe("triageChart", () => {
 
 describe("shadowProgress", () => {
   it("is collecting until the minimum sample count is reached", () => {
-    const p = shadowProgress({ samples: 18, agreed: 18, ratio: null, needed: 7, threshold: 0.95, eligibleToEnableLane0: false });
+    const p = shadowProgress({
+      samples: 18,
+      agreed: 18,
+      ratio: null,
+      needed: 7,
+      threshold: 0.95,
+      eligibleToEnableLane0: false,
+    });
     expect(p.state).toBe("collecting");
     expect(p.detail).toContain("7 more reviews");
   });
 
   it("estimates the agreeing reviews still needed below the threshold", () => {
-    const p = shadowProgress({ samples: 44, agreed: 41, ratio: 41 / 44, needed: 0, threshold: 0.95, eligibleToEnableLane0: false });
+    const p = shadowProgress({
+      samples: 44,
+      agreed: 41,
+      ratio: 41 / 44,
+      needed: 0,
+      threshold: 0.95,
+      eligibleToEnableLane0: false,
+    });
     expect(p.state).toBe("below");
     // (0.95*44 - 41) / 0.05 = 16 more agreeing reviews
     expect(p.detail).toContain("about 16 more");
   });
 
   it("is eligible at or above the threshold", () => {
-    const p = shadowProgress({ samples: 61, agreed: 59, ratio: 59 / 61, needed: 0, threshold: 0.95, eligibleToEnableLane0: true });
+    const p = shadowProgress({
+      samples: 61,
+      agreed: 59,
+      ratio: 59 / 61,
+      needed: 0,
+      threshold: 0.95,
+      eligibleToEnableLane0: true,
+    });
     expect(p.state).toBe("eligible");
     expect(p.headline).toBe("96.7% agreement");
   });
@@ -155,13 +214,19 @@ describe("unroutedCopy", () => {
     expect(unroutedCopy("failing", "chg_1").line).toMatch(/pushes a fix/);
   });
   it("closed changes and the bootstrap are not routed, each with its own reason", () => {
-    expect(unroutedCopy("abandoned", "chg_1")).toEqual({ title: "Not routed", line: "This change closed before a lane was computed." });
+    expect(unroutedCopy("abandoned", "chg_1")).toEqual({
+      title: "Not routed",
+      line: "This change closed before a lane was computed.",
+    });
     expect(unroutedCopy("merged", "bs-abc").line).toMatch(/first change/);
   });
 });
 
 describe("noTourCopy", () => {
-  const ch = (status: Parameters<typeof noTourCopy>[0]["status"], extra: Partial<Parameters<typeof noTourCopy>[0]> = {}) => ({
+  const ch = (
+    status: Parameters<typeof noTourCopy>[0]["status"],
+    extra: Partial<Parameters<typeof noTourCopy>[0]> = {},
+  ) => ({
     id: "chg_1",
     status,
     lane: null,
@@ -179,8 +244,13 @@ describe("noTourCopy", () => {
     // Sent back by a reviewer: there is a head, and the author is pushing a new one.
     expect(noTourCopy(ch("awaiting-push", { headSha: "abc1234" })).body).not.toMatch(/not pushed/);
     expect(noTourCopy(ch("awaiting-push", { headSha: "abc1234" })).showDiff).toBe(true);
-    expect(noTourCopy(ch("awaiting-review"), "queued").title).toBe("The walkthrough is not written yet");
-    expect(noTourCopy(ch("awaiting-review", { laneReasons: [{ code: "tour.failed" }] }), "passed").showDiff).toBe(true);
+    expect(noTourCopy(ch("awaiting-review"), "queued").title).toBe(
+      "The walkthrough is not written yet",
+    );
+    expect(
+      noTourCopy(ch("awaiting-review", { laneReasons: [{ code: "tour.failed" }] }), "passed")
+        .showDiff,
+    ).toBe(true);
     expect(noTourCopy(ch("merged", { id: "bs-abc" })).title).toMatch(/first change/);
     expect(noTourCopy(ch("merged", { lane: 0 })).title).toMatch(/auto-merged/);
   });
@@ -190,17 +260,17 @@ describe("noTourCopy", () => {
       title: "The reviewer agent is writing the walkthrough",
       showDiff: true,
     });
-    expect(noTourCopy(ch("awaiting-review", { laneReasons: [{ code: "tour.failed" }] })).title).toBe(
-      "No walkthrough: the reviewer agent could not write one",
-    );
+    expect(
+      noTourCopy(ch("awaiting-review", { laneReasons: [{ code: "tour.failed" }] })).title,
+    ).toBe("No walkthrough: the reviewer agent could not write one");
     expect(noTourCopy(ch("merged", { lane: 1 }))).toEqual({
       title: "No walkthrough for this change",
       body: "It was decided without a walkthrough. The diff and the signed evidence are the record.",
       showDiff: true,
     });
-    expect(noTourCopy(ch("merged", { lane: 2, laneReasons: [{ code: "tour.failed" }] })).title).toBe(
-      "No walkthrough: the reviewer agent could not write one",
-    );
+    expect(
+      noTourCopy(ch("merged", { lane: 2, laneReasons: [{ code: "tour.failed" }] })).title,
+    ).toBe("No walkthrough: the reviewer agent could not write one");
     expect(noTourCopy(ch("failing"), "failed").body).toMatch(/pushes a fix/);
   });
 });
@@ -208,13 +278,25 @@ describe("noTourCopy", () => {
 describe("foldChart", () => {
   const r = (code: string, lane: 0 | 1 | 2): LaneReason => ({ code, lane, message: code });
   it("puts the deciding reasons first, then the raising ones, and folds the passing checks", () => {
-    const chart = triageChart([r("tests.passed", 0), r("scope.drift", 1), r("api.breaking", 2), r("coverage.ok", 0), r("deps.added", 2)], null, null);
+    const chart = triageChart(
+      [
+        r("tests.passed", 0),
+        r("scope.drift", 1),
+        r("api.breaking", 2),
+        r("coverage.ok", 0),
+        r("deps.added", 2),
+      ],
+      null,
+      null,
+    );
     const { shown, passing } = foldChart(chart.rows);
     expect(shown.map((x) => x.reason.code)).toEqual(["api.breaking", "deps.added", "scope.drift"]);
     expect(passing.map((x) => x.reason.code)).toEqual(["tests.passed", "coverage.ok"]);
   });
   it("never folds a missing measurement into passed", () => {
-    const { shown, passing } = foldChart(triageChart([r("coverage.missing", 0), r("tests.passed", 0)], null, null).rows);
+    const { shown, passing } = foldChart(
+      triageChart([r("coverage.missing", 0), r("tests.passed", 0)], null, null).rows,
+    );
     expect(shown.map((x) => x.reason.code)).toEqual(["coverage.missing"]);
     expect(passing.map((x) => x.reason.code)).toEqual(["tests.passed"]);
   });

@@ -10,7 +10,7 @@
 import type { Caller, Services } from "../app-env.js";
 import { GITHUB_WEB } from "./api.js";
 import { githubApp } from "./app-config.js";
-import { randomNonce, signInstallState, verifyInstallState, type InstallState } from "./crypto.js";
+import { type InstallState, randomNonce, signInstallState, verifyInstallState } from "./crypto.js";
 import { getInstallation } from "./store.js";
 
 export const SETTINGS_PATH = "/settings/github";

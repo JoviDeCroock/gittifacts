@@ -43,12 +43,18 @@ export async function carryQaRun(
   ports: Pick<Ports, "signer" | "store">,
   input: { changeId: string; headSha: string; items: EvidenceItem[] },
 ): Promise<{ items: EvidenceItem[]; carried: number; dropped: string | null }> {
-  if (input.items.some((i) => i.kind === "qa-run")) return { items: input.items, carried: 0, dropped: null };
+  if (input.items.some((i) => i.kind === "qa-run"))
+    return { items: input.items, carried: 0, dropped: null };
   const prior = await ports.store.getEvidence(input.changeId, input.headSha);
   const qa = prior?.items.filter((i) => i.kind === "qa-run") ?? [];
   if (prior === null || qa.length === 0) return { items: input.items, carried: 0, dropped: null };
   const check = await ports.signer.verifyEvidence(prior);
-  if (!check.ok) return { items: input.items, carried: 0, dropped: check.reason ?? "the previous bundle did not verify" };
+  if (!check.ok)
+    return {
+      items: input.items,
+      carried: 0,
+      dropped: check.reason ?? "the previous bundle did not verify",
+    };
   return { items: [...input.items, ...qa], carried: qa.length, dropped: null };
 }
 

@@ -24,22 +24,28 @@ describe("integration copy", () => {
 
   it("explains scopes with the server's words, in catalog order", () => {
     expect(scopeText("contents:read").title).toBe("Clone the code");
-    expect(sortScopes(["checks:write", "repo:read", "webhooks"])).toEqual(["repo:read", "webhooks", "checks:write"]);
+    expect(sortScopes(["checks:write", "repo:read", "webhooks"])).toEqual([
+      "repo:read",
+      "webhooks",
+      "checks:write",
+    ]);
   });
 
   it("never shows a retrying delivery as plain pending", () => {
     expect(deliveryStatus({ status: "pending", attempts: 0 }).label).toBe("Pending");
-    expect(deliveryStatus({ status: "pending", attempts: 2 })).toMatchObject({ label: "Retrying", tone: "warn" });
+    expect(deliveryStatus({ status: "pending", attempts: 2 })).toMatchObject({
+      label: "Retrying",
+      tone: "warn",
+    });
     expect(deliveryStatus({ status: "failed", attempts: 8 }).tone).toBe("danger");
   });
 });
 
 describe("integration form checks", () => {
   it("splits redirect URIs one per line, trimmed and deduplicated", () => {
-    expect(lines(" https://a.example/cb \n\nhttps://a.example/cb\r\nhttp://localhost:3000/cb")).toEqual([
-      "https://a.example/cb",
-      "http://localhost:3000/cb",
-    ]);
+    expect(
+      lines(" https://a.example/cb \n\nhttps://a.example/cb\r\nhttp://localhost:3000/cb"),
+    ).toEqual(["https://a.example/cb", "http://localhost:3000/cb"]);
   });
 
   it("allows https anywhere and http only on localhost", () => {

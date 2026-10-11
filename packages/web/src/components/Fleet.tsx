@@ -34,10 +34,16 @@ const WAIT_WORD: Record<string, string> = {
 };
 
 /** The state in words, the same on the band and on the Agents page. */
-export function stateWord(a: Pick<AgentActivity, "state" | "last">): { word: string; icon: IconId } {
+export function stateWord(a: Pick<AgentActivity, "state" | "last">): {
+  word: string;
+  icon: IconId;
+} {
   const s = STATE[a.state];
   // Name the wait: a plan to approve or a change to review (whoever may take it, never its author).
-  return { word: a.state === "waiting" ? (WAIT_WORD[a.last.action] ?? s.word) : s.word, icon: s.icon };
+  return {
+    word: a.state === "waiting" ? (WAIT_WORD[a.last.action] ?? s.word) : s.word,
+    icon: s.icon,
+  };
 }
 
 /** "agent of Dev Patel", "your agent", or just "agent" when the owner isn't named. */
@@ -56,7 +62,9 @@ export function LastAct({ a, now }: { a: AgentActivity; now: number }) {
         {o ? <span class="fleet__object"> {o.title}</span> : null}
       </span>
       <span class="fleet__where">
-        {o?.repoName && o.repoName !== o.title ? <span class="fleet__repo">in {o.repoName} · </span> : null}
+        {o?.repoName && o.repoName !== o.title ? (
+          <span class="fleet__repo">in {o.repoName} · </span>
+        ) : null}
         <time class="fleet__when tnum" dateTime={a.last.at}>
           {relative(a.last.at, now)}
         </time>
@@ -81,7 +89,9 @@ function AgentRow({ a, now, me }: { a: AgentActivity; now: number; me: string | 
   useEffect(() => {
     const el = ref.current;
     if (!el || a.state !== "working" || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([e]) => el.toggleAttribute("data-onscreen", !!e?.isIntersecting));
+    const io = new IntersectionObserver(([e]) =>
+      el.toggleAttribute("data-onscreen", !!e?.isIntersecting),
+    );
     io.observe(el);
     return () => io.disconnect();
   }, [a.state]);
@@ -97,7 +107,13 @@ function AgentRow({ a, now, me }: { a: AgentActivity; now: number; me: string | 
     </>
   );
   return (
-    <li ref={ref} class={`fleet__row fleet__row--${a.state}`} data-testid="fleet-agent" data-state={a.state} data-agent={a.agent.id}>
+    <li
+      ref={ref}
+      class={`fleet__row fleet__row--${a.state}`}
+      data-testid="fleet-agent"
+      data-state={a.state}
+      data-agent={a.agent.id}
+    >
       {a.last.href ? (
         <a class="fleet__link" href={a.last.href}>
           {body}
@@ -116,7 +132,10 @@ const MEMORY = "gf:fleet-shape";
 /** How many rows the band showed last time (0 to 3) and whether one waited on a person. */
 export function rememberedFleet(): { rows: number; waiting: boolean } {
   try {
-    const v = JSON.parse(window.localStorage.getItem(MEMORY) ?? "null") as { rows?: unknown; waiting?: unknown } | null;
+    const v = JSON.parse(window.localStorage.getItem(MEMORY) ?? "null") as {
+      rows?: unknown;
+      waiting?: unknown;
+    } | null;
     const rows = typeof v?.rows === "number" ? Math.max(0, Math.min(3, Math.round(v.rows))) : 2;
     return { rows, waiting: v?.waiting === true };
   } catch {
@@ -126,7 +145,13 @@ export function rememberedFleet(): { rows: number; waiting: boolean } {
 
 function remember(rows: AgentActivity[]): void {
   try {
-    window.localStorage.setItem(MEMORY, JSON.stringify({ rows: Math.min(3, rows.length), waiting: rows.some((r) => r.state === "waiting") }));
+    window.localStorage.setItem(
+      MEMORY,
+      JSON.stringify({
+        rows: Math.min(3, rows.length),
+        waiting: rows.some((r) => r.state === "waiting"),
+      }),
+    );
   } catch {
     /* private mode: the next load guesses two rows */
   }
@@ -147,7 +172,12 @@ export function Fleet({ state, me }: { state: Resource<AuditPage>; me: string | 
     const shape = rememberedFleet();
     if (shape.rows === 0) return null;
     return (
-      <section class="fleet fleet--loading" aria-label="Agents at work" aria-busy="true" data-testid="fleet-loading">
+      <section
+        class="fleet fleet--loading"
+        aria-label="Agents at work"
+        aria-busy="true"
+        data-testid="fleet-loading"
+      >
         <SkeletonHead />
         <SkeletonRows count={shape.rows} />
       </section>
@@ -166,7 +196,11 @@ export function Fleet({ state, me }: { state: Resource<AuditPage>; me: string | 
           Agents at work
         </h2>
         <p class="fleet__sum">
-          {waiting > 0 ? <b class="tnum">{waiting} waiting on a person</b> : "None waiting on a person"}
+          {waiting > 0 ? (
+            <b class="tnum">{waiting} waiting on a person</b>
+          ) : (
+            "None waiting on a person"
+          )}
           {working > 0 ? ` · ${working} working now` : ""}
         </p>
         <a class="fleet__manage" href="/agents" data-testid="fleet-manage">

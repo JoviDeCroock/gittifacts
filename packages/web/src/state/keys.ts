@@ -18,7 +18,10 @@ function typing(t: EventTarget | null): boolean {
  * `keys` maps a lowercase key to a page command or a plain action (e.g. go to evidence).
  * Handlers are read through a ref, so callers can pass fresh closures every render.
  */
-export function usePageCommands(handlers: Handlers, keys: Record<string, PageCommand | (() => void)> = {}): void {
+export function usePageCommands(
+  handlers: Handlers,
+  keys: Record<string, PageCommand | (() => void)> = {},
+): void {
   const h = useRef(handlers);
   const k = useRef(keys);
   h.current = handlers;

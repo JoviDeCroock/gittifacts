@@ -102,7 +102,10 @@ export const DELIVERY_FILTERS: readonly { id: "all" | DeliveryStatus; label: str
 ];
 
 /** "All repositories", "billing-api", "billing-api and edge-router", "billing-api, edge-router and 2 more". */
-export function repoLine(selection: RepoSelection, repos: readonly Pick<RepoRef, "name">[]): string {
+export function repoLine(
+  selection: RepoSelection,
+  repos: readonly Pick<RepoRef, "name">[],
+): string {
   if (selection === "all") return "All repositories";
   const names = repos.map((r) => r.name);
   if (names.length === 0) return "No repositories";
@@ -131,7 +134,14 @@ export function prettyJson(raw: string): string {
 
 /** Non-empty trimmed lines, duplicates dropped (redirect URIs are matched exactly). */
 export function lines(text: string): string[] {
-  return [...new Set(text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0))];
+  return [
+    ...new Set(
+      text
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0),
+    ),
+  ];
 }
 
 /** https anywhere; http only for localhost (local development callbacks). */

@@ -96,11 +96,7 @@ export const membersApi = {
     isMockMode()
       ? (await mock()).listMembers(repoId)
       : request<MembersView>("GET", `/api/v1/repos/${enc(repoId)}/members`),
-  add: async (
-    repoId: string,
-    input: AddMemberInput,
-    key?: string,
-  ): Promise<AddMemberResult> =>
+  add: async (repoId: string, input: AddMemberInput, key?: string): Promise<AddMemberResult> =>
     isMockMode()
       ? (await mock()).addMember(repoId, input)
       : request<AddMemberResult>("POST", `/api/v1/repos/${enc(repoId)}/members`, input, key),

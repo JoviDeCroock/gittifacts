@@ -1,5 +1,3 @@
-import { calibrated } from "../github/backtests.js";
-import { conflict } from "../errors.js";
 import { type ShadowSample, shadowAgreement } from "@app/classifier";
 import type { Repo } from "@app/domain";
 import type { z } from "zod";
@@ -8,7 +6,8 @@ import { isPlatformAuditor } from "../access/config.js";
 import { auditorReadOnly } from "../access/route.js";
 import type { CreateRepoBody, ShadowStatsSchema } from "../api/schemas.js";
 import type { Caller, Services } from "../app-env.js";
-import { badRequest } from "../errors.js";
+import { badRequest, conflict } from "../errors.js";
+import { calibrated } from "../github/backtests.js";
 import { assertClaimedFor } from "../limits/refusals.js";
 import { EMPTY_LANE_COUNTS, type LaneCounts } from "../store/d1-store.js";
 
@@ -100,9 +99,14 @@ export async function setLane0(
     if (repo?.host != null) {
       const cal = await calibrated(svc.store.db, repoId);
       if (!cal.eligible) {
-        throw conflict(`Lane 0 needs a calibrated backtest first: ${cal.reason}`, "not-calibrated", {
-          explanation: "Run the backtest for this repository (POST /api/v1/github/repos/{repoId}/backtests) and turn Lane 0 on once its calibration says eligible.",
-        });
+        throw conflict(
+          `Lane 0 needs a calibrated backtest first: ${cal.reason}`,
+          "not-calibrated",
+          {
+            explanation:
+              "Run the backtest for this repository (POST /api/v1/github/repos/{repoId}/backtests) and turn Lane 0 on once its calibration says eligible.",
+          },
+        );
       }
     }
   }

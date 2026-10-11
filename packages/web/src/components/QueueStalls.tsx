@@ -41,7 +41,9 @@ function StallItem({ x, q, now }: { x: QueueStall; q: QueueOverviewView; now: nu
       <dl class="q-freeze__facts">
         <div class="q-stall__next">
           <dt>Next</dt>
-          <dd class={x.next.kind === "human" ? "tone--danger" : ""}>{stallNextLabel(x.next, now)}</dd>
+          <dd class={x.next.kind === "human" ? "tone--danger" : ""}>
+            {stallNextLabel(x.next, now)}
+          </dd>
         </div>
         <div>
           <dt>Attempts</dt>
@@ -69,7 +71,11 @@ export function QueueStalls({ q, now }: { q: QueueOverviewView; now: number }) {
   const tone = stallTone(q.stalls);
   const stopped = tone === "danger";
   return (
-    <section class={`q-banner q-banner--${tone}`} role={stopped ? "alert" : "status"} aria-labelledby="q-stalled">
+    <section
+      class={`q-banner q-banner--${tone}`}
+      role={stopped ? "alert" : "status"}
+      aria-labelledby="q-stalled"
+    >
       <Icon name={stopped ? "pause" : "redo"} size={22} class="q-banner__icon" />
       <div class="q-banner__body">
         <h2 id="q-stalled" class="q-banner__title">
@@ -82,7 +88,12 @@ export function QueueStalls({ q, now }: { q: QueueOverviewView; now: number }) {
         </p>
         <ul class="q-freeze">
           {q.stalls.map((x) => (
-            <StallItem key={`${x.command}:${x.batchId ?? ""}:${x.changeIds.join(",")}`} x={x} q={q} now={now} />
+            <StallItem
+              key={`${x.command}:${x.batchId ?? ""}:${x.changeIds.join(",")}`}
+              x={x}
+              q={q}
+              now={now}
+            />
           ))}
         </ul>
       </div>

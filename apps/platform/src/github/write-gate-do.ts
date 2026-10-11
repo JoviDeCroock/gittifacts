@@ -45,7 +45,10 @@ export class GithubWriteGate extends DurableObject {
             }),
         )
         .catch((e: unknown) => {
-          resolve({ ok: false, retryAfterSec: e instanceof GithubRateLimited ? e.retryAfterSec : 60 });
+          resolve({
+            ok: false,
+            retryAfterSec: e instanceof GithubRateLimited ? e.retryAfterSec : 60,
+          });
         });
     });
   }

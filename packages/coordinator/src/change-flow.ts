@@ -45,7 +45,7 @@ import {
   ReviewEvent,
   type RolloutParams,
 } from "./events.js";
-import { previewItem, carryQaRun, sealEvidence } from "./evidence.js";
+import { carryQaRun, previewItem, sealEvidence } from "./evidence.js";
 import { durableStages, persistClassification, persistTour, storeGradeData } from "./grading.js";
 import { changeSubject, ciRunIdFor, isBootstrapChange, rolloutWorkflowId } from "./ids.js";
 import { PUSHABLE_STATUSES, toCiStatus } from "./lifecycle.js";
@@ -617,7 +617,12 @@ export async function runChangeWorkflow(
   // is written. Its own durable step; a failure is logged and never fails grading.
   const publishLane = async (): Promise<void> => {
     if (host === null || ctx.host == null || backtest) return;
-    const ref = { host: "github" as const, owner: ctx.host.repo.owner, repo: ctx.host.repo.repo, number: ctx.host.change.number };
+    const ref = {
+      host: "github" as const,
+      owner: ctx.host.repo.owner,
+      repo: ctx.host.repo.repo,
+      number: ctx.host.change.number,
+    };
     try {
       await step.do("publish-lane", RETRY.remote, async () => {
         const stored = await store.getClassification(changeId, headSha);
@@ -631,13 +636,23 @@ export async function runChangeWorkflow(
           preliminary: true,
           evidence: null,
         });
-        await log("change.lane-published", { host: "github", headSha, lane: stored.lane, preliminary: true });
+        await log("change.lane-published", {
+          host: "github",
+          headSha,
+          lane: stored.lane,
+          preliminary: true,
+        });
         return true;
       });
     } catch (e) {
       const reason = errorMessage(e);
       await step.do("publish-lane-failed", RETRY.quick, async () => {
-        await log("change.host-publish-failed", { host: "github", what: "publish-lane", headSha, error: reason });
+        await log("change.host-publish-failed", {
+          host: "github",
+          what: "publish-lane",
+          headSha,
+          error: reason,
+        });
         return true;
       });
     }
@@ -671,7 +686,8 @@ export async function runChangeWorkflow(
         // A re-grade of this head keeps its on-request QA result (only from a bundle that verifies).
         seal: async (items) => {
           const qa = await carryQaRun(ports, { changeId, headSha, items });
-          if (qa.carried > 0 || qa.dropped !== null) await log("change.qa-carried", { carried: qa.carried, dropped: qa.dropped });
+          if (qa.carried > 0 || qa.dropped !== null)
+            await log("change.qa-carried", { carried: qa.carried, dropped: qa.dropped });
           return sealEvidence(ports, { changeId, headSha, baseSha, items: qa.items });
         },
       },
@@ -688,7 +704,12 @@ export async function runChangeWorkflow(
       log: async (action, payload) => {
         await log(action, payload);
       },
-      hooks: { workerItems: startPreview, afterEvidence, publishEvidence: writeEvidenceNote, laneKnown: publishLane },
+      hooks: {
+        workerItems: startPreview,
+        afterEvidence,
+        publishEvidence: writeEvidenceNote,
+        laneKnown: publishLane,
+      },
     },
   );
   if (graded.status === "stopped") {
@@ -757,7 +778,12 @@ export async function runChangeWorkflow(
       } catch (e) {
         const reason = errorMessage(e);
         await step.do(`${name}-failed`, RETRY.quick, async () => {
-          await log("change.host-publish-failed", { host: "github", what: name, headSha, error: reason });
+          await log("change.host-publish-failed", {
+            host: "github",
+            what: name,
+            headSha,
+            error: reason,
+          });
           return true;
         });
       }
@@ -794,7 +820,11 @@ export async function runChangeWorkflow(
   if (backtest) {
     await step.do("backtest-graded", RETRY.quick, async () => {
       await store.updateChange(changeId, { status: "merged", mergedSha: headSha });
-      await log("change.backtest-graded", { lane: cls.lane, computedLane: cls.computedLane, blocked: cls.blocked });
+      await log("change.backtest-graded", {
+        lane: cls.lane,
+        computedLane: cls.computedLane,
+        blocked: cls.blocked,
+      });
       return true;
     });
     return done("graded", cls.lane, "backtest");

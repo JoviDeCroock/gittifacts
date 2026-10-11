@@ -35,7 +35,10 @@ async function post(path: string, body: unknown): Promise<ResetResult> {
       body: JSON.stringify(body),
     });
   } catch {
-    return { ok: false, message: "The server could not be reached. Check your connection and try again." };
+    return {
+      ok: false,
+      message: "The server could not be reached. Check your connection and try again.",
+    };
   }
   if (res.ok) return { ok: true };
   const data = (await res.json().catch(() => null)) as {
@@ -45,10 +48,17 @@ async function post(path: string, body: unknown): Promise<ResetResult> {
   } | null;
   if (data?.error?.fix?.explanation) return { ok: false, message: data.error.fix.explanation };
   if (data?.code === "INVALID_TOKEN") {
-    return { ok: false, message: "This reset link has expired or was already used. Ask for a new one." };
+    return {
+      ok: false,
+      message: "This reset link has expired or was already used. Ask for a new one.",
+    };
   }
-  if (data?.code === "PASSWORD_TOO_SHORT") return { ok: false, message: "Use at least 8 characters." };
-  return { ok: false, message: data?.message ?? data?.error?.message ?? `The server answered ${res.status}.` };
+  if (data?.code === "PASSWORD_TOO_SHORT")
+    return { ok: false, message: "Use at least 8 characters." };
+  return {
+    ok: false,
+    message: data?.message ?? data?.error?.message ?? `The server answered ${res.status}.`,
+  };
 }
 
 /** E-mail a reset link (the answer is the same whether or not the account exists). */

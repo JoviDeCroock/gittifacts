@@ -7,11 +7,16 @@
  */
 import { useSignal } from "@preact/signals";
 import { useRef } from "preact/hooks";
-import { type PickResult, type PlanAttemptsView, type RankedAttempt, attemptsApi } from "../api/attempts.js";
+import {
+  attemptsApi,
+  type PickResult,
+  type PlanAttemptsView,
+  type RankedAttempt,
+} from "../api/attempts.js";
 import { ApiError, api, inlineError, newIdempotencyKey } from "../api/client.js";
+import { relative } from "../lib/time.js";
 import type { StatusMeta } from "../lib/vocab.js";
 import { CHANGE_STATUS, plural } from "../lib/vocab.js";
-import { relative } from "../lib/time.js";
 import { minuteClock } from "../state/clock.js";
 import { useResource } from "../state/resource.js";
 import { principal } from "../state/session.js";
@@ -45,7 +50,9 @@ function ownerOf(id: string): Promise<string | null> {
 
 async function loadAttempts(planId: string): Promise<AttemptsData> {
   const view = await attemptsApi.list(planId);
-  const agents = [...new Set(view.attempts.filter((a) => a.author.kind === "agent").map((a) => a.author.id))];
+  const agents = [
+    ...new Set(view.attempts.filter((a) => a.author.kind === "agent").map((a) => a.author.id)),
+  ];
   const names = await Promise.all(agents.map(ownerOf));
   return { view, owners: Object.fromEntries(agents.map((id, i) => [id, names[i] ?? null])) };
 }
@@ -67,7 +74,9 @@ function Reasons({ a }: { a: RankedAttempt }) {
   // Lane, standing and diff size have their own places on the row; the rest is the evidence, best first.
   const size = a.diff ? plural(a.diff.lines, "line") : null;
   const lane = a.lane === null ? null : `Lane ${a.lane}`;
-  const shown = a.reasons.filter((r) => r !== size && r !== lane && r !== "still grading" && r !== "closed");
+  const shown = a.reasons.filter(
+    (r) => r !== size && r !== lane && r !== "still grading" && r !== "closed",
+  );
   return (
     <p class="attempt__reasons" data-testid="attempt-reasons">
       {shown.map((r, i) => {
@@ -130,13 +139,25 @@ function AttemptRow({ a, view, owner, busy, onPick }: RowProps) {
         <div class="attempt__chips">
           {picked ? <StatusChip meta={PICKED} /> : null}
           {a.recommended && !picked ? (
-            <span data-testid="attempt-recommended" data-provisional={view.recommended?.provisional ? "true" : "false"}>
-              <StatusChip meta={view.recommended?.provisional ? LEADING : RECOMMENDED} class="attempt__rec" />
+            <span
+              data-testid="attempt-recommended"
+              data-provisional={view.recommended?.provisional ? "true" : "false"}
+            >
+              <StatusChip
+                meta={view.recommended?.provisional ? LEADING : RECOMMENDED}
+                class="attempt__rec"
+              />
             </span>
           ) : null}
           {a.standing === "grading" ? <StatusChip meta={GRADING} /> : null}
-          {a.standing === "closed" ? <StatusChip meta={a.status === "abandoned" && view.picked ? SUPERSEDED : CHANGE_STATUS[a.status]} /> : null}
-          {a.standing === "finished" && !picked && a.status !== "awaiting-review" ? <StatusChip meta={CHANGE_STATUS[a.status]} /> : null}
+          {a.standing === "closed" ? (
+            <StatusChip
+              meta={a.status === "abandoned" && view.picked ? SUPERSEDED : CHANGE_STATUS[a.status]}
+            />
+          ) : null}
+          {a.standing === "finished" && !picked && a.status !== "awaiting-review" ? (
+            <StatusChip meta={CHANGE_STATUS[a.status]} />
+          ) : null}
         </div>
       </div>
       {canPick ? (
@@ -172,13 +193,23 @@ function applyPick(view: PlanAttemptsView, result: PickResult): PlanAttemptsView
     attempts: view.attempts.map((a) => {
       if (a.changeId === result.picked.changeId) return { ...a, status: result.change.status };
       const status = closed.get(a.changeId);
-      return status ? { ...a, status: status as RankedAttempt["status"], standing: "closed", pickable: false } : a;
+      return status
+        ? { ...a, status: status as RankedAttempt["status"], standing: "closed", pickable: false }
+        : a;
     }),
   };
 }
 
 /** What the pick recorded, in words: approved, and how many other attempts closed. */
-function Confirmation({ result, authorName, repoId }: { result: PickResult; authorName: string | null; repoId: string }) {
+function Confirmation({
+  result,
+  authorName,
+  repoId,
+}: {
+  result: PickResult;
+  authorName: string | null;
+  repoId: string;
+}) {
   const n = result.superseded.length;
   const which = authorName ? (
     <>
@@ -192,17 +223,26 @@ function Confirmation({ result, authorName, repoId }: { result: PickResult; auth
       <Icon name="check-circle" size={20} />
       <div>
         <p class="attempts__done-title">
-          {result.approved ? <>Picked and approved {which}.</> : <>Picked {which}; it was already approved.</>}{" "}
-          {n === 0 ? "No other attempt was open." : `${plural(n, "other attempt")} closed as superseded.`}
+          {result.approved ? (
+            <>Picked and approved {which}.</>
+          ) : (
+            <>Picked {which}; it was already approved.</>
+          )}{" "}
+          {n === 0
+            ? "No other attempt was open."
+            : `${plural(n, "other attempt")} closed as superseded.`}
         </p>
         {result.notClosed.length > 0 ? (
           <p class="attempts__fine tone--warn" data-testid="attempts-not-closed">
-            {plural(result.notClosed.length, "attempt")} could not be closed: {result.notClosed.map((x) => x.error).join(" ")}
+            {plural(result.notClosed.length, "attempt")} could not be closed:{" "}
+            {result.notClosed.map((x) => x.error).join(" ")}
           </p>
         ) : null}
         <p class="attempts__fine">
           Signed as {result.picked.by.name} and recorded in the audit log.{" "}
-          <a href={`/repos/${encodeURIComponent(repoId)}/queue`}>Watch it land in the merge queue</a>
+          <a href={`/repos/${encodeURIComponent(repoId)}/queue`}>
+            Watch it land in the merge queue
+          </a>
         </p>
       </div>
     </div>
@@ -225,7 +265,12 @@ export function Attempts({ planId, repoId }: { planId: string; repoId: string })
     const key = keys.current[a.changeId] ?? newIdempotencyKey();
     keys.current[a.changeId] = key;
     try {
-      const result = await attemptsApi.pick(planId, a.changeId, a.headSha ? { headSha: a.headSha } : {}, key);
+      const result = await attemptsApi.pick(
+        planId,
+        a.changeId,
+        a.headSha ? { headSha: a.headSha } : {},
+        key,
+      );
       done.value = result;
       // What the server confirmed shows at once; the fresh ranking replaces it when it arrives.
       if (st.status === "ok") res.set({ ...st.data, view: applyPick(st.data.view, result) });
@@ -246,7 +291,12 @@ export function Attempts({ planId, repoId }: { planId: string; repoId: string })
   );
   if (st.status === "loading") {
     return (
-      <section class="plan-sec attempts" id="attempts" aria-labelledby="attempts-title" aria-busy="true">
+      <section
+        class="plan-sec attempts"
+        id="attempts"
+        aria-labelledby="attempts-title"
+        aria-busy="true"
+      >
         {head()}
         <Skeleton lines={4} />
       </section>
@@ -263,24 +313,48 @@ export function Attempts({ planId, repoId }: { planId: string; repoId: string })
   const { view, owners } = st.data;
   if (view.attempts.length < 2) return null;
   const pickedBy = view.picked;
-  const pickedAttempt = done.value ? view.attempts.find((x) => x.changeId === done.value?.picked.changeId) : undefined;
+  const pickedAttempt = done.value
+    ? view.attempts.find((x) => x.changeId === done.value?.picked.changeId)
+    : undefined;
   const anyPickable = pickedBy === null && view.attempts.some((x) => x.pickable);
   return (
-    <section class="plan-sec attempts" id="attempts" aria-labelledby="attempts-title" data-testid="attempts">
+    <section
+      class="plan-sec attempts"
+      id="attempts"
+      aria-labelledby="attempts-title"
+      data-testid="attempts"
+    >
       {head(view.attempts.length)}
-      <p class="attempts__summary">{view.summary}. Ranked by what the machines proved, best first.</p>
+      <p class="attempts__summary">
+        {view.summary}. Ranked by what the machines proved, best first.
+      </p>
       {done.value ? (
-        <Confirmation result={done.value} authorName={pickedAttempt?.author.name ?? null} repoId={repoId} />
+        <Confirmation
+          result={done.value}
+          authorName={pickedAttempt?.author.name ?? null}
+          repoId={repoId}
+        />
       ) : pickedBy ? (
         <p class="attempts__picked" data-testid="attempts-picked" data-fresh="false">
-          <Icon name="check-circle" size={16} /> Picked by {pickedBy.by.name}, {relative(pickedBy.at, minuteClock.value)}. The other open attempts were closed.
+          <Icon name="check-circle" size={16} /> Picked by {pickedBy.by.name},{" "}
+          {relative(pickedBy.at, minuteClock.value)}. The other open attempts were closed.
         </p>
       ) : anyPickable ? (
-        <p class="attempts__fine">Picking one approves it as you, at the head shown, and closes the other open attempts as superseded.</p>
+        <p class="attempts__fine">
+          Picking one approves it as you, at the head shown, and closes the other open attempts as
+          superseded.
+        </p>
       ) : null}
       <ol class="attempts__list">
         {view.attempts.map((a) => (
-          <AttemptRow key={a.changeId} a={a} view={view} owner={owners[a.author.id] ?? null} busy={busy.value} onPick={pick} />
+          <AttemptRow
+            key={a.changeId}
+            a={a}
+            view={view}
+            owner={owners[a.author.id] ?? null}
+            busy={busy.value}
+            onPick={pick}
+          />
         ))}
       </ol>
       {error.value ? (

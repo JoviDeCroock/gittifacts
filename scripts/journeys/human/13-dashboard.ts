@@ -44,13 +44,18 @@ export const journey: HumanJourney = {
     await p.waitForSelector(".gs-step[data-step='repo'][data-state='done']", { timeout: 30_000 });
     await j.hold(1200);
     await j.snap("try-running");
-    await j.caption("The repo is there; its first check runs, and a first plan waits for approval", 3000);
+    await j.caption(
+      "The repo is there; its first check runs, and a first plan waits for approval",
+      3000,
+    );
     await p.waitForSelector(".gs-green, .gs-step__line--failed", { timeout: 300_000 });
     const greenAt = Date.now();
     const failed = (await p.locator(".gs-step__line--failed").count()) > 0;
     j.metrics.createToGreenMs = greenAt - createAt;
     j.metrics.signupToGreenMs = greenAt - signupAt;
-    j.notes.push(failed ? "first run FAILED" : `green line: ${await p.locator(".gs-green").innerText()}`);
+    j.notes.push(
+      failed ? "first run FAILED" : `green line: ${await p.locator(".gs-green").innerText()}`,
+    );
     await j.hold(1500);
     await j.snap("try-green");
 
@@ -67,7 +72,9 @@ export const journey: HumanJourney = {
     await j.chapter("Back on the landing page", "Signed in, / is still the landing page");
     await j.goto("/", { waitFor: "h1", settleMs: 1800 });
     const nav = p.locator("a.topbar__signin").first();
-    j.notes.push(`landing nav: ${(await nav.innerText()).trim()} → ${await nav.getAttribute("href")}`);
+    j.notes.push(
+      `landing nav: ${(await nav.innerText()).trim()} → ${await nav.getAttribute("href")}`,
+    );
     await j.snap("landing-signed-in");
     await j.click(nav);
     await p.waitForURL(/\/dashboard$/, { timeout: 20_000 });

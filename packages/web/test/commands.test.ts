@@ -7,10 +7,23 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { type Command, cliArgs, commandsFor, contextOf, forMode, jumpCommand, match, mcpText, objectCommands } from "../src/lib/commands.js";
+import {
+  type Command,
+  cliArgs,
+  commandsFor,
+  contextOf,
+  forMode,
+  jumpCommand,
+  match,
+  mcpText,
+  objectCommands,
+} from "../src/lib/commands.js";
 
 /** Input schemas from the generated MCP contract snapshot (`pnpm --filter @app/mcp snapshot`). */
-function contractInputs(): Map<string, { properties: Record<string, unknown>; required: string[] }> {
+function contractInputs(): Map<
+  string,
+  { properties: Record<string, unknown>; required: string[] }
+> {
   const src = readFileSync(join(import.meta.dirname, "../../mcp/tools.introspection.d.ts"), "utf8");
   const out = new Map<string, { properties: Record<string, unknown>; required: string[] }>();
   for (const m of src.matchAll(/^ {4}"([a-z_]+)": \{\n {6}"inputSchema": /gm)) {
@@ -21,18 +34,46 @@ function contractInputs(): Map<string, { properties: Record<string, unknown>; re
       if (src[i] === "{") depth++;
       else if (src[i] === "}" && --depth === 0) break;
     }
-    const schema = JSON.parse(src.slice(start, i + 1)) as { properties?: Record<string, unknown>; required?: string[] };
+    const schema = JSON.parse(src.slice(start, i + 1)) as {
+      properties?: Record<string, unknown>;
+      required?: string[];
+    };
     out.set(m[1] ?? "", { properties: schema.properties ?? {}, required: schema.required ?? [] });
   }
   return out;
 }
 
 const TOOLS = contractInputs();
-const REPOS = [{ id: "repo_billing", name: "billing-api" }, { id: "gh-1", name: "acme/web", hosted: true }];
-const PATHS = ["/dashboard", "/repos/repo_billing", "/repos/repo_billing/queue", "/repos/repo_billing/members", "/repos/repo_billing/mission", "/repos/gh-1", "/plans/plan_1", "/changes/chg_1", "/changes/chg_1/evidence", "/changes/chg_1/rollout", "/agents", "/audit"];
+const REPOS = [
+  { id: "repo_billing", name: "billing-api" },
+  { id: "gh-1", name: "acme/web", hosted: true },
+];
+const PATHS = [
+  "/dashboard",
+  "/repos/repo_billing",
+  "/repos/repo_billing/queue",
+  "/repos/repo_billing/members",
+  "/repos/repo_billing/mission",
+  "/repos/gh-1",
+  "/plans/plan_1",
+  "/changes/chg_1",
+  "/changes/chg_1/evidence",
+  "/changes/chg_1/rollout",
+  "/agents",
+  "/audit",
+];
 const OBJECTS = {
-  changes: [{ id: "chg_fx2r7", title: "Jittered backoff for webhook retries", repoId: "repo_billing", status: "awaiting-review" }],
-  plans: [{ id: "plan_tz", title: "Store timestamps in UTC", repoId: "repo_billing", status: "draft" }],
+  changes: [
+    {
+      id: "chg_fx2r7",
+      title: "Jittered backoff for webhook retries",
+      repoId: "repo_billing",
+      status: "awaiting-review",
+    },
+  ],
+  plans: [
+    { id: "plan_tz", title: "Store timestamps in UTC", repoId: "repo_billing", status: "draft" },
+  ],
   agents: [{ id: "prn_coder07", name: "fleet-coder-07" }],
 };
 const every: Command[] = [
@@ -40,7 +81,9 @@ const every: Command[] = [
   ...commandsFor("/changes/chg_1", REPOS, { status: "queued" }),
   ...commandsFor("/plans/plan_1", REPOS, { status: "draft", mine: true }),
   ...objectCommands(OBJECTS, REPOS),
-  ...["chg_1", "plan_1", "repo_billing", "/audit"].flatMap((q) => jumpCommand(q, "https://x.test") ?? []),
+  ...["chg_1", "plan_1", "repo_billing", "/audit"].flatMap(
+    (q) => jumpCommand(q, "https://x.test") ?? [],
+  ),
 ];
 
 describe("agent twins", () => {
@@ -50,25 +93,45 @@ describe("agent twins", () => {
     expect(TOOLS.get("get_plan")?.required).toContain("planId");
   });
 
-  it.each(every.filter((c) => c.twin).map((c) => [c.id, c] as const))("%s calls a real tool with its arguments", (_id, c) => {
-    const twin = c.twin;
-    if (!twin) return;
-    const tool = TOOLS.get(twin.tool);
-    expect(tool, `${twin.tool} is not in the MCP contract (packages/mcp/tools.introspection.d.ts)`).toBeDefined();
-    if (!tool) return;
-    const given = [...Object.keys(twin.args), ...(twin.fill ?? [])];
-    for (const arg of given) expect(Object.keys(tool.properties), `${twin.tool} takes no "${arg}"`).toContain(arg);
-    for (const req of tool.required) if (req !== "idempotencyKey") expect(given, `${twin.tool} requires "${req}"`).toContain(req);
-    if (twin.positional) expect(Object.keys(twin.args)).toContain(twin.positional);
-  });
+  it.each(every.filter((c) => c.twin).map((c) => [c.id, c] as const))(
+    "%s calls a real tool with its arguments",
+    (_id, c) => {
+      const twin = c.twin;
+      if (!twin) return;
+      const tool = TOOLS.get(twin.tool);
+      expect(
+        tool,
+        `${twin.tool} is not in the MCP contract (packages/mcp/tools.introspection.d.ts)`,
+      ).toBeDefined();
+      if (!tool) return;
+      const given = [...Object.keys(twin.args), ...(twin.fill ?? [])];
+      for (const arg of given)
+        expect(Object.keys(tool.properties), `${twin.tool} takes no "${arg}"`).toContain(arg);
+      for (const req of tool.required)
+        if (req !== "idempotencyKey")
+          expect(given, `${twin.tool} requires "${req}"`).toContain(req);
+      if (twin.positional) expect(Object.keys(twin.args)).toContain(twin.positional);
+    },
+  );
 
   // The Twin Rule (DESIGN.md, Palette): a twin, a person-only rule, or a reason there is none.
-  it.each(every.map((c) => [c.id, c] as const))("%s has exactly one of a twin, a person-only rule or a twinless reason", (_id, c) => {
-    const said = [c.twin !== null, c.personOnly !== undefined, c.twinless !== undefined].filter(Boolean).length;
-    expect(said, `${c.id}: give it a twin, a personOnly rule or a twinless reason (exactly one)`).toBe(1);
-    // A person-only row without an act (no screen does it yet) still shows the boundary to agents.
-    expect(c.act !== null || c.twin !== null || c.personOnly !== undefined, `${c.id} does nothing for anyone`).toBe(true);
-  });
+  it.each(every.map((c) => [c.id, c] as const))(
+    "%s has exactly one of a twin, a person-only rule or a twinless reason",
+    (_id, c) => {
+      const said = [c.twin !== null, c.personOnly !== undefined, c.twinless !== undefined].filter(
+        Boolean,
+      ).length;
+      expect(
+        said,
+        `${c.id}: give it a twin, a personOnly rule or a twinless reason (exactly one)`,
+      ).toBe(1);
+      // A person-only row without an act (no screen does it yet) still shows the boundary to agents.
+      expect(
+        c.act !== null || c.twin !== null || c.personOnly !== undefined,
+        `${c.id} does nothing for anyone`,
+      ).toBe(true);
+    },
+  );
 
   it("never offers a twin for an act a product rule keeps human", () => {
     const approve = every.find((c) => c.id === "change.approve");
@@ -76,36 +139,85 @@ describe("agent twins", () => {
     expect(every.find((c) => c.id === "plan.approve")?.twin).toBeNull();
     expect(every.find((c) => c.id === "change.kill")?.twin).toBeNull();
     // Picking an attempt approves it: person-only; comparing them is an agent's read.
-    expect(every.find((c) => c.id === "plan.pick")).toMatchObject({ twin: null, personOnly: expect.stringMatching(/person/i) });
-    expect(every.find((c) => c.id === "plan.attempts")?.twin).toMatchObject({ tool: "compare_attempts", args: { planId: "plan_1" } });
-    for (const id of ["go.agents", "agents.add", "agents.revoke", "repo.membership", "repo.lane0", "queue.freeze", "queue.thaw", "queue.resume", "plan.reject"]) {
-      expect(every.find((c) => c.id === id)?.personOnly, `${id} is a person's act`).toMatch(/person/i);
+    expect(every.find((c) => c.id === "plan.pick")).toMatchObject({
+      twin: null,
+      personOnly: expect.stringMatching(/person/i),
+    });
+    expect(every.find((c) => c.id === "plan.attempts")?.twin).toMatchObject({
+      tool: "compare_attempts",
+      args: { planId: "plan_1" },
+    });
+    for (const id of [
+      "go.agents",
+      "agents.add",
+      "agents.revoke",
+      "repo.membership",
+      "repo.lane0",
+      "queue.freeze",
+      "queue.thaw",
+      "queue.resume",
+      "plan.reject",
+    ]) {
+      expect(every.find((c) => c.id === id)?.personOnly, `${id} is a person's act`).toMatch(
+        /person/i,
+      );
     }
   });
 
   it("names the walkthrough's own tool, and the agent's hand-offs on a change", () => {
     const cmds = commandsFor("/changes/chg_1", REPOS);
     expect(cmds.find((c) => c.id === "change.tour")?.twin?.tool).toBe("get_tour");
-    for (const tool of ["request_review", "close_change", "queue_status", "get_qa", "get_change_status"]) expect(cmds.map((c) => c.twin?.tool)).toContain(tool);
+    for (const tool of [
+      "request_review",
+      "close_change",
+      "queue_status",
+      "get_qa",
+      "get_change_status",
+    ])
+      expect(cmds.map((c) => c.twin?.tool)).toContain(tool);
     expect(cmds.map((c) => c.id)).not.toContain("change.dequeue");
     const queued = commandsFor("/changes/chg_1", REPOS, { status: "queued" });
     expect(queued.find((c) => c.id === "change.dequeue")?.twin?.tool).toBe("dequeue");
     expect(queued.find((c) => c.id === "change.reprioritize")?.twin?.tool).toBe("reprioritize");
     expect(commandsFor("/repos/gh-1/queue", REPOS).map((c) => c.id)).not.toContain("queue.freeze");
-    expect(commandsFor("/changes/chg_1/rollout", REPOS).find((c) => c.id === "change.issues")?.twin?.tool).toBe("list_issues_for_change");
+    expect(
+      commandsFor("/changes/chg_1/rollout", REPOS).find((c) => c.id === "change.issues")?.twin
+        ?.tool,
+    ).toBe("list_issues_for_change");
     expect(cmds.find((c) => c.id === "change.rollout")?.twin?.tool).toBe("get_rollout");
-    expect(commandsFor("/dashboard", REPOS).find((c) => c.id === "go.audit")?.twin?.tool).toBe("list_audit_events");
+    expect(commandsFor("/dashboard", REPOS).find((c) => c.id === "go.audit")?.twin?.tool).toBe(
+      "list_audit_events",
+    );
   });
 
   it("lets a person reach plan approval from the palette, which signs nothing itself", () => {
     const me = forMode(commandsFor("/plans/plan_1", REPOS), "me", "/plans/plan_1");
-    expect(me.find((c) => c.id === "plan.approve")?.act).toEqual({ kind: "go", href: "/plans/plan_1#sign" });
-    expect(me.find((c) => c.id === "plan.reject")?.act).toEqual({ kind: "go", href: "/plans/plan_1#sign" });
+    expect(me.find((c) => c.id === "plan.approve")?.act).toEqual({
+      kind: "go",
+      href: "/plans/plan_1#sign",
+    });
+    expect(me.find((c) => c.id === "plan.reject")?.act).toEqual({
+      kind: "go",
+      href: "/plans/plan_1#sign",
+    });
     // Withdrawing is for the author's own draft only; the page confirms it on #withdraw.
     expect(me.map((c) => c.id)).not.toContain("plan.withdraw");
-    const mine = forMode(commandsFor("/plans/plan_1", REPOS, { status: "draft", mine: true }), "me", "/plans/plan_1");
-    expect(mine.find((c) => c.id === "plan.withdraw")?.act).toEqual({ kind: "go", href: "/plans/plan_1#withdraw" });
-    expect(forMode(commandsFor("/plans/plan_1", REPOS, { status: "approved", mine: true }), "me", "/plans/plan_1").map((c) => c.id)).not.toContain("plan.withdraw");
+    const mine = forMode(
+      commandsFor("/plans/plan_1", REPOS, { status: "draft", mine: true }),
+      "me",
+      "/plans/plan_1",
+    );
+    expect(mine.find((c) => c.id === "plan.withdraw")?.act).toEqual({
+      kind: "go",
+      href: "/plans/plan_1#withdraw",
+    });
+    expect(
+      forMode(
+        commandsFor("/plans/plan_1", REPOS, { status: "approved", mine: true }),
+        "me",
+        "/plans/plan_1",
+      ).map((c) => c.id),
+    ).not.toContain("plan.withdraw");
   });
 
   it("offers no merge queue on a GitHub-mode repo (GitHub merges)", () => {
@@ -117,20 +229,33 @@ describe("agent twins", () => {
 describe("what a person can start", () => {
   it("offers plan approval to a person, landing on the signing form", () => {
     const me = forMode(commandsFor("/plans/plan_1", REPOS), "me", "/plans/plan_1");
-    expect(me.find((c) => c.id === "plan.approve")?.act).toEqual({ kind: "go", href: "/plans/plan_1#sign" });
+    expect(me.find((c) => c.id === "plan.approve")?.act).toEqual({
+      kind: "go",
+      href: "/plans/plan_1#sign",
+    });
   });
 
   it("lets a person say what should change, with create_plan as the agent's twin", () => {
     const c = commandsFor("/repos/repo_billing", REPOS).find((x) => x.id === "repo.plan");
     expect(c?.act).toEqual({ kind: "go", href: "/repos/repo_billing#intent" });
     expect(c?.twin?.tool).toBe("create_plan");
-    expect(forMode(commandsFor("/repos/repo_billing", REPOS), "me", "/repos/repo_billing").map((x) => x.id)).toContain("repo.plan");
+    expect(
+      forMode(commandsFor("/repos/repo_billing", REPOS), "me", "/repos/repo_billing").map(
+        (x) => x.id,
+      ),
+    ).toContain("repo.plan");
   });
 
   it("keeps importing a private repo person-only, listed for agents with its rule", () => {
     const c = commandsFor("/dashboard", REPOS).find((x) => x.id === "go.import");
-    expect(c).toMatchObject({ twin: null, act: { kind: "go", href: "/dashboard#import" }, personOnly: expect.stringMatching(/Only a person/) });
-    expect(forMode(commandsFor("/agents", REPOS), "agent", "/agents").map((x) => x.id)).toContain("go.import");
+    expect(c).toMatchObject({
+      twin: null,
+      act: { kind: "go", href: "/dashboard#import" },
+      personOnly: expect.stringMatching(/Only a person/),
+    });
+    expect(forMode(commandsFor("/agents", REPOS), "agent", "/agents").map((x) => x.id)).toContain(
+      "go.import",
+    );
   });
 });
 
@@ -149,7 +274,9 @@ describe("modes", () => {
     expect(agent.map((c) => c.id)).not.toContain("theme.dark");
     expect(agent.map((c) => c.id)).not.toContain("change.next-stop");
     // Places no tool reads yet stay listed, with the reason, instead of vanishing.
-    const audit = forMode(commandsFor("/dashboard", REPOS), "agent", "/dashboard").find((c) => c.id === "go.audit");
+    const audit = forMode(commandsFor("/dashboard", REPOS), "agent", "/dashboard").find(
+      (c) => c.id === "go.audit",
+    );
     expect(audit?.twin ?? audit?.twinless).toBeTruthy();
   });
 });
@@ -160,7 +287,9 @@ describe("text", () => {
     if (!c?.twin) throw new Error("no twin");
     expect(mcpText(c.twin)).toBe('get_evidence({ "changeId": "chg_1" })');
     expect(cliArgs(c.twin)).toBe("get-evidence chg_1");
-    expect(cliArgs({ tool: "create_plan", args: { repoId: "r 1" }, fill: ["title"] })).toBe("create-plan --repo-id 'r 1' --title <title>");
+    expect(cliArgs({ tool: "create_plan", args: { repoId: "r 1" }, fill: ["title"] })).toBe(
+      "create-plan --repo-id 'r 1' --title <title>",
+    );
   });
 
   it("matches label prefixes first and tool names too", () => {
@@ -171,7 +300,11 @@ describe("text", () => {
   });
 
   it("reads the object in view from the path", () => {
-    expect(contextOf("/changes/c%201/rollout")).toEqual({ kind: "change", id: "c 1", sub: "rollout" });
+    expect(contextOf("/changes/c%201/rollout")).toEqual({
+      kind: "change",
+      id: "c 1",
+      sub: "rollout",
+    });
     expect(contextOf("/repos/r1/queue")).toEqual({ kind: "repo", id: "r1", sub: "queue" });
     expect(contextOf("/audit")).toEqual({ kind: "audit" });
     expect(contextOf("/settings/integrations")).toBeNull();
@@ -188,9 +321,18 @@ describe("text", () => {
   });
 
   it("jumps to a pasted id or app address", () => {
-    expect(jumpCommand("chg_zz9", "https://x.test")?.act).toEqual({ kind: "go", href: "/changes/chg_zz9" });
-    expect(jumpCommand("https://x.test/plans/plan_1#sign", "https://x.test")?.act).toEqual({ kind: "go", href: "/plans/plan_1#sign" });
+    expect(jumpCommand("chg_zz9", "https://x.test")?.act).toEqual({
+      kind: "go",
+      href: "/changes/chg_zz9",
+    });
+    expect(jumpCommand("https://x.test/plans/plan_1#sign", "https://x.test")?.act).toEqual({
+      kind: "go",
+      href: "/plans/plan_1#sign",
+    });
     expect(jumpCommand("backoff", "https://x.test")).toBeNull();
-    expect(jumpCommand("0a1b2c3d4e5f6g7h8i9j", "https://x.test")?.act).toEqual({ kind: "go", href: "/changes/0a1b2c3d4e5f6g7h8i9j" });
+    expect(jumpCommand("0a1b2c3d4e5f6g7h8i9j", "https://x.test")?.act).toEqual({
+      kind: "go",
+      href: "/changes/0a1b2c3d4e5f6g7h8i9j",
+    });
   });
 });

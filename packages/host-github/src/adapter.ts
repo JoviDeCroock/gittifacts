@@ -12,8 +12,8 @@ import {
   type DiffInfo,
   type HostAdapter,
   type HostCapabilities,
-  type HostEvents,
   HostError,
+  type HostEvents,
   type LaneVerdict,
   type MergeMethod,
   type MergeResult,
@@ -21,12 +21,19 @@ import {
 } from "@app/host";
 import type { GithubApi } from "./api.js";
 import { type GithubRepoSetup, githubCapabilities } from "./capabilities.js";
-import { type CheckRunContext, closedCheckRun, completedCheckRun, laneRun, startedCheckRun, supersededCheckRun } from "./check-run.js";
+import {
+  type CheckRunContext,
+  closedCheckRun,
+  completedCheckRun,
+  laneRun,
+  startedCheckRun,
+  supersededCheckRun,
+} from "./check-run.js";
 import { changeIdFor } from "./ids.js";
 import { identityOf, normalizeGithubDelivery } from "./normalize.js";
+import { type GithubDelivery, PullRequest } from "./payloads.js";
 import type { PrIndex } from "./pr-index.js";
 import { PrPublisher, type PrPublisherDeps } from "./pr-publisher.js";
-import { type GithubDelivery, PullRequest } from "./payloads.js";
 
 /** Check run ids per (change, head): created when grading starts, completed once. */
 export interface CheckRunIndex {
@@ -66,15 +73,38 @@ export interface GitHubHostDeps {
   qa?: PrPublisherDeps["qa"];
 }
 
-const CATEGORIES: readonly ClaimedCategory[] = ["fix", "feature", "refactor", "dependency", "transform", "revert", "docs", "chore"];
+const CATEGORIES: readonly ClaimedCategory[] = [
+  "fix",
+  "feature",
+  "refactor",
+  "dependency",
+  "transform",
+  "revert",
+  "docs",
+  "chore",
+];
 const PREFIXES: Record<string, ClaimedCategory> = {
-  fix: "fix", feat: "feature", feature: "feature", refactor: "refactor", deps: "dependency",
-  dependency: "dependency", build: "dependency", transform: "transform", codemod: "transform",
-  revert: "revert", docs: "docs", chore: "chore", test: "chore", ci: "chore",
+  fix: "fix",
+  feat: "feature",
+  feature: "feature",
+  refactor: "refactor",
+  deps: "dependency",
+  dependency: "dependency",
+  build: "dependency",
+  transform: "transform",
+  codemod: "transform",
+  revert: "revert",
+  docs: "docs",
+  chore: "chore",
+  test: "chore",
+  ci: "chore",
 };
 
 /** The author's claim: a `gittifacts:<category>` label, else a conventional-commit title prefix. */
-export function claimedCategoryOf(pr: { title: string; labels: { name: string }[] }): ClaimedCategory | null {
+export function claimedCategoryOf(pr: {
+  title: string;
+  labels: { name: string }[];
+}): ClaimedCategory | null {
   for (const l of pr.labels) {
     const m = /^gittifacts:([a-z]+)$/.exec(l.name);
     if (m !== null && CATEGORIES.includes(m[1] as ClaimedCategory)) return m[1] as ClaimedCategory;
@@ -131,7 +161,10 @@ export class GitHubHost implements HostAdapter {
   private own(ref: ChangeRef): Extract<ChangeRef, { host: "github" }> {
     if (ref.host !== "github") throw new HostError("wrong-host", "not a GitHub pull request");
     const { owner, repo } = this.deps.repo;
-    if (ref.owner.toLowerCase() !== owner.toLowerCase() || ref.repo.toLowerCase() !== repo.toLowerCase()) {
+    if (
+      ref.owner.toLowerCase() !== owner.toLowerCase() ||
+      ref.repo.toLowerCase() !== repo.toLowerCase()
+    ) {
       throw new HostError("wrong-host", `${ref.owner}/${ref.repo} is not ${owner}/${repo}`);
     }
     return ref;
@@ -147,7 +180,8 @@ export class GitHubHost implements HostAdapter {
 
   async pull(number: number) {
     const parsed = PullRequest.safeParse(await this.deps.api.get(this.path(`/pulls/${number}`)));
-    if (!parsed.success) throw new HostError("invalid", `pull request #${number}: unexpected answer`);
+    if (!parsed.success)
+      throw new HostError("invalid", `pull request #${number}: unexpected answer`);
     return parsed.data;
   }
 
@@ -208,7 +242,10 @@ export class GitHubHost implements HostAdapter {
     labels: { name: string }[];
   } | null> {
     try {
-      const i = (await this.deps.api.get(this.path(`/issues/${number}`))) as Record<string, unknown>;
+      const i = (await this.deps.api.get(this.path(`/issues/${number}`))) as Record<
+        string,
+        unknown
+      >;
       if (i.pull_request !== undefined || typeof i.title !== "string") return null;
       const user = i.user as { login: string; id: number; type?: string };
       return {
@@ -216,7 +253,9 @@ export class GitHubHost implements HostAdapter {
         title: i.title,
         body: typeof i.body === "string" ? i.body : null,
         user: { login: user.login, id: user.id, type: user.type ?? "User" },
-        labels: ((i.labels ?? []) as { name?: string }[]).map((l) => ({ name: String(l.name ?? "") })),
+        labels: ((i.labels ?? []) as { name?: string }[]).map((l) => ({
+          name: String(l.name ?? ""),
+        })),
       };
     } catch {
       return null;
@@ -224,15 +263,29 @@ export class GitHubHost implements HostAdapter {
   }
 
   /** Who last applied `label` to an issue, and when (its timeline), or null. */
-  async labeledBy(number: number, label: string): Promise<{ login: string; id: number; type: string; at: string } | null> {
-    const events = (await this.deps.api.get(this.path(`/issues/${number}/events?per_page=100`))) as {
+  async labeledBy(
+    number: number,
+    label: string,
+  ): Promise<{ login: string; id: number; type: string; at: string } | null> {
+    const events = (await this.deps.api.get(
+      this.path(`/issues/${number}/events?per_page=100`),
+    )) as {
       event?: string;
       label?: { name?: string };
       actor?: { login: string; id: number; type?: string } | null;
       created_at?: string;
     }[];
-    const last = events.filter((e) => e.event === "labeled" && e.label?.name === label && e.actor).at(-1);
-    return last?.actor ? { login: last.actor.login, id: last.actor.id, type: last.actor.type ?? "User", at: last.created_at ?? "" } : null;
+    const last = events
+      .filter((e) => e.event === "labeled" && e.label?.name === label && e.actor)
+      .at(-1);
+    return last?.actor
+      ? {
+          login: last.actor.login,
+          id: last.actor.id,
+          type: last.actor.type ?? "User",
+          at: last.created_at ?? "",
+        }
+      : null;
   }
 
   /** The merge base of a PR (`GET /compare/{base}...{head}`, ETag-cached); `base` if unknown. */
@@ -253,7 +306,11 @@ export class GitHubHost implements HostAdapter {
   }
 
   /** Open the in-progress run for a head as soon as grading starts (idempotent per head). */
-  async startCheck(changeId: string, headSha: string, opts: { fresh?: boolean } = {}): Promise<number> {
+  async startCheck(
+    changeId: string,
+    headSha: string,
+    opts: { fresh?: boolean } = {},
+  ): Promise<number> {
     // A re-grade of the same head gets a run of its own (the earlier one keeps its verdict).
     const known = opts.fresh === true ? null : await this.deps.checks.get(changeId, headSha);
     if (known !== null) return known;
@@ -264,7 +321,9 @@ export class GitHubHost implements HostAdapter {
       shadow: this.deps.shadow ?? true,
       startedAt: this.deps.ports.clock.now().toISOString(),
     });
-    const run = (await this.deps.api.write("POST", this.path("/check-runs"), body)) as { id: number };
+    const run = (await this.deps.api.write("POST", this.path("/check-runs"), body)) as {
+      id: number;
+    };
     await this.deps.checks.put(changeId, headSha, run.id);
     return run.id;
   }
@@ -279,19 +338,31 @@ export class GitHubHost implements HostAdapter {
     const run = (await this.deps.api.get(this.path(`/check-runs/${id}`))) as { status?: string };
     if (run.status === "completed") return;
     const now = this.deps.ports.clock.now().toISOString();
-    await this.deps.api.write("PATCH", this.path(`/check-runs/${id}`), supersededCheckRun(newHead, now));
+    await this.deps.api.write(
+      "PATCH",
+      this.path(`/check-runs/${id}`),
+      supersededCheckRun(newHead, now),
+    );
   }
 
   /**
    * The pull request closed (or merged) while its head's run was still in progress: the run is
    * completed as cancelled, never left running. A completed run keeps its verdict.
    */
-  async closeCheck(changeId: string, headSha: string, merged: boolean): Promise<"closed" | "none" | "completed"> {
+  async closeCheck(
+    changeId: string,
+    headSha: string,
+    merged: boolean,
+  ): Promise<"closed" | "none" | "completed"> {
     const id = await this.deps.checks.get(changeId, headSha);
     if (id === null) return "none";
     const run = (await this.deps.api.get(this.path(`/check-runs/${id}`))) as { status?: string };
     if (run.status === "completed") return "completed";
-    await this.deps.api.write("PATCH", this.path(`/check-runs/${id}`), closedCheckRun(merged, this.deps.ports.clock.now().toISOString()));
+    await this.deps.api.write(
+      "PATCH",
+      this.path(`/check-runs/${id}`),
+      closedCheckRun(merged, this.deps.ports.clock.now().toISOString()),
+    );
     return "closed";
   }
 
@@ -303,12 +374,19 @@ export class GitHubHost implements HostAdapter {
   async publishVerdict(ref: ChangeRef, verdict: LaneVerdict): Promise<void> {
     const changeId = this.changeId(ref);
     if (verdict.preliminary) {
-      const body = laneRun(verdict, { detailsUrl: this.detailsUrl(changeId), shadow: this.deps.shadow ?? true });
+      const body = laneRun(verdict, {
+        detailsUrl: this.detailsUrl(changeId),
+        shadow: this.deps.shadow ?? true,
+      });
       if (body === null) return;
       const id = await this.deps.checks.get(changeId, verdict.headSha);
       // No open run (GitHub was down when grading started): the final verdict creates it. A head
       // already replaced keeps its "replaced" run: an early lane never reopens it.
-      if (id === null || (await this.deps.ports.store.getChange(changeId))?.headSha !== verdict.headSha) return;
+      if (
+        id === null ||
+        (await this.deps.ports.store.getChange(changeId))?.headSha !== verdict.headSha
+      )
+        return;
       await this.job(() => this.deps.api.write("PATCH", this.path(`/check-runs/${id}`), body));
       return;
     }
@@ -358,7 +436,10 @@ export class GitHubHost implements HostAdapter {
    * The flagged stops on the diff for the current head, because someone asked (the walkthrough
    * label, or Request full review): one review, idempotent per head; then the summary says so.
    */
-  async publishRequestedTour(changeId: string, number: number): Promise<"posted" | "exists" | "skipped"> {
+  async publishRequestedTour(
+    changeId: string,
+    number: number,
+  ): Promise<"posted" | "exists" | "skipped"> {
     const p = this.publisher;
     if (p === null) return "skipped";
     const change = await this.deps.ports.store.getChange(changeId);
@@ -381,11 +462,19 @@ export class GitHubHost implements HostAdapter {
     this.own(ref);
   }
 
-  async merge(ref: ChangeRef, input: { expectedHeadSha: string; method: MergeMethod }): Promise<MergeResult> {
+  async merge(
+    ref: ChangeRef,
+    input: { expectedHeadSha: string; method: MergeMethod },
+  ): Promise<MergeResult> {
     const r = this.own(ref);
     const pr = await this.pull(r.number);
     if (pr.state === "closed") {
-      return { status: "refused", reason: "closed", detail: `#${r.number} is closed`, currentHeadSha: pr.head.sha };
+      return {
+        status: "refused",
+        reason: "closed",
+        detail: `#${r.number} is closed`,
+        currentHeadSha: pr.head.sha,
+      };
     }
     if (pr.head.sha !== input.expectedHeadSha) {
       return {

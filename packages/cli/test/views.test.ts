@@ -85,8 +85,15 @@ describe("get-change-status --human", () => {
 
   it("nothing pushed yet", () => {
     const view = changeStatusView(
-      status({ runs: [], previewUrl: null }, { id: "chg_2", status: "awaiting-push", headSha: null }),
+      status(
+        { runs: [], previewUrl: null },
+        { id: "chg_2", status: "awaiting-push", headSha: null },
+      ),
     );
-    expect(view).toMatchObject({ head: "nothing pushed yet", latestRun: "no run yet", preview: "-" });
+    expect(view).toMatchObject({
+      head: "nothing pushed yet",
+      latestRun: "no run yet",
+      preview: "-",
+    });
   });
 });

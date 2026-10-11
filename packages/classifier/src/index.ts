@@ -19,6 +19,7 @@ export {
   type PathMatcher,
   PLATFORM_GLOBS,
 } from "./paths.js";
+export { qaChecklistEntry, qaReasonInputs, raiseForQa } from "./qa.js";
 export {
   formatReason,
   GATES,
@@ -36,4 +37,3 @@ export {
   sampleAgrees,
   shadowAgreement,
 } from "./shadow.js";
-export { qaChecklistEntry, qaReasonInputs, raiseForQa } from "./qa.js";

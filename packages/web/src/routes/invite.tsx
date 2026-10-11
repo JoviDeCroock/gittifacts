@@ -39,7 +39,12 @@ export function InvitePage({ token }: { token: string }) {
         joined.value ? (
           <Joined name={st.data.repo.name} {...joined.value} />
         ) : (
-          <Stage token={token} view={st.data} onJoined={(j) => (joined.value = j)} onStale={res.reload} />
+          <Stage
+            token={token}
+            view={st.data}
+            onJoined={(j) => (joined.value = j)}
+            onStale={res.reload}
+          />
         )
       ) : null}
     </ConsentFrame>
@@ -57,14 +62,26 @@ function LoadFailed({ error, onRetry }: { error: unknown; onRetry: () => void })
   return <ErrorState error={error} what="this invite" onRetry={onRetry} />;
 }
 
-function Joined({ name, repoId, role }: { name: string; repoId: string; role: InviteLink["role"] }) {
+function Joined({
+  name,
+  repoId,
+  role,
+}: {
+  name: string;
+  repoId: string;
+  role: InviteLink["role"];
+}) {
   const label = ROLE_COPY[role].label.toLowerCase();
   return (
     <ConsentOutcome
       tone="ok"
       title={`You're ${article(label)} ${label} of ${name}`}
       action={
-        <LinkButton href={`/repos/${encodeURIComponent(repoId)}`} variant="primary" icon="arrow-up-right">
+        <LinkButton
+          href={`/repos/${encodeURIComponent(repoId)}`}
+          variant="primary"
+          icon="arrow-up-right"
+        >
           Open the repo
         </LinkButton>
       }
@@ -139,7 +156,11 @@ function Stage({
         title={`Join ${name}`}
         action={
           <>
-            <LinkButton href={`/signin?mode=signup&next=${encodeURIComponent(here)}`} variant="primary" icon="user">
+            <LinkButton
+              href={`/signin?mode=signup&next=${encodeURIComponent(here)}`}
+              variant="primary"
+              icon="user"
+            >
               Create an account
             </LinkButton>
             <LinkButton href={signInHref(here)} variant="secondary">
@@ -180,14 +201,23 @@ function Stage({
       tone="neutral"
       title={`Join ${name}`}
       action={
-        <Button variant="primary" icon="check" busy={busy.value} busyLabel="Joining…" onClick={() => void join()}>
+        <Button
+          variant="primary"
+          icon="check"
+          busy={busy.value}
+          busyLabel="Joining…"
+          onClick={() => void join()}
+        >
           Join as {article(label)} {label}
         </Button>
       }
     >
       {ask}
       {view.viewer.role ? (
-        <p>You're already {article(view.viewer.role)} {view.viewer.role} here; joining keeps that role.</p>
+        <p>
+          You're already {article(view.viewer.role)} {view.viewer.role} here; joining keeps that
+          role.
+        </p>
       ) : null}
       <p>Joining is recorded in the repo's audit log.</p>
       {error.value ? (

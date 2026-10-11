@@ -6,7 +6,15 @@ import type { HunkRef } from "@app/domain";
 import { useSignal } from "@preact/signals";
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { ChangeDiff } from "../api/types.js";
-import { type Excerpt, excerptForRef, rangeLabel, splitPath, tokenize, usesHashComments, wholeFileRefs } from "../lib/diff.js";
+import {
+  type Excerpt,
+  excerptForRef,
+  rangeLabel,
+  splitPath,
+  tokenize,
+  usesHashComments,
+  wholeFileRefs,
+} from "../lib/diff.js";
 import { Icon } from "./Icon.js";
 
 function Code({ text, hash }: { text: string; hash: boolean }) {
@@ -78,18 +86,34 @@ function ExcerptView({ ex }: { ex: Excerpt }) {
           {side === "base" ? "main " : ""}
           {rangeLabel(ex.ref)}
         </span>
-        {ex.file.status !== "modified" ? <span class="excerpt__status">{ex.file.status}</span> : null}
+        {ex.file.status !== "modified" ? (
+          <span class="excerpt__status">{ex.file.status}</span>
+        ) : null}
         {box.overflows || wrap.value ? (
-          <button type="button" class="excerpt__wrap" aria-pressed={wrap.value} onClick={() => (wrap.value = !wrap.value)} data-testid="excerpt-wrap">
+          <button
+            type="button"
+            class="excerpt__wrap"
+            aria-pressed={wrap.value}
+            onClick={() => (wrap.value = !wrap.value)}
+            data-testid="excerpt-wrap"
+          >
             Wrap
           </button>
         ) : null}
       </figcaption>
       {ex.missing ? (
-        <p class="excerpt__missing">The cited lines are not part of this diff. Check the walkthrough against the current head.</p>
+        <p class="excerpt__missing">
+          The cited lines are not part of this diff. Check the walkthrough against the current head.
+        </p>
       ) : (
         <div class="excerpt__body" data-more={box.more && !wrap.value ? "" : undefined}>
-          <div class="excerpt__code scroll-x" ref={box.ref} tabIndex={0} role="region" aria-label={`${ex.file.path} ${rangeLabel(ex.ref)}`}>
+          <div
+            class="excerpt__code scroll-x"
+            ref={box.ref}
+            tabIndex={0}
+            role="region"
+            aria-label={`${ex.file.path} ${rangeLabel(ex.ref)}`}
+          >
             <table class="diff">
               <tbody>
                 {ex.rows.map((row, i) =>
@@ -102,7 +126,10 @@ function ExcerptView({ ex }: { ex: Excerpt }) {
                       </td>
                     </tr>
                   ) : (
-                    <tr key={i} class={`diff__line diff__line--${row.line.kind} ${row.cited ? "is-cited" : ""}`}>
+                    <tr
+                      key={i}
+                      class={`diff__line diff__line--${row.line.kind} ${row.cited ? "is-cited" : ""}`}
+                    >
                       <td class="diff__no tnum">
                         {/* Both numbers on wide screens, one on phones (CSS); spoken once, not as "3838". */}
                         <span class="diff__o" aria-hidden="true">
@@ -113,7 +140,16 @@ function ExcerptView({ ex }: { ex: Excerpt }) {
                         </span>
                         <span class="sr-only">{spokenLine(row.line.oldNo, row.line.newNo)}</span>
                       </td>
-                      <td class="diff__sign" aria-label={row.line.kind === "add" ? "added" : row.line.kind === "del" ? "removed" : undefined}>
+                      <td
+                        class="diff__sign"
+                        aria-label={
+                          row.line.kind === "add"
+                            ? "added"
+                            : row.line.kind === "del"
+                              ? "removed"
+                              : undefined
+                        }
+                      >
                         {row.line.kind === "add" ? "+" : row.line.kind === "del" ? "−" : ""}
                       </td>
                       <td class="diff__text">
@@ -164,7 +200,9 @@ export function WholeDiff({ diff }: { diff: ChangeDiff }) {
         <ul class="whole-diff__rest">
           {noText.map((f) => (
             <li key={f.path}>
-              <code>{f.path}</code> {f.binary ? "binary file" : f.truncated ? "too large to show" : "no text changes"}, {f.status}
+              <code>{f.path}</code>{" "}
+              {f.binary ? "binary file" : f.truncated ? "too large to show" : "no text changes"},{" "}
+              {f.status}
             </li>
           ))}
           {rest.map((f) => (

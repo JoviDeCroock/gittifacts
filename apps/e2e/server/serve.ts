@@ -42,7 +42,9 @@ function envLine(key: string, value: string): string {
 
 async function main(): Promise<void> {
   if (!existsSync(join(ROOT, "packages/web/dist/index.html"))) {
-    console.error("packages/web/dist is missing: run `pnpm --filter @app/e2e prepare-assets` first");
+    console.error(
+      "packages/web/dist is missing: run `pnpm --filter @app/e2e prepare-assets` first",
+    );
     process.exit(2);
   }
   // E2E_STATE_DIR: a state directory of its own, so two gate servers on one machine (E2E_PORT)
@@ -72,10 +74,22 @@ async function main(): Promise<void> {
     secretNames: secrets.map(([k]) => k),
   });
   const wrangler = (args: string[], opts: { inherit?: boolean } = {}) =>
-    [process.execPath, [join(ROOT, "node_modules/wrangler/bin/wrangler.js"), ...args], opts] as const;
+    [
+      process.execPath,
+      [join(ROOT, "node_modules/wrangler/bin/wrangler.js"), ...args],
+      opts,
+    ] as const;
 
   const [node, migrateArgs] = wrangler([
-    "d1", "migrations", "apply", "DB", "--local", "--config", config, "--persist-to", state,
+    "d1",
+    "migrations",
+    "apply",
+    "DB",
+    "--local",
+    "--config",
+    config,
+    "--persist-to",
+    state,
   ]);
   const migrated = spawnSync(node, migrateArgs, {
     cwd: PLATFORM,
@@ -85,9 +99,23 @@ async function main(): Promise<void> {
   if (migrated.status !== 0) process.exit(migrated.status ?? 1);
 
   const [, devArgs] = wrangler([
-    "dev", "--local", "--config", config, "--persist-to", state, "--env-file", envFile,
-    "--port", String(E2E_PORT), "--ip", "127.0.0.1", "--inspector-port", "0",
-    "--show-interactive-dev-session=false", "--log-level", "warn",
+    "dev",
+    "--local",
+    "--config",
+    config,
+    "--persist-to",
+    state,
+    "--env-file",
+    envFile,
+    "--port",
+    String(E2E_PORT),
+    "--ip",
+    "127.0.0.1",
+    "--inspector-port",
+    "0",
+    "--show-interactive-dev-session=false",
+    "--log-level",
+    "warn",
   ]);
   const child = spawn(node, devArgs, {
     cwd: PLATFORM,

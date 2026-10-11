@@ -31,12 +31,24 @@ export default defineConfig({
   retries: CI ? 1 : 0,
   workers: 3,
   reporter: CI
-    ? [["list"], ["github"], ["html", { open: "never", outputFolder: "playwright-report/smoke" }], ["json", { outputFile: "test-results/smoke.json" }]]
+    ? [
+        ["list"],
+        ["github"],
+        ["html", { open: "never", outputFolder: "playwright-report/smoke" }],
+        ["json", { outputFile: "test-results/smoke.json" }],
+      ]
     : [["list"]],
   outputDir: "test-results/smoke",
   use: { baseURL, trace: "off", screenshot: "only-on-failure" },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 } } },
-    { name: "phone", use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } }, testMatch: /pages\.spec\.ts/ },
+    {
+      name: "desktop",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 } },
+    },
+    {
+      name: "phone",
+      use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } },
+      testMatch: /pages\.spec\.ts/,
+    },
   ],
 });

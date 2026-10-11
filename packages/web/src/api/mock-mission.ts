@@ -5,8 +5,9 @@
  * the mock backend; the script is applied to each fetched copy. `?still` holds the opening state;
  * `?t=26` starts 26 seconds in (screenshots).
  */
-import type { QueueEntryView } from "./queue.js";
+
 import type { MissionData } from "./mission.js";
+import type { QueueEntryView } from "./queue.js";
 
 type Step = { at: number; apply: (d: MissionData, when: string, whenMs: number) => void };
 
@@ -45,24 +46,44 @@ const SCRIPT: Step[] = [
       Object.assign(c, { status: "queued", updatedAt: when });
       const last = Math.max(0, ...d.queue.entries.map((e) => e.position ?? 0));
       d.queue.entries.push({
-        changeId: c.id, title: c.title, authorId: c.authorId, priority: "normal", lane: 1, state: "waiting", hold: null,
-        trackId: "1", batch: null, position: last + 1, etaSeconds: 900, blocking: [], reason: "Waiting for the next batch on track 1.",
-        predictedPassProbability: 0.9, frozen: false, enqueuedAt: whenMs, dependsOn: [], plangroup: null, ejectReason: null,
-        mergedSha: null, stall: null,
+        changeId: c.id,
+        title: c.title,
+        authorId: c.authorId,
+        priority: "normal",
+        lane: 1,
+        state: "waiting",
+        hold: null,
+        trackId: "1",
+        batch: null,
+        position: last + 1,
+        etaSeconds: 900,
+        blocking: [],
+        reason: "Waiting for the next batch on track 1.",
+        predictedPassProbability: 0.9,
+        frozen: false,
+        enqueuedAt: whenMs,
+        dependsOn: [],
+        plangroup: null,
+        ejectReason: null,
+        mergedSha: null,
+        stall: null,
       });
     },
   },
   {
     at: 20 * S,
     apply: (d) => {
-      for (const e of entries(d, B41)) Object.assign(e, { state: "passed", batch: e.batch && { ...e.batch, state: "passed" } });
-      for (const t of d.queue?.tracks ?? []) for (const b of t.batches) if (b.id === "b_41") b.state = "passed";
+      for (const e of entries(d, B41))
+        Object.assign(e, { state: "passed", batch: e.batch && { ...e.batch, state: "passed" } });
+      for (const t of d.queue?.tracks ?? [])
+        for (const b of t.batches) if (b.id === "b_41") b.state = "passed";
     },
   },
   {
     at: 26 * S,
     apply: (d, when) => {
-      for (const e of entries(d, B41)) Object.assign(e, { state: "merged", position: null, batch: null });
+      for (const e of entries(d, B41))
+        Object.assign(e, { state: "merged", position: null, batch: null });
       for (const id of B41) {
         const c = change(d, id);
         if (c) Object.assign(c, { status: "merged", updatedAt: when });
@@ -74,7 +95,8 @@ const SCRIPT: Step[] = [
     at: 32 * S,
     apply: (d, when) => {
       const c = change(d, "chg_tg3p5");
-      if (c) Object.assign(c, { status: "running", lane: null, computedLane: null, updatedAt: when });
+      if (c)
+        Object.assign(c, { status: "running", lane: null, computedLane: null, updatedAt: when });
     },
   },
   {

@@ -6,7 +6,12 @@ import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import { expect, expectNoHorizontalScroll, test } from "../../lib/fixtures.js";
 import { uniqueName } from "../../lib/poll.js";
 
-test("agents: create an agent and see its token once", async ({ authed: page, request, baseURL, human }) => {
+test("agents: create an agent and see its token once", async ({
+  authed: page,
+  request,
+  baseURL,
+  human,
+}) => {
   await page.goto("/agents");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   const name = uniqueName("bot").toLowerCase();
@@ -19,13 +24,18 @@ test("agents: create an agent and see its token once", async ({ authed: page, re
   await form.locator('button[type="submit"]').click();
   // The token is shown once, in a field or code block that starts with the token prefix.
   await expect(page.getByText(/gtf_[A-Za-z0-9_-]{8,}/).first()).toBeVisible();
-  const res = await request.get(`${baseURL}/api/v1/principals`, { headers: { cookie: human.cookie } });
+  const res = await request.get(`${baseURL}/api/v1/principals`, {
+    headers: { cookie: human.cookie },
+  });
   const body = (await res.json()) as { principals: Array<{ name: string; kind: string }> };
   expect(body.principals.some((p) => p.kind === "agent" && p.name === name)).toBe(true);
   await expectNoHorizontalScroll(page);
 });
 
-test("agents: a create sent before the repositories arrive waits for them (its one repository is picked)", async ({ authed: page, world }) => {
+test("agents: a create sent before the repositories arrive waits for them (its one repository is picked)", async ({
+  authed: page,
+  world,
+}) => {
   // Hold the repository list back: the form must not answer "pick a repository" for a list it hasn't shown.
   let release!: () => void;
   const held = new Promise<void>((r) => (release = r));
@@ -48,7 +58,12 @@ test("agents: a create sent before the repositories arrive waits for them (its o
   await expect(form.getByRole("alert")).toHaveCount(0);
 });
 
-const SETTINGS = ["/settings/integrations", "/settings/integrations/developer", ...(GITHUB_SURFACES ? ["/settings/github"] : []), "/audit"];
+const SETTINGS = [
+  "/settings/integrations",
+  "/settings/integrations/developer",
+  ...(GITHUB_SURFACES ? ["/settings/github"] : []),
+  "/audit",
+];
 for (const path of SETTINGS) {
   test(`settings page ${path} renders without errors`, async ({ authed: page }) => {
     await page.goto(path);
@@ -58,7 +73,11 @@ for (const path of SETTINGS) {
   });
 }
 
-test("GitHub surfaces switched off: no nav entry, no palette command, no page, no sign-in button", async ({ authed: page, browser, baseURL }) => {
+test("GitHub surfaces switched off: no nav entry, no palette command, no page, no sign-in button", async ({
+  authed: page,
+  browser,
+  baseURL,
+}) => {
   test.skip(GITHUB_SURFACES, "GitHub surfaces are on (@app/domain/surfaces)");
   await page.goto("/dashboard");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -76,11 +95,17 @@ test("GitHub surfaces switched off: no nav entry, no palette command, no page, n
   await expect(anon.getByRole("button", { name: /email|sign in/i }).first()).toBeVisible();
   await expect(anon.getByRole("button", { name: /GitHub/ })).toHaveCount(0);
   await anon.goto("/docs");
-  await expect(anon.locator('a[href="/docs/get-started/github"], a[href="/docs/get-started/from-github"]')).toHaveCount(0);
+  await expect(
+    anon.locator('a[href="/docs/get-started/github"], a[href="/docs/get-started/from-github"]'),
+  ).toHaveCount(0);
   await ctx.close();
 });
 
-test("docs: home, a getting-started page, and its markdown twin", async ({ page, request, baseURL }) => {
+test("docs: home, a getting-started page, and its markdown twin", async ({
+  page,
+  request,
+  baseURL,
+}) => {
   await page.goto("/docs");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expectNoHorizontalScroll(page);

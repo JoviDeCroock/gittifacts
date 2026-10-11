@@ -3,14 +3,15 @@
  * claim link, a consent request, a CLI login or an install, the heading says what you're signing
  * in to do. Agents get their own way in under the form: the /start URL, as on the landing.
  */
+
+import { GITHUB_SURFACES } from "@app/domain/surfaces";
+import { LANE_LABELS } from "@app/domain/vocabulary";
 import { useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { api } from "../api/client.js";
 import { isMockMode } from "../api/mode.js";
 import { signInOptions } from "../api/password.js";
-import { GITHUB_SURFACES } from "@app/domain/surfaces";
-import { LANE_LABELS } from "@app/domain/vocabulary";
 import { CopyLine } from "../components/CopyLine.js";
 import { GitHubMark, Icon } from "../components/Icon.js";
 import { BrandMark } from "../components/Shell.js";
@@ -27,7 +28,8 @@ function localProblems(mode: Mode, name: string, email: string, password: string
   const out: Partial<Record<Field, string>> = {};
   if (mode === "signup" && name.trim() === "") out.name = "Enter your name.";
   if (email.trim() === "") out.email = "Enter your email address.";
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) out.email = "Enter an email address like maya@acme.dev.";
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+    out.email = "Enter an email address like maya@acme.dev.";
   if (password === "") out.password = "Enter your password.";
   else if (mode === "signup" && password.length < 8) out.password = "Use at least 8 characters.";
   return out;
@@ -280,7 +282,10 @@ export function SignIn() {
               </span>
               <div>
                 <p class="how__lead">Your agent drafts a Plan. You approve it.</p>
-                <p class="how__body">A Plan says what should change and how to tell it worked. Nothing starts until a person approves it.</p>
+                <p class="how__body">
+                  A Plan says what should change and how to tell it worked. Nothing starts until a
+                  person approves it.
+                </p>
               </div>
             </li>
             <li class="how__step">
@@ -289,7 +294,10 @@ export function SignIn() {
               </span>
               <div>
                 <p class="how__lead">It builds a Change, with proof.</p>
-                <p class="how__body">A Change is like a pull request that carries its evidence: tests, red/green proof and coverage, run and signed by the platform.</p>
+                <p class="how__body">
+                  A Change is like a pull request that carries its evidence: tests, red/green proof
+                  and coverage, run and signed by the platform.
+                </p>
               </div>
             </li>
             <li class="how__step">

@@ -15,8 +15,8 @@ import type { Change, Principal } from "@app/domain";
 import type { ChangeRef, LaneAction } from "@app/host";
 import type {
   ContractHost,
-  ContractReviewer,
   ContractHostFactory,
+  ContractReviewer,
   ContractScenario,
   Observed,
   OpenInput,

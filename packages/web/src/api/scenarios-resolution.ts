@@ -5,7 +5,18 @@
  */
 import { sha } from "./fixture-kit.js";
 import type { ResolutionView } from "./resolution.js";
-import { type Scenario, apiNone, depsNone, file, hunk, reason, scenario, sensitive, stop, testRun } from "./scenario-kit.js";
+import {
+  apiNone,
+  depsNone,
+  file,
+  hunk,
+  reason,
+  type Scenario,
+  scenario,
+  sensitive,
+  stop,
+  testRun,
+} from "./scenario-kit.js";
 
 const EDGE = "repo_edge";
 const ID = "chg_rs6q1";
@@ -48,11 +59,27 @@ const base = scenario({
       1,
       "The conflict resolution wrote 1 line(s) found on neither side: the earlier approval no longer covers what lands.",
     ),
-    reason("resolution.within-conflict", 0, "Conflict resolution against chg_up3d8 only replaced the 1 conflict hunk(s) (system:resolver).", "conflict-resolution"),
+    reason(
+      "resolution.within-conflict",
+      0,
+      "Conflict resolution against chg_up3d8 only replaced the 1 conflict hunk(s) (system:resolver).",
+      "conflict-resolution",
+    ),
   ],
   files: [
     file("README.md", "modified", [
-      hunk(1, 1, [" # edge-router", " ", "-Routes edge traffic.", "+Routes edge traffic. Docs: https://gittifacts.decroockjovi.workers.dev/docs", " ", " ## Install"].join("\n")),
+      hunk(
+        1,
+        1,
+        [
+          " # edge-router",
+          " ",
+          "-Routes edge traffic.",
+          "+Routes edge traffic. Docs: https://gittifacts.decroockjovi.workers.dev/docs",
+          " ",
+          " ## Install",
+        ].join("\n"),
+      ),
     ]),
   ],
   createdMin: 40,
@@ -67,10 +94,24 @@ const base = scenario({
         [],
         ["conflict-resolution"],
       ),
-      stop("intent", "unproven", "No plan; diff matches the change title", "No plan is attached. The title says the README should link to the docs; the diff adds that link to the intro line.", [{ file: "README.md", startLine: 3, endLine: 3 }]),
-      stop("risk", "risk", "The link target is not verified", "Nothing checks that the URL resolves to the docs.", [{ file: "README.md", startLine: 3, endLine: 3 }]),
+      stop(
+        "intent",
+        "unproven",
+        "No plan; diff matches the change title",
+        "No plan is attached. The title says the README should link to the docs; the diff adds that link to the intro line.",
+        [{ file: "README.md", startLine: 3, endLine: 3 }],
+      ),
+      stop(
+        "risk",
+        "risk",
+        "The link target is not verified",
+        "Nothing checks that the URL resolves to the docs.",
+        [{ file: "README.md", startLine: 3, endLine: 3 }],
+      ),
     ],
-    leastConfident: ["Whether the resolved sentence keeps upstream's advice and the link in the order readers expect."],
+    leastConfident: [
+      "Whether the resolved sentence keeps upstream's advice and the link in the order readers expect.",
+    ],
     notDone: ["Did not open the docs URL."],
   },
   items: [testRun(ID, 4), apiNone(), depsNone(), sensitive([])],
@@ -97,10 +138,16 @@ const resolution: ResolutionView = {
     novelLines: 1,
     semanticConflictWith: null,
     rationale: "Kept upstream's advice to read the docs and the change's link, in one sentence.",
-    resolver: { model: "@cf/moonshotai/kimi-k2.7-code", principalId: "system:resolver", promptVersion: "resolver/v3" },
+    resolver: {
+      model: "@cf/moonshotai/kimi-k2.7-code",
+      principalId: "system:resolver",
+      promptVersion: "resolver/v3",
+    },
     attempts: 1,
   },
-  upstream: [{ changeId: "chg_up3d8", title: "README: ask people to read the docs first", sha: ONTO }],
+  upstream: [
+    { changeId: "chg_up3d8", title: "README: ask people to read the docs first", sha: ONTO },
+  ],
   tourId: base.tour?.id ?? null,
   approvalRequested: true,
   lane: 1,

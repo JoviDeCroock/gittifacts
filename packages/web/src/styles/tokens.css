@@ -59,10 +59,12 @@
   --p-green-night: oklch(75% 0.13 152);
 
   /* ---------------------------------------------------------------- type */
-  --font-ui: "Atkinson Hyperlegible Next Variable", "Atkinson Hyperlegible Next", ui-sans-serif,
-    system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-code: "Atkinson Hyperlegible Mono Variable", "Atkinson Hyperlegible Mono", ui-monospace,
-    "SF Mono", Menlo, Consolas, monospace;
+  --font-ui:
+    "Atkinson Hyperlegible Next Variable", "Atkinson Hyperlegible Next", ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+  --font-code:
+    "Atkinson Hyperlegible Mono Variable", "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono",
+    Menlo, Consolas, monospace;
 
   /* Fixed rem scale, ratio 1.2 from 16px. Named by role. */
   --text-meta: 0.75rem; /* 12px: timestamps, counts beside labels */

@@ -4,23 +4,41 @@
  * real event path: a recorded webhook body → `GithubSync` (mirror fetch, Change, check run) →
  * ChangeCoordinator → ChangeWorkflow → `@app/core` `gradeChange` → the `gittifacts/lane` run.
  */
-import { createFakeEnvironment, type FakeEnvironment, portsForRole, principal } from "@app/coordinator/fakes";
+import {
+  createFakeEnvironment,
+  type FakeEnvironment,
+  portsForRole,
+  principal,
+} from "@app/coordinator/fakes";
 import type { GradeReviewer } from "@app/core";
 import { RepoPolicy } from "@app/domain";
-import { type ChangeRef, laneZeroAction, type LaneAction } from "@app/host";
-import type { ContractHost, ContractHostFactory, ContractReviewer, ContractScenario, Observed, OpenInput } from "@app/host-contract";
-import { memoryCheckRunIndex, GitHubHost, type GitHubHostDeps } from "../src/adapter.js";
-import { readCheckRunVerdict } from "../src/check-run.js";
-import { memoryPrIndex } from "../src/pr-index.js";
+import { type ChangeRef, type LaneAction, laneZeroAction } from "@app/host";
+import type {
+  ContractHost,
+  ContractHostFactory,
+  ContractReviewer,
+  ContractScenario,
+  Observed,
+  OpenInput,
+} from "@app/host-contract";
+import { GitHubHost, type GitHubHostDeps, memoryCheckRunIndex } from "../src/adapter.js";
 import { GithubApi } from "../src/api.js";
+import { readCheckRunVerdict } from "../src/check-run.js";
 import { changeIdFor, principalIdFor } from "../src/ids.js";
-import type { GithubQaPort } from "../src/sync-qa.js";
+import { memoryPrIndex } from "../src/pr-index.js";
 import { GithubSync } from "../src/sync.js";
+import type { GithubQaPort } from "../src/sync-qa.js";
 import { InstallationTokens, JobToken } from "../src/tokens.js";
 import { FakeGithub, type FakePull, gitName } from "./fake-github.js";
 import { TEST_APP_PEM } from "./keys.js";
 
-const REPO = { id: 9001, owner: "gittifacts-test", name: "fixture-lib", defaultBranch: "main", private: true };
+const REPO = {
+  id: 9001,
+  owner: "gittifacts-test",
+  name: "fixture-lib",
+  defaultBranch: "main",
+  private: true,
+};
 const APP_ID = 1180001;
 
 export class GithubContractHost implements ContractHost {
@@ -40,7 +58,10 @@ export class GithubContractHost implements ContractHost {
   /** The job token the adapter's API calls share (released after each delivery, like a queue job). */
   readonly job: JobToken;
 
-  constructor(reviewer: GradeReviewer, opts: { prWrites?: boolean; qa?: GithubQaPort; qaView?: GitHubHostDeps["qa"] } = {}) {
+  constructor(
+    reviewer: GradeReviewer,
+    opts: { prWrites?: boolean; qa?: GithubQaPort; qaView?: GitHubHostDeps["qa"] } = {},
+  ) {
     const { ports, bindings } = this.env;
     ports.reviewer.judge = (input) => reviewer.judge(input);
     ports.reviewer.tour = (input) => reviewer.tour(input);
@@ -50,22 +71,50 @@ export class GithubContractHost implements ContractHost {
       bundleRef: `bundle/${req.runId}`,
     });
     this.gh = new FakeGithub(ports.git, REPO);
-    const tokens = new InstallationTokens({ appId: APP_ID, clientId: "Iv23contract", privateKey: TEST_APP_PEM }, { fetch: this.gh.fetch });
-    const scope = { repositoryIds: [REPO.id], permissions: { checks: "write" as const, contents: "read" as const, pull_requests: "read" as const } };
+    const tokens = new InstallationTokens(
+      { appId: APP_ID, clientId: "Iv23contract", privateKey: TEST_APP_PEM },
+      { fetch: this.gh.fetch },
+    );
+    const scope = {
+      repositoryIds: [REPO.id],
+      permissions: {
+        checks: "write" as const,
+        contents: "read" as const,
+        pull_requests: "read" as const,
+      },
+    };
     this.job = new JobToken(tokens, this.gh.installationId, scope);
     const job = this.job;
     const api = new GithubApi({ token: () => job.value(), fetch: this.gh.fetch });
     this.api = api;
     const githubPorts = portsForRole(ports, "github");
-    const repoHost = { kind: "github" as const, owner: REPO.owner, repo: REPO.name, githubRepoId: REPO.id, installationId: this.gh.installationId, appId: APP_ID, private: true };
+    const repoHost = {
+      kind: "github" as const,
+      owner: REPO.owner,
+      repo: REPO.name,
+      githubRepoId: REPO.id,
+      installationId: this.gh.installationId,
+      appId: APP_ID,
+      private: true,
+    };
     this.adapter = new GitHubHost({
-      repoId: `gh-${REPO.id}`, mirror: `ghm-${REPO.id}`, repo: repoHost, api,
-      ports: githubPorts, checks: memoryCheckRunIndex(), origin: "https://gittifacts.test",
+      repoId: `gh-${REPO.id}`,
+      mirror: `ghm-${REPO.id}`,
+      repo: repoHost,
+      api,
+      ports: githubPorts,
+      checks: memoryCheckRunIndex(),
+      origin: "https://gittifacts.test",
       // M3: the tour review and the summary comment (the installation is linked).
-      prs: memoryPrIndex(), prWrites: async () => opts.prWrites ?? true,
+      prs: memoryPrIndex(),
+      prWrites: async () => opts.prWrites ?? true,
       ...(opts.qaView !== undefined ? { qa: opts.qaView } : {}),
     });
-    for (const [login, p] of [["maint-1", "write"], ["octo-author", "write"], ["copilot-swe-agent[bot]", "write"]] as const) {
+    for (const [login, p] of [
+      ["maint-1", "write"],
+      ["octo-author", "write"],
+      ["copilot-swe-agent[bot]", "write"],
+    ] as const) {
       this.gh.permissions.set(login, p);
     }
     // The platform's runtime hands the ChangeWorkflow this adapter for GitHub changes.
@@ -77,9 +126,15 @@ export class GithubContractHost implements ContractHost {
       installationId: this.gh.installationId,
       appId: APP_ID,
       source: async () => {
-        const t = await tokens.mint(this.gh.installationId, { repositoryIds: [REPO.id], permissions: { contents: "read" } });
+        const t = await tokens.mint(this.gh.installationId, {
+          repositoryIds: [REPO.id],
+          permissions: { contents: "read" },
+        });
         return {
-          remote: { url: `https://${gitName(REPO)}.git`, auth: { basic: { username: "x-access-token", password: t.value() } } },
+          remote: {
+            url: `https://${gitName(REPO)}.git`,
+            auth: { basic: { username: "x-access-token", password: t.value() } },
+          },
           release: async () => void (await tokens.revoke(t)),
         };
       },
@@ -93,7 +148,13 @@ export class GithubContractHost implements ContractHost {
       authorPrincipal: async (who) => {
         const id = principalIdFor(Number(who.id));
         if ((await ports.store.getPrincipal(id)) === null) {
-          ports.store.addPrincipal(principal({ id, kind: who.kind === "human" ? "human" : "agent", name: `${who.login} (GitHub)` }));
+          ports.store.addPrincipal(
+            principal({
+              id,
+              kind: who.kind === "human" ? "human" : "agent",
+              name: `${who.login} (GitHub)`,
+            }),
+          );
         }
         return id;
       },
@@ -107,7 +168,10 @@ export class GithubContractHost implements ContractHost {
     // As if an earlier delivery created the repo: the mirror, and the policy read from base.
     const repo = await this.sync.ensureRepo(this.gh.repoJson() as never);
     await ports.git.fetchExternal(
-      { url: `https://${gitName(REPO)}.git`, auth: { basic: { username: "x-access-token", password: "seed" } } },
+      {
+        url: `https://${gitName(REPO)}.git`,
+        auth: { basic: { username: "x-access-token", password: "seed" } },
+      },
       repo.artifactsName,
       { sha: baseSha, toRef: "refs/heads/main" },
     );
@@ -122,10 +186,15 @@ export class GithubContractHost implements ContractHost {
     const headRepo = scenario.kind === "fork" ? this.gh.fork("outside-contributor") : REPO;
     const head = this.gh.commit(headRepo, "change", push);
     this.pr = {
-      number: 1, title: title.slice(0, 200), body: this.prBody ?? body, labels: this.prLabels ?? [`gittifacts:${scenario.category}`],
+      number: 1,
+      title: title.slice(0, 200),
+      body: this.prBody ?? body,
+      labels: this.prLabels ?? [`gittifacts:${scenario.category}`],
       user: { login: "octo-author", id: 4711, type: "User" },
-      head: { ref: "change", sha: head, repo: headRepo }, base: { ref: "main", sha: baseSha },
-      state: "open", merged: false,
+      head: { ref: "change", sha: head, repo: headRepo },
+      base: { ref: "main", sha: baseSha },
+      state: "open",
+      merged: false,
     };
     this.gh.pulls.set(1, this.pr);
     this.gh.setHead(this.pr, head);
@@ -148,7 +217,12 @@ export class GithubContractHost implements ContractHost {
     const pr = this.pr;
     if (pr === null) throw new Error("no PR open");
     const before = pr.head.sha;
-    const sha = this.gh.commit(pr.head.repo, pr.head.ref, changes, opts.force ? pr.base.sha : undefined);
+    const sha = this.gh.commit(
+      pr.head.repo,
+      pr.head.ref,
+      changes,
+      opts.force ? pr.base.sha : undefined,
+    );
     this.gh.setHead(pr, sha);
     await this.sync.handle(this.gh.pullRequestDelivery("synchronize", pr, before));
     await this.job.release();
@@ -175,8 +249,12 @@ export class GithubContractHost implements ContractHost {
    * there is nothing to compare: undefined.
    */
   private publishedTour(headSha: string): Observed["publishedTour"] {
-    const r = [...this.gh.reviews.values()].filter((x) => x.commit_id === headSha && !x.minimized).at(-1);
-    return r === undefined ? undefined : { stops: r.comments.length, riskiestFile: r.comments[0]?.path ?? null };
+    const r = [...this.gh.reviews.values()]
+      .filter((x) => x.commit_id === headSha && !x.minimized)
+      .at(-1);
+    return r === undefined
+      ? undefined
+      : { stops: r.comments.length, riskiestFile: r.comments[0]?.path ?? null };
   }
 
   /** What GitHub shows: the completed check run's conclusion, read back as a routing action. */
@@ -184,10 +262,15 @@ export class GithubContractHost implements ContractHost {
     const run = this.gh.laneRun(headSha);
     if (run === null || run.status !== "completed" || run.conclusion === "cancelled") return null;
     // Report-only runs are all `neutral`: the verdict is read from the run itself.
-    const v = readCheckRunVerdict({ title: run.output.title ?? null, summary: run.output.summary ?? null, text: run.output.text ?? null }).verdict;
+    const v = readCheckRunVerdict({
+      title: run.output.title ?? null,
+      summary: run.output.summary ?? null,
+      text: run.output.text ?? null,
+    }).verdict;
     if (v === undefined) return null;
     if (v.blocked) return "blocked";
-    if (v.lane === 0 && !v.requiresHumanApproval) return laneZeroAction(this.adapter.capabilities()).action;
+    if (v.lane === 0 && !v.requiresHumanApproval)
+      return laneZeroAction(this.adapter.capabilities()).action;
     return "request-review";
   }
 
@@ -199,8 +282,12 @@ export class GithubContractHost implements ContractHost {
       store.getClassification(changeId, headSha),
       store.getEvidence(changeId, headSha),
     ]);
-    const tour = [...store.tours.values()].find((t) => t.changeId === changeId && t.headSha === headSha) ?? null;
-    const runs = [...ci.runs.values()].filter((r) => r.request.changeId === changeId && r.request.headSha === headSha);
+    const tour =
+      [...store.tours.values()].find((t) => t.changeId === changeId && t.headSha === headSha) ??
+      null;
+    const runs = [...ci.runs.values()].filter(
+      (r) => r.request.changeId === changeId && r.request.headSha === headSha,
+    );
     return {
       verdict:
         cls === null
@@ -218,11 +305,16 @@ export class GithubContractHost implements ContractHost {
       evidence:
         evidence === null
           ? null
-          : { kinds: [...new Set(evidence.items.map((i) => i.kind))].sort(), verified: (await signer.verifyEvidence(evidence)).ok },
+          : {
+              kinds: [...new Set(evidence.items.map((i) => i.kind))].sort(),
+              verified: (await signer.verifyEvidence(evidence)).ok,
+            },
       tour,
       run: runs.at(-1)?.status.status ?? null,
       publishedTour: this.publishedTour(headSha),
-      approved: [...store.reviews.values()].some((r) => r.changeId === changeId && r.headSha === headSha && r.decision === "approve"),
+      approved: [...store.reviews.values()].some(
+        (r) => r.changeId === changeId && r.headSha === headSha && r.decision === "approve",
+      ),
     };
   }
 
@@ -231,9 +323,11 @@ export class GithubContractHost implements ContractHost {
     const pr = this.pr;
     if (pr === null) return;
     const user =
-      who === "maintainer" ? { login: "maint-1", id: 6001, type: "User" }
-      : who === "author" ? pr.user
-      : { login: "copilot-swe-agent[bot]", id: 198982749, type: "Bot" };
+      who === "maintainer"
+        ? { login: "maint-1", id: 6001, type: "User" }
+        : who === "author"
+          ? pr.user
+          : { login: "copilot-swe-agent[bot]", id: 198982749, type: "Bot" };
     await this.sync.handle(this.gh.reviewDelivery(pr, user, "approved", headSha));
     await this.job.release();
     await this.settle();
@@ -244,7 +338,9 @@ export class GithubContractHost implements ContractHost {
     const subject = `change:${changeIdFor(REPO.id, ref.number)}`;
     const { audit } = this.env.ports;
     return audit.events.flatMap((e, i) =>
-      e.subject === subject && e.action === "change.classified" ? [(audit.payloads[i] as { headSha: string }).headSha] : [],
+      e.subject === subject && e.action === "change.classified"
+        ? [(audit.payloads[i] as { headSha: string }).headSha]
+        : [],
     );
   }
 }

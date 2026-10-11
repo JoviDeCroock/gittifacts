@@ -101,20 +101,30 @@ function recordScrolls(): void {
   const log: Probed["__scrolls"] = [];
   (window as unknown as Probed).__scrolls = log;
   const behavior = (arg: unknown) =>
-    typeof arg === "object" && arg !== null && "behavior" in arg ? String((arg as { behavior: unknown }).behavior) : null;
+    typeof arg === "object" && arg !== null && "behavior" in arg
+      ? String((arg as { behavior: unknown }).behavior)
+      : null;
   const scrollTo = window.scrollTo.bind(window) as (...args: unknown[]) => void;
   window.scrollTo = ((...args: unknown[]) => {
     log.push({ kind: "scrollTo", behavior: behavior(args[0]) });
     scrollTo(...args);
   }) as typeof window.scrollTo;
   const intoView = Element.prototype.scrollIntoView;
-  Element.prototype.scrollIntoView = function (this: Element, arg?: boolean | ScrollIntoViewOptions) {
+  Element.prototype.scrollIntoView = function (
+    this: Element,
+    arg?: boolean | ScrollIntoViewOptions,
+  ) {
     log.push({ kind: "scrollIntoView", behavior: behavior(arg) });
     intoView.call(this, arg);
   };
 }
 
-async function approvePlan(request: APIRequestContext, baseURL: string, human: Human, planId: string): Promise<void> {
+async function approvePlan(
+  request: APIRequestContext,
+  baseURL: string,
+  human: Human,
+  planId: string,
+): Promise<void> {
   const res = await request.post(`${baseURL}/api/v1/plans/${planId}/approve`, {
     headers: { cookie: human.cookie, origin: baseURL },
     data: {},
@@ -122,7 +132,11 @@ async function approvePlan(request: APIRequestContext, baseURL: string, human: H
   expect(res.status(), `approve the plan: ${await res.text()}`).toBe(200);
 }
 
-async function createAgent(request: APIRequestContext, baseURL: string, human: Human): Promise<void> {
+async function createAgent(
+  request: APIRequestContext,
+  baseURL: string,
+  human: Human,
+): Promise<void> {
   const res = await request.post(`${baseURL}/api/v1/principals/agents`, {
     headers: { cookie: human.cookie, origin: baseURL },
     data: { name: uniqueName("a11y").toLowerCase(), scopes: ["repo:read"] },
@@ -142,7 +156,8 @@ async function expectTargets(targets: Locator, what: string): Promise<void> {
     els.filter((e) => e.getClientRects().length > 0).map((e) => e.getBoundingClientRect().height),
   );
   expect(heights.length, `${what}: none rendered`).toBeGreaterThan(0);
-  for (const h of heights) expect(h, `${what}: target height in px`).toBeGreaterThanOrEqual(TAP - 0.5);
+  for (const h of heights)
+    expect(h, `${what}: target height in px`).toBeGreaterThanOrEqual(TAP - 0.5);
 }
 
 const focusedId = (page: Page) => page.evaluate(() => document.activeElement?.id ?? "");
@@ -150,16 +165,28 @@ const focusedId = (page: Page) => page.evaluate(() => document.activeElement?.id
 function expectSameColour(actual: number[] | undefined, expected: number[], what: string): void {
   expect(actual, what).toBeDefined();
   for (const [i, v] of expected.slice(0, 3).entries()) {
-    expect(Math.abs((actual?.[i] ?? -99) - v), `${what}: channel ${i} of ${actual} vs ${expected}`).toBeLessThanOrEqual(2);
+    expect(
+      Math.abs((actual?.[i] ?? -99) - v),
+      `${what}: channel ${i} of ${actual} vs ${expected}`,
+    ).toBeLessThanOrEqual(2);
   }
 }
 
 test.describe("touch targets at 390 px", () => {
   test.beforeEach(({}, testInfo) => {
-    test.skip(testInfo.project.name !== "phone", "a coarse-pointer rule: the desktop layout stays as it is");
+    test.skip(
+      testInfo.project.name !== "phone",
+      "a coarse-pointer rule: the desktop layout stays as it is",
+    );
   });
 
-  test("a repo's plan links and the audit log's hash toggles", async ({ authed: page, world, request, baseURL, human }) => {
+  test("a repo's plan links and the audit log's hash toggles", async ({
+    authed: page,
+    world,
+    request,
+    baseURL,
+    human,
+  }) => {
     // An approved Plan is listed in the repo's side column.
     await approvePlan(request, baseURL as string, human, world.planId);
     await page.goto(`/repos/${world.repoId}`);
@@ -194,7 +221,10 @@ test.describe("touch targets at 390 px", () => {
   });
 });
 
-test("an in-app navigation hands focus to the new page; the first load doesn't", async ({ authed: page, world }) => {
+test("an in-app navigation hands focus to the new page; the first load doesn't", async ({
+  authed: page,
+  world,
+}) => {
   // Signed in, /signin?next= only redirects: still the first load.
   await page.goto(`/signin?next=${encodeURIComponent(`/repos/${world.repoId}`)}`);
   await expect(page).toHaveURL(new RegExp(`/repos/${world.repoId}$`));
@@ -206,7 +236,11 @@ test("an in-app navigation hands focus to the new page; the first load doesn't",
   expect(await focusedId(page)).not.toBe("main");
   // Following a link: the new page's main takes focus, the page starts at the top, and the next
   // Tab lands inside the page (not back at the top of the document).
-  await page.getByRole("main").getByRole("link", { name: new RegExp(world.repoName) }).first().click();
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: new RegExp(world.repoName) })
+    .first()
+    .click();
   await expect(page).toHaveURL(new RegExp(`/repos/${world.repoId}$`));
   await expect.poll(() => focusedId(page)).toBe("main");
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
@@ -241,7 +275,10 @@ test("scripted scrolling respects reduced motion", async ({ authed: page, world 
   await form.locator('button[type="submit"]').click();
   await expect(page.getByTestId("agent-token")).toBeVisible();
   const afterCreate = await scrolls();
-  expect(afterCreate.filter((s) => s.kind === "scrollTo" && s.behavior !== null), "the scroll to the token").not.toHaveLength(0);
+  expect(
+    afterCreate.filter((s) => s.kind === "scrollTo" && s.behavior !== null),
+    "the scroll to the token",
+  ).not.toHaveLength(0);
   expect(afterCreate.filter((s) => s.behavior === "smooth")).toEqual([]);
 
   // On phones, the plan's bottom bar jumps to the signature panel.
@@ -250,7 +287,10 @@ test("scripted scrolling respects reduced motion", async ({ authed: page, world 
     await page.getByTestId("plan-jump-to-sign").click();
     await expect(page.locator("#sign")).toBeInViewport();
     const afterJump = await scrolls();
-    expect(afterJump.filter((s) => s.kind === "scrollIntoView"), "the jump to the signature").not.toHaveLength(0);
+    expect(
+      afterJump.filter((s) => s.kind === "scrollIntoView"),
+      "the jump to the signature",
+    ).not.toHaveLength(0);
     expect(afterJump.filter((s) => s.behavior === "smooth")).toEqual([]);
   }
 });
@@ -261,7 +301,9 @@ test("the focus ring keeps each control's own shape", async ({ authed: page, wor
   // Every control's corner radius at rest, before anything has focus (and after the page loaded).
   await page.evaluate(() => {
     const rest = new Map<Element, string>();
-    for (const el of document.querySelectorAll("a[href], button, summary, input, select, textarea, [tabindex]")) {
+    for (const el of document.querySelectorAll(
+      "a[href], button, summary, input, select, textarea, [tabindex]",
+    )) {
       rest.set(el, getComputedStyle(el).borderRadius);
     }
     (window as unknown as Probed).__rest = rest;
@@ -273,23 +315,41 @@ test("the focus ring keeps each control's own shape", async ({ authed: page, wor
       const el = document.activeElement;
       const rest = el ? (window as unknown as Probed).__rest.get(el) : undefined;
       // Bare inline links (no class) may round their ring: they have no shape of their own.
-      if (!el || rest === undefined || !el.matches(":focus-visible") || (el.tagName === "A" && !el.hasAttribute("class"))) return null;
+      if (
+        !el ||
+        rest === undefined ||
+        !el.matches(":focus-visible") ||
+        (el.tagName === "A" && !el.hasAttribute("class"))
+      )
+        return null;
       return { what: el.outerHTML.slice(0, 90), rest, focused: getComputedStyle(el).borderRadius };
     });
     if (seen) checked.push(seen);
   }
   expect(checked.length, "controls reached by Tab").toBeGreaterThan(3);
-  expect(checked.some((c) => c.rest === "0px"), `a control without a radius of its own among ${JSON.stringify(checked)}`).toBe(true);
+  expect(
+    checked.some((c) => c.rest === "0px"),
+    `a control without a radius of its own among ${JSON.stringify(checked)}`,
+  ).toBe(true);
   for (const c of checked) expect(c.focused, `radius while focused: ${c.what}`).toBe(c.rest);
 });
 
-test("bands mean lane, verdict or state: an active agent and a rollout in flight are ink", async ({ authed: page, request, baseURL, human }) => {
+test("bands mean lane, verdict or state: an active agent and a rollout in flight are ink", async ({
+  authed: page,
+  request,
+  baseURL,
+  human,
+}) => {
   await page.addInitScript(installProbes);
-  const bands = (target: Locator) => target.evaluate((el) => (window as unknown as Probed).__a11y.bands(el));
+  const bands = (target: Locator) =>
+    target.evaluate((el) => (window as unknown as Probed).__a11y.bands(el));
 
   await createAgent(request, baseURL as string, human);
   await page.goto("/agents");
-  const active = page.getByTestId("agent-status").and(page.locator('[data-status="active"]')).first();
+  const active = page
+    .getByTestId("agent-status")
+    .and(page.locator('[data-status="active"]'))
+    .first();
   await expect(active).toBeVisible();
   expect(await bands(active), "the Active chip").toEqual([]);
 
@@ -305,12 +365,20 @@ test("bands mean lane, verdict or state: an active agent and a rollout in flight
   expect(await bands(state.locator(".icon").first()), "the rollout state's icon").toEqual([]);
 });
 
-test("quiet text keeps 4.5:1: a repo's zero lane counts, light and dark", async ({ authed: page, world }, testInfo) => {
+test("quiet text keeps 4.5:1: a repo's zero lane counts, light and dark", async ({
+  authed: page,
+  world,
+}, testInfo) => {
   await page.addInitScript(installProbes);
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     await page.goto("/dashboard");
-    await expect(page.getByRole("main").getByRole("link", { name: new RegExp(world.repoName) }).first()).toBeVisible();
+    await expect(
+      page
+        .getByRole("main")
+        .getByRole("link", { name: new RegExp(world.repoName) })
+        .first(),
+    ).toBeVisible();
     const zeros = page.locator(".lane-count.is-zero b");
     await expect(zeros.first()).toBeAttached();
     if (testInfo.project.name === "phone") {
@@ -319,13 +387,18 @@ test("quiet text keeps 4.5:1: a repo's zero lane counts, light and dark", async 
       continue;
     }
     await expect(zeros.first()).toBeVisible();
-    const ratios = await zeros.evaluateAll((els) => els.map((e) => (window as unknown as Probed).__a11y.contrast(e)));
-    for (const r of ratios) expect(r, `${colorScheme}: a zero count's contrast`).toBeGreaterThanOrEqual(4.5);
+    const ratios = await zeros.evaluateAll((els) =>
+      els.map((e) => (window as unknown as Probed).__a11y.contrast(e)),
+    );
+    for (const r of ratios)
+      expect(r, `${colorScheme}: a zero count's contrast`).toBeGreaterThanOrEqual(4.5);
   }
 });
 
 for (const colorScheme of ["light", "dark"] as const) {
-  test(`a cold load in ${colorScheme} mode: the scheme is declared and the canvas paints before any stylesheet`, async ({ authed: page }) => {
+  test(`a cold load in ${colorScheme} mode: the scheme is declared and the canvas paints before any stylesheet`, async ({
+    authed: page,
+  }) => {
     await page.addInitScript(installProbes);
     await page.emulateMedia({ colorScheme });
     await page.goto("/dashboard");
@@ -336,7 +409,8 @@ for (const colorScheme of ["light", "dark"] as const) {
         .filter((m) => window.matchMedia(m.getAttribute("media") ?? "all").matches)
         .map((m) => rgb(m.getAttribute("content") ?? "transparent"));
       return {
-        scheme: document.querySelector('meta[name="color-scheme"]')?.getAttribute("content") ?? null,
+        scheme:
+          document.querySelector('meta[name="color-scheme"]')?.getAttribute("content") ?? null,
         themes,
         canvas: rgb(getComputedStyle(document.documentElement).backgroundColor),
       };
@@ -346,9 +420,16 @@ for (const colorScheme of ["light", "dark"] as const) {
     expectSameColour(styled.themes[0], styled.canvas, "theme-color vs the canvas token");
 
     // Every stylesheet empty: only index.html's inline style paints the ground.
-    await page.route((url) => url.pathname.endsWith(".css"), (route) => route.fulfill({ status: 200, contentType: "text/css", body: "" }));
+    await page.route(
+      (url) => url.pathname.endsWith(".css"),
+      (route) => route.fulfill({ status: 200, contentType: "text/css", body: "" }),
+    );
     await page.goto("/dashboard");
-    const bare = await page.evaluate(() => (window as unknown as Probed).__a11y.rgb(getComputedStyle(document.documentElement).backgroundColor));
+    const bare = await page.evaluate(() =>
+      (window as unknown as Probed).__a11y.rgb(
+        getComputedStyle(document.documentElement).backgroundColor,
+      ),
+    );
     expectSameColour(bare, styled.canvas, "the ground before CSS vs the canvas token");
   });
 }

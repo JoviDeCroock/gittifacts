@@ -29,8 +29,8 @@ function AppRow({ app }: { app: GithubApp }) {
           <Icon name="eye" size={16} />
           <span>
             Report-only: one <code>gittifacts/lane</code> check run per pull request head, and for a
-            linked installation the walkthrough as one review plus a summary comment. It never blocks,
-            approves or merges.
+            linked installation the walkthrough as one review plus a summary comment. It never
+            blocks, approves or merges.
           </span>
         </p>
       </div>

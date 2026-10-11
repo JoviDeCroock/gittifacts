@@ -35,7 +35,10 @@ async function signUp(app: TestApp, email: string): Promise<string> {
     body: { email, password: PASSWORD, name: "Rita" },
   });
   expect(res.status).toBe(200);
-  return res.headers.getSetCookie().find((c) => c.startsWith("better-auth.session_token="))!.split(";")[0]!;
+  return res.headers
+    .getSetCookie()
+    .find((c) => c.startsWith("better-auth.session_token="))!
+    .split(";")[0]!;
 }
 
 describe("password reset", () => {
@@ -50,7 +53,12 @@ describe("password reset", () => {
     const err = await expectError(res, 503, "not-configured");
     expect(err.error.fix.explanation).toContain("can't send e-mail");
     // Half-configured (a sender without a binding) is still off.
-    const half = await callWith(app, { EMAIL_FROM: "noreply@example.com" }, "GET", "/api/v1/sign-in-options");
+    const half = await callWith(
+      app,
+      { EMAIL_FROM: "noreply@example.com" },
+      "GET",
+      "/api/v1/sign-in-options",
+    );
     expect(await json(half)).toMatchObject({ passwordReset: false });
   });
 
@@ -80,7 +88,11 @@ describe("password reset", () => {
     expect(asked.status).toBe(200);
     expect(sent).toHaveLength(1);
     const msg = sent[0]!;
-    expect(msg).toMatchObject({ to: email, from: "noreply@gittifacts.test", subject: "Reset your gittifacts password" });
+    expect(msg).toMatchObject({
+      to: email,
+      from: "noreply@gittifacts.test",
+      subject: "Reset your gittifacts password",
+    });
     const link = /https?:\/\/\S+/.exec(msg.text)?.[0];
     expect(link).toBeDefined();
     expect(msg.html).toContain("Choose a new password");
@@ -106,9 +118,13 @@ describe("password reset", () => {
     expect(again.status).toBe(400);
 
     expect((await call(app, "GET", "/api/v1/me", { cookie: oldCookie })).status).toBe(401);
-    const oldPw = await call(app, "POST", "/api/auth/sign-in/email", { body: { email, password: PASSWORD } });
+    const oldPw = await call(app, "POST", "/api/auth/sign-in/email", {
+      body: { email, password: PASSWORD },
+    });
     expect(oldPw.status).toBe(401);
-    const newPw = await call(app, "POST", "/api/auth/sign-in/email", { body: { email, password: NEW } });
+    const newPw = await call(app, "POST", "/api/auth/sign-in/email", {
+      body: { email, password: NEW },
+    });
     expect(newPw.status).toBe(200);
   });
 });

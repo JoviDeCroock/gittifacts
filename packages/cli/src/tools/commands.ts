@@ -141,7 +141,8 @@ export function deriveCommand(tool: WireTool, source: "bundled" | "server"): Com
   // A change named either by id or (GitHub mode) by `--github owner/repo#123`: neither is
   // required, and the id stays positional (`get-change-status chg_1`).
   const changeIdFallback =
-    requiredStrings.length === 0 && flags.some((f) => f.property === "changeId" && f.kind === "string")
+    requiredStrings.length === 0 &&
+    flags.some((f) => f.property === "changeId" && f.kind === "string")
       ? "changeId"
       : null;
   const positional =

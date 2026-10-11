@@ -89,7 +89,8 @@ function parseFile(path: string, lines: string[]): ResolvedFile {
     if (hunk) {
       const oldStart = Number(hunk[1]);
       const oldLines = hunk[2] === undefined ? 1 : Number(hunk[2]);
-      if (region !== null && prevOldEnd !== null) region.hidden += Math.max(0, oldStart - prevOldEnd);
+      if (region !== null && prevOldEnd !== null)
+        region.hidden += Math.max(0, oldStart - prevOldEnd);
       if (region === null) flushOutside();
       prevOldEnd = oldStart + oldLines;
       justClosed = null;
@@ -171,7 +172,10 @@ export function parseResolution(diff: string): ResolvedFile[] {
       if (m?.[1]) path = m[1];
       continue;
     }
-    if (/^(index |new file mode|deleted file mode|old mode|new mode|similarity|rename )/.test(line) && body.length === 0)
+    if (
+      /^(index |new file mode|deleted file mode|old mode|new mode|similarity|rename )/.test(line) &&
+      body.length === 0
+    )
       continue;
     if (line === "" && body.length === 0) continue;
     body.push(line);
@@ -183,6 +187,7 @@ export function parseResolution(diff: string): ResolvedFile[] {
 /** Lines the resolver wrote (found on no side), across all files. */
 export function resolverLineCount(files: ResolvedFile[]): number {
   let n = 0;
-  for (const f of files) for (const r of f.regions) n += r.lands.filter((l) => l.origin === "resolver").length;
+  for (const f of files)
+    for (const r of f.regions) n += r.lands.filter((l) => l.origin === "resolver").length;
   return n;
 }

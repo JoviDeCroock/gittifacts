@@ -19,4 +19,3 @@ export function proseBlocks(text: string): ProseBlock[] {
   }
   return blocks;
 }
-

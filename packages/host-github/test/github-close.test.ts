@@ -21,7 +21,10 @@ describe("closing a pull request", () => {
     expect(host.gh.laneRun(headSha)?.status).toBe("in_progress");
     host.pull.state = "closed";
     await host.sync.handle(host.gh.pullRequestDelivery("closed", host.pull));
-    expect(host.gh.laneRun(headSha)).toMatchObject({ status: "completed", conclusion: "cancelled" });
+    expect(host.gh.laneRun(headSha)).toMatchObject({
+      status: "completed",
+      conclusion: "cancelled",
+    });
     expect(host.gh.laneRun(headSha)?.output.title).toBe("Closed before grading finished");
   });
 

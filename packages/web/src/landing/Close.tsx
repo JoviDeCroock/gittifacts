@@ -12,7 +12,9 @@ export function Close() {
         <h2 class="close__title" id="close-title">
           Start with one change.
         </h2>
-        <p class="l-lede">Approve a plan, read a walkthrough, or let an agent find its own way in.</p>
+        <p class="l-lede">
+          Approve a plan, read a walkthrough, or let an agent find its own way in.
+        </p>
         <div class="close__actions">
           <SessionCta />
           <CopyLine id="agent-url-3" originPath="/start" label="Copy the start URL" />

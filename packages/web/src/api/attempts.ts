@@ -36,20 +36,45 @@ const enc = encodeURIComponent;
 
 /** zod and the domain schema load on first use, keeping them out of the entry chunk. */
 async function viewSchema() {
-  const [{ z }, { AttemptsRanking: Ranking }] = await Promise.all([import("zod"), import("@app/domain/attempts")]);
-  const Picked = z.object({ changeId: z.string(), by: z.object({ id: z.string(), name: z.string() }), at: z.string() });
+  const [{ z }, { AttemptsRanking: Ranking }] = await Promise.all([
+    import("zod"),
+    import("@app/domain/attempts"),
+  ]);
+  const Picked = z.object({
+    changeId: z.string(),
+    by: z.object({ id: z.string(), name: z.string() }),
+    at: z.string(),
+  });
   return Ranking.extend({ planId: z.string(), picked: Picked.nullable() });
 }
 
 export const attemptsApi = {
   list: async (planId: string): Promise<PlanAttemptsView> => {
-    const [raw, schema] = await Promise.all([request<unknown>("GET", `/api/v1/plans/${enc(planId)}/attempts`), viewSchema()]);
+    const [raw, schema] = await Promise.all([
+      request<unknown>("GET", `/api/v1/plans/${enc(planId)}/attempts`),
+      viewSchema(),
+    ]);
     const parsed = schema.safeParse(raw);
     if (!parsed.success) {
-      throw new ApiError(502, "invalid_response", "The attempts from the server did not match the expected shape.", parsed.error.issues);
+      throw new ApiError(
+        502,
+        "invalid_response",
+        "The attempts from the server did not match the expected shape.",
+        parsed.error.issues,
+      );
     }
     return parsed.data;
   },
-  pick: (planId: string, changeId: string, input: { headSha?: string; comment?: string }, key?: string) =>
-    request<PickResult>("POST", `/api/v1/plans/${enc(planId)}/attempts/${enc(changeId)}/pick`, input, key),
+  pick: (
+    planId: string,
+    changeId: string,
+    input: { headSha?: string; comment?: string },
+    key?: string,
+  ) =>
+    request<PickResult>(
+      "POST",
+      `/api/v1/plans/${enc(planId)}/attempts/${enc(changeId)}/pick`,
+      input,
+      key,
+    ),
 };

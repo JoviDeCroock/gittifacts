@@ -17,9 +17,19 @@ import { LastAct, ownerLine, StateWord } from "../components/Fleet.js";
 import { Icon } from "../components/Icon.js";
 import { RepoPicker } from "../components/Integrations.js";
 import { McpSetup } from "../components/McpSetup.js";
-import { Term } from "../components/Term.js";
 import { Page } from "../components/Shell.js";
-import { Avatar, Button, CopyButton, ErrorState, LinkButton, Loading, Segmented, SkeletonHead, SkeletonRows } from "../components/ui.js";
+import { Term } from "../components/Term.js";
+import {
+  Avatar,
+  Button,
+  CopyButton,
+  ErrorState,
+  LinkButton,
+  Loading,
+  Segmented,
+  SkeletonHead,
+  SkeletonRows,
+} from "../components/ui.js";
 import { cliCommand } from "../lib/cli.js";
 import { neverSentence } from "../lib/consent-copy.js";
 import { type AgentActivity, fleetFrom, trailHref } from "../lib/fleet.js";
@@ -44,9 +54,16 @@ const SCOPES: { id: Scope; label: string; hint: string }[] = [
     label: "Draft Plans",
     hint: "Propose Plans. Only a person can approve one.",
   },
-  { id: "repo:read", label: "Read", hint: "Clone and read code, Changes, walkthroughs and evidence." },
+  {
+    id: "repo:read",
+    label: "Read",
+    hint: "Clone and read code, Changes, walkthroughs and evidence.",
+  },
 ];
-const NEVER_LINE = neverSentence(["plan:approve", "change:review", "policy:admin", "repo:admin"], "Agents");
+const NEVER_LINE = neverSentence(
+  ["plan:approve", "change:review", "policy:admin", "repo:admin"],
+  "Agents",
+);
 /** How long a hand-made token works. The platform's default is 90 days. */
 const EXPIRY = ["7", "30", "90", "365"] as const;
 
@@ -63,7 +80,8 @@ function TokenReveal({ created, onDone }: { created: CreateAgentResponse; onDone
         <Icon name="key" size={18} /> Token for {created.principal.name}
       </h2>
       <p class="token__warn">
-        <b>Copy it now.</b> This is the only time it is shown. If you lose it, revoke it and create a new one.
+        <b>Copy it now.</b> This is the only time it is shown. If you lose it, revoke it and create
+        a new one.
       </p>
       <div class="token__box">
         <code class="token__value">{created.token}</code>
@@ -89,8 +107,8 @@ function Connect() {
         Connect an agent
       </h2>
       <p class="connect__lede">
-        Add gittifacts to your agent's MCP client, or log in with the CLI. Either asks you to approve what it may do, then
-        shows up here as its own agent.
+        Add gittifacts to your agent's MCP client, or log in with the CLI. Either asks you to
+        approve what it may do, then shows up here as its own agent.
       </p>
       <span class="connect__label">MCP client</span>
       <McpSetup />
@@ -113,12 +131,16 @@ function CreateAgent({ onCreated }: { onCreated: (r: CreateAgentResponse) => voi
   const repos = useResource(
     () =>
       api.repos().then((r) => {
-        if (r.repos.length === 1 && r.repos[0] && picked.value.length === 0) picked.value = [r.repos[0].id];
+        if (r.repos.length === 1 && r.repos[0] && picked.value.length === 0)
+          picked.value = [r.repos[0].id];
         return r;
       }),
     [],
   );
-  const list = repos.state.value.status === "ok" ? repos.state.value.data.repos.map((r) => ({ id: r.id, name: r.name, fullName: r.name })) : [];
+  const list =
+    repos.state.value.status === "ok"
+      ? repos.state.value.data.repos.map((r) => ({ id: r.id, name: r.name, fullName: r.name }))
+      : [];
   // Until the list arrives there is nothing to pick (and the one repo isn't picked yet): submit waits.
   const reposLoading = repos.state.value.status === "loading";
   // A repository picked (or all of them) answers the error about repositories.
@@ -134,11 +156,17 @@ function CreateAgent({ onCreated }: { onCreated: (r: CreateAgentResponse) => voi
     e.preventDefault();
     if (busy.value || reposLoading) return;
     if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(name.value.trim())) {
-      error.value = { field: "name", text: "Use 2 to 41 lowercase letters, digits or hyphens, starting with a letter or digit." };
+      error.value = {
+        field: "name",
+        text: "Use 2 to 41 lowercase letters, digits or hyphens, starting with a letter or digit.",
+      };
       return;
     }
     if (selection.value === "selected" && picked.value.length === 0) {
-      error.value = { field: "repos", text: "Pick at least one repository, or choose all of them." };
+      error.value = {
+        field: "repos",
+        text: "Pick at least one repository, or choose all of them.",
+      };
       return;
     }
     if (scopes.value.length === 0) {
@@ -168,9 +196,15 @@ function CreateAgent({ onCreated }: { onCreated: (r: CreateAgentResponse) => voi
   }
 
   return (
-    <form class="create-agent" onSubmit={submit} aria-label="Add an agent by hand" data-testid="create-agent">
+    <form
+      class="create-agent"
+      onSubmit={submit}
+      aria-label="Add an agent by hand"
+      data-testid="create-agent"
+    >
       <p class="create-agent__lede">
-        For agents that can't sign in. You get a token to paste into the agent; it works until you revoke it or it ends.
+        For agents that can't sign in. You get a token to paste into the agent; it works until you
+        revoke it or it ends.
       </p>
       <label class="field">
         <span class="field__label">Name</span>
@@ -219,7 +253,11 @@ function CreateAgent({ onCreated }: { onCreated: (r: CreateAgentResponse) => voi
         </legend>
         {SCOPES.map((s) => (
           <label key={s.id} class="check">
-            <input type="checkbox" checked={scopes.value.includes(s.id)} onChange={(e) => toggle(s.id, e.currentTarget.checked)} />
+            <input
+              type="checkbox"
+              checked={scopes.value.includes(s.id)}
+              onChange={(e) => toggle(s.id, e.currentTarget.checked)}
+            />
             <span>
               {s.label} <code class="scopes__id">{s.id}</code>
             </span>
@@ -246,21 +284,41 @@ function CreateAgent({ onCreated }: { onCreated: (r: CreateAgentResponse) => voi
           {error.value.text}
         </p>
       ) : null}
-      <Button type="submit" variant="primary" icon="plus" busy={busy.value || reposLoading} busyLabel={reposLoading ? "Loading repositories…" : "Creating…"}>
+      <Button
+        type="submit"
+        variant="primary"
+        icon="plus"
+        busy={busy.value || reposLoading}
+        busyLabel={reposLoading ? "Loading repositories…" : "Creating…"}
+      >
         Create agent and token
       </Button>
     </form>
   );
 }
 
-const CAN: Partial<Record<Scope, string>> = { "change:create": "open Changes", "plan:create": "draft Plans", "repo:read": "read code" };
-const OPEN = new Set(["awaiting-push", "running", "failing", "awaiting-review", "approved", "queued"]);
+const CAN: Partial<Record<Scope, string>> = {
+  "change:create": "open Changes",
+  "plan:create": "draft Plans",
+  "repo:read": "read code",
+};
+const OPEN = new Set([
+  "awaiting-push",
+  "running",
+  "failing",
+  "awaiting-review",
+  "approved",
+  "queued",
+]);
 
 /** "Can open Changes and read code in" + the repositories, as links. */
 function CanLine({ s }: { s: AgentSession }) {
-  const can = (["change:create", "plan:create", "repo:read"] as Scope[]).filter((x) => s.scopes.includes(x)).map((x) => CAN[x]);
+  const can = (["change:create", "plan:create", "repo:read"] as Scope[])
+    .filter((x) => s.scopes.includes(x))
+    .map((x) => CAN[x]);
   if (can.length === 0) return <p class="agent__can">Can do nothing</p>;
-  const verbs = can.length === 1 ? can[0] : `${can.slice(0, -1).join(", ")} and ${can[can.length - 1]}`;
+  const verbs =
+    can.length === 1 ? can[0] : `${can.slice(0, -1).join(", ")} and ${can[can.length - 1]}`;
   return (
     <p class="agent__can">
       Can {verbs} in{" "}
@@ -283,11 +341,16 @@ function CanLine({ s }: { s: AgentSession }) {
 /** Created, last active (its newest audit event counts, not only its last token use), and the end. */
 function whenLine(s: AgentSession, a: AgentActivity | undefined, now: number): string {
   const parts = [`Created ${relative(s.createdAt, Math.max(now, Date.parse(s.createdAt)))}`];
-  const used = [s.lastUsedAt, a?.last.at].filter((t): t is string => !!t).sort().pop();
+  const used = [s.lastUsedAt, a?.last.at]
+    .filter((t): t is string => !!t)
+    .sort()
+    .pop();
   parts.push(used ? `last active ${relative(used, now)}` : "never used");
   // Just revoked: the minute clock may lag the server's stamp; never say "in under a minute".
-  if (s.status === "revoked" && s.revokedAt) parts.push(`revoked ${relative(s.revokedAt, Math.max(now, Date.parse(s.revokedAt)))}`);
-  else if (s.expiresAt) parts.push(`${Date.parse(s.expiresAt) > now ? "ends" : "ended"} ${relative(s.expiresAt, now)}`);
+  if (s.status === "revoked" && s.revokedAt)
+    parts.push(`revoked ${relative(s.revokedAt, Math.max(now, Date.parse(s.revokedAt)))}`);
+  else if (s.expiresAt)
+    parts.push(`${Date.parse(s.expiresAt) > now ? "ends" : "ended"} ${relative(s.expiresAt, now)}`);
   else parts.push("no end date");
   return parts.join(" · ");
 }
@@ -314,18 +377,27 @@ function NowLine({ a, now }: { a: AgentActivity | undefined; now: number }) {
 /** After a revoke: the work it leaves open, so a person can pick it up or close it. */
 async function openWork(s: AgentSession): Promise<ChangeSummary[]> {
   const ids = s.repoIds ?? (await api.repos()).repos.map((r) => r.id);
-  const lists = await Promise.all(ids.map((id) => api.changes(id).then((r) => r.changes, () => [] as ChangeSummary[])));
+  const lists = await Promise.all(
+    ids.map((id) =>
+      api.changes(id).then(
+        (r) => r.changes,
+        () => [] as ChangeSummary[],
+      ),
+    ),
+  );
   return lists.flat().filter((c) => c.authorId === s.principalId && OPEN.has(c.status));
 }
 
 function LeftOpen({ work }: { work: ChangeSummary[] | "loading" | "error" }) {
   if (work === "loading") return <Loading label="Looking for its open changes" lines={1} />;
-  if (work === "error") return <p class="agent__left">Couldn't list its open changes. Check its repositories.</p>;
+  if (work === "error")
+    return <p class="agent__left">Couldn't list its open changes. Check its repositories.</p>;
   if (work.length === 0) return <p class="agent__left">It has no open changes.</p>;
   return (
     <div class="agent__left" data-testid="agent-left-open">
       <p>
-        It leaves {plural(work.length, "open change")}. They stay open until someone closes or finishes them:
+        It leaves {plural(work.length, "open change")}. They stay open until someone closes or
+        finishes them:
       </p>
       <ul>
         {work.map((c) => (
@@ -338,7 +410,15 @@ function LeftOpen({ work }: { work: ChangeSummary[] | "loading" | "error" }) {
   );
 }
 
-function SessionRow({ s, a, onRevoked }: { s: AgentSession; a: AgentActivity | undefined; onRevoked: (s: AgentSession) => void }) {
+function SessionRow({
+  s,
+  a,
+  onRevoked,
+}: {
+  s: AgentSession;
+  a: AgentActivity | undefined;
+  onRevoked: (s: AgentSession) => void;
+}) {
   const confirm = useSignal(false);
   const busy = useSignal(false);
   const result = useSignal<string | null>(null);
@@ -366,13 +446,22 @@ function SessionRow({ s, a, onRevoked }: { s: AgentSession; a: AgentActivity | u
   }
 
   return (
-    <li class={`agent agent--${s.status}`} id={`agent-${s.principalId}`} data-testid="agent-row" data-agent={s.principalId}>
+    <li
+      class={`agent agent--${s.status}`}
+      id={`agent-${s.principalId}`}
+      data-testid="agent-row"
+      data-agent={s.principalId}
+    >
       <AgentMark name={s.name} id={s.principalId} size={36} />
       <div class="agent__main">
         <p class="agent__name">
           {s.name}
           {s.status !== "active" ? (
-            <span class={`agent__status agent__status--${s.status}`} data-testid="agent-status" data-status={s.status}>
+            <span
+              class={`agent__status agent__status--${s.status}`}
+              data-testid="agent-status"
+              data-status={s.status}
+            >
               {s.status === "expired" ? "Ended" : "Revoked"}
             </span>
           ) : (
@@ -385,7 +474,9 @@ function SessionRow({ s, a, onRevoked }: { s: AgentSession; a: AgentActivity | u
         <p class="agent__via">
           <Icon name={flow.icon} size={14} /> {flow.label}
           {s.client && s.client.name !== s.name ? <span> · {s.client.name}</span> : null}
-          {s.client?.id.startsWith("https://") ? <span class="agent__host"> · {new URL(s.client.id).host}</span> : null}
+          {s.client?.id.startsWith("https://") ? (
+            <span class="agent__host"> · {new URL(s.client.id).host}</span>
+          ) : null}
         </p>
         <CanLine s={s} />
         <p class="agent__keys">{whenLine(s, a, now)}</p>
@@ -397,20 +488,39 @@ function SessionRow({ s, a, onRevoked }: { s: AgentSession; a: AgentActivity | u
         {work.value ? <LeftOpen work={work.value} /> : null}
       </div>
       <div class="agent__actions">
-        <LinkButton variant="quiet" size="sm" icon="scroll-text" href={trailHref(s.principalId)} data-testid="agent-trail" aria-label={`Trail of ${s.name} in the audit log`}>
+        <LinkButton
+          variant="quiet"
+          size="sm"
+          icon="scroll-text"
+          href={trailHref(s.principalId)}
+          data-testid="agent-trail"
+          aria-label={`Trail of ${s.name} in the audit log`}
+        >
           Trail
         </LinkButton>
         {s.status !== "active" ? null : confirm.value ? (
           <fieldset class="agent__confirm" aria-label={`Revoke ${s.name}`}>
             <p>
-              Revoke {s.name}? The API and MCP refuse its tokens at once; a push token it already holds works for up to an hour.
-              Its open changes stay open.
+              Revoke {s.name}? The API and MCP refuse its tokens at once; a push token it already
+              holds works for up to an hour. Its open changes stay open.
             </p>
             <div>
-              <Button variant="secondary" size="sm" onClick={() => (confirm.value = false)} disabled={busy.value}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => (confirm.value = false)}
+                disabled={busy.value}
+              >
                 Cancel
               </Button>
-              <Button variant="danger" size="sm" busy={busy.value} busyLabel="Revoking…" onClick={revoke} data-testid="agent-revoke-confirm">
+              <Button
+                variant="danger"
+                size="sm"
+                busy={busy.value}
+                busyLabel="Revoking…"
+                onClick={revoke}
+                data-testid="agent-revoke-confirm"
+              >
                 Revoke access
               </Button>
             </div>
@@ -438,7 +548,12 @@ function SessionRow({ s, a, onRevoked }: { s: AgentSession; a: AgentActivity | u
 function OtherRow({ a }: { a: AgentActivity }) {
   const now = minuteClock.value;
   return (
-    <li class="agent agent--other" id={`agent-${a.agent.id}`} data-testid="agent-other" data-agent={a.agent.id}>
+    <li
+      class="agent agent--other"
+      id={`agent-${a.agent.id}`}
+      data-testid="agent-other"
+      data-agent={a.agent.id}
+    >
       <AgentMark name={a.agent.name} id={a.agent.id} size={36} />
       <div class="agent__main">
         <p class="agent__name">
@@ -447,7 +562,14 @@ function OtherRow({ a }: { a: AgentActivity }) {
         <NowLine a={a} now={now} />
       </div>
       <div class="agent__actions">
-        <LinkButton variant="quiet" size="sm" icon="scroll-text" href={trailHref(a.agent.id)} data-testid="agent-trail" aria-label={`Trail of ${a.agent.name} in the audit log`}>
+        <LinkButton
+          variant="quiet"
+          size="sm"
+          icon="scroll-text"
+          href={trailHref(a.agent.id)}
+          data-testid="agent-trail"
+          aria-label={`Trail of ${a.agent.name} in the audit log`}
+        >
           Trail
         </LinkButton>
       </div>
@@ -475,7 +597,13 @@ function SelfRow({ p }: { p: Principal }) {
         </ul>
       </div>
       <div class="agent__actions">
-        <LinkButton variant="quiet" size="sm" icon="scroll-text" href={trailHref(p.id)} aria-label="Your trail in the audit log">
+        <LinkButton
+          variant="quiet"
+          size="sm"
+          icon="scroll-text"
+          href={trailHref(p.id)}
+          aria-label="Your trail in the audit log"
+        >
           Trail
         </LinkButton>
       </div>
@@ -497,7 +625,8 @@ export function AgentsView() {
   // A row revoked here stays in place until the next visit, so its result and the work it
   // leaves open stay on screen; then it moves under Ended and revoked.
   const justRevoked = useSignal<string[]>([]);
-  const here = (s: AgentSession) => s.status === "active" || justRevoked.value.includes(s.principalId);
+  const here = (s: AgentSession) =>
+    s.status === "active" || justRevoked.value.includes(s.principalId);
   const active = sessions.filter(here);
   const ended = sessions.filter((s) => !here(s));
   const fleet = au.status === "ok" ? fleetFrom(au.data, minuteClock.value) : [];
@@ -510,7 +639,9 @@ export function AgentsView() {
   function replace(updated: AgentSession) {
     if (st.status !== "ok") return;
     justRevoked.value = [...justRevoked.value, updated.principalId];
-    res.set({ sessions: st.data.sessions.map((s) => (s.principalId === updated.principalId ? updated : s)) });
+    res.set({
+      sessions: st.data.sessions.map((s) => (s.principalId === updated.principalId ? updated : s)),
+    });
   }
 
   return (
@@ -519,14 +650,16 @@ export function AgentsView() {
       wide
       meta={
         <span>
-          Every connected MCP client, CLI login and hand-made token is its own agent, owned by you. Each row is what it is doing,
-          what it may touch and its trail.
+          Every connected MCP client, CLI login and hand-made token is its own agent, owned by you.
+          Each row is what it is doing, what it may touch and its trail.
         </span>
       }
     >
       <div class="agents-layout">
         <div class="agents-main">
-          {created.value ? <TokenReveal created={created.value} onDone={() => (created.value = null)} /> : null}
+          {created.value ? (
+            <TokenReveal created={created.value} onDone={() => (created.value = null)} />
+          ) : null}
           {!settled ? (
             <div role="status" aria-live="polite">
               <span class="sr-only">Loading your agents</span>
@@ -534,30 +667,52 @@ export function AgentsView() {
               <SkeletonRows count={3} />
             </div>
           ) : null}
-          {st.status === "error" ? <ErrorState error={st.error} what="your agents" onRetry={res.reload} /> : null}
+          {st.status === "error" ? (
+            <ErrorState error={st.error} what="your agents" onRetry={res.reload} />
+          ) : null}
           {settled && st.status === "ok" ? (
             <>
               <h2 class="agents__title">
-                Your agents <span class="tnum agents__n">{active.filter((s) => s.status === "active").length}</span>
+                Your agents{" "}
+                <span class="tnum agents__n">
+                  {active.filter((s) => s.status === "active").length}
+                </span>
               </h2>
               {active.length === 0 ? (
-                <p class="ev-sub">No agent can act for you right now. Connect one, or add one by hand.</p>
+                <p class="ev-sub">
+                  No agent can act for you right now. Connect one, or add one by hand.
+                </p>
               ) : (
                 <ul class="agents" data-testid="agents-mine">
                   {active.map((s) => (
-                    <SessionRow key={s.principalId} s={s} a={activity.get(s.principalId)} onRevoked={replace} />
+                    <SessionRow
+                      key={s.principalId}
+                      s={s}
+                      a={activity.get(s.principalId)}
+                      onRevoked={replace}
+                    />
                   ))}
                 </ul>
               )}
               {ended.length > 0 ? (
-                <details class="disclosure agents__ended" open={showEnded.value} onToggle={(e) => (showEnded.value = e.currentTarget.open)}>
+                <details
+                  class="disclosure agents__ended"
+                  open={showEnded.value}
+                  onToggle={(e) => (showEnded.value = e.currentTarget.open)}
+                >
                   <summary>
                     <Icon name="chevron-down" class="disclosure__chev" />
-                    Ended and revoked <span class="tnum agents__n">{plural(ended.length, "agent")}</span>
+                    Ended and revoked{" "}
+                    <span class="tnum agents__n">{plural(ended.length, "agent")}</span>
                   </summary>
                   <ul class="agents">
                     {ended.map((s) => (
-                      <SessionRow key={s.principalId} s={s} a={activity.get(s.principalId)} onRevoked={replace} />
+                      <SessionRow
+                        key={s.principalId}
+                        s={s}
+                        a={activity.get(s.principalId)}
+                        onRevoked={replace}
+                      />
                     ))}
                   </ul>
                 </details>
@@ -567,7 +722,9 @@ export function AgentsView() {
                   <h2 class="agents__title" id="others-title">
                     Other people's agents <span class="tnum agents__n">{others.length}</span>
                   </h2>
-                  <p class="agents__lede">Active this week in repositories you can see. Only their owner can revoke them.</p>
+                  <p class="agents__lede">
+                    Active this week in repositories you can see. Only their owner can revoke them.
+                  </p>
                   <ul class="agents">
                     {others.map((a) => (
                       <OtherRow key={a.agent.id} a={a} />
@@ -588,7 +745,11 @@ export function AgentsView() {
         </div>
         <aside class="agents-side">
           <Connect />
-          <details class="disclosure by-hand" open={byHand.value} onToggle={(e) => (byHand.value = e.currentTarget.open)}>
+          <details
+            class="disclosure by-hand"
+            open={byHand.value}
+            onToggle={(e) => (byHand.value = e.currentTarget.open)}
+          >
             <summary data-testid="create-agent-open">
               <Icon name="chevron-down" class="disclosure__chev" />
               Add one by hand…

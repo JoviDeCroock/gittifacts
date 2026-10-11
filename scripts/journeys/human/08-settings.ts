@@ -4,8 +4,9 @@
  * simulated third party receives the code (route-intercepted: there is no real deploy platform);
  * then the GitHub page. Secrets shown once are blurred in the video.
  */
-import { GITHUB_SURFACES } from "../../../packages/domain/src/surfaces.js";
+
 import { createHash, randomBytes } from "node:crypto";
+import { GITHUB_SURFACES } from "../../../packages/domain/src/surfaces.js";
 import { HOST } from "../lib/journey.js";
 import type { HumanJourney } from "../lib/types.js";
 

@@ -34,7 +34,9 @@ export const QaRunViewSchema = z
     costUsd: z.number().nullable(),
     wallMs: z.number().nullable(),
     error: z.string().nullable(),
-    withdrawn: z.array(z.object({ reviewId: z.string(), reviewerId: z.string(), name: z.string() })).describe("Approvals this run withdrew (a failed criterion)"),
+    withdrawn: z
+      .array(z.object({ reviewId: z.string(), reviewerId: z.string(), name: z.string() }))
+      .describe("Approvals this run withdrew (a failed criterion)"),
     createdAt: z.string(),
     startedAt: z.string().nullable(),
     finishedAt: z.string().nullable(),

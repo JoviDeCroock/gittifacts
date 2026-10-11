@@ -13,18 +13,38 @@
  *
  * Every step is idempotent: deliveries are at least once and may race.
  */
-import { type ChangeCoordinatorClient, type ExternalRemote, PUSHABLE_STATUSES, type Ports, SYSTEM_PRINCIPAL_ID, ZERO_SHA } from "@app/coordinator";
-import { type Change, defaultPolicy, type GithubChangeHost, type Plan, type Repo } from "@app/domain";
+import {
+  type ChangeCoordinatorClient,
+  type ExternalRemote,
+  type Ports,
+  PUSHABLE_STATUSES,
+  SYSTEM_PRINCIPAL_ID,
+  ZERO_SHA,
+} from "@app/coordinator";
+import {
+  type Change,
+  defaultPolicy,
+  type GithubChangeHost,
+  type Plan,
+  type Repo,
+} from "@app/domain";
 import type { Identity } from "@app/host";
 import { claimedCategoryOf, type GitHubHost } from "./adapter.js";
 import { changeIdFor, headBranchFor, mirrorNameFor, repoIdFor } from "./ids.js";
-import { WALKTHROUGH_LABEL } from "./terms.js";
 import { identityOf, normalizeGithubDelivery } from "./normalize.js";
-import { type GithubDelivery, type GithubRepo, IssueEvent, type PullRequest, PullRequestEvent, PushEvent } from "./payloads.js";
+import {
+  type GithubDelivery,
+  type GithubRepo,
+  IssueEvent,
+  type PullRequest,
+  PullRequestEvent,
+  PushEvent,
+} from "./payloads.js";
 import { PLAN_LABEL } from "./plans.js";
 import { resolvePlan } from "./sync-plans.js";
 import { type GithubQaPort, onQaComment } from "./sync-qa.js";
 import { onCheckAction, onReview, refreshSummary } from "./sync-reviews.js";
+import { WALKTHROUGH_LABEL } from "./terms.js";
 
 /** A GitHub remote readable for one job; `release` revokes its token. */
 export interface GithubSource {
@@ -68,7 +88,12 @@ export class GithubSync {
   constructor(private readonly deps: GithubSyncDeps) {}
 
   private log(action: string, subject: string, payload: unknown) {
-    return this.deps.ports.audit.append({ principalId: SYSTEM_PRINCIPAL_ID, action, subject, payload });
+    return this.deps.ports.audit.append({
+      principalId: SYSTEM_PRINCIPAL_ID,
+      action,
+      subject,
+      payload,
+    });
   }
 
   async handle(delivery: GithubDelivery): Promise<SyncOutcome[]> {
@@ -90,7 +115,8 @@ export class GithubSync {
         out.push(await this.onMain(delivery));
       } else {
         // A merge group: we answer merge_group as a required check from M5.
-        const subject = ev.repo.host === "github" ? `github:${ev.repo.owner}/${ev.repo.repo}` : "github";
+        const subject =
+          ev.repo.host === "github" ? `github:${ev.repo.owner}/${ev.repo.repo}` : "github";
         await this.log(`github.${ev.type}`, subject, ev);
         out.push({ event: ev.type, action: "recorded", detail: "recorded; acted on in M5" });
       }
@@ -113,16 +139,28 @@ export class GithubSync {
     };
     const existing = await store.getRepo(id);
     if (existing !== null) {
-      const same = JSON.stringify(existing.host) === JSON.stringify(host) && existing.defaultBranch === r.default_branch;
-      return same ? existing : store.updateRepo(id, { host, defaultBranch: r.default_branch, name: r.full_name.slice(0, 100) });
+      const same =
+        JSON.stringify(existing.host) === JSON.stringify(host) &&
+        existing.defaultBranch === r.default_branch;
+      return same
+        ? existing
+        : store.updateRepo(id, {
+            host,
+            defaultBranch: r.default_branch,
+            name: r.full_name.slice(0, 100),
+          });
     }
     const mirror = mirrorNameFor(r.id);
     if ((await git.branchHead(mirror, r.default_branch).catch(() => undefined)) === undefined) {
       try {
-        await git.createRepo(mirror, { defaultBranch: r.default_branch, description: `GitHub mirror of ${r.full_name}` });
+        await git.createRepo(mirror, {
+          defaultBranch: r.default_branch,
+          description: `GitHub mirror of ${r.full_name}`,
+        });
       } catch (e) {
         // Another delivery created it first.
-        if ((await git.branchHead(mirror, r.default_branch).catch(() => undefined)) === undefined) throw e;
+        if ((await git.branchHead(mirror, r.default_branch).catch(() => undefined)) === undefined)
+          throw e;
       }
     }
     const repo: Repo = {
@@ -165,7 +203,8 @@ export class GithubSync {
     if (!p.success) return { event, action: "ignored", detail: "unreadable pull_request payload" };
     const { pull_request: pr, repository: r } = p.data;
     if (pr.state !== "open") return { event, action: "ignored", detail: "pull request is closed" };
-    if (pr.draft) return { event, action: "ignored", detail: "draft (graded when ready for review)" };
+    if (pr.draft)
+      return { event, action: "ignored", detail: "draft (graded when ready for review)" };
     // Policy and the merge queue are about the default branch; stacked PRs are out of M2's scope.
     if (pr.base.ref !== r.default_branch) {
       return { event, action: "ignored", detail: `base ${pr.base.ref} is not the default branch` };
@@ -198,7 +237,13 @@ export class GithubSync {
       url: pr.html_url,
     };
     // The Plan: a reference in the body (platform Plan or plan file), else a labelled issue.
-    const link = await resolvePlan(this.deps, this.deps.host, { pr, githubRepoId: r.id, repoId: repo.id, mirror, baseSha });
+    const link = await resolvePlan(this.deps, this.deps.host, {
+      pr,
+      githubRepoId: r.id,
+      repoId: repo.id,
+      mirror,
+      baseSha,
+    });
     const planId = link.planId;
     hostInfo.issueRefs = link.issueRefs;
     let change = await store.getChange(changeId);
@@ -210,7 +255,10 @@ export class GithubSync {
         repoId: repo.id,
         planId,
         title: (pr.title || `#${pr.number}`).slice(0, 200),
-        claim: { category: claimedCategoryOf(pr) ?? DEFAULT_PR_CATEGORY, summary: pr.body?.slice(0, 10_000) ?? null },
+        claim: {
+          category: claimedCategoryOf(pr) ?? DEFAULT_PR_CATEGORY,
+          summary: pr.body?.slice(0, 10_000) ?? null,
+        },
         baseSha,
         headSha: null,
         forkName: mirror,
@@ -235,7 +283,10 @@ export class GithubSync {
     } else {
       await store.updateChange(changeId, {
         title: (pr.title || `#${pr.number}`).slice(0, 200),
-        claim: { category: claimedCategoryOf(pr) ?? change.claim.category, summary: pr.body?.slice(0, 10_000) ?? null },
+        claim: {
+          category: claimedCategoryOf(pr) ?? change.claim.category,
+          summary: pr.body?.slice(0, 10_000) ?? null,
+        },
         baseSha,
         planId,
         host: hostInfo,
@@ -254,7 +305,10 @@ export class GithubSync {
         await this.deps.host.publisher?.staleOlder(changeId, pr.number, headSha);
       }
     } catch (e) {
-      await this.log("github.check-start-failed", `change:${changeId}`, { headSha, error: (e as Error).message });
+      await this.log("github.check-start-failed", `change:${changeId}`, {
+        headSha,
+        error: (e as Error).message,
+      });
     }
 
     // 4. From here it is the native path: serialized heads, the ChangeWorkflow, gradeChange.
@@ -264,7 +318,12 @@ export class GithubSync {
       before: previous ?? ZERO_SHA,
       after: headSha,
     });
-    await this.log("github.pr-head", `change:${changeId}`, { headSha, previous, outcome: pushed.action, plan: link });
+    await this.log("github.pr-head", `change:${changeId}`, {
+      headSha,
+      previous,
+      outcome: pushed.action,
+      plan: link,
+    });
     if (previous !== null && previous !== headSha) {
       await refreshSummary(this.deps, changeId, r.owner.login, r.name, pr.number);
     }
@@ -288,10 +347,17 @@ export class GithubSync {
     if (pr.labels.some((l) => l.name === WALKTHROUGH_LABEL)) {
       try {
         if ((await this.deps.host.publishRequestedTour(changeId, pr.number)) === "posted") {
-          await this.deps.host.publishSummary({ host: "github", owner: r.owner.login, repo: r.name, number: pr.number });
+          await this.deps.host.publishSummary({
+            host: "github",
+            owner: r.owner.login,
+            repo: r.name,
+            number: pr.number,
+          });
         }
       } catch (e) {
-        await this.log("github.review-post-failed", `change:${changeId}`, { error: (e as Error).message });
+        await this.log("github.review-post-failed", `change:${changeId}`, {
+          error: (e as Error).message,
+        });
       }
     }
     return this.reconsider(event, changeId, pr, "the title, description or labels changed");
@@ -306,7 +372,8 @@ export class GithubSync {
     if ((action === "labeled" || action === "unlabeled") && label?.name !== PLAN_LABEL) {
       return [{ event, action: "ignored", detail: "not the plan label" }];
     }
-    if (!["labeled", "unlabeled", "edited"].includes(action)) return [{ event, action: "ignored", detail: action }];
+    if (!["labeled", "unlabeled", "edited"].includes(action))
+      return [{ event, action: "ignored", detail: action }];
     const open = await this.deps.ports.store.listChanges(repoIdFor(r.id), [...PUSHABLE_STATUSES]);
     const linked = open.filter((c) => c.host?.issueRefs?.includes(issue.number) === true);
     const out: SyncOutcome[] = [];
@@ -318,15 +385,26 @@ export class GithubSync {
     return out.length > 0 ? out : [{ event, action: "ignored", detail: "no open PR closes it" }];
   }
 
-  private async reconsider(event: string, changeId: string, pr: PullRequest, reason: string): Promise<SyncOutcome> {
+  private async reconsider(
+    event: string,
+    changeId: string,
+    pr: PullRequest,
+    reason: string,
+  ): Promise<SyncOutcome> {
     const { store } = this.deps.ports;
     const change = await store.getChange(changeId);
-    if (change?.host == null || change.headSha === null) return { event, action: "ignored", detail: "not graded yet", changeId };
+    if (change?.host == null || change.headSha === null)
+      return { event, action: "ignored", detail: "not graded yet", changeId };
     const repo = await store.getRepo(change.repoId);
-    if (repo?.host == null) return { event, action: "ignored", detail: "repo not mirrored", changeId };
+    if (repo?.host == null)
+      return { event, action: "ignored", detail: "repo not mirrored", changeId };
     const before = change.planId === null ? null : await store.getPlan(change.planId);
     const link = await resolvePlan(this.deps, this.deps.host, {
-      pr, githubRepoId: repo.host.githubRepoId, repoId: repo.id, mirror: repo.artifactsName, baseSha: change.baseSha,
+      pr,
+      githubRepoId: repo.host.githubRepoId,
+      repoId: repo.id,
+      mirror: repo.artifactsName,
+      baseSha: change.baseSha,
     });
     const after = link.planId === null ? null : await store.getPlan(link.planId);
     const category = claimedCategoryOf(pr) ?? change.claim.category;
@@ -340,27 +418,51 @@ export class GithubSync {
       category !== change.claim.category ||
       link.planId !== change.planId ||
       (before?.status ?? null) !== (after?.status ?? null);
-    if (!changed) return { event, action: "recorded", detail: "nothing that grades changed", changeId };
+    if (!changed)
+      return { event, action: "recorded", detail: "nothing that grades changed", changeId };
     const head = change.headSha;
     try {
       await this.deps.host.publisher?.staleOlder(changeId, pr.number, head, { sameHeadToo: true });
       await this.deps.host.startCheck(changeId, head, { fresh: true });
     } catch (e) {
-      await this.log("github.check-start-failed", `change:${changeId}`, { headSha: head, error: (e as Error).message });
+      await this.log("github.check-start-failed", `change:${changeId}`, {
+        headSha: head,
+        error: (e as Error).message,
+      });
     }
     const out = await this.deps.coordinator(changeId).regrade({ changeId, reason });
-    await this.log("github.pr-regrade", `change:${changeId}`, { headSha: head, reason, plan: link, category });
-    return { event, action: out.action === "ignored" ? "ignored" : "graded", detail: reason, changeId, headSha: head };
+    await this.log("github.pr-regrade", `change:${changeId}`, {
+      headSha: head,
+      reason,
+      plan: link,
+      category,
+    });
+    return {
+      event,
+      action: out.action === "ignored" ? "ignored" : "graded",
+      detail: reason,
+      changeId,
+      headSha: head,
+    };
   }
 
-  private async onClosed(delivery: GithubDelivery, merged: boolean, mergedSha: string | null): Promise<SyncOutcome> {
+  private async onClosed(
+    delivery: GithubDelivery,
+    merged: boolean,
+    mergedSha: string | null,
+  ): Promise<SyncOutcome> {
     const p = PullRequestEvent.safeParse(delivery.payload);
-    if (!p.success) return { event: delivery.event, action: "ignored", detail: "unreadable payload" };
+    if (!p.success)
+      return { event: delivery.event, action: "ignored", detail: "unreadable payload" };
     const changeId = changeIdFor(p.data.repository.id, p.data.pull_request.number);
     const { store } = this.deps.ports;
     const change = await store.getChange(changeId);
-    if (change === null) return { event: delivery.event, action: "ignored", detail: "never graded", changeId };
-    await store.updateChange(changeId, merged ? { status: "merged", mergedSha } : { status: "abandoned" });
+    if (change === null)
+      return { event: delivery.event, action: "ignored", detail: "never graded", changeId };
+    await store.updateChange(
+      changeId,
+      merged ? { status: "merged", mergedSha } : { status: "abandoned" },
+    );
     // A run still in progress for the head (grading never finished) must not stay running.
     let check: string = "none";
     try {
@@ -368,16 +470,26 @@ export class GithubSync {
     } catch (e) {
       check = `failed: ${(e as Error).message}`.slice(0, 300);
     }
-    await this.log(merged ? "github.pr-merged" : "github.pr-closed", `change:${changeId}`, { mergedSha, check });
-    return { event: delivery.event, action: "closed", detail: merged ? "merged on GitHub" : "closed", changeId };
+    await this.log(merged ? "github.pr-merged" : "github.pr-closed", `change:${changeId}`, {
+      mergedSha,
+      check,
+    });
+    return {
+      event: delivery.event,
+      action: "closed",
+      detail: merged ? "merged on GitHub" : "closed",
+      changeId,
+    };
   }
 
   private async onMain(delivery: GithubDelivery): Promise<SyncOutcome> {
     const p = PushEvent.safeParse(delivery.payload);
-    if (!p.success) return { event: delivery.event, action: "ignored", detail: "unreadable payload" };
+    if (!p.success)
+      return { event: delivery.event, action: "ignored", detail: "unreadable payload" };
     const repo = await this.deps.ports.store.getRepo(repoIdFor(p.data.repository.id));
     // Only repos we already grade: a push alone never creates a mirror.
-    if (repo === null) return { event: delivery.event, action: "ignored", detail: "repo not graded yet" };
+    if (repo === null)
+      return { event: delivery.event, action: "ignored", detail: "repo not graded yet" };
     await this.fetch(repo.artifactsName, p.data.after, `refs/heads/${repo.defaultBranch}`);
     return { event: delivery.event, action: "mirrored", detail: p.data.after };
   }

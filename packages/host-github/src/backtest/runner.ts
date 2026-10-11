@@ -22,7 +22,8 @@ import { findPatches, type PatchOutcome } from "./patches.js";
 import { type BacktestReport, backtestReport, type GradedPr } from "./report.js";
 import { findReverts } from "./reverts.js";
 
-export const backtestChangeId = (githubRepoId: number, number: number) => `ghb-${githubRepoId}-${number}`;
+export const backtestChangeId = (githubRepoId: number, number: number) =>
+  `ghb-${githubRepoId}-${number}`;
 export const backtestBranch = (number: number) => `gittifacts/backtest/${number}`;
 
 export interface BacktestDeps {
@@ -52,7 +53,10 @@ export interface BacktestInput {
 
 const HEAD_QUERY = `query($owner: String!, $repo: String!) { repository(owner: $owner, name: $repo) { defaultBranchRef { target { oid } } } }`;
 
-export async function runBacktest(deps: BacktestDeps, input: BacktestInput): Promise<BacktestReport> {
+export async function runBacktest(
+  deps: BacktestDeps,
+  input: BacktestInput,
+): Promise<BacktestReport> {
   const { repo } = deps;
   const host = repo.host;
   if (host == null) throw new Error(`${repo.id} is not a GitHub repository`);
@@ -63,7 +67,13 @@ export async function runBacktest(deps: BacktestDeps, input: BacktestInput): Pro
   // everything from the first graded PR on (later reverts and patches), trimmed so the step
   // result stays small (a Workflow step result is ≤ 1 MB).
   const listing = await deps.step("list", async () => {
-    const all = await listMergedPrs(deps.api, { owner, repo: name, defaultBranch: repo.defaultBranch, since: new Date(input.since), until: new Date(input.until) });
+    const all = await listMergedPrs(deps.api, {
+      owner,
+      repo: name,
+      defaultBranch: repo.defaultBranch,
+      since: new Date(input.since),
+      until: new Date(input.until),
+    });
     const settled = new Date(input.until).getTime() - 14 * 86_400_000;
     const old = all.prs.filter((p) => Date.parse(p.mergedAt) <= settled);
     const toGrade = (old.length > 0 ? old : all.prs).slice(-(input.maxPrs ?? 50));
@@ -71,16 +81,27 @@ export async function runBacktest(deps: BacktestDeps, input: BacktestInput): Pro
     const prs = all.prs
       .filter((p) => p.mergedAt >= from)
       .map((p) => ({ ...p, body: p.body?.slice(0, 500) ?? null, files: p.files.slice(0, 100) }));
-    return { prs, grade: toGrade.map((p) => p.number), pages: all.pages, points: all.points, truncated: all.truncated };
+    return {
+      prs,
+      grade: toGrade.map((p) => p.number),
+      pages: all.pages,
+      points: all.points,
+      truncated: all.truncated,
+    };
   });
   // The mirror's default branch: the newest history (every merge commit of the window is in it).
   await deps.step("mirror", async () => {
-    const out = (await deps.api.graphql(HEAD_QUERY, { owner, repo: name })) as { repository: { defaultBranchRef: { target: { oid: string } } | null } };
+    const out = (await deps.api.graphql(HEAD_QUERY, { owner, repo: name })) as {
+      repository: { defaultBranchRef: { target: { oid: string } } | null };
+    };
     const head = out.repository.defaultBranchRef?.target.oid;
     if (head === undefined) throw new Error("the repository has no default branch");
     const src = await deps.source();
     try {
-      await deps.ports.git.fetchExternal?.(src.remote, mirror, { sha: head, toRef: `refs/heads/${repo.defaultBranch}` });
+      await deps.ports.git.fetchExternal?.(src.remote, mirror, {
+        sha: head,
+        toRef: `refs/heads/${repo.defaultBranch}`,
+      });
     } finally {
       await src.release();
     }
@@ -98,9 +119,17 @@ export async function runBacktest(deps: BacktestDeps, input: BacktestInput): Pro
       const started = await deps.step(`start-${pr.number}`, () => startOne(deps, pr, githubRepoId));
       if (started !== null) skipped.push({ number: pr.number, reason: started });
     }
-    const pending = new Set(batch.filter((p) => !skipped.some((s) => s.number === p.number)).map((p) => p.number));
+    const pending = new Set(
+      batch.filter((p) => !skipped.some((s) => s.number === p.number)).map((p) => p.number),
+    );
     for (let poll = 0; pending.size > 0 && poll < (input.maxPolls ?? 120); poll++) {
-      const done = await deps.step(`wave-${w}-poll-${poll}`, () => readGraded(deps, githubRepoId, batch.filter((p) => pending.has(p.number))));
+      const done = await deps.step(`wave-${w}-poll-${poll}`, () =>
+        readGraded(
+          deps,
+          githubRepoId,
+          batch.filter((p) => pending.has(p.number)),
+        ),
+      );
       for (const g of done) {
         graded.set(g.number, g);
         pending.delete(g.number);
@@ -112,10 +141,14 @@ export async function runBacktest(deps: BacktestDeps, input: BacktestInput): Pro
 
   const outcomes = await deps.step("outcomes", async () => {
     const reverts = findReverts(listing.prs, `${owner}/${name}`);
-    const patches = await findPatches(listing.prs, {
-      diff: (base, head) => deps.ports.git.diff(mirror, base, head),
-      parent: async (sha) => (await deps.ports.git.commitParents(mirror, sha))?.[0] ?? null,
-    }, { now: new Date(input.until) });
+    const patches = await findPatches(
+      listing.prs,
+      {
+        diff: (base, head) => deps.ports.git.diff(mirror, base, head),
+        parent: async (sha) => (await deps.ports.git.commitParents(mirror, sha))?.[0] ?? null,
+      },
+      { now: new Date(input.until) },
+    );
     return { reverts: [...reverts], patches: [...patches] as [number, PatchOutcome][] };
   });
   return backtestReport({
@@ -130,7 +163,11 @@ export async function runBacktest(deps: BacktestDeps, input: BacktestInput): Pro
 }
 
 /** Create the backtest Change for a merged PR and start its grading. Null, or why it's skipped. */
-async function startOne(deps: BacktestDeps, pr: MergedPr, githubRepoId: number): Promise<string | null> {
+async function startOne(
+  deps: BacktestDeps,
+  pr: MergedPr,
+  githubRepoId: number,
+): Promise<string | null> {
   const { store, git, clock } = deps.ports;
   const mirror = deps.repo.artifactsName;
   const id = backtestChangeId(githubRepoId, pr.number);
@@ -141,7 +178,12 @@ async function startOne(deps: BacktestDeps, pr: MergedPr, githubRepoId: number):
   const branch = backtestBranch(pr.number);
   const current = await git.branchHead(mirror, branch);
   if (current !== pr.mergeSha) {
-    const moved = await git.updateRef(mirror, `refs/heads/${branch}`, current ?? ZERO_SHA, pr.mergeSha);
+    const moved = await git.updateRef(
+      mirror,
+      `refs/heads/${branch}`,
+      current ?? ZERO_SHA,
+      pr.mergeSha,
+    );
     if (!moved.ok) return `couldn't point ${branch} at the merge commit (${moved.reason})`;
   }
   if (existing === null) {
@@ -157,7 +199,12 @@ async function startOne(deps: BacktestDeps, pr: MergedPr, githubRepoId: number):
       repoId: deps.repo.id,
       planId: null,
       title: (pr.title || `#${pr.number}`).slice(0, 200),
-      claim: { category: claimedCategoryOf({ title: pr.title, labels: pr.labels.map((name) => ({ name })) }) ?? "feature", summary: null },
+      claim: {
+        category:
+          claimedCategoryOf({ title: pr.title, labels: pr.labels.map((name) => ({ name })) }) ??
+          "feature",
+        summary: null,
+      },
       baseSha: parent,
       headSha: null,
       forkName: mirror,
@@ -191,12 +238,18 @@ async function startOne(deps: BacktestDeps, pr: MergedPr, githubRepoId: number):
     };
     await store.insertChange(change);
   }
-  const pushed = await deps.coordinator(id).onPush({ changeId: id, ref: `refs/heads/${branch}`, before: ZERO_SHA, after: pr.mergeSha });
+  const pushed = await deps
+    .coordinator(id)
+    .onPush({ changeId: id, ref: `refs/heads/${branch}`, before: ZERO_SHA, after: pr.mergeSha });
   return pushed.action === "ignored" ? `not started: ${pushed.reason}` : null;
 }
 
 /** The PRs of a wave whose grading finished (their classification for the merge commit exists). */
-async function readGraded(deps: BacktestDeps, githubRepoId: number, prs: readonly MergedPr[]): Promise<GradedPr[]> {
+async function readGraded(
+  deps: BacktestDeps,
+  githubRepoId: number,
+  prs: readonly MergedPr[],
+): Promise<GradedPr[]> {
   const out: GradedPr[] = [];
   for (const pr of prs) {
     const id = backtestChangeId(githubRepoId, pr.number);

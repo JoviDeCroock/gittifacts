@@ -12,22 +12,23 @@ import type {
   ClaimedCategory,
   DiffHunk,
   DiffLine,
-  LinkedIssue,
-  PipelineRun,
-  RunStatus,
   Evidence,
   Lane,
   LaneReason,
+  LinkedIssue,
+  PipelineRun,
   Plan,
   PlanDraftInput,
   Principal,
   Repo,
   RolloutState,
+  RunStatus,
   Scope,
   StartChangeInput,
   Tour,
 } from "@app/domain";
 
+export type { EvidenceItem, EvidenceKind } from "@app/evidence";
 export type {
   AuditEvent,
   Change,
@@ -36,22 +37,21 @@ export type {
   ClaimedCategory,
   DiffHunk,
   DiffLine,
-  LinkedIssue,
-  PipelineRun,
-  RunStatus,
   Evidence,
   Lane,
   LaneReason,
+  LinkedIssue,
+  PipelineRun,
   Plan,
   PlanDraftInput,
   Principal,
   Repo,
   RolloutState,
+  RunStatus,
   Scope,
   StartChangeInput,
   Tour,
 };
-export type { EvidenceItem, EvidenceKind } from "@app/evidence";
 
 export type PrincipalKind = Principal["kind"];
 
@@ -210,7 +210,13 @@ export interface AuditPage {
    * `verified` only when every entry up to `headSeq` is checked. Each read verifies a bounded
    * number of new entries from a checkpoint: `complete: false` means the rest is still pending.
    */
-  chain: { verified: boolean; brokenAt?: number; verifiedThrough?: number; headSeq?: number; complete?: boolean };
+  chain: {
+    verified: boolean;
+    brokenAt?: number;
+    verifiedThrough?: number;
+    headSeq?: number;
+    complete?: boolean;
+  };
   /** GAP: names and kinds for the principals referenced by `events`. */
   principals?: Record<string, PrincipalRef>;
   /** GAP (not served by the platform yet): titles for the subjects referenced by `events`. */

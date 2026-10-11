@@ -20,19 +20,33 @@ describe("backtest (recorded fixtures)", () => {
     const { gh, env } = host;
     host.gh.seed(fx.base);
     const repo = await host.sync.ensureRepo(gh.repoJson() as never);
-    const merge = (n: number, d: number, changes: Record<string, string | null>, extra: { title?: string; headRefName?: string } = {}) => {
+    const merge = (
+      n: number,
+      d: number,
+      changes: Record<string, string | null>,
+      extra: { title?: string; headRefName?: string } = {},
+    ) => {
       const sha = gh.git.commit(gitName(gh.repo), "main", changes, `#${n}`);
       gh.merged.push({
-        number: n, title: extra.title ?? `PR ${n}`, body: null, createdAt: day(d - 0.2), mergedAt: day(d),
-        headRefName: extra.headRefName ?? `feature-${n}`, author: { login: "octo-dev", id: 5150, type: "User" },
-        mergeSha: sha, files: Object.keys(changes), labels: [],
+        number: n,
+        title: extra.title ?? `PR ${n}`,
+        body: null,
+        createdAt: day(d - 0.2),
+        mergedAt: day(d),
+        headRefName: extra.headRefName ?? `feature-${n}`,
+        author: { login: "octo-dev", id: 5150, type: "User" },
+        mergeSha: sha,
+        files: Object.keys(changes),
+        labels: [],
       });
       return sha;
     };
     const file = "src/allocate.ts";
     const fixed = fx.head[file] ?? "";
     merge(1, 1, fx.push, { title: "fix: allocate() keeps the last cent" });
-    merge(2, 3, { [file]: fixed.replace("index < leftover ? 1 : 0", "index <= leftover - 1 ? 1 : 0") });
+    merge(2, 3, {
+      [file]: fixed.replace("index < leftover ? 1 : 0", "index <= leftover - 1 ? 1 : 0"),
+    });
     merge(3, 5, { [file]: fixed }, { title: 'Revert "PR 2"', headRefName: "revert-2-feature-2" });
     merge(4, 30, { "README.md": "# fixture lib, again\n" });
     const writesBefore = gh.writes.length;
@@ -43,10 +57,19 @@ describe("backtest (recorded fixtures)", () => {
         api: host.api,
         repo,
         coordinator: (id) => env.bindings.changeCoordinator(id),
-        source: async () => ({ remote: { url: `https://${gitName(gh.repo)}.git`, auth: { basic: { username: "x-access-token", password: "t" } } }, release: async () => {} }),
+        source: async () => ({
+          remote: {
+            url: `https://${gitName(gh.repo)}.git`,
+            auth: { basic: { username: "x-access-token", password: "t" } },
+          },
+          release: async () => {},
+        }),
         authorPrincipal: async (who) => {
           const id = principalIdFor(Number(who.id));
-          if ((await env.ports.store.getPrincipal(id)) === null) env.ports.store.addPrincipal(principal({ id, kind: "human", name: `${who.login} (GitHub)` }));
+          if ((await env.ports.store.getPrincipal(id)) === null)
+            env.ports.store.addPrincipal(
+              principal({ id, kind: "human", name: `${who.login} (GitHub)` }),
+            );
           return id;
         },
         step: (_name, run) => run(),

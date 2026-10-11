@@ -367,7 +367,13 @@ export class FakeGitHost implements GitHost {
    * GitHub mode: `source.url` names another repo of this fake (the "GitHub" side, e.g.
    * `https://github.com/acme/app.git` → repo `github.com/acme/app`); the fetch copies objects.
    */
-  readonly externalFetches: Array<{ url: string; toRepo: string; sha: string; toRef: string; authed: boolean }> = [];
+  readonly externalFetches: Array<{
+    url: string;
+    toRepo: string;
+    sha: string;
+    toRef: string;
+    authed: boolean;
+  }> = [];
   async fetchExternal(
     source: { url: string; auth?: { basic: { username: string; password: string } } },
     toRepo: string,
@@ -380,7 +386,12 @@ export class FakeGitHost implements GitHost {
     }
     this.copyObjects(toRepo, input.sha);
     this.repo(toRepo).refs.set(input.toRef, input.sha);
-    this.externalFetches.push({ url: source.url, toRepo, ...input, authed: source.auth !== undefined });
+    this.externalFetches.push({
+      url: source.url,
+      toRepo,
+      ...input,
+      authed: source.auth !== undefined,
+    });
     this.writes.push({ op: "fetch-external", repo: toRepo, ref: input.toRef });
   }
 

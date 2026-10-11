@@ -38,7 +38,8 @@ export async function recordHostReview(
   const { store, audit, clock } = ports;
   const change = await store.getChange(input.changeId);
   if (change === null) return { recorded: false, reason: "unknown change" };
-  if (change.host == null) return { recorded: false, reason: "a native change is reviewed through its workflow" };
+  if (change.host == null)
+    return { recorded: false, reason: "a native change is reviewed through its workflow" };
   if (input.reviewer.kind !== "human") {
     return { recorded: false, reason: "only humans review; agents and bots never approve" };
   }
@@ -46,9 +47,13 @@ export async function recordHostReview(
     return { recorded: false, reason: "no principal reviews its own change" };
   }
   if (change.headSha !== input.headSha) {
-    return { recorded: false, reason: `the review is for ${input.headSha.slice(0, 12)}, the head is ${change.headSha?.slice(0, 12) ?? "none"}` };
+    return {
+      recorded: false,
+      reason: `the review is for ${input.headSha.slice(0, 12)}, the head is ${change.headSha?.slice(0, 12) ?? "none"}`,
+    };
   }
-  if (!REVIEWABLE.has(change.status)) return { recorded: false, reason: `change is ${change.status}` };
+  if (!REVIEWABLE.has(change.status))
+    return { recorded: false, reason: `change is ${change.status}` };
   const classification = await store.getClassification(change.id, input.headSha);
   if (classification === null) return { recorded: false, reason: "this head is not graded yet" };
   if (input.id !== undefined) {
@@ -69,7 +74,12 @@ export async function recordHostReview(
   };
   await store.putReview(review);
   await store.updateChange(change.id, {
-    status: input.decision === "approve" ? "approved" : input.decision === "reject" ? "rejected" : "awaiting-push",
+    status:
+      input.decision === "approve"
+        ? "approved"
+        : input.decision === "reject"
+          ? "rejected"
+          : "awaiting-push",
   });
   await audit.append({
     principalId: review.reviewerId,

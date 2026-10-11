@@ -61,14 +61,18 @@ function Decided({ view, done }: { view: InstallView; done: Done }) {
       <p class="consent-receipt__audit">
         <Icon name="scroll-text" size={14} /> Recorded in the audit log.
       </p>
-      <p>
-        {back} Uninstall it any time on the Integrations page; its tokens stop working at once.
-      </p>
+      <p>{back} Uninstall it any time on the Integrations page; its tokens stop working at once.</p>
     </ConsentOutcome>
   );
 }
 
-function NotPending({ status, name }: { status: InstallView["status"] | "conflict"; name: string }) {
+function NotPending({
+  status,
+  name,
+}: {
+  status: InstallView["status"] | "conflict";
+  name: string;
+}) {
   if (status === "expired") {
     return (
       <ConsentOutcome tone="neutral" title="This request expired">
@@ -124,7 +128,12 @@ export function IntegrationInstall() {
   // An outcome names the tab itself (ConsentOutcome); this covers loading and the open decision.
   useEffect(() => {
     if (st.status === "loading") document.title = "Install an integration · gittifacts";
-    else if (st.status === "ok" && st.data?.install.status === "pending" && !done.value && !conflict.value)
+    else if (
+      st.status === "ok" &&
+      st.data?.install.status === "pending" &&
+      !done.value &&
+      !conflict.value
+    )
       document.title = `Install ${st.data.install.integration.name} · gittifacts`;
   }, [st]);
 
@@ -146,7 +155,10 @@ export function IntegrationInstall() {
       <ConsentFrame>
         <ConsentOutcome tone="danger" title="This installation can't continue">
           <p>{query.error_description ?? "The request was not valid."}</p>
-          <p>Go back to the integration and connect again. If it keeps failing, its setup needs fixing.</p>
+          <p>
+            Go back to the integration and connect again. If it keeps failing, its setup needs
+            fixing.
+          </p>
         </ConsentOutcome>
       </ConsentFrame>
     );
@@ -166,7 +178,9 @@ export function IntegrationInstall() {
 
   return (
     <ConsentFrame wide>
-      {st.status === "loading" ? <Loading label="Loading the installation request" lines={8} /> : null}
+      {st.status === "loading" ? (
+        <Loading label="Loading the installation request" lines={8} />
+      ) : null}
       {st.status === "error" ? <LoadError error={st.error} onRetry={res.reload} /> : null}
       {st.status === "ok" && st.data ? (
         done.value ? (

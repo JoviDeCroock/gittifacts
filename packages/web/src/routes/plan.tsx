@@ -6,9 +6,18 @@ import type { PrincipalRef, RepoDetail } from "../api/types.js";
 import { Attempts } from "../components/Attempts.js";
 import { Icon } from "../components/Icon.js";
 import { Prose, ProseBlocks } from "../components/Prose.js";
-import { Term } from "../components/Term.js";
 import { Page } from "../components/Shell.js";
-import { Button, CopyButton, ErrorState, Hash, LaneTag, Loading, StatusChip, Who } from "../components/ui.js";
+import { Term } from "../components/Term.js";
+import {
+  Button,
+  CopyButton,
+  ErrorState,
+  Hash,
+  LaneTag,
+  Loading,
+  StatusChip,
+  Who,
+} from "../components/ui.js";
 import { formatDateTime, relative } from "../lib/time.js";
 import { CHANGE_STATUS, PLAN_STATUS, plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
@@ -29,8 +38,16 @@ async function loadPlan(planId: string): Promise<PlanData> {
   const { plan, changes } = await api.plan(planId);
   const [repo, author, approver] = await Promise.all([
     api.repo(plan.repoId),
-    api.principal(plan.authorId).then((r) => r.principal, () => null),
-    plan.approvedBy ? api.principal(plan.approvedBy).then((r) => r.principal, () => null) : Promise.resolve(null),
+    api.principal(plan.authorId).then(
+      (r) => r.principal,
+      () => null,
+    ),
+    plan.approvedBy
+      ? api.principal(plan.approvedBy).then(
+          (r) => r.principal,
+          () => null,
+        )
+      : Promise.resolve(null),
   ]);
   return { plan, changes, repo, author, approver };
 }
@@ -73,7 +90,11 @@ function OwnDraft({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
     error.value = null;
     try {
       intentKey.current ??= newIdempotencyKey();
-      const res = await api.withdrawPlan(plan.id, reason.value.trim() || undefined, intentKey.current);
+      const res = await api.withdrawPlan(
+        plan.id,
+        reason.value.trim() || undefined,
+        intentKey.current,
+      );
       onPlan(res.plan);
     } catch (err) {
       error.value = inlineError(err);
@@ -83,21 +104,36 @@ function OwnDraft({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
   }
 
   return (
-    <section class="signature signature--locked" id="withdraw" aria-labelledby="sig-title" data-testid="plan-own-draft">
+    <section
+      class="signature signature--locked"
+      id="withdraw"
+      aria-labelledby="sig-title"
+      data-testid="plan-own-draft"
+    >
       <h2 id="sig-title" class="signature__title">
         <Icon name="lock" size={18} /> You wrote this plan
       </h2>
-      <p>Another person has to approve or reject it. Share the link with a teammate who has the plan:approve scope.</p>
+      <p>
+        Another person has to approve or reject it. Share the link with a teammate who has the
+        plan:approve scope.
+      </p>
       {confirming.value ? (
         <form class="signature__confirm" onSubmit={withdraw} data-testid="plan-withdraw-form">
           <p class="signature__confirm-q" ref={prompt} tabIndex={-1}>
-            Withdraw this draft? It closes for good: agents cannot start work on it, and a new plan has to be drafted to try again.
+            Withdraw this draft? It closes for good: agents cannot start work on it, and a new plan
+            has to be drafted to try again.
           </p>
           <label class="field">
             <span class="field__label">
               Why<span class="field__hint"> (optional, goes into the audit log)</span>
             </span>
-            <textarea class="textarea" rows={2} value={reason.value} onInput={(e) => (reason.value = e.currentTarget.value)} aria-describedby={error.value ? "withdraw-error" : undefined} />
+            <textarea
+              class="textarea"
+              rows={2}
+              value={reason.value}
+              onInput={(e) => (reason.value = e.currentTarget.value)}
+              aria-describedby={error.value ? "withdraw-error" : undefined}
+            />
           </label>
           {error.value ? (
             <p class="field__error" id="withdraw-error" role="alert">
@@ -108,15 +144,32 @@ function OwnDraft({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
             <Button variant="secondary" onClick={back} disabled={busy.value}>
               Back
             </Button>
-            <Button type="submit" variant="danger-outline" icon="undo" busy={busy.value} busyLabel="Withdrawing…" wide data-testid="plan-withdraw-confirm">
+            <Button
+              type="submit"
+              variant="danger-outline"
+              icon="undo"
+              busy={busy.value}
+              busyLabel="Withdrawing…"
+              wide
+              data-testid="plan-withdraw-confirm"
+            >
               Withdraw draft
             </Button>
           </div>
         </form>
       ) : (
         <div class="signature__own">
-          <CopyButton text={`${window.location.origin}/plans/${encodeURIComponent(plan.id)}`} label="Copy link" />
-          <button type="button" class="btn btn--secondary btn--sm" ref={opener} onClick={() => (confirming.value = true)} data-testid="plan-withdraw">
+          <CopyButton
+            text={`${window.location.origin}/plans/${encodeURIComponent(plan.id)}`}
+            label="Copy link"
+          />
+          <button
+            type="button"
+            class="btn btn--secondary btn--sm"
+            ref={opener}
+            onClick={() => (confirming.value = true)}
+            data-testid="plan-withdraw"
+          >
             <Icon name="undo" />
             <span>Withdraw draft…</span>
           </button>
@@ -144,20 +197,45 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
 
   if (plan.status !== "draft") {
     return (
-      <section class="signature" aria-labelledby="sig-title" data-testid="plan-decided" data-status={plan.status}>
+      <section
+        class="signature"
+        aria-labelledby="sig-title"
+        data-testid="plan-decided"
+        data-status={plan.status}
+      >
         <h2 id="sig-title" class="signature__title" ref={decidedTitle} tabIndex={-1}>
-          {plan.status === "approved" ? "Signed approval" : withdrawn.value ? "Draft withdrawn" : `Plan ${PLAN_STATUS[plan.status].label.toLowerCase()}`}
+          {plan.status === "approved"
+            ? "Signed approval"
+            : withdrawn.value
+              ? "Draft withdrawn"
+              : `Plan ${PLAN_STATUS[plan.status].label.toLowerCase()}`}
         </h2>
-        {withdrawn.value ? <p class="signature__consequence">You withdrew it. Agents cannot start work on it; draft a new plan to try again.</p> : null}
+        {withdrawn.value ? (
+          <p class="signature__consequence">
+            You withdrew it. Agents cannot start work on it; draft a new plan to try again.
+          </p>
+        ) : null}
         <dl class="signature__block">
           <dt>Drafted by</dt>
-          <dd>{author ? <Who kind={author.kind} name={author.name} owner={author.ownerName} size={20} /> : plan.authorId}</dd>
+          <dd>
+            {author ? (
+              <Who kind={author.kind} name={author.name} owner={author.ownerName} size={20} />
+            ) : (
+              plan.authorId
+            )}
+          </dd>
           <dt>Drafted</dt>
           <dd class="tnum">{formatDateTime(plan.createdAt)}</dd>
           {plan.status === "approved" ? (
             <>
               <dt>Approved by</dt>
-              <dd>{approver ? <Who kind={approver.kind} name={approver.name} size={20} /> : plan.approvedBy}</dd>
+              <dd>
+                {approver ? (
+                  <Who kind={approver.kind} name={approver.name} size={20} />
+                ) : (
+                  plan.approvedBy
+                )}
+              </dd>
               <dt>Approved</dt>
               <dd class="tnum">{plan.approvedAt ? formatDateTime(plan.approvedAt) : "—"}</dd>
               <dt>Signature</dt>
@@ -174,7 +252,11 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
             </>
           ) : null}
         </dl>
-        {plan.status === "approved" ? <p class="signature__fine">Ed25519, signed by the platform over the canonical plan and the approver.</p> : null}
+        {plan.status === "approved" ? (
+          <p class="signature__fine">
+            Ed25519, signed by the platform over the canonical plan and the approver.
+          </p>
+        ) : null}
       </section>
     );
   }
@@ -226,20 +308,30 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
       </h2>
       {mode.value === "approve" ? (
         <p class="signature__consequence">
-          Agents can then start <Term id="change">Changes</Term> inside {plural(plan.scopePaths.length, "scope path")}. Anything outside them is flagged as scope drift and gets a full review (Lane 2).
+          Agents can then start <Term id="change">Changes</Term> inside{" "}
+          {plural(plan.scopePaths.length, "scope path")}. Anything outside them is flagged as scope
+          drift and gets a full review (Lane 2).
         </p>
       ) : (
-        <p class="signature__consequence">The plan closes. Agents cannot start work on it, and the author has to draft a new one.</p>
+        <p class="signature__consequence">
+          The plan closes. Agents cannot start work on it, and the author has to draft a new one.
+        </p>
       )}
       {ownAgent ? (
         <p class="signature__note">
-          <Icon name="bot" size={16} /> Your agent {author?.name} drafted this. You are allowed to approve it, but a teammate's eyes are the stronger check.
+          <Icon name="bot" size={16} /> Your agent {author?.name} drafted this. You are allowed to
+          approve it, but a teammate's eyes are the stronger check.
         </p>
       ) : null}
       <form class="signature__form" onSubmit={submit}>
         {mode.value === "approve" ? (
           <label class="check signature__read">
-            <input type="checkbox" checked={read.value} onChange={(e) => (read.value = e.currentTarget.checked)} data-testid="plan-read" />
+            <input
+              type="checkbox"
+              checked={read.value}
+              onChange={(e) => (read.value = e.currentTarget.checked)}
+              data-testid="plan-read"
+            />
             <span>I read the intent, the acceptance criteria and what is out of scope.</span>
           </label>
         ) : null}
@@ -247,7 +339,13 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
           <span class="field__label">
             Comment{mode.value === "approve" ? <span class="field__hint"> (optional)</span> : null}
           </span>
-          <textarea class="textarea" rows={3} value={comment.value} onInput={(e) => (comment.value = e.currentTarget.value)} aria-describedby={error.value ? "sig-error" : undefined} />
+          <textarea
+            class="textarea"
+            rows={3}
+            value={comment.value}
+            onInput={(e) => (comment.value = e.currentTarget.value)}
+            aria-describedby={error.value ? "sig-error" : undefined}
+          />
         </label>
         {error.value ? (
           <p class="field__error" id="sig-error" role="alert">
@@ -255,21 +353,41 @@ function SignaturePanel({ data, onPlan }: { data: PlanData; onPlan: (p: Plan) =>
           </p>
         ) : null}
         <p class="signature__fine">
-          <Icon name="signature" size={14} /> You sign as {me?.name ?? "yourself"}. The platform signs the canonical plan with your approval and records it in the audit log.
+          <Icon name="signature" size={14} /> You sign as {me?.name ?? "yourself"}. The platform
+          signs the canonical plan with your approval and records it in the audit log.
         </p>
         <div class="signature__actions">
           {mode.value === "approve" ? (
             <>
-              <Button variant="secondary" onClick={() => ((mode.value = "reject"), (error.value = null), (intentKey.current = null))}>
+              <Button
+                variant="secondary"
+                onClick={() => (
+                  (mode.value = "reject"), (error.value = null), (intentKey.current = null)
+                )}
+              >
                 Reject…
               </Button>
-              <Button type="submit" variant="primary" icon="signature" busy={busy.value} busyLabel="Signing…" disabled={!read.value} wide data-testid="plan-approve">
+              <Button
+                type="submit"
+                variant="primary"
+                icon="signature"
+                busy={busy.value}
+                busyLabel="Signing…"
+                disabled={!read.value}
+                wide
+                data-testid="plan-approve"
+              >
                 Sign and approve
               </Button>
             </>
           ) : (
             <>
-              <Button variant="secondary" onClick={() => ((mode.value = "approve"), (error.value = null), (intentKey.current = null))}>
+              <Button
+                variant="secondary"
+                onClick={() => (
+                  (mode.value = "approve"), (error.value = null), (intentKey.current = null)
+                )}
+              >
                 Back
               </Button>
               <Button type="submit" variant="danger" busy={busy.value} busyLabel="Rejecting…" wide>
@@ -294,7 +412,8 @@ function PlanDoc({ data }: { data: PlanData }) {
         <h2 id="intent">Intent</h2>
         {data.plan.status === "draft" ? (
           <p class="plan-doc__lede">
-            A <Term id="plan">Plan</Term> is what should change and how to tell it worked. Once a person who didn't write it approves it, agents build it as Changes.
+            A <Term id="plan">Plan</Term> is what should change and how to tell it worked. Once a
+            person who didn't write it approves it, agents build it as Changes.
           </p>
         ) : null}
         <ProseBlocks text={plan.intent} class="plan-doc__intent" />
@@ -339,7 +458,9 @@ function PlanDoc({ data }: { data: PlanData }) {
       <section class="plan-sec" aria-labelledby="risks">
         <h2 id="risks">Declared risks</h2>
         {plan.riskDeclarations.length === 0 ? (
-          <p class="plan-sec__empty">The author declared no risks. The classifier and the reviewer agent still look for them.</p>
+          <p class="plan-sec__empty">
+            The author declared no risks. The classifier and the reviewer agent still look for them.
+          </p>
         ) : (
           <dl class="risks">
             {plan.riskDeclarations.map((r, i) => (
@@ -363,7 +484,10 @@ function PlanDoc({ data }: { data: PlanData }) {
             <Term id="scope-paths" />
           </h2>
           {plan.scopePaths.length === 0 ? (
-            <p class="plan-sec__empty">Not declared. Every change under this plan counts as unknown scope, which rules out auto-merge.</p>
+            <p class="plan-sec__empty">
+              Not declared. Every change under this plan counts as unknown scope, which rules out
+              auto-merge.
+            </p>
           ) : (
             <ul class="globs">
               {plan.scopePaths.map((g) => (
@@ -391,26 +515,34 @@ function PlanDoc({ data }: { data: PlanData }) {
       </section>
 
       {attempts ? null : (
-      <section class="plan-sec" aria-labelledby="plan-changes">
-        <h2 id="plan-changes">
-          Changes under this plan <span class="plan-sec__n tnum">{changes.length}</span>
-        </h2>
-        {changes.length === 0 ? (
-          <p class="plan-sec__empty">{plan.status === "draft" ? "None yet. Agents can start once the plan is approved." : "None yet."}</p>
-        ) : (
-          <ul class="plan-changes">
-            {changes.map((c) => (
-              <li key={c.id}>
-                <a href={`/changes/${c.id}`}>
-                  <LaneTag lane={c.lane} shadow={c.computedLane === 0 && c.lane === 1} size="sm" />
-                  <span class="plan-changes__title">{c.title}</span>
-                  <StatusChip meta={CHANGE_STATUS[c.status]} />
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <section class="plan-sec" aria-labelledby="plan-changes">
+          <h2 id="plan-changes">
+            Changes under this plan <span class="plan-sec__n tnum">{changes.length}</span>
+          </h2>
+          {changes.length === 0 ? (
+            <p class="plan-sec__empty">
+              {plan.status === "draft"
+                ? "None yet. Agents can start once the plan is approved."
+                : "None yet."}
+            </p>
+          ) : (
+            <ul class="plan-changes">
+              {changes.map((c) => (
+                <li key={c.id}>
+                  <a href={`/changes/${c.id}`}>
+                    <LaneTag
+                      lane={c.lane}
+                      shadow={c.computedLane === 0 && c.lane === 1}
+                      size="sm"
+                    />
+                    <span class="plan-changes__title">{c.title}</span>
+                    <StatusChip meta={CHANGE_STATUS[c.status]} />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
     </article>
   );
@@ -428,7 +560,10 @@ function PlanBar() {
     const el = bar.current;
     if (!target || !el || typeof IntersectionObserver === "undefined") return;
     // "On screen" means above the bar: a sliver of the section behind the bar doesn't count.
-    const io = new IntersectionObserver(([e]) => el.toggleAttribute("data-aside", !!e?.isIntersecting), { rootMargin: `0px 0px -${el.offsetHeight}px 0px` });
+    const io = new IntersectionObserver(
+      ([e]) => el.toggleAttribute("data-aside", !!e?.isIntersecting),
+      { rootMargin: `0px 0px -${el.offsetHeight}px 0px` },
+    );
     io.observe(target);
     return () => io.disconnect();
   }, []);
@@ -436,7 +571,9 @@ function PlanBar() {
     const sign = document.getElementById("sign");
     if (!sign) return;
     sign.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
-    sign.querySelector<HTMLElement>("[data-testid=plan-read], textarea")?.focus({ preventScroll: true });
+    sign
+      .querySelector<HTMLElement>("[data-testid=plan-read], textarea")
+      ?.focus({ preventScroll: true });
   }
   return (
     <div class="plan-bar" ref={bar} data-testid="plan-bar">
@@ -480,7 +617,9 @@ export function PlanView({ planId }: { planId: string }) {
       meta={
         <>
           <StatusChip meta={PLAN_STATUS[plan.status]} />
-          {author ? <Who kind={author.kind} name={author.name} owner={author.ownerName} size={20} /> : null}
+          {author ? (
+            <Who kind={author.kind} name={author.name} owner={author.ownerName} size={20} />
+          ) : null}
           <span>Drafted {relative(plan.createdAt, minuteClock.value)}</span>
         </>
       }
@@ -488,7 +627,24 @@ export function PlanView({ planId }: { planId: string }) {
       <div class="plan-layout">
         <PlanDoc data={data} />
         <aside class="plan-layout__rail">
-          <SignaturePanel data={data} onPlan={(p) => res.set({ ...data, plan: p, approver: p.approvedBy === principal.value?.id && principal.value ? { id: principal.value.id, kind: principal.value.kind, name: principal.value.name, ownerId: null } : data.approver })} />
+          <SignaturePanel
+            data={data}
+            onPlan={(p) =>
+              res.set({
+                ...data,
+                plan: p,
+                approver:
+                  p.approvedBy === principal.value?.id && principal.value
+                    ? {
+                        id: principal.value.id,
+                        kind: principal.value.kind,
+                        name: principal.value.name,
+                        ownerId: null,
+                      }
+                    : data.approver,
+              })
+            }
+          />
         </aside>
       </div>
       {isDraft && !desktop && !mine ? <PlanBar /> : null}

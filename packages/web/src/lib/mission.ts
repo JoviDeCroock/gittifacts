@@ -30,7 +30,10 @@ export const STATIONS = ["Push", "Grade", "Review", "Queue", "Merge"] as const;
 
 export type StageTone = "neutral" | "person" | "danger" | "done";
 
-export const STAGE: Record<Stage, { label: string; step: number; tone: StageTone; working: boolean }> = {
+export const STAGE: Record<
+  Stage,
+  { label: string; step: number; tone: StageTone; working: boolean }
+> = {
   started: { label: "Started", step: 0, tone: "neutral", working: true },
   "sent-back": { label: "Sent back", step: 0, tone: "neutral", working: true },
   grading: { label: "Grading", step: 1, tone: "neutral", working: true },
@@ -93,19 +96,36 @@ export interface MissionInput {
   now: number;
 }
 
-const ACTIVE_ENTRY = new Set<QueueEntryView["state"]>(["waiting", "speculating", "resolving", "passed"]);
+const ACTIVE_ENTRY = new Set<QueueEntryView["state"]>([
+  "waiting",
+  "speculating",
+  "resolving",
+  "passed",
+]);
 const LANDING_BATCH = new Set(["passed", "landing", "landed"]);
 const CLOSED = new Set(["reverted", "rejected", "abandoned"]);
 
 /** A change's stage, its detail line and since when, with the queue entry when it has one. */
-export function stageOf(c: ChangeSummary, entry: QueueEntryView | undefined): { stage: Stage; detail: string; since: number } {
+export function stageOf(
+  c: ChangeSummary,
+  entry: QueueEntryView | undefined,
+): { stage: Stage; detail: string; since: number } {
   const updated = Date.parse(c.updatedAt);
   if (entry && (ACTIVE_ENTRY.has(entry.state) || entry.state === "ejected")) {
     const since = entry.enqueuedAt;
-    if (entry.state === "ejected") return { stage: "ejected", detail: entry.ejectReason?.message ?? entry.reason, since: updated };
+    if (entry.state === "ejected")
+      return {
+        stage: "ejected",
+        detail: entry.ejectReason?.message ?? entry.reason,
+        since: updated,
+      };
     const batch = entry.batch;
     if (entry.state === "passed" || (batch && LANDING_BATCH.has(batch.state)))
-      return { stage: "merging", detail: batch ? `Batch ${batch.id} passed, landing on main` : "Passed, landing on main", since };
+      return {
+        stage: "merging",
+        detail: batch ? `Batch ${batch.id} passed, landing on main` : "Passed, landing on main",
+        since,
+      };
     const pos = entry.position === null ? "" : `#${entry.position} in the queue`;
     const what =
       entry.state === "resolving"
@@ -117,24 +137,52 @@ export function stageOf(c: ChangeSummary, entry: QueueEntryView | undefined): { 
             : "waiting for a batch";
     return { stage: "queued", detail: [pos, what].filter(Boolean).join(" · "), since };
   }
-  if (entry?.state === "merged" || c.status === "merged" || c.status === "rolling-out" || c.status === "released") {
-    const tail = c.status === "rolling-out" ? "rolling out" : c.status === "released" ? "released" : "on main";
+  if (
+    entry?.state === "merged" ||
+    c.status === "merged" ||
+    c.status === "rolling-out" ||
+    c.status === "released"
+  ) {
+    const tail =
+      c.status === "rolling-out" ? "rolling out" : c.status === "released" ? "released" : "on main";
     return { stage: "merged", detail: `Merged, ${tail}`, since: updated };
   }
-  if (CLOSED.has(c.status)) return { stage: "closed", detail: c.status === "reverted" ? "Reverted" : c.status === "rejected" ? "Rejected" : "Abandoned", since: updated };
+  if (CLOSED.has(c.status))
+    return {
+      stage: "closed",
+      detail:
+        c.status === "reverted" ? "Reverted" : c.status === "rejected" ? "Rejected" : "Abandoned",
+      since: updated,
+    };
   switch (c.status) {
     case "awaiting-push":
       return c.headSha
-        ? { stage: "sent-back", detail: "A reviewer asked for changes; the next push is graded again", since: updated }
+        ? {
+            stage: "sent-back",
+            detail: "A reviewer asked for changes; the next push is graded again",
+            since: updated,
+          }
         : { stage: "started", detail: "Fork open, waiting for the first push", since: updated };
     case "running":
       return c.lane === null
-        ? { stage: "grading", detail: "Checks, tests and signed evidence on the pushed head", since: updated }
-        : { stage: "lane", detail: "Routed; the reviewer agent is writing the walkthrough", since: updated };
+        ? {
+            stage: "grading",
+            detail: "Checks, tests and signed evidence on the pushed head",
+            since: updated,
+          }
+        : {
+            stage: "lane",
+            detail: "Routed; the reviewer agent is writing the walkthrough",
+            since: updated,
+          };
     case "failing":
       return { stage: "failing", detail: "A check failed; the agent pushes a fix", since: updated };
     case "awaiting-review":
-      return { stage: "review", detail: "The walkthrough is ready; waits on a person", since: updated };
+      return {
+        stage: "review",
+        detail: "The walkthrough is ready; waits on a person",
+        since: updated,
+      };
     case "approved":
     case "queued":
       return { stage: "approved", detail: "Approved, joining the merge queue", since: updated };
@@ -148,7 +196,10 @@ function sameDay(a: number, b: number): boolean {
 }
 
 /** One row per agent author with a change in flight or merged today, in a stable (name) order. */
-export function missionFrom({ changes, queue, owners, now }: MissionInput): { rows: MissionRow[]; counts: MissionCounts } {
+export function missionFrom({ changes, queue, owners, now }: MissionInput): {
+  rows: MissionRow[];
+  counts: MissionCounts;
+} {
   const entries = new Map((queue?.entries ?? []).map((e) => [e.changeId, e]));
   const staged = changes.map((c) => ({ c, ...stageOf(c, entries.get(c.id)) }));
   const byAgent = new Map<string, typeof staged>();
@@ -163,7 +214,8 @@ export function missionFrom({ changes, queue, owners, now }: MissionInput): { ro
     const pick = [...list].sort(
       (a, b) =>
         RANK[a.stage] - RANK[b.stage] ||
-        (entries.get(a.c.id)?.position ?? Number.POSITIVE_INFINITY) - (entries.get(b.c.id)?.position ?? Number.POSITIVE_INFINITY) ||
+        (entries.get(a.c.id)?.position ?? Number.POSITIVE_INFINITY) -
+          (entries.get(b.c.id)?.position ?? Number.POSITIVE_INFINITY) ||
         b.since - a.since,
     )[0];
     if (!pick) continue;
@@ -176,7 +228,10 @@ export function missionFrom({ changes, queue, owners, now }: MissionInput): { ro
       detail: pick.detail,
       lane: pick.c.lane,
       calibrating: pick.c.computedLane === 0 && pick.c.lane !== 0,
-      queue: inQueue && e ? { position: e.position, batchId: e.batch?.id ?? null, trackId: e.trackId } : null,
+      queue:
+        inQueue && e
+          ? { position: e.position, batchId: e.batch?.id ?? null, trackId: e.trackId }
+          : null,
       since: pick.since,
       more: list.filter((s) => s !== pick && STAGE[s.stage].step < 5).length,
     });

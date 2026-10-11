@@ -12,7 +12,8 @@ export const journey: HumanJourney = {
   number: "14",
   slug: "docs-v2",
   title: "Docs: the front door, then the quickest path",
-  subtitle: "A developer who heard about gittifacts: docs home, then the 2-minute path to a green check.",
+  subtitle:
+    "A developer who heard about gittifacts: docs home, then the 2-minute path to a green check.",
   mobile: true,
   async run(j, _state, { mobile }) {
     const p = j.page;

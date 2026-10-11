@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { ChangeDiff } from "../src/api/types.js";
-import { compressLines, excerptForRef, fileStats, hunkFromText, splitPath, tokenize, wholeFileRefs } from "../src/lib/diff.js";
+import {
+  compressLines,
+  excerptForRef,
+  fileStats,
+  hunkFromText,
+  splitPath,
+  tokenize,
+  wholeFileRefs,
+} from "../src/lib/diff.js";
 
 const hunk = hunkFromText(
   10,
@@ -57,7 +65,11 @@ describe("hunkFromText", () => {
 
 describe("excerptForRef", () => {
   it("cuts the cited head lines plus context, pulling in the deletions they replace", () => {
-    const ex = excerptForRef(diff, { file: "src/x.ts", startLine: 11, endLine: 12, side: "head" }, 1);
+    const ex = excerptForRef(
+      diff,
+      { file: "src/x.ts", startLine: 11, endLine: 12, side: "head" },
+      1,
+    );
     expect(ex?.missing).toBe(false);
     const rows = ex?.rows.filter((r) => r.type === "line") ?? [];
     expect(rows.map((r) => (r.type === "line" ? r.line.text : ""))).toEqual([
@@ -67,20 +79,31 @@ describe("excerptForRef", () => {
       "  return x;",
       "}",
     ]);
-    const cited = rows.filter((r) => r.type === "line" && r.cited).map((r) => (r.type === "line" ? r.line.kind : ""));
+    const cited = rows
+      .filter((r) => r.type === "line" && r.cited)
+      .map((r) => (r.type === "line" ? r.line.kind : ""));
     expect(cited).toEqual(["del", "add", "add"]);
   });
 
   it("cites deleted lines by their base-side numbers", () => {
-    const ex = excerptForRef(diff, { file: "src/x.ts", startLine: 15, endLine: 15, side: "base" }, 0);
+    const ex = excerptForRef(
+      diff,
+      { file: "src/x.ts", startLine: 15, endLine: 15, side: "base" },
+      0,
+    );
     const cited = ex?.rows.filter((r) => r.type === "line" && r.cited) ?? [];
     expect(cited).toHaveLength(1);
     expect(cited[0]?.type === "line" && cited[0].line.text).toBe('  return "old";');
   });
 
   it("returns null for a file outside the diff and missing for lines outside it", () => {
-    expect(excerptForRef(diff, { file: "nope.ts", startLine: 1, endLine: 2, side: "head" })).toBeNull();
-    expect(excerptForRef(diff, { file: "src/x.ts", startLine: 400, endLine: 410, side: "head" })?.missing).toBe(true);
+    expect(
+      excerptForRef(diff, { file: "nope.ts", startLine: 1, endLine: 2, side: "head" }),
+    ).toBeNull();
+    expect(
+      excerptForRef(diff, { file: "src/x.ts", startLine: 400, endLine: 410, side: "head" })
+        ?.missing,
+    ).toBe(true);
   });
 });
 
@@ -120,7 +143,13 @@ describe("wholeFileRefs", () => {
       ...diff,
       files: [
         diff.files[0]!,
-        { ...diff.files[0]!, path: "old.ts", status: "deleted", hunks: [gone], ...fileStats([gone]) },
+        {
+          ...diff.files[0]!,
+          path: "old.ts",
+          status: "deleted",
+          hunks: [gone],
+          ...fileStats([gone]),
+        },
         { ...diff.files[0]!, path: "logo.png", status: "added", binary: true, hunks: [] },
       ],
     };

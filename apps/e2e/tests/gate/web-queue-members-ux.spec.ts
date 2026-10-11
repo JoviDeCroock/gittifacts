@@ -7,7 +7,9 @@
 import { expect, expectNoHorizontalScroll, test } from "../../lib/fixtures.js";
 import { signUp } from "../../lib/world.js";
 
-test("queue: a reviewer dequeues an entry after a named confirmation, and it leaves the queue (demo data)", async ({ authed: page }) => {
+test("queue: a reviewer dequeues an entry after a named confirmation, and it leaves the queue (demo data)", async ({
+  authed: page,
+}) => {
   // The hermetic server has no busy queue; the UI's demo backend has one and the demo viewer reviews.
   await page.goto("/repos/repo_billing/queue?mock");
   const entry = page.locator('[data-testid="queue-entry"][data-change-id="chg_tz7k2"]');
@@ -19,18 +21,24 @@ test("queue: a reviewer dequeues an entry after a named confirmation, and it lea
   // The first click only opens the confirmation: nothing has left yet.
   const confirm = entry.getByTestId("queue-dequeue-confirm");
   await expect(confirm).toBeVisible();
-  await expect(entry.getByRole("group", { name: /Dequeue Fix invoice due dates/ })).toContainText("out of the merge queue");
+  await expect(entry.getByRole("group", { name: /Dequeue Fix invoice due dates/ })).toContainText(
+    "out of the merge queue",
+  );
   await expect(entry.getByText('dequeue({ changeId: "chg_tz7k2" })')).toBeVisible();
   await expect(entry).toHaveAttribute("data-state", "speculating");
 
   await confirm.click();
   await expect(page.getByTestId("queue-notice")).toContainText("out of the queue");
-  await expect(page.locator('[data-testid="queue-entry"][data-change-id="chg_tz7k2"]')).toHaveAttribute("data-state", "dequeued");
+  await expect(
+    page.locator('[data-testid="queue-entry"][data-change-id="chg_tz7k2"]'),
+  ).toHaveAttribute("data-state", "dequeued");
   await expect(count).toHaveText(String(before - 1));
   await expectNoHorizontalScroll(page);
 });
 
-test("queue: an owner resumes a halted queue from its banner (demo data)", async ({ authed: page }) => {
+test("queue: an owner resumes a halted queue from its banner (demo data)", async ({
+  authed: page,
+}) => {
   await page.goto("/repos/repo_billing/queue?mock&halted");
   const halted = page.getByTestId("queue-halted");
   await expect(halted).toBeVisible();
@@ -41,7 +49,13 @@ test("queue: an owner resumes a halted queue from its banner (demo data)", async
   await expect(page.getByTestId("queue-notice")).toContainText("Queue resumed");
 });
 
-test("members: Remove needs an inline confirmation that names the person", async ({ authed: page, world, request, baseURL, human }) => {
+test("members: Remove needs an inline confirmation that names the person", async ({
+  authed: page,
+  world,
+  request,
+  baseURL,
+  human,
+}) => {
   const other = await signUp(request, baseURL as string, "e2e-member");
   // By principal id: an unverified e-mail gets an invite, not a membership (security audit M3).
   const added = await request.post(`${baseURL}/api/v1/repos/${world.repoId}/members`, {
@@ -64,17 +78,26 @@ test("members: Remove needs an inline confirmation that names the person", async
 
   await row.getByTestId("member-remove").click();
   await row.getByTestId("member-confirm-act").click();
-  await expect(page.locator(`[data-testid="member"][data-principal="${other.principalId}"]`)).toHaveCount(0);
-  await expect(page.getByRole("status").filter({ hasText: `Removed ${other.name}.` })).toBeVisible();
+  await expect(
+    page.locator(`[data-testid="member"][data-principal="${other.principalId}"]`),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: `Removed ${other.name}.` }),
+  ).toBeVisible();
   await expectNoHorizontalScroll(page);
 });
 
-test("repo: the title is the repo's name from the first frame of an in-app navigation", async ({ authed: page, world }) => {
+test("repo: the title is the repo's name from the first frame of an in-app navigation", async ({
+  authed: page,
+  world,
+}) => {
   await page.goto("/dashboard");
   const link = page.locator(`a[href="/repos/${world.repoId}"]`).filter({ visible: true }).first();
   await expect(link).toBeVisible();
   // The sidebar's list (in the DOM on phones too) is where the name comes from.
-  await expect(page.getByTestId("nav-repo").filter({ hasText: world.repoName }).first()).toBeAttached();
+  await expect(
+    page.getByTestId("nav-repo").filter({ hasText: world.repoName }).first(),
+  ).toBeAttached();
   // Record every h1 and tab title the navigation renders, loading frames included.
   await page.evaluate(() => {
     const seen: string[] = [];

@@ -16,7 +16,10 @@ export interface AppCredentials {
 }
 
 export type Permissions = Partial<
-  Record<"contents" | "checks" | "pull_requests" | "metadata" | "issues" | "statuses", "read" | "write">
+  Record<
+    "contents" | "checks" | "pull_requests" | "metadata" | "issues" | "statuses",
+    "read" | "write"
+  >
 >;
 
 export interface InstallationToken {
@@ -29,7 +32,12 @@ export interface InstallationToken {
   toJSON(): string;
 }
 
-function opaque(installationId: number, raw: string, expiresAt: string, permissions: Permissions): InstallationToken {
+function opaque(
+  installationId: number,
+  raw: string,
+  expiresAt: string,
+  permissions: Permissions,
+): InstallationToken {
   return {
     installationId,
     expiresAt,
@@ -64,12 +72,21 @@ export class InstallationTokens {
     const now = this.now();
     if (this.jwt !== null && this.jwt.until - 60_000 > now.getTime()) return this.jwt.value;
     this.key ??= importAppKey(this.app.privateKey);
-    const { jwt, expiresAt } = await signAppJwt({ key: await this.key, issuer: this.app.clientId, now });
+    const { jwt, expiresAt } = await signAppJwt({
+      key: await this.key,
+      issuer: this.app.clientId,
+      now,
+    });
     this.jwt = { value: jwt, until: expiresAt };
     return jwt;
   }
 
-  private async send(method: string, path: string, auth: string, body?: unknown): Promise<Response> {
+  private async send(
+    method: string,
+    path: string,
+    auth: string,
+    body?: unknown,
+  ): Promise<Response> {
     const res = await (this.opts.fetch ?? fetch)(`${this.opts.apiBase ?? GITHUB_API}${path}`, {
       method,
       headers: {
@@ -98,9 +115,11 @@ export class InstallationTokens {
       permissions: scope.permissions,
     });
     const text = await res.text();
-    if (!res.ok) throw new GithubHttpError(res.status, path, `minting an installation token: ${res.status}`);
+    if (!res.ok)
+      throw new GithubHttpError(res.status, path, `minting an installation token: ${res.status}`);
     const parsed = TokenAnswer.safeParse(JSON.parse(text));
-    if (!parsed.success) throw new GithubHttpError(502, path, "minting an installation token: unexpected answer");
+    if (!parsed.success)
+      throw new GithubHttpError(502, path, "minting an installation token: unexpected answer");
     return opaque(installationId, parsed.data.token, parsed.data.expires_at, scope.permissions);
   }
 

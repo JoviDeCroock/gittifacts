@@ -8,10 +8,10 @@ import {
   ChangeIdParam,
   ChangeSchema,
   ClassifyResultApiSchema,
+  CloseBody,
   EvidenceSchema,
   GitRemoteSchema,
   IdempotencyHeaders,
-  CloseBody,
   KillBody,
   LinkedIssueSchema,
   OverlapReportSchema,
@@ -157,7 +157,9 @@ const tour = createRoute({
         tour: TourSchema,
         stale: z
           .boolean()
-          .describe("The walkthrough was generated for an older head than the change's current one"),
+          .describe(
+            "The walkthrough was generated for an older head than the change's current one",
+          ),
       }),
       "Tour",
     ),

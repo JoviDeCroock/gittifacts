@@ -29,7 +29,17 @@ function issue(labeler: { login: string; id: number; type: string } | null): Fak
     body: ISSUE_BODY,
     user: { login: "issue-writer", id: 7001, type: "User" },
     labels: labeler === null ? [] : ["gittifacts:plan"],
-    events: labeler === null ? [] : [{ event: "labeled", label: { name: "gittifacts:plan" }, actor: labeler, created_at: "2026-10-03T08:00:00Z" }],
+    events:
+      labeler === null
+        ? []
+        : [
+            {
+              event: "labeled",
+              label: { name: "gittifacts:plan" },
+              actor: labeler,
+              created_at: "2026-10-03T08:00:00Z",
+            },
+          ],
   };
 }
 
@@ -41,7 +51,10 @@ async function open(setup: (h: GithubContractHost) => void) {
   const opened = await host.open({ scenario: s, base: fx.base, push: fx.push, title: fx.title });
   await host.settle();
   const changeId = changeIdFor(9001, 1);
-  const reasons = async () => (await host.env.ports.store.getClassification(changeId, opened.headSha))?.reasons.map((r) => r.code) ?? [];
+  const reasons = async () =>
+    (await host.env.ports.store.getClassification(changeId, opened.headSha))?.reasons.map(
+      (r) => r.code,
+    ) ?? [];
   return { host, changeId, reasons, ...opened };
 }
 
@@ -67,7 +80,10 @@ describe("plans from GitHub", () => {
       h.gh.issues.set(12, issue({ login: "octo-author", id: 4711, type: "User" }));
       h.prBody = "Closes #12";
     });
-    expect(await host.env.ports.store.getPlan("ghi-9001-12")).toMatchObject({ status: "draft", approvedBy: null });
+    expect(await host.env.ports.store.getPlan("ghi-9001-12")).toMatchObject({
+      status: "draft",
+      approvedBy: null,
+    });
     expect(await reasons()).toContain("plan.not-approved");
   });
 
@@ -77,7 +93,10 @@ describe("plans from GitHub", () => {
       h.prBody = "gittifacts-plan: fix-allocate";
     });
     expect((await host.env.ports.store.getChange(changeId))?.planId).toBe("ghp-9001-fix-allocate");
-    expect(await host.env.ports.store.getPlan("ghp-9001-fix-allocate")).toMatchObject({ status: "draft", title: "Fix allocate()" });
+    expect(await host.env.ports.store.getPlan("ghp-9001-fix-allocate")).toMatchObject({
+      status: "draft",
+      title: "Fix allocate()",
+    });
     expect(await reasons()).toContain("plan.not-approved");
   });
 });
@@ -94,7 +113,9 @@ describe("re-grading the same head", () => {
     await host.settle();
     expect((await host.env.ports.store.getChange(changeId))?.claim.category).toBe("fix");
     expect([...host.gh.checkRuns.values()].filter((r) => r.head_sha === headSha)).toHaveLength(2);
-    expect((await host.verdictHeads(ref)).filter((h) => h === headSha).length).toBeGreaterThanOrEqual(2);
+    expect(
+      (await host.verdictHeads(ref)).filter((h) => h === headSha).length,
+    ).toBeGreaterThanOrEqual(2);
     // The same head's earlier tour review was staled; the new grading posted a fresh one.
     const reviews = [...host.gh.reviews.values()].filter((r) => r.commit_id === headSha);
     expect(reviews.map((r) => r.minimized)).toEqual([true, false]);

@@ -141,10 +141,14 @@ export async function createPlan(svc: Services, caller: Caller, input: unknown):
         call: `list_plans({ repoId: "${draft.repoId}" })`,
       });
     if (prev.status === "rejected" || prev.status === "superseded") {
-      throw conflict(`plan ${prev.id} is ${prev.status} and cannot be superseded`, "invalid-state", {
-        explanation: `Plan ${prev.id} is ${prev.status}; only a draft or an approved plan can be superseded. Draft a new plan without supersedes.`,
-        call: `get_plan({ planId: "${prev.id}" })`,
-      });
+      throw conflict(
+        `plan ${prev.id} is ${prev.status} and cannot be superseded`,
+        "invalid-state",
+        {
+          explanation: `Plan ${prev.id} is ${prev.status}; only a draft or an approved plan can be superseded. Draft a new plan without supersedes.`,
+          call: `get_plan({ planId: "${prev.id}" })`,
+        },
+      );
     }
   }
   const now = svc.clock.now().toISOString();

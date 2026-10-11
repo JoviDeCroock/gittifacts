@@ -17,7 +17,8 @@ export function markGlyph(name: string): string {
     .split(/[-_\s.]+/)
     .filter(Boolean);
   const tail = words.length > 1 ? words[words.length - 1] : undefined;
-  const digits = tail && /^\d+$/.test(tail) ? tail.slice(-3) : (/(\d{1,3})$/.exec(name.trim())?.[1] ?? "");
+  const digits =
+    tail && /^\d+$/.test(tail) ? tail.slice(-3) : (/(\d{1,3})$/.exec(name.trim())?.[1] ?? "");
   const letters = words.filter((w) => /^\p{L}/u.test(w)).map((w) => w[0]!.toUpperCase());
   // A lone digit is padded ("P01", never "P1"), so no mark reads as a severity or priority code.
   if (digits) return `${letters[0] ?? "A"}${digits.padStart(2, "0")}`;

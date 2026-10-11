@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   APP_ID,
   APP_SLUG,
-  callEnv,
   CLIENT_SECRET,
+  callEnv,
   UNCONFIGURED,
   WEBHOOK_SECRET,
 } from "./github-helpers.js";

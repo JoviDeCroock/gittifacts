@@ -12,7 +12,11 @@ import { uniqueName } from "../../lib/poll.js";
 
 const CANARY = process.env.E2E_CANARY_PASSWORD ?? "canary-local-only-0123456789";
 
-test("signing in through the API puts no secret on the page or in the report", async ({ page, context, baseURL }, testInfo) => {
+test("signing in through the API puts no secret on the page or in the report", async ({
+  page,
+  context,
+  baseURL,
+}, testInfo) => {
   const name = uniqueName("canary");
   const email = `${name}@e2e.invalid`;
   // Sign-up from a private request context too: the traced `request` fixture would put the
@@ -33,5 +37,7 @@ test("signing in through the API puts no secret on the page or in the report", a
   await testInfo.attach("aria.yml", { body: aria, contentType: "text/yaml" });
   await testInfo.attach("page.html", { body: html, contentType: "text/html" });
   await testInfo.attach("page.png", { body: await page.screenshot(), contentType: "image/png" });
-  expect(aria.includes(CANARY) || html.includes(CANARY), "the password reached the page").toBe(false);
+  expect(aria.includes(CANARY) || html.includes(CANARY), "the password reached the page").toBe(
+    false,
+  );
 });

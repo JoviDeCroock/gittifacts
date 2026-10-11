@@ -3,11 +3,20 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts", "./vocabulary": "./src/vocabulary.ts", "./surfaces": "./src/surfaces.ts", "./attempts": "./src/attempts.ts", "./lane-reasons": "./src/lane-reasons.ts" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./vocabulary": "./src/vocabulary.ts",
+    "./surfaces": "./src/surfaces.ts",
+    "./attempts": "./src/attempts.ts",
+    "./lane-reasons": "./src/lane-reasons.ts"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --passWithNoTests"
   },
-  "dependencies": { "@app/evidence": "workspace:*", "zod": "^4.6.5" },
+  "dependencies": {
+    "@app/evidence": "workspace:*",
+    "zod": "^4.6.5"
+  },
   "devDependencies": {}
 }

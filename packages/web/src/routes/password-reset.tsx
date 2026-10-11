@@ -49,13 +49,18 @@ export function ForgotPassword() {
   }
 
   let body;
-  if (available.value === null) body = <Loading label="Checking what this server offers" lines={2} />;
+  if (available.value === null)
+    body = <Loading label="Checking what this server offers" lines={2} />;
   else if (!available.value) {
     body = (
       <ConsentOutcome
         tone="neutral"
         title="Password reset isn't available here"
-        action={<LinkButton href="/signin" variant="primary">Back to sign in</LinkButton>}
+        action={
+          <LinkButton href="/signin" variant="primary">
+            Back to sign in
+          </LinkButton>
+        }
       >
         <p>This server can't send e-mail, so it can't send you a reset link.</p>
         <p>If you can't sign in, ask whoever runs this server for help.</p>
@@ -66,7 +71,11 @@ export function ForgotPassword() {
       <ConsentOutcome
         tone="ok"
         title="Check your e-mail"
-        action={<LinkButton href="/signin" variant="secondary">Back to sign in</LinkButton>}
+        action={
+          <LinkButton href="/signin" variant="secondary">
+            Back to sign in
+          </LinkButton>
+        }
       >
         <p>
           If an account uses <b>{sent.value}</b>, we sent it a link to choose a new password. The
@@ -77,7 +86,9 @@ export function ForgotPassword() {
   } else {
     body = (
       <form class="reset-form" onSubmit={submit} noValidate aria-labelledby="forgot-title">
-        <h1 id="forgot-title" class="reset-form__title">Reset your password</h1>
+        <h1 id="forgot-title" class="reset-form__title">
+          Reset your password
+        </h1>
         <p class="reset-form__lede">We'll e-mail you a link to choose a new one.</p>
         <label class="field">
           <span class="field__label">Email</span>
@@ -98,7 +109,9 @@ export function ForgotPassword() {
         <Button type="submit" variant="primary" wide busy={busy.value} busyLabel="Sending link…">
           Send the reset link
         </Button>
-        <a class="reset-form__back" href="/signin">Back to sign in</a>
+        <a class="reset-form__back" href="/signin">
+          Back to sign in
+        </a>
       </form>
     );
   }
@@ -139,7 +152,11 @@ export function ResetPassword() {
       <ConsentOutcome
         tone="neutral"
         title="This reset link doesn't work"
-        action={<LinkButton href="/forgot-password" variant="primary">Ask for a new link</LinkButton>}
+        action={
+          <LinkButton href="/forgot-password" variant="primary">
+            Ask for a new link
+          </LinkButton>
+        }
       >
         <p>It expired or was already used. Reset links work once, for an hour.</p>
       </ConsentOutcome>
@@ -149,7 +166,11 @@ export function ResetPassword() {
       <ConsentOutcome
         tone="ok"
         title="Your password is changed"
-        action={<LinkButton href="/signin" variant="primary">Sign in</LinkButton>}
+        action={
+          <LinkButton href="/signin" variant="primary">
+            Sign in
+          </LinkButton>
+        }
       >
         <p>Every device that was signed in is signed out. Sign in with the new password.</p>
       </ConsentOutcome>
@@ -157,7 +178,9 @@ export function ResetPassword() {
   } else {
     body = (
       <form class="reset-form" onSubmit={submit} noValidate aria-labelledby="reset-title">
-        <h1 id="reset-title" class="reset-form__title">Choose a new password</h1>
+        <h1 id="reset-title" class="reset-form__title">
+          Choose a new password
+        </h1>
         <label class="field">
           <span class="field__label">New password</span>
           <input
@@ -173,7 +196,9 @@ export function ResetPassword() {
             aria-describedby={error.value ? "reset-error" : "reset-hint"}
           />
         </label>
-        <p class="reset-form__hint" id="reset-hint">At least 8 characters.</p>
+        <p class="reset-form__hint" id="reset-hint">
+          At least 8 characters.
+        </p>
         <FormError id="reset-error" message={error.value} />
         <Button type="submit" variant="primary" wide busy={busy.value} busyLabel="Saving…">
           Save the new password

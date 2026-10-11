@@ -73,7 +73,11 @@ const dateTime = new Intl.DateTimeFormat("en", {
   minute: "2-digit",
   hour12: false,
 });
-const timeOnly = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: false });
+const timeOnly = new Intl.DateTimeFormat("en", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
 
 export function formatDateTime(iso: string): string {
   return dateTime.format(new Date(iso));
@@ -92,8 +96,20 @@ export function durationLabel(ms: number): string {
   return rest ? `${m} min ${rest} s` : `${m} min`;
 }
 
-const clock = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-const dateClock = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+const clock = new Intl.DateTimeFormat("en", {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+const dateClock = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
 
 /** Time of day to the second ("09:06:12"): for events seconds apart, like a rollback. */
 export function formatClock(iso: string): string {
@@ -104,7 +120,10 @@ export function formatClock(iso: string): string {
 export function formatWhenPrecise(iso: string, now: number): string {
   const d = new Date(iso);
   const n = new Date(now);
-  const sameDay = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+  const sameDay =
+    d.getFullYear() === n.getFullYear() &&
+    d.getMonth() === n.getMonth() &&
+    d.getDate() === n.getDate();
   return sameDay ? formatClock(iso) : dateClock.format(d);
 }
 
@@ -119,7 +138,10 @@ export function spanLabel(ms: number): string {
 export function formatWhen(iso: string, now: number): string {
   const d = new Date(iso);
   const n = new Date(now);
-  const sameDay = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+  const sameDay =
+    d.getFullYear() === n.getFullYear() &&
+    d.getMonth() === n.getMonth() &&
+    d.getDate() === n.getDate();
   return sameDay ? formatTime(iso) : formatDateTime(iso);
 }
 
@@ -130,6 +152,7 @@ export function stepTime(s: {
   elapsedMs?: number | undefined;
 }): string {
   if (s.durationMs !== null && s.status === "passed") return durationLabel(s.durationMs);
-  if (s.status === "running" && s.elapsedMs !== undefined) return `running ${durationLabel(s.elapsedMs)}`;
+  if (s.status === "running" && s.elapsedMs !== undefined)
+    return `running ${durationLabel(s.elapsedMs)}`;
   return s.status === "pending" ? "queued" : s.status;
 }

@@ -136,7 +136,9 @@
   border: 1px solid var(--rule-strong);
   color: inherit;
   text-decoration: none;
-  transition: border-color var(--dur-feedback) var(--ease-out), background-color var(--dur-feedback) var(--ease-out);
+  transition:
+    border-color var(--dur-feedback) var(--ease-out),
+    background-color var(--dur-feedback) var(--ease-out);
 }
 .plan-row:hover {
   border-color: var(--action);

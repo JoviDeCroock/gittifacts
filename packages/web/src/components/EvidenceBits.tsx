@@ -30,12 +30,21 @@ const KIND_ICON: Record<EvidenceItem["kind"], IconId> = {
   "qa-run": "monitor",
 };
 
-const TONE_MARK: Record<Tone, string> = { ok: "ok", warn: "warn", danger: "danger", neutral: "neutral", action: "neutral" };
+const TONE_MARK: Record<Tone, string> = {
+  ok: "ok",
+  warn: "warn",
+  danger: "danger",
+  neutral: "neutral",
+  action: "neutral",
+};
 
 export function EvidenceChip({ item, changeId }: { item: EvidenceItem; changeId: string }) {
   const s: ItemSummary = summarize(item);
   return (
-    <a class={`ev-chip ev-chip--${TONE_MARK[s.tone]}`} href={`/changes/${changeId}/evidence#${itemAnchor(item.id)}`}>
+    <a
+      class={`ev-chip ev-chip--${TONE_MARK[s.tone]}`}
+      href={`/changes/${changeId}/evidence#${itemAnchor(item.id)}`}
+    >
       <Icon name={KIND_ICON[item.kind]} size={15} />
       <span class="ev-chip__label">{s.label}</span>
       <span class="ev-chip__value">{s.value}</span>
@@ -45,7 +54,10 @@ export function EvidenceChip({ item, changeId }: { item: EvidenceItem; changeId:
 
 export function MissingChip({ id }: { id: string }) {
   return (
-    <span class="ev-chip ev-chip--danger" title="The walkthrough cites evidence that is not in the signed bundle.">
+    <span
+      class="ev-chip ev-chip--danger"
+      title="The walkthrough cites evidence that is not in the signed bundle."
+    >
       <Icon name="shield-alert" size={15} />
       <span class="ev-chip__label">{id}</span>
       <span class="ev-chip__value">Not in bundle</span>
@@ -66,9 +78,19 @@ const OUTCOME: Record<string, { label: string; cls: string }> = {
   missing: { label: "missing", cls: "neutral" },
 };
 
-export function RedGreenList({ item, compact = false }: { item: Extract<EvidenceItem, { kind: "red-green" }>; compact?: boolean }) {
+export function RedGreenList({
+  item,
+  compact = false,
+}: {
+  item: Extract<EvidenceItem, { kind: "red-green" }>;
+  compact?: boolean;
+}) {
   if (item.tests.length === 0) {
-    return <p class="rg-empty">No new or changed tests. Nothing here was shown to fail before the change.</p>;
+    return (
+      <p class="rg-empty">
+        No new or changed tests. Nothing here was shown to fail before the change.
+      </p>
+    );
   }
   return (
     <table class={`rg ${compact ? "rg--compact" : ""}`}>
@@ -151,7 +173,17 @@ function loadImage(url: string): Promise<HTMLImageElement> {
  * Registered difference: both captures drawn at the same scale, changed pixels marked in carmine
  * over a faded copy of the "after" frame. Computed in the browser from the two images.
  */
-function DiffFrame({ beforeRef, afterRef, label, signed }: { beforeRef: string | undefined; afterRef: string | undefined; label: string; signed: boolean }) {
+function DiffFrame({
+  beforeRef,
+  afterRef,
+  label,
+  signed,
+}: {
+  beforeRef: string | undefined;
+  afterRef: string | undefined;
+  label: string;
+  signed: boolean;
+}) {
   const before = useArtifact(beforeRef);
   const after = useArtifact(afterRef);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -179,7 +211,10 @@ function DiffFrame({ beforeRef, afterRef, label, signed }: { beforeRef: string |
         let changed = 0;
         const hit = new Uint8Array(w * h);
         for (let i = 0, px = 0; i < pb.length; i += 4, px++) {
-          const d = Math.abs(pa[i]! - pb[i]!) + Math.abs(pa[i + 1]! - pb[i + 1]!) + Math.abs(pa[i + 2]! - pb[i + 2]!);
+          const d =
+            Math.abs(pa[i]! - pb[i]!) +
+            Math.abs(pa[i + 1]! - pb[i + 1]!) +
+            Math.abs(pa[i + 2]! - pb[i + 2]!);
           if (d > 48) {
             hit[px] = 1;
             changed++;
@@ -215,10 +250,19 @@ function DiffFrame({ beforeRef, afterRef, label, signed }: { beforeRef: string |
   if (!beforeRef || !afterRef) return <div class="shot__none">Needs both captures</div>;
   return (
     <>
-      <canvas ref={canvas} class="shot__canvas" role="img" aria-label={`${label}: changed pixels marked in red`} />
+      <canvas
+        ref={canvas}
+        class="shot__canvas"
+        role="img"
+        aria-label={`${label}: changed pixels marked in red`}
+      />
       {failed.value ? <p class="shot__none">Could not compare the captures.</p> : null}
       {/* The signed figure in the caption is the evidence; the browser's own count is only spoken when there is none. */}
-      {ratio.value !== null && !signed ? <span class="sr-only">About {pct(ratio.value, 1)} of pixels differ, as computed in your browser</span> : null}
+      {ratio.value !== null && !signed ? (
+        <span class="sr-only">
+          About {pct(ratio.value, 1)} of pixels differ, as computed in your browser
+        </span>
+      ) : null}
     </>
   );
 }
@@ -232,7 +276,9 @@ export function ShotPair({ shot }: { shot: Shot }) {
         <span class="shot__route">
           <code>{shot.route}</code> · {shot.viewport}
         </span>
-        {shot.diffRatio !== undefined ? <span class="shot__diff tnum">{pct(shot.diffRatio, 1)} of pixels differ</span> : null}
+        {shot.diffRatio !== undefined ? (
+          <span class="shot__diff tnum">{pct(shot.diffRatio, 1)} of pixels differ</span>
+        ) : null}
       </figcaption>
       <div class="shot__toggle">
         <Segmented
@@ -263,7 +309,12 @@ export function ShotPair({ shot }: { shot: Shot }) {
         <div class="shot__frame shot__frame--diff">
           <span class="shot__tag">Difference</span>
           <div class="shot__img">
-            <DiffFrame beforeRef={shot.beforeRef} afterRef={shot.afterRef} label={label} signed={shot.diffRatio !== undefined} />
+            <DiffFrame
+              beforeRef={shot.beforeRef}
+              afterRef={shot.afterRef}
+              label={label}
+              signed={shot.diffRatio !== undefined}
+            />
           </div>
         </div>
       </div>

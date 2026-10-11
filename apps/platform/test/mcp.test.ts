@@ -227,7 +227,9 @@ describe("POST /mcp", () => {
     expect(none.headers.get("www-authenticate")).toMatch(/^Bearer/);
     // The fix leads with the likeliest cause: an agent that created a project anonymously and
     // kept its anonymous session (wait_for_change next) must reconnect with the project token.
-    const noneBody = await json<{ error: { code: string; message: string; fix: { explanation: string } } }>(none);
+    const noneBody = await json<{
+      error: { code: string; message: string; fix: { explanation: string } };
+    }>(none);
     expect(noneBody.error.code).toBe("unauthorized");
     expect(noneBody.error.message).toContain("create_project and whoami work without credentials");
     expect(noneBody.error.fix.explanation).toContain(

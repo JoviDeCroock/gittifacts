@@ -14,7 +14,13 @@
  */
 import { expect, expectNoHorizontalScroll, test } from "../../lib/fixtures.js";
 
-test("plan: the author of a draft copies its link or withdraws it, and the server records the withdrawal", async ({ authed: page, request, baseURL, human, world }) => {
+test("plan: the author of a draft copies its link or withdraws it, and the server records the withdrawal", async ({
+  authed: page,
+  request,
+  baseURL,
+  human,
+  world,
+}) => {
   const created = await request.post(`${baseURL}/api/v1/plans`, {
     headers: { cookie: human.cookie, origin: baseURL as string },
     data: {
@@ -43,18 +49,25 @@ test("plan: the author of a draft copies its link or withdraws it, and the serve
   await expect(page.getByTestId("plan-withdraw")).toBeFocused();
 
   await page.getByTestId("plan-withdraw").click();
-  await page.getByTestId("plan-withdraw-form").getByRole("textbox").fill("Folded into a bigger plan.");
+  await page
+    .getByTestId("plan-withdraw-form")
+    .getByRole("textbox")
+    .fill("Folded into a bigger plan.");
   await page.getByTestId("plan-withdraw-confirm").click();
   const decided = page.getByTestId("plan-decided");
   await expect(decided).toHaveAttribute("data-status", "rejected");
   await expect(decided.getByRole("heading", { level: 2 })).toBeFocused();
   await expectNoHorizontalScroll(page);
 
-  const after = await request.get(`${baseURL}/api/v1/plans/${plan.id}`, { headers: { cookie: human.cookie } });
+  const after = await request.get(`${baseURL}/api/v1/plans/${plan.id}`, {
+    headers: { cookie: human.cookie },
+  });
   expect(((await after.json()) as { plan: { status: string } }).plan.status).toBe("rejected");
 });
 
-test("plan: on a phone the signing bar steps aside at the panel and focus lands on the attestation (demo data)", async ({ authed: page }, testInfo) => {
+test("plan: on a phone the signing bar steps aside at the panel and focus lands on the attestation (demo data)", async ({
+  authed: page,
+}, testInfo) => {
   // plan_dunning: an agent's draft the demo viewer may sign.
   await page.goto("/plans/plan_dunning?mock");
   await expect(page.getByTestId("plan-approve")).toBeAttached();
@@ -72,7 +85,9 @@ test("plan: on a phone the signing bar steps aside at the panel and focus lands 
   await expectNoHorizontalScroll(page);
 });
 
-test("evidence: the index says what needs judgment and marks the item in view (demo data)", async ({ authed: page }) => {
+test("evidence: the index says what needs judgment and marks the item in view (demo data)", async ({
+  authed: page,
+}) => {
   await page.goto("/changes/chg_tz7k2/evidence?mock");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Evidence for");
   const index = page.getByTestId("evidence-index");
@@ -88,9 +103,13 @@ test("evidence: the index says what needs judgment and marks the item in view (d
   await expectNoHorizontalScroll(page);
 });
 
-test("rollout: the state is the title, spoken to the minute, and each timeline row says the stage and who acted (demo data)", async ({ authed: page }, testInfo) => {
+test("rollout: the state is the title, spoken to the minute, and each timeline row says the stage and who acted (demo data)", async ({
+  authed: page,
+}, testInfo) => {
   await page.goto("/changes/chg_fx2r7/rollout?mock");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^Rolling out to \d+% of traffic$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    /^Rolling out to \d+% of traffic$/,
+  );
 
   // One live region, and it does not change with the per-second countdown.
   const live = page.locator("main [aria-live]");

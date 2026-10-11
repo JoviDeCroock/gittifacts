@@ -15,9 +15,18 @@ const CLIENTS: { id: McpClient; label: string }[] = [
 ];
 
 const WHERE: Record<McpClient, (token: boolean) => string> = {
-  claude: (t) => (t ? "Run it in a terminal. The agent uses this token for every call." : "Run it in a terminal. On its first call Claude Code opens a sign-in page and you approve what it may do."),
-  json: (t) => (t ? "Put it in .cursor/mcp.json or your VS Code MCP settings." : "Put it in .cursor/mcp.json or your VS Code MCP settings. The client signs in on first use and you approve it."),
-  other: (t) => (t ? "Any MCP client that speaks streamable HTTP: this URL, and the header on every request." : "Any MCP client that speaks streamable HTTP. It signs in with OAuth on first use."),
+  claude: (t) =>
+    t
+      ? "Run it in a terminal. The agent uses this token for every call."
+      : "Run it in a terminal. On its first call Claude Code opens a sign-in page and you approve what it may do.",
+  json: (t) =>
+    t
+      ? "Put it in .cursor/mcp.json or your VS Code MCP settings."
+      : "Put it in .cursor/mcp.json or your VS Code MCP settings. The client signs in on first use and you approve it.",
+  other: (t) =>
+    t
+      ? "Any MCP client that speaks streamable HTTP: this URL, and the header on every request."
+      : "Any MCP client that speaks streamable HTTP. It signs in with OAuth on first use.",
 };
 
 export function McpSetup({ token, idPrefix = "mcp" }: { token?: string; idPrefix?: string }) {
@@ -25,12 +34,23 @@ export function McpSetup({ token, idPrefix = "mcp" }: { token?: string; idPrefix
   const text = mcpSnippet(client.value, window.location.origin, token);
   return (
     <div class="mcp-setup" data-testid={token ? "mcp-setup-token" : "mcp-setup"}>
-      <Segmented size="sm" label="Your MCP client" value={client.value} options={CLIENTS} onChange={(id) => (client.value = id)} />
+      <Segmented
+        size="sm"
+        label="Your MCP client"
+        value={client.value}
+        options={CLIENTS}
+        onChange={(id) => (client.value = id)}
+      />
       <p class="mcp-setup__where" id={`${idPrefix}-where`}>
         {WHERE[client.value](!!token)}
       </p>
       <div class="mcp-setup__box">
-        <pre class="scroll-x" tabIndex={0} aria-describedby={`${idPrefix}-where`} data-testid="mcp-snippet">
+        <pre
+          class="scroll-x"
+          tabIndex={0}
+          aria-describedby={`${idPrefix}-where`}
+          data-testid="mcp-snippet"
+        >
           <code>{text}</code>
         </pre>
         <CopyButton text={text} label="Copy" />

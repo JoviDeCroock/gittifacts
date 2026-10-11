@@ -5,10 +5,35 @@ import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { LinkedIssue, PrincipalRef, RepoDetail, TimelineEvent } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
-import { Button, EmptyState, ErrorState, LinkButton, Loading, StatusChip, Who } from "../components/ui.js";
-import { detectionSentence, findIncident, healthGapCopy, type Incident, SIGNAL_LABEL, type TimelineRow, timelineRows } from "../lib/rollout-incident.js";
-import { addMinutes, countdown, countdownWords, formatClock, formatTime, formatWhenPrecise, relative, spanLabel } from "../lib/time.js";
-import { CHANGE_STATUS, ROLLOUT_STATUS, num, plural } from "../lib/vocab.js";
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  LinkButton,
+  Loading,
+  StatusChip,
+  Who,
+} from "../components/ui.js";
+import {
+  detectionSentence,
+  findIncident,
+  healthGapCopy,
+  type Incident,
+  SIGNAL_LABEL,
+  type TimelineRow,
+  timelineRows,
+} from "../lib/rollout-incident.js";
+import {
+  addMinutes,
+  countdown,
+  countdownWords,
+  formatClock,
+  formatTime,
+  formatWhenPrecise,
+  relative,
+  spanLabel,
+} from "../lib/time.js";
+import { CHANGE_STATUS, num, plural, ROLLOUT_STATUS } from "../lib/vocab.js";
 import { useTick } from "../state/clock.js";
 import { prefersReducedMotion } from "../state/media.js";
 import { useResource } from "../state/resource.js";
@@ -31,12 +56,28 @@ async function loadRollout(changeId: string): Promise<RolloutData> {
   const revertId = change.revertedBy;
   const [r, issues, repo, revertTimeline] = await Promise.all([
     api.rollout(changeId),
-    api.issues(changeId).then((x) => x.issues, () => []),
+    api.issues(changeId).then(
+      (x) => x.issues,
+      () => [],
+    ),
     api.repo(change.repoId),
-    revertId ? api.rollout(revertId).then((x) => ({ timeline: x.timeline, principals: x.principals ?? {} }), () => ({ timeline: [], principals: {} })) : Promise.resolve({ timeline: [], principals: {} }),
+    revertId
+      ? api.rollout(revertId).then(
+          (x) => ({ timeline: x.timeline, principals: x.principals ?? {} }),
+          () => ({ timeline: [], principals: {} }),
+        )
+      : Promise.resolve({ timeline: [], principals: {} }),
   ]);
   const principals = { ...revertTimeline.principals, ...(r.principals ?? {}) };
-  return { change, rollout: r.rollout, timeline: r.timeline, revertTimeline: revertTimeline.timeline, issues, repo, principals };
+  return {
+    change,
+    rollout: r.rollout,
+    timeline: r.timeline,
+    revertTimeline: revertTimeline.timeline,
+    issues,
+    repo,
+    principals,
+  };
 }
 
 type NodeState = "done" | "current" | "pending" | "failed" | "skipped";
@@ -56,7 +97,10 @@ function trackNodes(r: RolloutState, policy: RolloutPolicy, now: number): TrackN
     if (s.completedAt) state = "done";
     else if (s.startedAt) state = failed ? "failed" : r.status === "rolling" ? "current" : "done";
     else if (failed) state = "skipped";
-    const advance = s.startedAt && !s.completedAt && r.status === "rolling" ? addMinutes(s.startedAt, policy.stageMinutes) : null;
+    const advance =
+      s.startedAt && !s.completedAt && r.status === "rolling"
+        ? addMinutes(s.startedAt, policy.stageMinutes)
+        : null;
     return {
       key: `s${i}`,
       label: `${s.percent}%`,
@@ -65,12 +109,22 @@ function trackNodes(r: RolloutState, policy: RolloutPolicy, now: number): TrackN
       note: advance ? `${countdown(advance, now)} left` : state === "failed" ? "stopped" : null,
     };
   });
-  const watchState: NodeState = r.status === "watching" ? "current" : r.status === "released" ? "done" : failed ? "skipped" : "pending";
+  const watchState: NodeState =
+    r.status === "watching"
+      ? "current"
+      : r.status === "released"
+        ? "done"
+        : failed
+          ? "skipped"
+          : "pending";
   nodes.push({
     key: "watch",
     label: "Watch",
     state: watchState,
-    time: r.watchUntil && watchState !== "pending" ? formatTime(r.watchUntil) : `${policy.watchMinutes} min`,
+    time:
+      r.watchUntil && watchState !== "pending"
+        ? formatTime(r.watchUntil)
+        : `${policy.watchMinutes} min`,
     note: r.status === "watching" && r.watchUntil ? `${countdown(r.watchUntil, now)} left` : null,
   });
   return nodes;
@@ -80,9 +134,17 @@ function StageTrack({ nodes }: { nodes: TrackNode[] }) {
   return (
     <ol class="track" aria-label="Rollout stages">
       {nodes.map((n) => (
-        <li key={n.key} class={`track__node track__node--${n.state}`} aria-current={n.state === "current" ? "step" : undefined}>
+        <li
+          key={n.key}
+          class={`track__node track__node--${n.state}`}
+          aria-current={n.state === "current" ? "step" : undefined}
+        >
           <span class="track__dot" aria-hidden="true">
-            {n.state === "done" ? <Icon name="check" size={14} /> : n.state === "failed" ? <Icon name="x" size={14} /> : null}
+            {n.state === "done" ? (
+              <Icon name="check" size={14} />
+            ) : n.state === "failed" ? (
+              <Icon name="x" size={14} />
+            ) : null}
           </span>
           <span class="track__label tnum">{n.label}</span>
           <span class="track__time tnum">{n.note ?? n.time ?? "—"}</span>
@@ -93,23 +155,35 @@ function StageTrack({ nodes }: { nodes: TrackNode[] }) {
   );
 }
 
-function headline(r: RolloutState, policy: RolloutPolicy, now: number, incident: Incident | null): { title: string; line: string; live: boolean } {
+function headline(
+  r: RolloutState,
+  policy: RolloutPolicy,
+  now: number,
+  incident: Incident | null,
+): { title: string; line: string; live: boolean } {
   const current = r.stages.find((s) => s.startedAt && !s.completedAt);
   const next = current ? r.stages[r.stages.indexOf(current) + 1] : undefined;
   switch (r.status) {
     case "rolling": {
       const pct = current?.percent ?? 0;
-      const advance = current?.startedAt ? addMinutes(current.startedAt, policy.stageMinutes) : null;
+      const advance = current?.startedAt
+        ? addMinutes(current.startedAt, policy.stageMinutes)
+        : null;
       return {
         title: `Rolling out to ${pct}% of traffic`,
-        line: advance && next ? `Moves to ${next.percent}% ${countdownWords(advance, now).replace(" left", "")} from now if the checks stay healthy.` : "Holding at this stage.",
+        line:
+          advance && next
+            ? `Moves to ${next.percent}% ${countdownWords(advance, now).replace(" left", "")} from now if the checks stay healthy.`
+            : "Holding at this stage.",
         live: true,
       };
     }
     case "watching":
       return {
         title: "Serving 100% and watching",
-        line: r.watchUntil ? `The watch window closes in ${countdownWords(r.watchUntil, now).replace(" left", "")}. A breach before then reverts automatically.` : "Watching.",
+        line: r.watchUntil
+          ? `The watch window closes in ${countdownWords(r.watchUntil, now).replace(" left", "")}. A breach before then reverts automatically.`
+          : "Watching.",
         live: true,
       };
     case "released":
@@ -117,21 +191,40 @@ function headline(r: RolloutState, policy: RolloutPolicy, now: number, incident:
     case "rolled-back":
       return {
         title: "Rolled back",
-        line: incident ? detectionSentence(incident, spanLabel) : "Traffic went back to the previous version and a revert change was opened.",
+        line: incident
+          ? detectionSentence(incident, spanLabel)
+          : "Traffic went back to the previous version and a revert change was opened.",
         live: false,
       };
     case "rolling-back":
-      return { title: "Rolling back", line: "Traffic is moving back to the previous version.", live: true };
+      return {
+        title: "Rolling back",
+        line: "Traffic is moving back to the previous version.",
+        live: true,
+      };
     case "failed":
-      return { title: "Rollout failed", line: "The rollout could not complete. Traffic stays on the previous version.", live: false };
+      return {
+        title: "Rollout failed",
+        line: "The rollout could not complete. Traffic stays on the previous version.",
+        live: false,
+      };
     case "pending":
-      return { title: "Waiting to start", line: "The rollout starts after the merge deploys.", live: false };
+      return {
+        title: "Waiting to start",
+        line: "The rollout starts after the merge deploys.",
+        live: false,
+      };
   }
 }
 
 /** What happened, to the second: the first error, the detection, and each automatic step after it. */
 function IncidentFacts({ incident }: { incident: Incident }) {
-  const by = incident.signal === "person" ? "Switched off by a person" : incident.signal ? `Detected by ${SIGNAL_LABEL[incident.signal]}` : "Regression detected";
+  const by =
+    incident.signal === "person"
+      ? "Switched off by a person"
+      : incident.signal
+        ? `Detected by ${SIGNAL_LABEL[incident.signal]}`
+        : "Regression detected";
   return (
     <div class="incident">
       <ol class="incident__list" aria-label="What happened, to the second">
@@ -149,7 +242,9 @@ function IncidentFacts({ incident }: { incident: Incident }) {
           <time class="incident__clock tnum" dateTime={incident.detectedAt}>
             {formatClock(incident.detectedAt)}
           </time>
-          <span class="incident__after tnum">{incident.detectedAfterMs !== null ? `+${spanLabel(incident.detectedAfterMs)}` : "0 s"}</span>
+          <span class="incident__after tnum">
+            {incident.detectedAfterMs !== null ? `+${spanLabel(incident.detectedAfterMs)}` : "0 s"}
+          </span>
         </li>
         {incident.steps.map((s) => (
           <li key={s.key} class="incident__row">
@@ -162,7 +257,9 @@ function IncidentFacts({ incident }: { incident: Incident }) {
         ))}
       </ol>
       <p class="incident__legend">
-        {incident.firstError ? "The detection is timed from the first error, each step after it from the detection." : "Each step is timed from the detection."}
+        {incident.firstError
+          ? "The detection is timed from the first error, each step after it from the detection."
+          : "Each step is timed from the detection."}
       </p>
     </div>
   );
@@ -170,16 +267,28 @@ function IncidentFacts({ incident }: { incident: Incident }) {
 
 function stoppedNote(incident: Incident): string {
   const at = formatClock(incident.detectedAt);
-  if (incident.signal === "person") return `Switched off by a person at ${at}. The rates below are from the last check that was kept.`;
+  if (incident.signal === "person")
+    return `Switched off by a person at ${at}. The rates below are from the last check that was kept.`;
   const by = incident.signal ? ` by ${SIGNAL_LABEL[incident.signal]}` : "";
   return `Stopped at ${at}${by}. The rates below are from the last check that was kept.`;
 }
 
-function Health({ r, policy, now, incident }: { r: RolloutState; policy: RolloutPolicy; now: number; incident: Incident | null }) {
+function Health({
+  r,
+  policy,
+  now,
+  incident,
+}: {
+  r: RolloutState;
+  policy: RolloutPolicy;
+  now: number;
+  incident: Incident | null;
+}) {
   const c = r.lastCheck;
   const live = r.status === "rolling" || r.status === "watching" || r.status === "pending";
   if (!c) {
-    let copy = "No health check result was recorded for this rollout. The timeline has what happened.";
+    let copy =
+      "No health check result was recorded for this rollout. The timeline has what happened.";
     if (live) copy = "No health check has run yet.";
     else if (incident) copy = healthGapCopy(incident, formatClock);
     return <p class="ev-sub">{copy}</p>;
@@ -197,7 +306,12 @@ function Health({ r, policy, now, incident }: { r: RolloutState; policy: Rollout
         <h2 id="health-title">Health</h2>
         <span class="health__when">
           Checked {relative(c.at, now)} · {num.format(c.requests)} requests
-          {tooFew ? <span class="tone--warn"> · fewer than the {policy.minRequests} needed to trust the rate</span> : null}
+          {tooFew ? (
+            <span class="tone--warn">
+              {" "}
+              · fewer than the {policy.minRequests} needed to trust the rate
+            </span>
+          ) : null}
         </span>
       </div>
       {incident && !live ? <p class="health__note">{stoppedNote(incident)}</p> : null}
@@ -206,7 +320,9 @@ function Health({ r, policy, now, incident }: { r: RolloutState; policy: Rollout
           <span class="rate__label">This version</span>
           <span class="rate__bar">
             <span class="rate__fill" style={{ inlineSize: `${((rate ?? 0) / scale) * 100}%` }} />
-            {limit !== null ? <span class="rate__limit" style={{ insetInlineStart: `${(limit / scale) * 100}%` }} /> : null}
+            {limit !== null ? (
+              <span class="rate__limit" style={{ insetInlineStart: `${(limit / scale) * 100}%` }} />
+            ) : null}
           </span>
           <span class="rate__value tnum">{rate === null ? "unknown" : p(rate)}</span>
         </div>
@@ -214,13 +330,16 @@ function Health({ r, policy, now, incident }: { r: RolloutState; policy: Rollout
           <span class="rate__label">Previous version</span>
           <span class="rate__bar">
             <span class="rate__fill" style={{ inlineSize: `${((base ?? 0) / scale) * 100}%` }} />
-            {limit !== null ? <span class="rate__limit" style={{ insetInlineStart: `${(limit / scale) * 100}%` }} /> : null}
+            {limit !== null ? (
+              <span class="rate__limit" style={{ insetInlineStart: `${(limit / scale) * 100}%` }} />
+            ) : null}
           </span>
           <span class="rate__value tnum">{base === null ? "unknown" : p(base)}</span>
         </div>
         {limit !== null ? (
           <p class="rates__legend">
-            <span class="rates__tick" aria-hidden="true" /> Reverts above {p(limit)} (baseline + {(policy.maxErrorRateIncrease * 100).toFixed(1)} points)
+            <span class="rates__tick" aria-hidden="true" /> Reverts above {p(limit)} (baseline +{" "}
+            {(policy.maxErrorRateIncrease * 100).toFixed(1)} points)
           </p>
         ) : null}
       </div>
@@ -230,7 +349,9 @@ function Health({ r, policy, now, incident }: { r: RolloutState; policy: Rollout
           <dd class="tnum">
             {c.newIssueGroups}
             <span class="health__rule">
-              {policy.maxNewIssueGroups === 0 ? "The first new group reverts the change." : `More than ${policy.maxNewIssueGroups} reverts the change.`}
+              {policy.maxNewIssueGroups === 0
+                ? "The first new group reverts the change."
+                : `More than ${policy.maxNewIssueGroups} reverts the change.`}
             </span>
           </dd>
         </div>
@@ -243,9 +364,18 @@ function Health({ r, policy, now, incident }: { r: RolloutState; policy: Rollout
  * Phones: the switch-off control and the rate it guards stay in the thumb zone while you read the
  * timeline (below 1100px the side column stacks under everything). It opens the same form.
  */
-function KillBar({ r, policy, onOpen }: { r: RolloutState; policy: RolloutPolicy; onOpen: () => void }) {
+function KillBar({
+  r,
+  policy,
+  onOpen,
+}: {
+  r: RolloutState;
+  policy: RolloutPolicy;
+  onOpen: () => void;
+}) {
   const c = r.lastCheck;
-  const limit = c?.baselineErrorRate != null ? c.baselineErrorRate + policy.maxErrorRateIncrease : null;
+  const limit =
+    c?.baselineErrorRate != null ? c.baselineErrorRate + policy.maxErrorRateIncrease : null;
   const p = (x: number) => `${(x * 100).toFixed(x < 0.01 ? 2 : 1)}%`;
   // While the Switch off section itself is on screen, the bar steps aside: one control at a time.
   const bar = useRef<HTMLDivElement>(null);
@@ -254,7 +384,10 @@ function KillBar({ r, policy, onOpen }: { r: RolloutState; policy: RolloutPolicy
     const el = bar.current;
     if (!target || !el || typeof IntersectionObserver === "undefined") return;
     // "On screen" means above the bar: a sliver of the section behind the bar doesn't count.
-    const io = new IntersectionObserver(([e]) => el.toggleAttribute("data-aside", !!e?.isIntersecting), { rootMargin: `0px 0px -${el.offsetHeight}px 0px` });
+    const io = new IntersectionObserver(
+      ([e]) => el.toggleAttribute("data-aside", !!e?.isIntersecting),
+      { rootMargin: `0px 0px -${el.offsetHeight}px 0px` },
+    );
     io.observe(target);
     return () => io.disconnect();
   }, []);
@@ -276,7 +409,15 @@ function KillBar({ r, policy, onOpen }: { r: RolloutState; policy: RolloutPolicy
   );
 }
 
-function KillSwitch({ change, onKilled, open }: { change: Change; onKilled: (c: Change) => void; open: Signal<boolean> }) {
+function KillSwitch({
+  change,
+  onKilled,
+  open,
+}: {
+  change: Change;
+  onKilled: (c: Change) => void;
+  open: Signal<boolean>;
+}) {
   const reason = useSignal("");
   const busy = useSignal(false);
   const error = useSignal<string | null>(null);
@@ -317,13 +458,21 @@ function KillSwitch({ change, onKilled, open }: { change: Change; onKilled: (c: 
         <Icon name="power" size={18} /> Switch off
       </h2>
       <p class="kill__line">
-        Turns the flag off for everyone, sends all traffic back to {prev ? <code>{prev}</code> : "the previous version"}, and opens a revert change.
+        Turns the flag off for everyone, sends all traffic back to{" "}
+        {prev ? <code>{prev}</code> : "the previous version"}, and opens a revert change.
       </p>
       {open.value ? (
         <form class="kill__form" onSubmit={kill} ref={form}>
           <label class="field">
             <span class="field__label">Why are you switching this change off?</span>
-            <textarea class="textarea" rows={2} value={reason.value} onInput={(e) => (reason.value = e.currentTarget.value)} aria-describedby={error.value ? "kill-error" : undefined} aria-invalid={error.value ? "true" : undefined} />
+            <textarea
+              class="textarea"
+              rows={2}
+              value={reason.value}
+              onInput={(e) => (reason.value = e.currentTarget.value)}
+              aria-describedby={error.value ? "kill-error" : undefined}
+              aria-invalid={error.value ? "true" : undefined}
+            />
           </label>
           {error.value ? (
             <p class="field__error" id="kill-error" role="alert">
@@ -331,10 +480,21 @@ function KillSwitch({ change, onKilled, open }: { change: Change; onKilled: (c: 
             </p>
           ) : null}
           <div class="kill__actions">
-            <Button variant="secondary" onClick={() => ((open.value = false), (error.value = null))} disabled={busy.value}>
+            <Button
+              variant="secondary"
+              onClick={() => ((open.value = false), (error.value = null))}
+              disabled={busy.value}
+            >
               Cancel
             </Button>
-            <Button type="submit" variant="danger" icon="power" busy={busy.value} busyLabel="Turning off…" wide>
+            <Button
+              type="submit"
+              variant="danger"
+              icon="power"
+              busy={busy.value}
+              busyLabel="Turning off…"
+              wide
+            >
               Turn off and revert
             </Button>
           </div>
@@ -351,12 +511,35 @@ function KillSwitch({ change, onKilled, open }: { change: Change; onKilled: (c: 
 /** Who acted on a timeline row: people as circles, agents as squares with their person, the platform as itself. */
 function Actor({ id, principals }: { id: string; principals: Record<string, PrincipalRef> }) {
   const p = principals[id];
-  if (p && p.kind !== "system") return <Who kind={p.kind} name={p.name} owner={p.ownerName ?? (p.ownerId ? principals[p.ownerId]?.name : null)} size={16} />;
-  const name = p?.name && p.name !== id ? p.name : id.startsWith("system:") ? id.slice("system:".length).replace(/-/g, " ") : "gittifacts platform";
+  if (p && p.kind !== "system")
+    return (
+      <Who
+        kind={p.kind}
+        name={p.name}
+        owner={p.ownerName ?? (p.ownerId ? principals[p.ownerId]?.name : null)}
+        size={16}
+      />
+    );
+  const name =
+    p?.name && p.name !== id
+      ? p.name
+      : id.startsWith("system:")
+        ? id.slice("system:".length).replace(/-/g, " ")
+        : "gittifacts platform";
   return <Who kind="system" name={name} size={16} />;
 }
 
-function Timeline({ rows, now, revertId, principals }: { rows: TimelineRow[]; now: number; revertId: string | null; principals: Record<string, PrincipalRef> }) {
+function Timeline({
+  rows,
+  now,
+  revertId,
+  principals,
+}: {
+  rows: TimelineRow[];
+  now: number;
+  revertId: string | null;
+  principals: Record<string, PrincipalRef>;
+}) {
   if (rows.length === 0) return null;
   return (
     <section class="timeline" aria-labelledby="timeline-title" data-testid="rollout-timeline">
@@ -396,7 +579,10 @@ function Timeline({ rows, now, revertId, principals }: { rows: TimelineRow[]; no
                 ) : null}
                 {r.seq !== null ? (
                   <span class="timeline__seq tnum">
-                    <span class="sr-only">{r.source === "revert" ? "Revert change, audit event" : "Audit event"} </span>#{r.seq}
+                    <span class="sr-only">
+                      {r.source === "revert" ? "Revert change, audit event" : "Audit event"}{" "}
+                    </span>
+                    #{r.seq}
                   </span>
                 ) : (
                   <span class="timeline__seq">Issues</span>
@@ -444,13 +630,28 @@ export function RolloutView({ changeId }: { changeId: string }) {
   const { change, rollout, timeline, revertTimeline, issues, repo, principals } = st.data;
   const policy = repo.repo.policy.rollout;
   const now = tick.value;
-  const pageCrumbs = [...crumbs, { href: `/repos/${repo.repo.id}`, label: repo.repo.name }, { href: `/changes/${change.id}`, label: change.title }];
+  const pageCrumbs = [
+    ...crumbs,
+    { href: `/repos/${repo.repo.id}`, label: repo.repo.name },
+    { href: `/changes/${change.id}`, label: change.title },
+  ];
 
   if (!rollout) {
     return (
       <Page title="Rollout" crumbs={pageCrumbs} meta={<span>{change.title}</span>}>
-        <EmptyState icon="rocket" title="No rollout yet" action={<LinkButton href={`/changes/${change.id}`} icon="eye">Open the walkthrough</LinkButton>}>
-          <p>Rollouts start after a change merges. It goes to 5%, then 25%, then 100% behind its own flag, with a {policy.watchMinutes}-minute watch window and automatic revert.</p>
+        <EmptyState
+          icon="rocket"
+          title="No rollout yet"
+          action={
+            <LinkButton href={`/changes/${change.id}`} icon="eye">
+              Open the walkthrough
+            </LinkButton>
+          }
+        >
+          <p>
+            Rollouts start after a change merges. It goes to 5%, then 25%, then 100% behind its own
+            flag, with a {policy.watchMinutes}-minute watch window and automatic revert.
+          </p>
         </EmptyState>
       </Page>
     );
@@ -458,7 +659,8 @@ export function RolloutView({ changeId }: { changeId: string }) {
 
   const incident = findIncident(timeline, issues);
   const h = headline(rollout, policy, now, incident);
-  const live = rollout.status === "rolling" || rollout.status === "watching" || rollout.status === "pending";
+  const live =
+    rollout.status === "rolling" || rollout.status === "watching" || rollout.status === "pending";
   const meta = ROLLOUT_STATUS[rollout.status];
   const started = rollout.stages[0]?.startedAt ?? null;
 
@@ -481,7 +683,10 @@ export function RolloutView({ changeId }: { changeId: string }) {
       </p>
       <div class="rollout-layout">
         <div class="rollout-main">
-          <section class={`rollout-state rollout-state--${meta.tone}`} aria-label="Rollout progress">
+          <section
+            class={`rollout-state rollout-state--${meta.tone}`}
+            aria-label="Rollout progress"
+          >
             <p class="rollout-state__line">{h.line}</p>
             {incident ? <IncidentFacts incident={incident} /> : null}
             <StageTrack nodes={trackNodes(rollout, policy, now)} />
@@ -509,7 +714,10 @@ export function RolloutView({ changeId }: { changeId: string }) {
 
           {issues.length > 0 ? (
             <section class="issues" id="issues" aria-labelledby="issues-title">
-              <h2 id="issues-title">New issue groups {issues.length > 0 ? <span class="tnum issues__n">{issues.length}</span> : null}</h2>
+              <h2 id="issues-title">
+                New issue groups{" "}
+                {issues.length > 0 ? <span class="tnum issues__n">{issues.length}</span> : null}
+              </h2>
               <ul>
                 {issues.map((i) => (
                   <li key={i.id}>
@@ -534,14 +742,19 @@ export function RolloutView({ changeId }: { changeId: string }) {
 
         <aside class="rollout-side">
           {live ? (
-            <KillSwitch change={change} open={killOpen} onKilled={(c) => res.set({ ...st.data, change: c, rollout: c.rolloutState })} />
+            <KillSwitch
+              change={change}
+              open={killOpen}
+              onKilled={(c) => res.set({ ...st.data, change: c, rollout: c.rolloutState })}
+            />
           ) : change.revertedBy ? (
             <section class="revert-note">
               <Icon name="undo" size={18} />
               <div>
                 <p class="revert-note__title">Reverted</p>
                 <p>
-                  The revert is its own change, verified as the exact inverse. <a href={`/changes/${change.revertedBy}`}>Open the revert change</a>
+                  The revert is its own change, verified as the exact inverse.{" "}
+                  <a href={`/changes/${change.revertedBy}`}>Open the revert change</a>
                 </p>
               </div>
             </section>
@@ -551,15 +764,23 @@ export function RolloutView({ changeId }: { changeId: string }) {
               <div>
                 <p class="revert-note__title">This change is a revert</p>
                 <p>
-                  It restores the state before <a href={`/changes/${change.revertOf}`}>the reverted change</a>.
+                  It restores the state before{" "}
+                  <a href={`/changes/${change.revertOf}`}>the reverted change</a>.
                 </p>
               </div>
             </section>
           ) : null}
-          <Timeline rows={timelineRows(timeline, revertTimeline, incident, rollout.stages)} now={now} revertId={change.revertedBy} principals={principals} />
+          <Timeline
+            rows={timelineRows(timeline, revertTimeline, incident, rollout.stages)}
+            now={now}
+            revertId={change.revertedBy}
+            principals={principals}
+          />
         </aside>
       </div>
-      {live && !killOpen.value ? <KillBar r={rollout} policy={policy} onOpen={() => (killOpen.value = true)} /> : null}
+      {live && !killOpen.value ? (
+        <KillBar r={rollout} policy={policy} onOpen={() => (killOpen.value = true)} />
+      ) : null}
     </Page>
   );
 }

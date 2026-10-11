@@ -10,7 +10,10 @@ import { repos } from "../db/app-schema.js";
 import { notFound } from "../errors.js";
 import type { Db } from "../store/d1-store.js";
 
-export async function resolveGithubChangeId(db: Db, ref: string): Promise<{ changeId: string; repoId: string }> {
+export async function resolveGithubChangeId(
+  db: Db,
+  ref: string,
+): Promise<{ changeId: string; repoId: string }> {
   const parsed = parseChangeRef(ref);
   if (parsed === null || parsed.host !== "github") {
     throw notFound(`pull request ${ref}`, { explanation: "Name it as owner/repo#123." });

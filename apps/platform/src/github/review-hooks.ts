@@ -11,7 +11,9 @@ import { buildPorts } from "../runtime/ports.js";
 import { D1Store } from "../store/d1-store.js";
 import { githubHostFor } from "./runtime.js";
 
-export function githubReviewOptions(env: Bindings): Pick<CoordinatorOptions, "onHostReview" | "isHostAuthor"> {
+export function githubReviewOptions(
+  env: Bindings,
+): Pick<CoordinatorOptions, "onHostReview" | "isHostAuthor"> {
   return {
     async onHostReview(change) {
       if (change.host == null) return;
@@ -20,7 +22,12 @@ export function githubReviewOptions(env: Bindings): Pick<CoordinatorOptions, "on
       if (repo?.host == null) return;
       const { host, release } = githubHostFor(env, ports, repo.host);
       try {
-        await host.publishSummary({ host: "github", owner: repo.host.owner, repo: repo.host.repo, number: change.host.number });
+        await host.publishSummary({
+          host: "github",
+          owner: repo.host.owner,
+          repo: repo.host.repo,
+          number: change.host.number,
+        });
       } finally {
         await release();
       }

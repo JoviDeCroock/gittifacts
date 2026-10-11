@@ -5,9 +5,9 @@
  * `?actor=&action=&subject=`, so a trail is a link: the Agents page and the band link here.
  */
 import { signal, useSignal } from "@preact/signals";
-import { useLocation } from "preact-iso";
 import { Fragment } from "preact";
 import { useEffect } from "preact/hooks";
+import { useLocation } from "preact-iso";
 import { api } from "../api/client.js";
 import type { AuditEvent, AuditPage, AuditSubjectRef, PrincipalRef } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
@@ -26,7 +26,8 @@ const seenActions = signal<string[]>([]);
 
 function remember(page: AuditPage): void {
   const p = page.principals ?? {};
-  if (Object.keys(p).some((id) => !seenPrincipals.peek()[id])) seenPrincipals.value = { ...seenPrincipals.peek(), ...p };
+  if (Object.keys(p).some((id) => !seenPrincipals.peek()[id]))
+    seenPrincipals.value = { ...seenPrincipals.peek(), ...p };
   const actions = page.events.map((e) => e.action).filter((a) => !seenActions.peek().includes(a));
   if (actions.length > 0) seenActions.value = [...new Set([...seenActions.peek(), ...actions])];
 }
@@ -76,8 +77,15 @@ function Subject({ subject, named: r }: { subject: string; named: AuditSubjectRe
           {body}
         </span>
       )}
-      {r?.repoName && r.repoName !== r.title ? <span class="audit__in">in {r.repoName}</span> : null}
-      <a class="audit__only" href={auditHref({ subject })} aria-label={`Only events on ${r?.title ?? subject}`} title="Only events on this">
+      {r?.repoName && r.repoName !== r.title ? (
+        <span class="audit__in">in {r.repoName}</span>
+      ) : null}
+      <a
+        class="audit__only"
+        href={auditHref({ subject })}
+        aria-label={`Only events on ${r?.title ?? subject}`}
+        title="Only events on this"
+      >
         <Icon name="search" size={14} />
       </a>
     </span>
@@ -90,7 +98,9 @@ export function auditDetail(e: { action: string; summary?: string }): string | n
   if (!summary) return null;
   const label = actionLabel(e.action).toLowerCase();
   const plain = summary.toLowerCase();
-  return plain === label || plain === e.action.replace(/[._-]+/g, " ").toLowerCase() ? null : summary;
+  return plain === label || plain === e.action.replace(/[._-]+/g, " ").toLowerCase()
+    ? null
+    : summary;
 }
 
 function Actor({ id, who }: { id: string; who: PrincipalRef | undefined }) {
@@ -103,15 +113,32 @@ function Actor({ id, who }: { id: string; who: PrincipalRef | undefined }) {
       <a class="audit__who-link" href={auditHref({ actor: id })} title={`Only ${name}'s events`}>
         <Who kind={kind} name={name} id={id} owner={who?.ownerName} size={20} compact />
       </a>
-      {kind === "agent" ? <span class="audit__owner">{who?.ownerName ? `agent of ${who.ownerName}` : "agent"}</span> : null}
+      {kind === "agent" ? (
+        <span class="audit__owner">{who?.ownerName ? `agent of ${who.ownerName}` : "agent"}</span>
+      ) : null}
     </span>
   );
 }
 
-function EventRow({ e, who, named, linksToPrev }: { e: AuditEvent & { summary?: string }; who: PrincipalRef | undefined; named: AuditSubjectRef | undefined; linksToPrev: boolean | null }) {
+function EventRow({
+  e,
+  who,
+  named,
+  linksToPrev,
+}: {
+  e: AuditEvent & { summary?: string };
+  who: PrincipalRef | undefined;
+  named: AuditSubjectRef | undefined;
+  linksToPrev: boolean | null;
+}) {
   const detail = auditDetail(e);
   return (
-    <li class="audit__row" data-testid="audit-event" data-actor={e.principalId} data-action={e.action}>
+    <li
+      class="audit__row"
+      data-testid="audit-event"
+      data-actor={e.principalId}
+      data-action={e.action}
+    >
       <span class="audit__seq tnum">#{num.format(e.seq)}</span>
       <time class="audit__time tnum" dateTime={e.at}>
         {formatDateTime(e.at)}
@@ -176,8 +203,11 @@ function Filters({ f, onApply }: { f: AuditFilter; onApply: (f: AuditFilter) => 
     draft.value = f.subject;
   }, [f.subject, draft]);
   const people = Object.values(seenPrincipals.value);
-  if (f.actor && !seenPrincipals.value[f.actor]) people.push({ id: f.actor, kind: "system", name: f.actor, ownerId: null });
-  const actions = [...new Set([...seenActions.value, ...(f.action ? [f.action] : [])])].sort((a, b) => actionLabel(a).localeCompare(actionLabel(b)));
+  if (f.actor && !seenPrincipals.value[f.actor])
+    people.push({ id: f.actor, kind: "system", name: f.actor, ownerId: null });
+  const actions = [...new Set([...seenActions.value, ...(f.action ? [f.action] : [])])].sort(
+    (a, b) => actionLabel(a).localeCompare(actionLabel(b)),
+  );
   const any = f.actor || f.action || f.subject;
   return (
     <form
@@ -193,35 +223,49 @@ function Filters({ f, onApply }: { f: AuditFilter; onApply: (f: AuditFilter) => 
       <label class="field">
         <span class="field__label">Who</span>
         <span class="select">
-          <select class="input" value={f.actor} onChange={(e) => onApply({ ...f, actor: e.currentTarget.value })} data-testid="audit-filter-actor">
-          <option value="">Everyone</option>
-          {KIND_GROUP.map((g) => {
-            const list = people.filter((p) => p.kind === g.kind).sort((a, b) => a.name.localeCompare(b.name));
-            return list.length === 0 ? null : (
-              <optgroup key={g.kind} label={g.label}>
-                {list.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.kind === "agent" && p.ownerName ? `${p.name} (agent of ${p.ownerName})` : p.name}
-                  </option>
-                ))}
-              </optgroup>
-            );
-          })}
-        </select>
+          <select
+            class="input"
+            value={f.actor}
+            onChange={(e) => onApply({ ...f, actor: e.currentTarget.value })}
+            data-testid="audit-filter-actor"
+          >
+            <option value="">Everyone</option>
+            {KIND_GROUP.map((g) => {
+              const list = people
+                .filter((p) => p.kind === g.kind)
+                .sort((a, b) => a.name.localeCompare(b.name));
+              return list.length === 0 ? null : (
+                <optgroup key={g.kind} label={g.label}>
+                  {list.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.kind === "agent" && p.ownerName
+                        ? `${p.name} (agent of ${p.ownerName})`
+                        : p.name}
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
+          </select>
           <Icon name="chevron-down" size={16} class="select__chev" />
         </span>
       </label>
       <label class="field">
         <span class="field__label">Action</span>
         <span class="select">
-          <select class="input" value={f.action} onChange={(e) => onApply({ ...f, action: e.currentTarget.value })} data-testid="audit-filter-action">
-          <option value="">Any action</option>
-          {actions.map((a) => (
-            <option key={a} value={a}>
-              {actionLabel(a)}
-            </option>
-          ))}
-        </select>
+          <select
+            class="input"
+            value={f.action}
+            onChange={(e) => onApply({ ...f, action: e.currentTarget.value })}
+            data-testid="audit-filter-action"
+          >
+            <option value="">Any action</option>
+            {actions.map((a) => (
+              <option key={a} value={a}>
+                {actionLabel(a)}
+              </option>
+            ))}
+          </select>
           <Icon name="chevron-down" size={16} class="select__chev" />
         </span>
       </label>
@@ -260,15 +304,20 @@ function Chain({ chain, count }: { chain: AuditPage["chain"]; count: number }) {
   const pending = !chain.verified && chain.brokenAt === undefined && chain.complete === false;
   if (pending) {
     return (
-      <section class="chain chain--pending" aria-live="polite" data-testid="audit-chain" data-verified="partial">
+      <section
+        class="chain chain--pending"
+        aria-live="polite"
+        data-testid="audit-chain"
+        data-verified="partial"
+      >
         <Icon name="timer" size={22} />
         <div>
           <p class="chain__title">
             Verified through event #{chain.verifiedThrough ?? 0} of #{chain.headSeq ?? "?"}
           </p>
           <p class="chain__line">
-            Newer events are checked a batch at a time. Reload to continue; until then treat events after this one as not yet
-            verified.
+            Newer events are checked a batch at a time. Reload to continue; until then treat events
+            after this one as not yet verified.
           </p>
         </div>
       </section>
@@ -276,13 +325,18 @@ function Chain({ chain, count }: { chain: AuditPage["chain"]; count: number }) {
   }
   if (!chain.verified) {
     return (
-      <section class="chain chain--bad" aria-live="polite" data-testid="audit-chain" data-verified="false">
+      <section
+        class="chain chain--bad"
+        aria-live="polite"
+        data-testid="audit-chain"
+        data-verified="false"
+      >
         <Icon name="shield-alert" size={22} />
         <div>
           <p class="chain__title">Chain broken at event #{chain.brokenAt ?? "?"}</p>
           <p class="chain__line">
-            An event no longer matches the hash its successor recorded. Treat everything after it as unverified and tell your
-            platform admin.
+            An event no longer matches the hash its successor recorded. Treat everything after it as
+            unverified and tell your platform admin.
           </p>
         </div>
       </section>
@@ -297,8 +351,8 @@ function Chain({ chain, count }: { chain: AuditPage["chain"]; count: number }) {
         <Icon name="chevron-down" size={14} class="disclosure__chev" />
       </summary>
       <p class="chain__line">
-        Every event commits to the hash of the one before it and carries a platform signature. Nothing has been edited or
-        removed.
+        Every event commits to the hash of the one before it and carries a platform signature.
+        Nothing has been edited or removed.
       </p>
     </details>
   );
@@ -306,15 +360,32 @@ function Chain({ chain, count }: { chain: AuditPage["chain"]; count: number }) {
 
 export function AuditView() {
   const { query, route } = useLocation();
-  const f: AuditFilter = { actor: query.actor ?? "", action: query.action ?? "", subject: query.subject ?? "" };
+  const f: AuditFilter = {
+    actor: query.actor ?? "",
+    action: query.action ?? "",
+    subject: query.subject ?? "",
+  };
   const filtered = !!(f.actor || f.action || f.subject);
   const pages = useSignal<AuditPage[]>([]);
   // Open from 900px (the summary is hidden there); on phones folded unless a filter is on.
-  const filtersOpen = useSignal(filtered || typeof window.matchMedia !== "function" || window.matchMedia("(min-width: 900px)").matches);
+  const filtersOpen = useSignal(
+    filtered ||
+      typeof window.matchMedia !== "function" ||
+      window.matchMedia("(min-width: 900px)").matches,
+  );
   const more = useSignal<"idle" | "loading" | "error">("idle");
   const ask = (cursor?: string) =>
-    api.audit({ actor: f.actor || undefined, action: f.action || undefined, subject: f.subject || undefined, cursor, limit: 30 });
-  const res = useResource(() => ask().then((p) => (remember(p), p)), [f.actor, f.action, f.subject]);
+    api.audit({
+      actor: f.actor || undefined,
+      action: f.action || undefined,
+      subject: f.subject || undefined,
+      cursor,
+      limit: 30,
+    });
+  const res = useResource(
+    () => ask().then((p) => (remember(p), p)),
+    [f.actor, f.action, f.subject],
+  );
   const st = res.state.value;
   // Widening past 900px unfolds them (the fold's summary isn't shown there).
   useEffect(() => {
@@ -331,7 +402,18 @@ export function AuditView() {
     api.principals().then(
       ({ principals: list }) => {
         const me = list.find((p) => p.ownerId === null);
-        const refs = Object.fromEntries(list.map((p) => [p.id, { id: p.id, kind: p.kind, name: p.name, ownerId: p.ownerId, ownerName: p.ownerId ? (me?.name ?? null) : null }]));
+        const refs = Object.fromEntries(
+          list.map((p) => [
+            p.id,
+            {
+              id: p.id,
+              kind: p.kind,
+              name: p.name,
+              ownerId: p.ownerId,
+              ownerName: p.ownerId ? (me?.name ?? null) : null,
+            },
+          ]),
+        );
         seenPrincipals.value = { ...refs, ...seenPrincipals.peek() };
       },
       () => {},
@@ -344,8 +426,14 @@ export function AuditView() {
 
   const all: AuditPage[] = st.status === "ok" ? [st.data, ...pages.value] : [];
   const events = all.flatMap((p) => p.events);
-  const principals: Record<string, PrincipalRef> = Object.assign({}, ...all.map((p) => p.principals ?? {}));
-  const subjects: Record<string, AuditSubjectRef> = Object.assign({}, ...all.map((p) => p.subjects ?? {}));
+  const principals: Record<string, PrincipalRef> = Object.assign(
+    {},
+    ...all.map((p) => p.principals ?? {}),
+  );
+  const subjects: Record<string, AuditSubjectRef> = Object.assign(
+    {},
+    ...all.map((p) => p.subjects ?? {}),
+  );
   const last = all[all.length - 1];
   const chain = all[0]?.chain;
 
@@ -364,13 +452,31 @@ export function AuditView() {
 
   return (
     <Page title="Audit log" wide>
-      {chain ? <Chain chain={chain} count={events.length} /> : <div class="chain-space" aria-hidden="true" />}
-      <details class="disclosure audit-filter-fold" open={filtersOpen.value} onToggle={(e) => (filtersOpen.value = e.currentTarget.open)}>
+      {chain ? (
+        <Chain chain={chain} count={events.length} />
+      ) : (
+        <div class="chain-space" aria-hidden="true" />
+      )}
+      <details
+        class="disclosure audit-filter-fold"
+        open={filtersOpen.value}
+        onToggle={(e) => (filtersOpen.value = e.currentTarget.open)}
+      >
         <summary data-testid="audit-filter-open">
           <Icon name="chevron-down" class="disclosure__chev" />
           Filter
           <span class="audit-filter-fold__now">
-            · {filtered ? [f.actor && (principals[f.actor]?.name ?? seenPrincipals.value[f.actor]?.name ?? f.actor), f.action && actionLabel(f.action), f.subject].filter(Boolean).join(" · ") : "everything"}
+            ·{" "}
+            {filtered
+              ? [
+                  f.actor &&
+                    (principals[f.actor]?.name ?? seenPrincipals.value[f.actor]?.name ?? f.actor),
+                  f.action && actionLabel(f.action),
+                  f.subject,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : "everything"}
           </span>
         </summary>
         <Filters f={f} onApply={(next) => route(auditHref(next))} />
@@ -382,7 +488,9 @@ export function AuditView() {
           <SkeletonRows count={8} shape="table" mark="circle" />
         </div>
       ) : null}
-      {st.status === "error" ? <ErrorState error={st.error} what="the audit log" onRetry={res.reload} /> : null}
+      {st.status === "error" ? (
+        <ErrorState error={st.error} what="the audit log" onRetry={res.reload} />
+      ) : null}
       {st.status === "ok" && events.length === 0 ? (
         <EmptyState
           icon="scroll-text"
@@ -395,7 +503,14 @@ export function AuditView() {
             ) : undefined
           }
         >
-          {filtered ? <p>Filters match exactly: one person or agent, one action, one subject such as change:ID or plan:ID.</p> : <p>Every approval, merge, rollout step and token change lands here.</p>}
+          {filtered ? (
+            <p>
+              Filters match exactly: one person or agent, one action, one subject such as change:ID
+              or plan:ID.
+            </p>
+          ) : (
+            <p>Every approval, merge, rollout step and token change lands here.</p>
+          )}
         </EmptyState>
       ) : null}
       {events.length > 0 ? (
@@ -418,10 +533,18 @@ export function AuditView() {
               const hidden = older !== undefined && !filtered ? e.seq - older.seq - 1 : 0;
               return (
                 <Fragment key={e.seq}>
-                  <EventRow e={e} who={principals[e.principalId]} named={subjects[e.subject]} linksToPrev={links} />
+                  <EventRow
+                    e={e}
+                    who={principals[e.principalId]}
+                    named={subjects[e.subject]}
+                    linksToPrev={links}
+                  />
                   {hidden > 0 ? (
                     <li class="audit__gap">
-                      {hidden === 1 ? `#${num.format(e.seq - 1)}` : `#${num.format(e.seq - hidden)} to #${num.format(e.seq - 1)}`} {hidden === 1 ? "is" : "are"} in repositories you can't see
+                      {hidden === 1
+                        ? `#${num.format(e.seq - 1)}`
+                        : `#${num.format(e.seq - hidden)} to #${num.format(e.seq - 1)}`}{" "}
+                      {hidden === 1 ? "is" : "are"} in repositories you can't see
                     </li>
                   ) : null}
                 </Fragment>
@@ -430,7 +553,12 @@ export function AuditView() {
           </ol>
           {last?.nextCursor ? (
             <div class="audit__more">
-              <Button variant="secondary" busy={more.value === "loading"} busyLabel="Loading older events…" onClick={loadMore}>
+              <Button
+                variant="secondary"
+                busy={more.value === "loading"}
+                busyLabel="Loading older events…"
+                onClick={loadMore}
+              >
                 Load older events
               </Button>
               {more.value === "error" ? (
@@ -440,7 +568,9 @@ export function AuditView() {
               ) : null}
             </div>
           ) : (
-            <p class="audit__end">{filtered ? "End of matching events." : "Genesis. The chain starts here."}</p>
+            <p class="audit__end">
+              {filtered ? "End of matching events." : "Genesis. The chain starts here."}
+            </p>
           )}
         </>
       ) : null}

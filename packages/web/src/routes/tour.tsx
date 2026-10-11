@@ -11,7 +11,14 @@ import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { ApiError, api, inlineError, newIdempotencyKey, request } from "../api/client.js";
 import { describesResolution, fetchResolution, type ResolutionView } from "../api/resolution.js";
-import type { ChangeDiff, EvidenceResponse, PipelineRun, PrincipalRef, RepoDetail, ReviewDecisionKind } from "../api/types.js";
+import type {
+  ChangeDiff,
+  EvidenceResponse,
+  PipelineRun,
+  PrincipalRef,
+  RepoDetail,
+  ReviewDecisionKind,
+} from "../api/types.js";
 import { DecisionPanel } from "../components/DecisionPanel.js";
 import { DiffExcerpt, WholeDiff } from "../components/DiffExcerpt.js";
 import { EvidenceChip, MissingChip, RedGreenList, ShotPair } from "../components/EvidenceBits.js";
@@ -22,11 +29,35 @@ import { ResolutionPanel } from "../components/ResolutionPanel.js";
 import { Page } from "../components/Shell.js";
 import { Term } from "../components/Term.js";
 import { TriageChart } from "../components/TriageChart.js";
-import { Button, ErrorState, LaneTag, Loading, StatusChip, VerdictBadge, VerdictMark, Who } from "../components/ui.js";
+import {
+  Button,
+  ErrorState,
+  LaneTag,
+  Loading,
+  StatusChip,
+  VerdictBadge,
+  VerdictMark,
+  Who,
+} from "../components/ui.js";
 import { findItem } from "../lib/evidence.js";
-import { type ChartRow, foldChart, LANES, noTourCopy, triageChart, unroutedCopy } from "../lib/lanes.js";
+import {
+  type ChartRow,
+  foldChart,
+  LANES,
+  noTourCopy,
+  triageChart,
+  unroutedCopy,
+} from "../lib/lanes.js";
 import { relative, shortAge, stepTime } from "../lib/time.js";
-import { CATEGORY_LABEL, CHANGE_STATUS, plural, ROLLOUT_STATUS, STOP_KIND, shortSha, VERDICT } from "../lib/vocab.js";
+import {
+  CATEGORY_LABEL,
+  CHANGE_STATUS,
+  plural,
+  ROLLOUT_STATUS,
+  STOP_KIND,
+  shortSha,
+  VERDICT,
+} from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
 import { usePageCommands } from "../state/keys.js";
 import { prefersReducedMotion } from "../state/media.js";
@@ -131,7 +162,11 @@ interface StripProps {
 function StationStrip({ tour, current, onJump, resumeAt, onResume, announce, inert }: StripProps) {
   const n = tour.stops.length;
   return (
-    <nav class={`stations ${resumeAt !== null ? "stations--resume" : ""}`} aria-label="Walkthrough stops" inert={inert}>
+    <nav
+      class={`stations ${resumeAt !== null ? "stations--resume" : ""}`}
+      aria-label="Walkthrough stops"
+      inert={inert}
+    >
       <div class="stations__inner">
         {/* The count stays put while you scroll; only a jump (J/K, a station, Resume) is announced. */}
         <span class="stations__count tnum" data-testid="stations-count">
@@ -157,7 +192,12 @@ function StationStrip({ tour, current, onJump, resumeAt, onResume, announce, ine
           ))}
         </ol>
         {resumeAt !== null ? (
-          <button type="button" class="stations__resume" onClick={onResume} data-testid="stations-resume">
+          <button
+            type="button"
+            class="stations__resume"
+            onClick={onResume}
+            data-testid="stations-resume"
+          >
             <Icon name="undo" size={15} />
             Resume at stop {resumeAt + 1}
           </button>
@@ -172,10 +212,23 @@ function StationStrip({ tour, current, onJump, resumeAt, onResume, announce, ine
 /** "2 reasons · 13 passed": what sets the lane, then the checks folded under it. */
 function reasonCount(rows: ChartRow[]): string {
   const { shown, passing } = foldChart(rows);
-  return [shown.length > 0 ? plural(shown.length, "reason") : null, passing.length > 0 ? `${passing.length} passed` : null].filter(Boolean).join(" · ");
+  return [
+    shown.length > 0 ? plural(shown.length, "reason") : null,
+    passing.length > 0 ? `${passing.length} passed` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
-function LaneBlock({ change, open, rail = false }: { change: Change; open: boolean; rail?: boolean }) {
+function LaneBlock({
+  change,
+  open,
+  rail = false,
+}: {
+  change: Change;
+  open: boolean;
+  rail?: boolean;
+}) {
   const chart = triageChart(change.laneReasons, change.computedLane, change.lane);
   if (change.lane === null) {
     const copy = unroutedCopy(change.status, change.id);
@@ -208,7 +261,10 @@ function LaneBlock({ change, open, rail = false }: { change: Change; open: boole
               (<Term id="lane">{routed.badge}</Term>)
             </span>
           </h2>
-          <p class="lane-block__line lane-block__line--clamp" title={why.length > 160 ? why : undefined}>
+          <p
+            class="lane-block__line lane-block__line--clamp"
+            title={why.length > 160 ? why : undefined}
+          >
             {why}
           </p>
         </div>
@@ -219,7 +275,12 @@ function LaneBlock({ change, open, rail = false }: { change: Change; open: boole
           <span class="lane-block__n">{reasonCount(chart.rows)}</span>
           <Icon name="chevron-down" class="disclosure__chev" />
         </summary>
-        <TriageChart reasons={change.laneReasons} computedLane={change.computedLane} lane={change.lane} changeId={change.id} />
+        <TriageChart
+          reasons={change.laneReasons}
+          computedLane={change.computedLane}
+          lane={change.lane}
+          changeId={change.id}
+        />
       </details>
     </section>
   );
@@ -240,7 +301,9 @@ function ContextLinks({ data }: { data: TourData }) {
               <span class="ctx-link__label">Plan</span>
               <span class="ctx-link__value">{plan.title}</span>
               <span class="ctx-link__sub">
-                {plan.approvedAt ? `Approved by ${approver?.name ?? "a reviewer"} ${relative(plan.approvedAt, minuteClock.value)}` : "Not approved yet"}
+                {plan.approvedAt
+                  ? `Approved by ${approver?.name ?? "a reviewer"} ${relative(plan.approvedAt, minuteClock.value)}`
+                  : "Not approved yet"}
               </span>
             </span>
             <Icon name="chevron-right" class="ctx-link__chev" />
@@ -253,18 +316,25 @@ function ContextLinks({ data }: { data: TourData }) {
             <span class="ctx-link__label">Plan</span>
             <span class="ctx-link__value">
               None.{" "}
-              {change.claim.category === "transform" || change.claim.category === "revert" ? "Policy allows this category without one." : "This change was started without a plan."}
+              {change.claim.category === "transform" || change.claim.category === "revert"
+                ? "Policy allows this category without one."
+                : "This change was started without a plan."}
             </span>
           </span>
         </li>
       )}
       <li>
         <a href={`/changes/${change.id}/evidence`} class="ctx-link">
-          <Icon name={evidence ? (verified ? "shield-check" : "shield-alert") : "circle-dashed"} class={evidence ? (verified ? "tone--ok" : "tone--danger") : ""} />
+          <Icon
+            name={evidence ? (verified ? "shield-check" : "shield-alert") : "circle-dashed"}
+            class={evidence ? (verified ? "tone--ok" : "tone--danger") : ""}
+          />
           <span class="ctx-link__text">
             <span class="ctx-link__label">Evidence</span>
             <span class="ctx-link__value">
-              {evidence ? `${plural(evidence.evidence.items.length, "item")}, ${verified ? "signed and verified" : "signature does not verify"}` : "Not signed yet"}
+              {evidence
+                ? `${plural(evidence.evidence.items.length, "item")}, ${verified ? "signed and verified" : "signature does not verify"}`
+                : "Not signed yet"}
             </span>
           </span>
           <Icon name="chevron-right" class="ctx-link__chev" />
@@ -276,7 +346,9 @@ function ContextLinks({ data }: { data: TourData }) {
             <Icon name="rocket" />
             <span class="ctx-link__text">
               <span class="ctx-link__label">Rollout</span>
-              <span class="ctx-link__value">{ROLLOUT_STATUS[change.rolloutState.status].label}</span>
+              <span class="ctx-link__value">
+                {ROLLOUT_STATUS[change.rolloutState.status].label}
+              </span>
             </span>
             <Icon name="chevron-right" class="ctx-link__chev" />
           </a>
@@ -326,7 +398,8 @@ function Handover({ tour, reviewer }: { tour: Tour; reviewer: PrincipalRef | nul
         <span>Written by</span>
         <Who kind="agent" name={reviewer?.name ?? "the reviewer agent"} size={16} compact />
         <span>
-          a separate agent from the author, using {by.model} ({plural(by.attempts, "attempt")}, ${by.costUsd.toFixed(2)}).
+          a separate agent from the author, using {by.model} ({plural(by.attempts, "attempt")}, $
+          {by.costUsd.toFixed(2)}).
         </span>
       </p>
     </section>
@@ -346,7 +419,17 @@ function testsStopIndex(tour: Tour): number {
   return proof >= 0 ? proof : tour.stops.findIndex((s) => s.kind === "behavior" && cites(s));
 }
 
-function StopBody({ stop, data, items, tests }: { stop: TourStop; data: TourData; items: EvidenceItem[]; tests: boolean }) {
+function StopBody({
+  stop,
+  data,
+  items,
+  tests,
+}: {
+  stop: TourStop;
+  data: TourData;
+  items: EvidenceItem[];
+  tests: boolean;
+}) {
   const refs = evidenceFor(stop, items);
   const redGreen = refs.find((r) => r.item?.kind === "red-green")?.item;
   const shots = refs.find((r) => r.item?.kind === "screenshots")?.item;
@@ -357,7 +440,9 @@ function StopBody({ stop, data, items, tests }: { stop: TourStop; data: TourData
       <p class="stop__why">
         <Prose text={stop.why} />
       </p>
-      {showTests && redGreen?.kind === "red-green" ? <RedGreenList item={redGreen} compact /> : null}
+      {showTests && redGreen?.kind === "red-green" ? (
+        <RedGreenList item={redGreen} compact />
+      ) : null}
       {shots?.kind === "screenshots" && shots.shots.length > 0 ? (
         <div class="stop__shots">
           {shots.shots.map((s) => (
@@ -372,14 +457,19 @@ function StopBody({ stop, data, items, tests }: { stop: TourStop; data: TourData
             <code>{transform.command}</code>
           </dd>
           <dt>Reproduced</dt>
-          <dd>{transform.verified ? `All ${transform.files.length} files, byte for byte` : `${transform.mismatchedFiles.length} of ${transform.files.length} files differ`}</dd>
+          <dd>
+            {transform.verified
+              ? `All ${transform.files.length} files, byte for byte`
+              : `${transform.mismatchedFiles.length} of ${transform.files.length} files differ`}
+          </dd>
         </dl>
       ) : null}
       {stop.kind === "resolution" && data.resolution ? (
         <p class="stop__noev">
           <Icon name="git-merge" size={15} />
           <span>
-            <a href="#resolution-title">The resolved lines are above</a>, next to what each side had.
+            <a href="#resolution-title">The resolved lines are above</a>, next to what each side
+            had.
           </span>
         </p>
       ) : stop.hunkRefs.length > 0 && data.diff ? (
@@ -388,11 +478,18 @@ function StopBody({ stop, data, items, tests }: { stop: TourStop; data: TourData
       {refs.length > 0 ? (
         <div class="stop__evidence">
           <span class="stop__evlabel">Evidence</span>
-          {refs.map((r) => (r.item ? <EvidenceChip key={r.id} item={r.item} changeId={data.change.id} /> : <MissingChip key={r.id} id={r.id} />))}
+          {refs.map((r) =>
+            r.item ? (
+              <EvidenceChip key={r.id} item={r.item} changeId={data.change.id} />
+            ) : (
+              <MissingChip key={r.id} id={r.id} />
+            ),
+          )}
         </div>
       ) : (
         <p class="stop__noev">
-          <Icon name="info" size={15} /> No evidence cited. This stop is the reviewer agent's reading.
+          <Icon name="info" size={15} /> No evidence cited. This stop is the reviewer agent's
+          reading.
         </p>
       )}
     </>
@@ -437,7 +534,11 @@ function StopView({
   );
   if (stop.kind === "transform") {
     return (
-      <li class={`stop stop--${stop.verdict} stop--transform ${current ? "is-current" : ""}`} id={`stop-${index + 1}`} data-stop={index}>
+      <li
+        class={`stop stop--${stop.verdict} stop--transform ${current ? "is-current" : ""}`}
+        id={`stop-${index + 1}`}
+        data-stop={index}
+      >
         {/* The heading stays outside the summary (a button), so heading navigation and J find it. */}
         {head}
         <details class="stop__collapse">
@@ -452,7 +553,11 @@ function StopView({
     );
   }
   return (
-    <li class={`stop stop--${stop.verdict} ${current ? "is-current" : ""}`} id={`stop-${index + 1}`} data-stop={index}>
+    <li
+      class={`stop stop--${stop.verdict} ${current ? "is-current" : ""}`}
+      id={`stop-${index + 1}`}
+      data-stop={index}
+    >
       {head}
       <div class="stop__body">
         <StopBody stop={stop} data={data} items={items} tests={tests} />
@@ -461,7 +566,17 @@ function StopView({
   );
 }
 
-function TourEnd({ tour, desktop, awaiting, onGithub = false }: { tour: Tour; desktop: boolean; awaiting: boolean; onGithub?: boolean }) {
+function TourEnd({
+  tour,
+  desktop,
+  awaiting,
+  onGithub = false,
+}: {
+  tour: Tour;
+  desktop: boolean;
+  awaiting: boolean;
+  onGithub?: boolean;
+}) {
   const tally = { proven: 0, unproven: 0, risk: 0 };
   for (const s of tour.stops) tally[s.verdict]++;
   return (
@@ -508,7 +623,8 @@ function PipelineHead({ run }: { run: PipelineRun }) {
     case "errored":
       return (
         <>
-          <Icon name="x-circle" class="tone--danger" /> Failed at <b>{run.steps[idx]?.name ?? "a step"}</b>
+          <Icon name="x-circle" class="tone--danger" /> Failed at{" "}
+          <b>{run.steps[idx]?.name ?? "a step"}</b>
         </>
       );
     case "cancelled":
@@ -521,7 +637,8 @@ function PipelineHead({ run }: { run: PipelineRun }) {
     default:
       return idx >= 0 ? (
         <>
-          <Icon name="loader" class="spin" /> Running step {idx + 1} of {run.steps.length}: <b>{run.steps[idx]?.name}</b>
+          <Icon name="loader" class="spin" /> Running step {idx + 1} of {run.steps.length}:{" "}
+          <b>{run.steps[idx]?.name}</b>
         </>
       ) : (
         <>
@@ -538,7 +655,15 @@ function PipelineSteps({ run }: { run: PipelineRun }) {
         {run.steps.map((s) => (
           <li key={s.name} class={`pstep pstep--${s.status}`}>
             <Icon
-              name={s.status === "passed" || s.status === "cached" ? "check" : s.status === "failed" ? "x" : s.status === "running" ? "loader" : "circle-dashed"}
+              name={
+                s.status === "passed" || s.status === "cached"
+                  ? "check"
+                  : s.status === "failed"
+                    ? "x"
+                    : s.status === "running"
+                      ? "loader"
+                      : "circle-dashed"
+              }
               size={15}
               class={s.status === "running" ? "spin" : ""}
             />
@@ -591,7 +716,15 @@ function NotReady({ data }: { data: TourData }) {
 function useStopTracking(tour: Tour | null, changeId: string) {
   const current = useSignal(0);
   const saved = tour ? readTourProgress(changeId) : null;
-  const resumeAt = useSignal<number | null>(saved && tour && saved.headSha === tour.headSha && saved.stop > 0 && saved.stop < tour.stops.length ? saved.stop : null);
+  const resumeAt = useSignal<number | null>(
+    saved &&
+      tour &&
+      saved.headSha === tour.headSha &&
+      saved.stop > 0 &&
+      saved.stop < tour.stops.length
+      ? saved.stop
+      : null,
+  );
   const listRef = useRef<HTMLOListElement>(null);
   /** What the strip's live region says: set by a jump, never by scrolling (that would chatter). */
   const announce = useSignal("");
@@ -668,14 +801,31 @@ function updatedAgo(iso: string, now: number): string {
 // ---------------------------------------------------------------- close (abandon)
 
 /** Statuses a change can still be closed from (the coordinator's FINAL_STATUSES are the rest). */
-const CLOSABLE: ReadonlySet<Change["status"]> = new Set(["awaiting-push", "running", "failing", "awaiting-review", "approved", "queued"]);
+const CLOSABLE: ReadonlySet<Change["status"]> = new Set([
+  "awaiting-push",
+  "running",
+  "failing",
+  "awaiting-review",
+  "approved",
+  "queued",
+]);
 
 /**
  * A stale change, closed by a person: its author, the author agent's owner or a maintainer (the
  * server checks; `close_change` is the agent's twin). Quiet until asked, then an inline
  * confirmation that names the act before the danger button appears.
  */
-function CloseChange({ change, me, author, onClosed }: { change: Change; me: Principal | null; author: PrincipalRef | null; onClosed: (c: Change) => void }) {
+function CloseChange({
+  change,
+  me,
+  author,
+  onClosed,
+}: {
+  change: Change;
+  me: Principal | null;
+  author: PrincipalRef | null;
+  onClosed: (c: Change) => void;
+}) {
   const open = useSignal(false);
   const reason = useSignal("");
   const busy = useSignal(false);
@@ -695,7 +845,11 @@ function CloseChange({ change, me, author, onClosed }: { change: Change; me: Pri
     window.addEventListener("hashchange", fromHash);
     return () => window.removeEventListener("hashchange", fromHash);
   }, [open]);
-  const may = me !== null && (change.authorId === me.id || author?.ownerId === me.id || (me.kind === "human" && me.scopes.includes("change:review")));
+  const may =
+    me !== null &&
+    (change.authorId === me.id ||
+      author?.ownerId === me.id ||
+      (me.kind === "human" && me.scopes.includes("change:review")));
   if (!may || !CLOSABLE.has(change.status)) return null;
 
   const cancel = () => {
@@ -713,7 +867,12 @@ function CloseChange({ change, me, author, onClosed }: { change: Change; me: Pri
     key.current ??= newIdempotencyKey();
     const why = reason.value.trim();
     try {
-      const res = await request<{ change: Change }>("POST", `/api/v1/changes/${encodeURIComponent(change.id)}/close`, why ? { reason: why } : {}, key.current);
+      const res = await request<{ change: Change }>(
+        "POST",
+        `/api/v1/changes/${encodeURIComponent(change.id)}/close`,
+        why ? { reason: why } : {},
+        key.current,
+      );
       open.value = false;
       onClosed(res.change);
     } catch (err) {
@@ -726,7 +885,13 @@ function CloseChange({ change, me, author, onClosed }: { change: Change; me: Pri
   if (!open.value) {
     return (
       <div class="close-change" id="close">
-        <button type="button" class="close-change__open" ref={triggerRef} onClick={() => (open.value = true)} data-testid="close-change-open">
+        <button
+          type="button"
+          class="close-change__open"
+          ref={triggerRef}
+          onClick={() => (open.value = true)}
+          data-testid="close-change-open"
+        >
           <Icon name="ban" size={15} /> Close change…
         </button>
       </div>
@@ -751,13 +916,21 @@ function CloseChange({ change, me, author, onClosed }: { change: Change; me: Pri
       </h2>
       <p class="close-change__line">
         Its checks stop, it leaves the merge queue and it can't be reopened.{" "}
-        {author?.kind === "agent" ? `${author.name} would have to start a new change.` : "Its author would have to start a new change."}
+        {author?.kind === "agent"
+          ? `${author.name} would have to start a new change.`
+          : "Its author would have to start a new change."}
       </p>
       <label class="field">
         <span class="field__label">
           Reason <span class="field__hint">(optional, goes to the audit log)</span>
         </span>
-        <textarea class="textarea" rows={2} value={reason.value} onInput={(e) => (reason.value = e.currentTarget.value)} maxLength={2000} />
+        <textarea
+          class="textarea"
+          rows={2}
+          value={reason.value}
+          onInput={(e) => (reason.value = e.currentTarget.value)}
+          maxLength={2000}
+        />
       </label>
       {error.value ? (
         <p class="field__error" role="alert">
@@ -768,7 +941,13 @@ function CloseChange({ change, me, author, onClosed }: { change: Change; me: Pri
         <Button variant="secondary" onClick={cancel} disabled={busy.value}>
           Keep it open
         </Button>
-        <Button type="submit" variant="danger" busy={busy.value} busyLabel="Closing…" data-testid="close-change-confirm">
+        <Button
+          type="submit"
+          variant="danger"
+          busy={busy.value}
+          busyLabel="Closing…"
+          data-testid="close-change-confirm"
+        >
           Close change
         </Button>
       </div>
@@ -800,7 +979,11 @@ function useRail(ref: RefObject<HTMLElement | null>): boolean {
 }
 
 /** The fixed bar's height as `--bar-h` on the tour, so the page end is never under the bar (or its done sheet). */
-function useBarHeight(root: RefObject<HTMLElement | null>, bar: RefObject<HTMLElement | null>, on: boolean) {
+function useBarHeight(
+  root: RefObject<HTMLElement | null>,
+  bar: RefObject<HTMLElement | null>,
+  on: boolean,
+) {
   useLayoutEffect(() => {
     const el = bar.current;
     const host = root.current;
@@ -827,7 +1010,8 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
   const own = data.evidence?.evidence.items ?? [];
   // The resolution stop cites the resolved head's conflict-resolution item.
   const resolutionItem = data.resolution?.item ?? null;
-  const items = resolutionItem && !own.some((i) => i.id === resolutionItem.id) ? [...own, resolutionItem] : own;
+  const items =
+    resolutionItem && !own.some((i) => i.id === resolutionItem.id) ? [...own, resolutionItem] : own;
   const { current, resumeAt, listRef, jump, announce } = useStopTracking(tour, change.id);
   const { route } = useLocation();
   const stops = tour?.stops.length ?? 0;
@@ -844,7 +1028,11 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
     },
   );
   const now = minuteClock.value;
-  const stale = tour && change.headSha && tour.headSha !== change.headSha && !describesResolution(tour.headSha, data.resolution);
+  const stale =
+    tour &&
+    change.headSha &&
+    tour.headSha !== change.headSha &&
+    !describesResolution(tour.headSha, data.resolution);
   const authorName = author?.name ?? "the author";
   const testsAt = tour ? testsStopIndex(tour) : -1;
 
@@ -866,7 +1054,10 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
   const closing = <CloseChange change={change} me={me} author={author} onClosed={onChange} />;
 
   return (
-    <div ref={rootRef} class={`tour ${tour ? "" : "tour--pending"} ${desktop ? "tour--rail" : "tour--bar"}`}>
+    <div
+      ref={rootRef}
+      class={`tour ${tour ? "" : "tour--pending"} ${desktop ? "tour--rail" : "tour--bar"}`}
+    >
       {tour ? (
         <StationStrip
           inert={modal}
@@ -889,14 +1080,19 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
             {author ? <Who kind={author.kind} name={author.name} owner={author.ownerName} /> : null}
             <span class="tour__dot" aria-hidden="true" />
             <span>
-              {CATEGORY_LABEL[change.claim.category]} · updated <time dateTime={change.updatedAt}>{updatedAgo(change.updatedAt, now)}</time>
+              {CATEGORY_LABEL[change.claim.category]} · updated{" "}
+              <time dateTime={change.updatedAt}>{updatedAgo(change.updatedAt, now)}</time>
             </span>
             {data.diff && data.diff.files.length > 0 ? (
               <span class="tour__stat tnum">
-                <span class="tone--ok">+{data.diff.additions}</span> <span class="tone--danger">−{data.diff.deletions}</span> in {plural(data.diff.files.length, "file")}
+                <span class="tone--ok">+{data.diff.additions}</span>{" "}
+                <span class="tone--danger">−{data.diff.deletions}</span> in{" "}
+                {plural(data.diff.files.length, "file")}
               </span>
             ) : null}
-            {change.status !== "awaiting-review" ? <StatusChip meta={CHANGE_STATUS[change.status]} /> : null}
+            {change.status !== "awaiting-review" ? (
+              <StatusChip meta={CHANGE_STATUS[change.status]} />
+            ) : null}
           </div>
           {change.host ? (
             <p class="tour__github">
@@ -906,7 +1102,8 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
                   {data.repo.repo.name}#{change.host.number}
                 </a>{" "}
                 on GitHub by {change.host.author.login}
-                {change.host.fork ? " (from a fork)" : ""}. Approve here or on GitHub: it's the same approval. GitHub merges it.
+                {change.host.fork ? " (from a fork)" : ""}. Approve here or on GitHub: it's the same
+                approval. GitHub merges it.
               </span>
             </p>
           ) : null}
@@ -916,29 +1113,51 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
           {stale ? (
             <p class="tour__stale" role="alert">
               <Icon name="triangle-alert" size={18} />
-              This walkthrough describes head <code>{shortSha(tour?.headSha)}</code>, but the change is now at <code>{shortSha(change.headSha)}</code>. The reviewer agent is
-              rewriting it.
+              This walkthrough describes head <code>{shortSha(tour?.headSha)}</code>, but the change
+              is now at <code>{shortSha(change.headSha)}</code>. The reviewer agent is rewriting it.
             </p>
           ) : null}
 
-          {data.evidenceError ? <ErrorState error={data.evidenceError} what="the evidence bundle" /> : null}
-          {data.resolutionError ? <ErrorState error={data.resolutionError} what="the merge queue's conflict resolution" /> : null}
-          {data.resolution ? <ResolutionPanel r={data.resolution} awaiting={change.status === "awaiting-review"} /> : null}
+          {data.evidenceError ? (
+            <ErrorState error={data.evidenceError} what="the evidence bundle" />
+          ) : null}
+          {data.resolutionError ? (
+            <ErrorState error={data.resolutionError} what="the merge queue's conflict resolution" />
+          ) : null}
+          {data.resolution ? (
+            <ResolutionPanel r={data.resolution} awaiting={change.status === "awaiting-review"} />
+          ) : null}
 
           {tour ? (
             <>
               <p class="tour__lede">
-                The <Term id="walkthrough">walkthrough</Term> takes you through this <Term id="change">Change</Term>, riskiest part first. Every stop cites its <Term id="evidence">evidence</Term>.
+                The <Term id="walkthrough">walkthrough</Term> takes you through this{" "}
+                <Term id="change">Change</Term>, riskiest part first. Every stop cites its{" "}
+                <Term id="evidence">evidence</Term>.
               </p>
               <Handover tour={tour} reviewer={data.reviewer} />
               <ol class="stops has-current" ref={listRef}>
                 {tour.stops.map((s, i) => (
-                  <StopView key={i} stop={s} index={i} total={tour.stops.length} data={data} items={items} current={i === current.value} tests={i === testsAt} />
+                  <StopView
+                    key={i}
+                    stop={s}
+                    index={i}
+                    total={tour.stops.length}
+                    data={data}
+                    items={items}
+                    current={i === current.value}
+                    tests={i === testsAt}
+                  />
                 ))}
               </ol>
               {/* QA gathers evidence, so it comes before the end of the walkthrough that says decide. */}
               <QaPanel change={change} />
-              <TourEnd tour={tour} desktop={desktop} awaiting={change.status === "awaiting-review"} onGithub={!!change.host} />
+              <TourEnd
+                tour={tour}
+                desktop={desktop}
+                awaiting={change.status === "awaiting-review"}
+                onGithub={!!change.host}
+              />
             </>
           ) : (
             <>
@@ -967,7 +1186,14 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
 
       {/* Phones: the open sheet is a modal moment (you sign here). The page recedes and goes inert;
           a tap on it is Back. The sheet itself stays solid paper (the Acetate Rule). */}
-      {modal ? <div class="tour__scrim" aria-hidden="true" data-testid="decision-scrim" onClick={() => (sheet.value = null)} /> : null}
+      {modal ? (
+        <div
+          class="tour__scrim"
+          aria-hidden="true"
+          data-testid="decision-scrim"
+          onClick={() => (sheet.value = null)}
+        />
+      ) : null}
       {!desktop ? (
         <div class="tour__bar" ref={barRef} data-testid="decision-bar">
           {decision}
@@ -998,7 +1224,12 @@ export function TourView({ changeId }: { changeId: string }) {
   }
   const data = st.data;
   return (
-    <Page title={data.change.title} crumbs={[...crumbsBase, { href: `/repos/${data.repo.repo.id}`, label: data.repo.repo.name }]} wide class="tour-page">
+    <Page
+      title={data.change.title}
+      crumbs={[...crumbsBase, { href: `/repos/${data.repo.repo.id}`, label: data.repo.repo.name }]}
+      wide
+      class="tour-page"
+    >
       <TourBody data={data} onChange={(c) => res.set({ ...data, change: c })} />
     </Page>
   );

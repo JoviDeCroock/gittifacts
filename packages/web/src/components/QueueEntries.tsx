@@ -14,8 +14,8 @@ import {
   isTerminal,
   PRIORITY,
   percentLabel,
-  splitEntries,
   STALL_STATE,
+  splitEntries,
   trackLabel,
 } from "../lib/queue.js";
 import { relative } from "../lib/time.js";
@@ -221,7 +221,12 @@ function EntryRow({
   const prio = PRIORITY[e.priority];
   const stacked = e.dependsOn.filter((id) => !e.blocking.includes(id));
   return (
-    <li class={`q-entry q-entry--${e.state}`} data-testid="queue-entry" data-change-id={e.changeId} data-state={e.state}>
+    <li
+      class={`q-entry q-entry--${e.state}`}
+      data-testid="queue-entry"
+      data-change-id={e.changeId}
+      data-state={e.state}
+    >
       <span
         class="q-entry__pos tnum"
         title={e.position === null ? "No queue position" : `Position ${e.position}`}
@@ -260,7 +265,8 @@ function EntryRow({
           ) : null}
         </div>
         {/* A reason that only repeats the state chip ("merged") adds nothing. */}
-        {e.reason.trim().toLowerCase() === e.state || e.reason.trim().toLowerCase() === ENTRY_STATE[e.state].label.toLowerCase() ? null : (
+        {e.reason.trim().toLowerCase() === e.state ||
+        e.reason.trim().toLowerCase() === ENTRY_STATE[e.state].label.toLowerCase() ? null : (
           <p class="q-entry__reason">{e.reason}</p>
         )}
         {e.blocking.length > 0 ? (
@@ -280,8 +286,12 @@ function EntryRow({
         ) : null}
         {e.overlaps && e.overlaps.length > 0 ? <OverlapNotes overlaps={e.overlaps} /> : null}
         {e.mergedSha ? (
-          <p class="q-entry__rel" title="The queue lands every change as one commit; a change of several commits is squashed and its message lists them.">
-            Merged as <Hash value={e.mergedSha} head={7} tail={0} /> <span class="q-dim">· one commit per change</span>
+          <p
+            class="q-entry__rel"
+            title="The queue lands every change as one commit; a change of several commits is squashed and its message lists them."
+          >
+            Merged as <Hash value={e.mergedSha} head={7} tail={0} />{" "}
+            <span class="q-dim">· one commit per change</span>
           </p>
         ) : null}
         {e.ejectReason ? <EjectPanel r={e.ejectReason} find={find} /> : null}
@@ -322,7 +332,14 @@ export function QueueEntries({
       ) : (
         <ul class="q-entries">
           {active.map((e) => (
-            <EntryRow key={e.changeId} e={e} find={find} trackName={nameOf(e)} now={now} actions={actions?.(e)} />
+            <EntryRow
+              key={e.changeId}
+              e={e}
+              find={find}
+              trackName={nameOf(e)}
+              now={now}
+              actions={actions?.(e)}
+            />
           ))}
         </ul>
       )}

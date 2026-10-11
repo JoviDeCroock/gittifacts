@@ -13,7 +13,9 @@ describe("evalHeaderFn", () => {
     expect(platform["x-gittifacts-eval-run"]).toBe("run-1");
     expect(platform["x-gittifacts-eval-sig"]).toMatch(/^[0-9a-f]{64}$/);
     // A preview runs project code: it could capture and replay the signature.
-    expect(headers(new URL("https://abc-pv.example.dev/"))).toEqual({ "x-gittifacts-eval-run": "run-1" });
+    expect(headers(new URL("https://abc-pv.example.dev/"))).toEqual({
+      "x-gittifacts-eval-run": "run-1",
+    });
     expect(headers(new URL("https://elsewhere.example/"))).toEqual({});
   });
 });

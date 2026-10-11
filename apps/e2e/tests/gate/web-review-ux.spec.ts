@@ -18,7 +18,9 @@ import { expect, expectNoHorizontalScroll, test } from "../../lib/fixtures.js";
 
 const visible = (page: Page, id: string) => page.getByTestId(id).filter({ visible: true }).first();
 
-test("reading width: the column stays readable at 1280 and beside the rail (demo data)", async ({ authed: page }, testInfo) => {
+test("reading width: the column stays readable at 1280 and beside the rail (demo data)", async ({
+  authed: page,
+}, testInfo) => {
   test.skip(testInfo.project.name === "phone", "desktop widths");
   await page.goto("/changes/chg_tz7k2?mock");
   const main = page.getByTestId("tour-main");
@@ -33,7 +35,9 @@ test("reading width: the column stays readable at 1280 and beside the rail (demo
   await expectNoHorizontalScroll(page);
 });
 
-test("keyboard: J/K focus the stop heading, A opens the decision on its title, Escape closes it (demo data)", async ({ authed: page }) => {
+test("keyboard: J/K focus the stop heading, A opens the decision on its title, Escape closes it (demo data)", async ({
+  authed: page,
+}) => {
   await page.goto("/changes/chg_tz7k2?mock");
   await expect(visible(page, "decision-approve")).toBeVisible();
   await page.keyboard.press("j");
@@ -51,7 +55,9 @@ test("keyboard: J/K focus the stop heading, A opens the decision on its title, E
   await expect(visible(page, "decision-approve")).toBeFocused();
 });
 
-test("phones: Approve keeps the keyboard down, the page behind the sheet is inert, a tap on it is Back (demo data)", async ({ authed: page }, testInfo) => {
+test("phones: Approve keeps the keyboard down, the page behind the sheet is inert, a tap on it is Back (demo data)", async ({
+  authed: page,
+}, testInfo) => {
   test.skip(testInfo.project.name !== "phone", "the bottom sheet");
   await page.goto("/changes/chg_tz7k2?mock");
   await visible(page, "decision-approve").click();
@@ -68,7 +74,9 @@ test("phones: Approve keeps the keyboard down, the page behind the sheet is iner
   await expect(form.getByRole("textbox")).toBeFocused();
 });
 
-test("after a decision the done sheet never covers the end of the page (demo data)", async ({ authed: page }) => {
+test("after a decision the done sheet never covers the end of the page (demo data)", async ({
+  authed: page,
+}) => {
   // Both gate widths use the bar: 1280 is below the rail.
   await page.goto("/changes/chg_tz7k2?mock");
   await visible(page, "decision-approve").click();
@@ -80,18 +88,29 @@ test("after a decision the done sheet never covers the end of the page (demo dat
   const last = page.getByTestId("tour-main").locator(":scope > :last-child");
   await expect
     .poll(async () => {
-      const [end, bar] = await Promise.all([last.boundingBox(), page.getByTestId("decision-bar").boundingBox()]);
+      const [end, bar] = await Promise.all([
+        last.boundingBox(),
+        page.getByTestId("decision-bar").boundingBox(),
+      ]);
       return end && bar ? bar.y - (end.y + end.height) : -1;
     })
     .toBeGreaterThanOrEqual(0);
   await expectNoHorizontalScroll(page);
 });
 
-test("the owner of the authoring agent sees the boundary, and can close the change (real Worker)", async ({ authed: page, request, baseURL, human, agentWork }) => {
+test("the owner of the authoring agent sees the boundary, and can close the change (real Worker)", async ({
+  authed: page,
+  request,
+  baseURL,
+  human,
+  agentWork,
+}) => {
   await page.goto(`/changes/${agentWork.changeId}`);
   await expect(visible(page, "decision-approve")).toBeVisible();
   await page.keyboard.press("a");
-  await expect(page.getByTestId("decision-own-agent").filter({ visible: true })).toContainText("Your agent");
+  await expect(page.getByTestId("decision-own-agent").filter({ visible: true })).toContainText(
+    "Your agent",
+  );
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("decision-form")).toHaveCount(0);
   // A then Escape straight away: focus is already in the sheet, so the Escape closes it.
@@ -107,6 +126,8 @@ test("the owner of the authoring agent sees the boundary, and can close the chan
   await expect(form).toHaveCount(0);
   await expect(page.getByTestId("close-change-open")).toHaveCount(0);
 
-  const res = await request.get(`${baseURL}/api/v1/changes/${agentWork.changeId}`, { headers: { cookie: human.cookie } });
+  const res = await request.get(`${baseURL}/api/v1/changes/${agentWork.changeId}`, {
+    headers: { cookie: human.cookie },
+  });
   expect(((await res.json()) as { change: { status: string } }).change.status).toBe("abandoned");
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { GettingStarted } from "../src/api/getting-started.js";
-import { agentPrompt, buildPrompt, checklistView, durationLabel } from "../src/lib/getting-started.js";
+import {
+  agentPrompt,
+  buildPrompt,
+  checklistView,
+  durationLabel,
+} from "../src/lib/getting-started.js";
 
 const NEW: GettingStarted = {
   projects: 0,

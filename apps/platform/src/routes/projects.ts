@@ -34,7 +34,10 @@ const NextStepSchema = z.object({
 
 export const ProjectCreatedSchema = z
   .object({
-    repoId: z.string().optional().describe("The repo id: pass it as repoId everywhere else (always set since 2026-10-04)"),
+    repoId: z
+      .string()
+      .optional()
+      .describe("The repo id: pass it as repoId everywhere else (always set since 2026-10-04)"),
     projectId: z.string().describe("Deprecated: the same value as repoId, kept for older clients"),
     name: z.string(),
     template: z.string().nullable(),
@@ -168,7 +171,9 @@ const ttfg = createRoute({
             p50Ms: z.number().nullable(),
             p90Ms: z.number().nullable(),
           })
-          .describe("Time-to-first-merge: create_project → the first non-bootstrap Change landed (D1)"),
+          .describe(
+            "Time-to-first-merge: create_project → the first non-bootstrap Change landed (D1)",
+          ),
       }),
       "Report",
     ),

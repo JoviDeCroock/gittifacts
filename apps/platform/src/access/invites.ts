@@ -100,7 +100,9 @@ export async function createInvite(
     subject: `repo:${repoId}`,
     payload: { inviteId: row.id, emailHint: emailHint(email), role, replaced },
   });
-  const [invite] = await views(svc, [{ ...row, acceptedAt: null, acceptedBy: null, revokedAt: null }]);
+  const [invite] = await views(svc, [
+    { ...row, acceptedAt: null, acceptedBy: null, revokedAt: null },
+  ]);
   if (!invite) throw new Error(`invite ${row.id} has no view`);
   return { invite, inviteUrl: inviteUrlFor(svc.origin, token) };
 }
@@ -114,10 +116,15 @@ export async function revokeInvite(
 ): Promise<{ revoked: true; inviteId: string }> {
   await assertRepoAccess(svc, caller.principal, repoId, "admin");
   const row = await inviteById(svc.store, repoId, inviteId);
-  const gone = await revokeOpenInvites(svc.store, { repoId, id: inviteId }, svc.clock.now().toISOString());
+  const gone = await revokeOpenInvites(
+    svc.store,
+    { repoId, id: inviteId },
+    svc.clock.now().toISOString(),
+  );
   if (!row || gone.length === 0) {
     throw notFound(`open invite ${inviteId} of repo ${repoId}`, {
-      explanation: "That invite was already accepted or revoked, or never existed. List the members to see open invites.",
+      explanation:
+        "That invite was already accepted or revoked, or never existed. List the members to see open invites.",
     });
   }
   await svc.audit.append({
@@ -130,8 +137,16 @@ export async function revokeInvite(
 }
 
 /** An owner added someone directly: any open invite for their e-mail is moot. */
-export async function supersedeInvites(svc: Services, repoId: string, email: string): Promise<void> {
-  await revokeOpenInvites(svc.store, { repoId, email: normalizeEmail(email) }, svc.clock.now().toISOString());
+export async function supersedeInvites(
+  svc: Services,
+  repoId: string,
+  email: string,
+): Promise<void> {
+  await revokeOpenInvites(
+    svc.store,
+    { repoId, email: normalizeEmail(email) },
+    svc.clock.now().toISOString(),
+  );
 }
 
 export type InviteStatus = "pending" | "accepted" | "expired" | "revoked";
@@ -208,9 +223,15 @@ function gone(status: InviteStatus): ApiError {
     expired: "This invite expired. Invite links work for a week.",
     pending: "",
   }[status];
-  return new ApiError(409, "invite-closed", `invite is ${status}`, { status }, {
-    explanation: `${why} Ask the repo's owner to add you again; they get a new link.`,
-  });
+  return new ApiError(
+    409,
+    "invite-closed",
+    `invite is ${status}`,
+    { status },
+    {
+      explanation: `${why} Ask the repo's owner to add you again; they get a new link.`,
+    },
+  );
 }
 
 /** A signed-in person accepts an invite with the link and their matching account e-mail. */
@@ -229,15 +250,22 @@ export async function acceptInvite(
   }
   if (status !== "pending") throw gone(status);
   if (!caller.user || normalizeEmail(caller.user.email) !== row.email) {
-    throw new ApiError(403, "invite-email-mismatch", "this invite is for another e-mail", {
-      invitedEmail: emailHint(row.email),
-    }, {
-      explanation: `This invite is for ${emailHint(row.email)}. Sign out, then sign in or create an account with that e-mail and open the link again.`,
-    });
+    throw new ApiError(
+      403,
+      "invite-email-mismatch",
+      "this invite is for another e-mail",
+      {
+        invitedEmail: emailHint(row.email),
+      },
+      {
+        explanation: `This invite is for ${emailHint(row.email)}. Sign out, then sign in or create an account with that e-mail and open the link again.`,
+      },
+    );
   }
   if ((await memberRole(svc.store, row.repoId, row.invitedBy)) !== "owner") {
     throw conflict("the person who sent this invite is no longer an owner", "invite-closed", {
-      explanation: "Invites only work while their sender owns the repo. Ask a current owner to add you.",
+      explanation:
+        "Invites only work while their sender owns the repo. Ask a current owner to add you.",
     });
   }
   if (!(await markAccepted(svc.store, row.id, me.id, at))) throw gone("accepted");
@@ -256,7 +284,12 @@ export async function acceptInvite(
     principalId: me.id,
     action: "member.invite-accepted",
     subject: `repo:${row.repoId}`,
-    payload: { inviteId: row.id, role: existing ?? row.role, invitedBy: row.invitedBy, alreadyMember: existing !== null },
+    payload: {
+      inviteId: row.id,
+      role: existing ?? row.role,
+      invitedBy: row.invitedBy,
+      alreadyMember: existing !== null,
+    },
   });
   return { repoId: row.repoId, role: existing ?? row.role, alreadyMember: existing !== null };
 }

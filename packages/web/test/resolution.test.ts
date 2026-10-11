@@ -124,14 +124,18 @@ describe("ResolutionPanel", () => {
     expect(out).toContain("Main had (chg_up3d8)");
     expect(out).toContain("This change had");
     expect(out).toContain("Lands on main");
-    expect(out).toMatch(/res-line--resolver[^>]*>.*resolver<\/span><code class="res-text">Routes edge traffic\. Read the docs \(https/s);
+    expect(out).toMatch(
+      /res-line--resolver[^>]*>.*resolver<\/span><code class="res-text">Routes edge traffic\. Read the docs \(https/s,
+    );
     expect(out).toContain("1 line written by the resolver");
     expect(out).toContain("Only the conflict hunks changed");
   });
 
   it("after the decision it describes the resolution without asking", async () => {
     if (r === null) throw new Error("no mock resolution");
-    const out = await html(h(ResolutionPanel, { r: { ...r, approvalRequested: false }, awaiting: false }));
+    const out = await html(
+      h(ResolutionPanel, { r: { ...r, approvalRequested: false }, awaiting: false }),
+    );
     expect(out).toContain("The merge queue resolved a conflict in this change");
     expect(out).not.toContain("no longer covers");
   });

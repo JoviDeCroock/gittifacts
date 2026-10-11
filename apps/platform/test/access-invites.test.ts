@@ -59,7 +59,9 @@ describe("member invites", () => {
     expect(asBob.invites).toEqual([]);
 
     // Signed out, the link says what it is for, with the e-mail partly hidden.
-    const anon = await json<Record<string, unknown>>(await call(w.app, "GET", `/api/v1/invites/${token}`));
+    const anon = await json<Record<string, unknown>>(
+      await call(w.app, "GET", `/api/v1/invites/${token}`),
+    );
     expect(anon).toMatchObject({
       status: "pending",
       repo: { id: w.repo.id },
@@ -68,9 +70,15 @@ describe("member invites", () => {
       viewer: { signedIn: false, emailMatches: false, role: null },
     });
     expect(anon.emailHint).toBe(`${email.slice(0, 2)}•••@example.com`);
-    await expectError(await call(w.app, "POST", `/api/v1/invites/${token}/accept`), 401, "unauthorized");
     await expectError(
-      await call(w.app, "POST", `/api/v1/invites/${token}/accept`, { headers: { "idempotency-key": "k-anon" } }),
+      await call(w.app, "POST", `/api/v1/invites/${token}/accept`),
+      401,
+      "unauthorized",
+    );
+    await expectError(
+      await call(w.app, "POST", `/api/v1/invites/${token}/accept`, {
+        headers: { "idempotency-key": "k-anon" },
+      }),
       401,
       "unauthorized",
     );
@@ -95,7 +103,11 @@ describe("member invites", () => {
       headers: { "idempotency-key": `accept-${token.slice(4, 16)}` },
     });
     expect(accepted.status).toBe(200);
-    expect(await json(accepted)).toEqual({ repoId: w.repo.id, role: "reviewer", alreadyMember: false });
+    expect(await json(accepted)).toEqual({
+      repoId: w.repo.id,
+      role: "reviewer",
+      alreadyMember: false,
+    });
     expect((await call(w.app, "GET", `/api/v1/repos/${w.repo.id}`, { cookie })).status).toBe(200);
 
     // Single use: the accepter sees it done; the link is closed for anyone else.
@@ -125,11 +137,15 @@ describe("member invites", () => {
     const alice = { cookie: w.alice.cookie };
     const path = `/api/v1/repos/${w.repo.id}/members`;
     const email = fresh();
-    const first = await json<Invited>(await call(w.app, "POST", path, { ...alice, body: { email, role: "reader" } }));
-    const second = await json<Invited>(await call(w.app, "POST", path, { ...alice, body: { email, role: "maintainer" } }));
-    expect((await json<Members>(await call(w.app, "GET", path, alice))).invites.map((i) => i.id)).toEqual([
-      second.invite.id,
-    ]);
+    const first = await json<Invited>(
+      await call(w.app, "POST", path, { ...alice, body: { email, role: "reader" } }),
+    );
+    const second = await json<Invited>(
+      await call(w.app, "POST", path, { ...alice, body: { email, role: "maintainer" } }),
+    );
+    expect(
+      (await json<Members>(await call(w.app, "GET", path, alice))).invites.map((i) => i.id),
+    ).toEqual([second.invite.id]);
     const firstView = await json<{ status: string }>(
       await call(w.app, "GET", `/api/v1/invites/${tokenOf(first.inviteUrl)}`),
     );
@@ -137,17 +153,27 @@ describe("member invites", () => {
 
     // Non-owners and agents cannot invite or revoke.
     await expectError(
-      await call(w.app, "POST", path, { cookie: w.bob.cookie, body: { email: fresh(), role: "reader" } }),
+      await call(w.app, "POST", path, {
+        cookie: w.bob.cookie,
+        body: { email: fresh(), role: "reader" },
+      }),
       404,
       "not-found",
     );
     await expectError(
-      await call(w.app, "POST", path, { token: w.aliceAgent.token, body: { email: fresh(), role: "reader" } }),
+      await call(w.app, "POST", path, {
+        token: w.aliceAgent.token,
+        body: { email: fresh(), role: "reader" },
+      }),
       403,
       "forbidden",
     );
     const inv = `/api/v1/repos/${w.repo.id}/invites/${second.invite.id}`;
-    await expectError(await call(w.app, "DELETE", inv, { token: w.aliceAgent.token }), 403, "forbidden");
+    await expectError(
+      await call(w.app, "DELETE", inv, { token: w.aliceAgent.token }),
+      403,
+      "forbidden",
+    );
 
     expect((await call(w.app, "DELETE", inv, alice)).status).toBe(200);
     await expectError(await call(w.app, "DELETE", inv, alice), 404, "not-found");
@@ -173,12 +199,18 @@ describe("member invites", () => {
     const w = await world();
     const path = `/api/v1/repos/${w.repo.id}/members`;
     // Bob becomes an owner, invites someone, then Alice demotes him.
-    await call(w.app, "POST", path, { cookie: w.alice.cookie, body: { principalId: w.bob.principal.id, role: "owner" } });
+    await call(w.app, "POST", path, {
+      cookie: w.alice.cookie,
+      body: { principalId: w.bob.principal.id, role: "owner" },
+    });
     const email = fresh();
     const { inviteUrl } = await json<Invited>(
       await call(w.app, "POST", path, { cookie: w.bob.cookie, body: { email, role: "owner" } }),
     );
-    await call(w.app, "POST", path, { cookie: w.alice.cookie, body: { principalId: w.bob.principal.id, role: "reader" } });
+    await call(w.app, "POST", path, {
+      cookie: w.alice.cookie,
+      body: { principalId: w.bob.principal.id, role: "reader" },
+    });
     const cookie = await signUpAs(w.app, email);
     await expectError(
       await call(w.app, "POST", `/api/v1/invites/${tokenOf(inviteUrl)}/accept`, { cookie }),

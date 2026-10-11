@@ -417,7 +417,8 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
         return { action: "ignored", reason: `change is ${change.status}` };
       }
       const state = await this.load();
-      if (state.instanceId !== null) await terminateQuietly(bindings.changeWorkflow, state.instanceId);
+      if (state.instanceId !== null)
+        await terminateQuietly(bindings.changeWorkflow, state.instanceId);
       if (state.runId !== null) await this.supersedeRun(state.runId);
       await ports.store.updateChange(change.id, {
         status: "running",
@@ -441,7 +442,15 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
         headSha: head,
       });
       if (!created) await instance.restart();
-      await this.save({ ...state, changeId: change.id, forkName: change.forkName, headSha: head, instanceId, runId: null, regrades });
+      await this.save({
+        ...state,
+        changeId: change.id,
+        forkName: change.forkName,
+        headSha: head,
+        instanceId,
+        runId: null,
+        regrades,
+      });
       await this.changed(change.id);
       return { action: "started", headSha: head, instanceId, superseded: state.instanceId };
     });

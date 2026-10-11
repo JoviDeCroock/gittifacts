@@ -17,9 +17,24 @@ export interface LaneLabel {
 }
 
 export const LANE_LABELS: Record<Lane, LaneLabel> = {
-  0: { lane: 0, name: "Auto-merge", badge: "Lane 0", description: "The evidence decides; nobody reviews." },
-  1: { lane: 1, name: "Quick review", badge: "Lane 1", description: "A person reads the walkthrough and approves, usually in under three minutes." },
-  2: { lane: 2, name: "Full review", badge: "Lane 2", description: "A person reads the diff, with the walkthrough as a guide." },
+  0: {
+    lane: 0,
+    name: "Auto-merge",
+    badge: "Lane 0",
+    description: "The evidence decides; nobody reviews.",
+  },
+  1: {
+    lane: 1,
+    name: "Quick review",
+    badge: "Lane 1",
+    description: "A person reads the walkthrough and approves, usually in under three minutes.",
+  },
+  2: {
+    lane: 2,
+    name: "Full review",
+    badge: "Lane 2",
+    description: "A person reads the diff, with the walkthrough as a guide.",
+  },
 };
 
 /** "Quick review (Lane 1)". */

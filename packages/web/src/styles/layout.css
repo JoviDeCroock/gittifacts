@@ -13,7 +13,12 @@
   .shell {
     display: grid;
     grid-template-columns: 248px minmax(0, 1fr);
-    background: linear-gradient(90deg, var(--panel) 0 247px, var(--rule) 247px 248px, var(--canvas) 248px);
+    background: linear-gradient(
+      90deg,
+      var(--panel) 0 247px,
+      var(--rule) 247px 248px,
+      var(--canvas) 248px
+    );
   }
   .sidebar {
     position: sticky;
@@ -289,7 +294,9 @@
   backdrop-filter: var(--acetate-filter);
   -webkit-backdrop-filter: var(--acetate-filter);
   border-block-end: 1px solid transparent;
-  transition: border-color var(--dur-state) var(--ease-out), box-shadow var(--dur-state) var(--ease-out);
+  transition:
+    border-color var(--dur-state) var(--ease-out),
+    box-shadow var(--dur-state) var(--ease-out);
 }
 /* At the top the bar is part of the page; once the chart scrolls under it, it gains an edge. */
 .topbar[data-scrolled="true"] {
@@ -313,14 +320,22 @@
     padding-inline: var(--gutter) var(--s-2);
     opacity: 0;
     visibility: hidden;
-    transition: opacity var(--dur-exit) var(--ease-in), visibility 0s linear var(--dur-exit), border-color var(--dur-state) var(--ease-out), box-shadow var(--dur-state) var(--ease-out);
+    transition:
+      opacity var(--dur-exit) var(--ease-in),
+      visibility 0s linear var(--dur-exit),
+      border-color var(--dur-state) var(--ease-out),
+      box-shadow var(--dur-state) var(--ease-out);
   }
   .topbar[data-away="true"] {
     opacity: 1;
     visibility: visible;
     border-block-end-color: var(--acetate-edge);
     box-shadow: var(--acetate-rim), var(--shadow-float);
-    transition: opacity var(--dur-state) var(--ease-out), visibility 0s, border-color var(--dur-state) var(--ease-out), box-shadow var(--dur-state) var(--ease-out);
+    transition:
+      opacity var(--dur-state) var(--ease-out),
+      visibility 0s,
+      border-color var(--dur-state) var(--ease-out),
+      box-shadow var(--dur-state) var(--ease-out);
   }
   .topbar > :is(.topbar__back, .topbar__brand, .topbar__title, .topbar__menu) {
     display: none;

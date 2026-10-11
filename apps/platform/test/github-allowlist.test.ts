@@ -86,7 +86,9 @@ describe("GITHUB_REPO_ALLOWLIST", () => {
       msg("pull_request", { action: "opened", number: 1, installation: { id }, repository }, id),
     );
     // Only this test's calls: another test's background work can reach the same fetch spy.
-    expect(seen.filter((c) => c.url.includes(`/installations/${id}`) || c.url.includes("website"))).toEqual([]);
+    expect(
+      seen.filter((c) => c.url.includes(`/installations/${id}`) || c.url.includes("website")),
+    ).toEqual([]);
   });
 
   it("the redelivery cron skips deliveries for repos outside the allowlist", async () => {
@@ -168,19 +170,26 @@ describe("a change event for an installation we never recorded", () => {
     const id = nextInst++;
     const seen = stubGithub({
       [`GET https://api.github.com/app/installations/${id}`]: (req) =>
-        req.headers.get("authorization")?.startsWith("Bearer ey") ? jsonRes(installation(id)) : jsonRes({}, 401),
+        req.headers.get("authorization")?.startsWith("Bearer ey")
+          ? jsonRes(installation(id))
+          : jsonRes({}, 401),
     });
     const row = await adoptInstallation(cfg, s(), id, APP_ID, repo);
     expect(row).toMatchObject({ id, appId: APP_ID, accountLogin: "ReSynapse", deletedAt: null });
-    expect((await reposOf(store().db, id)).map((r) => r.fullName)).toEqual(["ReSynapse/fixture-lib"]);
+    expect((await reposOf(store().db, id)).map((r) => r.fullName)).toEqual([
+      "ReSynapse/fixture-lib",
+    ]);
     // Only this test's call: another test's background work can reach the same fetch spy.
-    expect(seen.filter((c) => c.url.includes(`/app/installations/${id}`)).map((c) => c.method)).toEqual(["GET"]);
+    expect(
+      seen.filter((c) => c.url.includes(`/app/installations/${id}`)).map((c) => c.method),
+    ).toEqual(["GET"]);
   });
 
   it("GitHub doesn't know it: nothing recorded; another App's: not even asked", async () => {
     const id = nextInst++;
     const seen = stubGithub({
-      [`GET https://api.github.com/app/installations/${id}`]: () => jsonRes({ message: "Not Found" }, 404),
+      [`GET https://api.github.com/app/installations/${id}`]: () =>
+        jsonRes({ message: "Not Found" }, 404),
     });
     expect(await adoptInstallation(cfg, s(), id, APP_ID, repo)).toBeNull();
     expect(await getInstallation(store().db, id)).toBeNull();

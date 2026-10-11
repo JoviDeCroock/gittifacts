@@ -154,7 +154,8 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
   if (c.lane === 0) {
     return [
       {
-        title: "Auto-merge is calibrating: a human still gives it a quick review (handled like Lane 1)",
+        title:
+          "Auto-merge is calibrating: a human still gives it a quick review (handled like Lane 1)",
         why: "Auto-merge is off until the repo owner turns it on after enough agreement (unclaimed repos: always off). Your Change still counts towards that agreement.",
         call: call("wait_for_change", { changeId, until: "tour_ready", timeoutSec: 50 }),
       },

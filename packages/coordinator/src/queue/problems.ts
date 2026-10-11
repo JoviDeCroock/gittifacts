@@ -5,8 +5,8 @@
 import type { CommandOf } from "@app/merge-queue";
 import type { QueueContext } from "./context.js";
 import type { CommandFailure } from "./failure.js";
-import type { OutboxRow, QueueStore } from "./store.js";
 import { afterDrop, idsOf, PROBLEMS_KEPT, type QueueProblem, typeOf, whatOf } from "./stalls.js";
+import type { OutboxRow, QueueStore } from "./store.js";
 
 const PROBLEMS_KEY = "problems";
 
