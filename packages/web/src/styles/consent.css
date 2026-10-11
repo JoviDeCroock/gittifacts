@@ -18,11 +18,17 @@
 .consent-frame__brand .brand-mark {
   fill: var(--text);
 }
+/* A plain mark here, not a link: nothing pulls you off a pending decision. */
+.consent-frame__brand .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
 .consent-frame__main {
   inline-size: 100%;
   max-inline-size: 560px;
   margin-inline: auto;
-  padding: var(--s-5) var(--gutter) calc(150px + env(safe-area-inset-bottom));
+  padding: var(--s-5) var(--gutter) calc(190px + env(safe-area-inset-bottom));
 }
 .consent-frame__main--wide {
   max-inline-size: 640px;
@@ -198,19 +204,27 @@
   font-weight: var(--weight-medium);
   overflow-wrap: anywhere;
 }
+/* A risk, said on a neutral panel with a 3px ink rule (like "It can never"), never in ochre:
+   ochre means Lane 1 (the Band Means Lane Rule). The triangle carries the risk. */
 .consent__broad {
   display: flex;
   gap: var(--s-2);
   align-items: flex-start;
+  margin-block-start: var(--s-2);
   padding: var(--s-3);
   border-radius: var(--r-control);
-  background: var(--warn-tint);
+  border-block-start: 3px solid var(--text);
+  background: var(--panel);
   font-size: var(--text-small);
+  color: var(--text-2);
+}
+.consent__broad b {
+  color: var(--text);
 }
 .consent__broad .icon {
   flex: none;
   margin-block-start: 2px;
-  color: var(--warn);
+  color: var(--danger);
 }
 .consent__scope {
   border-block-end: 1px solid var(--rule);
@@ -250,13 +264,89 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.consent-bar__time,
-.consent-bar__missing {
+.consent-bar__meta {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+.consent-bar__who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.consent-bar__who .avatar {
+  flex: none;
+}
+.consent-bar__as {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.consent-bar__as b {
+  font-weight: var(--weight-medium);
+  color: var(--text);
+}
+.consent-bar__email {
+  color: var(--text-3);
+}
+.consent-bar__switch {
+  flex: none;
+  margin-inline-start: auto;
+  padding: 0 var(--s-1);
+  min-block-size: 32px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--action-ink);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+.consent-bar__time {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: var(--text-meta);
   color: var(--text-3);
+}
+.consent-bar__time .tnum {
+  white-space: nowrap;
+}
+/* The last minute: words and carmine text, never colour alone. */
+.consent-bar__time--urgent {
+  color: var(--danger);
+  font-weight: var(--weight-medium);
+}
+/* Why Allow is disabled, as a way to the missing choice. */
+.consent-bar__missing {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-block-size: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+@media (pointer: coarse) {
+  .consent-bar__switch,
+  .consent-bar__missing {
+    min-block-size: var(--tap);
+  }
 }
 @media (min-width: 640px) {
   /* Inside the panel, pinned to the bottom of the viewport while the panel scrolls. */
@@ -266,6 +356,7 @@
     inset-block-end: 0;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
+    column-gap: var(--s-4);
     margin-inline: calc(-1 * var(--s-5));
     margin-block-end: calc(-1 * var(--s-5));
     padding: var(--s-4) var(--s-5);
@@ -274,12 +365,25 @@
     border-block-start: 1px solid var(--rule);
     box-shadow: none;
   }
+  /* The approver gets the full width; the timer sits beside the buttons. */
+  .consent-bar__meta {
+    display: contents;
+  }
+  .consent-bar__who {
+    grid-column: 1 / -1;
+  }
   .consent-bar__actions {
     grid-template-columns: auto auto;
   }
   .consent-bar__missing {
     grid-column: 1 / -1;
-    justify-content: flex-end;
+    justify-self: end;
+  }
+}
+/* The fixed bar never covers what has focus (WCAG 2.4.11): scrolling stops above it. */
+@media (max-width: 639.98px) {
+  html:has(.consent-bar) {
+    scroll-padding-block-end: calc(170px + env(safe-area-inset-bottom));
   }
 }
 
@@ -310,11 +414,56 @@
   font-size: var(--text-heading);
   line-height: var(--leading-tight);
 }
+.consent-outcome__title:focus {
+  outline: none;
+}
 .consent-outcome__body {
   display: grid;
-  gap: var(--s-2);
+  gap: var(--s-3);
+  inline-size: 100%;
   color: var(--text-2);
   max-inline-size: var(--measure);
+}
+.consent-outcome__body code {
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  color: var(--text);
+}
+
+/* The receipt: what was signed, in the form's words. Hairline rows, a label column. */
+.consent-receipt {
+  display: grid;
+  border-block-start: 1px solid var(--rule);
+}
+.consent-receipt > div {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: var(--s-3);
+  padding-block: var(--s-2);
+  border-block-end: 1px solid var(--rule);
+}
+.consent-receipt dt {
+  color: var(--text-3);
+  font-size: var(--text-small);
+  line-height: var(--leading-body);
+}
+.consent-receipt dd {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.consent-receipt__agent {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-weight: var(--weight-medium);
+}
+.consent-receipt__audit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-small);
+  color: var(--text-3);
 }
 
 /* ---------------------------------------------------------------- device code entry */
@@ -343,22 +492,13 @@
 }
 .device-entry__how {
   display: grid;
-  gap: var(--s-1);
-  padding: var(--s-3) var(--s-4);
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4) var(--s-4);
   border-radius: var(--r-control);
   background: var(--panel);
   font-size: var(--text-small);
   color: var(--text-2);
 }
-.device-entry__how .cmd {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-1) var(--s-2);
-}
-.device-entry__how code {
-  font-family: var(--font-code);
-  font-size: var(--text-code);
-  color: var(--text);
+.device-entry__agent {
+  color: var(--text-3);
 }

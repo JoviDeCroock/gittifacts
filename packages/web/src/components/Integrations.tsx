@@ -8,6 +8,7 @@ import type { IntegrationScope, ScopeExplained, WebhookEvent } from "../api/inte
 import { ALL_EVENTS, EVENT_CATALOG, SCOPE_CATALOG, sortScopes } from "../lib/integrations.js";
 import { Icon } from "./Icon.js";
 import { Button, CopyButton } from "./ui.js";
+import "../styles/repo-picker.css";
 
 function monogram(name: string): string {
   const words = name.replace(/[()]/g, "").trim().split(/\s+/);
@@ -170,8 +171,9 @@ export interface PickerRepo {
 }
 
 /**
- * "All repositories you own or maintain" or "Only selected repositories" with a checklist. Used on the
- * install screen and when changing an installation's repositories.
+ * One repository decision for every signing screen (agent consent, device login, integration
+ * install, an installation's repositories): "All repositories …" states its count and consequence
+ * before you choose, "Only selected repositories" is the recommended default, with a checklist.
  */
 export function RepoPicker({
   repos,
@@ -180,6 +182,10 @@ export function RepoPicker({
   onSelection,
   onToggle,
   name = "repo-selection",
+  allLabel = "All repositories you own or maintain",
+  later = "any you own or maintain later",
+  none = "You don't own or maintain any claimed repositories yet. Only claimed repositories you own or maintain can be connected to an integration; unclaimed repos can't.",
+  allNote,
 }: {
   repos: PickerRepo[];
   selection: "all" | "selected";
@@ -187,6 +193,13 @@ export function RepoPicker({
   onSelection: (s: "all" | "selected") => void;
   onToggle: (id: string, on: boolean) => void;
   name?: string;
+  allLabel?: string;
+  /** Completes "5 repositories today, and …". */
+  later?: string;
+  /** Said when there is nothing to pick. */
+  none?: string;
+  /** Shown under the choice while "All" is picked: the consequence, as a risk. */
+  allNote?: ComponentChildren;
 }) {
   return (
     <div class="repo-picker">
@@ -197,11 +210,11 @@ export function RepoPicker({
           checked={selection === "all"}
           onChange={() => onSelection("all")}
         />
-        <span>All repositories you own or maintain</span>
+        <span>{allLabel}</span>
         <span class="check__hint">
           {repos.length === 0
-            ? "None yet. Ones you own or maintain later are included."
-            : `${repos.length === 1 ? "1 repository" : `${repos.length} repositories`} today, and any you own or maintain later.`}
+            ? `None yet; ${later} are included.`
+            : `${repos.length === 1 ? "1 repository" : `${repos.length} repositories`} today, and ${later}.`}
         </span>
       </label>
       <label class="check repo-picker__mode">
@@ -217,10 +230,7 @@ export function RepoPicker({
       {repos.length === 0 ? (
         <p class="repo-picker__none" role="note">
           <Icon name="info" size={16} />
-          <span>
-            You don't own or maintain any claimed repositories yet. Only claimed repositories you
-            own or maintain can be connected to an integration; unclaimed repos can't.
-          </span>
+          <span>{none}</span>
         </p>
       ) : selection === "selected" ? (
         <ul class="repo-picker__list" aria-label="Repositories">
@@ -237,7 +247,9 @@ export function RepoPicker({
             </li>
           ))}
         </ul>
-      ) : null}
+      ) : (
+        allNote ?? null
+      )}
     </div>
   );
 }

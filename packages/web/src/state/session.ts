@@ -103,7 +103,11 @@ export async function signInWithGitHub(): Promise<AuthResult> {
   return { ok: true };
 }
 
-export async function signOut(): Promise<void> {
+/**
+ * Sign out and leave with a full load: to the marketing page by default, or to `to` (same origin),
+ * e.g. "Switch account" on a consent screen goes to `/signin?next=` the same request.
+ */
+export async function signOut(to = "/"): Promise<void> {
   if (isMockMode()) {
     const { mockSignOut } = await import("../api/mock.js");
     mockSignOut();
@@ -114,5 +118,5 @@ export async function signOut(): Promise<void> {
   // Back to the marketing page: a full load (the Worker serves `/`), without first flashing the
   // sign-in screen the app would show once the session reads as signed out.
   hintSignedIn(false);
-  window.location.assign("/");
+  window.location.assign(to.startsWith("/") && !to.startsWith("//") ? to : "/");
 }

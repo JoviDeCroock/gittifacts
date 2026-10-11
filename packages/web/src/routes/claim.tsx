@@ -54,6 +54,7 @@ export function ClaimPage({ token }: { token: string }) {
             name={done.value.project.name}
             already={done.value.alreadyClaimed}
             repoPath={done.value.next.repoPath}
+            agent={st.data.createdBy.name}
           />
         ) : (
           <ClaimStageView
@@ -88,26 +89,37 @@ function Claimed({
   name,
   already,
   repoPath,
+  agent,
 }: {
   name: string;
   already: boolean;
   repoPath: string;
+  agent: string;
 }) {
   return (
     <ConsentOutcome
       tone="ok"
       title={already ? `You already own ${name}` : `You own ${name} now`}
       action={
-        <LinkButton href={repoPath} variant="primary" icon="arrow-up-right">
-          Open the repo
-        </LinkButton>
+        <div class="claim__next">
+          <LinkButton href={repoPath} variant="primary" icon="arrow-up-right">
+            Open the repo
+          </LinkButton>
+          <a href="/agents" class="claim__see-agent">
+            See the agent
+          </a>
+        </div>
       }
     >
       <p>It no longer expires, and its limits are lifted to those of any repo you own.</p>
-      <p>
-        The agent that made it keeps working on it, now accountable to you. You review its Changes;
-        auto-merge stays off until you turn it on.
-      </p>
+      <div class="claim__agent-line">
+        <Avatar kind="agent" name={agent} size={28} />
+        <p>
+          <b>{agent}</b> keeps working on it, now accountable to you. You review its Changes;
+          auto-merge stays off until you turn it on. It sees <code>claim: claimed</code> the next
+          time it calls <code>whoami</code>.
+        </p>
+      </div>
       <p class="claim__audit">
         <Icon name="scroll-text" size={14} /> Recorded in the audit log.
       </p>
@@ -130,7 +142,14 @@ function ClaimStageView({
   const stage = claimStage(view, { signedIn: me !== null, principalId: me?.id ?? null });
   const name = view.project.name;
   if (stage === "yours") {
-    return <Claimed name={name} already repoPath={`/repos/${view.project.id}`} />;
+    return (
+      <Claimed
+        name={name}
+        already
+        repoPath={`/repos/${view.project.id}`}
+        agent={view.createdBy.name}
+      />
+    );
   }
   if (stage === "taken") {
     return (
@@ -286,7 +305,7 @@ function ClaimForm({
         </p>
 
         {signedIn ? (
-          <fieldset class="claim__check">
+          <fieldset class="claim__check" id="claim-check" tabIndex={-1}>
             <legend class="claim__h2">Confirm you're a person</legend>
             <Turnstile
               siteKey={view.turnstile.siteKey}
@@ -339,9 +358,19 @@ function ClaimForm({
             )}
           </div>
           {signedIn && check.value === null && !busy.value ? (
-            <p class="consent-bar__missing" id="claim-missing">
-              Finish the check above to claim.
-            </p>
+            <button
+              type="button"
+              class="consent-bar__missing"
+              id="claim-missing"
+              onClick={() => {
+                const el = document.getElementById("claim-check");
+                el?.scrollIntoView({ block: "center" });
+                el?.focus({ preventScroll: true });
+              }}
+            >
+              <Icon name="arrow-up-right" size={14} />
+              Finish the human check to claim.
+            </button>
           ) : null}
         </div>
       </aside>

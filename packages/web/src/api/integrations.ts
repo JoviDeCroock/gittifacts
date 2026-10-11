@@ -139,7 +139,14 @@ export interface InstallView {
   never: string[];
   /** Repositories you may install on: claimed, and you own or maintain them. */
   repos: RepoRef[];
-  existing: { installationId: string; repoSelection: RepoSelection; repoIds: string[] } | null;
+  existing: {
+    installationId: string;
+    repoSelection: RepoSelection;
+    repoIds: string[];
+    /** What the installation granted, so an update can show what it adds. GAP: the platform
+     * doesn't send it yet; without it the screen can't mark new permissions. */
+    scopes?: IntegrationScope[];
+  } | null;
   expiresAt: string;
 }
 

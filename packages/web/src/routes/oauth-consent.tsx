@@ -11,11 +11,19 @@ import { useEffect } from "preact/hooks";
 import { useLocation } from "preact-iso";
 import { isMockMode } from "../api/mode.js";
 import { type ConsentView, oauthApi } from "../api/oauth.js";
-import { ConsentFrame, ConsentOutcome, ConsentPanel } from "../components/ConsentPanel.js";
+import {
+  ConsentFrame,
+  ConsentOutcome,
+  ConsentPanel,
+  ConsentReceipt,
+  type Granted,
+} from "../components/ConsentPanel.js";
 import { ErrorState, Loading } from "../components/ui.js";
 import { useResource } from "../state/resource.js";
 
-type Done = { kind: "approved" | "denied"; redirectTo: string };
+type Done =
+  | { kind: "approved"; redirectTo: string; granted: Granted }
+  | { kind: "denied"; redirectTo: string };
 
 function hostOf(url: string): string {
   try {
@@ -34,22 +42,24 @@ function Decided({ view, done }: { view: ConsentView; done: Done }) {
   return done.kind === "approved" ? (
     <ConsentOutcome
       tone="ok"
-      title={`${view.client.name} is connected`}
-      action={<a href="/agents">See your agent sessions</a>}
+      title={`${done.granted.name} is connected`}
+      action={<a href="/agents">See it on the Agents page</a>}
     >
+      <ConsentReceipt granted={done.granted} />
       <p>
         {isMockMode()
-          ? `In a real connection your browser now returns to ${host} with a one-time code.`
-          : `Sending you back to ${host}…`}
+          ? `In a real connection your browser now returns to ${host} with a one-time code, and ${view.client.name} can call list_repos.`
+          : `Sending you back to ${host}… ${view.client.name} can then call list_repos.`}{" "}
+        Revoke it any time on the Agents page.
       </p>
-      <p>It acts as a new agent you are accountable for. Revoke it any time on the Agents page.</p>
     </ConsentOutcome>
   ) : (
     <ConsentOutcome tone="neutral" title="Access denied">
       <p>
         {isMockMode()
           ? `In a real connection your browser now returns to ${host}.`
-          : `Sending you back to ${host}…`}
+          : `Sending you back to ${host}…`}{" "}
+        Nothing was granted.
       </p>
     </ConsentOutcome>
   );
@@ -85,12 +95,12 @@ export function OAuthConsent() {
     [requestId],
   );
 
+  // An outcome names the tab itself (ConsentOutcome); this covers loading and the open decision.
   useEffect(() => {
     const st = res.state.value;
-    document.title =
-      st.status === "ok" && st.data
-        ? `${st.data.consent.client.name} wants access · gittifacts`
-        : "Connect an agent · gittifacts";
+    if (st.status === "loading") document.title = "Connect an agent · gittifacts";
+    else if (st.status === "ok" && st.data?.consent.status === "pending" && !done.value)
+      document.title = `${st.data.consent.client.name} wants access · gittifacts`;
   }, [res.state.value]);
 
   if (query.error) {
@@ -131,9 +141,10 @@ export function OAuthConsent() {
         ) : (
           <ConsentPanel
             view={st.data.consent}
-            onApprove={async (d, key) => {
+            expired={<NotPending view={{ ...st.data.consent, status: "expired" }} />}
+            onApprove={async (d, key, granted) => {
               const { redirectTo } = await oauthApi.approve(requestId, d, key);
-              done.value = { kind: "approved", redirectTo };
+              done.value = { kind: "approved", redirectTo, granted };
             }}
             onDeny={async (key) => {
               const { redirectTo } = await oauthApi.deny(requestId, key);

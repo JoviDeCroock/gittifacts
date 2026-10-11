@@ -1,0 +1,51 @@
+/*
+ * The one repository decision on every signing screen (agent consent, device login, integration
+ * install) and on an installation's settings: two radios that state their consequence, and a
+ * hairline checklist.
+ */
+.repo-picker {
+  display: grid;
+  min-inline-size: 0;
+}
+.repo-picker__mode {
+  border-block-end: 1px solid var(--rule);
+}
+.repo-picker__mode:last-of-type {
+  border-block-end: 0;
+}
+.repo-picker__list {
+  list-style: none;
+  margin-inline-start: var(--s-6);
+  border-block-start: 1px solid var(--rule);
+}
+.repo-picker__list li {
+  border-block-end: 1px solid var(--rule);
+}
+.repo-picker__list .check {
+  align-items: center;
+  min-block-size: var(--tap);
+}
+.repo-picker__name {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+.repo-picker__none {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  margin-block-start: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--panel);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.repo-picker__none .icon {
+  flex: none;
+  margin-block-start: 2px;
+  color: var(--text-3);
+}
+/* Inside a consent panel the list sits flush under the radios. */
+.consent .repo-picker__list {
+  margin-inline-start: 0;
+}

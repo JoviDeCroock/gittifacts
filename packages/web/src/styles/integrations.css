@@ -217,50 +217,6 @@ fieldset.confirm {
   gap: var(--s-2);
 }
 
-/* ---------------------------------------------------------------- repo picker (install + change) */
-.repo-picker {
-  display: grid;
-  min-inline-size: 0;
-}
-.repo-picker__mode {
-  border-block-end: 1px solid var(--rule);
-}
-.repo-picker__mode:last-of-type {
-  border-block-end: 0;
-}
-.repo-picker__list {
-  list-style: none;
-  margin-inline-start: var(--s-6);
-  border-block-start: 1px solid var(--rule);
-}
-.repo-picker__list li {
-  border-block-end: 1px solid var(--rule);
-}
-.repo-picker__list .check {
-  align-items: center;
-  min-block-size: var(--tap);
-}
-.repo-picker__name {
-  font-weight: var(--weight-medium);
-  overflow-wrap: anywhere;
-}
-.repo-picker__none {
-  display: flex;
-  gap: var(--s-2);
-  align-items: flex-start;
-  margin-block-start: var(--s-2);
-  padding: var(--s-3);
-  border-radius: var(--r-control);
-  background: var(--panel);
-  font-size: var(--text-small);
-  color: var(--text-2);
-}
-.repo-picker__none .icon {
-  flex: none;
-  margin-block-start: 2px;
-  color: var(--text-3);
-}
-
 /* ---------------------------------------------------------------- shown-once secrets */
 .secret-reveal {
   display: grid;
@@ -360,14 +316,36 @@ fieldset.confirm {
   font-weight: var(--weight-medium);
   line-height: 1.35;
 }
+/* An update marks what it adds: a neutral chip says "already granted", "new" is ink on sheet with
+   an ink edge (gaining a permission is the decision that matters; not a lane, so no band colour). */
+.int-install__delta {
+  display: inline-block;
+  margin-inline-start: var(--s-2);
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--panel-strong);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  color: var(--text-2);
+  vertical-align: 2px;
+}
+.int-install__delta--new {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--text);
+  color: var(--text);
+}
+.int-install__can li[data-new] > .icon {
+  color: var(--text);
+}
+.int-install__removed {
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
 .int-install__scope-desc {
   font-size: var(--text-small);
   font-weight: var(--weight-regular);
   line-height: var(--leading-body);
   color: var(--text-2);
-}
-.int-install .repo-picker__list {
-  margin-inline-start: 0;
 }
 
 /* ---------------------------------------------------------------- developer portal */
