@@ -198,15 +198,13 @@ export async function setLinkRepos(
   const at = now.toISOString();
   const inserts = [];
   for (let i = 0; i < repos.length; i += 20) {
-    const rows = repos
-      .slice(i, i + 20)
-      .map((r) => ({
-        installationId,
-        principalId,
-        repoId: r.repoId,
-        access: r.access,
-        recordedAt: at,
-      }));
+    const rows = repos.slice(i, i + 20).map((r) => ({
+      installationId,
+      principalId,
+      repoId: r.repoId,
+      access: r.access,
+      recordedAt: at,
+    }));
     inserts.push(db.insert(githubLinkRepos).values(rows));
   }
   await db.batch([db.delete(githubLinkRepos).where(mine), ...inserts]);

@@ -87,12 +87,10 @@ export async function withdrawApprovalsForQa(
     if (change.status === "approved" || change.status === "queued") {
       // A fresh grade of the same head: the QA item rides along, the lane comes out raised, and
       // the workflow waits for a new approval (the old instance waited for a merge).
-      const out = await bindings
-        .changeCoordinator(input.changeId)
-        .regrade({
-          changeId: input.changeId,
-          reason: `approval withdrawn: QA run ${input.runId} failed`,
-        });
+      const out = await bindings.changeCoordinator(input.changeId).regrade({
+        changeId: input.changeId,
+        reason: `approval withdrawn: QA run ${input.runId} failed`,
+      });
       regraded = out.action === "started";
     }
   } else if (change.status === "approved") {

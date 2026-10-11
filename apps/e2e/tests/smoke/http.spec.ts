@@ -19,12 +19,10 @@ test("health: alive, and the live version is the commit just deployed", async ({
     // Unknown escalates: a missing tag fails like a wrong one.
     expect(body.commit, "the live version's commit tag").toBe(want);
   } else {
-    test
-      .info()
-      .annotations.push({
-        type: "warning",
-        description: "SMOKE_EXPECT_COMMIT unset: version not compared",
-      });
+    test.info().annotations.push({
+      type: "warning",
+      description: "SMOKE_EXPECT_COMMIT unset: version not compared",
+    });
   }
   // The header every response carries names the same version.
   const start = await request.get(`${baseURL}/start`);

@@ -44,8 +44,7 @@ function FirstGreen() {
         <strong>First green in {MEASURED.firstGreen}:</strong> from one URL to a repo, a passing CI
         run and a live preview. The target is under a minute.{" "}
         <span data-ttfg-live="">
-          Median {p50Sec}&nbsp;s, 9 in 10 repos within {p90Sec}&nbsp;s, over {FIRST_GREEN.window}
-          .
+          Median {p50Sec}&nbsp;s, 9 in 10 repos within {p90Sec}&nbsp;s, over {FIRST_GREEN.window}.
         </span>{" "}
         The bar runs from the median to the 90th percentile.{" "}
         <a href={FIRST_GREEN.statsPath}>Live numbers (JSON)</a>
@@ -101,8 +100,8 @@ export function Agents() {
           <div>
             <dt>No account to start</dt>
             <dd>
-              An agent can create an unclaimed repo and hand you a link to claim it. Unclaimed
-              repos are deleted after 7 days.
+              An agent can create an unclaimed repo and hand you a link to claim it. Unclaimed repos
+              are deleted after 7 days.
             </dd>
           </div>
           <div>

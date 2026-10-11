@@ -2,7 +2,7 @@
  * HTTP checks of what agents read first, shared by the pre-deploy gate and the post-deploy smoke.
  * Each returns the list of failures (empty = pass) so one run reports every broken URL at once.
  */
-import { expect, type APIRequestContext } from "@playwright/test";
+import { type APIRequestContext, expect } from "@playwright/test";
 
 interface UrlCheck {
   path: string;
@@ -37,18 +37,26 @@ const CHECKS: UrlCheck[] = [
   { path: "/docs/no-such-page", accept: "text/html", status: 404, type: "text/html" },
 ];
 
-export async function checkFrontDoor(request: APIRequestContext, origin: string): Promise<string[]> {
+export async function checkFrontDoor(
+  request: APIRequestContext,
+  origin: string,
+): Promise<string[]> {
   const failures: string[] = [];
   for (const c of CHECKS) {
-    const res = await request.get(`${origin}${c.path}`, { headers: { accept: c.accept }, maxRedirects: 0 });
+    const res = await request.get(`${origin}${c.path}`, {
+      headers: { accept: c.accept },
+      maxRedirects: 0,
+    });
     const want = c.status ?? 200;
     const type = res.headers()["content-type"] ?? "";
     const where = `${c.path} (accept ${c.accept})`;
     if (res.status() !== want) failures.push(`${where}: HTTP ${res.status()}, want ${want}`);
-    else if (!type.includes(c.type)) failures.push(`${where}: content-type ${type}, want ${c.type}`);
+    else if (!type.includes(c.type))
+      failures.push(`${where}: content-type ${type}, want ${c.type}`);
     else if (c.body !== undefined) {
       const needle = c.body.replace("{origin}", origin);
-      if (!(await res.text()).includes(needle)) failures.push(`${where}: body lacks ${JSON.stringify(needle)}`);
+      if (!(await res.text()).includes(needle))
+        failures.push(`${where}: body lacks ${JSON.stringify(needle)}`);
     }
   }
   // `/` points every agent at the rest (RFC 8288 Link header).
@@ -66,25 +74,36 @@ export async function checkFrontDoor(request: APIRequestContext, origin: string)
     },
     data: { jsonrpc: "2.0", id: 1, method: "tools/list" },
   });
-  if (mcp.status() !== 401 || !(mcp.headers()["www-authenticate"] ?? "").includes("resource_metadata=")) {
-    failures.push(`POST /mcp with a bad token: HTTP ${mcp.status()}, want 401 with resource_metadata`);
+  if (
+    mcp.status() !== 401 ||
+    !(mcp.headers()["www-authenticate"] ?? "").includes("resource_metadata=")
+  ) {
+    failures.push(
+      `POST /mcp with a bad token: HTTP ${mcp.status()}, want 401 with resource_metadata`,
+    );
   }
   failures.push(...(await checkListedUrls(request, origin)));
   return failures;
 }
 
 /** Every same-origin URL /start and /docs/llms.txt print must resolve (no dead links for agents). */
-export async function checkListedUrls(request: APIRequestContext, origin: string): Promise<string[]> {
+export async function checkListedUrls(
+  request: APIRequestContext,
+  origin: string,
+): Promise<string[]> {
   const failures: string[] = [];
   const urls = new Set<string>();
   for (const doc of ["/start", "/llms.txt", "/docs/llms.txt"]) {
-    const text = await (await request.get(`${origin}${doc}`, { headers: { accept: "text/markdown" } })).text();
+    const text = await (
+      await request.get(`${origin}${doc}`, { headers: { accept: "text/markdown" } })
+    ).text();
     for (const m of text.matchAll(/https?:\/\/[^\s)<>"'`\]]+/g)) {
       const url = m[0].replace(/[.,;:]+$/, "");
       // Templates ({repoId}, <changeId>) and endpoints that need a body or credentials.
       if (!url.startsWith(origin) || /[{<]|%7B|%3C/.test(url)) continue;
       const path = new URL(url).pathname;
-      if (/^\/(mcp|api\/|git\/|webhooks\/|github\/|oauth\/|claim\/)/.test(path) || path === "/mcp") continue;
+      if (/^\/(mcp|api\/|git\/|webhooks\/|github\/|oauth\/|claim\/)/.test(path) || path === "/mcp")
+        continue;
       urls.add(url);
     }
   }
@@ -92,7 +111,10 @@ export async function checkListedUrls(request: APIRequestContext, origin: string
     const res = await request.get(url, { headers: { accept: "*/*" } });
     if (res.status() >= 400) failures.push(`listed URL ${url}: HTTP ${res.status()}`);
   }
-  if (urls.size < 5) failures.push(`only ${urls.size} same-origin URLs found in /start, /llms.txt and /docs/llms.txt`);
+  if (urls.size < 5)
+    failures.push(
+      `only ${urls.size} same-origin URLs found in /start, /llms.txt and /docs/llms.txt`,
+    );
   return failures;
 }
 
@@ -100,7 +122,10 @@ export async function checkListedUrls(request: APIRequestContext, origin: string
  * A GitHub delivery with a wrong signature is refused before anything is queued: 401. Where GitHub
  * mode is deliberately off (staging, `SMOKE_GITHUB=off`), the refusal is 503 github-not-configured.
  */
-export async function checkWebhookRejectsBadSignature(request: APIRequestContext, origin: string): Promise<void> {
+export async function checkWebhookRejectsBadSignature(
+  request: APIRequestContext,
+  origin: string,
+): Promise<void> {
   const res = await request.post(`${origin}/github/webhooks`, {
     headers: {
       "content-type": "application/json",
@@ -112,7 +137,9 @@ export async function checkWebhookRejectsBadSignature(request: APIRequestContext
   });
   if (process.env.SMOKE_GITHUB === "off") {
     expect(res.status()).toBe(503);
-    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("github-not-configured");
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+      "github-not-configured",
+    );
   } else {
     expect(res.status()).toBe(401);
   }

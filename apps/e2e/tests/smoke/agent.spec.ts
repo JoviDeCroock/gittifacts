@@ -100,11 +100,9 @@ test("anonymous create_project → first green check and a serving preview, with
     );
   }
   const elapsed = Date.now() - t0;
-  test
-    .info()
-    .annotations.push({
-      type: "ttfg",
-      description: `${Math.round(elapsed / 1000)} s (budget ${BUDGET_MS / 1000} s)`,
-    });
+  test.info().annotations.push({
+    type: "ttfg",
+    description: `${Math.round(elapsed / 1000)} s (budget ${BUDGET_MS / 1000} s)`,
+  });
   expect(elapsed, "time to first green").toBeLessThanOrEqual(BUDGET_MS);
 });

@@ -252,7 +252,10 @@ export function checkSamples(page: Page, x: Extracted): Problem[] {
   for (const c of x.inline) {
     problems.push(...checkToolCalls(page, c.text, c.line));
     // Inline mentions name commands; usage notation (`[--flag <x>]`) is not an invocation.
-    if (/^(npx (-y )?)?(gittifacts|\S+\/cli\/(?:v\d+\/)?gittifacts\S*\.tgz) /.test(c.text) && !c.text.includes("[")) {
+    if (
+      /^(npx (-y )?)?(gittifacts|\S+\/cli\/(?:v\d+\/)?gittifacts\S*\.tgz) /.test(c.text) &&
+      !c.text.includes("[")
+    ) {
       problems.push(...checkCommands(page, c.text, c.line, false));
     }
   }
