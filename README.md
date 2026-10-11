@@ -16,18 +16,6 @@ cheapest review that is still safe, and makes changes easy to undo after merge.
 
 See `STATUS.md` for what works today and `DECISIONS.md` for why things are the way they are.
 
-## Try it
-
-On the hosted platform (https://gittifacts.decroockjovi.workers.dev), with Node 22+ and git and no
-account. This creates a repo, runs its first CI and starts a preview:
-
-```sh
-npx -y https://gittifacts.decroockjovi.workers.dev/cli/gittifacts.tgz \
-  --host https://gittifacts.decroockjovi.workers.dev init --template workers-api --name my-api --clone
-```
-
-Agents start at `/start` (or MCP at `/mcp`); docs are at `/docs`.
-
 ## Run it locally
 
 No Cloudflare account needed: the real platform Worker runs under `wrangler dev --local`, with
@@ -39,6 +27,8 @@ pnpm install --frozen-lockfile
 pnpm --filter @app/e2e prepare-assets   # web app, docs and CLI the Worker serves
 pnpm --filter @app/e2e serve            # http://127.0.0.1:8799
 ```
+
+Agents start at `/start` (or MCP at `/mcp`); docs are at `/docs`.
 
 Tests (targeted; `docs/testing.md` has the tiers):
 
