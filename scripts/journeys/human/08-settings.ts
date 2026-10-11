@@ -29,6 +29,7 @@ export const journey: HumanJourney = {
     await j.goto("/agents", { waitFor: "h1", settleMs: 2000 });
     await blur();
     await j.snap("agents");
+    await j.click(p.getByTestId("create-agent-open"));
     await j.click(p.getByRole("button", { name: /Create agent and token/ }).first());
     await j.hold(700);
     await blur();
