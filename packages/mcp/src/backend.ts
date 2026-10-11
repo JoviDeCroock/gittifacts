@@ -208,7 +208,9 @@ export interface McpBackend
     input: CreateProjectArgs,
     opts: MutationOptions,
   ): Promise<ProjectCreated>;
-  listRepos(caller: McpCaller): Promise<Array<Repo & { counts: LaneCountsData }>>;
+  listRepos(
+    caller: McpCaller,
+  ): Promise<Array<Repo & { counts: LaneCountsData; cloneUrl?: string | null }>>;
   /** A repo's human members and their roles (read-only; owners manage members on the web). */
   listMembers(caller: McpCaller, repoId: string): Promise<MembersData>;
   createPlan(

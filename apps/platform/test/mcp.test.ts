@@ -253,6 +253,23 @@ describe("POST /mcp", () => {
   });
 });
 
+describe("list_repos over MCP", () => {
+  it("gives a claimed repo's read-only clone URL", async () => {
+    const { repo, mcp } = await setup();
+    try {
+      const res = await mcp.tools.list_repos({});
+      if (res.isError) throw new Error(JSON.stringify(res.content));
+      const listed = res.structuredContent.repos.find((r) => r.id === repo.id);
+      const cloneUrl = new URL(listed?.cloneUrl ?? "");
+      expect(cloneUrl.origin).toBe(ORIGIN);
+      expect(cloneUrl.pathname).toMatch(new RegExp(`^/git/[a-z0-9-]+/${repo.name}\\.git$`));
+      // `gittifacts clone <repoId>` clones it (the /git/ proxy itself: integrations.test.ts).
+    } finally {
+      await mcp.client.close();
+    }
+  });
+});
+
 describe("list_changes over MCP", () => {
   it("lists a repo's changes with their pages, by status and only the caller's", async () => {
     const { app, human, agent, repo, change, mcp } = await setup();

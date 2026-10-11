@@ -637,6 +637,7 @@ export function buildTools(backend: McpBackend) {
             lane0Enabled: r.policy.lane0Enabled,
             claim: r.claim,
             counts: r.counts,
+            cloneUrl: r.cloneUrl ?? null,
           })),
         };
       },

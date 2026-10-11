@@ -61,6 +61,25 @@ Runs the CI engine's seedCache for each template (or `?template=<id>`), so the f
 - **202:** `{ seeds }`
 - **Errors:** 401, 403
 
+### `GET /api/v1/admin/spend`
+
+Today's metered platform spend (USD, upper-bound estimate) and the spend breaker
+
+- **Auth:** session cookie or bearer token
+- **200:** `PlatformSpend { day, totalUsd, bySource, softUsd, hardUsd, level, paused, resumedBy }`
+- **Errors:** 401, 403
+
+### `PUT /api/v1/admin/spend-breaker`
+
+Resume paid work after the spend breaker tripped (until 00:00 UTC), or hand back to the budgets
+
+`resume`: new CI runs, workspaces, previews, QA and model calls start again for the rest of the UTC day, whatever today's spend. `auto`: the daily budgets decide again. Platform admins only (PLATFORM_ADMINS).
+
+- **Auth:** session cookie or bearer token
+- **Body:** `{ mode }`
+- **200:** `PlatformSpend { day, totalUsd, bySource, softUsd, hardUsd, level, paused, resumedBy }`
+- **Errors:** 400, 401, 403
+
 ### `GET /api/v1/admin/unclaimed-creation`
 
 Kill switch for credential-less project creation: flag, override, effective state
@@ -86,7 +105,7 @@ Time-to-first-green per project and template (Analytics Engine, else D1)
 
 - **Auth:** session cookie or bearer token
 - **Parameters:** `days` (query)
-- **200:** `{ source, sinceDays, targetMs, overall, byTemplate, recent, note }`
+- **200:** `{ source, sinceDays, targetMs, overall, byTemplate, recent, note, firstMerge }`
 - **Errors:** 401, 403
 
 ## Other

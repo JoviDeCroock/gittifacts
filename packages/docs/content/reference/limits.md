@@ -42,11 +42,11 @@ Claiming a project lifts every unclaimed limit at once. Operators can override t
 
 | Limit | Claimed | Unclaimed | Meaning |
 | --- | --- | --- | --- |
-| `ttlMs` | 120 min | 30 min | Hard end of a workspace session, from when it was opened. |
+| `ttlMs` | 60 min | 30 min | Hard end of a workspace session, from when it was opened. |
 | `idleMs` | 10 min | 5 min | Idle time before the workspace sleeps (snapshot + stop). |
 | `instance` | standard-2 | standard-1 | Container size. |
-| `cpuSecondsPerDay` | 600 vCPU-min/day | 30 vCPU-min/day | vCPU-seconds of container time per project per UTC day (null: unlimited). |
-| `maxOpen` | 5 | 1 | Workspaces open at once per project. |
+| `cpuSecondsPerDay` | 60 vCPU-min/day | 30 vCPU-min/day | vCPU-seconds of container time per project per UTC day (null: unlimited). |
+| `maxOpen` | 1 | 1 | Workspaces open at once per project. |
 | `maxExecTimeoutSec` | 30 min | 10 min | Longest `ws_exec` timeout. |
 | `maxOutputBytes` | 64 KB | 32 KB | stdout and stderr of one ws_exec, each. |
 

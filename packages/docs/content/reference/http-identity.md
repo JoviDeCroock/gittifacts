@@ -34,7 +34,7 @@ The calling principal (and the signed-in user, for humans)
 Your first-run checklist: a connected agent, the first green check (with its preview) and a repo brought in
 
 - **Auth:** session cookie or bearer token
-- **200:** `GettingStarted { projects, agent, firstGreen, latestBootstrap, repo }`
+- **200:** `GettingStarted { projects, agent, firstGreen, latestBootstrap, repo, plan, review, firstMerge }`
 - **Errors:** 401, 403
 
 ### `GET /api/v1/principals`

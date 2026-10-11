@@ -559,6 +559,11 @@ export const ListReposOutput = {
           lane0Enabled: bool,
           claim: Claim,
           counts: LaneCounts,
+          cloneUrl: {
+            ...nullableStr,
+            description:
+              "Read-only clone URL (`gittifacts clone <repoId>` uses it); null while the repo is unclaimed.",
+          },
         },
         required: ["id", "name", "defaultBranch", "lane0Enabled", "claim", "counts"],
       },

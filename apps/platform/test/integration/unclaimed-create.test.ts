@@ -234,8 +234,10 @@ describe("the unclaimed project's token", () => {
       expect(JSON.stringify(again.content)).toContain("repo-not-granted");
       const repos = await mcp.tools.list_repos({});
       if (repos.isError) throw new Error(JSON.stringify(repos.content));
-      const listed = repos.structuredContent as { repos: Array<{ id: string }> };
+      const listed = repos.structuredContent as { repos: Array<{ id: string; cloneUrl: string | null }> };
       expect(listed.repos.map((r) => r.id)).toEqual([p.projectId]);
+      // No clone URL until a human claims it (the /git/ proxy serves claimed repos only).
+      expect(listed.repos[0]?.cloneUrl).toBeNull();
     } finally {
       await mcp.client.close();
     }

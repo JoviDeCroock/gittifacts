@@ -4301,6 +4301,13 @@ export type introspection = {
                     "rollingOut",
                     "failing"
                   ]
+                },
+                "cloneUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Read-only clone URL (`gittifacts clone <repoId>` uses it); null while the repo is unclaimed."
                 }
               },
               "required": [

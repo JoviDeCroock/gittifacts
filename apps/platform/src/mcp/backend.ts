@@ -54,6 +54,7 @@ import { getChangeOverlaps } from "../services/overlaps.js";
 import { createPlan, getPlanDetail, listPlans, withdrawPlan } from "../services/plans.js";
 import { createProject } from "../services/projects.js";
 import { listQaRuns, requestQaFor } from "../services/qa.js";
+import { repoNames } from "../integrations/handles.js";
 import { listRepoSummaries } from "../services/repos.js";
 import type { PrincipalRef } from "../store/d1-store.js";
 import { createWorkspaceMcpBackend } from "../workspace/mcp.js";
@@ -234,7 +235,10 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     },
 
     async listRepos(mc) {
-      return listRepoSummaries(svc, callerFrom(mc));
+      const repos = await listRepoSummaries(svc, callerFrom(mc));
+      return Promise.all(
+        repos.map(async (r) => ({ ...r, cloneUrl: (await repoNames(svc, r))?.cloneUrl ?? null })),
+      );
     },
 
     webUrl(page) {

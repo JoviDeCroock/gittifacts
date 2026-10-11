@@ -29,7 +29,7 @@ One call: a repo from a template (or an import, or empty) with .platform/ci.ts, 
 create_project({ template: "workers-api" })
 ```
 
-**Returns:** `repoId` (string), `projectId` (string), `name` (string), `template` (string | null), `defaultBranch` (string), `remote` (null | object), `token` (string | null), `mcpUrl` (string), `previewUrl` (string | null), `claimUrl` (string | null), `bootstrapChangeId` (string | null), `nextSteps` (object[]).
+**Returns:** `repoId` (string), `projectId` (string), `name` (string), `template` (string | null), `defaultBranch` (string), `remote` (null | object), `token` (string | null), `mcpUrl` (string), `previewUrl` (string | null), `claimUrl` (string | null), `bootstrapChangeId` (string | null), `samplePlanId` (string | null), `nextSteps` (object[]).
 
 ## `whoami`
 

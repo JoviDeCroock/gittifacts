@@ -81,6 +81,7 @@ Schema `DependencyDiff`.
 | `changed` | object[] |  |
 | `newInstallScripts` | object[] | Lifecycle scripts (preinstall/install/postinstall/prepare) that appear in head but not base, or whose command changed. `name` is the package name (or the manifest path when the manifest has no name). |
 | `lockfileChanged` | boolean |  |
+| `lockfile?` | { verified, changes, problems } | The lockfile diff checked against the recorded bumps: `verified` when every changed entry is a recorded patch bump re-resolved from the registry, with nothing added or removed. Absent: the lockfiles were not read, so a lockfile change is unexplained (the classifier escalates). |
 
 ### `llm-judgment`
 

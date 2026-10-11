@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 121 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 123 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -24,6 +24,8 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `POST` | [`/api/oauth/token`](/docs/reference/http-identity) | Token endpoint: authorization_code (PKCE), refresh_token (rotating), device_code (RFC 8628) |
 | `POST` | [`/api/v1/admin/audit/verify`](/docs/reference/http-platform) | Re-verify the whole audit chain from genesis, ignoring the verified-through checkpoint |
 | `POST` | [`/api/v1/admin/seed-cache`](/docs/reference/http-platform) | Pre-build every template's dependency snapshot (CI global cache) |
+| `GET` | [`/api/v1/admin/spend`](/docs/reference/http-platform) | Today's metered platform spend (USD, upper-bound estimate) and the spend breaker |
+| `PUT` | [`/api/v1/admin/spend-breaker`](/docs/reference/http-platform) | Resume paid work after the spend breaker tripped (until 00:00 UTC), or hand back to the budgets |
 | `GET` | [`/api/v1/admin/unclaimed-creation`](/docs/reference/http-platform) | Kill switch for credential-less project creation: flag, override, effective state |
 | `PUT` | [`/api/v1/admin/unclaimed-creation`](/docs/reference/http-platform) | Override the kill switch in D1 (works when Flagship is unreachable) |
 | `GET` | [`/api/v1/agent-sessions`](/docs/reference/http-identity) | Your agents' sessions: client, scopes, repos, created, last used, expiry, status |
