@@ -5,7 +5,7 @@ import type { Caller, Services } from "../app-env.js";
 import { GITHUB_WEB } from "./api.js";
 import { appUrl, githubApp, installUrl, missingConfig } from "./app-config.js";
 import { prWritesSetting } from "./pr-index.js";
-import { linkedInstallations, reposOf } from "./store.js";
+import { linkedInstallations, linkRepos, reposOf } from "./store.js";
 
 export const GithubAppView = z
   .object({
@@ -52,6 +52,12 @@ export const GithubOverview = z
   .meta({ id: "GithubOverview" });
 export type GithubOverview = z.infer<typeof GithubOverview>;
 
+/** The installation's repos this human's link saw on GitHub (never the whole installation). */
+async function visibleRepos(svc: Services, installationId: number, principalId: string) {
+  const seen = new Set((await linkRepos(svc.store.db, installationId, principalId)).map((r) => r.repoId));
+  return (await reposOf(svc.store.db, installationId)).filter((r) => seen.has(r.repoId));
+}
+
 export async function githubOverview(svc: Services, caller: Caller): Promise<GithubOverview> {
   const env = svc.env as unknown as Record<string, unknown>;
   const app = githubApp(env);
@@ -64,7 +70,7 @@ export async function githubOverview(svc: Services, caller: Caller): Promise<Git
       repositorySelection: inst.repositorySelection,
       suspended: inst.suspendedAt !== null,
       repos: await Promise.all(
-        (await reposOf(svc.store.db, inst.id)).map(async (r) => {
+        (await visibleRepos(svc, inst.id, caller.principal.id)).map(async (r) => {
           const graded = await svc.store.getRepo(repoIdFor(r.repoId));
           return {
             id: r.repoId,

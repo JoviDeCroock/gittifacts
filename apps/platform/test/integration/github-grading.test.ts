@@ -11,7 +11,7 @@ import { changeWorkflowId, ciRunIdFor } from "@app/coordinator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bindings } from "../../src/app-env.js";
 import { handleGithubEvent } from "../../src/github/consumer.js";
-import { upsertInstallation } from "../../src/github/store.js";
+import { setLinkRepos, upsertInstallation } from "../../src/github/store.js";
 import type { GithubEventMessage } from "../../src/github/webhook.js";
 import { createPlatformClient } from "@app/mcp/client";
 import { githubInstallationLinks } from "../../src/db/github-schema.js";
@@ -64,8 +64,10 @@ describe("GitHub mode in workerd", () => {
     const app = platformApp();
     const human = await signUpHuman(app, "Ines");
     await store().db.insert(githubInstallationLinks).values({
-      installationId: INSTALLATION, principalId: human.principal.id, githubLogin: "ines", linkedAt: new Date().toISOString(),
+      installationId: INSTALLATION, principalId: human.principal.id, githubLogin: "ines", githubUserId: 6001, linkedAt: new Date().toISOString(),
     });
+    // Her token saw this repo as an admin (test/integration/github-links.test.ts walks the link itself).
+    await setLinkRepos(store().db, INSTALLATION, human.principal.id, [{ repoId: REPO.id, access: "admin" }], new Date());
     const gh = `github.com/${REPO.owner}/${REPO.name}`;
     const base = fakes.git.seed(gh, { "src/total.ts": "export const total = (xs: number[]) => xs.reduce((a, b) => a + b, 0);\n", "README.md": "# widgets\n" });
     fakes.git.repo(gh).refs.set("refs/heads/fix-total", base);

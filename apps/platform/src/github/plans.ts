@@ -37,14 +37,18 @@ export async function upsertGithubPlan(env: Bindings, store: D1Store, plan: Plan
 
 /**
  * Who a GitHub reviewer or labeller acts as on the platform: the human who linked an installation
- * as that GitHub login (proved with a GitHub user token), else the account's own principal.
+ * as that GitHub account (proved with a GitHub user token), else the account's own principal.
+ * Matched by GitHub's numeric user id, never the login (renamable, re-registrable): a link from
+ * before the id was recorded attributes nobody to its human until it is linked again.
  */
 export async function githubActorPrincipal(store: D1Store, who: Identity & { login: string }): Promise<string> {
-  if (who.kind === "human") {
+  const userId = Number(who.id);
+  if (who.kind === "human" && Number.isSafeInteger(userId)) {
     const link = await store.db
       .select({ principalId: githubInstallationLinks.principalId })
       .from(githubInstallationLinks)
-      .where(eq(githubInstallationLinks.githubLogin, who.login))
+      .where(eq(githubInstallationLinks.githubUserId, userId))
+      .orderBy(githubInstallationLinks.linkedAt)
       .get();
     if (link !== undefined) return link.principalId;
   }

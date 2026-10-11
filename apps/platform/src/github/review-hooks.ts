@@ -1,10 +1,10 @@
 /**
  * Coordinator hooks for GitHub Changes reviewed on gittifacts (M3): the PR's summary comment is
  * refreshed (an approval here shows on GitHub), and the PR's author can't review it here either
- * (their linked GitHub login is the author's).
+ * (a GitHub account they linked is the PR author's, by numeric id).
  */
 import type { CoordinatorOptions } from "@app/coordinator";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Bindings } from "../app-env.js";
 import { githubInstallationLinks } from "../db/github-schema.js";
 import { buildPorts } from "../runtime/ports.js";
@@ -25,15 +25,19 @@ export function githubReviewOptions(env: Bindings): Pick<CoordinatorOptions, "on
         await release();
       }
     },
+    // Ids, never logins (security audit 2026-10-11, M4): a login can be renamed or re-registered.
+    // A link from before github_user_id was recorded can't tell, so it counts as the author.
     async isHostAuthor(change, principalId) {
       if (change.host == null) return false;
+      if (change.authorId === principalId) return true;
       const db = new D1Store(env.DB, env.BLOBS).db;
-      const link = await db
-        .select({ login: githubInstallationLinks.githubLogin })
+      const links = await db
+        .select({ githubUserId: githubInstallationLinks.githubUserId })
         .from(githubInstallationLinks)
-        .where(and(eq(githubInstallationLinks.principalId, principalId), eq(githubInstallationLinks.githubLogin, change.host.author.login)))
-        .get();
-      return link !== undefined;
+        .where(eq(githubInstallationLinks.principalId, principalId))
+        .all();
+      const author = change.host.author.id;
+      return links.some((l) => l.githubUserId === null || l.githubUserId === author);
     },
   };
 }

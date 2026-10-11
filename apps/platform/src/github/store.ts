@@ -5,6 +5,7 @@ import {
   githubInstallationLinks,
   githubInstallationRepos,
   githubInstallations,
+  githubLinkRepos,
 } from "../db/github-schema.js";
 import type { Db } from "../store/d1-store.js";
 
@@ -115,16 +116,25 @@ export async function addRepos(db: Db, installationId: number, repos: RepoInput[
   }
 }
 
+/** Repos left the installation: their rows go, and so does every link's access to them. */
 export async function removeRepos(db: Db, installationId: number, repoIds: number[]) {
   for (let i = 0; i < repoIds.length; i += 50) {
-    await db
-      .delete(githubInstallationRepos)
-      .where(
-        and(
-          eq(githubInstallationRepos.installationId, installationId),
-          inArray(githubInstallationRepos.repoId, repoIds.slice(i, i + 50)),
+    const ids = repoIds.slice(i, i + 50);
+    await db.batch([
+      db
+        .delete(githubInstallationRepos)
+        .where(
+          and(
+            eq(githubInstallationRepos.installationId, installationId),
+            inArray(githubInstallationRepos.repoId, ids),
+          ),
         ),
-      );
+      db
+        .delete(githubLinkRepos)
+        .where(
+          and(eq(githubLinkRepos.installationId, installationId), inArray(githubLinkRepos.repoId, ids)),
+        ),
+    ]);
   }
 }
 
@@ -164,8 +174,65 @@ export async function linkInstallation(
     .values(row)
     .onConflictDoUpdate({
       target: [githubInstallationLinks.installationId, githubInstallationLinks.principalId],
-      set: { githubLogin: row.githubLogin, linkedAt: row.linkedAt },
+      set: { githubLogin: row.githubLogin, githubUserId: row.githubUserId, linkedAt: row.linkedAt },
     });
+}
+
+export type GithubAccess = (typeof githubLinkRepos.$inferSelect)["access"];
+
+/** Make a link's visible repos exactly `repos` (what its user token listed just now). */
+export async function setLinkRepos(
+  db: Db,
+  installationId: number,
+  principalId: string,
+  repos: { repoId: number; access: GithubAccess }[],
+  now: Date,
+): Promise<void> {
+  const mine = and(
+    eq(githubLinkRepos.installationId, installationId),
+    eq(githubLinkRepos.principalId, principalId),
+  );
+  const at = now.toISOString();
+  const inserts = [];
+  for (let i = 0; i < repos.length; i += 20) {
+    const rows = repos
+      .slice(i, i + 20)
+      .map((r) => ({ installationId, principalId, repoId: r.repoId, access: r.access, recordedAt: at }));
+    inserts.push(db.insert(githubLinkRepos).values(rows));
+  }
+  await db.batch([db.delete(githubLinkRepos).where(mine), ...inserts]);
+}
+
+/** The links that saw one repo of an installation, oldest link first. */
+export async function linksSeeingRepo(db: Db, installationId: number, repoId: number) {
+  return db
+    .select({
+      principalId: githubLinkRepos.principalId,
+      access: githubLinkRepos.access,
+      linkedAt: githubInstallationLinks.linkedAt,
+    })
+    .from(githubLinkRepos)
+    .innerJoin(
+      githubInstallationLinks,
+      and(
+        eq(githubInstallationLinks.installationId, githubLinkRepos.installationId),
+        eq(githubInstallationLinks.principalId, githubLinkRepos.principalId),
+      ),
+    )
+    .where(and(eq(githubLinkRepos.installationId, installationId), eq(githubLinkRepos.repoId, repoId)))
+    .orderBy(githubInstallationLinks.linkedAt)
+    .all();
+}
+
+/** The repos one link saw, with its access to each. */
+export async function linkRepos(db: Db, installationId: number, principalId: string) {
+  return db
+    .select({ repoId: githubLinkRepos.repoId, access: githubLinkRepos.access })
+    .from(githubLinkRepos)
+    .where(
+      and(eq(githubLinkRepos.installationId, installationId), eq(githubLinkRepos.principalId, principalId)),
+    )
+    .all();
 }
 
 /** Installations this human linked (not deleted), newest link first. */

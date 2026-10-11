@@ -166,6 +166,19 @@ export const RepoInfo = z.object({
   id: z.number().int().positive(),
   full_name: z.string().min(3),
   private: z.boolean(),
+  /**
+   * The authenticated user's access (user-token listings only; absent in webhook payloads).
+   * Absent or partial counts as the least access: it can only lower what a link grants.
+   */
+  permissions: z
+    .object({
+      admin: z.boolean().optional(),
+      maintain: z.boolean().optional(),
+      push: z.boolean().optional(),
+      triage: z.boolean().optional(),
+      pull: z.boolean().optional(),
+    })
+    .optional(),
 });
 export type RepoInfo = z.infer<typeof RepoInfo>;
 

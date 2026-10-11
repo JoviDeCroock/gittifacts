@@ -13,19 +13,25 @@ import { resolveRuntime } from "@app/coordinator";
 import type { GithubRepoHost, Repo } from "@app/domain";
 import type { Identity } from "@app/host";
 import { GithubRepo, GithubSync, InstallationTokens, principalIdFor, repoIdFor } from "@app/host-github";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { putMember } from "../access/members-store.js";
+import { memberRole, putMember } from "../access/members-store.js";
+import { type RepoRole, roleAtLeast } from "../access/roles.js";
 import type { Bindings } from "../app-env.js";
 import { principals } from "../db/app-schema.js";
-import { githubInstallationLinks, githubInstallationRepos } from "../db/github-schema.js";
 import { D1Store } from "../store/d1-store.js";
 import { githubActorPrincipal, upsertGithubPlan } from "./plans.js";
 import { githubHostFor, githubReadSource } from "./runtime.js";
 import { repoAllowed } from "./allowlist.js";
 import { githubApp } from "./app-config.js";
-import { appInstallation } from "./api.js";
-import { addRepos, getInstallation, upsertInstallation } from "./store.js";
+import { appInstallation, type RepoInfo } from "./api.js";
+import {
+  addRepos,
+  getInstallation,
+  type GithubAccess,
+  linkRepos,
+  linksSeeingRepo,
+  upsertInstallation,
+} from "./store.js";
 import type { GithubEventMessage } from "./webhook.js";
 
 /** The principal a GitHub account authors as: created once, disabled (it never authenticates). */
@@ -51,65 +57,73 @@ export async function ensureGithubPrincipal(
   return id;
 }
 
-/** Humans who linked the installation see its repos: the first as owner, the rest maintainers. */
+/**
+ * What a link's GitHub access to one repo makes its human here (security audit 2026-10-11, H1):
+ * "admin" (repo admin, or the personal account the App is installed on) may claim the repo when
+ * nobody has; "admin" and "write" (maintain or push) are at least maintainers; "read" (pull or
+ * triage) at least readers. Pure.
+ */
+export function accessOf(
+  permissions: RepoInfo["permissions"],
+  accountOwner: boolean,
+): GithubAccess {
+  if (accountOwner || permissions?.admin === true) return "admin";
+  if (permissions?.maintain === true || permissions?.push === true) return "write";
+  return "read";
+}
+
+const ROLE_OF: Record<GithubAccess, RepoRole> = { admin: "maintainer", write: "maintainer", read: "reader" };
+
+/** Raise a membership to at least `role`. Never lowers one a person (or an earlier grant) set. */
+async function grantAtLeast(store: D1Store, repoId: string, principalId: string, role: RepoRole) {
+  if (roleAtLeast(await memberRole(store, repoId, principalId), role)) return;
+  await putMember(store, { repoId, principalId, role, addedBy: "system", addedAt: new Date().toISOString() });
+}
+
+/** One link's access to one graded repo → its claim or membership. Returns the owner after. */
+async function grantFromLink(
+  store: D1Store,
+  repo: Repo,
+  ownerId: string | null,
+  principalId: string,
+  access: GithubAccess,
+): Promise<string | null> {
+  if (ownerId === principalId) return ownerId;
+  if (ownerId === null && access === "admin") {
+    // A claimed repo's owner becomes an `owner` member (d1-store updateRepo).
+    await store.updateRepo(repo.id, { claim: { status: "claimed", ownerId: principalId, expiresAt: null } });
+    return principalId;
+  }
+  await grantAtLeast(store, repo.id, principalId, ROLE_OF[access]);
+  return ownerId;
+}
+
+/**
+ * A repo graded for the first time: the humans whose link saw it get what their GitHub access
+ * says (the oldest admin link claims it). A link that didn't see the repo grants nothing.
+ */
 export async function grantInstallationMembers(
   store: D1Store,
   repo: Repo,
   installationId: number,
 ): Promise<void> {
-  const links = await store.db
-    .select()
-    .from(githubInstallationLinks)
-    .where(eq(githubInstallationLinks.installationId, installationId))
-    .orderBy(githubInstallationLinks.linkedAt)
-    .all();
-  const at = new Date().toISOString();
-  for (const [i, link] of links.entries()) {
-    if (i === 0 && repo.claim.ownerId === null) {
-      // A claimed repo's owner becomes an `owner` member (d1-store updateRepo).
-      await store.updateRepo(repo.id, {
-        claim: { status: "claimed", ownerId: link.principalId, expiresAt: null },
-      });
-    } else {
-      await putMember(store, {
-        repoId: repo.id,
-        principalId: link.principalId,
-        role: "maintainer",
-        addedBy: "system",
-        addedAt: at,
-      });
-    }
+  if (repo.host == null) return;
+  let ownerId = repo.claim.ownerId;
+  for (const link of await linksSeeingRepo(store.db, installationId, repo.host.githubRepoId)) {
+    ownerId = await grantFromLink(store, repo, ownerId, link.principalId, link.access);
   }
 }
 
-/** After a link: memberships on the installation's repos that are already graded. */
+/** After a link: memberships on the repos that link saw which are already graded. */
 export async function grantLinkedRepos(
   store: D1Store,
   installationId: number,
   principalId: string,
 ): Promise<void> {
-  const rows = await store.db
-    .select({ id: githubInstallationRepos.repoId })
-    .from(githubInstallationRepos)
-    .where(eq(githubInstallationRepos.installationId, installationId))
-    .all();
-  const at = new Date().toISOString();
-  for (const { id } of rows) {
-    const repo = await store.getRepo(repoIdFor(id));
+  for (const { repoId, access } of await linkRepos(store.db, installationId, principalId)) {
+    const repo = await store.getRepo(repoIdFor(repoId));
     if (repo === null) continue;
-    if (repo.claim.ownerId === null) {
-      await store.updateRepo(repo.id, {
-        claim: { status: "claimed", ownerId: principalId, expiresAt: null },
-      });
-    } else if (repo.claim.ownerId !== principalId) {
-      await putMember(store, {
-        repoId: repo.id,
-        principalId,
-        role: "maintainer",
-        addedBy: "system",
-        addedAt: at,
-      });
-    }
+    await grantFromLink(store, repo, repo.claim.ownerId, principalId, access);
   }
 }
 

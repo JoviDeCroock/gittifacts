@@ -51,7 +51,7 @@ describe("plans and people from GitHub (M3)", () => {
   it("a GitHub login someone linked acts as that human; anyone else as their own disabled principal", async () => {
     const s = store();
     const human = await seedPrincipal(s, { kind: "human" });
-    await s.db.insert(githubInstallationLinks).values({ installationId: 990001, principalId: human, githubLogin: "linked-dev", linkedAt: new Date().toISOString() });
+    await s.db.insert(githubInstallationLinks).values({ installationId: 990001, principalId: human, githubLogin: "linked-dev", githubUserId: 31, linkedAt: new Date().toISOString() });
     expect(await githubActorPrincipal(s, { kind: "human", id: "31", login: "linked-dev" })).toBe(human);
     const own = await githubActorPrincipal(s, { kind: "human", id: "32", login: "stranger" });
     expect(own).toBe("gh-u-32");

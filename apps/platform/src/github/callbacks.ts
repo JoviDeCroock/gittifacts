@@ -9,9 +9,9 @@ import {
 } from "./api.js";
 import { repoAllowed } from "./allowlist.js";
 import { githubApp } from "./app-config.js";
-import { grantLinkedRepos } from "./grading.js";
+import { accessOf, grantLinkedRepos } from "./grading.js";
 import { FlowError, settingsUrl, takeState } from "./setup.js";
-import { addRepos, linkInstallation, upsertInstallation } from "./store.js";
+import { addRepos, linkInstallation, setLinkRepos, upsertInstallation } from "./store.js";
 
 const CODE = /^[A-Za-z0-9_-]{4,128}$/;
 
@@ -60,22 +60,34 @@ export async function finishSetup(
       },
       now,
     );
-    const repos = await userInstallationRepos(token, mine.id);
+    // GitHub lists an installation for anyone who can read one of its repos, so access is per
+    // repo: only the repos this user's token lists, each with the access GitHub reports.
+    const repos = (await userInstallationRepos(token, mine.id)).filter((r) =>
+      repoAllowed(svc.env as unknown as Record<string, unknown>, r.full_name),
+    );
     await addRepos(
       svc.store.db,
       mine.id,
-      repos
-        .filter((r) => repoAllowed(svc.env as unknown as Record<string, unknown>, r.full_name))
-        .map((r) => ({ id: r.id, fullName: r.full_name, private: r.private })),
+      repos.map((r) => ({ id: r.id, fullName: r.full_name, private: r.private })),
       now,
     );
     await linkInstallation(svc.store.db, {
       installationId: mine.id,
       principalId: caller.principal.id,
       githubLogin: user.login,
+      githubUserId: user.id,
       linkedAt: now.toISOString(),
     });
-    // Repos of this installation already graded become visible to the person who linked it.
+    // The personal account the App is installed on administers all of its repos.
+    const accountOwner = mine.account.type === "User" && mine.account.id === user.id;
+    await setLinkRepos(
+      svc.store.db,
+      mine.id,
+      caller.principal.id,
+      repos.map((r) => ({ repoId: r.id, access: accessOf(r.permissions, accountOwner) })),
+      now,
+    );
+    // The repos this person saw that are already graded become theirs to see (or claim).
     await grantLinkedRepos(svc.store, mine.id, caller.principal.id);
     await svc.audit.append({
       principalId: caller.principal.id,
@@ -85,6 +97,7 @@ export async function finishSetup(
         appId: app.appId,
         account: mine.account.login,
         githubLogin: user.login,
+        githubUserId: user.id,
         repos: repos.length,
       },
     });

@@ -9,6 +9,7 @@
  *   they cover, kept in sync from `installation*` webhooks and the setup flow.
  * - `github_installation_links`: which platform humans proved (with a GitHub user token) that they
  *   can access an installation. Never from `installation_id` alone.
+ * - `github_link_repos`: per link, the repos that token could see and its access to each.
  */
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
@@ -69,13 +70,43 @@ export const githubInstallationLinks = sqliteTable(
     installationId: integer("installation_id").notNull(),
     /** The platform human who proved access. */
     principalId: text("principal_id").notNull(),
-    /** The GitHub login whose user token proved it. */
+    /** The GitHub login whose user token proved it (display only: logins are renamable). */
     githubLogin: text("github_login").notNull(),
+    /**
+     * GitHub's numeric user id behind that token: who this human is on GitHub (author checks,
+     * attribution). Null on links made before migration 0023: such a link attributes nothing
+     * and counts as "may be the author" until it is linked again.
+     */
+    githubUserId: integer("github_user_id"),
     linkedAt: text("linked_at").notNull(),
   },
   (t) => [
     primaryKey({ columns: [t.installationId, t.principalId] }),
     index("github_installation_links_principal_idx").on(t.principalId),
+    index("github_installation_links_user_idx").on(t.githubUserId),
+  ],
+);
+
+/**
+ * The repos of an installation each link's user token could see, and with what access (from
+ * `GET /user/installations/{id}/repositories` at link time). Memberships come from these rows
+ * only, per repo: a link never grants a repo its user couldn't see on GitHub. "admin": admin on
+ * the repo, or the installation's personal account itself; "write": maintain or push; "read":
+ * anything less. Replaced on every link; rows go when the repo leaves the installation.
+ */
+export const githubLinkRepos = sqliteTable(
+  "github_link_repos",
+  {
+    installationId: integer("installation_id").notNull(),
+    principalId: text("principal_id").notNull(),
+    /** GitHub's repository id. */
+    repoId: integer("repo_id").notNull(),
+    access: text("access", { enum: ["admin", "write", "read"] }).notNull(),
+    recordedAt: text("recorded_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.installationId, t.principalId, t.repoId] }),
+    index("github_link_repos_repo_idx").on(t.installationId, t.repoId),
   ],
 );
 
