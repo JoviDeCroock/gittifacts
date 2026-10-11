@@ -22,12 +22,13 @@
   gap: var(--s-6);
   align-items: start;
 }
+/* Sticky under the top bar and the 52px station strip. */
 .tour__rail {
   position: sticky;
-  inset-block-start: 68px;
+  inset-block-start: calc(var(--topbar-h) + 52px + var(--s-4));
   display: grid;
   gap: var(--s-4);
-  max-block-size: calc(100dvh - 84px);
+  max-block-size: calc(100dvh - var(--topbar-h) - 52px - var(--s-6));
   overflow-y: auto;
   padding-block-end: var(--s-4);
   scrollbar-width: thin;
@@ -85,8 +86,8 @@
 /* ================================================================ station strip */
 .stations {
   position: sticky;
-  /* Under the top bar, which is 56px below the notch (layout.css). */
-  inset-block-start: calc(56px + env(safe-area-inset-top));
+  /* Under the top bar: 56px below the notch on phones, the slim 48px bar on desktop (tokens.css). */
+  inset-block-start: var(--topbar-h);
   z-index: calc(var(--z-sticky) - 1);
   margin-inline: calc(var(--gutter) * -1);
   margin-block-end: var(--s-4);
@@ -98,7 +99,6 @@
 }
 @media (min-width: 1024px) {
   .stations {
-    inset-block-start: 0;
     margin-inline: 0;
     padding-inline: 0;
   }
@@ -355,12 +355,8 @@
 .stop {
   padding-block: var(--s-6);
   border-block-start: 1px solid var(--rule);
-  scroll-margin-block-start: 118px;
-}
-@media (min-width: 1024px) {
-  .stop {
-    scroll-margin-block-start: 70px;
-  }
+  /* Lands under the top bar and the station strip. */
+  scroll-margin-block-start: calc(var(--topbar-h) + 62px);
 }
 /*
  * The current stop owns attention; the rest recede through colour steps that stay AA
