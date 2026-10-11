@@ -402,3 +402,31 @@ describe("a person's agents: limited to repos at creation, listed with their own
     );
   });
 });
+
+describe("an agent ends its own session (what `gittifacts logout` calls)", () => {
+  it("GET /me names the token's principal; DELETE its tokens with the same bearer revokes them", async () => {
+    const { app, human, agent } = await setup();
+    const me = await call(app, "GET", "/api/v1/me", { token: agent.token });
+    expect(me.status).toBe(200);
+    const { principal } = await json<{ principal: { id: string } }>(me);
+    expect(principal.id).toBe(agent.principal.id);
+    const revoked = await call(app, "DELETE", `/api/v1/principals/${principal.id}/tokens`, {
+      token: agent.token,
+    });
+    expect(revoked.status).toBe(200);
+    expect((await json<{ revoked: number }>(revoked)).revoked).toBeGreaterThan(0);
+    expect((await call(app, "GET", "/api/v1/me", { token: agent.token })).status).toBe(401);
+    // Recorded for the person who owns it.
+    const trail = await json<AuditPage>(
+      await call(
+        app,
+        "GET",
+        `/api/v1/audit?action=principal.tokens-revoked&actor=${agent.principal.id}`,
+        {
+          cookie: human.cookie,
+        },
+      ),
+    );
+    expect(trail.events.map((e) => e.subject)).toEqual([`principal:${agent.principal.id}`]);
+  });
+});

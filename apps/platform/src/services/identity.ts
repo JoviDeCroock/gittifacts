@@ -141,7 +141,12 @@ export async function revokeTokens(
   const target = await svc.store.getPrincipal(principalId);
   if (!target) throw notFound(`principal ${principalId}`);
   const allowed = target.id === caller.principal.id || target.ownerId === caller.principal.id;
-  if (!allowed) throw forbidden("only the principal or its owner may revoke its tokens");
+  if (!allowed)
+    throw forbidden("only the principal or its owner may revoke its tokens", undefined, {
+      explanation:
+        "A principal revokes its own tokens, or its owner does on the agents page. Revoke yours with your own id (whoami).",
+      call: "whoami({})",
+    });
   const revoked = await revokeAgentTokens(svc.store, target.id, svc.clock.now());
   await svc.audit.append({
     principalId: caller.principal.id,

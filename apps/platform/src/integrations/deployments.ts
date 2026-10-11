@@ -159,7 +159,11 @@ async function installationOf(svc: Services, caller: Caller) {
     .from(installations)
     .where(eq(installations.principalId, caller.principal.id))
     .get();
-  if (inst?.status !== "active") throw forbidden("this installation was removed");
+  if (inst?.status !== "active")
+    throw forbidden("this installation was removed", undefined, {
+      explanation:
+        "The repo owner uninstalled this integration, so its tokens no longer report deployments. Ask them to install it again.",
+    });
   return inst;
 }
 

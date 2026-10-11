@@ -91,7 +91,7 @@ Examples: `gittifacts login --host https://gittifacts.example`, `gittifacts logi
 
 ### `gittifacts logout`
 
-Forget this host's login token. --all also forgets the tokens of unclaimed projects created from this machine.
+Revoke this host's login on the platform (its session stops showing as active), then forget the token. --all also forgets the tokens of unclaimed projects created from this machine.
 
 ```text
 gittifacts logout [--all]
@@ -209,11 +209,11 @@ One per MCP tool. Arguments, scopes and outputs are in the [MCP tools](/docs/ref
 | `gittifacts ws-commit-push` | `ws_commit_push` | `gittifacts ws-commit-push --workspace-id <string> --message <string> [--idempotency-key <key>]` — Commits every change in the workspace (as you) and pushes it to the Change's fork branch. |
 | `gittifacts close-workspace` | `close_workspace` | `gittifacts close-workspace <workspaceId> [--idempotency-key <key>]` — Stops the workspace and deletes its sleep snapshot. |
 | `gittifacts propose-platform-config` | `propose_platform_config` | `gittifacts propose-platform-config <repoId> [--rerun] [--wait-sec <integer>] [--idempotency-key <key>]` — Detects how an imported repo installs, tests and builds (in a sandbox) and proposes .platform/ci.ts, .platform/policy.ts and AGENTS.md as a draft Plan plus a Change a human approves (never applied silently). |
-| `gittifacts enqueue` | `enqueue` | `gittifacts enqueue <changeId> [--priority <normal\|security\|incident>] [--depends-on <string>...] [--plangroup <string>] [--land-together] [--group-size <integer>] [--land-mode <atomic\|incremental>] [--incident-plan-id <string>] [--idempotency-key <key>]` — Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode). |
+| `gittifacts enqueue` | `enqueue` | `gittifacts enqueue <changeId> [--priority <normal\|security\|incident>] [--depends-on <string>...] [--plangroup <string>] [--land-together] [--group-size <integer>] [--land-mode <atomic\|incremental>] [--incident-plan-id <string>] [--idempotency-key <key>]` — Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode); optional, since approval queues a Change by itself. |
 | `gittifacts queue-status` | `queue_status` | `gittifacts queue-status <changeId>` — State, track, batch, position, ETA, the Changes it waits on and why (e.g. |
 | `gittifacts wait-for-merge` | `wait_for_merge` | `gittifacts wait-for-merge <changeId> [--timeout-sec <integer>]` — Long-polls until the Change merges, is ejected or dequeued, or the queue freezes (timeoutSec ≤ 55). |
-| `gittifacts dequeue` | `dequeue` | `gittifacts dequeue <changeId> [--idempotency-key <key>]` — Removes your Change from the merge queue (stack dependents leave with it). |
-| `gittifacts reprioritize` | `reprioritize` | `gittifacts reprioritize <changeId> --priority <normal\|security\|incident> [--incident-plan-id <string>] [--idempotency-key <key>]` — Sets the priority class (normal, security, incident). |
+| `gittifacts dequeue` | `dequeue` | `gittifacts dequeue <changeId> [--idempotency-key <key>]` — Removes a Change from the merge queue (stack dependents leave with it): its author, the author's owner, or a person who may review it. |
+| `gittifacts reprioritize` | `reprioritize` | `gittifacts reprioritize <changeId> --priority <normal\|security\|incident> [--incident-plan-id <string>] [--idempotency-key <key>]` — Sets a queued Change's priority class (normal, security, incident): its author, the author's owner, or a person who may review it. |
 | `gittifacts queue-overview` | `queue_overview` | `gittifacts queue-overview <repoId>` — Tracks (independent parallel queues) with their speculative batches, the landing pipeline, freeze state, throughput, p50/p95 time in queue, quarantined tests and every entry with its reason and ETA. |
 | `gittifacts search-tools` | `search_tools` | `gittifacts search-tools <query>` — Fuzzy search over every gittifacts tool's name and description. |
 | `gittifacts request-qa` | `request_qa` | `gittifacts request-qa <changeId> [--github <string>] [--force] [--idempotency-key <key>]` — On request only: an agent drives the app built from the change's current head in a real browser against the Plan's acceptance criteria (no Plan: a smoke check), with a screenshot per step, a replay GIF and a pass / fail / couldn't-test verdict per criterion, signed into the evidence. |

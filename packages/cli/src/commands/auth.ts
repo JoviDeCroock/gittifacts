@@ -1,6 +1,7 @@
 /**
  * `login` (OAuth device flow), `logout`. Logging in is optional: unclaimed projects work without
- * an account, and GITTIFACTS_TOKEN overrides whatever is stored.
+ * an account, and GITTIFACTS_TOKEN overrides whatever is stored. `logout` revokes the login's
+ * tokens on the platform before forgetting them, so the session stops showing as active.
  */
 import {
   discoverEndpoints,
@@ -202,12 +203,42 @@ export const login: Builtin = {
   },
 };
 
+/**
+ * Revoke every token of the principal `token` belongs to (`DELETE /api/v1/principals/{self}/tokens`,
+ * allowed for the principal itself). Best effort: an unreachable platform or an already dead token
+ * still lets the local logout proceed, and the answer says what happened.
+ */
+async function revokeOnPlatform(
+  ctx: Ctx,
+  host: string,
+  token: string,
+): Promise<{ revoked: number } | { revoked: null; reason: string }> {
+  const auth = { authorization: `Bearer ${token}`, accept: "application/json" };
+  try {
+    const me = await ctx.io.fetch(`${host}/api/v1/me`, { headers: auth });
+    if (me.status === 401) return { revoked: null, reason: "the token was already invalid" };
+    if (!me.ok) return { revoked: null, reason: `GET /api/v1/me answered ${me.status}` };
+    const { principal } = (await me.json()) as { principal?: { id?: unknown } };
+    if (typeof principal?.id !== "string") return { revoked: null, reason: "no principal id" };
+    const res = await ctx.io.fetch(
+      `${host}/api/v1/principals/${encodeURIComponent(principal.id)}/tokens`,
+      { method: "DELETE", headers: auth },
+    );
+    if (!res.ok) return { revoked: null, reason: `revoking answered ${res.status}` };
+    const body = (await res.json()) as { revoked?: unknown };
+    return { revoked: typeof body.revoked === "number" ? body.revoked : 0 };
+  } catch (e) {
+    if (isAbort(e)) throw e;
+    return { revoked: null, reason: "the platform was unreachable" };
+  }
+}
+
 export const logout: Builtin = {
   spec: builtinSpec({
     command: "logout",
     title: "Log out",
     description:
-      "Forget this host's login token. --all also forgets the tokens of unclaimed projects created from this machine.",
+      "Revoke this host's login on the platform (its session stops showing as active), then forget the token. --all also forgets the tokens of unclaimed projects created from this machine.",
     properties: {
       all: { type: "boolean", description: "Also remove project tokens for this host." },
     },
@@ -215,6 +246,8 @@ export const logout: Builtin = {
   async run(ctx, parsed) {
     const host = normalizeHost(hostFor(ctx));
     const all = bool(parsed, "all");
+    const login = ctx.creds().hosts[host]?.login;
+    const server = login === undefined ? null : await revokeOnPlatform(ctx, host, login.token);
     let removedLogin = false;
     let removedProjects = 0;
     updateCredentials(ctx.credentialsPath, (c) => {
@@ -236,6 +269,8 @@ export const logout: Builtin = {
         loggedOut: removedLogin || removedProjects > 0,
         host,
         removed: { login: removedLogin, projectTokens: removedProjects },
+        // null: there was no login to revoke; revoked null: forgotten locally only (see reason).
+        revokedOnPlatform: server,
         credentialsPath: ctx.credentialsPath,
         ...(ctx.io.env.GITTIFACTS_TOKEN
           ? { note: "GITTIFACTS_TOKEN is still set in your environment." }

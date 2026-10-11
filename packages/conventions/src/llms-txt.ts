@@ -63,7 +63,11 @@ export function llmsTxt(opts: LlmsTxtOptions): string {
       opts.mcpUrl,
       `streamable HTTP, MCP ${MCP_PROTOCOL_VERSION}; send Authorization: Bearer <token>${opts.oauth === true ? ", or use OAuth discovered from the 401" : ""}`,
     ),
-    link("OpenAPI", opts.openapiUrl, "the HTTP API; every endpoint mirrors an MCP tool"),
+    link(
+      "OpenAPI",
+      opts.openapiUrl,
+      "the HTTP API; most endpoints have an MCP tool twin, except a person's acts (approving, reviewing, policy, members)",
+    ),
     link(
       "CLI",
       cliTarballUrl(host),

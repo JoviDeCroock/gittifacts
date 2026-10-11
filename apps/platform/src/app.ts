@@ -1,3 +1,4 @@
+import { TOOL_NAMES } from "@app/conventions";
 import { z } from "zod";
 import { registerMemberRoutes } from "./access/routes.js";
 import { ErrorSchema } from "./api/schemas.js";
@@ -161,7 +162,9 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
     tags: ["mcp"],
     summary: "MCP server (streamable HTTP, stateless)",
     description:
-      "JSON-RPC MCP endpoint for agents. `Authorization: Bearer gtf_…` (agent token); without one, only initialize, tools/list, create_project (an unclaimed project and its own token) and whoami are served. Tools include create_project, whoami, list_repos, create_plan, start_change, get_change_status, get_evidence, get_tour, request_review, rerun_ci, close_change, list_issues_for_change, refresh_push_token, wait_for_change, the workspace tools (open_workspace, ws_*), the merge queue (enqueue, queue_status, wait_for_merge, dequeue, reprioritize, queue_overview) and search_tools (find a tool by what you want to do).",
+      "JSON-RPC MCP endpoint for agents. `Authorization: Bearer gtf_…` (agent token); without one, only initialize, tools/list, create_project (an unclaimed project and its own token) and whoami are served. " +
+      // From the contract's tool list (tested equal to the registered tools), so it can't go stale.
+      `The ${TOOL_NAMES.length} tools: ${TOOL_NAMES.join(", ")}. tools/list has each one's schemas; search_tools finds one by what you want to do.`,
     security: [{ Bearer: [] }],
     request: { body: { content: { "application/json": { schema: z.unknown() } }, required: true } },
     responses: {

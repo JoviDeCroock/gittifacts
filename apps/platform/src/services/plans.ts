@@ -136,9 +136,15 @@ export async function createPlan(svc: Services, caller: Caller, input: unknown):
     const prev = await svc.store.getPlan(draft.supersedes);
     if (!prev) throw noSuchPlan(draft.supersedes, draft.repoId);
     if (prev.repoId !== draft.repoId)
-      throw conflict("a plan can only supersede a plan of the same repo");
+      throw conflict("a plan can only supersede a plan of the same repo", "conflict", {
+        explanation: `Plan ${prev.id} belongs to another repo. Supersede one of this repo's plans, or leave supersedes out.`,
+        call: `list_plans({ repoId: "${draft.repoId}" })`,
+      });
     if (prev.status === "rejected" || prev.status === "superseded") {
-      throw conflict(`plan ${prev.id} is ${prev.status} and cannot be superseded`, "invalid-state");
+      throw conflict(`plan ${prev.id} is ${prev.status} and cannot be superseded`, "invalid-state", {
+        explanation: `Plan ${prev.id} is ${prev.status}; only a draft or an approved plan can be superseded. Draft a new plan without supersedes.`,
+        call: `get_plan({ planId: "${prev.id}" })`,
+      });
     }
   }
   const now = svc.clock.now().toISOString();
