@@ -8,6 +8,8 @@ import {
   freezeTone,
   orderTracks,
   percentLabel,
+  queuePowers,
+  reprioritizeTwin,
   splitEntries,
   trackLabel,
   updatedLabel,
@@ -167,5 +169,37 @@ describe("updatedLabel", () => {
     expect(updatedLabel(1_000, 3_000)).toBe("Updated just now");
     expect(updatedLabel(0, 12_000)).toBe("Updated 12 s ago");
     expect(updatedLabel(0, 185_000)).toBe("Updated 3 min ago");
+  });
+});
+
+describe("queuePowers", () => {
+  const human = (scopes: string[]) => ({ id: "prn_me", kind: "human", scopes });
+  const reviewer = human(["repo:read", "change:create", "change:review"]);
+
+  it("lets a human reviewer act on anyone's entry, and an owner run the queue", () => {
+    const p = queuePowers(reviewer, "reviewer", new Set());
+    expect(p.canAct("prn_someone")).toBe(true);
+    expect(p.canAdmin).toBe(false);
+    expect(queuePowers(human(["change:create", "repo:admin"]), "owner", new Set()).canAdmin).toBe(true);
+  });
+
+  it("lets an author or an agent's owner act on their own entries only", () => {
+    const p = queuePowers(human(["repo:read", "change:create"]), "reviewer", new Set(["prn_bot"]));
+    expect(p.canAct("prn_bot")).toBe(true);
+    expect(p.canAct("prn_me")).toBe(true);
+    expect(p.canAct("prn_other")).toBe(false);
+  });
+
+  it("shows nothing when the role or session is unknown, or to readers and agents", () => {
+    expect(queuePowers(null, "owner", new Set()).canAct("x")).toBe(false);
+    expect(queuePowers(reviewer, null, new Set()).canAct("x")).toBe(false);
+    expect(queuePowers(reviewer, "reader", new Set()).canAct("x")).toBe(false);
+    const agent = { id: "prn_bot", kind: "agent", scopes: ["change:create", "change:review", "repo:admin"] };
+    expect(queuePowers(agent, "owner", new Set()).canAct("prn_other")).toBe(false);
+    expect(queuePowers(agent, "owner", new Set()).canAdmin).toBe(false);
+  });
+
+  it("prints the agent twin the MCP tool takes", () => {
+    expect(reprioritizeTwin("chg_1", "security")).toBe('reprioritize({ changeId: "chg_1", priority: "security" })');
   });
 });

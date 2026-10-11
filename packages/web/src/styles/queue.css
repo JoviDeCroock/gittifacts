@@ -113,63 +113,72 @@
   }
 }
 
-/* ---------------------------------------------------------------- stats */
-.q-stats__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
+/* ---------------------------------------------------------------- figures (hairline rows, not cards) */
+/*
+ * One strip between two hairlines. Figures are separated by vertical hairlines; each row's first
+ * hairline sits at -1px and is clipped, so a wrapped row starts clean.
+ */
+.q-figs {
   overflow: hidden;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-panel);
-  background: var(--rule);
+  border-block: 1px solid var(--rule);
 }
-@media (min-width: 640px) {
-  .q-stats__grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+.q-figs__row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  row-gap: var(--s-3);
+  padding-block: var(--s-3);
 }
-@media (min-width: 1180px) {
-  .q-stats__grid {
+@media (min-width: 1100px) {
+  .q-figs__row {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
-.q-stat {
-  display: grid;
-  align-content: start;
-  gap: var(--s-1);
-  padding: var(--s-3) var(--s-4);
-  background: var(--surface);
+.q-fig {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-inline-start: -1px;
+  padding-inline: var(--s-3);
+  border-inline-start: 1px solid var(--rule);
   min-inline-size: 0;
 }
-.q-stat dt {
-  font-size: var(--text-small);
-  color: var(--text-3);
+@media (min-width: 640px) {
+  .q-fig {
+    padding-inline: var(--s-4);
+  }
 }
-.q-stat dd {
-  display: grid;
-  gap: 2px;
+.q-fig dd {
+  text-wrap: balance;
   font-size: var(--text-title);
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
+  color: var(--text);
 }
-.q-stat__sub {
+.q-fig dt {
   font-size: var(--text-meta);
-  font-weight: var(--weight-regular);
   line-height: 1.45;
   color: var(--text-3);
 }
-a.q-stat__sub {
-  justify-self: start;
+.q-fig dt a {
   color: var(--action-ink);
 }
-/* Touch: a 44px target without growing the tile. */
+/* Touch: a 44px target without growing the strip. */
 @media (pointer: coarse) {
-  a.q-stat__sub {
-    padding-block: 13.5px;
-    margin-block: -13.5px;
+  .q-fig dt a {
+    display: inline-block;
+    padding-block: 13px;
+    margin-block: -13px;
   }
 }
-.q-stat__nm {
+.q-fig__sub {
+  display: block;
+}
+/* A figure that is a state says so in ochre, beside its word ("Resolving conflicts"). */
+.q-fig--warn dd {
+  color: var(--warn);
+}
+.q-fig__nm {
   font-size: var(--text-body);
 }
 
@@ -431,6 +440,7 @@ a.q-stat__sub {
 }
 .q-entry__main {
   display: grid;
+  align-content: start;
   gap: var(--s-2);
   justify-items: start;
   min-inline-size: 0;
@@ -694,4 +704,139 @@ a.q-stat__sub {
   font-size: var(--text-code);
   color: var(--text-2);
   overflow-wrap: anywhere;
+}
+/* ---------------------------------------------------------------- acts (dequeue, priority, freeze, thaw, resume) */
+/* Under the row's text on phones; in the facts column on desktop, widening when an act opens. */
+.q-acts {
+  grid-column: 2;
+  display: grid;
+  gap: var(--s-2);
+  min-inline-size: 0;
+  max-inline-size: 72ch;
+}
+@media (min-width: 1024px) {
+  .q-entry:has(> .q-acts) {
+    grid-template-rows: auto 1fr;
+  }
+  .q-entry:has(> .q-acts) > .q-entry__main {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+  .q-entry:has(> .q-acts) > .q-facts {
+    grid-row: 1;
+  }
+  .q-acts {
+    grid-column: 3;
+    grid-row: 2;
+    align-content: start;
+  }
+  .q-acts:has(.q-act) {
+    grid-column: 2 / -1;
+    grid-row: 3;
+  }
+}
+.q-acts__buttons,
+.q-act__buttons,
+.q-banner__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.q-banner__acts {
+  margin-block-start: var(--s-2);
+}
+/* An act opened inline: a sheet with a hairline edge, on paper (never acetate: you decide here). */
+.q-act {
+  display: grid;
+  gap: var(--s-3);
+  min-inline-size: 0;
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+}
+.q-act--queue {
+  max-inline-size: 72ch;
+}
+.q-act__lede {
+  max-inline-size: var(--measure);
+  color: var(--text);
+}
+.q-act__choices {
+  display: grid;
+  gap: 0;
+}
+.q-act__choices .check {
+  padding-block: var(--s-1);
+}
+.q-choice {
+  font-weight: var(--weight-medium);
+}
+.q-act__reason {
+  min-block-size: 64px;
+}
+/* The agent twin: a quiet line in the act, the call in mono (it is a command). */
+.q-twin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s-2);
+  padding-block-start: var(--s-2);
+  border-block-start: 1px solid var(--rule);
+  font-size: var(--text-small);
+  color: var(--text-3);
+}
+.q-twin__call {
+  min-inline-size: 0;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.q-twin--person {
+  gap: var(--s-2);
+}
+.q-twin--person .icon {
+  flex: none;
+}
+/* A status line after an act; out of the flow while there is nothing to say. */
+.q-notice {
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--text-2);
+}
+.q-notice:empty {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.q-rel__id {
+  font-size: var(--text-meta);
+}
+
+/* ---------------------------------------------------------------- tracks folded (phones) */
+.q-fold__summary {
+  flex-wrap: wrap;
+  column-gap: var(--s-3);
+}
+.q-fold__meta {
+  font-size: var(--text-small);
+  font-weight: var(--weight-regular);
+  color: var(--text-3);
+}
+.q-fold__summary .disclosure__chev {
+  margin-inline-start: auto;
+}
+.q-fold__body {
+  display: grid;
+  gap: var(--s-4);
+  padding-block-start: var(--s-2);
+}
+.q-notice:focus {
+  outline: none;
+}
+.q-notice:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }

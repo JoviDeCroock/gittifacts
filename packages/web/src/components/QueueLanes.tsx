@@ -133,35 +133,67 @@ function LandingLane({ landing, find }: { landing: LandingBatch[]; find: Find })
   );
 }
 
-export function QueueLanes({ q }: { q: QueueOverviewView }) {
+/**
+ * `folded` (phones): the rails scroll sideways anyway, so the tracks sit behind one disclosure
+ * ("4 tracks · 9 batches") below the per-change list instead of pushing it two screens down.
+ */
+export function QueueLanes({ q, folded = false }: { q: QueueOverviewView; folded?: boolean }) {
   const find = entryIndex(q.entries);
   const tracks = orderTracks(q.tracks);
+  const empty = tracks.length === 0 && q.landing.length === 0;
+  const batches = tracks.reduce((n, t) => n + t.batches.length, 0) + q.landing.length;
+  const head = (
+    <h2 id="q-tracks" class="q-section__title">
+      Tracks {folded ? null : <span class="q-count tnum">{tracks.length}</span>}
+    </h2>
+  );
+  const lede = (
+    <p class="q-section__lede">
+      Changes that touch different code speculate in parallel, one track each. Within a track,
+      each batch is tested on top of the one before it.
+    </p>
+  );
+  const lanes = empty ? (
+    <EmptyState icon="list-ordered" title="Nothing is being tested">
+      <p>
+        Approved changes enter the queue through the API or MCP (<code>enqueue</code>). Each
+        conflict-free group gets its own track and speculates against main.
+      </p>
+    </EmptyState>
+  ) : (
+    <ol class="q-lanes">
+      {tracks.map((t) => (
+        <TrackLane key={t.id} track={t} find={find} />
+      ))}
+      {q.landing.length > 0 ? <LandingLane landing={q.landing} find={find} /> : null}
+    </ol>
+  );
+  if (folded && !empty) {
+    return (
+      <section class="q-section" aria-labelledby="q-tracks">
+        <details class="disclosure q-fold">
+          <summary class="q-fold__summary">
+            {head}
+            <span class="q-fold__meta tnum">
+              {plural(tracks.length, "track")} · {plural(batches, "batch", "batches")}
+            </span>
+            <Icon name="chevron-down" size={20} class="disclosure__chev" />
+          </summary>
+          <div class="q-fold__body">
+            {lede}
+            {lanes}
+          </div>
+        </details>
+      </section>
+    );
+  }
   return (
     <section class="q-section" aria-labelledby="q-tracks">
       <div class="q-section__head">
-        <h2 id="q-tracks" class="q-section__title">
-          Tracks <span class="q-count tnum">{tracks.length}</span>
-        </h2>
-        <p class="q-section__lede">
-          Changes that touch different code speculate in parallel, one track each. Within a track,
-          each batch is tested on top of the one before it.
-        </p>
+        {head}
+        {lede}
       </div>
-      {tracks.length === 0 && q.landing.length === 0 ? (
-        <EmptyState icon="list-ordered" title="Nothing is being tested">
-          <p>
-            Approved changes enter the queue through the API or MCP (<code>enqueue</code>). Each
-            conflict-free group gets its own track and speculates against main.
-          </p>
-        </EmptyState>
-      ) : (
-        <ol class="q-lanes">
-          {tracks.map((t) => (
-            <TrackLane key={t.id} track={t} find={find} />
-          ))}
-          {q.landing.length > 0 ? <LandingLane landing={q.landing} find={find} /> : null}
-        </ol>
-      )}
+      {lanes}
     </section>
   );
 }

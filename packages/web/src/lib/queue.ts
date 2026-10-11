@@ -1,6 +1,7 @@
 /**
  * Merge queue vocabulary and pure formatting helpers. No I/O, no clocks: `now` is passed in.
  */
+import type { RepoRole } from "../api/members.js";
 import type {
   BatchKind,
   BatchState,
@@ -13,6 +14,7 @@ import type {
   QueueEntryView,
   QueueStall,
   QueueTrack,
+  SettablePriority,
   StallState,
   TrainState,
 } from "../api/queue.js";
@@ -34,7 +36,8 @@ export const BATCH_STATE: Record<BatchState, StatusMeta> = {
   pending: { label: "Pending", tone: "neutral", icon: "circle-dashed" },
   building: { label: "Building tree", tone: "neutral", icon: "package" },
   ready: { label: "Ready", tone: "neutral", icon: "circle-dot" },
-  running: { label: "CI running", tone: "neutral", icon: "loader" },
+  // A static glyph: a loader that does not turn reads as frozen, and a dozen spinning ones is noise.
+  running: { label: "CI running", tone: "neutral", icon: "timer" },
   rechecking: { label: "Rechecking", tone: "neutral", icon: "test-tube" },
   passed: { label: "Passed", tone: "ok", icon: "check-circle" },
   landing: { label: "Landing", tone: "ok", icon: "git-merge" },
@@ -252,4 +255,48 @@ export function stallTone(stalls: QueueStall[]): Tone {
 export function attemptsLabel(x: QueueStall): string {
   if (x.attempts <= 0) return "No failed attempt recorded";
   return `${x.attempts} of ${x.maxAttempts} attempt${x.maxAttempts === 1 ? "" : "s"} failed`;
+}
+
+// ---------------------------------------------------------------- acts (who may, and the agent twins)
+
+/** The classes a person picks from; reverts are prioritized automatically. */
+export const PRIORITY_CHOICES: readonly SettablePriority[] = ["normal", "security", "incident"];
+
+const ROLE_RANK: Record<RepoRole, number> = { reader: 1, reviewer: 2, maintainer: 3, owner: 4 };
+
+export interface QueueViewer {
+  id: string;
+  kind: string;
+  scopes: readonly string[];
+}
+
+/**
+ * What the viewer may do on the queue, mirroring the platform (queue/service.ts, access/roles.ts):
+ * dequeue and reprioritize need contribute on the repo and either the author, the person who owns
+ * the authoring agent, or a human reviewer; freeze, thaw and resume need a human owner. Unknown
+ * (no session or no role yet) shows nothing: the server refuses what this cannot see.
+ */
+export function queuePowers(
+  viewer: QueueViewer | null,
+  role: RepoRole | null,
+  myAgents: ReadonlySet<string>,
+): { canAct: (authorId: string) => boolean; canAdmin: boolean } {
+  const human = viewer?.kind === "human";
+  const has = (s: string) => viewer?.scopes.includes(s) ?? false;
+  const contributes = role !== null && ROLE_RANK[role] >= ROLE_RANK.reviewer && has("change:create");
+  const reviews = human && has("change:review");
+  return {
+    canAct: (authorId) =>
+      viewer !== null && contributes && (reviews || authorId === viewer.id || myAgents.has(authorId)),
+    canAdmin: human && role === "owner" && (has("repo:admin") || has("policy:admin")),
+  };
+}
+
+/** The MCP call an agent makes for the same act (packages/mcp/src/tools/queue.ts). */
+export function dequeueTwin(changeId: string): string {
+  return `dequeue({ changeId: ${JSON.stringify(changeId)} })`;
+}
+
+export function reprioritizeTwin(changeId: string, priority: SettablePriority): string {
+  return `reprioritize({ changeId: ${JSON.stringify(changeId)}, priority: ${JSON.stringify(priority)} })`;
 }
