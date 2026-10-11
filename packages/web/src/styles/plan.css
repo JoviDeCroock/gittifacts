@@ -19,7 +19,8 @@
   }
   .plan-layout__rail {
     position: sticky;
-    inset-block-start: var(--s-6);
+    /* Below the top bar, which sits over the content column from 1024px. */
+    inset-block-start: calc(var(--topbar-h) + var(--s-4));
   }
 }
 
