@@ -43,7 +43,6 @@ describe("password reset", () => {
     const { app } = makeApp();
     expect(await json(await call(app, "GET", "/api/v1/sign-in-options"))).toEqual({
       passwordReset: false,
-      passkeys: true,
     });
     const res = await call(app, "POST", "/api/auth/request-password-reset", {
       body: { email: "someone@example.com", redirectTo: `${ORIGIN}/reset-password` },

@@ -17,6 +17,7 @@
   color: var(--text-2);
 }
 .reset-form__hint {
+  margin-block-start: calc(-1 * var(--s-3));
   font-size: var(--text-small);
 }
 .reset-form__back {

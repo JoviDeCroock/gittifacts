@@ -8,12 +8,11 @@ import { isMockMode } from "./mode.js";
 
 export interface SignInOptions {
   passwordReset: boolean;
-  passkeys: boolean;
 }
 
 export type ResetResult = { ok: true } | { ok: false; message: string };
 
-const OFF: SignInOptions = { passwordReset: false, passkeys: false };
+const OFF: SignInOptions = { passwordReset: false };
 
 let cached: Promise<SignInOptions> | null = null;
 

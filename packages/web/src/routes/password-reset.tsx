@@ -58,7 +58,7 @@ export function ForgotPassword() {
         action={<LinkButton href="/signin" variant="primary">Back to sign in</LinkButton>}
       >
         <p>This server can't send e-mail, so it can't send you a reset link.</p>
-        <p>Sign in another way (GitHub, or a passkey you added), or ask whoever runs this server.</p>
+        <p>If you can't sign in, ask whoever runs this server for help.</p>
       </ConsentOutcome>
     );
   } else if (sent.value) {
@@ -172,8 +172,8 @@ export function ResetPassword() {
             aria-invalid={error.value ? "true" : undefined}
             aria-describedby={error.value ? "reset-error" : "reset-hint"}
           />
-          <span class="reset-form__hint" id="reset-hint">At least 8 characters.</span>
         </label>
+        <p class="reset-form__hint" id="reset-hint">At least 8 characters.</p>
         <FormError id="reset-error" message={error.value} />
         <Button type="submit" variant="primary" wide busy={busy.value} busyLabel="Saving…">
           Save the new password

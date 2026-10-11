@@ -22,7 +22,6 @@ const SignInOptions = z
     passwordReset: z
       .boolean()
       .describe("A forgotten password can be reset by e-mail (outbound e-mail is configured)"),
-    passkeys: z.boolean().describe("Passkeys can be added and used to sign in"),
   })
   .meta({ id: "SignInOptions" });
 
@@ -42,7 +41,7 @@ export function resetNotConfigured(): ApiError {
     undefined,
     {
       explanation:
-        "This deployment can't send e-mail, so it can't send a reset link. Sign in another way (GitHub, or a passkey you added), or ask the platform's operator to configure e-mail (docs/deploy.md, \"Outbound e-mail\").",
+        "This deployment can't send e-mail, so it can't send a reset link. Ask whoever runs it for help, or to configure outbound e-mail (docs/deploy.md, \"Outbound e-mail\").",
     },
   );
 }
@@ -50,7 +49,7 @@ export function resetNotConfigured(): ApiError {
 /** Register BEFORE the `/api/auth/*` handler: the guard must run first. */
 export function registerPasswordResetRoutes(app: ApiApp): void {
   app.openapi(options, (c) =>
-    c.json({ passwordReset: emailConfigured(c.env), passkeys: true }, 200, {
+    c.json({ passwordReset: emailConfigured(c.env) }, 200, {
       "cache-control": "no-store",
     }),
   );

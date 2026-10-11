@@ -199,3 +199,22 @@
   max-inline-size: 68ch;
   overflow-wrap: anywhere;
 }
+/* The link wraps anywhere (its token has no "/" to break at) and keeps its copy button beside it. */
+.invite-once .cmd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-2);
+  max-inline-size: 100%;
+  padding: 8px 10px;
+  border-radius: var(--r-control);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+}
+.invite-once code {
+  min-inline-size: 0;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  overflow-wrap: anywhere;
+}
