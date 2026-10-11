@@ -3120,3 +3120,38 @@ anonymous `create_project` the next call got a 401 that never mentioned the proj
 **Consequences.** `pushIssues` and `laneSummary` are required fields of two outputs (additive for clients). The
 coordinator API gains `pushIssues(actor, changeId)`. If reading the list fails, it reports none rather than
 failing the status call: the list is a hint, and leaving it out never lowers risk.
+
+## 2026-10-11 — Invites for people without an account; password reset only where e-mail exists
+
+**Context.** Adding a member by e-mail failed unless that person had already signed up ("ask them to sign in once,
+then add them again"). There was no way back into an account after a forgotten password. The platform sends no
+e-mail.
+
+**Decision.**
+- Adding an e-mail nobody has signed up with creates a pending invite (`repo_invites`, migration 0022) and answers 202
+  with a single-use link `/invite/gtm_…` (32 random bytes; only the SHA-256 is stored; a week). The link is shown once
+  and the owner sends it. Inviting the same e-mail again revokes the old link. Adding the person directly once they
+  have signed up revokes their open invites. Owners see open invites on the members page and revoke them.
+- Joining needs **the link and a signed-in account whose e-mail is the invited one**. Neither alone is enough. E-mail
+  sign-up doesn't prove the address (nothing is mailed), so signing up as the invited e-mail must not grant access by
+  itself. The link is a bearer secret that can be forwarded or leaked, so holding it must not admit someone else
+  either. A person signed in as someone else is told which e-mail the invite is for (partly hidden) and offered a
+  switch. Accepting is one guarded UPDATE (open, unexpired), so a link works once. It also requires the inviter to
+  still be an owner, so demoting an owner closes their invites. An existing member keeps their role.
+- Audit on `repo:<id>`: `member.invited`, `member.invite-accepted`, `member.invite-revoked`. Payloads carry a masked
+  e-mail (`ad•••@example.com`), because readers of the repo's audit log don't see members' e-mails.
+- No MCP twin, following the members precedent: adding, removing and changing members is human-only
+  (`requirePrincipal(…, { humanOnly: true })`, only `list_members` is a tool). Accepting is a person joining for
+  themselves. `list_members` returns no invites (agents are never `canManage`).
+- Password reset uses better-auth's flow behind optional outbound e-mail: a Cloudflare Email Service `send_email`
+  binding `EMAIL` plus `EMAIL_FROM` (docs/research/email.md). Neither is declared in wrangler.jsonc, so deploy never
+  depends on an onboarded sending domain. docs/deploy.md has the manual step. Unconfigured (production today):
+  `GET /api/v1/sign-in-options` says `passwordReset: false`, sign-in shows no "Forgot password?", and
+  `POST /api/auth/request-password-reset` answers 503 `not-configured` with a fix. Configured: the link works once for
+  an hour, the answer is the same for unknown e-mails, and a reset signs the account out everywhere.
+- Passkeys stay without UI for now. The server plugin is configured, but the gate serves from `127.0.0.1` and
+  WebAuthn refuses IP-address RP IDs, so a virtual-authenticator test needs the gate moved to `localhost`. There is
+  also no account settings screen for "Add a passkey" yet.
+
+**Consequences.** `MembersView` gains `invites`, and `POST …/members` gains a 202 shape. Web clients must read both
+`member` and `invite`. The invite and reset screens are public routes like `/claim/:token`.
