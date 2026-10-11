@@ -197,7 +197,7 @@ export function Palette() {
     const plan = ctx?.kind === "plan" ? objects.value.plans.find((p) => p.id === ctx.id) : undefined;
     const here =
       ctx?.kind === "change"
-        ? { status: objects.value.changes.find((c) => c.id === ctx.id)?.status }
+        ? (({ status, repoId }) => ({ status, repoId }))(objects.value.changes.find((c) => c.id === ctx.id) ?? { status: undefined, repoId: undefined })
         : plan
           ? { status: plan.status, mine: plan.authorId !== undefined && plan.authorId === principal.value?.id }
           : {};

@@ -27,7 +27,7 @@ export type Act =
   | { kind: "page"; name: PageCommand }
   | { kind: "theme"; value: "system" | "light" | "dark" };
 
-export type PageCommand = "approve" | "request-changes" | "reject" | "next-stop" | "prev-stop";
+export type PageCommand = "approve" | "request-changes" | "reject" | "next-stop" | "prev-stop" | "next-change";
 
 export type Group = "This change" | "This plan" | "This repo" | "Your agents" | "Open" | "Go to" | "Preferences";
 
@@ -102,6 +102,8 @@ export interface ChangeHere {
   status?: string;
   /** The viewer wrote it (a plan's author may withdraw it while it is a draft). */
   mine?: boolean;
+  /** The change's repo, when known (the next change to review is in the same repo). */
+  repoId?: string;
 }
 
 function changeCommands(id: string, sub: "" | "evidence" | "rollout", here: ChangeHere): Command[] {
@@ -122,6 +124,10 @@ function changeCommands(id: string, sub: "" | "evidence" | "rollout", here: Chan
       { id: "change.next-stop", label: "Next stop", group: "This change", icon: "chevron-down", act: { kind: "page", name: "next-stop" }, twin: null, twinless: NAV_ONLY, keys: ["J"] },
       { id: "change.prev-stop", label: "Previous stop", group: "This change", icon: "chevron-up", act: { kind: "page", name: "prev-stop" }, twin: null, twinless: NAV_ONLY, keys: ["K"] },
     );
+    // Once decided, the decision panel offers the next change waiting in the repo; N opens it.
+    if (here.repoId && here.status !== undefined && here.status !== "awaiting-review") {
+      out.push({ id: "change.next-change", label: "Next change to review", group: "This change", icon: "chevron-right", act: { kind: "page", name: "next-change" }, twin: { tool: "list_changes", args: { repoId: here.repoId, status: "awaiting-review" } }, keys: ["N"], words: "queue inbox waiting following" });
+    }
   }
   out.push(
     { id: "change.qa", label: "Run QA in a browser", group: "This change", icon: "test-tube", act: { kind: "go", href: `/changes/${enc}#qa` }, twin: twin("request_qa"), words: "test browser criteria" },
@@ -138,7 +144,7 @@ function changeCommands(id: string, sub: "" | "evidence" | "rollout", here: Chan
     );
   }
   out.push({ id: "change.trail", label: "Its audit trail", group: "This change", icon: "scroll-text", act: { kind: "go", href: `/audit?subject=${encodeURIComponent(`change:${id}`)}` }, twin: { tool: "list_audit_events", args: { subject: `change:${id}` } }, words: "history events audit" });
-  out.push({ id: "change.close", label: "Close the change", group: "This change", icon: "archive", act: null, twin: twin("close_change"), words: "abandon stale drop" });
+  out.push({ id: "change.close", label: "Close the change", group: "This change", icon: "archive", act: { kind: "go", href: `/changes/${enc}#close` }, twin: twin("close_change"), words: "abandon stale drop" });
   if (sub === "rollout") {
     out.push(
       { id: "change.issues", label: "Production issues", group: "This change", icon: "triangle-alert", act: null, twin: twin("list_issues_for_change"), words: "errors incidents sentry" },

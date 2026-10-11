@@ -416,6 +416,7 @@ Two hands, as a radio pair under the query: **Myself** runs the command (Enter);
 Single keys act on the screen in view and never fire while typing, with a modifier held, or under an open dialog. No key signs anything: A opens the decision, it never approves. Each key and its palette row run the same handler (`state/keys.ts`, `gf:command`), so they cannot drift.
 - Anywhere: ⌘K / Ctrl+K, `/` (palette).
 - Walkthrough: J next stop, K previous stop, A open the decision, E evidence. Escape closes the decision sheet (as Back does) and focus returns to the choice that opened it.
+- After a decision: N opens the next change waiting in the repo (the one Next up shows).
 
 ### Agent Mark
 Every agent square in the app is one component (`components/AgentMark.tsx`), so an agent has one face on every screen. The glyph is the first letter plus the agent's number when its name ends in one ("F12", "F07", "P02"; a lone digit is padded, "P01", so no mark reads as a severity code), else the initials of two words ("QA"). A stable variant from the principal id sets the ground (solid ink or a 1.5px ink outline) and the corner (square or notched at the top right), so two agents with the same name still differ. Ink, paper and shape only, never a hue (the Band Means Lane Rule); 6px radius; tabular numerals.

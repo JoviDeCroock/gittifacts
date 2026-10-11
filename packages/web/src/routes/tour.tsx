@@ -676,6 +676,15 @@ function CloseChange({ change, me, author, onClosed }: { change: Change; me: Pri
   useEffect(() => {
     if (open.value) formRef.current?.querySelector<HTMLElement>("textarea")?.focus();
   }, [open.value]);
+  // The palette's "Close the change" lands here with #close: open the confirmation.
+  useEffect(() => {
+    const fromHash = () => {
+      if (window.location.hash === "#close") open.value = true;
+    };
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
+  }, [open]);
   const may = me !== null && (change.authorId === me.id || author?.ownerId === me.id || (me.kind === "human" && me.scopes.includes("change:review")));
   if (!may || !CLOSABLE.has(change.status)) return null;
 
@@ -706,7 +715,7 @@ function CloseChange({ change, me, author, onClosed }: { change: Change; me: Pri
 
   if (!open.value) {
     return (
-      <div class="close-change">
+      <div class="close-change" id="close">
         <button type="button" class="close-change__open" ref={triggerRef} onClick={() => (open.value = true)} data-testid="close-change-open">
           <Icon name="ban" size={15} /> Close change…
         </button>
