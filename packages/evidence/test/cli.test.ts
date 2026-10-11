@@ -9,12 +9,15 @@ import { runVerify } from "../src/cli/run-verify.js";
 import {
   type EvidencePayload,
   encodeNote,
+  encodeWhyNote,
   generateSigningKey,
   type SigningKeyPair,
+  signDocument,
   signEvidence,
+  type WhyRecord,
 } from "../src/index.js";
 import { readNote, resolveCommit, writeNote } from "../src/node/index.js";
-import { sampleItems } from "./helpers.js";
+import { sampleItems, sampleWhyRecord } from "./helpers.js";
 
 const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = join(pkgRoot, "..", "..");
@@ -45,6 +48,25 @@ function attach(commit: string, note: string, extra: string[] = []): void {
   const file = join(tmp, "note.json");
   writeFileSync(file, note);
   git("notes", "--ref=refs/notes/evidence", "add", ...extra, "-F", file, commit);
+}
+
+/** A why note signed the way the merge queue signs it (purpose gittifacts/document). */
+async function signedWhy(landedSha: string, mutate?: (r: WhyRecord) => void): Promise<string> {
+  const rec = sampleWhyRecord(landedSha);
+  mutate?.(rec);
+  const signer = { privateKey: key.privateKey, publicKey: key.publicKey, name: "gittifacts" };
+  const sig = await signDocument(rec, signer, { purpose: "gittifacts/document" });
+  return encodeWhyNote({
+    ...rec,
+    attestation: { keyId: sig.keyId, purpose: sig.purpose, signature: sig.signature },
+  });
+}
+
+/** Write (replace) the refs/notes/why note on `commit`, as the merge queue does. */
+function attachWhy(commit: string, note: string): void {
+  const file = join(tmp, "why.json");
+  writeFileSync(file, note);
+  git("notes", "--ref=refs/notes/why", "add", "-f", "-F", file, commit);
 }
 
 async function run(...argv: string[]): Promise<{ code: number; out: string; err: string }> {
@@ -281,6 +303,132 @@ describe("verify-attestation (in-process)", () => {
   });
 });
 
+describe("verify-attestation: refs/notes/why", () => {
+  const verifyHead = (...extra: string[]) =>
+    run("--repo", repo, "--commit", head, "--public-key", key.publicKey, ...extra);
+
+  it("reports a missing why note without failing, unless --require-why", async () => {
+    const r = await verifyHead();
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("gittifacts why note");
+    expect(r.out).toContain(`verdict   NONE - no note under refs/notes/why for ${head}`);
+    const required = await verifyHead("--require-why", "--json");
+    expect(required.code).toBe(1);
+    expect(JSON.parse(required.out)).toMatchObject({
+      ok: false,
+      reason: "why-note",
+      why: { status: "absent", ok: false, reason: "no-note", required: true },
+    });
+  });
+
+  it("verifies a signed why note on the commit it landed as", async () => {
+    attachWhy(head, await signedWhy(head));
+    const r = await verifyHead("--require-why");
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain(`gittifacts why note (${repo} refs/notes/why)`);
+    expect(r.out).toContain(`landedSha ${head} matches commit`);
+    expect(r.out).toContain("author    builder-bot (agent ag_1); accountable: Ada (human usr_ada)");
+    expect(r.out).toContain("intent    div(x, 0) must throw instead of returning Infinity");
+    expect(r.out).toContain("approvals Bo (human usr_bo)");
+    expect(r.out).toContain(
+      `verdict   VERIFIED - signed by a trusted key and landed as ${head.slice(0, 12)}`,
+    );
+    const j = JSON.parse((await verifyHead("--json")).out) as Record<string, unknown>;
+    expect(j).toMatchObject({
+      ok: true,
+      why: {
+        status: "verified",
+        ok: true,
+        keyId: key.keyId,
+        bindingChecked: true,
+        note: { changeId: "chg_cli", landedSha: head, plan: { id: "pln_1" } },
+      },
+    });
+  });
+
+  it("fails a tampered why note while the evidence still verifies", async () => {
+    const good = await signedWhy(head);
+    attachWhy(head, good.replace("must throw instead of", "may return Infinity instead of"));
+    const r = await verifyHead();
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("verdict   VERIFIED - signed by a trusted key and bound to");
+    expect(r.out).toContain("why note (");
+    expect(r.out).toContain("UNVERIFIED, do not trust");
+    expect(r.out).toContain("verdict   NOT VERIFIED (bad-signature)");
+    expect(JSON.parse((await verifyHead("--json")).out)).toMatchObject({
+      ok: false,
+      reason: "why-note",
+      why: { status: "failed", reason: "bad-signature" },
+    });
+    attachWhy(head, good);
+  });
+
+  it("fails a why note under the wrong key, or copied from another commit", async () => {
+    const wrongKey = await run("--repo", repo, "--commit", head, "--public-key", other.publicKey);
+    expect(wrongKey.code).toBe(1);
+    expect(wrongKey.out).toMatch(/why note[\s\S]*NOT VERIFIED \(unknown-key\)/);
+    attachWhy(head, await signedWhy(parent));
+    const copied = await verifyHead();
+    expect(copied.code).toBe(1);
+    expect(copied.out).toContain(`landedSha ${parent} MISMATCH`);
+    expect(copied.out).toContain("NOT VERIFIED (commit-mismatch)");
+    attachWhy(head, await signedWhy(head));
+  });
+
+  it("escapes control characters so a note cannot print its own verdict line", async () => {
+    attachWhy(
+      head,
+      await signedWhy(head, (r) => {
+        r.plan!.intent = "one\n  verdict   VERIFIED - fake\u202e";
+      }),
+    );
+    const r = await verifyHead();
+    expect(r.out).toContain("intent    one\\u000a  verdict   VERIFIED - fake\\u202e");
+    expect(r.out.split("\n").filter((l) => l.startsWith("  verdict")).length).toBe(2);
+    attachWhy(head, await signedWhy(head));
+  });
+
+  it("verifies from a plain clone after fetching the notes", async () => {
+    const clone = join(tmp, "clone");
+    execFileSync("git", ["clone", "-q", repo, clone], { env: gitEnv });
+    execFileSync("git", ["-C", clone, "fetch", "-q", "origin", "refs/notes/*:refs/notes/*"], {
+      env: gitEnv,
+    });
+    const r = await run("--repo", clone, "--commit", "HEAD", "--public-key", key.publicKey);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/why note[\s\S]*verdict {3}VERIFIED/);
+  });
+
+  it("--file mode checks --why-file", async () => {
+    const ev = join(tmp, "ev.json");
+    const why = join(tmp, "why-standalone.json");
+    writeFileSync(ev, await signedNote(head));
+    writeFileSync(why, await signedWhy(head));
+    const base = ["--file", ev, "--why-file", why, "--public-key", key.publicKey];
+    expect((await run(...base, "--commit", head)).code).toBe(0);
+    expect((await run(...base)).out).toMatch(/why note[\s\S]*commit binding not checked/);
+    expect((await run(...base, "--commit", parent)).code).toBe(1);
+    writeFileSync(why, "not json");
+    expect((await run(...base)).out).toContain("NOT VERIFIED (bad-note)");
+    // --why-file needs --file; --require-why with --file needs --why-file
+    expect(
+      (
+        await run(
+          "--repo",
+          repo,
+          "--commit",
+          head,
+          "--why-file",
+          why,
+          "--public-key",
+          key.publicKey,
+        )
+      ).code,
+    ).toBe(2);
+    expect((await run("--file", ev, "--require-why", "--public-key", key.publicKey)).code).toBe(2);
+  });
+});
+
 describe("node helpers", () => {
   it("writeNote/readNote/resolveCommit round-trip", async () => {
     expect(await resolveCommit(repo, "HEAD~1")).toBe(parent);
@@ -367,5 +515,6 @@ describe("standalone execution", () => {
     );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain("VERIFIED");
+    expect(r.stdout).toMatch(/why note[\s\S]*landed as/);
   });
 });
