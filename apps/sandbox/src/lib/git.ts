@@ -24,10 +24,17 @@ export function isSha(value: string): boolean {
   return SHA_RE.test(value);
 }
 
-/** Config that keeps output machine-readable regardless of the user's/global git config. */
+/**
+ * Config that keeps output machine-readable regardless of the user's/global git config, and that
+ * runs nothing repository code configured: an evidence step starts from a snapshot whose
+ * `.git/config` and `~/.gitconfig` that code could write (an fsmonitor command there would run
+ * inside the runner's own git calls). `safe.directory` is needed because system config is off.
+ */
 const BASE_CONFIG = [
   "-c",
   "safe.directory=*",
+  "-c",
+  "core.fsmonitor=false",
   "-c",
   "core.quotePath=true",
   "-c",
@@ -41,6 +48,9 @@ const BASE_CONFIG = [
   "-c",
   "commit.gpgSign=false",
 ];
+
+/** No global (`~/.gitconfig`, `~/.config/git/config`) or system config for the runner's git. */
+export const GIT_ISOLATION_ENV = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
 
 export interface GitOptions {
   input?: string;
@@ -58,7 +68,13 @@ export async function git(
   const result = await run("git", [...BASE_CONFIG, "-C", repo, ...args], {
     cwd: repo,
     echo: false,
-    env: { GIT_PAGER: "cat", LC_ALL: "C", GIT_NO_LAZY_FETCH: "1", ...opts.env },
+    env: {
+      ...GIT_ISOLATION_ENV,
+      GIT_PAGER: "cat",
+      LC_ALL: "C",
+      GIT_NO_LAZY_FETCH: "1",
+      ...opts.env,
+    },
     ...(opts.input === undefined ? {} : { input: opts.input }),
     timeoutMs: opts.timeoutMs ?? 10 * 60_000,
   });

@@ -4,6 +4,7 @@
  * is not in the checkout comes back as null, never as a network round trip.
  */
 import { spawn } from "node:child_process";
+import { GIT_ISOLATION_ENV } from "./git.js";
 import { scrubbedEnv } from "./proc.js";
 
 /** Text of each blob (null when missing or binary), by object id. */
@@ -16,9 +17,15 @@ export function readBlobs(
   const out = new Map<string, string | null>();
   if (unique.length === 0) return Promise.resolve(out);
   return new Promise((resolve, reject) => {
-    const child = spawn("git", ["-c", "safe.directory=*", "-C", repo, "cat-file", "--batch"], {
+    const args = ["-c", "safe.directory=*", "-c", "core.fsmonitor=false", "-C", repo];
+    const child = spawn("git", [...args, "cat-file", "--batch"], {
       cwd: repo,
-      env: scrubbedEnv({ GIT_NO_LAZY_FETCH: "1", LC_ALL: "C", GIT_TERMINAL_PROMPT: "0" }),
+      env: scrubbedEnv({
+        ...GIT_ISOLATION_ENV,
+        GIT_NO_LAZY_FETCH: "1",
+        LC_ALL: "C",
+        GIT_TERMINAL_PROMPT: "0",
+      }),
       stdio: ["pipe", "pipe", "pipe"],
     });
     const chunks: Buffer[] = [];

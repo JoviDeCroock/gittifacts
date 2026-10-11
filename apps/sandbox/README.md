@@ -37,6 +37,10 @@ Both contexts produce the same image. `Dockerfile.dockerignore` limits either co
 - **Defaults:** `--base` and `--head` fall back to `$GITTIFACTS_BASE_SHA` and
   `$GITTIFACTS_HEAD_SHA`. `--cwd` defaults to the current directory.
 - **Output file:** `$GITTIFACTS_EVIDENCE_OUT` (or `--out`) also gets the JSON, with no prefix.
+  The CI Runner reads evidence from this file only, never from stdout: repository code shares
+  the step's output (see `packages/ci-engine/RUNNER_CONTRACT.md`, trust model).
+- **Git:** the runner's own git calls ignore global and system config and turn off fsmonitor
+  and hooks, because an evidence step starts from a snapshot repository code wrote.
 - **Logs** go to stderr.
 - **Exit codes:**
   - 0 when a document was printed, including error items and `plan` error documents
