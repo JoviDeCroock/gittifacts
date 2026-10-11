@@ -10,7 +10,7 @@
  *   guard is in the SQL statement, so two owners removing each other at once cannot both win.
  * - Every change is audit-logged on `repo:<id>`.
  */
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Caller, Services } from "../app-env.js";
 import { ensureHumanPrincipal } from "../auth/principals.js";
 import { principals, user } from "../db/schema.js";
@@ -33,6 +33,8 @@ export interface MemberView {
   role: RepoRole;
   addedBy: string;
   addedAt: string;
+  /** The agents this member owns that may act here (with this member's role; not revoked). */
+  agents: { principalId: string; name: string }[];
 }
 
 export interface MembersView {
@@ -42,6 +44,40 @@ export interface MembersView {
   viewerRole: RepoRole | null;
   /** True when the caller may add, change and remove members (a human owner). */
   canManage: boolean;
+}
+
+/** Each owner's live agents that may act on `repoId` (no repo grant, or one that names it). */
+async function agentsOf(
+  svc: Services,
+  ownerIds: string[],
+  repoId: string,
+): Promise<Map<string, { principalId: string; name: string }[]>> {
+  const out = new Map<string, { principalId: string; name: string }[]>();
+  for (let i = 0; i < ownerIds.length; i += 90) {
+    const rows = await svc.store.db
+      .select({
+        id: principals.id,
+        name: principals.name,
+        ownerId: principals.ownerId,
+        repoIds: principals.repoIds,
+      })
+      .from(principals)
+      .where(
+        and(
+          inArray(principals.ownerId, ownerIds.slice(i, i + 90)),
+          eq(principals.kind, "agent"),
+          isNull(principals.disabledAt),
+        ),
+      )
+      .all();
+    for (const r of rows) {
+      if (r.ownerId === null || (r.repoIds !== null && !r.repoIds.includes(repoId))) continue;
+      const list = out.get(r.ownerId) ?? [];
+      list.push({ principalId: r.id, name: r.name });
+      out.set(r.ownerId, list);
+    }
+  }
+  return out;
 }
 
 async function emailsOf(svc: Services, principalIds: string[]): Promise<Map<string, string>> {
@@ -67,9 +103,10 @@ export async function listMembers(
   const viewerRole = (await repoAccess(svc, caller.principal, repo)).role;
   const canManage = caller.principal.kind === "human" && viewerRole === "owner";
   const ids = rows.map((r) => r.principalId);
-  const [refs, emails] = await Promise.all([
+  const [refs, emails, agents] = await Promise.all([
     svc.store.principalRefs(ids),
     canManage ? emailsOf(svc, ids) : Promise.resolve(new Map<string, string>()),
+    agentsOf(svc, ids, repoId),
   ]);
   return {
     repoId,
@@ -80,6 +117,7 @@ export async function listMembers(
       role: r.role,
       addedBy: r.addedBy,
       addedAt: r.addedAt,
+      agents: agents.get(r.principalId) ?? [],
     })),
     viewerRole,
     canManage,

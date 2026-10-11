@@ -103,6 +103,18 @@ export const PrincipalsMapSchema = z
   .record(z.string(), PrincipalRefSchema)
   .meta({ id: "PrincipalsMap" });
 
+/** What each audit subject is called (`change:<id>` → its title and repo). */
+export const AuditSubjectsMapSchema = z
+  .record(
+    z.string(),
+    z.object({
+      title: z.string(),
+      repoId: z.string().nullable(),
+      repoName: z.string().nullable(),
+    }),
+  )
+  .meta({ id: "AuditSubjectsMap" });
+
 export const PrincipalWithOwnerSchema = Principal.extend({ ownerName: z.string().optional() });
 export const RolloutStateSchema = RolloutState.meta({ id: "RolloutState" });
 export const ClassifyResultApiSchema = ClassifyResultSchema.meta({ id: "ClassifyResult" });
@@ -237,6 +249,15 @@ export const CreateAgentBody = z.object({
   name: z.string().min(1).max(120),
   scopes: z.array(Scope).min(1),
   expiresInDays: z.number().int().min(1).max(365).default(90),
+  repoIds: z
+    .array(z.string().min(1).max(64))
+    .min(1)
+    .max(100)
+    .nullable()
+    .optional()
+    .describe(
+      "Repos the agent may act on (claimed repos you can access); omitted or null: every repo you can reach",
+    ),
 });
 
 export const CreateRepoBody = z.object({

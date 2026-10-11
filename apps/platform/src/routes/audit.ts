@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   AuditEventSchema,
   AuditQuery,
+  AuditSubjectsMapSchema,
   ChainStatusSchema,
   PrincipalsMapSchema,
 } from "../api/schemas.js";
@@ -25,6 +26,7 @@ const list = createRoute({
         nextCursor: z.string().nullable(),
         chain: ChainStatusSchema,
         principals: PrincipalsMapSchema,
+        subjects: AuditSubjectsMapSchema,
       }),
       "Audit page",
     ),

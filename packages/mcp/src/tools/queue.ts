@@ -714,7 +714,10 @@ export function queueTools(backend: McpBackend, kit: ToolKit) {
         kit.requireScope(caller, "repo:read");
         const { changeId } = kit.parse(ChangeArgs, args);
         const [s, resolution] = await kit.run(backend, () =>
-          Promise.all([backend.queueStatus(caller, changeId), backend.getResolution(caller, changeId)]),
+          Promise.all([
+            backend.queueStatus(caller, changeId),
+            backend.getResolution(caller, changeId),
+          ]),
         );
         return {
           queued: s !== null,

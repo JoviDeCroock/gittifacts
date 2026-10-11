@@ -56,7 +56,11 @@ function errorOf(result: { isError?: boolean; content?: unknown }) {
 interface AuditPage {
   events: { seq: number; principalId: string; action: string; subject: string }[];
   nextCursor: string | null;
-  principals: Record<string, { name: string; kind: string; ownerId: string | null; ownerName: string | null }>;
+  subjects: Record<string, { title: string; repoId: string | null; repoName: string | null }>;
+  principals: Record<
+    string,
+    { name: string; kind: string; ownerId: string | null; ownerName: string | null }
+  >;
 }
 
 describe("the audit log names who is accountable and filters by actor, action and repo", () => {
@@ -85,7 +89,21 @@ describe("the audit log names who is accountable and filters by actor, action an
       ownerName: "Ada",
     });
 
+    // Subjects are named for reading: the change's title and repo, the agent's name.
+    expect(byAgent.subjects[`change:${change.id}`]).toEqual({
+      title: change.title,
+      repoId: repo.id,
+      repoName: repo.name,
+    });
+
     const byHuman = await page(`actor=${human.principal.id}`);
+    const issued = byHuman.events.find((e) => e.subject === `principal:${agent.principal.id}`);
+    expect(issued).toBeDefined();
+    expect(byHuman.subjects[`principal:${agent.principal.id}`]).toEqual({
+      title: "builder-bot",
+      repoId: null,
+      repoName: null,
+    });
     expect(byHuman.events.every((e) => e.principalId === human.principal.id)).toBe(true);
     expect(byHuman.events.map((e) => e.action)).not.toContain("change.review-requested");
 
@@ -117,6 +135,7 @@ describe("the audit log names who is accountable and filters by actor, action an
         action: "change.review-requested",
         subject: `change:${change.id}`,
         actor: { id: agent.principal.id, kind: "agent", ownerName: "Ada" },
+        about: { title: change.title },
       });
       expect(out.chain.verified).toBe(true);
       expect(out.url).toBe(`${ORIGIN}/audit?actor=${agent.principal.id}`);
@@ -154,7 +173,11 @@ describe("get_rollout", () => {
         versionId: "v2",
         previousVersionId: "v1",
         stages: [
-          { percent: 5, startedAt: "2026-10-01T00:10:00.000Z", completedAt: "2026-10-01T00:20:00.000Z" },
+          {
+            percent: 5,
+            startedAt: "2026-10-01T00:10:00.000Z",
+            completedAt: "2026-10-01T00:20:00.000Z",
+          },
           { percent: 25, startedAt: "2026-10-01T00:20:00.000Z", completedAt: null },
         ],
         watchUntil: null,
@@ -246,7 +269,9 @@ describe("agent outputs name who is accountable and what to hand a person", () =
       const ev = await mcp.tools.get_evidence({ changeId: change.id });
       if (ev.isError) throw new Error(JSON.stringify(ev.content));
       expect(ev.structuredContent.url).toBe(`${ORIGIN}/changes/${change.id}/evidence`);
-      expect(ev.structuredContent.nextSteps[0]?.call).toBe(`get_tour({ changeId: "${change.id}" })`);
+      expect(ev.structuredContent.nextSteps[0]?.call).toBe(
+        `get_tour({ changeId: "${change.id}" })`,
+      );
 
       const t = await mcp.tools.get_tour({ changeId: change.id });
       if (t.isError) throw new Error(JSON.stringify(t.content));
@@ -285,7 +310,13 @@ describe("agent outputs name who is accountable and what to hand a person", () =
       principalId: "system:merge-queue",
       action: "merge-queue.resolution",
       subject,
-      payload: { attempt: 1, kind: "textual", status: "resolved", headSha: HEAD_SHA, newHead: resolved },
+      payload: {
+        attempt: 1,
+        kind: "textual",
+        status: "resolved",
+        headSha: HEAD_SHA,
+        newHead: resolved,
+      },
     });
     await audit.append({
       principalId: "system:merge-queue",
@@ -318,5 +349,56 @@ describe("agent outputs name who is accountable and what to hand a person", () =
     } finally {
       await mcp.client.close();
     }
+  });
+});
+
+describe("a person's agents: limited to repos at creation, listed with their owner's membership", () => {
+  it("POST /principals/agents takes repoIds (only repos the creator can reach; omitted = all), and GET members lists each member's agents that can act there", async () => {
+    const { app, human, agent, repo } = await setup();
+    const s = store();
+    const other = repoFixture({
+      claim: { status: "claimed", ownerId: human.principal.id, expiresAt: null },
+    });
+    await s.insertRepo(other);
+    const create = (body: Record<string, unknown>) =>
+      call(app, "POST", "/api/v1/principals/agents", {
+        cookie: human.cookie,
+        body: { name: "scoped-bot", scopes: ["repo:read"], ...body },
+      });
+
+    const limited = await create({ repoIds: [other.id], expiresInDays: 7 });
+    expect(limited.status).toBe(201);
+    const { principal: scoped } = await json<{
+      principal: { id: string; repoIds?: string[] | null };
+    }>(limited);
+    expect(scoped.repoIds).toEqual([other.id]);
+
+    // A repo the creator can't reach is refused, not silently dropped.
+    const stranger = await signUpHuman(app, "Eve");
+    const theirs = repoFixture({
+      claim: { status: "claimed", ownerId: stranger.principal.id, expiresAt: null },
+    });
+    await s.insertRepo(theirs);
+    const refused = await create({ repoIds: [theirs.id] });
+    expect(refused.status).toBe(400);
+    expect((await json<{ error: { code: string } }>(refused)).error.code).toBe("invalid-request");
+
+    // Omitted: every repo the creator can reach (the agent from setup() works like that).
+    expect(agent.principal.repoIds ?? null).toBeNull();
+
+    const members = async (repoId: string) => {
+      const res = await call(app, "GET", `/api/v1/repos/${repoId}/members`, {
+        cookie: human.cookie,
+      });
+      expect(res.status).toBe(200);
+      const body = await json<{
+        members: { principalId: string; agents: { principalId: string; name: string }[] }[];
+      }>(res);
+      return body.members.find((m) => m.principalId === human.principal.id)?.agents ?? [];
+    };
+    expect((await members(repo.id)).map((a) => a.principalId)).toEqual([agent.principal.id]);
+    expect((await members(other.id)).map((a) => a.principalId).sort()).toEqual(
+      [agent.principal.id, scoped.id].sort(),
+    );
   });
 });

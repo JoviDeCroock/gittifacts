@@ -76,7 +76,12 @@ async function install(app: TestApp, cookie: string, r: Registered, repoIds: str
   expect(consent.pathname).toBe("/integrations/install");
   const requestId = consent.searchParams.get("request") ?? "";
   const view = await json<{
-    install: { scopes: { title: string }[]; never: string[]; repos: { id: string }[] };
+    install: {
+      scopes: { title: string }[];
+      never: string[];
+      repos: { id: string }[];
+      existing: { installationId: string; scopes: string[] } | null;
+    };
   }>(await call(app, "GET", `/api/v1/integration-installs/${requestId}`, { cookie }));
   const approve = await call(app, "POST", `/api/v1/integration-installs/${requestId}/approve`, {
     cookie,
@@ -121,6 +126,23 @@ async function deliveriesOf(installationId: string, event: string) {
 }
 
 describe("external integrations (acceptance)", () => {
+  it("installing again shows what the installation already granted (existing.scopes)", async () => {
+    mockPlatform();
+    const { app } = makeApp();
+    const human = await signUpHuman(app, "Jo Again");
+    const [repoA] = await seedRepos(1, human.principal.id);
+    if (!repoA) throw new Error("seed failed");
+    const reg = await register(app, human.cookie);
+    const first = await install(app, human.cookie, reg, [repoA.id]);
+    expect(first.view.existing).toBeNull();
+    const again = await install(app, human.cookie, reg, [repoA.id]);
+    expect(again.view.existing?.installationId).toBe(first.installationId);
+    expect([...(again.view.existing?.scopes ?? [])].sort()).toEqual(
+      ["contents:read", "deployments:write", "repo:read", "webhooks"].sort(),
+    );
+  });
+
+
   it("register → install one repo → clone (push refused) → signed push webhook → preview evidence → uninstall", async () => {
     const seen = mockPlatform();
     const { app } = makeApp();

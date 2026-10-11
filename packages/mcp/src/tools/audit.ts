@@ -28,6 +28,8 @@ export interface AuditEventData {
   subject: string;
   summary: string;
   actor: ActorData;
+  /** What the subject is called (a change or plan title and its repo); null when unknown. */
+  about: { title: string; repoId: string | null; repoName: string | null } | null;
 }
 
 export interface AuditFilterData {
@@ -76,12 +78,21 @@ export const AuditEvent = {
   properties: {
     seq: { type: "integer" },
     at: str,
-    action: { type: "string", description: "e.g. change.approved, plan.created, merge-queue.merged" },
+    action: {
+      type: "string",
+      description: "e.g. change.approved, plan.created, merge-queue.merged",
+    },
     subject: { type: "string", description: "change:<id>, plan:<id>, repo:<id> or principal:<id>" },
     summary: str,
     actor: Actor,
+    about: {
+      type: ["object", "null"],
+      description: "What the subject is called: a change or plan title and its repo.",
+      properties: { title: str, repoId: nullableStr, repoName: nullableStr },
+      required: ["title", "repoId", "repoName"],
+    },
   },
-  required: ["seq", "at", "action", "subject", "summary", "actor"],
+  required: ["seq", "at", "action", "subject", "summary", "actor", "about"],
 } as const;
 
 const ListAuditEventsInput = {
@@ -116,7 +127,12 @@ const ListAuditEventsInput = {
       pattern: "^[1-9][0-9]{0,15}$",
       description: "nextCursor from the previous page.",
     },
-    limit: { type: "integer", minimum: 1, maximum: 100, description: "Events per page (default 30)." },
+    limit: {
+      type: "integer",
+      minimum: 1,
+      maximum: 100,
+      description: "Events per page (default 30).",
+    },
   },
   additionalProperties: false,
 } as const;
@@ -132,7 +148,10 @@ const ListAuditEventsOutput = {
       properties: { verified: { type: "boolean" }, brokenAt: { type: "integer" } },
       required: ["verified"],
     },
-    nextCursor: { ...nullableStr, description: "Pass as cursor for older events; null on the last page." },
+    nextCursor: {
+      ...nullableStr,
+      description: "Pass as cursor for older events; null on the last page.",
+    },
     url: { type: "string", description: "The audit page with these filters, to hand a person." },
     nextSteps: {
       type: "array",

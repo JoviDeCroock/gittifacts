@@ -2961,6 +2961,35 @@ export type introspection = {
                     "ownerId",
                     "ownerName"
                   ]
+                },
+                "about": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "description": "What the subject is called: a change or plan title and its repo.",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "repoId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "repoName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "repoId",
+                    "repoName"
+                  ]
                 }
               },
               "required": [
@@ -2969,7 +2998,8 @@ export type introspection = {
                 "action",
                 "subject",
                 "summary",
-                "actor"
+                "actor",
+                "about"
               ]
             }
           },
@@ -3270,6 +3300,35 @@ export type introspection = {
                     "ownerId",
                     "ownerName"
                   ]
+                },
+                "about": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "description": "What the subject is called: a change or plan title and its repo.",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "repoId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "repoName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "repoId",
+                    "repoName"
+                  ]
                 }
               },
               "required": [
@@ -3278,7 +3337,8 @@ export type introspection = {
                 "action",
                 "subject",
                 "summary",
-                "actor"
+                "actor",
+                "about"
               ]
             }
           },

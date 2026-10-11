@@ -53,7 +53,7 @@ Humans only. Agents may hold repo:read, plan:create and change:create; never pla
 
 - **Auth:** session cookie or bearer token
 - **Idempotency-Key:** accepted
-- **Body:** `{ name, scopes, expiresInDays? }`
+- **Body:** `{ name, scopes, expiresInDays?, repoIds? }`
 - **201:** `{ principal: Principal, token }`
 - **Errors:** 400, 401, 403
 

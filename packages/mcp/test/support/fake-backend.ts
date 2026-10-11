@@ -152,8 +152,8 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
         ownerName: "Ada",
       };
       const events = [
-        { seq: 3, at: "2026-10-01T00:03:00.000Z", action: "change.review-requested", subject: "change:chg_1", summary: "asked for a review", actor },
-        { seq: 2, at: "2026-10-01T00:02:00.000Z", action: "change.started", subject: "change:chg_1", summary: "started", actor },
+        { seq: 3, at: "2026-10-01T00:03:00.000Z", action: "change.review-requested", subject: "change:chg_1", summary: "asked for a review", actor, about: null },
+        { seq: 2, at: "2026-10-01T00:02:00.000Z", action: "change.started", subject: "change:chg_1", summary: "started", actor, about: null },
       ].filter((e) => filter.action === undefined || e.action === filter.action);
       return {
         events: events.slice(0, filter.limit),

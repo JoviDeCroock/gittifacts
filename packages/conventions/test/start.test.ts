@@ -201,10 +201,11 @@ describe("unclaimed projects (O3)", () => {
       "package registries; previews have no internet",
       "120 requests per minute",
       "per IP (3 per hour)",
-      "expires 7 days after creation",
     ]) {
       expect(all).toContain(needle);
     }
+    // The expiry is said once, next to the list (ttlDays, the guide's lead-in), not inside it.
+    expect(all).not.toContain("expires");
     expect(generic.join("\n")).not.toMatch(/\d+ (minutes|MB|per|requests|days)/);
   });
 

@@ -59,9 +59,6 @@ export function unclaimedLimitLines(q?: UnclaimedQuotaHints): string[] {
     q === undefined
       ? "creation is rate limited per IP, per network and globally"
       : `creation is rate limited per IP (${q.createsPerIpPerHour} per hour), per network and globally`,
-    q === undefined
-      ? "it expires unless a human claims it"
-      : `it expires ${q.ttlDays} days after creation unless a human claims it (everything is deleted)`,
   ];
 }
 
