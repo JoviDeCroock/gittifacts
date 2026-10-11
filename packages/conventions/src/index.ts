@@ -16,5 +16,5 @@ export * from "./platform-files.js";
 export * from "./project.js";
 export * from "./start.js";
 export * from "./templates.js";
-export { pageUrl } from "./urls.js";
+export { type PlatformPage, pageUrl } from "./urls.js";
 export * from "./version.js";

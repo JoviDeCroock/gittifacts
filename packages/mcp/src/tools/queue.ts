@@ -575,6 +575,8 @@ export const TOOL_EXAMPLES: Readonly<Record<string, string>> = {
   queue_overview: 'queue_overview({ repoId: "<repoId>" })',
   ws_exec: 'ws_exec({ workspaceId: "<workspaceId>", command: "pnpm test" })',
   search_tools: 'search_tools({ query: "merge my change" })',
+  get_rollout: 'get_rollout({ changeId: "<changeId>" })',
+  list_audit_events: 'list_audit_events({ actor: "<principalId>" })',
 };
 
 /**

@@ -28,7 +28,7 @@ const list = createRoute({
       }),
       "Audit page",
     ),
-    ...errors(400, 401, 403),
+    ...errors(400, 401, 403, 404),
   },
 });
 

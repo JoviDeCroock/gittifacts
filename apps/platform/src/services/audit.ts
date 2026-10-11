@@ -1,5 +1,7 @@
 import type { AuditEvent } from "@app/domain";
-import { auditVisibility } from "../access/audit.js";
+import { and } from "drizzle-orm";
+import { assertRepoAccess } from "../access/access.js";
+import { auditVisibility, repoAuditSubjects } from "../access/audit.js";
 import type { Caller, Services } from "../app-env.js";
 import { auditLogStub } from "../audit/audit.js";
 import { verifyEntries } from "../audit/chain.js";
@@ -27,6 +29,16 @@ export interface AuditPage {
   principals: Record<string, PrincipalRef>;
 }
 
+/** Exact-match filters on the audit log; together they narrow (AND). */
+export interface AuditFilter {
+  /** Only this repo's events (the repo, its plans and its changes). */
+  repoId?: string | undefined;
+  subject?: string | undefined;
+  /** The principal that acted (e.g. one agent's trail). */
+  actor?: string | undefined;
+  action?: string | undefined;
+}
+
 /**
  * A page of the audit log (newest first) from the D1 mirror, with two checks:
  * 1. the returned rows themselves (hashes, payloads, signatures, links between adjacent seqs),
@@ -40,13 +52,19 @@ export interface AuditPage {
 export async function listAudit(
   svc: Services,
   caller: Caller,
-  q: { subject?: string | undefined; cursor?: string | undefined; limit: number },
+  q: AuditFilter & { cursor?: string | undefined; limit: number },
 ): Promise<AuditPage> {
-  const visible = await auditVisibility(svc, caller.principal);
+  // A named repo the caller can't read is a 404, like everywhere else.
+  if (q.repoId !== undefined) await assertRepoAccess(svc, caller.principal, q.repoId, "read");
+  const readable = await auditVisibility(svc, caller.principal);
+  const inRepo = q.repoId === undefined ? undefined : repoAuditSubjects(q.repoId);
+  const visible = readable === null ? inRepo : inRepo === undefined ? readable : and(readable, inRepo);
   const events = await svc.store.listAuditEvents({
     log: svc.auditLog,
-    ...(visible !== null ? { visible } : {}),
+    ...(visible !== undefined ? { visible } : {}),
     ...(q.subject !== undefined ? { subject: q.subject } : {}),
+    ...(q.actor !== undefined ? { actor: q.actor } : {}),
+    ...(q.action !== undefined ? { action: q.action } : {}),
     ...(q.cursor !== undefined ? { beforeSeq: Number(q.cursor) } : {}),
     limit: q.limit + 1,
   });

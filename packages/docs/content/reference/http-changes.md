@@ -235,6 +235,6 @@ Raw bytes of an R2 reference (logRef, beforeRef, afterRef), authorized by the ow
 Audit log, newest first, with hash-chain verification
 
 - **Auth:** session cookie or bearer token
-- **Parameters:** `subject` (query), `cursor` (query), `limit` (query)
+- **Parameters:** `repoId` (query), `subject` (query), `actor` (query), `action` (query), `cursor` (query), `limit` (query)
 - **200:** `{ events, nextCursor, chain: ChainStatus, principals: PrincipalsMap }`
 - **Errors:** 400, 401, 403

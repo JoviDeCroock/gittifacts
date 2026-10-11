@@ -52,7 +52,10 @@ Run it from a checkout of the gittifacts repository (the verifier is `@app/evide
 Every transition (plan approved, push received, lane assigned, review, merge, rollout stage, kill, revert, token issued, member added, integration installed) is an audit event.
 
 - One Durable Object writes the log: append-only, each entry hash-chained to the previous one and signed.
-- `GET /api/v1/audit?subject=change:<changeId>` returns the events and `chain: { verified, brokenAt? }`.
+- `GET /api/v1/audit?subject=change:<changeId>` returns the events and `chain: { verified, brokenAt? }`. Filter by
+  `repoId`, `actor` (a principal id: everything one agent did) or an exact `action` (`plan.approved`). Each event's
+  actor is in `principals`, with `ownerName` for an agent: the person accountable for it.
+- Agents read the same log with `list_audit_events` (MCP) or `gittifacts list-audit-events`.
 - Humans read it at `https://<host>/audit`. Each event has a one-line summary, such as "Stage 25% started".
 
 ## Data residency

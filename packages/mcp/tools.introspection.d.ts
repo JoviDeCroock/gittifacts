@@ -2697,6 +2697,327 @@ export type introspection = {
       }
     },
     /**
+     * Get a change's rollout
+     * After merge: the staged rollout of the change (stages, error rate against the previous version, new issue groups, the flag that switches it off), the policy it was held to (from its base) and its audit timeline. rollout is null before merge or without a deploy target. A regression rolls it back and opens a revert change (revertedBy). Read-only: switching a change off is a person's act.
+     * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
+     */
+    "get_rollout": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "github": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}#[0-9]{1,9}$",
+            "description": "GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "changeId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "The change's status (merged, rolling-out, released, reverted, ...)."
+          },
+          "mergedSha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revertedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The revert change, once a regression rolled it back."
+          },
+          "rollout": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "null: no rollout (not merged yet, or the repo has no deploy target).",
+            "properties": {
+              "status": {
+                "enum": [
+                  "pending",
+                  "rolling",
+                  "watching",
+                  "released",
+                  "rolling-back",
+                  "rolled-back",
+                  "failed"
+                ]
+              },
+              "versionId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "previousVersionId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "stages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "percent": {
+                      "type": "integer"
+                    },
+                    "startedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "completedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "percent",
+                    "startedAt",
+                    "completedAt"
+                  ]
+                }
+              },
+              "watchUntil": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "flagKey": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The flag a person switches off to disable the change."
+              },
+              "lastCheck": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "errorRate": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "baselineErrorRate": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "requests": {
+                    "type": "integer"
+                  },
+                  "newIssueGroups": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "at",
+                  "errorRate",
+                  "baselineErrorRate",
+                  "requests",
+                  "newIssueGroups"
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "versionId",
+              "previousVersionId",
+              "stages",
+              "watchUntil",
+              "flagKey",
+              "lastCheck"
+            ]
+          },
+          "policy": {
+            "type": "object",
+            "description": "The rollout policy from the change's base (.platform/policy.ts), not the repo's current one.",
+            "properties": {
+              "stages": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "stageMinutes": {
+                "type": "integer"
+              },
+              "watchMinutes": {
+                "type": "integer"
+              },
+              "maxErrorRateIncrease": {
+                "type": "number"
+              },
+              "maxNewIssueGroups": {
+                "type": "integer"
+              },
+              "minRequests": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "stages",
+              "stageMinutes",
+              "watchMinutes",
+              "maxErrorRateIncrease",
+              "maxNewIssueGroups",
+              "minRequests"
+            ]
+          },
+          "policySha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeline": {
+            "type": "array",
+            "description": "The change's audit events, oldest first.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "seq": {
+                  "type": "integer"
+                },
+                "at": {
+                  "type": "string"
+                },
+                "action": {
+                  "type": "string",
+                  "description": "e.g. change.approved, plan.created, merge-queue.merged"
+                },
+                "subject": {
+                  "type": "string",
+                  "description": "change:<id>, plan:<id>, repo:<id> or principal:<id>"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "actor": {
+                  "type": "object",
+                  "description": "Who acted; for an agent, ownerName is the person accountable for it.",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "human",
+                        "agent",
+                        "system",
+                        "integration"
+                      ]
+                    },
+                    "ownerId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "ownerName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "kind",
+                    "ownerId",
+                    "ownerName"
+                  ]
+                }
+              },
+              "required": [
+                "seq",
+                "at",
+                "action",
+                "subject",
+                "summary",
+                "actor"
+              ]
+            }
+          },
+          "url": {
+            "type": "string",
+            "description": "The change's rollout page, to hand a person."
+          },
+          "nextSteps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "changeId",
+          "status",
+          "mergedSha",
+          "revertedBy",
+          "rollout",
+          "policy",
+          "policySha",
+          "timeline",
+          "url",
+          "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
      * Get the review walkthrough
      * The walkthrough (the tour) a second reviewer agent wrote for the change, what a human will read: stops with verdicts, least-confident points and what was not done.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
@@ -2826,6 +3147,194 @@ export type introspection = {
         "required": [
           "tour",
           "stale"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Read the audit log
+     * The signed audit log, newest first: who did what (actor, with an agent's accountable person), to which subject, when, and whether the hash chain verifies. Filter by repoId, subject (change:<id>, plan:<id>), actor (a principal id: one agent's trail) or exact action (change.approved); page with nextCursor. Answers "who approved this, and when". Read-only.
+     * @param args.repoId Only this repo's events (the repo, its plans and its changes).
+     * @param args.subject Only events about this subject, e.g. change:<id> or plan:<id>.
+     * @param args.actor Only events by this principal id (one agent's trail; whoami gives yours).
+     * @param args.action Only this exact action, e.g. change.approved.
+     * @param args.cursor nextCursor from the previous page.
+     * @param args.limit Events per page (default 30).
+     */
+    "list_audit_events": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Only this repo's events (the repo, its plans and its changes)."
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Only events about this subject, e.g. change:<id> or plan:<id>."
+          },
+          "actor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Only events by this principal id (one agent's trail; whoami gives yours)."
+          },
+          "action": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Only this exact action, e.g. change.approved."
+          },
+          "cursor": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,15}$",
+            "description": "nextCursor from the previous page."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Events per page (default 30)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "seq": {
+                  "type": "integer"
+                },
+                "at": {
+                  "type": "string"
+                },
+                "action": {
+                  "type": "string",
+                  "description": "e.g. change.approved, plan.created, merge-queue.merged"
+                },
+                "subject": {
+                  "type": "string",
+                  "description": "change:<id>, plan:<id>, repo:<id> or principal:<id>"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "actor": {
+                  "type": "object",
+                  "description": "Who acted; for an agent, ownerName is the person accountable for it.",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "human",
+                        "agent",
+                        "system",
+                        "integration"
+                      ]
+                    },
+                    "ownerId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "ownerName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "kind",
+                    "ownerId",
+                    "ownerName"
+                  ]
+                }
+              },
+              "required": [
+                "seq",
+                "at",
+                "action",
+                "subject",
+                "summary",
+                "actor"
+              ]
+            }
+          },
+          "chain": {
+            "type": "object",
+            "description": "The hash chain's verdict: verified=false means an event was altered or removed (brokenAt is the first bad seq).",
+            "properties": {
+              "verified": {
+                "type": "boolean"
+              },
+              "brokenAt": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "verified"
+            ]
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass as cursor for older events; null on the last page."
+          },
+          "url": {
+            "type": "string",
+            "description": "The audit page with these filters, to hand a person."
+          },
+          "nextSteps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "call": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "events",
+          "chain",
+          "nextCursor",
+          "url",
+          "nextSteps"
         ]
       },
       "annotations": {

@@ -30,6 +30,9 @@ const TOOL_SOURCES = [
   "tools/workspace.ts",
   "tools/import.ts",
   "tools/queue.ts",
+  "tools/qa.ts",
+  "tools/rollout.ts",
+  "tools/audit.ts",
 ].map((f) => join(REPO, "packages/mcp/src", f));
 
 /** Scopes each tool's handler checks, in source order. */
@@ -78,7 +81,7 @@ export const FAMILIES: readonly {
     title: "MCP tools: plans and changes",
     nav: "MCP: plans and changes",
     description:
-      "create_plan, get_plan, list_plans, withdraw_plan, start_change, list_changes, wait_for_change and the read tools for status, evidence, tours and issues: arguments, scopes, examples and outputs.",
+      "create_plan, get_plan, list_plans, withdraw_plan, start_change, list_changes, wait_for_change and the read tools for status, evidence, tours, rollouts and issues: arguments, scopes, examples and outputs.",
     tools: [
       "create_plan",
       "get_plan",
@@ -92,6 +95,7 @@ export const FAMILIES: readonly {
       "get_evidence",
       "get_tour",
       "request_review",
+      "get_rollout",
       "list_issues_for_change",
     ],
   },

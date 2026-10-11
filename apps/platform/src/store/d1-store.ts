@@ -99,6 +99,8 @@ export interface PrincipalRef {
   name: string;
   kind: "human" | "agent" | "system" | "integration";
   ownerId: string | null;
+  /** The accountable person's name (agents); null without an owner or when it is unknown. */
+  ownerName: string | null;
 }
 
 export const EMPTY_LANE_COUNTS: LaneCounts = {
@@ -933,7 +935,7 @@ export class D1Store implements Store {
     return principalFromRows(r, keys);
   }
 
-  /** `{ id → { id, name, kind, ownerId } }` for the given ids (unknown ids are left out). */
+  /** `{ id → { id, name, kind, ownerId, ownerName } }` for the given ids (unknown ids are left out). */
   async principalRefs(ids: Iterable<string>): Promise<Record<string, PrincipalRef>> {
     const unique = [...new Set(ids)].filter((x) => x.length > 0);
     const out: Record<string, PrincipalRef> = {};
@@ -950,8 +952,28 @@ export class D1Store implements Store {
         .where(inArray(principals.id, chunk))
         .all();
       for (const r of rows)
-        out[r.id] = { id: r.id, name: r.name, kind: r.kind, ownerId: r.ownerId };
+        out[r.id] = { id: r.id, name: r.name, kind: r.kind, ownerId: r.ownerId, ownerName: null };
     }
+    // One more lookup names the owners (an agent row says whose it is) that weren't in `ids`.
+    const owners = [
+      ...new Set(Object.values(out).flatMap((p) => (p.ownerId === null ? [] : [p.ownerId]))),
+    ];
+    const names = new Map<string, string>();
+    for (const o of owners) {
+      const known = out[o];
+      if (known !== undefined) names.set(o, known.name);
+    }
+    const missing = owners.filter((o) => !names.has(o));
+    for (let i = 0; i < missing.length; i += 90) {
+      const rows = await this.db
+        .select({ id: principals.id, name: principals.name })
+        .from(principals)
+        .where(inArray(principals.id, missing.slice(i, i + 90)))
+        .all();
+      for (const r of rows) names.set(r.id, r.name);
+    }
+    for (const p of Object.values(out))
+      if (p.ownerId !== null) p.ownerName = names.get(p.ownerId) ?? null;
     return out;
   }
 
@@ -987,6 +1009,10 @@ export class D1Store implements Store {
   async listAuditEvents(filter: {
     log: string;
     subject?: string;
+    /** Exact principal id (indexed: audit_events_principal_seq_idx). */
+    actor?: string;
+    /** Exact action (indexed: audit_events_action_seq_idx). */
+    action?: string;
     beforeSeq?: number;
     limit: number;
     /** Extra condition (src/access/audit.ts: the events a principal may read). */
@@ -995,6 +1021,8 @@ export class D1Store implements Store {
     const where: SQL[] = [eq(auditEvents.log, filter.log)];
     if (filter.visible !== undefined) where.push(filter.visible);
     if (filter.subject !== undefined) where.push(eq(auditEvents.subject, filter.subject));
+    if (filter.actor !== undefined) where.push(eq(auditEvents.principalId, filter.actor));
+    if (filter.action !== undefined) where.push(eq(auditEvents.action, filter.action));
     if (filter.beforeSeq !== undefined) where.push(lt(auditEvents.seq, filter.beforeSeq));
     const rows = await this.db
       .select()

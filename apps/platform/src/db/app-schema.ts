@@ -403,6 +403,8 @@ export const auditEvents = sqliteTable(
     primaryKey({ columns: [t.log, t.seq] }),
     index("audit_events_subject_seq_idx").on(t.log, t.subject, t.seq),
     index("audit_events_principal_seq_idx").on(t.log, t.principalId, t.seq),
+    // GET /api/v1/audit?action=…: one kind of event across subjects (e.g. every plan.approved).
+    index("audit_events_action_seq_idx").on(t.log, t.action, t.seq),
   ],
 );
 
