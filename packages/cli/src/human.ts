@@ -48,6 +48,31 @@ export interface RenderOptions {
   title?: string | undefined;
 }
 
+/**
+ * C0 controls except tab and newline (so ESC, CR, BEL, backspace), DEL and C1 (incl. the 8-bit CSI
+ * and OSC introducers). Server strings are rendered to a terminal in --human mode; left in, these
+ * could move the cursor, rewrite earlier lines, set the window title or plant OSC 8 links.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point.
+const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g;
+
+/** `s` without terminal control characters (tab and newline kept). */
+export function stripControl(s: string): string {
+  return s.replace(CONTROL, "");
+}
+
+/** `v` with every string (and object key) passed through stripControl. */
+export function sanitize(v: unknown): unknown {
+  if (typeof v === "string") return stripControl(v);
+  if (Array.isArray(v)) return v.map(sanitize);
+  if (isRecord(v)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v)) out[stripControl(k)] = sanitize(x);
+    return out;
+  }
+  return v;
+}
+
 type Scalar = string | number | boolean | null | undefined;
 
 function isScalar(v: unknown): v is Scalar {
@@ -171,11 +196,14 @@ function renderObject(
 }
 
 export function renderError(
-  body: ErrorBody,
+  rawBody: ErrorBody,
   opts: RenderOptions,
-  extra: Record<string, unknown> = {},
+  rawExtra: Record<string, unknown> = {},
 ): string {
   const { style } = opts;
+  // Messages and details can carry server text; sanitize keeps the shape, only strings change.
+  const body = sanitize(rawBody) as ErrorBody;
+  const extra = sanitize(rawExtra) as Record<string, unknown>;
   const out = [`${style.red(style.bold("Error"))} ${style.red(`[${body.code}]`)} ${body.message}`];
   const fix = body.fix;
   out.push("", `${style.yellow(style.bold("Fix:"))} ${style.yellow(fix.explanation)}`);
@@ -196,9 +224,10 @@ export function renderError(
 }
 
 /** Renders any result document. */
-export function renderHuman(doc: unknown, opts: RenderOptions): string {
+export function renderHuman(rawDoc: unknown, opts: RenderOptions): string {
+  const doc = sanitize(rawDoc);
   const out: string[] = [];
-  if (opts.title) out.push(opts.style.bold(opts.title), "");
+  if (opts.title) out.push(opts.style.bold(stripControl(opts.title)), "");
   if (isRecord(doc)) out.push(...renderObject(doc, opts, 0, 0));
   else if (Array.isArray(doc)) {
     out.push(

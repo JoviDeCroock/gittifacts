@@ -6,7 +6,14 @@
  * - `--human`: the same document as text sections and tables on stdout; errors on stderr.
  */
 import type { ErrorBody } from "./errors.js";
-import { makeStyle, renderError, renderHuman, type Style, useColor } from "./human.js";
+import {
+  makeStyle,
+  renderError,
+  renderHuman,
+  type Style,
+  stripControl,
+  useColor,
+} from "./human.js";
 import type { CliIo } from "./io.js";
 import { isRecord } from "./tools/schema.js";
 
@@ -50,9 +57,13 @@ export class Output {
     }
   }
 
-  /** Progress lines (stderr) for people watching: shown with --human or on a terminal. */
+  /**
+   * Progress lines (stderr) for people watching: shown with --human or on a terminal. They can
+   * quote server text (a QA run's progress), so terminal control characters are stripped.
+   */
   progress(line: string): void {
-    if (this.human || this.io.stderr.isTTY) this.io.stderr.write(`${this.errStyle.dim(line)}\n`);
+    if (this.human || this.io.stderr.isTTY)
+      this.io.stderr.write(`${this.errStyle.dim(stripControl(line))}\n`);
   }
 
   /** Instructions someone must act on (stderr, always). */

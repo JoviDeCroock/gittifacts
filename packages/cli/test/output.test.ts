@@ -8,8 +8,16 @@ import {
 } from "../src/calls.js";
 import { makeStyle, renderError, renderHuman, useColor } from "../src/human.js";
 import { harness, run } from "./support/io.js";
+import { mockConnector } from "./support/mcp.js";
 
 const plain = { style: makeStyle(false), width: 100 };
+
+/** C0 (tab and newline aside), DEL or C1 anywhere in `s`. */
+const hasControl = (s: string) =>
+  [...s].some((c) => {
+    const n = c.codePointAt(0) ?? 0;
+    return (n < 0x20 && n !== 0x09 && n !== 0x0a) || (n >= 0x7f && n <= 0x9f);
+  });
 
 describe("JSON output (default)", () => {
   it("prints exactly one JSON document on stdout", async () => {
@@ -172,6 +180,58 @@ describe("--human output", () => {
     expect(r.stderr).toMatch(/^Error \[no-host\]/);
     expect(r.stderr).toMatch(/Fix: Tell the CLI which platform to use/);
     expect(r.stderr.includes("\u001b[")).toBe(false);
+    h.cleanup();
+  });
+
+  it("strips terminal control sequences from server strings (title, table cells, keys, errors)", async () => {
+    // OSC 0 sets the window title, CSI 2J clears the screen, CR rewrites the line, OSC 8 plants a
+    // link, and \u009b is the 8-bit CSI.
+    const evil =
+      "agent\u001b]0;pwned\u0007\u001b[2J\rok\u001b]8;;https://evil.example\u001b\\x\u009b31m";
+    const h = harness({
+      env: { GITTIFACTS_HOST: "https://gittifacts.example", NO_COLOR: "1" },
+      tty: true,
+    });
+    h.io.connect = mockConnector({
+      tools: {
+        whoami: {
+          principalId: "ag_1",
+          kind: "agent",
+          name: evil,
+          ownerId: null,
+          scopes: ["repo:read"],
+          canApprove: false,
+          repos: [
+            {
+              id: "r_1",
+              name: evil,
+              claim: { status: "claimed", ownerId: null, expiresAt: null },
+              actions: [],
+            },
+          ],
+          quotas: {
+            enforced: false,
+            ciMinutesPerDay: null,
+            ciMinutesUsedToday: null,
+            artifactsOpsPerDay: null,
+          },
+        },
+      },
+    });
+    const r = await run(h, ["whoami", "--human"]);
+    expect(r.code).toBe(0);
+    // The rendered text keeps the readable part and loses every control character (tab/newline
+    // aside). The stdout is a TTY, and NO_COLOR keeps our own SGR out of the way.
+    expect(r.stdout).toContain("agent]0;pwned[2Jok]8;;https://evil.example\\x31m");
+    expect(hasControl(r.stdout)).toBe(false);
+
+    const err = renderError(
+      { code: "x", message: evil, fix: { explanation: evil, command: evil } },
+      plain,
+      { [evil]: evil },
+    );
+    expect(hasControl(err)).toBe(false);
+    expect(renderHuman({ a: "line1\n\tline2" }, plain)).toBe("A: line1\n\tline2\n");
     h.cleanup();
   });
 
