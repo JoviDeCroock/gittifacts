@@ -395,6 +395,27 @@ export function plans(): Plan[] {
       approvedMin: 380,
     }),
     plan({
+      id: "plan_ratelimit",
+      repoId: "repo_edge",
+      title: "Per-key rate limits on the public API",
+      intent:
+        "One customer's runaway script can take the edge API down for everyone. Give every API key a budget (one request per second, bursts up to 60) and answer 429 with Retry-After when it runs out. Requests without a key keep today's behaviour.",
+      acceptanceCriteria: [
+        "A key over its budget gets 429 with a Retry-After header in whole seconds.",
+        "The budget refills at one request per second, up to a burst of 60.",
+        "Requests without an x-api-key header are not limited.",
+      ],
+      outOfScope: ["Per-plan budgets.", "Exemptions for individual routes."],
+      riskDeclarations: [{ area: "Paying customers", description: "A wrong budget throttles customers who pay for the API; roll out behind the flag and watch 429 rates." }],
+      scopePaths: ["src/ratelimit/**", "src/middleware/index.ts", "test/ratelimit/**"],
+      affectedRoutes: [],
+      status: "approved",
+      authorId: "prn_planner",
+      approvedBy: "prn_dev",
+      createdMin: 90,
+      approvedMin: 70,
+    }),
+    plan({
       id: "plan_dash_lanes",
       repoId: "repo_dashboard",
       title: "Lane tags in the dashboard",

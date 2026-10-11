@@ -9,6 +9,7 @@ import invoiceBefore from "./mock-assets/invoice-before.png";
 import { b64u, ago, sha } from "./fixture-kit.js";
 import { type MockDb, chainEvents, createDb, principalRef } from "./fixtures.js";
 import type { RawResponse } from "./client.js";
+import { listAttempts, pickAttempt } from "./mock-attempts.js";
 import { createClaimMock } from "./mock-claim.js";
 import { mockCreatedProjects, mockFreshAccount } from "./mock-getting-started.js";
 import type { Scenario } from "./scenario-kit.js";
@@ -248,6 +249,14 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
       if (!plan) return fail(404, "not_found", "No such plan.");
       return ok({ plan, changes: db.scenarios.map((s) => s.change).filter((c) => c.planId === id) });
     },
+  ],
+
+  ["GET", /^\/api\/v1\/plans\/([^/]+)\/attempts$/, ([id]) => listAttempts(db, id!)],
+
+  [
+    "POST",
+    /^\/api\/v1\/plans\/([^/]+)\/attempts\/([^/]+)\/pick$/,
+    ([planId, changeId], _q, body) => pickAttempt(db, planId!, changeId!, parseBody<{ headSha: string; comment: string }>(body), appendAudit),
   ],
 
   [
