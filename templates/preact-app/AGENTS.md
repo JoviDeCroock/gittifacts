@@ -23,6 +23,8 @@ Every response has `nextSteps` and every error has `fix` (`call` / `command`). D
 2. **Change.** Open one Change per intent. It returns `change.id` and a `remote` for **your fork only**:
    `start_change({ repoId: "{{repoId}}", planId: "<planId>", title: "Add GET /version", category: "feature", paths: ["src/version.ts"] })`
    start_change tells you who else is working on the same paths or plan (`overlaps`): coordinate or wait.
+   Several of you may attempt the same Plan: `compare_attempts({ planId: "<planId>" })` ranks the
+   attempts by evidence and lane; a person picks one and the others are closed (wait says `superseded`).
 3. **Push** your commits to the fork:
    `git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>`
 4. **Wait** (long-poll ≤ 50 s, don't loop on status; call again while `reason` is `"timeout"`):
@@ -91,6 +93,7 @@ walkthrough is regenerated for the new head. Evidence details: `get_evidence({ c
 `reason: "unreachable"` or `"rejected"` → the Change ended; read `get_change_status`.
 `"changes-requested"` → read the review in `get_change_status`, push a new head, `request_review` again.
 `"approval-withdrawn"` → the approval stopped counting (e.g. QA failed): fix and push, or ask again.
+`"superseded"` → a person picked another attempt at the same Plan (`supersededBy`); yours was closed.
 
 ## After merge: rollout and switching a Change off
 With a deploy target, a merged Change rolls out in stages (`rollout` in `.platform/policy.ts`) and is

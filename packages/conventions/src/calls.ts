@@ -18,6 +18,7 @@ export const TOOL_NAMES = [
   "withdraw_plan",
   "start_change",
   "list_changes",
+  "compare_attempts",
   "refresh_push_token",
   "wait_for_change",
   "get_change_status",
