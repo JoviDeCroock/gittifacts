@@ -40,7 +40,7 @@ The CLI prints exactly one JSON document on stdout (errors too) and `--human` ta
 | `0` | success |
 | `1` | error: `{ error: { code, message, fix } }` on stdout |
 | `2` | usage error (unknown command/flag, missing argument); nothing was sent |
-| `3` | wait: the milestone was not reached (timeout or unreachable) |
+| `3` | wait, ship: the milestone was not reached (timeout, unreachable, or ship: CI failed) |
 | `130` | interrupted (Ctrl-C) |
 
 ## Local commands
@@ -49,7 +49,7 @@ These run in the CLI itself (some call one MCP tool on your behalf).
 
 ### `gittifacts init`
 
-Create a repo in one call (create_project): repo from a template or a GitHub import, .platform/ci.ts, policy and AGENTS.md, first CI and preview. Writes .gittifacts.json (host, projectId, remote). No account needed: you get an unclaimed repo and a claim URL for a human.
+Create a repo in one call (create_project): repo from a template or a GitHub import, .platform/ci.ts, policy and AGENTS.md, first CI and preview. Writes .gittifacts.json (host, projectId, remote, changeId; no secrets). With --clone, plain git push then goes to the first Change's fork (credential helper). No account needed: you get an unclaimed repo and a claim URL for a human.
 
 ```text
 gittifacts init [--template <workers-api|preact-app|ts-library|static-site>] [--from <string>] [--name <string>] [--description <string>] [--clone] [--dir <string>] [--force] [--show-token] [--idempotency-key <key>]

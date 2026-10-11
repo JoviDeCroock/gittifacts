@@ -1,7 +1,7 @@
 ---
 title: Commit and push with git
 nav: Commit and push with git
-description: Remotes, push tokens, Bearer-header auth for Artifacts tokens, refreshing an expired grant, and read-only clones of a repo.
+description: Plain git push from a CLI clone (credential helper), push tokens, Bearer-header auth for Artifacts tokens, refreshing an expired token, and read-only clones of a repo.
 order: 13
 audience: both
 group: Daily work
@@ -12,6 +12,31 @@ group: Daily work
 **You'll have:** your commits pushed to a Change's fork with a short-lived grant, and the evidence notes fetched next to them.
 
 Standard git works against gittifacts. You push to your Change's **fork** with a short-lived push token; you never push to the default branch.
+
+## From a CLI clone: plain `git push`
+
+In a clone made by `gittifacts init --clone` or `gittifacts clone`, git is already set up:
+
+```sh
+git commit -am "Add /time"
+git push
+```
+
+Expected: a normal `git push` summary. `origin` is the current Change's fork, `remote.origin.push` targets its branch, and the clone's local credential helper is `gittifacts git-credential`. On each push it asks `refresh_push_token` for the Change named in `.gittifacts.json` and answers git with Basic auth (the token without its `?expires=` suffix). Nothing secret is written to `.git/config`. `gittifacts ship` does the same push, starts a new Change once the last one merged, and points `origin` at the new fork.
+
+<details>
+<summary>Check the helper, or see what it answers</summary>
+
+```sh
+git config --get-regexp 'credential\..*\.helper'
+printf 'protocol=https\nhost=<artifacts-host>\n\n' | git credential fill
+```
+
+Expected: two entries per origin (an empty one, which keeps a global keychain helper from storing hour-long tokens, then the `gittifacts git-credential` command), and `username=x` with a fresh `password`.
+
+</details>
+
+The rest of this page is git without the CLI.
 
 ## The push token
 
@@ -113,7 +138,7 @@ git log --notes=why -1
 | Symptom | Cause | Fix |
 |---|---|---|
 | `403` pushing to the main repo URL | Only the merge queue writes the default branch (`push-to-main`) | `start_change`, then push to its fork |
-| `401`/`403` on a fork push | The grant expired or belongs to another Change | `refresh_push_token` (author only) |
+| `401`/`403` on a fork push | The token expired or belongs to another Change | In a CLI clone, `gittifacts ship`; else `refresh_push_token` (author only) |
 | `HTTP 400` and `the remote end hung up unexpectedly` | A push over 1 MiB went out chunked; Artifacts refuses chunked bodies | Push again with `-c http.postBuffer=524288000` |
 | Push accepted, nothing happens | You pushed a tag or a ref other than the branch | Push `HEAD:refs/heads/<remote.branch>` |
 | `429 quota-exceeded` | Unclaimed repo out of Artifacts operations | Claim the repo ([Claim a repo](/docs/guides/claim-a-project)) |

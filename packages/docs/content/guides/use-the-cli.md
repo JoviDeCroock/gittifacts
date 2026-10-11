@@ -1,6 +1,6 @@
 ---
 title: Use the CLI
-description: Install the gittifacts CLI, log in with the device flow, and ship a Change from a terminal. Every MCP tool is a command; output is JSON.
+description: Install the gittifacts CLI, log in with the device flow, clone a repo and ship a Change with plain git. Every MCP tool is a command; text on a terminal, JSON when piped.
 order: 12
 audience: both
 group: Daily work
@@ -19,7 +19,7 @@ alias gittifacts="npx -y https://<host>/cli/gittifacts.tgz"
 gittifacts --version
 ```
 
-Expected: `{"name":"gittifacts","version":"0.1.0"}`. The next steps the CLI prints start with `gittifacts`, so the alias makes them runnable.
+Expected: the name `gittifacts` and version `0.1.0`. The next steps the CLI prints start with `gittifacts`, so the alias makes them runnable.
 
 <details>
 <summary>Install for good, update, and npm</summary>
@@ -47,27 +47,31 @@ gittifacts login --device-code <deviceCode>
 
 To keep a repo you made without logging in, open its `claimUrl` signed in ([Claim a repo](/docs/guides/claim-a-project)).
 
-## 3. Ship a change
+## 3. Clone a repo
 
 ```sh
-gittifacts create-plan --repo-id 3fk2q8wz7m1x0c5v9nbd --title "Add /time" \
-  --intent "Clients need the server time in ISO 8601." \
-  --acceptance-criteria "GET /time returns an ISO 8601 timestamp"
-# a human approves the plan, then:
-gittifacts start-change --repo-id 3fk2q8wz7m1x0c5v9nbd --plan-id 4p8n2b7dq0x6w3k9m1zs --title "Add /time" --category feature
-git -c http.extraHeader="Authorization: Bearer $PUSH_TOKEN" push "$PUSH_URL" HEAD:main
-gittifacts wait 7h2kd9x0qw3m5z8r1vtc --until lane_assigned
+gittifacts clone 3fk2q8wz7m1x0c5v9nbd
+cd my-api
+```
+
+The repo page shows this command with your repo id. It clones through the platform's read-only git URL with your login and sets git up for `ship`. Unclaimed repos have no such URL: claim the repo first, or create one with `init --clone`.
+
+## 4. Ship a change
+
+```sh
+git commit -am "Add /time"
+gittifacts ship --plan 4p8n2b7dq0x6w3k9m1zs
 gittifacts request-review 7h2kd9x0qw3m5z8r1vtc
 gittifacts wait 7h2kd9x0qw3m5z8r1vtc --until merged
 ```
 
-Take `PUSH_URL`, `PUSH_TOKEN` and the branch from `remote` in the `start-change` output. Each step, with expected output: [Make a Change](/docs/guides/make-a-change). Pushing in depth: [Commit and push with git](/docs/guides/git).
+`ship` starts a Change (title: your last commit's subject), points `origin` at its fork, pushes, waits for CI and the lane, and prints the lane, what decided it, the Change page and one next step. After that, plain `git push` goes to the same fork: git asks `gittifacts git-credential` for a fresh push token each time. `--plan` links an approved Plan; without it the Change is planless (usually a quick review). Each step, with expected output: [Make a Change](/docs/guides/make-a-change). Pushing in depth: [Commit and push with git](/docs/guides/git).
 
 ## Habits
 
 - `gittifacts tools` lists every command; `gittifacts search-tools "wait for ci"` finds one by what it does.
 - `gittifacts <command> --help` prints its flags from the tool's schema.
-- `--human` prints tables instead of JSON.
+- On a terminal the CLI prints text; piped, or with `--json`, it prints one JSON document. `--human` forces text.
 - Mutating commands print an `idempotencyKey`. On a network error, retry with `--idempotency-key <key>` and nothing happens twice.
 - Errors are `{ "error": { "code", "message", "fix" } }`. `fix.command` is the CLI command that resolves it.
 
