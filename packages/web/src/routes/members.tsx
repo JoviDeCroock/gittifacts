@@ -18,7 +18,7 @@ import { plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
 import { useResource } from "../state/resource.js";
 import { principal } from "../state/session.js";
-import { AddMember, RoleGuide } from "./members-form.js";
+import { AddMember, PendingInvites, RoleGuide } from "./members-form.js";
 import "../styles/members.css";
 
 const RANK: Record<RepoRole, number> = { reader: 1, reviewer: 2, maintainer: 3, owner: 4 };
@@ -290,6 +290,14 @@ export function MembersPage({ repoId }: { repoId: string }) {
             {view.canManage ? null : ` Ask ${owners.length > 0 ? names(owners) : "an owner"} to change a role.`}
           </p>
         </section>
+        {view.canManage ? (
+          <PendingInvites
+            repoId={repoId}
+            invites={view.invites}
+            now={minuteClock.value}
+            onChanged={res.reload}
+          />
+        ) : null}
         {view.canManage ? (
           <AddMember
             repoId={repoId}

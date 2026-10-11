@@ -4,7 +4,14 @@
  */
 import { ApiError } from "./client.js";
 import { ME, principals } from "./fixtures.js";
-import type { AddMemberInput, MembersView, RepoMember, RepoRole } from "./members.js";
+import type {
+  AddMemberInput,
+  AddMemberResult,
+  MembersView,
+  RepoInvite,
+  RepoMember,
+  RepoRole,
+} from "./members.js";
 
 const PEOPLE: Record<string, { name: string; email: string }> = {
   prn_maya: { name: "Maya Okafor", email: "maya@acme.dev" },
@@ -14,6 +21,7 @@ const PEOPLE: Record<string, { name: string; email: string }> = {
 };
 
 const byRepo = new Map<string, RepoMember[]>();
+const invitesByRepo = new Map<string, RepoInvite[]>();
 
 function iso(minAgo: number): string {
   return new Date(Date.now() - minAgo * 60_000).toISOString();
@@ -57,6 +65,7 @@ function view(repoId: string): MembersView {
     members: all.map((m) => ({ ...m, email: canManage ? m.email : null, agents: agentsOf(m.principalId) })),
     viewerRole,
     canManage,
+    invites: canManage ? [...(invitesByRepo.get(repoId) ?? [])] : [],
   };
 }
 
@@ -81,19 +90,30 @@ export async function listMembers(repoId: string): Promise<MembersView> {
 export async function addMember(
   repoId: string,
   input: AddMemberInput,
-): Promise<{ member: RepoMember }> {
+): Promise<AddMemberResult> {
   await wait(420);
   const all = rows(repoId);
   const id =
     "principalId" in input
       ? input.principalId
       : Object.entries(PEOPLE).find(([, p]) => p.email === input.email.trim().toLowerCase())?.[0];
-  if (!id) {
-    throw new ApiError(404, "not-found", "user with that e-mail not found", undefined, {
-      explanation:
-        "Nobody has signed up with that e-mail. Ask them to sign in once, then add them again.",
-    });
+  if (!id && "email" in input) {
+    // Nobody signed up with it: an invite, with a demo link that goes nowhere.
+    const email = input.email.trim().toLowerCase();
+    const open = (invitesByRepo.get(repoId) ?? []).filter((i) => i.email !== email);
+    const invite: RepoInvite = {
+      id: `inv_demo_${Date.now()}`,
+      email,
+      role: input.role,
+      invitedBy: { principalId: ME, name: PEOPLE[ME]?.name ?? "You" },
+      createdAt: iso(0),
+      expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      expired: false,
+    };
+    invitesByRepo.set(repoId, [...open, invite]);
+    return { invite, inviteUrl: `${window.location.origin}/invite/gtm_demo-link-not-real` };
   }
+  if (!id) throw new ApiError(404, "not-found", "not a person");
   const existing = all.find((m) => m.principalId === id);
   if (existing) {
     const owners = all.filter((m) => m.role === "owner").length;
@@ -104,6 +124,18 @@ export async function addMember(
   const added = member(id, input.role, 0);
   all.push(added);
   return { member: added };
+}
+
+export async function revokeInvite(
+  repoId: string,
+  inviteId: string,
+): Promise<{ revoked: true; inviteId: string }> {
+  await wait(300);
+  invitesByRepo.set(
+    repoId,
+    (invitesByRepo.get(repoId) ?? []).filter((i) => i.id !== inviteId),
+  );
+  return { revoked: true, inviteId };
 }
 
 export async function removeMember(

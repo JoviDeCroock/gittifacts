@@ -183,3 +183,19 @@
 .members__status:not(:empty) {
   margin-block-end: var(--s-3);
 }
+/* A new invite's link, shown once under the form: the value to paste, then what it does. */
+.invite-once {
+  margin-block-start: var(--s-4);
+  display: grid;
+  gap: var(--s-2);
+}
+.invite-once__title {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+.invite-once__note {
+  font-size: var(--text-small);
+  color: var(--text-3);
+  max-inline-size: 68ch;
+  overflow-wrap: anywhere;
+}

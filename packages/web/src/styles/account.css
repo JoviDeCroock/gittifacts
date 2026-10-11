@@ -1,0 +1,30 @@
+/* Account screens outside the app shell: password reset forms and the invite page's actions. */
+.reset-form {
+  display: grid;
+  gap: var(--s-4);
+}
+.reset-form__title {
+  font-size: var(--text-heading);
+  line-height: var(--leading-tight);
+}
+@media (min-width: 1024px) {
+  .reset-form__title {
+    font-size: var(--text-display);
+  }
+}
+.reset-form__lede,
+.reset-form__hint {
+  color: var(--text-2);
+}
+.reset-form__hint {
+  font-size: var(--text-small);
+}
+.reset-form__back {
+  justify-self: start;
+  font-size: var(--text-small);
+}
+.invite-frame .consent-outcome__action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}

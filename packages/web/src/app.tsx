@@ -25,6 +25,9 @@ const NotFound = lazy(() => import("./routes/notfound.js").then((m) => m.NotFoun
 const OAuthConsent = lazy(() => import("./routes/oauth-consent.js").then((m) => m.OAuthConsent));
 const DeviceView = lazy(() => import("./routes/device.js").then((m) => m.DeviceView));
 const ClaimPage = lazy(() => import("./routes/claim.js").then((m) => m.ClaimPage));
+const InvitePage = lazy(() => import("./routes/invite.js").then((m) => m.InvitePage));
+const ForgotPassword = lazy(() => import("./routes/password-reset.js").then((m) => m.ForgotPassword));
+const ResetPassword = lazy(() => import("./routes/password-reset.js").then((m) => m.ResetPassword));
 const InstalledIntegrations = lazy(() => import("./routes/integrations.js").then((m) => m.InstalledIntegrations));
 const IntegrationInstall = lazy(() => import("./routes/integration-install.js").then((m) => m.IntegrationInstall));
 const IntegrationsDeveloper = lazy(() => import("./routes/integrations-developer.js").then((m) => m.IntegrationsDeveloper));
@@ -38,8 +41,11 @@ const GITHUB_ROUTES = GITHUB_SURFACES ? [<Route key="github" path="/settings/git
 /** Agent consent screens: one decision, no navigation to wander off to. */
 const FOCUSED = /^\/(oauth\/consent|device|integrations\/install)\/?$/;
 
-/** Claim links: public (an agent hands one to a person who may not be signed in yet) and focused. */
-const PUBLIC = /^\/claim\/[^/]+\/?$/;
+/**
+ * Public and focused: claim links (an agent hands one to a person who may not be signed in yet),
+ * invite links (an owner hands one to someone without an account) and password reset.
+ */
+const PUBLIC = /^\/(claim\/[^/]+|invite\/[^/]+|forgot-password|reset-password)\/?$/;
 
 /** Where this page load started: the SPA only boots at `/` on the dev server (or a build without
  * the landing page); everywhere else the Worker serves `/` as the marketing page. */
@@ -156,6 +162,9 @@ function Gate() {
       <ErrorBoundary>
         <Router>
           <Route path="/claim/:token" component={ClaimPage} />
+          <Route path="/invite/:token" component={InvitePage} />
+          <Route path="/forgot-password" component={ForgotPassword} />
+          <Route path="/reset-password" component={ResetPassword} />
           <Route default component={NotFound} />
         </Router>
       </ErrorBoundary>

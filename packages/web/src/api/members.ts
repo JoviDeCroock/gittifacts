@@ -1,6 +1,7 @@
 /**
  * Repo members (apps/platform/src/access/routes.ts): `GET/POST /api/v1/repos/:repoId/members`,
- * `DELETE /api/v1/repos/:repoId/members/:principalId`. In mock mode an in-browser backend answers.
+ * `DELETE /api/v1/repos/:repoId/members/:principalId`, and invites (an e-mail nobody has signed up
+ * with gets a single-use link: `/api/v1/invites/:token`). In mock mode an in-browser backend answers.
  */
 import { request } from "./client.js";
 import { isMockMode } from "./mode.js";
@@ -46,11 +47,38 @@ export interface MemberAgent {
   name: string;
 }
 
+/** An open invite: the e-mail has not signed up and accepted yet. Owners only. */
+export interface RepoInvite {
+  id: string;
+  email: string;
+  role: RepoRole;
+  invitedBy: { principalId: string; name: string };
+  createdAt: string;
+  expiresAt: string;
+  expired: boolean;
+}
+
 export interface MembersView {
   repoId: string;
   members: RepoMember[];
   viewerRole: RepoRole | null;
   canManage: boolean;
+  /** Open invites (owners only; empty for everyone else). */
+  invites: RepoInvite[];
+}
+
+/** Adding a signed-up person makes them a member; anyone else gets an invite link, shown once. */
+export type AddMemberResult = { member: RepoMember } | { invite: RepoInvite; inviteUrl: string };
+
+/** What an invite link offers (`GET /api/v1/invites/:token`, readable signed out). */
+export interface InviteLink {
+  status: "pending" | "accepted" | "expired" | "revoked";
+  repo: { id: string; name: string };
+  role: RepoRole;
+  invitedBy: { name: string };
+  emailHint: string;
+  expiresAt: string;
+  viewer: { signedIn: boolean; emailMatches: boolean; role: RepoRole | null };
 }
 
 export type AddMemberInput =
@@ -72,10 +100,30 @@ export const membersApi = {
     repoId: string,
     input: AddMemberInput,
     key?: string,
-  ): Promise<{ member: RepoMember }> =>
+  ): Promise<AddMemberResult> =>
     isMockMode()
       ? (await mock()).addMember(repoId, input)
-      : request<{ member: RepoMember }>("POST", `/api/v1/repos/${enc(repoId)}/members`, input, key),
+      : request<AddMemberResult>("POST", `/api/v1/repos/${enc(repoId)}/members`, input, key),
+  revokeInvite: async (
+    repoId: string,
+    inviteId: string,
+    key?: string,
+  ): Promise<{ revoked: true; inviteId: string }> =>
+    isMockMode()
+      ? (await mock()).revokeInvite(repoId, inviteId)
+      : request<{ revoked: true; inviteId: string }>(
+          "DELETE",
+          `/api/v1/repos/${enc(repoId)}/invites/${enc(inviteId)}`,
+          undefined,
+          key,
+        ),
+  inviteLink: (token: string): Promise<InviteLink> =>
+    request<InviteLink>("GET", `/api/v1/invites/${enc(token)}`),
+  acceptInvite: (
+    token: string,
+    key?: string,
+  ): Promise<{ repoId: string; role: RepoRole; alreadyMember: boolean }> =>
+    request("POST", `/api/v1/invites/${enc(token)}/accept`, undefined, key),
   remove: async (
     repoId: string,
     principalId: string,
