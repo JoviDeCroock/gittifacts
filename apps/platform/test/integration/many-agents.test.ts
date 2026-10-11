@@ -22,13 +22,13 @@ import {
   cloudflareBindings,
   createCoordinator,
 } from "@app/coordinator";
-import { decodeWhyNote, WHY_NOTES_REF, whySigningRecord } from "@app/evidence";
+import { decodeWhyNote, parseKeySet, verifyWhyNote, WHY_NOTES_REF } from "@app/evidence";
 import { createPlatformClient, type PlatformClient } from "@app/mcp/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app.js";
 import { COORDINATOR_OPTIONS } from "../../src/coordinator.js";
 import { buildPorts } from "../../src/runtime/ports.js";
-import { Purpose, platformSigner } from "../../src/signing.js";
+import { Purpose } from "../../src/signing.js";
 import { call, createAgent, json, ORIGIN, signUpHuman, type TestApp } from "../http.js";
 import {
   type IntegrationFakes,
@@ -271,7 +271,10 @@ describe("many agents, one repo (workerd: real DOs + Workflows)", () => {
       const whyOf = new Map(
         notes.map(([sha, text]) => [decodeWhyNote(text).changeId, { sha, text }]),
       );
-      const signer = await platformSigner(env);
+      // Verified as any clone would: the published keys and verify-attestation's own check.
+      const keysRes = await call(app, "GET", "/.well-known/gittifacts-keys.json");
+      expect(keysRes.status).toBe(200);
+      const keys = parseKeySet(await keysRes.json());
       for (const w of work) {
         const found = whyOf.get(w.changeId);
         expect(found, `no why note for agent ${w.agent.i}'s Change`).toBeDefined();
@@ -298,16 +301,10 @@ describe("many agents, one repo (workerd: real DOs + Workflows)", () => {
         });
         expect(why.evidenceId).not.toBeNull();
         expect(why.attestation.purpose).toBe(Purpose.document);
-        const verified = await signer.verifyDetached(
-          whySigningRecord(why),
-          why.attestation.signature,
-          {
-            purpose: Purpose.document,
-            keyId: why.attestation.keyId,
-            signedAt: why.landedAt,
-          },
-        );
-        expect(verified).toMatchObject({ ok: true });
+        expect(await verifyWhyNote(found!.text, keys, { commit: found!.sha })).toMatchObject({
+          ok: true,
+          bindingChecked: true,
+        });
       }
     } finally {
       for (const d of disposables) await d[Symbol.asyncDispose]();
