@@ -26,19 +26,70 @@ const RESOLVE = [
 ];
 
 /**
+ * Rewrites `.git/config` from scratch (a blobless partial clone of `$WS_REMOTE`). Repo code or
+ * an agent could have added url rewrites (`insteadOf`), credential helpers, an fsmonitor command
+ * or filters that would see or redirect the token: every script that runs with one starts here.
+ */
+const RESET_GIT_CONFIG = [
+  "cat > .git/config <<EOF",
+  "[core]",
+  "\trepositoryformatversion = 1",
+  "\tfilemode = true",
+  "\tbare = false",
+  "\tlogallrefupdates = true",
+  "[extensions]",
+  "\tpartialclone = origin",
+  '[remote "origin"]',
+  "\turl = $WS_REMOTE",
+  "\tfetch = +refs/heads/*:refs/remotes/origin/*",
+  "\tpromisor = true",
+  "\tpartialclonefilter = blob:none",
+  "EOF",
+];
+
+/**
+ * Env that gives git the token for one exec and nothing repository code wrote a say in it: no
+ * global (`~/.gitconfig`, `~/.config/git/config`, writable by repo code and agents) or system
+ * config, no hooks, no fsmonitor, no credential helper. Command-scope config (`GIT_CONFIG_*`)
+ * wins over `.git/config` for these keys; RESET_GIT_CONFIG covers the ones it can't override.
+ * `safe.directory` comes back because the image sets it in the system config this turns off.
+ * Same list as the CI Runner's `gitTokenEnv` (@app/ci-engine, runner/shell.ts).
+ */
+export function workspaceTokenEnv(token: string): Record<string, string> {
+  const config: [string, string][] = [
+    ["http.extraHeader", `Authorization: Bearer ${token}`],
+    ["core.hooksPath", "/dev/null"],
+    ["core.fsmonitor", "false"],
+    ["credential.helper", ""],
+    ["safe.directory", "*"],
+  ];
+  const env: Record<string, string> = {
+    GIT_TERMINAL_PROMPT: "0",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_COUNT: String(config.length),
+  };
+  config.forEach(([key, value], i) => {
+    env[`GIT_CONFIG_KEY_${i}`] = key;
+    env[`GIT_CONFIG_VALUE_${i}`] = value;
+  });
+  return env;
+}
+
+/**
  * Brings /workspace to `$WS_HEAD` on branch `$WS_BRANCH` of the fork `$WS_REMOTE`:
  * a blobless clone (commits and trees first, blobs of the checked-out tree fetched by the
  * checkout itself) plus the base commit with blobs, so `ws_diff` works without credentials.
  * Starting from a CI dependency snapshot, untracked files such as node_modules are kept.
- * Auth: `GIT_CONFIG_*` env only (this exec), never argv or .git/config.
+ * Auth: `GIT_CONFIG_*` env only (this exec, {@link workspaceTokenEnv}), never argv or
+ * .git/config, which a snapshot's repo code wrote and is rewritten first.
  */
 export const CHECKOUT_SCRIPT = [
   "set -eu",
   'mkdir -p "$WS_ROOT"',
   'cd "$WS_ROOT"',
   "if [ ! -d .git ]; then git init -q .; fi",
-  "git remote remove origin >/dev/null 2>&1 || true",
-  'git remote add origin "$WS_REMOTE"',
+  ...RESET_GIT_CONFIG,
   'git fetch -q --no-tags --depth=50 --filter=blob:none origin "$WS_HEAD"',
   'if [ "$WS_BASE" != "$WS_HEAD" ]; then git fetch -q --no-tags --no-filter --depth=1 origin "$WS_BASE"; fi',
   'git -c advice.detachedHead=false checkout -q --force -B "$WS_BRANCH" "$WS_HEAD"',
@@ -119,29 +170,15 @@ export const DIFF_PATCH_SCRIPT = [
 /**
  * Commit everything as `$GIT_AUTHOR_*` and push HEAD to `refs/heads/$WS_BRANCH` of the fork.
  *
- * Before it runs anything with the token, it rewrites .git/config from scratch: repo code or an
- * agent could have added url rewrites (`insteadOf`), credential helpers, an fsmonitor command or
- * filters that would see or redirect the token. Hooks are off (`core.hooksPath=/dev/null`,
- * `--no-verify`). The token is in this exec's env only (`GIT_CONFIG_*`). A non-fast-forward
+ * Before it runs anything with the token, it rewrites .git/config from scratch (RESET_GIT_CONFIG),
+ * and global/system config, hooks and fsmonitor are off for the exec ({@link workspaceTokenEnv};
+ * also `--no-verify`). The token is in this exec's env only (`GIT_CONFIG_*`). A non-fast-forward
  * (the fork moved) is reported, never forced.
  */
 export const COMMIT_PUSH_SCRIPT = [
   "set -eu",
   'cd "$WS_ROOT"',
-  "cat > .git/config <<EOF",
-  "[core]",
-  "\trepositoryformatversion = 1",
-  "\tfilemode = true",
-  "\tbare = false",
-  "\tlogallrefupdates = true",
-  "[extensions]",
-  "\tpartialclone = origin",
-  '[remote "origin"]',
-  "\turl = $WS_REMOTE",
-  "\tfetch = +refs/heads/*:refs/remotes/origin/*",
-  "\tpromisor = true",
-  "\tpartialclonefilter = blob:none",
-  "EOF",
+  ...RESET_GIT_CONFIG,
   'before="$(git rev-parse -q --verify HEAD || true)"',
   "git -c core.hooksPath=/dev/null add -A",
   "committed=false",

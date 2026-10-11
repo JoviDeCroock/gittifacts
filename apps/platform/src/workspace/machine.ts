@@ -30,6 +30,7 @@ import {
   parseDiffStats,
   READ_SCRIPT,
   WRITE_SCRIPT,
+  workspaceTokenEnv,
 } from "./scripts.js";
 
 // ---------------------------------------------------------------- contract
@@ -309,14 +310,6 @@ function baseEnv(author?: Author): Record<string, string> {
   };
 }
 
-function tokenEnv(token: string): Record<string, string> {
-  return {
-    GIT_CONFIG_COUNT: "1",
-    GIT_CONFIG_KEY_0: "http.extraHeader",
-    GIT_CONFIG_VALUE_0: `Authorization: Bearer ${token}`,
-  };
-}
-
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
@@ -559,7 +552,7 @@ export class ContainerMachine implements WorkspaceMachine {
         WS_BRANCH: spec.branch,
         WS_HEAD: spec.headSha,
         WS_BASE: spec.baseSha,
-        ...tokenEnv(spec.token),
+        ...workspaceTokenEnv(spec.token),
       },
     });
     const marker = lastWsMarker(r.stdout.text) as { head?: unknown } | null;
@@ -647,7 +640,7 @@ export class ContainerMachine implements WorkspaceMachine {
         WS_BRANCH: spec.branch,
         WS_MESSAGE: spec.message,
         WS_PUSHED: spec.pushedHead,
-        ...tokenEnv(spec.token),
+        ...workspaceTokenEnv(spec.token),
       },
     });
     const m = lastWsMarker(r.stdout.text) as {

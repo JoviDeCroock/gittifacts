@@ -3,7 +3,16 @@
  * against a temp checkout (`WS_ROOT`) and a local bare "fork" (the workerd tests fake the machine).
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { devNull, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -16,6 +25,7 @@ import {
   parseDiffStats,
   READ_SCRIPT,
   WRITE_SCRIPT,
+  workspaceTokenEnv,
 } from "../src/workspace/scripts.js";
 
 const tmp = mkdtempSync(join(tmpdir(), "gittifacts-ws-"));
@@ -147,5 +157,57 @@ describe("workspace scripts", () => {
     const pushed = git(root, "rev-parse", "HEAD");
     const r = sh(COMMIT_PUSH_SCRIPT, [], { WS_MESSAGE: "late", WS_PUSHED: pushed });
     expect(lastWsMarker(r.stdout)).toMatchObject({ status: "rejected" });
+  });
+
+  it("runs nothing repo code planted in ~/.gitconfig or .git while the token is in env", () => {
+    // Security audit 2026-10-11 (Low): the machine's token env alone must keep git from reading
+    // global config, hooks and fsmonitor; the base ENV here (GIT_CONFIG_GLOBAL) is left out.
+    const home = join(tmp, "planted-home");
+    const marker = join(tmp, "PWNED");
+    const evil = join(tmp, "evil.sh");
+    mkdirSync(home);
+    writeFileSync(evil, `#!/bin/sh\necho "$0 $*" >> ${marker}\nexit 1\n`);
+    chmodSync(evil, 0o755);
+    const hooks = join(tmp, "planted-hooks");
+    mkdirSync(hooks);
+    for (const hook of ["post-checkout", "pre-commit", "pre-push", "reference-transaction"]) {
+      writeFileSync(join(hooks, hook), `#!/bin/sh\n${evil} ${hook}\n`);
+      chmodSync(join(hooks, hook), 0o755);
+    }
+    writeFileSync(
+      join(home, ".gitconfig"),
+      `[core]\n\tfsmonitor = ${evil}\n\thooksPath = ${hooks}\n[credential]\n\thelper = !${evil}\n`,
+    );
+    git(root, "config", "core.fsmonitor", evil);
+    const isolated = (script: string, env: Record<string, string>) => {
+      const r = spawnSync("sh", ["-c", script, "gittifacts-ws"], {
+        cwd: root,
+        env: {
+          PATH: ENV.PATH,
+          HOME: home,
+          GIT_AUTHOR_NAME: ENV.GIT_AUTHOR_NAME,
+          GIT_AUTHOR_EMAIL: ENV.GIT_AUTHOR_EMAIL,
+          GIT_COMMITTER_NAME: ENV.GIT_COMMITTER_NAME,
+          GIT_COMMITTER_EMAIL: ENV.GIT_COMMITTER_EMAIL,
+          WS_ROOT: root,
+          WS_REMOTE: ENV.WS_REMOTE,
+          WS_BRANCH: ENV.WS_BRANCH,
+          ...workspaceTokenEnv("tok"),
+          ...env,
+        },
+        encoding: "utf8",
+      });
+      return { code: r.status, stdout: r.stdout, stderr: r.stderr };
+    };
+    const tip = git(remote, "rev-parse", "refs/heads/main");
+    const co = isolated(CHECKOUT_SCRIPT, { WS_HEAD: tip, WS_BASE: base });
+    expect(co.code, co.stderr).toBe(0);
+    expect(readFileSync(join(root, ".git", "config"), "utf8")).not.toContain("fsmonitor");
+    git(root, "config", "core.fsmonitor", evil);
+    writeFileSync(join(root, "e.txt"), "e\n");
+    const push = isolated(COMMIT_PUSH_SCRIPT, { WS_MESSAGE: "planted", WS_PUSHED: tip });
+    expect(push.code, push.stderr).toBe(0);
+    expect(lastWsMarker(push.stdout)).toMatchObject({ status: "pushed" });
+    expect(existsSync(marker) ? readFileSync(marker, "utf8") : "").toBe("");
   });
 });
