@@ -78,7 +78,7 @@ export function changeListTools(backend: McpBackend, kit: ToolKit) {
       name: "list_changes",
       title: "List changes",
       description:
-        "A repo's changes, most recently updated first (up to 200): status, lane, plan, who started it and its page (url). Filter by status (e.g. awaiting-review) or to the changes you started (mine: true). get_change_status has one change's details.",
+        "A repo's changes, most recently updated first (up to 200): status, lane, plan, who started it and its page (url). Filter by status (e.g. awaiting-review) or to the changes you started (mine: true; applied within those 200, so add status to reach older ones). get_change_status has one change's details.",
       inputSchema: ListChangesInput,
       outputSchema: ListChangesOutput,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },

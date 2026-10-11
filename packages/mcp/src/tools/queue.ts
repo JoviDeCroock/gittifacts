@@ -662,7 +662,7 @@ export function queueTools(backend: McpBackend, kit: ToolKit) {
       name: "enqueue",
       title: "Enqueue a Change for merge",
       description:
-        "Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode). It never skips review: an unapproved Change is registered and joins once approved (an auto-merge Change, Lane 0, joins by itself). Returns position, track, ETA and the predicted pass probability.",
+        "Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode); optional, since approval queues a Change by itself. It never skips review: an unapproved Change is registered and joins once approved (an auto-merge Change, Lane 0, joins by itself). Returns position, track, ETA and the predicted pass probability.",
       inputSchema: EnqueueInput,
       outputSchema: EnqueueOutput,
       annotations: WRITE,
@@ -762,7 +762,7 @@ export function queueTools(backend: McpBackend, kit: ToolKit) {
       name: "dequeue",
       title: "Take a Change out of the merge queue",
       description:
-        "Removes your Change from the merge queue (stack dependents leave with it). A Change that is landing right now leaves after its CAS settles.",
+        "Removes a Change from the merge queue (stack dependents leave with it): its author, the author's owner, or a person who may review it. A Change that is landing right now leaves after its CAS settles.",
       inputSchema: DequeueInput,
       outputSchema: DequeueOutput,
       annotations: WRITE,
@@ -780,7 +780,7 @@ export function queueTools(backend: McpBackend, kit: ToolKit) {
       name: "reprioritize",
       title: "Change a queued Change's priority",
       description:
-        "Sets the priority class (normal, security, incident). The incident class needs a human or an approved incident Plan (incidentPlanId); reverts are prioritized automatically.",
+        "Sets a queued Change's priority class (normal, security, incident): its author, the author's owner, or a person who may review it. The incident class needs a human or an approved incident Plan (incidentPlanId); reverts are prioritized automatically.",
       inputSchema: ReprioritizeInput,
       outputSchema: ReprioritizeOutput,
       annotations: WRITE,

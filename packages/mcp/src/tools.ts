@@ -683,7 +683,7 @@ export function buildTools(backend: McpBackend) {
       name: "start_change",
       title: "Start a change",
       description:
-        "Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically. overlaps lists the open changes already on the same plan or touching the paths you name (paths) or your plan's scopePaths: coordinate with them or wait.",
+        "Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically. overlaps lists the open changes already on the same plan or touching the paths you name (paths) or your plan's scopePaths: coordinate with them or wait. url is the change's page, to hand a person. A plan still in draft is fine to start from, but the change can't auto-merge until a person approves the plan.",
       inputSchema: StartChangeInputSchema,
       outputSchema: StartChangeOutput,
       annotations: WRITE,

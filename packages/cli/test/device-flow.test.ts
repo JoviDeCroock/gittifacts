@@ -233,7 +233,12 @@ describe("gittifacts login / logout", () => {
       loggedOut: true,
       host: server.host,
       removed: { login: true },
+      // Revoked on the platform first, so the session no longer shows as active on /agents.
+      revokedOnPlatform: { revoked: 2 },
     });
+    expect(server.requests.map((q) => `${q.method} ${q.path}`)).toEqual(
+      expect.arrayContaining(["GET /api/v1/me", "DELETE /api/v1/principals/ag_cli/tokens"]),
+    );
     const after = JSON.parse(readFileSync(path, "utf8"));
     expect(after.hosts[server.host]).toBeUndefined();
     expect(after.defaultHost).toBeUndefined();

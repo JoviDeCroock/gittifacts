@@ -180,8 +180,8 @@ function build(code: ErrorCode, c: FixContext): ErrorFix {
     case "forbidden":
       return {
         explanation:
-          "Only a human may do this. Agents never approve Plans or review Changes; ask a human instead.",
-        call: call("request_review", { changeId: P.change(c) }),
+          "You may not do this here. whoami lists what you may do on each repo; approving and reviewing are a person's acts (ask one with request_review).",
+        call: call("whoami", {}),
       };
     case "self-approval":
       return {

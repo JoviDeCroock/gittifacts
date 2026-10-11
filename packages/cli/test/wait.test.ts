@@ -29,6 +29,7 @@ function waitResult(status: WaitOut["change"]["status"], reason: WaitOut["reason
       revertOf: null,
       updatedAt: "2026-10-01T00:00:00Z",
     },
+    url: "https://gittifacts.test/changes/chg_1",
     nextSteps: [
       {
         title: "Watch for production issues",

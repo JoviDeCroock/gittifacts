@@ -13,7 +13,7 @@ generated: true
 
 ## `enqueue`
 
-Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode). It never skips review: an unapproved Change is registered and joins once approved (an auto-merge Change, Lane 0, joins by itself). Returns position, track, ETA and the predicted pass probability.
+Joins your Change to the merge queue with options (priority, dependsOn for stacks, plangroup + landTogether, landMode); optional, since approval queues a Change by itself. It never skips review: an unapproved Change is registered and joins once approved (an auto-merge Change, Lane 0, joins by itself). Returns position, track, ETA and the predicted pass probability.
 
 **Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts enqueue`
 
@@ -69,7 +69,7 @@ wait_for_merge({ changeId: "<changeId>" })
 
 ## `dequeue`
 
-Removes your Change from the merge queue (stack dependents leave with it). A Change that is landing right now leaves after its CAS settles.
+Removes a Change from the merge queue (stack dependents leave with it): its author, the author's owner, or a person who may review it. A Change that is landing right now leaves after its CAS settles.
 
 **Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts dequeue`
 
@@ -85,7 +85,7 @@ dequeue({ changeId: "<changeId>" })
 
 ## `reprioritize`
 
-Sets the priority class (normal, security, incident). The incident class needs a human or an approved incident Plan (incidentPlanId); reverts are prioritized automatically.
+Sets a queued Change's priority class (normal, security, incident): its author, the author's owner, or a person who may review it. The incident class needs a human or an approved incident Plan (incidentPlanId); reverts are prioritized automatically.
 
 **Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts reprioritize`
 

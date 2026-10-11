@@ -74,6 +74,12 @@ export async function fakeOAuthServer(
       if (!answer) return json(500, { error: "server_error" });
       return json(answer.status, answer.body);
     }
+    // `logout` revokes its own login before forgetting it (the session's principal is ag_cli).
+    const bearer = req.headers.authorization === "Bearer sess_abc";
+    if (req.method === "GET" && url.pathname === "/api/v1/me")
+      return bearer ? json(200, { principal: { id: "ag_cli" } }) : json(401, {});
+    if (req.method === "DELETE" && url.pathname === "/api/v1/principals/ag_cli/tokens")
+      return bearer ? json(200, { revoked: 2 }) : json(401, {});
     json(404, { error: "not_found" });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
