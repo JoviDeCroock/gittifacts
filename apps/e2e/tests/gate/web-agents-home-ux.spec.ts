@@ -56,8 +56,11 @@ test("audit: picking who filters the log and keeps it in the URL (demo data)", a
   // Clearing the filter brings everyone back (with a filter on, the phone fold is open).
   await page.getByTestId("audit-filter-clear").click();
   await expect(page).toHaveURL(/\/audit$/);
-  const everyone = await events.evaluateAll((els) => new Set(els.map((e) => e.getAttribute("data-actor"))).size);
-  expect(everyone).toBeGreaterThan(1);
+  // The URL moves before the unfiltered page arrives: wait for it rather than read the old list.
+  await expect
+    .poll(() => events.evaluateAll((els) => new Set(els.map((e) => e.getAttribute("data-actor"))).size), { message: "distinct actors after Clear" })
+    .toBeGreaterThan(1);
+  await expect(page.getByTestId("audit-filter-actor")).toHaveValue("");
   await expectNoHorizontalScroll(page);
 });
 
