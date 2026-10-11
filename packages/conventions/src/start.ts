@@ -240,7 +240,9 @@ export function startGuide(opts: StartGuideOptions): { markdown: string; json: S
         planId: "<planId>",
         title: "<what>",
         category: "feature",
+        paths: ["src/<file>.ts"],
       }),
+      why: "start_change tells you who else is working on the same paths or plan (overlaps): coordinate or wait.",
     },
     {
       title: "Push to the fork",

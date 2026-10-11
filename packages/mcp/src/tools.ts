@@ -11,6 +11,7 @@ import {
   type ApiError,
   type Change,
   Id,
+  type OverlapReport,
   type PipelineRun,
   PlanDraftInput,
   type Scope,
@@ -159,6 +160,25 @@ export function changeBrief(c: Change) {
 }
 
 type NextStep = { title: string; call?: string; why?: string };
+
+/** start_change: say who else is on the same plan or paths before the agent writes code. */
+function overlapSteps(report: OverlapReport | null): NextStep[] {
+  if (report === null) return [];
+  const first = report.overlaps[0];
+  if (first === undefined) return [];
+  const n = report.overlaps.length + report.moreOverlaps;
+  const who = `${first.title} (${first.author.name})`;
+  return [
+    {
+      title:
+        n === 1
+          ? `Another open change overlaps yours: ${who}`
+          : `${n} open changes overlap yours, first ${who}`,
+      call: `get_change_status({ changeId: "${first.changeId}" })`,
+      why: `${first.reasons.map((r) => r.message).join("; ")}. Coordinate with its author or wait for it to merge before touching the same paths.`,
+    },
+  ];
+}
 
 /** What next steps read of a review (`get_change_status` passes them; `wait_for_change` doesn't). */
 export type ReviewBrief = Pick<
@@ -560,7 +580,7 @@ export function buildTools(backend: McpBackend) {
       name: "start_change",
       title: "Start a change",
       description:
-        "Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically.",
+        "Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically. overlaps lists the open changes already on the same plan or touching the paths you name (paths) or your plan's scopePaths: coordinate with them or wait.",
       inputSchema: StartChangeInputSchema,
       outputSchema: StartChangeOutput,
       annotations: WRITE,
@@ -569,14 +589,16 @@ export function buildTools(backend: McpBackend) {
         requireScope(caller, "change:create");
         const { idempotencyKey, ...rest } = args;
         const input = parse(StartChangeInput, rest);
-        const { change, remote } = await run(backend, () =>
+        const { change, remote, overlaps } = await run(backend, () =>
           backend.startChange(caller, input, { idempotencyKey }),
         );
         return {
           change: changeBrief(change),
           remote,
           url: backend.webUrl({ changeId: change.id }),
+          overlaps,
           nextSteps: [
+            ...overlapSteps(overlaps),
             {
               title: `Push your work to ${remote.branch}`,
               why: "Authenticate git with remote.token as a Bearer header (the token includes its ?expires= suffix; don't put it in the URL).",
@@ -596,7 +618,7 @@ export function buildTools(backend: McpBackend) {
       name: "get_change_status",
       title: "Get change status",
       description:
-        "A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), its page (url) to hand a person, and what to do next.",
+        "A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), the open changes on the same plan or paths (overlaps), its page (url) to hand a person, and what to do next.",
       inputSchema: ChangeRefInput,
       outputSchema: ChangeStatusOutput,
       annotations: READ,
@@ -645,6 +667,7 @@ export function buildTools(backend: McpBackend) {
               }
             : null,
           previewUrl: s.previewUrl ?? null,
+          overlaps: s.overlaps,
           nextSteps: changeNextSteps(s.change, s.runs, s.reviews),
         };
       },

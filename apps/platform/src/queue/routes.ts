@@ -18,6 +18,7 @@ import { ChangeIdParam, IdempotencyHeaders, RepoIdParam } from "../api/schemas.j
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
 import { type ApiApp, body, errors, json, SECURITY } from "../routes/common.js";
+import { withQueueOverlaps } from "../services/overlaps.js";
 import { queueEventStream } from "./events.js";
 import {
   EnqueueBody,
@@ -191,9 +192,11 @@ export function registerQueueRoutes(app: ApiApp): void {
     },
   });
 
-  app.openapi(overview, async (c) =>
-    c.json(await queueOverview(c.get("services"), c.req.valid("param").repoId), 200),
-  );
+  app.openapi(overview, async (c) => {
+    const svc = c.get("services");
+    const { repoId } = c.req.valid("param");
+    return c.json(await withQueueOverlaps(svc, repoId, await queueOverview(svc, repoId)), 200);
+  });
   app.openapi(status, async (c) =>
     c.json({ status: await queueStatus(c.get("services"), c.req.valid("param").changeId) }, 200),
   );

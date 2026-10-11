@@ -1171,7 +1171,7 @@ export type introspection = {
     },
     /**
      * Get change status
-     * A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), its page (url) to hand a person, and what to do next.
+     * A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), the open changes on the same plan or paths (overlaps), its page (url) to hand a person, and what to do next.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
      */
     "get_change_status": {
@@ -1541,6 +1541,182 @@ export type introspection = {
             ],
             "description": "The live preview of the current head once it answers (null before that, or when the repo has no preview)."
           },
+          "overlaps": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "description": "Open changes (not merged, rejected or abandoned) in the repo on the same plan or touching the same paths. Coordinate with their authors or wait for them to merge before touching the same paths.",
+                "properties": {
+                  "overlaps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "description": "Another open change in the repo on the same plan or paths.",
+                      "properties": {
+                        "changeId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "enum": [
+                            "awaiting-push",
+                            "running",
+                            "failing",
+                            "awaiting-review",
+                            "approved",
+                            "queued",
+                            "merged",
+                            "rolling-out",
+                            "released",
+                            "reverted",
+                            "rejected",
+                            "abandoned"
+                          ]
+                        },
+                        "lane": {
+                          "enum": [
+                            0,
+                            1,
+                            2,
+                            null
+                          ]
+                        },
+                        "headSha": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "planId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "author": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "enum": [
+                                "human",
+                                "agent",
+                                "system",
+                                "integration"
+                              ]
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "kind",
+                            "name"
+                          ]
+                        },
+                        "reasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "enum": [
+                                  "same-plan",
+                                  "same-paths",
+                                  "paths-unknown"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "paths": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "same-paths: the overlapping paths (capped)."
+                              },
+                              "morePaths": {
+                                "type": "integer",
+                                "description": "same-paths: overlapping paths not listed."
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "message",
+                              "paths",
+                              "morePaths"
+                            ]
+                          }
+                        },
+                        "pathsKnown": {
+                          "type": "boolean",
+                          "description": "False: it has nothing pushed yet, so whether its paths overlap is unknown."
+                        },
+                        "url": {
+                          "type": "string",
+                          "description": "Its page on the platform."
+                        }
+                      },
+                      "required": [
+                        "changeId",
+                        "title",
+                        "status",
+                        "lane",
+                        "headSha",
+                        "planId",
+                        "author",
+                        "reasons",
+                        "pathsKnown",
+                        "url"
+                      ]
+                    }
+                  },
+                  "moreOverlaps": {
+                    "type": "integer"
+                  },
+                  "comparedPaths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "What this change was compared on: its paths, its diff, or its plan's scopePaths."
+                  },
+                  "scanned": {
+                    "type": "integer",
+                    "description": "Open changes looked at (the newest)."
+                  },
+                  "truncated": {
+                    "type": "boolean",
+                    "description": "More open changes exist than were scanned."
+                  },
+                  "unchecked": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Open changes whose overlap by path is unknown (either side has no paths yet): check again after pushing."
+                  }
+                },
+                "required": [
+                  "overlaps",
+                  "moreOverlaps",
+                  "comparedPaths",
+                  "scanned",
+                  "truncated",
+                  "unchecked"
+                ]
+              }
+            ]
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
@@ -1573,6 +1749,7 @@ export type introspection = {
           "runs",
           "classification",
           "previewUrl",
+          "overlaps",
           "nextSteps"
         ]
       },
@@ -4988,9 +5165,10 @@ export type introspection = {
     },
     /**
      * Start a change
-     * Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically.
+     * Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically. overlaps lists the open changes already on the same plan or touching the paths you name (paths) or your plan's scopePaths: coordinate with them or wait.
      * @param args.planId The approved plan this change implements.
      * @param args.category Your claim; it can only raise risk, never lower it.
+     * @param args.paths Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them; never stored, never a lane input.
      * @param args.idempotencyKey Optional. Retrying with the same key returns the same change with a fresh push token.
      */
     "start_change": {
@@ -5033,6 +5211,16 @@ export type introspection = {
           "agentTraceId": {
             "type": "string",
             "maxLength": 200
+          },
+          "paths": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "description": "Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them; never stored, never a lane input."
           },
           "idempotencyKey": {
             "type": "string",
@@ -5217,6 +5405,182 @@ export type introspection = {
             "type": "string",
             "description": "The change's page on the platform: hand it to the person who reviews it."
           },
+          "overlaps": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "description": "Open changes (not merged, rejected or abandoned) in the repo on the same plan or touching the same paths. Coordinate with their authors or wait for them to merge before touching the same paths.",
+                "properties": {
+                  "overlaps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "description": "Another open change in the repo on the same plan or paths.",
+                      "properties": {
+                        "changeId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "enum": [
+                            "awaiting-push",
+                            "running",
+                            "failing",
+                            "awaiting-review",
+                            "approved",
+                            "queued",
+                            "merged",
+                            "rolling-out",
+                            "released",
+                            "reverted",
+                            "rejected",
+                            "abandoned"
+                          ]
+                        },
+                        "lane": {
+                          "enum": [
+                            0,
+                            1,
+                            2,
+                            null
+                          ]
+                        },
+                        "headSha": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "planId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "author": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "enum": [
+                                "human",
+                                "agent",
+                                "system",
+                                "integration"
+                              ]
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "kind",
+                            "name"
+                          ]
+                        },
+                        "reasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "enum": [
+                                  "same-plan",
+                                  "same-paths",
+                                  "paths-unknown"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "paths": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "same-paths: the overlapping paths (capped)."
+                              },
+                              "morePaths": {
+                                "type": "integer",
+                                "description": "same-paths: overlapping paths not listed."
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "message",
+                              "paths",
+                              "morePaths"
+                            ]
+                          }
+                        },
+                        "pathsKnown": {
+                          "type": "boolean",
+                          "description": "False: it has nothing pushed yet, so whether its paths overlap is unknown."
+                        },
+                        "url": {
+                          "type": "string",
+                          "description": "Its page on the platform."
+                        }
+                      },
+                      "required": [
+                        "changeId",
+                        "title",
+                        "status",
+                        "lane",
+                        "headSha",
+                        "planId",
+                        "author",
+                        "reasons",
+                        "pathsKnown",
+                        "url"
+                      ]
+                    }
+                  },
+                  "moreOverlaps": {
+                    "type": "integer"
+                  },
+                  "comparedPaths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "What this change was compared on: its paths, its diff, or its plan's scopePaths."
+                  },
+                  "scanned": {
+                    "type": "integer",
+                    "description": "Open changes looked at (the newest)."
+                  },
+                  "truncated": {
+                    "type": "boolean",
+                    "description": "More open changes exist than were scanned."
+                  },
+                  "unchecked": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Open changes whose overlap by path is unknown (either side has no paths yet): check again after pushing."
+                  }
+                },
+                "required": [
+                  "overlaps",
+                  "moreOverlaps",
+                  "comparedPaths",
+                  "scanned",
+                  "truncated",
+                  "unchecked"
+                ]
+              }
+            ]
+          },
           "nextSteps": {
             "type": "array",
             "description": "What to do next, as concrete tool calls (call) or shell commands (command).",
@@ -5246,6 +5610,7 @@ export type introspection = {
           "change",
           "remote",
           "url",
+          "overlaps",
           "nextSteps"
         ]
       },

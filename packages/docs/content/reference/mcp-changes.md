@@ -90,7 +90,7 @@ withdraw_plan({ planId: "<planId>" })
 
 ## `start_change`
 
-Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically.
+Fork the repo for one change and get a short-lived push token for that fork only. Push commits there; CI, evidence and the lane follow automatically. overlaps lists the open changes already on the same plan or touching the paths you name (paths) or your plan's scopePaths: coordinate with them or wait.
 
 **Scope:** `change:create` · **Kind:** mutating (retry safely with `idempotencyKey`) · **CLI:** `gittifacts start-change`
 
@@ -102,12 +102,13 @@ Fork the repo for one change and get a short-lived push token for that fork only
 | `category` | "fix" \| "feature" \| "refactor" \| "dependency" \| "transform" \| "revert" \| "docs" \| "chore" | yes | Your claim; it can only raise risk, never lower it. |
 | `summary` | string |  | max 10000 chars |
 | `agentTraceId` | string |  | max 200 chars |
+| `paths` | string[] |  | Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them; never stored, never a lane input. max 50 items |
 
 ```text
 start_change({ repoId: "<repoId>", title: "<what>", category: "fix" })
 ```
 
-**Returns:** `change` (object), `remote` (object), `url` (string), `nextSteps` (object[]).
+**Returns:** `change` (object), `remote` (object), `url` (string), `overlaps` (null | object), `nextSteps` (object[]).
 
 ## `list_changes`
 
@@ -164,7 +165,7 @@ wait_for_change({ changeId: "<changeId>", until: "merged" })
 
 ## `get_change_status`
 
-A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), its page (url) to hand a person, and what to do next.
+A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), the open changes on the same plan or paths (overlaps), its page (url) to hand a person, and what to do next.
 
 **Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts get-change-status`
 
@@ -177,7 +178,7 @@ A change's status, lane (and why), pipeline runs for each head, the human review
 get_change_status({})
 ```
 
-**Returns:** `change` (object), `url` (string), `reviews` (object[]), `runs` (object[]), `classification` (null | object), `previewUrl` (string | null), `nextSteps` (object[]).
+**Returns:** `change` (object), `url` (string), `reviews` (object[]), `runs` (object[]), `classification` (null | object), `previewUrl` (string | null), `overlaps` (null | object), `nextSteps` (object[]).
 
 ## `get_evidence`
 

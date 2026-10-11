@@ -1,5 +1,6 @@
 /** OpenAPI schemas of the merge-queue API (the coordinator's `QueueEntryView` / overview). */
 import { z } from "zod";
+import { ChangeOverlapSchema } from "../api/schemas.js";
 
 export const PriorityBody = z.enum(["normal", "security", "incident"]);
 
@@ -150,7 +151,16 @@ export const QueueOverviewSchema = z.object({
       targets: z.union([z.literal("all"), z.array(z.string())]),
     }),
   ),
-  entries: z.array(QueueEntrySchema),
+  entries: z.array(
+    QueueEntrySchema.extend({
+      overlaps: z
+        .array(ChangeOverlapSchema)
+        .optional()
+        .describe(
+          "Open Changes this entry shares a Plan or paths with (absent: not known, e.g. a finished entry)",
+        ),
+    }),
+  ),
   waiting: z.number(),
   resolving: z.number(),
   throughputPerHour: z.number(),

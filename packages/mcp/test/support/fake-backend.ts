@@ -276,6 +276,14 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
           expiresAt: "2026-10-01T01:00:00Z",
           branch: "main",
         },
+        overlaps: {
+          overlaps: [],
+          moreOverlaps: 0,
+          comparedPaths: input.paths ?? [],
+          scanned: 0,
+          truncated: false,
+          unchecked: [],
+        },
       };
     },
     async getChangeStatus(_caller, changeId) {
@@ -283,6 +291,7 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
       if (changeId !== "chg_1") throw new NotFound(`change ${changeId}`);
       return {
         change: change(),
+        overlaps: null,
         reviews: [],
         runs: [
           {

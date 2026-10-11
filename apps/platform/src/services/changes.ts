@@ -6,6 +6,7 @@ import {
   type Evidence,
   type Lane,
   type LinkedIssue,
+  type OverlapReport,
   type PipelineRun,
   type ReviewDecision,
   type RolloutPolicy,
@@ -24,6 +25,7 @@ import type { ChangeSummary, PrincipalRef } from "../store/d1-store.js";
 import type { PlanView } from "../store/rows.js";
 import { type AuditEventView, withSummaries } from "./audit.js";
 import { withLiveSteps } from "./live-runs.js";
+import { startOverlaps } from "./overlaps.js";
 import { planPrincipalIds } from "./plans.js";
 import { type ResolutionView, resolutionOf } from "./resolution.js";
 
@@ -274,7 +276,7 @@ export async function startChange(
   caller: Caller,
   input: unknown,
   idempotencyKey?: string,
-): Promise<{ change: Change; remote: GitRemoteGrant }> {
+): Promise<{ change: Change; remote: GitRemoteGrant; overlaps: OverlapReport | null }> {
   const v = StartChangeInput.parse(input);
   // Repo access: the caller (an agent: its owning human) must be at least a reviewer.
   const repo = await assertRepoAccess(svc, caller.principal, v.repoId, "contribute");
@@ -289,7 +291,7 @@ export async function startChange(
   }
   // The plan must be one the caller can read (a plan of another repo is the coordinator's 400).
   if (v.planId !== undefined) await assertPlanAccess(svc, caller.principal, v.planId, "read");
-  return svc.coordinator.startChange(caller.principal, {
+  const started = await svc.coordinator.startChange(caller.principal, {
     ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
     repoId: v.repoId,
     title: v.title,
@@ -298,6 +300,15 @@ export async function startChange(
     ...(v.summary !== undefined ? { summary: v.summary } : {}),
     ...(v.agentTraceId !== undefined ? { agentTraceId: v.agentTraceId } : {}),
   });
+  // Who else is on the same plan or paths. The change exists now: a failed read must not fail
+  // the start (a retry without a key would fork twice); null says "not checked, ask again".
+  let overlaps: OverlapReport | null = null;
+  try {
+    overlaps = await startOverlaps(svc, started.change, v.paths ?? []);
+  } catch (err) {
+    console.warn("start_change: overlap check failed", err);
+  }
+  return { ...started, overlaps };
 }
 
 export async function refreshPushGrant(

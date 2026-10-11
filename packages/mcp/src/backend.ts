@@ -9,6 +9,7 @@ import type {
   Evidence,
   LaneReason,
   LinkedIssue,
+  OverlapReport,
   PipelineRun,
   Plan,
   PlanDraftInput,
@@ -189,7 +190,12 @@ export interface McpBackend
     caller: McpCaller,
     input: z.output<typeof StartChangeInput>,
     opts: MutationOptions,
-  ): Promise<{ change: Change; remote: GitRemote }>;
+  ): Promise<{
+    change: Change;
+    remote: GitRemote;
+    /** Open Changes on the same plan or paths; null when the check could not run. */
+    overlaps: OverlapReport | null;
+  }>;
   getChangeStatus(
     caller: McpCaller,
     changeId: string,
@@ -201,6 +207,8 @@ export interface McpBackend
     previewUrl?: string | null;
     /** Human reviews of every head, oldest first. */
     reviews: ChangeReviewData[];
+    /** Open Changes on the same plan or paths; null when the check could not run. */
+    overlaps: OverlapReport | null;
   }>;
   getEvidence(
     caller: McpCaller,

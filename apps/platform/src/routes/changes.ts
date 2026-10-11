@@ -14,6 +14,7 @@ import {
   CloseBody,
   KillBody,
   LinkedIssueSchema,
+  OverlapReportSchema,
   PipelineRunSchema,
   PlanSchema,
   PrincipalsMapSchema,
@@ -48,6 +49,7 @@ import {
   submitReview,
 } from "../services/changes.js";
 import { changeEventStream } from "../services/events.js";
+import { getChangeOverlaps } from "../services/overlaps.js";
 import { type ApiApp, body, errors, json, SECURITY } from "./common.js";
 
 const read = requirePrincipal(["repo:read"]);
@@ -64,7 +66,16 @@ const start = createRoute({
   middleware: [requirePrincipal(["change:create"])] as const,
   request: { headers: IdempotencyHeaders, body: body(StartChangeBody) },
   responses: {
-    201: json(z.object({ change: ChangeSchema, remote: GitRemoteSchema }), "Started"),
+    201: json(
+      z.object({
+        change: ChangeSchema,
+        remote: GitRemoteSchema,
+        overlaps: OverlapReportSchema.nullable().describe(
+          "Open Changes in the repo on the same Plan or paths (the body's `paths`, the Plan's scopePaths). Null: not checked; ask GET /api/v1/changes/{changeId}/overlaps",
+        ),
+      }),
+      "Started",
+    ),
     ...errors(400, 401, 403, 404, 409, 502),
   },
 });
@@ -333,6 +344,22 @@ const issues = createRoute({
   },
 });
 
+const overlaps = createRoute({
+  method: "get",
+  path: "/api/v1/changes/{changeId}/overlaps",
+  tags: ["changes"],
+  summary: "Open Changes in the same repo that share this change's Plan or touch the same paths",
+  description:
+    "Compared on the change's diff at its current head (before a push: its Plan's scopePaths) against the changed paths of the newest open Changes. A change with nothing pushed yet is listed when it shares the Plan (`paths-unknown`); any other whose overlap can't be decided is in `unchecked`.",
+  security: SECURITY,
+  middleware: [read] as const,
+  request: { params: ChangeIdParam },
+  responses: {
+    200: json(z.object({ changeId: z.string(), overlaps: OverlapReportSchema }), "Overlaps"),
+    ...errors(401, 403, 404),
+  },
+});
+
 export const CHANGE_EVENTS_PATH = "/api/v1/changes/:changeId/events";
 
 export function registerChangeRoutes(app: ApiApp): void {
@@ -383,6 +410,11 @@ export function registerChangeRoutes(app: ApiApp): void {
       200,
     ),
   );
+  app.openapi(overlaps, async (c) => {
+    const { changeId } = c.req.valid("param");
+    const report = await getChangeOverlaps(c.get("services"), callerOf(c), changeId);
+    return c.json({ changeId, overlaps: report }, 200);
+  });
   app.openapi(token, async (c) => {
     const remote = await refreshPushGrant(
       c.get("services"),

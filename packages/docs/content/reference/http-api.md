@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 113 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 114 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -38,6 +38,7 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `GET` | [`/api/v1/changes/{changeId}/evidence`](/docs/reference/http-changes) | Signed evidence for the current head, re-verified against the platform keys |
 | `GET` | [`/api/v1/changes/{changeId}/issues`](/docs/reference/http-changes) | Workers Issues attributed to the change (or its rollout version) |
 | `POST` | [`/api/v1/changes/{changeId}/kill`](/docs/reference/http-changes) | Kill switch: flag off, roll back, open a revert change (human maintainer or owner) |
+| `GET` | [`/api/v1/changes/{changeId}/overlaps`](/docs/reference/http-changes) | Open Changes in the same repo that share this change's Plan or touch the same paths |
 | `GET` | [`/api/v1/changes/{changeId}/qa`](/docs/reference/http-changes) | The change's QA runs, newest first |
 | `POST` | [`/api/v1/changes/{changeId}/qa`](/docs/reference/http-changes) | Ask for QA in a browser on the current head (on request only; idempotent per head) |
 | `GET` | [`/api/v1/changes/{changeId}/queue`](/docs/reference/http-merge-queue) | A Change's place in the merge queue (state, track, batch, position, ETA, why it waits) |

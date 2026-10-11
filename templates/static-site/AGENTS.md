@@ -21,7 +21,8 @@ Every response has `nextSteps` and every error has `fix` (`call` / `command`). D
    `create_plan({ repoId: "{{repoId}}", title: "Add GET /version", intent: "Expose the deployed version so clients can check it.", acceptanceCriteria: ["GET /version returns { version }"], scopePaths: ["src/**", "test/**"] })`
    Hand a person its `url`; `get_plan({ planId: "<planId>" })` shows when it is `approved`.
 2. **Change.** Open one Change per intent. It returns `change.id` and a `remote` for **your fork only**:
-   `start_change({ repoId: "{{repoId}}", planId: "<planId>", title: "Add GET /version", category: "feature" })`
+   `start_change({ repoId: "{{repoId}}", planId: "<planId>", title: "Add GET /version", category: "feature", paths: ["src/version.ts"] })`
+   start_change tells you who else is working on the same paths or plan (`overlaps`): coordinate or wait.
 3. **Push** your commits to the fork:
    `git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>`
 4. **Wait** (long-poll ≤ 50 s, don't loop on status; call again while `reason` is `"timeout"`):

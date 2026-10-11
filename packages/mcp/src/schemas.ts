@@ -287,6 +287,13 @@ export const StartChangeInput = {
     },
     summary: { type: "string", maxLength: 10000 },
     agentTraceId: { type: "string", maxLength: 200 },
+    paths: {
+      type: "array",
+      maxItems: 50,
+      items: { type: "string", minLength: 1, maxLength: 300 },
+      description:
+        "Optional. Paths or globs you expect to touch (files like src/money.ts, or globs). The result's overlaps lists open changes already touching them; never stored, never a lane input.",
+    },
     idempotencyKey: {
       ...idempotencyKey,
       description:
@@ -558,10 +565,93 @@ export const CreateProjectOutput = {
   ],
 } as const;
 
+const OverlapReason = {
+  type: "object",
+  properties: {
+    code: { enum: ["same-plan", "same-paths", "paths-unknown"] },
+    message: str,
+    paths: { type: "array", items: str, description: "same-paths: the overlapping paths (capped)." },
+    morePaths: { ...int, description: "same-paths: overlapping paths not listed." },
+  },
+  required: ["code", "message", "paths", "morePaths"],
+} as const;
+
+const ChangeOverlap = {
+  type: "object",
+  description: "Another open change in the repo on the same plan or paths.",
+  properties: {
+    changeId: str,
+    title: str,
+    status: { enum: CHANGE_STATUSES },
+    lane: laneOrNull,
+    headSha: nullableStr,
+    planId: nullableStr,
+    author: {
+      type: "object",
+      properties: { id: str, kind: { enum: ["human", "agent", "system", "integration"] }, name: str },
+      required: ["id", "kind", "name"],
+    },
+    reasons: { type: "array", items: OverlapReason },
+    pathsKnown: {
+      ...bool,
+      description: "False: it has nothing pushed yet, so whether its paths overlap is unknown.",
+    },
+    url: { ...str, description: "Its page on the platform." },
+  },
+  required: [
+    "changeId",
+    "title",
+    "status",
+    "lane",
+    "headSha",
+    "planId",
+    "author",
+    "reasons",
+    "pathsKnown",
+    "url",
+  ],
+} as const;
+
+/** Open changes on the same plan or paths; null when the check could not run (ask again). */
+const Overlaps = {
+  anyOf: [
+    { type: "null" },
+    {
+      type: "object",
+      description:
+        "Open changes (not merged, rejected or abandoned) in the repo on the same plan or touching the same paths. Coordinate with their authors or wait for them to merge before touching the same paths.",
+      properties: {
+        overlaps: { type: "array", items: ChangeOverlap },
+        moreOverlaps: int,
+        comparedPaths: {
+          type: "array",
+          items: str,
+          description: "What this change was compared on: its paths, its diff, or its plan's scopePaths.",
+        },
+        scanned: { ...int, description: "Open changes looked at (the newest)." },
+        truncated: { ...bool, description: "More open changes exist than were scanned." },
+        unchecked: {
+          type: "array",
+          items: str,
+          description:
+            "Open changes whose overlap by path is unknown (either side has no paths yet): check again after pushing.",
+        },
+      },
+      required: ["overlaps", "moreOverlaps", "comparedPaths", "scanned", "truncated", "unchecked"],
+    },
+  ],
+} as const;
+
 export const StartChangeOutput = {
   type: "object",
-  properties: { change: ChangeBrief, remote: GitRemote, url: changeUrl, nextSteps: NextSteps },
-  required: ["change", "remote", "url", "nextSteps"],
+  properties: {
+    change: ChangeBrief,
+    remote: GitRemote,
+    url: changeUrl,
+    overlaps: Overlaps,
+    nextSteps: NextSteps,
+  },
+  required: ["change", "remote", "url", "overlaps", "nextSteps"],
 } as const;
 
 export const ChangeStatusOutput = {
@@ -624,9 +714,19 @@ export const ChangeStatusOutput = {
       description:
         "The live preview of the current head once it answers (null before that, or when the repo has no preview).",
     },
+    overlaps: Overlaps,
     nextSteps: NextSteps,
   },
-  required: ["change", "url", "reviews", "runs", "classification", "previewUrl", "nextSteps"],
+  required: [
+    "change",
+    "url",
+    "reviews",
+    "runs",
+    "classification",
+    "previewUrl",
+    "overlaps",
+    "nextSteps",
+  ],
 } as const;
 
 export const EvidenceOutput = {

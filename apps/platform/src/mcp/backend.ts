@@ -40,6 +40,7 @@ import {
   rerunChangeCi,
   startChange,
 } from "../services/changes.js";
+import { getChangeOverlaps } from "../services/overlaps.js";
 import { createPlan, getPlanDetail, listPlans, withdrawPlan } from "../services/plans.js";
 import { createProject } from "../services/projects.js";
 import { listQaRuns, requestQaFor } from "../services/qa.js";
@@ -101,6 +102,16 @@ async function previewUrlOf(svc: Services, change: Change): Promise<string | nul
     return item?.kind === "preview" && item.status === "ok" && item.url ? item.url : null;
   } catch {
     return null; // informational: never fail the status call over it
+  }
+}
+
+/** Open changes on the same plan or paths; null when the check failed (never fails the status). */
+async function overlapsOf(svc: Services, caller: Caller, changeId: string) {
+  try {
+    return await getChangeOverlaps(svc, caller, changeId);
+  } catch (err) {
+    console.warn("get_change_status: overlap check failed", err);
+    return null;
   }
 }
 
@@ -238,6 +249,7 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
       ]);
       return {
         previewUrl: await previewUrlOf(svc, d.change),
+        overlaps: await overlapsOf(svc, caller, changeId),
         reviews: r.reviews.map((x) => reviewData(x, r.principals)),
         change: d.change,
         runs: d.runs,

@@ -547,6 +547,67 @@ export class D1Store implements Store {
     return parseRow(ChangeDiff, await this.getJson(r, what), what);
   }
 
+  /**
+   * The changed paths (and rename sources) of each change's diff at the given head, without
+   * reading hunks: inline diffs are read with SQLite's JSON functions in one query; diffs kept in
+   * R2 are fetched (at most `maxBlobReads`). A change missing from the result has no diff at that
+   * head, or one this call didn't read: its paths are unknown.
+   */
+  async changedPathsAt(
+    heads: ReadonlyArray<{ changeId: string; headSha: string }>,
+    maxBlobReads = 5,
+  ): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    const want = new Map(heads.map((h) => [h.changeId, h.headSha]));
+    const ids = [...want.keys()];
+    const PathList = z.array(z.string().nullable());
+    let blobReads = 0;
+    for (let i = 0; i < ids.length; i += 90) {
+      const chunk = ids.slice(i, i + 90);
+      const rows = await this.db
+        .select({
+          changeId: diffs.changeId,
+          headSha: diffs.headSha,
+          r2Key: diffs.r2Key,
+          // Qualified on purpose: json_each has a hidden column named `json` that would shadow it.
+          paths: sql<string | null>`(SELECT json_group_array(p) FROM (
+              SELECT json_extract(f.value, '$.path') AS p FROM json_each("diffs"."json", '$.files') AS f
+              UNION
+              SELECT json_extract(f.value, '$.previousPath') FROM json_each("diffs"."json", '$.files') AS f
+              WHERE json_extract(f.value, '$.previousPath') IS NOT NULL))`,
+        })
+        .from(diffs)
+        .where(inArray(diffs.changeId, chunk))
+        .all();
+      for (const r of rows) {
+        if (want.get(r.changeId) !== r.headSha) continue;
+        if (r.r2Key !== null) {
+          if (blobReads >= maxBlobReads) continue;
+          blobReads += 1;
+          const diff = await this.getDiff(r.changeId, r.headSha).catch(() => null);
+          if (diff === null) continue;
+          out.set(r.changeId, [
+            ...new Set(diff.files.flatMap((f) => [f.path, ...(f.previousPath ? [f.previousPath] : [])])),
+          ]);
+          continue;
+        }
+        let raw: unknown = null;
+        try {
+          raw = r.paths === null ? [] : JSON.parse(r.paths);
+        } catch {
+          continue; // unreadable: unknown, never "touches nothing"
+        }
+        const parsed = PathList.safeParse(raw);
+        if (!parsed.success) continue;
+        out.set(
+          r.changeId,
+          parsed.data.filter((p): p is string => typeof p === "string" && p.length > 0),
+        );
+      }
+    }
+    return out;
+  }
+
   // ------------------------------------------------------------ evidence
 
   async putEvidence(ev: Evidence): Promise<void> {

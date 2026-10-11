@@ -19,8 +19,8 @@ Start a change: fork the repo and get a push token for the fork only
 
 - **Auth:** session cookie or bearer token
 - **Idempotency-Key:** accepted
-- **Body:** `StartChangeInput { repoId, planId?, title, category, summary?, agentTraceId? }`
-- **201:** `{ change: Change, remote: GitRemote }`
+- **Body:** `StartChangeInput { repoId, planId?, title, category, summary?, agentTraceId?, paths? }`
+- **201:** `{ change: Change, remote: GitRemote, overlaps }`
 - **Errors:** 400, 401, 403, 404, 409, 502
 
 ### `GET /api/v1/changes/{changeId}`
@@ -93,6 +93,17 @@ Kill switch: flag off, roll back, open a revert change (human maintainer or owne
 - **Body:** `{ reason }`
 - **200:** `{ change: Change }`
 - **Errors:** 400, 401, 403, 404, 409, 502
+
+### `GET /api/v1/changes/{changeId}/overlaps`
+
+Open Changes in the same repo that share this change's Plan or touch the same paths
+
+Compared on the change's diff at its current head (before a push: its Plan's scopePaths) against the changed paths of the newest open Changes. A change with nothing pushed yet is listed when it shares the Plan (`paths-unknown`); any other whose overlap can't be decided is in `unchecked`.
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `changeId` (path, required)
+- **200:** `{ changeId, overlaps: OverlapReport }`
+- **Errors:** 401, 403, 404
 
 ### `GET /api/v1/changes/{changeId}/qa`
 

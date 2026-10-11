@@ -331,6 +331,13 @@ export const Change = z.object({
 });
 export type Change = z.infer<typeof Change>;
 
+/** At most this many intended paths per start_change. */
+export const OVERLAP_MAX_INPUT_PATHS = 50;
+/** At most this many overlapping changes in one report. */
+export const OVERLAP_MAX_ENTRIES = 20;
+/** At most this many overlapping paths per same-paths reason. */
+export const OVERLAP_MAX_PATHS = 10;
+
 export const StartChangeInput = z.object({
   repoId: Id,
   planId: Id.optional(),
@@ -338,8 +345,69 @@ export const StartChangeInput = z.object({
   category: ClaimedCategory,
   summary: z.string().max(10_000).optional(),
   agentTraceId: z.string().max(200).optional(),
+  /**
+   * Paths or globs this change expects to touch (it has no head yet). Only used to tell the
+   * caller which open Changes already touch them; never stored, never an input to the lane.
+   */
+  paths: z.array(z.string().trim().min(1).max(300)).max(OVERLAP_MAX_INPUT_PATHS).optional(),
 });
 export type StartChangeInput = z.input<typeof StartChangeInput>;
+
+// ---------------------------------------------------------------- overlapping work
+
+export const OverlapReasonCode = z.enum(["same-plan", "same-paths", "paths-unknown"]);
+export type OverlapReasonCode = z.infer<typeof OverlapReasonCode>;
+
+/** Why another open Change overlaps: same Plan, same paths, or its paths can't be known yet. */
+export const OverlapReason = z.object({
+  code: OverlapReasonCode,
+  message: z.string(),
+  /** `same-paths`: the other change's paths that overlap (capped); empty otherwise. */
+  paths: z.array(z.string()),
+  /** `same-paths`: overlapping paths not listed in `paths`. */
+  morePaths: z.number().int().nonnegative(),
+});
+export type OverlapReason = z.infer<typeof OverlapReason>;
+
+/** Another open Change in the same repo that overlaps this one. */
+export const ChangeOverlap = z.object({
+  changeId: Id,
+  title: z.string(),
+  status: ChangeStatus,
+  lane: Lane.nullable(),
+  headSha: Sha.nullable(),
+  planId: Id.nullable(),
+  author: z.object({
+    id: Id,
+    kind: z.enum(["human", "agent", "system", "integration"]),
+    name: z.string(),
+  }),
+  reasons: z.array(OverlapReason).min(1),
+  /** False when it has nothing pushed yet: whether its paths overlap is unknown. */
+  pathsKnown: z.boolean(),
+  /** Its page on the platform. */
+  url: z.string(),
+});
+export type ChangeOverlap = z.infer<typeof ChangeOverlap>;
+
+/**
+ * Open Changes (not merged, released, reverted, rejected or abandoned) in the same repo that
+ * overlap a change. Read-only and bounded: at most `scanned` open changes were looked at.
+ */
+export const OverlapReport = z.object({
+  overlaps: z.array(ChangeOverlap).max(OVERLAP_MAX_ENTRIES),
+  /** Overlapping changes beyond the cap. */
+  moreOverlaps: z.number().int().nonnegative(),
+  /** The paths/globs this change was compared on (its intended paths, its diff or its plan's scope). */
+  comparedPaths: z.array(z.string()),
+  /** Open changes looked at. */
+  scanned: z.number().int().nonnegative(),
+  /** More open changes exist than were scanned (the oldest were not looked at). */
+  truncated: z.boolean(),
+  /** Open changes whose overlap by path could not be decided (either side's paths unknown), not listed above. */
+  unchecked: z.array(Id),
+});
+export type OverlapReport = z.infer<typeof OverlapReport>;
 
 // ---------------------------------------------------------------- diff
 

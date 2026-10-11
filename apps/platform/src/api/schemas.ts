@@ -6,6 +6,7 @@ import {
   AuditEvent,
   Change,
   ChangeDiff,
+  ChangeOverlap,
   ChangeStatus,
   ApiError as DomainApiError,
   Evidence,
@@ -13,6 +14,7 @@ import {
   IsoDate,
   Lane,
   LinkedIssue,
+  OverlapReport,
   PipelineRun,
   Plan,
   PlanDraftInput,
@@ -45,6 +47,10 @@ export const ChangeSchema = Change.meta({ id: "Change" });
 export const TourSchema = Tour.meta({ id: "Tour" });
 export const EvidenceSchema = Evidence.meta({ id: "Evidence" });
 export const ChangeDiffSchema = ChangeDiff.meta({ id: "ChangeDiff" });
+export const ChangeOverlapSchema = ChangeOverlap.meta({ id: "ChangeOverlap" });
+export const OverlapReportSchema = OverlapReport.extend({
+  overlaps: z.array(ChangeOverlapSchema),
+}).meta({ id: "OverlapReport" });
 export const PipelineRunSchema = PipelineRun.meta({ id: "PipelineRun" });
 export const LinkedIssueSchema = LinkedIssue.meta({ id: "LinkedIssue" });
 export const AuditEventSchema = AuditEvent.extend({
