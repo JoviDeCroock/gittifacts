@@ -1,8 +1,10 @@
 /**
  * App frame. Phone: a sticky top bar with back/title/menu and a nav drawer. Desktop (≥1024px):
- * a fixed sidebar with the same destinations. One information architecture at every width.
+ * a fixed sidebar with the same destinations, and a slim acetate top bar in the content column
+ * that fades in with the crumbs once the page head scrolls away. One information architecture at
+ * every width: the drawer renders the sidebar's own body.
  */
-import { useSignal } from "@preact/signals";
+import { signal, useSignal } from "@preact/signals";
 import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import type { ComponentChildren } from "preact";
 import { useLocation } from "preact-iso";
@@ -14,7 +16,7 @@ import { principal, session, signOut } from "../state/session.js";
 import { type ThemePref, themePref } from "../state/prefs.js";
 import { BrandMark } from "./BrandMark.js";
 import { Icon, type IconId } from "./Icon.js";
-import { Palette, PaletteButton, paletteRepos, usePaletteShortcut } from "./Palette.js";
+import { Palette, PaletteButton, paletteOpen, paletteRepos, usePaletteShortcut } from "./Palette.js";
 import "../styles/palette.css";
 import { Who } from "./ui.js";
 
@@ -22,7 +24,7 @@ export { BrandMark };
 
 /** `server`: a page the Worker serves (not an SPA route), so the router must not intercept it. */
 const ALL_NAV: { href: string; label: string; icon: IconId; match: (path: string) => boolean; server?: boolean }[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "layers", match: (p) => p === "/dashboard" || p.startsWith("/repos") || p.startsWith("/changes") || p.startsWith("/plans") },
+  { href: "/dashboard", label: "Dashboard", icon: "layers", match: (p) => p === "/dashboard" },
   { href: "/audit", label: "Audit log", icon: "scroll-text", match: (p) => p.startsWith("/audit") },
   { href: "/agents", label: "Agents", icon: "bot", match: (p) => p.startsWith("/agents") },
   { href: "/settings/integrations", label: "Integrations", icon: "plug", match: (p) => p.startsWith("/settings/integrations") },
@@ -32,26 +34,46 @@ const ALL_NAV: { href: string; label: string; icon: IconId; match: (path: string
 /** The GitHub page leaves the nav while GitHub surfaces are off (@app/domain/surfaces). */
 const NAV = ALL_NAV.filter((n) => GITHUB_SURFACES || n.href !== "/settings/github");
 
-const sidebarRepos = { value: null as RepoSummary[] | null };
+/** Repos the sidebar loaded: the drawer and the next sidebar render show them at once. */
+const sidebarRepos = signal<RepoSummary[] | null>(null);
+/** The repo the screen in view belongs to (its crumbs say so), so its link is the current one. */
+const pageRepo = signal<string | null>(null);
 
+/** Screens that live inside a repository: Dashboard is their ancestor, never their current item. */
+const IN_REPO = /^\/(repos|changes|plans)\//;
+
+const THEMES: { id: ThemePref; label: string; icon: IconId }[] = [
+  { id: "system", label: "System", icon: "monitor" },
+  { id: "light", label: "Light", icon: "sun" },
+  { id: "dark", label: "Dark", icon: "moon" },
+];
+
+/** A radio group: one Tab stop (the checked option), arrows move the choice. */
 function ThemeSwitch() {
-  const opts: { id: ThemePref; label: string; icon: IconId }[] = [
-    { id: "system", label: "System", icon: "monitor" },
-    { id: "light", label: "Light", icon: "sun" },
-    { id: "dark", label: "Dark", icon: "moon" },
-  ];
+  const ref = useRef<HTMLDivElement>(null);
+  const onKey = (e: KeyboardEvent, i: number) => {
+    const n = THEMES.length;
+    const next = e.key === "ArrowRight" || e.key === "ArrowDown" ? (i + 1) % n : e.key === "ArrowLeft" || e.key === "ArrowUp" ? (i - 1 + n) % n : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : -1;
+    const opt = THEMES[next];
+    if (!opt) return;
+    e.preventDefault();
+    themePref.value = opt.id;
+    ref.current?.querySelectorAll<HTMLButtonElement>("button")[next]?.focus();
+  };
   return (
-    <div class="theme-switch" role="radiogroup" aria-label="Theme">
-      {opts.map((o) => (
+    <div class="theme-switch" role="radiogroup" aria-label="Theme" ref={ref}>
+      {THEMES.map((o, i) => (
         <button
           key={o.id}
           type="button"
           role="radio"
           aria-checked={themePref.value === o.id}
+          tabIndex={themePref.value === o.id ? 0 : -1}
           class="theme-switch__opt"
           onClick={() => {
             themePref.value = o.id;
           }}
+          onKeyDown={(e) => onKey(e, i)}
           title={o.label}
         >
           <Icon name={o.icon} size={16} />
@@ -72,48 +94,39 @@ function DemoNote() {
   );
 }
 
-function Sidebar() {
-  const { path } = useLocation();
-  const repos = useSignal<RepoSummary[] | null>(sidebarRepos.value);
-  useEffect(() => {
-    let live = true;
-    api.repos().then(
-      (r) => {
-        sidebarRepos.value = r.repos;
-        paletteRepos.value = r.repos.map((x) => ({ id: x.id, name: x.name }));
-        if (live) repos.value = r.repos;
-      },
-      () => {},
-    );
-    return () => {
-      live = false;
-    };
-  }, [path, repos]);
-  const me = principal.value;
-  const s = session.value;
+/**
+ * Search, places and repositories: the sidebar's body, and the drawer's. Exactly one link is
+ * current: the repo you are in (on its changes, plans, queue and members too), else the place.
+ */
+function NavBody({ path }: { path: string }) {
+  const repos = sidebarRepos.value;
+  const inRepo = IN_REPO.test(path);
+  const repoHere = /^\/repos\/([^/]+)/.exec(path)?.[1] ?? (inRepo ? pageRepo.value : null);
   return (
-    <aside class="sidebar" aria-label="Main">
-      <a href="/dashboard" class="brand" aria-label="gittifacts dashboard">
-        <BrandMark />
-        <span class="brand__word">gittifacts</span>
-      </a>
+    <>
       <PaletteButton />
-      <nav class="sidebar__nav">
+      <nav class="sidebar__nav" aria-label="Places">
         <ul>
           {NAV.map((n) => (
             <li key={n.href}>
-              <a href={n.href} class="nav-link" aria-current={n.match(path) ? "page" : undefined} target={n.server ? "_top" : undefined}>
+              <a
+                href={n.href}
+                class="nav-link"
+                aria-current={n.match(path) ? "page" : undefined}
+                data-ancestor={n.href === "/dashboard" && inRepo ? "true" : undefined}
+                target={n.server ? "_top" : undefined}
+              >
                 <Icon name={n.icon} />
                 {n.label}
               </a>
             </li>
           ))}
         </ul>
-        {repos.value && repos.value.length > 0 ? (
+        {repos && repos.length > 0 ? (
           <ul class="sidebar__repos" aria-label="Repositories">
-            {repos.value.map((r) => (
+            {repos.map((r) => (
               <li key={r.id}>
-                <a href={`/repos/${r.id}`} class="repo-link" aria-current={path.startsWith(`/repos/${r.id}`) ? "page" : undefined}>
+                <a href={`/repos/${r.id}`} class="repo-link" aria-current={repoHere === r.id ? "page" : undefined} data-testid="nav-repo">
                   <span class="repo-link__name">{r.name}</span>
                   {r.counts.awaitingReview + (r.counts.plansAwaitingApproval ?? 0) > 0 ? (
                     <span
@@ -129,16 +142,48 @@ function Sidebar() {
           </ul>
         ) : null}
       </nav>
+    </>
+  );
+}
+
+function NavFoot() {
+  const me = principal.value;
+  const s = session.value;
+  return (
+    <>
+      {me ? <Who kind={me.kind} name={s.status === "authed" ? (s.me.user?.name ?? me.name) : me.name} compact /> : null}
+      <div class="sidebar__row">
+        <ThemeSwitch />
+        <button type="button" class="btn btn--quiet btn--sm" onClick={() => void signOut()}>
+          <Icon name="log-out" />
+          <span>Sign out</span>
+        </button>
+      </div>
+      <DemoNote />
+    </>
+  );
+}
+
+function Sidebar() {
+  const { path } = useLocation();
+  useEffect(() => {
+    api.repos().then(
+      (r) => {
+        sidebarRepos.value = r.repos;
+        paletteRepos.value = r.repos.map((x) => ({ id: x.id, name: x.name, hosted: !!x.host }));
+      },
+      () => {},
+    );
+  }, [path]);
+  return (
+    <aside class="sidebar" aria-label="Navigation">
+      <a href="/dashboard" class="brand" aria-label="gittifacts dashboard">
+        <BrandMark />
+        <span class="brand__word">gittifacts</span>
+      </a>
+      <NavBody path={path} />
       <div class="sidebar__foot">
-        {me ? <Who kind={me.kind} name={s.status === "authed" ? (s.me.user?.name ?? me.name) : me.name} compact /> : null}
-        <div class="sidebar__row">
-          <ThemeSwitch />
-          <button type="button" class="btn btn--quiet btn--sm" onClick={() => void signOut()}>
-            <Icon name="log-out" />
-            <span>Sign out</span>
-          </button>
-        </div>
-        <DemoNote />
+        <NavFoot />
       </div>
     </aside>
   );
@@ -172,6 +217,11 @@ function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
       d.addEventListener("animationend", done, { once: true });
     }
   }, [open]);
+  // The palette opened from the drawer's search field takes over: one sheet at a time.
+  useEffect(() => {
+    if (open && paletteOpen.value) onClose();
+    // biome-ignore lint/correctness/useExhaustiveDependencies: only when the palette opens
+  }, [paletteOpen.value]);
   useEffect(() => {
     if (open) {
       navClose.current = true;
@@ -180,8 +230,6 @@ function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
     // close on navigation
     // biome-ignore lint/correctness/useExhaustiveDependencies: only on path change
   }, [path]);
-  const me = principal.value;
-  const s = session.value;
   return (
     <dialog
       ref={ref}
@@ -206,28 +254,11 @@ function NavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
             <Icon name="x" size={22} />
           </button>
         </div>
-        <nav>
-          <ul class="drawer__nav">
-            {NAV.map((n) => (
-              <li key={n.href}>
-                <a href={n.href} class="nav-link" aria-current={n.match(path) ? "page" : undefined} target={n.server ? "_top" : undefined}>
-                  <Icon name={n.icon} />
-                  {n.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <div class="drawer__body">
+          <NavBody path={path} />
+        </div>
         <div class="drawer__foot">
-          {me ? <Who kind={me.kind} name={s.status === "authed" ? (s.me.user?.name ?? me.name) : me.name} compact /> : null}
-          <div class="sidebar__row">
-            <ThemeSwitch />
-            <button type="button" class="btn btn--quiet btn--sm" onClick={() => void signOut()}>
-              <Icon name="log-out" />
-              <span>Sign out</span>
-            </button>
-          </div>
-          <DemoNote />
+          <NavFoot />
         </div>
       </div>
     </dialog>
@@ -262,6 +293,11 @@ export function Page({ title, crumbs = [], actions, meta, children, wide, barTit
   useEffect(() => {
     document.title = `${title} · gittifacts`;
   }, [title]);
+  // A change or plan names its repo in its crumbs: that repo's sidebar link is the current one.
+  const repoCrumb = crumbs.map((c) => /^\/repos\/([^/?#]+)$/.exec(c.href)?.[1]).filter(Boolean).pop() ?? null;
+  useEffect(() => {
+    pageRepo.value = repoCrumb ? decodeURIComponent(repoCrumb) : null;
+  }, [repoCrumb]);
   useEffect(() => {
     const el = heading.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
@@ -274,7 +310,7 @@ export function Page({ title, crumbs = [], actions, meta, children, wide, barTit
   const back = crumbs[crumbs.length - 1];
   return (
     <div class={`page ${wide ? "page--wide" : ""} ${cls ?? ""}`}>
-      <header class="topbar" data-scrolled={scrolled.value || barTitle ? "true" : "false"}>
+      <header class="topbar" data-scrolled={scrolled.value || barTitle ? "true" : "false"} data-away={scrolled.value ? "true" : "false"} data-testid="topbar">
         {back ? (
           <a href={back.href} class="topbar__back" aria-label={`Back to ${back.label}`}>
             <Icon name="chevron-left" size={24} />
@@ -293,8 +329,19 @@ export function Page({ title, crumbs = [], actions, meta, children, wide, barTit
         <div class="topbar__title" aria-hidden={barTitle ? undefined : "true"}>
           {barTitle ?? <span class="topbar__text">{title}</span>}
         </div>
+        {/* Desktop: where you are, once the page's own crumbs and title have scrolled away. */}
+        <nav class="topbar__crumbs" aria-label="Where you are">
+          <ol>
+            {crumbs.map((c) => (
+              <li key={c.href}>
+                <a href={c.href}>{c.label}</a>
+              </li>
+            ))}
+            <li class="topbar__here">{title}</li>
+          </ol>
+        </nav>
         <PaletteButton compact />
-        <button type="button" class="icon-btn" aria-label="Open menu" aria-haspopup="dialog" onClick={() => (drawer.value = true)}>
+        <button type="button" class="icon-btn topbar__menu" aria-label="Open menu" aria-haspopup="dialog" onClick={() => (drawer.value = true)}>
           <Icon name="menu" size={22} />
         </button>
       </header>
