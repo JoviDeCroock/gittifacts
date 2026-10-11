@@ -34,18 +34,20 @@
   color: var(--text-2);
   margin-block-end: var(--s-3);
 }
+/* Information, not a lane: a neutral panel (ochre means Lane 1). */
 .signin__notice {
   display: flex;
   gap: var(--s-2);
   align-items: flex-start;
   padding: var(--s-3);
   border-radius: var(--r-control);
-  background: var(--warn-tint);
+  background: var(--panel);
   color: var(--text);
   font-size: var(--text-small);
 }
 .signin__notice .icon {
-  color: var(--warn);
+  flex: none;
+  color: var(--text-3);
   margin-block-start: 2px;
 }
 .signin__github {
@@ -82,6 +84,55 @@
   text-decoration: underline;
   text-underline-offset: 0.2em;
   min-block-size: 32px;
+}
+@media (pointer: coarse) {
+  .linklike {
+    min-block-size: var(--tap);
+  }
+}
+
+/* The agent's way in: a quiet secondary row under the form, the landing's copy line. */
+.signin__agent {
+  display: grid;
+  gap: var(--s-2);
+  padding-block-start: var(--s-4);
+  border-block-start: 1px solid var(--rule);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.signin__agent p {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+}
+.signin__agent .icon {
+  flex: none;
+  margin-block-start: 2px;
+  color: var(--text-3);
+}
+
+/* Phones and tablets: the product's signature in one line (the full chart sits beside the form
+   from 1024px). */
+.signin__strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: start;
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--panel);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.signin__strip b {
+  display: block;
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+@media (min-width: 1024px) {
+  .signin__strip {
+    display: none;
+  }
 }
 .signin__specimen {
   display: none;
