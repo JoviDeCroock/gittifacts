@@ -7,20 +7,32 @@
  *   audit log keeps who minted and revoked them. Live tokens and tokens without an expiry stay.
  * - `webhook_deliveries` that finished (delivered, failed, cancelled) more than `RETENTION_DAYS`
  *   ago (their last attempt; `created_at` when there was none), signed payloads included. Pending deliveries are never touched: the sweep still owes them.
+ * - Authorization attempts more than `AUTH_REQUEST_GRACE_DAYS` past their expiry and their code's
+ *   expiry: `oauth_requests` and `integration_authorizations` (one row per unauthenticated GET of
+ *   an authorize URL) and better-auth's `device_code`. Past that point a request can no longer be
+ *   decided or redeemed, and a replayed code is refused as unknown. The sessions and installations
+ *   they created live in their own tables.
  */
-import { and, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
+import { and, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import type { Bindings } from "./app-env.js";
 import { agentTokens } from "./db/app-schema.js";
-import { webhookDeliveries } from "./db/integration-schema.js";
+import { deviceCode } from "./db/auth-schema.js";
+import { integrationAuthorizations, webhookDeliveries } from "./db/integration-schema.js";
+import { oauthRequests } from "./db/oauth-schema.js";
 import { createDb, type Db } from "./store/d1-store.js";
 
 export const RETENTION_DAYS = 30;
 /** Rows deleted per table per run (D1 caps statement cost; the next run continues). */
 export const RETENTION_BATCH = 500;
+/** Days an expired authorization attempt (and its code) is kept before it is purged. */
+export const AUTH_REQUEST_GRACE_DAYS = 1;
 
 export interface PurgeResult {
   agentTokens: number;
   webhookDeliveries: number;
+  oauthRequests: number;
+  integrationAuthorizations: number;
+  deviceCodes: number;
 }
 
 export async function purgeExpired(
@@ -73,12 +85,72 @@ export async function purgeExpired(
     )
     .returning({ id: webhookDeliveries.id });
 
-  return { agentTokens: tokens.length, webhookDeliveries: deliveries.length };
+  const authCutoff = new Date(now.getTime() - AUTH_REQUEST_GRACE_DAYS * 86_400_000).toISOString();
+  const requests = await db
+    .delete(oauthRequests)
+    .where(
+      inArray(
+        oauthRequests.id,
+        db
+          .select({ id: oauthRequests.id })
+          .from(oauthRequests)
+          .where(
+            and(
+              lt(oauthRequests.expiresAt, authCutoff),
+              or(isNull(oauthRequests.codeExpiresAt), lt(oauthRequests.codeExpiresAt, authCutoff)),
+            ),
+          )
+          .limit(limit),
+      ),
+    )
+    .returning({ id: oauthRequests.id });
+
+  const ia = integrationAuthorizations;
+  const integrationRequests = await db
+    .delete(ia)
+    .where(
+      inArray(
+        ia.id,
+        db
+          .select({ id: ia.id })
+          .from(ia)
+          .where(
+            and(
+              lt(ia.expiresAt, authCutoff),
+              or(isNull(ia.codeExpiresAt), lt(ia.codeExpiresAt, authCutoff)),
+            ),
+          )
+          .limit(limit),
+      ),
+    )
+    .returning({ id: ia.id });
+
+  const devices = await db
+    .delete(deviceCode)
+    .where(
+      inArray(
+        deviceCode.id,
+        db
+          .select({ id: deviceCode.id })
+          .from(deviceCode)
+          .where(lt(deviceCode.expiresAt, new Date(Date.parse(authCutoff))))
+          .limit(limit),
+      ),
+    )
+    .returning({ id: deviceCode.id });
+
+  return {
+    agentTokens: tokens.length,
+    webhookDeliveries: deliveries.length,
+    oauthRequests: requests.length,
+    integrationAuthorizations: integrationRequests.length,
+    deviceCodes: devices.length,
+  };
 }
 
 export async function runRetention(env: Bindings): Promise<PurgeResult> {
   const purged = await purgeExpired(createDb(env.DB), new Date());
-  if (purged.agentTokens + purged.webhookDeliveries > 0)
+  if (Object.values(purged).some((n) => n > 0))
     console.log(JSON.stringify({ event: "retention-purge", ...purged }));
   return purged;
 }
