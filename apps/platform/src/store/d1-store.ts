@@ -979,13 +979,15 @@ export class D1Store implements Store {
   /** Mirror rows by seq (with payloads), for re-verifying a page. */
   async auditPayloads(log: string, seqs: number[]): Promise<Map<number, unknown>> {
     const out = new Map<number, unknown>();
-    if (seqs.length === 0) return out;
-    const rows = await this.db
-      .select({ seq: auditEvents.seq, payload: auditEvents.payload })
-      .from(auditEvents)
-      .where(and(eq(auditEvents.log, log), inArray(auditEvents.seq, seqs)))
-      .all();
-    for (const r of rows) out.set(r.seq, r.payload ?? null);
+    // Chunked: D1 binds at most 100 parameters per query, and a page can be 200 events.
+    for (let i = 0; i < seqs.length; i += 90) {
+      const rows = await this.db
+        .select({ seq: auditEvents.seq, payload: auditEvents.payload })
+        .from(auditEvents)
+        .where(and(eq(auditEvents.log, log), inArray(auditEvents.seq, seqs.slice(i, i + 90))))
+        .all();
+      for (const r of rows) out.set(r.seq, r.payload ?? null);
+    }
     return out;
   }
 }

@@ -360,6 +360,25 @@ describe("lifecycle routes call the CoordinatorApi", () => {
 });
 
 describe("audit route", () => {
+  // The dashboard's agent band asks for 100 events; a page's payload re-check once bound one
+  // parameter per seq and broke D1's 100-parameter limit (500 in production, 2026-10-11 smoke).
+  it("serves pages of 100 and 200 events (under D1's bound-parameter limit)", async () => {
+    const { app, human, repo } = await world();
+    const audit = new DoAudit(env);
+    const subject = `repo:${repo.id}`;
+    for (let i = 0; i < 150; i++)
+      await audit.append({ principalId: "system", action: "t", subject, payload: { i } });
+    for (const limit of [100, 200]) {
+      const page = await json<{ events: { seq: number }[]; chain: { verified: boolean } }>(
+        await call(app, "GET", `/api/v1/audit?subject=${subject}&limit=${limit}`, {
+          cookie: human.cookie,
+        }),
+      );
+      expect(page.events).toHaveLength(Math.min(limit, 150));
+      expect(page.chain.verified).toBe(true);
+    }
+  });
+
   it("pages newest first with a cursor and reports a tampered mirror", async () => {
     const { app, human, repo } = await world();
     const audit = new DoAudit(env);
