@@ -18,7 +18,10 @@ test("navigation: exactly one current item, the repo you are in (desktop)", asyn
     const current = nav.locator('[aria-current="page"]');
     await expect(current).toHaveCount(1);
     await expect(current).toContainText(agentWork.repoName);
-    await expect(nav.getByRole("link", { name: "Dashboard" })).not.toHaveAttribute("aria-current", /.+/);
+    // Dashboard is the quiet ancestor here (DESIGN.md, sidebar); the brand mark also links home.
+    const dashboard = nav.getByRole("navigation", { name: "Places" }).getByRole("link", { name: "Dashboard", exact: true });
+    await expect(dashboard).not.toHaveAttribute("aria-current", /.+/);
+    await expect(dashboard).toHaveAttribute("data-ancestor", "true");
   }
   await page.goto("/dashboard");
   await expect(nav.locator('[aria-current="page"]')).toHaveText("Dashboard");
@@ -48,6 +51,10 @@ test("palette: finds a change by title or id; the walkthrough's agent twin is ge
   const palette = page.getByTestId("palette");
   await expect(palette).toBeVisible();
   await palette.getByTestId("palette-mode-me").click();
+  // A pasted id offers the change (from anywhere but its own page, which the palette leaves out).
+  await page.keyboard.type(agentWork.changeId);
+  await expect(palette.locator('[data-command="jump.change"], [data-command^="open.change."]').first()).toBeVisible();
+  await palette.getByRole("combobox").fill("");
   await page.keyboard.type("off-by-one");
   const row = palette.locator(`[data-command="open.change.${agentWork.changeId}"]`);
   await expect(row).toContainText(TITLE);
@@ -56,10 +63,11 @@ test("palette: finds a change by title or id; the walkthrough's agent twin is ge
   await expect(page).toHaveURL(new RegExp(`/changes/${agentWork.changeId}$`));
   await expect(palette).toBeHidden();
 
-  // A pasted id jumps straight there.
+  // What's typed straight after ⌘K lands in the palette, not in the page's single-key shortcuts.
   await page.keyboard.press("ControlOrMeta+k");
-  await page.keyboard.type(agentWork.changeId);
-  await expect(palette.locator('[data-command="jump.change"], [data-command^="open.change."]').first()).toBeVisible();
+  await page.keyboard.type("walkthrough");
+  await expect(palette.getByRole("combobox")).toHaveValue("walkthrough");
+  await expect(page).toHaveURL(new RegExp(`/changes/${agentWork.changeId}$`));
 
   // The two hands are one radio group: arrows move the choice.
   await palette.getByTestId("palette-mode-me").focus();
