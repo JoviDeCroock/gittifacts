@@ -12,8 +12,8 @@ test("dashboard: the first-run checklist and the human's repo", async ({ authed:
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   const checklist = page.getByTestId("first-run-checklist");
   await expect(checklist).toBeVisible();
-  await expect(checklist.locator("li[data-state]")).toHaveCount(3);
-  // The seeded Change has signed evidence, so "try it" reads done from real state.
+  await expect(checklist.locator("li[data-state]")).toHaveCount(5);
+  // The seeded repo makes "Create a repo" done from real state.
   await expect(checklist.locator('li[data-state="done"]')).not.toHaveCount(0);
   const repoLink = page.getByRole("main").getByRole("link", { name: new RegExp(world.repoName) }).first();
   await expect(repoLink).toBeVisible();
