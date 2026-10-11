@@ -61,6 +61,12 @@ export const GLOBAL_FLAGS = [
     description: "Usage for a command.",
   },
   { flag: "--version", placeholder: "", description: "Print the CLI version." },
+  {
+    flag: "--no-update",
+    placeholder: "",
+    description:
+      "Run this build as it is: skip the check for a newer one on the platform (also GITTIFACTS_NO_UPDATE=1).",
+  },
 ] as const;
 
 const GLOBAL_VALUE_FLAGS = new Set(["--host", "--json", "--idempotency-key"]);
@@ -90,6 +96,8 @@ function takeGlobal(globals: Globals, tokens: readonly string[], i: number): num
   if (token === "--human") return set(() => (globals.human = true), 1);
   if (token === "--help" || token === "-h") return set(() => (globals.help = true), 1);
   if (token === "--version" || token === "-V") return set(() => (globals.version = true), 1);
+  // Read before dispatch by src/self-update.ts; accepted anywhere so it never trips the parser.
+  if (token === "--no-update") return 1;
   const eq = token.indexOf("=");
   const name = eq > 0 ? token.slice(0, eq) : token;
   if (!GLOBAL_VALUE_FLAGS.has(name)) return 0;
@@ -136,7 +144,7 @@ export function splitArgv(argv: readonly string[]): Invocation {
     if (token.startsWith("-") && token !== "-") {
       throw usageError(`unknown flag before the command: ${token}`, {
         explanation:
-          "Only global flags (--host, --human, --json, --idempotency-key, --help) may come before the command name; put command flags after it.",
+          "Only global flags (--host, --human, --json, --idempotency-key, --help, --no-update) may come before the command name; put command flags after it.",
         command: "gittifacts help",
       });
     }

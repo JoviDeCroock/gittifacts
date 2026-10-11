@@ -3505,3 +3505,30 @@ an existing unverified account's, gets the single-use invite (202): joining need
 with the invited e-mail, and the link, handed to the person the owner means, is the proof. Adding by principal id is
 unchanged. Residual: a squatted e-mail can keep the real person from signing up with it (denial, not access); turning
 on e-mail verification removes it.
+
+## 2026-10-11 — The CLI updates itself; the tarball moves to /cli/v2/ once
+npx reuses its `~/.npm/_npx/<hash>` install for a tarball URL it has seen (libnpmexec compares the resolved URL, never
+refetches), so everyone who ran `npx -y <host>/cli/gittifacts.tgz` once kept that build forever, including builds from
+before audit H2 that send `GITTIFACTS_TOKEN` wherever a checkout's `.gittifacts.json` points. Two changes:
+- **Self-update** (`packages/cli/src/self-update.ts`). Before dispatch the CLI hashes its own file and, at most every
+  10 minutes per host (a stamp in `~/.cache/gittifacts/cli/`), GETs `<host>/cli/version.json` (`{ sha256, size }` of
+  `dist/cli.mjs`, written by `pack:assets`). On a mismatch it downloads `/cli/v2/gittifacts.tgz`, extracts
+  `package/dist/cli.mjs` (gunzip + a minimal tar reader, no dependency), checks sha256 and size, writes it (temp file
+  + rename, 0700 directory) and re-executes it with the same argv, `GITTIFACTS_UPDATED=1` (never loops) and the
+  child's exit code. Opt out: `--no-update`, `GITTIFACTS_NO_UPDATE=1`. `git-credential` never fetches (git waits on
+  it); it only runs an already cached newer build.
+- **Threat model.** This fetches code to run, so the host must be one the user chose: `--host`, `GITTIFACTS_HOST`, a
+  host in the credentials file (logged in to, or a project created there), the last login or the build default. A
+  host only `.gittifacts.json` names is never used (a hostile checkout could otherwise serve its own CLI). Transport is
+  host-trust.ts's rule (`isSecureOrigin`: https, plain http only to loopback); no token, no cookies and no redirects
+  on either request. Both responses are untrusted input: version.json is zod-validated (64 lowercase hex), the download
+  is capped at 20 MB while streaming (64 MB unpacked), and nothing reaches the disk before the extracted file matches
+  version.json's sha256. A cached build is re-hashed before every run. Any failure runs the current CLI unchanged, and
+  a platform that is down costs one 1.5 s timeout per 10 minutes. Nothing on stdout (the JSON contract is one
+  document); one stderr line, only on a terminal. Residual: whoever controls the trusted platform (or its TLS) controls
+  the CLI, as with any `npx` of its tarball.
+- **`/cli/v2/gittifacts.tgz`** is the canonical path on every surface (/start, llms.txt, AGENTS.md templates, web
+  app, landing, docs, the CLI's own hints and credential-helper fallback): a new URL is what gets old npx installs a
+  fresh one, since they can't update themselves. The platform keeps answering the old path with the same v2 file
+  (`routes/cli.ts`), so it is never a stale build. Rejected: a new URL per build (template digests and every surface
+  would churn on each CLI change).

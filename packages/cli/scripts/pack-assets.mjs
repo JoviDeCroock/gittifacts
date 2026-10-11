@@ -1,17 +1,21 @@
 /**
  * Packs the CLI as an npm tarball into the platform's static assets, so it runs without an npm
- * publish: `npx -y https://<host>/cli/gittifacts.tgz --host https://<host> …`.
+ * publish: `npx -y https://<host>/cli/v2/gittifacts.tgz --host https://<host> …`.
  *
  *   node scripts/pack-assets.mjs [--out <dir>]      (default: ../web/dist/cli)
  *
  * 1. `node build.mjs` → dist/cli.mjs (one dependency-free file).
  * 2. Stage a publishable package (package.json without the workspace devDependencies, dist/,
  *    README.md) and `npm pack` it.
- * 3. Write gittifacts.tgz (latest), the same bytes as gittifacts-<version>.tgz, and latest.json.
+ * 3. Write v2/gittifacts.tgz (latest), the same bytes as gittifacts-<version>.tgz, latest.json,
+ *    and version.json ({ sha256, size } of dist/cli.mjs: what the CLI's self-update compares
+ *    its own file with, src/self-update.ts). The platform serves the pre-v2 tarball path
+ *    from v2/gittifacts.tgz (apps/platform/src/routes/cli.ts), so both are always this build.
  *
  * `deploy:prepare` runs it after the web build (vite empties packages/web/dist).
  */
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -54,18 +58,29 @@ try {
   mkdirSync(out, { recursive: true });
   const pinned = `gittifacts-${pkg.version}.tgz`;
   copyFileSync(join(stage, packed.filename), join(out, pinned));
-  copyFileSync(join(stage, packed.filename), join(out, "gittifacts.tgz"));
+  mkdirSync(join(out, "v2"), { recursive: true });
+  copyFileSync(join(stage, packed.filename), join(out, "v2", "gittifacts.tgz"));
   const latest = {
     name: pkg.name,
     version: pkg.version,
     tarball: `/cli/${pinned}`,
-    latest: "/cli/gittifacts.tgz",
+    latest: "/cli/v2/gittifacts.tgz",
     integrity: packed.integrity,
     shasum: packed.shasum,
     size: packed.size,
     node: ">=22",
   };
   writeFileSync(join(out, "latest.json"), `${JSON.stringify(latest, null, 2)}\n`);
+  const cli = readFileSync(join(root, "dist", "cli.mjs"));
+  const version = {
+    name: pkg.name,
+    version: pkg.version,
+    sha256: createHash("sha256").update(cli).digest("hex"),
+    size: cli.length,
+    tarball: "/cli/v2/gittifacts.tgz",
+    builtAt: new Date().toISOString(),
+  };
+  writeFileSync(join(out, "version.json"), `${JSON.stringify(version, null, 2)}\n`);
   console.log(`packed ${pinned} (${(packed.size / 1024).toFixed(0)} KiB) into ${out}`);
 } finally {
   rmSync(stage, { recursive: true, force: true });

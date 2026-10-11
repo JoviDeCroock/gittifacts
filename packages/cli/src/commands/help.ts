@@ -33,6 +33,8 @@ export const ENV_VARS: Record<string, string> = {
   GITTIFACTS_TOKEN_HOST:
     "the one host GITTIFACTS_TOKEN may be sent to when the host comes only from .gittifacts.json",
   GITTIFACTS_CONFIG_DIR: "credentials directory (default ~/.config/gittifacts)",
+  GITTIFACTS_NO_UPDATE:
+    "1: never check the platform for a newer CLI build (like --no-update; builds live in ~/.cache/gittifacts/cli)",
   NO_COLOR: "no color in --human output",
 };
 

@@ -14,6 +14,7 @@ import { cliError, EXIT, usageError } from "../errors.js";
 import { unknownTool } from "../failures.js";
 import { clone, type GitAuth, splitRemote } from "../git.js";
 import { callAnyTool } from "../mcp.js";
+import { isCachedBuild, TARBALL_PATH } from "../self-update.js";
 import { bundledCommands, IDEMPOTENCY_PROPERTY } from "../tools/commands.js";
 import { isRecord, toWireTool } from "../tools/schema.js";
 import { type Builtin, bool, builtinSpec, str } from "./builtin.js";
@@ -221,9 +222,10 @@ export function initText(
   return `${lines.join("\n")}\n`;
 }
 
-/** The tarball URL when this bundle runs from npx's cache. */
+/** The tarball URL when this bundle runs from npx's cache (or a build it updated itself to). */
 function npxSource(script: string | null, host: string): string | null {
-  return script !== null && /[\\/]_npx[\\/]/.test(script) ? `${host}/cli/gittifacts.tgz` : null;
+  if (script === null) return null;
+  return /[\\/]_npx[\\/]/.test(script) || isCachedBuild(script) ? `${host}${TARBALL_PATH}` : null;
 }
 
 function slug(s: string): string {

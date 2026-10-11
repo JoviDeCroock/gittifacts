@@ -14,6 +14,7 @@ import { shellQuote } from "./calls.js";
 import { PROJECT_FILE, type ProjectConfig, writeProject } from "./config.js";
 import { splitRemote } from "./git.js";
 import type { CliIo, SelfCommand } from "./io.js";
+import { TARBALL_PATH } from "./self-update.js";
 import { isRecord } from "./tools/schema.js";
 
 /** Artifacts refuses chunked request bodies; git chunks anything over http.postBuffer. */
@@ -77,7 +78,7 @@ export function basicPassword(token: string): string {
  * cache cleaned up), so the clone keeps working after the npx run that set it up.
  */
 export function helperCommand(self: SelfCommand, host: string): string {
-  const npx = `npx -y ${shellQuote(`${host}/cli/gittifacts.tgz`)} git-credential`;
+  const npx = `npx -y ${shellQuote(`${host}${TARBALL_PATH}`)} git-credential`;
   if (self.script === null) return `!${npx}`;
   const script = shellQuote(self.script);
   return [

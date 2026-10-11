@@ -21,6 +21,7 @@
     "@app/mcp": "workspace:*",
     "@modelcontextprotocol/client": "2.2.0",
     "esbuild": "0.28.2",
-    "mcp-tada": "0.4.0"
+    "mcp-tada": "0.4.0",
+    "zod": "^4.6.5"
   }
 }
