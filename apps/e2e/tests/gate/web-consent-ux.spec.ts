@@ -50,8 +50,11 @@ test.describe("sign-in carries its context", () => {
   });
 });
 
-test("CLI consent names the approver, and the agent's name is the one the person gave", async ({ authed: page, request, baseURL, human, world }) => {
-  const code = await deviceCode(request, baseURL as string);
+test("CLI consent names the approver, and the agent's name is the one the person gave", async ({ authed: page, playwright, baseURL, human, world }) => {
+  // The CLI's own HTTP client: no browser session. (The shared request context carries the
+  // person's cookie from sign-up, and better-auth then wants an Origin as from a browser.)
+  const cli = await playwright.request.newContext();
+  const code = await deviceCode(cli, baseURL as string);
   await page.goto(`/device?user_code=${encodeURIComponent(code.user)}`);
 
   // Who is approving is on screen before anything is granted, with a way to switch accounts.
@@ -76,7 +79,8 @@ test("CLI consent names the approver, and the agent's name is the one the person
   await expect(outcome.getByRole("heading", { level: 1 })).toBeFocused();
   await expect(page).toHaveTitle(/gittifacts/);
 
-  await redeem(request, baseURL as string, code.device);
+  await redeem(cli, baseURL as string, code.device);
+  await cli.dispose();
   await page.goto("/agents");
   const row = page.getByTestId("agent-row").filter({ hasText: agentName });
   await expect(row).toBeVisible();
