@@ -138,6 +138,9 @@ describe("the audit log names who is accountable and filters by actor, action an
         about: { title: change.title },
       });
       expect(out.chain.verified).toBe(true);
+      // The incremental verdict (security M9) reaches agents too: how far the chain is verified.
+      expect(out.chain).toMatchObject({ complete: true });
+      expect(out.chain.verifiedThrough).toBe(out.chain.headSeq);
       expect(out.url).toBe(`${ORIGIN}/audit?actor=${agent.principal.id}`);
       expect(out.nextCursor).not.toBeNull();
       expect(out.nextSteps.map((s) => s.call)).toContain(
@@ -154,6 +157,34 @@ describe("the audit log names who is accountable and filters by actor, action an
       // A repo the caller can't see answers like one that doesn't exist.
       const unknown = errorOf(await mcp.tools.list_audit_events({ repoId: "repo_nope" }));
       expect(unknown?.error.code).toBe("not-found");
+    } finally {
+      await mcp.client.close();
+    }
+  });
+
+  it("list_audit_events: a partly verified chain is reported as such, not as broken (security M9)", async () => {
+    const { agent, mcp } = await setup();
+    try {
+      const first = await mcp.tools.list_audit_events({ actor: agent.principal.id, limit: 1 });
+      if (first.isError) throw new Error(JSON.stringify(first.content));
+      expect(first.structuredContent.chain).toMatchObject({ verified: true, complete: true });
+      // More new entries than one read verifies (VERIFY_BATCH = 200).
+      const audit = new DoAudit(env);
+      for (let i = 0; i < 205; i++) {
+        await audit.append({ principalId: "system", action: "test.bulk", subject: "repo:bulk", payload: { i } });
+      }
+      const r = await mcp.tools.list_audit_events({ actor: agent.principal.id, limit: 1 });
+      if (r.isError) throw new Error(JSON.stringify(r.content));
+      const { chain, nextSteps } = r.structuredContent;
+      expect(chain).toMatchObject({ verified: false, complete: false });
+      expect(chain.brokenAt).toBeUndefined();
+      expect(chain.verifiedThrough).toBeLessThan(chain.headSeq ?? 0);
+      expect(nextSteps.map((s) => s.title).join("\n")).toMatch(/verified through event \d+ of \d+ so far/);
+      expect(nextSteps.map((s) => s.title).join("\n")).not.toMatch(/does not verify/);
+      // The next read picks up where this one stopped.
+      const again = await mcp.tools.list_audit_events({ actor: agent.principal.id, limit: 1 });
+      if (again.isError) throw new Error(JSON.stringify(again.content));
+      expect(again.structuredContent.chain).toMatchObject({ verified: true, complete: true });
     } finally {
       await mcp.client.close();
     }

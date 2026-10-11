@@ -3643,13 +3643,25 @@ export type introspection = {
           },
           "chain": {
             "type": "object",
-            "description": "The hash chain's verdict: verified=false means an event was altered or removed (brokenAt is the first bad seq).",
+            "description": "The hash chain's verdict. verified=true: every event up to headSeq checks out. brokenAt set: an event was altered or removed (the first bad seq). Neither, with complete=false: verified through verifiedThrough so far; reads check newer events a batch at a time, so treat later events as not yet verified.",
             "properties": {
               "verified": {
                 "type": "boolean"
               },
               "brokenAt": {
                 "type": "integer"
+              },
+              "verifiedThrough": {
+                "type": "integer",
+                "description": "Highest seq verified (it and every earlier event)."
+              },
+              "headSeq": {
+                "type": "integer",
+                "description": "Newest seq when checked."
+              },
+              "complete": {
+                "type": "boolean",
+                "description": "verifiedThrough reached headSeq."
               }
             },
             "required": [

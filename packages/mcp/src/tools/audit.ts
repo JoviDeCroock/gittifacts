@@ -49,7 +49,13 @@ export interface AuditToolsBackend {
   ): Promise<{
     events: AuditEventData[];
     nextCursor: string | null;
-    chain: { verified: boolean; brokenAt?: number | undefined };
+    chain: {
+      verified: boolean;
+      brokenAt?: number | undefined;
+      verifiedThrough?: number | undefined;
+      headSeq?: number | undefined;
+      complete?: boolean | undefined;
+    };
   }>;
   /** The `/audit` page with these filters, to hand a person. */
   auditUrl(filter: { subject?: string; actor?: string; action?: string }): string;
@@ -144,8 +150,14 @@ const ListAuditEventsOutput = {
     chain: {
       type: "object",
       description:
-        "The hash chain's verdict: verified=false means an event was altered or removed (brokenAt is the first bad seq).",
-      properties: { verified: { type: "boolean" }, brokenAt: { type: "integer" } },
+        "The hash chain's verdict. verified=true: every event up to headSeq checks out. brokenAt set: an event was altered or removed (the first bad seq). Neither, with complete=false: verified through verifiedThrough so far; reads check newer events a batch at a time, so treat later events as not yet verified.",
+      properties: {
+        verified: { type: "boolean" },
+        brokenAt: { type: "integer" },
+        verifiedThrough: { type: "integer", description: "Highest seq verified (it and every earlier event)." },
+        headSeq: { type: "integer", description: "Newest seq when checked." },
+        complete: { type: "boolean", description: "verifiedThrough reached headSeq." },
+      },
       required: ["verified"],
     },
     nextCursor: {
@@ -196,12 +208,18 @@ export function auditTools(backend: McpBackend, kit: ToolKit) {
         const page = await kit.run(backend, () => backend.listAuditEvents(caller, filter));
         const { subject, actor, action } = filter;
         const more = page.nextCursor;
+        const c = page.chain;
+        // Reads verify the chain a batch at a time (security M9): no break found, but not done yet.
+        const pending = !c.verified && c.brokenAt === undefined && c.complete === false;
         return {
           events: page.events,
-          chain:
-            page.chain.brokenAt === undefined
-              ? { verified: page.chain.verified }
-              : { verified: page.chain.verified, brokenAt: page.chain.brokenAt },
+          chain: {
+            verified: c.verified,
+            ...(c.brokenAt === undefined ? {} : { brokenAt: c.brokenAt }),
+            ...(c.verifiedThrough === undefined ? {} : { verifiedThrough: c.verifiedThrough }),
+            ...(c.headSeq === undefined ? {} : { headSeq: c.headSeq }),
+            ...(c.complete === undefined ? {} : { complete: c.complete }),
+          },
           nextCursor: more,
           url: backend.auditUrl({
             ...(subject === undefined ? {} : { subject }),
@@ -209,14 +227,21 @@ export function auditTools(backend: McpBackend, kit: ToolKit) {
             ...(action === undefined ? {} : { action }),
           }),
           nextSteps: [
-            ...(page.chain.verified
+            ...(c.verified
               ? []
-              : [
-                  {
-                    title: `The audit chain does not verify (first bad event: ${page.chain.brokenAt ?? "unknown"})`,
-                    why: "Treat these events as untrusted and tell a person: hand them url.",
-                  },
-                ]),
+              : pending
+                ? [
+                    {
+                      title: `The audit chain is verified through event ${c.verifiedThrough ?? 0} of ${c.headSeq ?? "?"} so far`,
+                      why: "Newer events are checked a batch at a time: call again to continue, and until then treat events after that one as not yet verified.",
+                    },
+                  ]
+                : [
+                    {
+                      title: `The audit chain does not verify (first bad event: ${c.brokenAt ?? "unknown"})`,
+                      why: "Treat these events as untrusted and tell a person: hand them url.",
+                    },
+                  ]),
             ...(more === null
               ? []
               : [
