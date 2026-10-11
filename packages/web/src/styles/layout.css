@@ -339,13 +339,14 @@
     inset-block-start: var(--topbar-h);
   }
 }
+/* Ink, not ink-2: text on glass keeps 4.5:1 even over a solid lane tag (DESIGN.md, Acetate). */
 .topbar__crumbs ol {
   display: flex;
   align-items: center;
   gap: var(--s-1);
   min-inline-size: 0;
   list-style: none;
-  color: var(--text-2);
+  color: var(--text);
   font-size: var(--text-small);
   white-space: nowrap;
 }
@@ -358,11 +359,10 @@
   color: var(--text-3);
 }
 .topbar__crumbs a {
-  color: var(--text-2);
+  color: var(--text);
   text-decoration: none;
 }
 .topbar__crumbs a:hover {
-  color: var(--text);
   text-decoration: underline;
 }
 /* The title gives way first when the trail is long. */
