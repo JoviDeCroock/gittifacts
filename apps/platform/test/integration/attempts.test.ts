@@ -232,8 +232,18 @@ describe("attempts at one plan (workerd: real DOs + Workflows)", () => {
         expect(error.fix.explanation).toContain(`/plans/${plan.id}`);
       }
 
-      // The losers' agents are waiting for their merge when the person picks.
-      const waits = [drift, red].map((a) =>
+      // The red attempt's merge wait answers at once: its head is failing, and only a new push
+      // moves it (it never holds until the pick).
+      const redWait = await red.mcp.tools.wait_for_change({
+        changeId: idOf("red"),
+        until: "merged",
+        timeoutSec: 30,
+      });
+      if (redWait.isError) throw new Error(JSON.stringify(redWait.content));
+      expect(redWait.structuredContent).toMatchObject({ reached: false, reason: "failing" });
+
+      // The green loser's agent is waiting for its merge when the person picks.
+      const waits = [drift].map((a) =>
         a.mcp.tools.wait_for_change({ changeId: idOf(a.quality), until: "merged", timeoutSec: 30 }),
       );
 
@@ -262,8 +272,13 @@ describe("attempts at one plan (workerd: real DOs + Workflows)", () => {
       expect(pick.superseded.every((s) => s.status === "abandoned")).toBe(true);
       expect(pick.notClosed).toEqual([]);
 
-      // The losers' waits answer `superseded`, naming the winner.
-      for (const w of await Promise.all(waits)) {
+      // The losers' waits answer `superseded`, naming the winner (the red one's, asked again, too).
+      const redAgain = red.mcp.tools.wait_for_change({
+        changeId: idOf("red"),
+        until: "merged",
+        timeoutSec: 30,
+      });
+      for (const w of await Promise.all([...waits, redAgain])) {
         if (w.isError) throw new Error(JSON.stringify(w.content));
         expect(w.structuredContent).toMatchObject({
           reached: false,

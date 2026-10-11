@@ -100,3 +100,40 @@ test("dashboard: arrives in place, nothing in the main column shifts while it lo
   const shift = await page.evaluate(() => (window as unknown as { __shift: number }).__shift);
   expect(shift, "cumulative layout shift inside main").toBeLessThan(0.02);
 });
+
+test("audit: a long agent name stays in its Who column and reads in full on hover", async ({ authed: page, request, baseURL, human }) => {
+  const headers = { cookie: human.cookie, origin: baseURL as string };
+  const created = await request.post(`${baseURL}/api/v1/repos`, { headers, data: { name: uniqueName("longname").toLowerCase() } });
+  expect(created.status(), `create repo: ${await created.text()}`).toBe(201);
+  const { repo } = (await created.json()) as { repo: { id: string } };
+  // The name a device claim gives an agent before anyone names it (apps/platform/src/claim/principal.ts).
+  const name = `Unclaimed agent (tophat-native-${uniqueName("x").toLowerCase()})`;
+  const agentRes = await request.post(`${baseURL}/api/v1/principals/agents`, {
+    headers,
+    data: { name, scopes: ["repo:read", "change:create"] },
+  });
+  expect(agentRes.status(), `create agent: ${await agentRes.text()}`).toBe(201);
+  const { principal, token } = (await agentRes.json()) as { principal: { id: string }; token: string };
+  const started = await request.post(`${baseURL}/api/v1/changes`, {
+    headers: { authorization: `Bearer ${token}`, origin: baseURL as string },
+    data: { repoId: repo.id, title: "Rename the invoice totaller", category: "fix" },
+  });
+  expect(started.status(), `start change: ${await started.text()}`).toBe(201);
+
+  await page.goto(`/audit?actor=${encodeURIComponent(principal.id)}`);
+  const event = page.getByTestId("audit-event").first();
+  await expect(event).toBeVisible();
+  const link = event.locator(".audit__who-link");
+  await expect(link).toHaveAttribute("title", new RegExp(name.replace(/[()]/g, "\\$&")));
+  // The name is clipped inside its column: it never paints over What (beside it, or below it on a phone).
+  const box = await event.evaluate((row) => {
+    const name = (row.querySelector(".audit__who .who__name") as HTMLElement).getBoundingClientRect();
+    const who = (row.querySelector(".audit__who") as HTMLElement).getBoundingClientRect();
+    const what = (row.querySelector(".audit__what") as HTMLElement).getBoundingClientRect();
+    const overlaps = name.right > what.left && name.left < what.right && name.bottom > what.top && name.top < what.bottom;
+    return { nameRight: name.right, whoRight: who.right, overlaps };
+  });
+  expect(box.nameRight).toBeLessThanOrEqual(box.whoRight + 0.5);
+  expect(box.overlaps).toBe(false);
+  await expectNoHorizontalScroll(page);
+});
