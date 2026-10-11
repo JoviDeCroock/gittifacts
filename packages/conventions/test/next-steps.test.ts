@@ -57,6 +57,16 @@ const cases: Case[] = [
   ["project_created", { projectId: "rep_1", claimed: false, claimUrl: null, previewUrl: null }],
   ["project_created", { projectId: "rep_1", changeId: "bs-rep_1", claimed: true, imported: true }],
   [
+    "project_created",
+    {
+      projectId: "rep_1",
+      changeId: "bs-rep_1",
+      claimUrl: "https://h/claim/x",
+      claimed: false,
+      samplePlan: { planId: "plan_s1", title: "Add GET /version", url: "https://h/plans/plan_s1" },
+    },
+  ],
+  [
     "change_started",
     { changeId: "chg_1", remote: { url: "https://git.example/task-chg_1.git", branch: "main" } },
   ],
@@ -169,6 +179,39 @@ describe("nextStepsFor", () => {
     // An authenticated caller has nothing to reconnect.
     const { anonymous: _a, ...authed } = ctx;
     expect(nextStepsFor("project_created", authed)[0]?.title).not.toMatch(/Reconnect/);
+  });
+
+  it("leads a template repo down the golden path: claim, approve the sample plan, build, review, merge", () => {
+    const samplePlan = {
+      planId: "plan_s1",
+      title: "Add GET /version",
+      url: "https://h/plans/plan_s1",
+    };
+    const steps = nextStepsFor("project_created", {
+      projectId: "rep_1",
+      changeId: "bs-rep_1",
+      claimUrl: "https://h/claim/x",
+      claimed: false,
+      samplePlan,
+    });
+    const lead = steps.slice(0, 7).map((s) => s.call ?? s.command);
+    expect(lead[0]).toBe("whoami({})");
+    expect(steps[0]?.why).toContain("https://h/claim/x");
+    expect(lead.slice(1)).toEqual([
+      'get_plan({ planId: "plan_s1" })',
+      'start_change({ repoId: "rep_1", planId: "plan_s1", title: "Add GET /version", category: "feature" })',
+      'git -c http.extraHeader="Authorization: Bearer <remote.token>" push <remote.url> HEAD:<remote.branch>',
+      'wait_for_change({ changeId: "<changeId from start_change>", until: "lane_assigned", timeoutSec: 50 })',
+      'request_review({ changeId: "<changeId from start_change>" })',
+      'wait_for_change({ changeId: "<changeId from start_change>", until: "merged", timeoutSec: 50 })',
+    ]);
+    expect(steps[1]?.why).toContain("https://h/plans/plan_s1 (after they claim the repo)");
+    // The claim step is said once, up front.
+    expect(steps.filter((s) => s.title.includes("claim link"))).toHaveLength(1);
+    // Claimed: no claim step; the approval comes first.
+    const claimed = nextStepsFor("project_created", { projectId: "rep_1", claimed: true, samplePlan });
+    expect(claimed[0]?.call).toBe('get_plan({ planId: "plan_s1" })');
+    expect(claimed.some((s) => s.title.includes("claim"))).toBe(false);
   });
 
   it("tells every wait step to call again while reason is timeout", () => {

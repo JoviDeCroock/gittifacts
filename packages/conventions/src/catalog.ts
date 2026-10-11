@@ -46,8 +46,27 @@ function pnpmFeatures(cacheInputs: string[], worker: boolean): ProjectFeatures {
   };
 }
 
+/**
+ * The small first task every template repo starts with (onboarding's golden path): create_project
+ * drafts it as a Plan by the platform (`system`), a human approves it, an agent builds it, the
+ * merge queue lands it. Fields are a `create_plan` input (PlanDraftInput) minus `repoId`.
+ */
+export const SamplePlan = z
+  .object({
+    title: z.string().min(3).max(200),
+    intent: z.string().min(10).max(2000),
+    acceptanceCriteria: z.array(z.string().min(1).max(1000)).min(1).max(10),
+    outOfScope: z.array(z.string().min(1).max(1000)).max(10),
+    scopePaths: z.array(z.string().min(1).max(300)).min(1).max(20),
+    affectedRoutes: z.array(z.string().startsWith("/")).max(5),
+  })
+  .strict();
+export type SamplePlan = z.infer<typeof SamplePlan>;
+
 export interface TemplateSpec {
   manifest: TemplateManifest;
+  /** The first Plan of a repo made from this template (drafted by the platform, never approved by it). */
+  samplePlan: SamplePlan;
   features: ProjectFeatures;
   previewRoutes: string[];
   /**
@@ -60,6 +79,19 @@ export interface TemplateSpec {
 
 export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
   "workers-api": {
+    samplePlan: {
+      title: "Add GET /version",
+      intent:
+        "Callers can ask which version of the API is running: GET /version returns { version }, the version in package.json.",
+      acceptanceCriteria: [
+        "GET /version answers 200 with JSON { version } (a non-empty string)",
+        "test/app.test.ts has a test for GET /version",
+        "GET / and GET /health answer as before",
+      ],
+      outOfScope: ["Other routes", "Deploy settings (wrangler.jsonc)"],
+      scopePaths: ["src/**", "test/**"],
+      affectedRoutes: [],
+    },
     manifest: {
       id: "workers-api",
       title: "Workers API (TypeScript)",
@@ -75,6 +107,19 @@ export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
     deployable: true,
   },
   "preact-app": {
+    samplePlan: {
+      title: "Add a Reset button to the counter",
+      intent:
+        "The counter only counts up. A Reset button next to it sets the count back to 0, using the counter's reset().",
+      acceptanceCriteria: [
+        "The home page shows a Reset button next to the counter",
+        "Clicking it sets the count (and its double) back to 0",
+        "test/state.test.ts has a test for reset()",
+      ],
+      outOfScope: ["The server time button", "The /api/* routes"],
+      scopePaths: ["src/client/**", "test/**"],
+      affectedRoutes: ["/"],
+    },
     manifest: {
       id: "preact-app",
       title: "Preact + signals app on Workers",
@@ -90,6 +135,19 @@ export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
     deployable: false,
   },
   "ts-library": {
+    samplePlan: {
+      title: "Add capitalize()",
+      intent:
+        "Export capitalize(input) from the library: it upper-cases the first letter and leaves the rest as is. An additive public API change.",
+      acceptanceCriteria: [
+        'capitalize("hello world") returns "Hello world"',
+        'capitalize("") returns ""',
+        "src/index.ts exports capitalize, and test/capitalize.test.ts tests it",
+      ],
+      outOfScope: ["Changes to slugify() or truncate()"],
+      scopePaths: ["src/**", "test/**"],
+      affectedRoutes: [],
+    },
     manifest: {
       id: "ts-library",
       title: "TypeScript library",
@@ -105,6 +163,19 @@ export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
     deployable: false,
   },
   "static-site": {
+    samplePlan: {
+      title: "Add a contact page",
+      intent:
+        "Visitors need a way to reach us: a /contact/ page with a title, a description and an email link, linked from the nav on every page.",
+      acceptanceCriteria: [
+        "/contact/ serves a page with a title and a mailto: link",
+        "The nav on every page links to /contact/",
+        "The site tests pass (every page's title and links)",
+      ],
+      outOfScope: ["A contact form", "Styling changes beyond the new page"],
+      scopePaths: ["public/**", "test/**"],
+      affectedRoutes: ["/contact/"],
+    },
     manifest: {
       id: "static-site",
       title: "Static site",

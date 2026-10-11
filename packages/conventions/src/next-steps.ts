@@ -43,6 +43,11 @@ export interface NextStepContexts {
      * let detection propose one (a Plan + Change a human approves).
      */
     imported?: boolean | undefined;
+    /**
+     * Template repos: the sample Plan create_project drafted (author: the platform). The steps then
+     * lead down the golden path: a human approves it, you build it, a human reviews, it merges.
+     */
+    samplePlan?: { planId: string; title: string; url: string } | undefined;
   };
   change_started: { changeId: string; remote: { url: string; branch: string } };
   push_received: { changeId: string; headSha?: string | undefined };
@@ -188,6 +193,68 @@ function laneSteps(c: NextStepContexts["lane_assigned"]): NextStep[] {
 export const WAIT_TIMEOUT_SEC = 50;
 export const WAIT_AGAIN = `Returns within ${WAIT_TIMEOUT_SEC} s; call it again while reason is "timeout".`;
 
+function claimStep(c: NextStepContexts["project_created"]): NextStep {
+  return {
+    title: "Give the claim link to a human to keep this repo",
+    why: clip(
+      `${c.claimUrl ? `Claim link: ${c.claimUrl}. ` : "The claimUrl is in the create_project response. "}` +
+        `${c.expiresAt ? `Unless a human claims it, this repo is deleted at ${c.expiresAt}. ` : "Unclaimed repos expire unless a human claims them. "}` +
+        "Until then: previews only, no secrets, no production deploys, no auto-merge, tight quotas. " +
+        "The response's token is your Bearer token for this repo only: send it as Authorization on every call. whoami shows the expiry and quotas.",
+      600,
+    ),
+    call: call("whoami", {}),
+  };
+}
+
+/**
+ * The golden path of a template repo (DECISIONS 2026-10-11): claim (if unclaimed) → a human
+ * approves the sample Plan → you build it on a Change → lane → a human reviews → it merges.
+ */
+function goldenPath(
+  c: NextStepContexts["project_created"],
+  plan: NonNullable<NextStepContexts["project_created"]["samplePlan"]>,
+): NextStep[] {
+  const changeId = "<changeId from start_change>";
+  return [
+    ...(c.claimed ? [] : [claimStep(c)]),
+    {
+      title: clip(`Ask a human to approve the sample plan "${plan.title}"`, 200),
+      why: clip(
+        `The platform drafted it; you can't approve it. Send the human ${plan.url}${c.claimed ? "" : " (after they claim the repo)"}. Check its status with get_plan.`,
+        600,
+      ),
+      call: call("get_plan", { planId: plan.planId }),
+    },
+    {
+      title: "Build it: start a Change on the plan",
+      why: "Its acceptance criteria are what the evidence and the reviewer check.",
+      call: call("start_change", {
+        repoId: c.projectId,
+        planId: plan.planId,
+        title: plan.title,
+        category: "feature",
+      }),
+    },
+    {
+      title: "Commit the work (code and test) and push it to the Change's fork",
+      command: PUSH({ url: "<remote.url>", branch: "<remote.branch>" }),
+    },
+    {
+      title: "Wait for the lane (CI, signed evidence, then the review lane)",
+      call: call("wait_for_change", { changeId, until: "lane_assigned", timeoutSec: 50 }),
+    },
+    {
+      title: "Ask a human to review it (you can't approve)",
+      call: call("request_review", { changeId }),
+    },
+    {
+      title: "Wait until the merge queue lands it",
+      call: call("wait_for_change", { changeId, until: "merged", timeoutSec: 50 }),
+    },
+  ];
+}
+
 /** Every wait step says to call again on timeout. */
 function withWaitHint(step: NextStep): NextStep {
   if (step.call === undefined || !step.call.startsWith("wait_for_change(")) return step;
@@ -220,6 +287,7 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
           call: call("whoami", {}),
         });
       }
+      if (c.samplePlan !== undefined) steps.push(...goldenPath(c, c.samplePlan));
       if (c.changeId !== undefined) {
         steps.push({
           title: "Wait for the first CI run and preview",
@@ -282,19 +350,8 @@ function stepsFor<E extends NextStepEvent>(event: E, ctx: NextStepContexts[E]): 
         title: "Or start a Change right away (it can't auto-merge without an approved Plan)",
         call: call("start_change", { repoId: c.projectId, title: "<what>", category: "feature" }),
       });
-      if (!c.claimed) {
-        steps.push({
-          title: "Give the claim link to a human to keep this repo",
-          why: clip(
-            `${c.claimUrl ? `Claim link: ${c.claimUrl}. ` : "The claimUrl is in the create_project response. "}` +
-              `${c.expiresAt ? `Unless a human claims it, this repo is deleted at ${c.expiresAt}. ` : "Unclaimed repos expire unless a human claims them. "}` +
-              "Until then: previews only, no secrets, no production deploys, no auto-merge, tight quotas. " +
-              "The response's token is your Bearer token for this repo only: send it as Authorization on every call. whoami shows the expiry and quotas.",
-            600,
-          ),
-          call: call("whoami", {}),
-        });
-      }
+      // The golden path puts the claim first (nobody approves in an unclaimed repo).
+      if (!c.claimed && c.samplePlan === undefined) steps.push(claimStep(c));
       return steps;
     }
     case "change_started": {
