@@ -1136,6 +1136,15 @@ a.ctx-link:hover .ctx-link__value {
   color: var(--text-3);
   font-size: var(--text-meta);
 }
+.next-up__key {
+  margin-inline-start: var(--s-1);
+}
+/* No keyboard to press it with. */
+@media (pointer: coarse) {
+  .next-up__key {
+    display: none;
+  }
+}
 /* What is next, at a glance: its lane tag (Band Means Lane: the tag carries the numeral), a title
    on up to two lines, and who wrote it (agents as squares). */
 .next-up__title {

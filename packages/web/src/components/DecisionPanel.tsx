@@ -6,6 +6,7 @@
 import type { Change, Lane, Principal } from "@app/domain";
 import { type Signal, useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
+import { useLocation } from "preact-iso";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
 import type { ChangeSummary, PrincipalRef, ReviewDecisionKind, ShadowStats } from "../api/types.js";
 import { LANES } from "../lib/lanes.js";
@@ -177,12 +178,24 @@ function NextUp({ change, me, approved }: { change: Change; me: Principal | null
       live = false;
     };
   }, [change.id, change.repoId, me?.id]);
+  const { route } = useLocation();
+  // N (or the palette's "Next change to review") opens it, once the decision is made.
+  usePageCommands(
+    {
+      "next-change": () => {
+        if (next.value) route(`/changes/${encodeURIComponent(next.value.first.id)}`);
+      },
+    },
+    { n: "next-change" },
+  );
   if (next.value === undefined) return null;
   return (
     <div class="decision__next" data-testid="next-up">
       {next.value ? (
-        <a class="next-up" href={`/changes/${encodeURIComponent(next.value.first.id)}`}>
-          <span class="next-up__label">Next · {plural(next.value.left, "change")} waiting</span>
+        <a class="next-up" href={`/changes/${encodeURIComponent(next.value.first.id)}`} aria-keyshortcuts="N">
+          <span class="next-up__label">
+            Next · {plural(next.value.left, "change")} waiting <kbd class="kbd next-up__key" aria-hidden="true">N</kbd>
+          </span>
           <span class="next-up__title">
             <LaneTag lane={next.value.first.lane} size="sm" />
             <span class="next-up__text">{next.value.first.title}</span>
