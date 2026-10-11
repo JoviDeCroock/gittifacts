@@ -2,10 +2,10 @@ import type { Change, RolloutPolicy, RolloutState } from "@app/domain";
 import { type Signal, useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
-import type { LinkedIssue, RepoDetail, TimelineEvent } from "../api/types.js";
+import type { LinkedIssue, PrincipalRef, RepoDetail, TimelineEvent } from "../api/types.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
-import { Button, EmptyState, ErrorState, LinkButton, Loading, StatusChip } from "../components/ui.js";
+import { Button, EmptyState, ErrorState, LinkButton, Loading, StatusChip, Who } from "../components/ui.js";
 import { detectionSentence, findIncident, healthGapCopy, type Incident, SIGNAL_LABEL, type TimelineRow, timelineRows } from "../lib/rollout-incident.js";
 import { addMinutes, countdown, countdownWords, formatClock, formatTime, formatWhenPrecise, relative, spanLabel } from "../lib/time.js";
 import { CHANGE_STATUS, ROLLOUT_STATUS, num, plural } from "../lib/vocab.js";
@@ -22,6 +22,8 @@ interface RolloutData {
   revertTimeline: TimelineEvent[];
   issues: LinkedIssue[];
   repo: RepoDetail;
+  /** Who acted in the timelines, by principal id. */
+  principals: Record<string, PrincipalRef>;
 }
 
 async function loadRollout(changeId: string): Promise<RolloutData> {
@@ -31,9 +33,10 @@ async function loadRollout(changeId: string): Promise<RolloutData> {
     api.rollout(changeId),
     api.issues(changeId).then((x) => x.issues, () => []),
     api.repo(change.repoId),
-    revertId ? api.rollout(revertId).then((x) => x.timeline, () => []) : Promise.resolve([]),
+    revertId ? api.rollout(revertId).then((x) => ({ timeline: x.timeline, principals: x.principals ?? {} }), () => ({ timeline: [], principals: {} })) : Promise.resolve({ timeline: [], principals: {} }),
   ]);
-  return { change, rollout: r.rollout, timeline: r.timeline, revertTimeline, issues, repo };
+  const principals = { ...revertTimeline.principals, ...(r.principals ?? {}) };
+  return { change, rollout: r.rollout, timeline: r.timeline, revertTimeline: revertTimeline.timeline, issues, repo, principals };
 }
 
 type NodeState = "done" | "current" | "pending" | "failed" | "skipped";
@@ -344,45 +347,74 @@ function KillSwitch({ change, onKilled, open }: { change: Change; onKilled: (c: 
   );
 }
 
-function Timeline({ rows, now, revertId }: { rows: TimelineRow[]; now: number; revertId: string | null }) {
+/** Who acted on a timeline row: people as circles, agents as squares with their person, the platform as itself. */
+function Actor({ id, principals }: { id: string; principals: Record<string, PrincipalRef> }) {
+  const p = principals[id];
+  if (p && p.kind !== "system") return <Who kind={p.kind} name={p.name} owner={p.ownerName ?? (p.ownerId ? principals[p.ownerId]?.name : null)} size={16} />;
+  const name = p?.name && p.name !== id ? p.name : id.startsWith("system:") ? id.slice("system:".length).replace(/-/g, " ") : "gittifacts platform";
+  return <Who kind="system" name={name} size={16} />;
+}
+
+function Timeline({ rows, now, revertId, principals }: { rows: TimelineRow[]; now: number; revertId: string | null; principals: Record<string, PrincipalRef> }) {
   if (rows.length === 0) return null;
   return (
-    <section class="timeline" aria-labelledby="timeline-title">
+    <section class="timeline" aria-labelledby="timeline-title" data-testid="rollout-timeline">
       <h2 id="timeline-title">Timeline</h2>
       <ol>
-        {rows.map((r) => (
-          <li key={r.key} class={r.bad ? "is-bad" : ""}>
-            <time class="tnum" dateTime={r.at} title={new Date(r.at).toLocaleString()}>
-              {formatWhenPrecise(r.at, now)}
-            </time>
-            <span class="timeline__what">
-              {r.source === "revert" && revertId ? (
-                <a href={`/changes/${revertId}`} class="timeline__label" title={r.action ?? undefined}>
-                  {r.label}
-                </a>
-              ) : (
+        {rows.map((r) => {
+          // A row opens its record: the revert change, the audit log, or the issue groups on this page.
+          const href =
+            r.source === "revert" && revertId
+              ? `/changes/${revertId}`
+              : r.seq !== null && r.subject
+                ? `/audit?subject=${encodeURIComponent(r.subject)}`
+                : r.source === "issue"
+                  ? "#issues"
+                  : null;
+          const body = (
+            <>
+              <time class="tnum" dateTime={r.at} title={new Date(r.at).toLocaleString()}>
+                {formatWhenPrecise(r.at, now)}
+              </time>
+              <span class="timeline__what">
                 <span class="timeline__label" title={r.action ?? undefined}>
                   {r.label}
                 </span>
-              )}
-              {r.detail ? <span class="timeline__detail">{r.detail}</span> : null}
-            </span>
-            <span class="timeline__end">
-              {r.afterMs !== null && r.afterMs > 0 ? (
-                <span class="timeline__after tnum" title="After the detection">
-                  +{spanLabel(r.afterMs)}
-                </span>
-              ) : null}
-              {r.seq !== null && r.subject ? (
-                <a href={`/audit?subject=${encodeURIComponent(r.subject)}`} class="timeline__seq tnum" aria-label={`Audit event ${r.seq}`}>
-                  #{r.seq}
+                {r.actorId ? (
+                  <span class="timeline__who">
+                    <Actor id={r.actorId} principals={principals} />
+                  </span>
+                ) : null}
+                {r.detail ? <span class="timeline__detail">{r.detail}</span> : null}
+              </span>
+              <span class="timeline__end">
+                {r.afterMs !== null && r.afterMs > 0 ? (
+                  <span class="timeline__after tnum" title="After the detection">
+                    +{spanLabel(r.afterMs)}
+                  </span>
+                ) : null}
+                {r.seq !== null ? (
+                  <span class="timeline__seq tnum">
+                    <span class="sr-only">{r.source === "revert" ? "Revert change, audit event" : "Audit event"} </span>#{r.seq}
+                  </span>
+                ) : (
+                  <span class="timeline__seq">Issues</span>
+                )}
+              </span>
+            </>
+          );
+          return (
+            <li key={r.key} class={r.bad ? "is-bad" : ""} data-testid="rollout-timeline-row">
+              {href ? (
+                <a class="timeline__row" href={href}>
+                  {body}
                 </a>
               ) : (
-                <span class="timeline__seq">Issues</span>
+                <div class="timeline__row">{body}</div>
               )}
-            </span>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ol>
     </section>
   );
@@ -408,7 +440,7 @@ export function RolloutView({ changeId }: { changeId: string }) {
       </Page>
     );
   }
-  const { change, rollout, timeline, revertTimeline, issues, repo } = st.data;
+  const { change, rollout, timeline, revertTimeline, issues, repo, principals } = st.data;
   const policy = repo.repo.policy.rollout;
   const now = tick.value;
   const pageCrumbs = [...crumbs, { href: `/repos/${repo.repo.id}`, label: repo.repo.name }, { href: `/changes/${change.id}`, label: change.title }];
@@ -427,26 +459,28 @@ export function RolloutView({ changeId }: { changeId: string }) {
   const h = headline(rollout, policy, now, incident);
   const live = rollout.status === "rolling" || rollout.status === "watching" || rollout.status === "pending";
   const meta = ROLLOUT_STATUS[rollout.status];
+  const started = rollout.stages[0]?.startedAt ?? null;
 
   return (
     <Page
-      title="Rollout"
+      title={h.title}
       wide
+      class="rollout-page"
       crumbs={pageCrumbs}
       meta={
         <>
-          <span>{change.title}</span>
+          <span>{started ? `Rollout started ${relative(started, now)}` : "Rollout"}</span>
           <StatusChip meta={CHANGE_STATUS[change.status]} />
         </>
       }
     >
+      {/* One sentence to the minute for screen readers; the per-second countdown below stays out of it. */}
+      <p class="sr-only" aria-live="polite" data-testid="rollout-live">
+        {h.title}. {h.line}
+      </p>
       <div class="rollout-layout">
         <div class="rollout-main">
-          <section class={`rollout-state rollout-state--${meta.tone}`} aria-live="polite">
-            <p class="rollout-state__title">
-              <Icon name={meta.icon} size={22} />
-              {h.title}
-            </p>
+          <section class={`rollout-state rollout-state--${meta.tone}`} aria-label="Rollout progress">
             <p class="rollout-state__line">{h.line}</p>
             {incident ? <IncidentFacts incident={incident} /> : null}
             <StageTrack nodes={trackNodes(rollout, policy, now)} />
@@ -473,7 +507,7 @@ export function RolloutView({ changeId }: { changeId: string }) {
           <Health r={rollout} policy={policy} now={now} incident={incident} />
 
           {issues.length > 0 ? (
-            <section class="issues" aria-labelledby="issues-title">
+            <section class="issues" id="issues" aria-labelledby="issues-title">
               <h2 id="issues-title">New issue groups {issues.length > 0 ? <span class="tnum issues__n">{issues.length}</span> : null}</h2>
               <ul>
                 {issues.map((i) => (
@@ -521,7 +555,7 @@ export function RolloutView({ changeId }: { changeId: string }) {
               </div>
             </section>
           ) : null}
-          <Timeline rows={timelineRows(timeline, revertTimeline, incident)} now={now} revertId={change.revertedBy} />
+          <Timeline rows={timelineRows(timeline, revertTimeline, incident, rollout.stages)} now={now} revertId={change.revertedBy} principals={principals} />
         </aside>
       </div>
       {live && !killOpen.value ? <KillBar r={rollout} policy={policy} onOpen={() => (killOpen.value = true)} /> : null}

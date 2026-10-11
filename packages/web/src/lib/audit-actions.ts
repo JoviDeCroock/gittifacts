@@ -52,8 +52,20 @@ const LABEL: Record<string, string> = {
   "deploy.revert-failed": "Automatic revert failed: revert it by hand",
   "deployment.created": "Deployment reported",
   "rollout.via-train": "Rolling out in a deploy batch",
+  "rollout.stage": "Stage started",
   "rollout.stage.started": "Stage started",
   "rollout.stage.completed": "Stage completed",
+  "change.rollout-started": "Rollout started",
+  "rollout.flag-ready": "Flag ready",
+  "rollout.version-uploaded": "New version uploaded",
+  "rollout.blocked": "Rollout blocked",
+  "rollout.skipped": "Rollout skipped",
+  "rollout.watching": "Watch window opened",
+  "rollout.regression": "Regression detected",
+  "rollout.flag-off": "Flag turned off",
+  "rollout.rollback-impossible": "Rollback not possible: revert it by hand",
+  "rollout.revert-skipped": "Automatic revert skipped",
+  "rollout.reverted": "Revert change opened",
   "rollout.check.passed": "Health check passed",
   "rollout.check.failed": "Health check breached the limit",
   "rollout.watch.started": "Watch window opened",
@@ -106,5 +118,5 @@ export function actionLabel(action: string): string {
 
 /** Actions a reader should notice: something failed, was undone or was stopped. */
 export function isBadAction(action: string): boolean {
-  return /failed|rolled-back|killed|regression|alarm-error|refused|undelivered|dropped|errored|timed-out|gave-up|run-lost/.test(action);
+  return /failed|rolled-back|killed|regression|alarm-error|refused|undelivered|dropped|errored|timed-out|gave-up|run-lost|impossible|blocked/.test(action);
 }

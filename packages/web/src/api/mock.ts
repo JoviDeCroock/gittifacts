@@ -367,7 +367,12 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   [
     "GET",
     /^\/api\/v1\/changes\/([^/]+)\/rollout$/,
-    ([id]) => withScenario(id, (s) => ok({ rollout: s.change.rolloutState, timeline: s.timeline ?? db.audit.filter((e) => e.subject === `change:${s.change.id}`) })),
+    ([id]) =>
+      withScenario(id, (s) => {
+        const timeline = s.timeline ?? db.audit.filter((e) => e.subject === `change:${s.change.id}`);
+        const principals = Object.fromEntries([...new Set(timeline.map((e) => e.principalId))].map((p) => [p, principalRef(db.principals, p)]));
+        return ok({ rollout: s.change.rolloutState, timeline, principals });
+      }),
   ],
 
   [

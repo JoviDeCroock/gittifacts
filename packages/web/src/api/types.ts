@@ -175,6 +175,8 @@ export type TimelineEvent = AuditEvent & { summary?: string };
 export interface RolloutResponse {
   rollout: RolloutState | null;
   timeline: TimelineEvent[];
+  /** Names and kinds for the principals who acted in `timeline` (the server always sends it). */
+  principals?: Record<string, PrincipalRef>;
 }
 
 // ---------------------------------------------------------------- audit

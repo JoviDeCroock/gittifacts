@@ -115,6 +115,33 @@ export interface TimelineRow {
   /** Milliseconds after the detection (incident rows only); the detection row has 0. */
   afterMs: number | null;
   source: "change" | "revert" | "issue";
+  /** Who acted (a principal id); null for the first-error row, which Workers Issues saw. */
+  actorId: string | null;
+}
+
+const STAGE_STARTED = new Set(["rollout.stage", "rollout.stage.started"]);
+const STAGE_DONE = new Set(["rollout.stage.completed"]);
+
+/**
+ * Stage events in words: "Started at 5%", "Moved to 25%", "Finished 5%". The percent is the one
+ * the server's summary names ("Stage 25% started"); without one, the nth started (or finished)
+ * event is the rollout's nth stage. Null when neither says which stage it was.
+ */
+export function stageLabels(events: readonly TimelineEvent[], stages: readonly { percent: number }[]): Map<number, string> {
+  const out = new Map<number, string>();
+  let started = 0;
+  let done = 0;
+  for (const e of [...events].sort(byTime)) {
+    const isStart = STAGE_STARTED.has(e.action);
+    if (!isStart && !STAGE_DONE.has(e.action)) continue;
+    const n = isStart ? started++ : done++;
+    const named = /(\d+(?:\.\d+)?)%/.exec(e.summary ?? "")?.[1];
+    const percent = named !== undefined ? Number(named) : stages[n]?.percent;
+    if (percent === undefined) continue;
+    const first = stages[0] ? percent === stages[0].percent : n === 0;
+    out.set(e.seq, isStart ? (first ? `Started at ${percent}%` : `Moved to ${percent}%`) : `Finished ${percent}%`);
+  }
+  return out;
 }
 
 /** Actions whose summary names something the label can't (the signal, an error, a reason). */
@@ -130,13 +157,19 @@ const REVERT_ACTIONS: Record<string, string> = {
 };
 
 /** The page's timeline, newest first: the change's events, the first error, the revert's landing. */
-export function timelineRows(events: readonly TimelineEvent[], revertEvents: readonly TimelineEvent[], incident: Incident | null): TimelineRow[] {
+export function timelineRows(
+  events: readonly TimelineEvent[],
+  revertEvents: readonly TimelineEvent[],
+  incident: Incident | null,
+  stages: readonly { percent: number }[] = [],
+): TimelineRow[] {
   const t0 = incident ? ms(incident.detectedAt) : null;
+  const stage = stageLabels(events, stages);
   const after = (at: string) => (t0 !== null && ms(at) >= t0 && ms(at) - t0 <= INCIDENT_WINDOW_MS ? ms(at) - t0 : null);
   const rows: TimelineRow[] = events.map((e) => ({
     key: `c${e.seq}`,
     at: e.at,
-    label: actionLabel(e.action),
+    label: stage.get(e.seq) ?? actionLabel(e.action),
     action: e.action,
     detail: DETAIL_ACTIONS.has(e.action) && e.summary ? e.summary : null,
     seq: e.seq,
@@ -144,14 +177,15 @@ export function timelineRows(events: readonly TimelineEvent[], revertEvents: rea
     bad: isBadAction(e.action),
     afterMs: after(e.at),
     source: "change",
+    actorId: e.principalId,
   }));
   for (const e of revertEvents) {
     const label = REVERT_ACTIONS[e.action];
     if (label === undefined || (t0 !== null && ms(e.at) < t0)) continue;
-    rows.push({ key: `r${e.seq}`, at: e.at, label, action: e.action, detail: null, seq: e.seq, subject: e.subject, bad: false, afterMs: after(e.at), source: "revert" });
+    rows.push({ key: `r${e.seq}`, at: e.at, label, action: e.action, detail: null, seq: e.seq, subject: e.subject, bad: false, afterMs: after(e.at), source: "revert", actorId: e.principalId });
   }
   if (incident?.firstError) {
-    rows.push({ key: "first-error", at: incident.firstError.at, label: "First error in production", action: null, detail: incident.firstError.title, seq: null, subject: null, bad: true, afterMs: null, source: "issue" });
+    rows.push({ key: "first-error", at: incident.firstError.at, label: "First error in production", action: null, detail: incident.firstError.title, seq: null, subject: null, bad: true, afterMs: null, source: "issue", actorId: null });
   }
   return rows.sort((a, b) => ms(b.at) - ms(a.at) || (b.seq ?? -1) - (a.seq ?? -1));
 }
