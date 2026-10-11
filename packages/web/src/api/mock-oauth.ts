@@ -167,15 +167,20 @@ async function includeManualAgents(): Promise<void> {
   for (const p of list) {
     if (p.kind !== "agent" || sessions.some((s) => s.principalId === p.id)) continue;
     const created = p.keys[0]?.createdAt ?? new Date().toISOString();
+    // api/mock.ts stores the grant on hand-made principals: null repoIds means every repo.
+    const grant = p as Principal & { repoIds?: string[] | null; expiresAt?: string };
+    const repoIds = Array.isArray(grant.repoIds) ? grant.repoIds : null;
     sessions.unshift(
       session({
         principalId: p.id,
         name: p.name,
         flow: "manual",
         scopes: p.scopes,
+        repoIds,
+        repos: (repoIds ?? []).map((rid) => ({ id: rid, name: repoName(rid) })),
         createdAt: created,
         lastUsedAt: null,
-        expiresAt: ahead(60 * 24 * 90),
+        expiresAt: grant.expiresAt ?? ahead(60 * 24 * 90),
         tokenPrefix: "gtf_new",
       }),
     );
