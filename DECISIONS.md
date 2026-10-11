@@ -3186,3 +3186,34 @@ approves, and the merge queue lands it with a signed why note. Time-to-first-mer
 
 **Consequences.** Template repos start with one draft Plan in their plan list. A person who wants something else
 rejects it or ignores it; nothing waits on it. Migration 0023 must run before the code deploys.
+
+## 2026-10-11 — Plain `git push` from a CLI clone; `ship`; text on a terminal
+
+**Context.** The hosted quickstart's clone had no credentials: `git push` failed (401/403), `init` never printed the
+push token its next steps named, fork tokens last ≤ 1 h and every Change has its own fork URL. `.gittifacts.json`
+got committed, and a person at a terminal got 4 KB of JSON.
+
+**Decision.**
+- `gittifacts git-credential` speaks git's credential-helper protocol. `get` reads `.gittifacts.json` (now with
+  `changeId`, `branch`; still no secrets), calls `refresh_push_token` and answers Basic `x:<token without ?expires=>`
+  (Artifacts rejects the suffix in Basic; verified with a live 401 probe that Artifacts challenges, so git asks).
+  The login token is answered only for the CLI's own host (its `/git/` proxy), never an origin a project file names.
+  `store`/`erase` are no-ops: nothing is cached, each push mints a fresh token.
+- `init --clone`, `clone`, `start-change` (inside a clone of that repo) and `ship` repoint `origin` at the Change's
+  fork (no dedicated remote: fetching a new fork is fetching the latest default branch), set
+  `remote.origin.push=HEAD:refs/heads/<branch>`, branch tracking, `http.postBuffer`, and a local
+  `credential.<fork-origin>.helper` preceded by an empty helper (so a global keychain can't store hour-long tokens).
+  The helper runs this bundle by absolute path when it exists, else `npx -y <host>/cli/gittifacts.tgz`.
+  `.gittifacts.json` goes in `.git/info/exclude` and every template's `.gitignore`.
+- `gittifacts ship`: push HEAD to the open Change, or `start_change` (title: last commit subject) when there is none
+  or it ended; wait for evidence of the pushed head, then the lane; print lane name, deciding reasons
+  (`groupLaneReasons`), the Change URL and one next step. Exit 0 with a lane, 3 when CI failed or the wait ended.
+- `gittifacts clone <repoId>` clones the read-only proxy with the login token. MCP `list_repos` has no clone URL yet,
+  so the CLI reads `cloneUrl` there when the platform adds it, and takes `--url` meanwhile; unclaimed repos get an
+  error that says to claim or start a Change.
+- Output: text when stdout is a TTY, JSON when piped or with a bare `--json` (`--json '{…}'`/`--json -` still carry
+  tool arguments); `--human` still forces text. The JSON documents are unchanged (additive `git` field on
+  init/start-change). `init` on a TTY prints ≤ 6 lines: repo, preview, claim link, the one next step.
+
+**Consequences.** Clones made before this don't push until `gittifacts ship` (idempotently wires them). Template
+digests changed (seed caches roll).
