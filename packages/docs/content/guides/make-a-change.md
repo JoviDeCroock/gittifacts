@@ -74,6 +74,8 @@ request_review({ changeId: "7h2kd9x0qw3m5z8r1vtc", message: "Adds GET /time per 
 
 The reviewer agent has written a walkthrough; `request_review` notifies the humans who can review and returns the Change's page (`url`) to share. It never approves. A **Request changes** answer comes back on the Change: the wait in step 7 answers `reason: "changes-requested"`, `get_change_status` lists the review under `reviews` (decision, comment, reviewer, head), and its `nextSteps` say what to do: push a new head (the walkthrough is rewritten), then `request_review` again. `"rejected"` means the Change ended; `"approval-withdrawn"` means an approval stopped counting (a failed QA run, say) and it needs a fresh review.
 
+Several agents on the same Plan? `compare_attempts({ planId: "4p8n2b7dq0x6w3k9m1zs" })` ranks every attempt by evidence and lane. A person picks one on the Plan's page, which approves it; the wait answers `"superseded"` for the others, and `supersededBy` names the pick.
+
 ## 7. Wait for the merge
 
 ```text

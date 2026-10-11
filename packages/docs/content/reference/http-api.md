@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 114 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 116 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -93,6 +93,8 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `POST` | [`/api/v1/plans`](/docs/reference/http-repos) | Draft a plan (intent, acceptance criteria, scope) |
 | `GET` | [`/api/v1/plans/{planId}`](/docs/reference/http-repos) | A plan and the changes that implement it |
 | `POST` | [`/api/v1/plans/{planId}/approve`](/docs/reference/http-repos) | Approve a draft plan (human, plan:approve, not the author); signs the approval |
+| `GET` | [`/api/v1/plans/{planId}/attempts`](/docs/reference/http-repos) | Every change attempting this plan, ranked by evidence and lane, with the recommended one |
+| `POST` | [`/api/v1/plans/{planId}/attempts/{changeId}/pick`](/docs/reference/http-repos) | Pick one attempt (human, change:review, not its author): approves it, closes the others |
 | `POST` | [`/api/v1/plans/{planId}/reject`](/docs/reference/http-repos) | Reject a draft plan (human maintainer or owner; the author may withdraw) |
 | `POST` | [`/api/v1/plans/{planId}/withdraw`](/docs/reference/http-repos) | Withdraw a draft plan you drafted (its author only, agents included) |
 | `GET` | [`/api/v1/principals`](/docs/reference/http-identity) | The caller and the agents it owns |

@@ -201,6 +201,30 @@ Approve a draft plan (human, plan:approve, not the author); signs the approval
 - **200:** `{ plan: Plan }`
 - **Errors:** 400, 401, 403, 404, 409
 
+### `GET /api/v1/plans/{planId}/attempts`
+
+Every change attempting this plan, ranked by evidence and lane, with the recommended one
+
+Several agents may attempt the same approved plan. Ranked best first by: finished and green before the rest (still grading never ranks above finished), lane, tests, CI, red/green proof, scope drift, coverage, mutation, public API, diff size (smaller wins), time to green. Anything not measured ranks below measured. `recommended` is the best finished green attempt (provisional when nothing has finished). The newest 20 changes on the plan.
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `planId` (path, required)
+- **200:** `Attempts { attempts, recommended, summary, planId, picked }`
+- **Errors:** 401, 403, 404
+
+### `POST /api/v1/plans/{planId}/attempts/{changeId}/pick`
+
+Pick one attempt (human, change:review, not its author): approves it, closes the others
+
+Approves the change through the normal review path (binds to `headSha`, or the current head; the change must be awaiting review, or already approved) and closes every other open change on the plan as superseded; their agents' wait_for_change answers `superseded`. One pick per plan (409 `already-picked`); the plan must be approved. Audited as `plan.attempt-picked` and `change.superseded`.
+
+- **Auth:** session cookie or bearer token
+- **Idempotency-Key:** accepted
+- **Parameters:** `planId` (path, required), `changeId` (path, required)
+- **Body:** `{ headSha?, comment? }`
+- **200:** `AttemptPicked { planId, picked: AttemptPick, change: Change, approved, superseded, notClosed }`
+- **Errors:** 400, 401, 403, 404, 409, 502
+
 ### `POST /api/v1/plans/{planId}/reject`
 
 Reject a draft plan (human maintainer or owner; the author may withdraw)

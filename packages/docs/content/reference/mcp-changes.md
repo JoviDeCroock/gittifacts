@@ -146,7 +146,7 @@ refresh_push_token({ changeId: "<changeId>" })
 
 ## `wait_for_change`
 
-Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first: reason changes-requested (push a new head), rejected (it ended) or approval-withdrawn (it needs a fresh review); read get_change_status for the review. On timeout call again, after retryAfterSec when it is set.
+Long-poll until the change's current head reaches a milestone, can no longer reach it, or the timeout passes. Prefer this to polling. reached=true means the milestone holds now: evidence_ready = CI finished (passed or failed) and its signed evidence is sealed (a first Change: also released when green, failing when not); lane_assigned = the lane is set (status stays running while the walkthrough is written); tour_ready = the walkthrough is written and the change is routed (awaiting-review, or queued); merged = on the default branch; reverted = reverted. A human can send it back first: reason changes-requested (push a new head), rejected (it ended), approval-withdrawn (it needs a fresh review) or superseded (a person picked another attempt at the same plan and closed this one: supersededBy); read get_change_status for the review. On timeout call again, after retryAfterSec when it is set.
 
 **Scope:** `repo:read` · **Kind:** read-only · **CLI:** `gittifacts wait-for-change`
 
@@ -161,7 +161,7 @@ Long-poll until the change's current head reaches a milestone, can no longer rea
 wait_for_change({ changeId: "<changeId>", until: "merged" })
 ```
 
-**Returns:** `reached` (boolean), `reason` ("reached" | "timeout" | "unreachable" | "changes-requested" | "rejected" | "approval-withdrawn"), `retryAfterSec` (integer), `change` (object), `nextSteps` (object[]).
+**Returns:** `reached` (boolean), `reason` ("reached" | "timeout" | "unreachable" | "changes-requested" | "rejected" | "approval-withdrawn" | "superseded"), `supersededBy` (string), `retryAfterSec` (integer), `change` (object), `nextSteps` (object[]).
 
 ## `get_change_status`
 

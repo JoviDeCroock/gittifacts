@@ -23,6 +23,7 @@ describe("command table generated from the MCP tool definitions", () => {
     expect(tools).toEqual([
       "close_change",
       "close_workspace",
+      "compare_attempts",
       "create_plan",
       "create_project",
       "dequeue",
@@ -112,6 +113,7 @@ describe("command table generated from the MCP tool definitions", () => {
       list_plans: true,
       withdraw_plan: true,
       list_changes: true,
+      compare_attempts: true,
     };
     expect(new Set(names)).toEqual(new Set(Object.keys(all)));
   });
@@ -120,6 +122,7 @@ describe("command table generated from the MCP tool definitions", () => {
     expect(byName("list-changes")).toMatchObject({ positional: "repoId", mutating: false });
     expect(byName("list-plans")).toMatchObject({ positional: "repoId", mutating: false });
     expect(byName("get-plan")).toMatchObject({ positional: "planId", mutating: false });
+    expect(byName("compare-attempts")).toMatchObject({ positional: "planId", mutating: false });
     expect(byName("withdraw-plan")).toMatchObject({
       positional: "planId",
       mutating: true,

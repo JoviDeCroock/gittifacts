@@ -1,6 +1,6 @@
 ---
 title: "MCP tools"
-description: "All 36 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
+description: "All 37 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
 order: 10
 audience: agents
 generated: true
@@ -35,6 +35,7 @@ Mutating tools accept `idempotencyKey`: retry with the same key safely.
 | [`withdraw_plan`](/docs/reference/mcp-changes#withdraw_plan) | Withdraw a draft plan you drafted yourself (it ends as rejected, withdrawn by its author; the reason is audited). | `plan:create` | write |
 | [`start_change`](/docs/reference/mcp-changes#start_change) | Fork the repo for one change and get a short-lived push token for that fork only. | `change:create` | write |
 | [`list_changes`](/docs/reference/mcp-changes#list_changes) | A repo's changes, most recently updated first (up to 200): status, lane, plan, who started it and its page (url). | `repo:read` | read |
+| [`compare_attempts`](#compare_attempts) | Several agents may attempt the same approved plan, each its own change. |  | read |
 | [`get_change_status`](/docs/reference/mcp-changes#get_change_status) | A change's status, lane (and why), pipeline runs for each head, the human reviews (decision, comment, reviewer, head; a withdrawn approval says why), the open changes on the same plan or paths (overlaps), its page (url) to hand a person, and what to do next. | `repo:read` | read |
 | [`get_evidence`](/docs/reference/mcp-changes#get_evidence) | The signed evidence for the change's current head (tests, red/green proof, coverage, API diff, ...) and whether the signature verifies. | `repo:read` | read |
 | [`get_tour`](/docs/reference/mcp-changes#get_tour) | The walkthrough (the tour) a second reviewer agent wrote for the change, what a human will read: stops with verdicts, least-confident points and what was not done. | `repo:read` | read |
@@ -61,6 +62,22 @@ Mutating tools accept `idempotencyKey`: retry with the same key safely.
 | [`search_tools`](/docs/reference/mcp-projects#search_tools) | Fuzzy search over every gittifacts tool's name and description. |  | read |
 | [`request_qa`](#request_qa) | On request only: an agent drives the app built from the change's current head in a real browser against the Plan's acceptance criteria (no Plan: a smoke check), with a screenshot per step, a replay GIF and a pass / fail / couldn't-test verdict per criterion, signed into the evidence. |  | write |
 | [`get_qa`](#get_qa) | The change's QA runs, newest first: status, verdict per criterion with the reason, the lane before and after, cost, and the screenshots' blob refs. |  | read |
+
+## `compare_attempts`
+
+Several agents may attempt the same approved plan, each its own change. This ranks every change on the plan by evidence and lane (lane, CI, tests, red/green proof, scope drift, coverage, mutation, public API, diff size, time to green; anything not measured ranks below measured) and says which one is recommended. A person picks one on the plan's page (url): that approves it and closes the others as superseded. Read-only.
+
+**Scope:** none · **Kind:** read-only · **CLI:** `gittifacts compare-attempts`
+
+| Argument | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `planId` | string | yes | The plan. max 64 chars |
+
+```text
+compare_attempts({ planId: "<planId>" })
+```
+
+**Returns:** `planId` (string), `summary` (string), `attempts` (object[]), `recommended` ({ changeId, provisional, why } | null), `picked` ({ changeId, by, at } | null), `url` (string), `nextSteps` (object[]).
 
 ## `rerun_ci`
 

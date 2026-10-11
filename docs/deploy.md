@@ -80,6 +80,9 @@ pnpm --filter @app/platform deploy                # same, then uploads; register
 Migration 0020 (`change_intents`: the paths an agent gives `start_change`, compared against other agents'
 work until it pushes) is additive. Without it the Worker still starts Changes, but `overlaps` answers null.
 
+Migration 0021 (`plan_picks`: which attempt at a plan a person picked) is additive. Without it
+`GET /api/v1/plans/{planId}/attempts` and the pick answer 500; nothing else reads it.
+
 `deploy:prepare` also regenerates `apps/platform/src/generated/templates.ts` from `templates/` (bundle-templates).
 Migration `0006_onboarding_previews_ttfg` adds the `previews` and `project_onboarding` tables.
 
