@@ -75,8 +75,12 @@ export class EngineShapedCi implements CiEngine {
 
   async restartFrom(): Promise<void> {}
 
-  /** Finish `runId` green (install, test, build + evidence) and report it like CiRunWorkflow. */
-  async finish(env: CiSinkEnv, runId: string): Promise<unknown> {
+  /**
+   * Finish `runId` green (install, test, build + evidence) and report it like CiRunWorkflow. With
+   * `failTests`, the test step fails with that many failing tests (CI red, evidence still sealed).
+   */
+  async finish(env: CiSinkEnv, runId: string, opts: { failTests?: number } = {}): Promise<unknown> {
+    const failing = opts.failTests ?? 0;
     const run = this.runs.get(runId);
     if (run === undefined) throw new Error(`CI run ${runId} was never started`);
     const { request } = run;
@@ -93,11 +97,11 @@ export class EngineShapedCi implements CiEngine {
     const step = (name: string, kind: "user" | "evidence", durationMs: number) => ({
       name,
       kind,
-      status: "passed" as const,
+      status: failing > 0 && name === "test" ? ("failed" as const) : ("passed" as const),
       durationMs,
       logRef: log(name),
       cacheHit: false,
-      exitCode: 0,
+      exitCode: failing > 0 && name === "test" ? 1 : 0,
       startedAt: started,
       finishedAt: finished,
     });
@@ -108,7 +112,7 @@ export class EngineShapedCi implements CiEngine {
       headSha: request.headSha,
       baseSha: request.baseSha,
       engine: "workflows",
-      status: "passed",
+      status: failing > 0 ? "failed" : "passed",
       startedAt: started,
       finishedAt: finished,
       steps: [
@@ -119,7 +123,19 @@ export class EngineShapedCi implements CiEngine {
       ],
       pipelineSource: "default",
       warnings: [],
-      evidence: greenEvidence(request.baseSha, request.headSha),
+      evidence: greenEvidence(request.baseSha, request.headSha).map((item) =>
+        failing > 0 && item.kind === "test-run"
+          ? {
+              ...item,
+              passed: Math.max(0, item.passed - failing),
+              failed: failing,
+              failures: Array.from({ length: failing }, (_, i) => ({
+                name: `breaks case ${i + 1}`,
+                message: "expected 'hello' to be 'hi'",
+              })),
+            }
+          : item,
+      ),
       evidenceErrors: [],
       usage: {
         computeMs: 5500,
@@ -140,7 +156,7 @@ export class EngineShapedCi implements CiEngine {
       ...run.status,
       // Like the engine's RunStatus: the passed steps' container snapshots (previews, QA).
       ...({ snapshots: summary.snapshots } as Partial<CiRunStatus>),
-      status: "passed",
+      status: summary.status,
       finishedAt: finished,
       steps: summary.steps.map((s) => ({
         name: s.name,

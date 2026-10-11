@@ -25,6 +25,8 @@ import { createImportMcpBackend } from "../import/mcp.js";
 import type { AnonymousClient } from "../limits/client.js";
 import { qaBrief } from "../qa/brief.js";
 import { createQueueMcpBackend } from "../queue/mcp.js";
+import { compareAttempts } from "../services/attempts.js";
+import { supersededBy } from "../services/attempts-pick.js";
 import { capabilities } from "../services/capabilities.js";
 import {
   closeChange,
@@ -194,6 +196,10 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
       return getPlanDetail(svc, await scoped(mc, { planId }), planId);
     },
 
+    async compareAttempts(mc, planId) {
+      return compareAttempts(svc, await scoped(mc, { planId }), planId);
+    },
+
     async listChanges(mc, repoId, filter) {
       const caller = await scoped(mc, { repoId });
       const { changes } = await listChangeSummaries(svc, caller, repoId, {
@@ -340,7 +346,13 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
     async waitForChange(mc, changeId, until, timeoutMs) {
       const caller = await scoped(mc, { changeId });
       await requireChange(svc, changeId);
-      return svc.coordinator.waitFor(caller.principal, changeId, until, timeoutMs);
+      const r = await svc.coordinator.waitFor(caller.principal, changeId, until, timeoutMs);
+      // Several attempts at one plan: a person picked another, which closed this one.
+      if (r.reason === "unreachable") {
+        const by = await supersededBy(svc, r.change).catch(() => null);
+        if (by !== null) return { ...r, reason: "superseded" as const, supersededBy: by };
+      }
+      return r;
     },
 
     async listMembers(mc, repoId) {

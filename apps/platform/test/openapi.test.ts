@@ -18,6 +18,8 @@ const EXPECTED: Record<string, string[]> = {
   "/api/v1/plans/{planId}/approve": ["post"],
   "/api/v1/plans/{planId}/reject": ["post"],
   "/api/v1/plans/{planId}/withdraw": ["post"],
+  "/api/v1/plans/{planId}/attempts": ["get"],
+  "/api/v1/plans/{planId}/attempts/{changeId}/pick": ["post"],
   "/api/v1/changes": ["post"],
   "/api/v1/changes/{changeId}": ["get"],
   "/api/v1/changes/{changeId}/token": ["post"],

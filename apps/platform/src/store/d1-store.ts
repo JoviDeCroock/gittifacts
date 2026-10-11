@@ -34,6 +34,7 @@ import {
   evidence as evidenceTable,
   issues,
   pipelineRuns,
+  planPicks,
   plans,
   principalKeys,
   principals,
@@ -109,6 +110,15 @@ export const EMPTY_LANE_COUNTS: LaneCounts = {
   failing: 0,
   plansAwaitingApproval: 0,
 };
+
+/** A person's pick among a plan's attempts (one per plan). */
+export interface PlanPick {
+  planId: string;
+  changeId: string;
+  pickedBy: string;
+  headSha: string | null;
+  pickedAt: string;
+}
 
 export interface ChangeSummary extends Change {
   planTitle: string | null;
@@ -458,7 +468,10 @@ export class D1Store implements Store {
       })
       .from(changes);
     const notBacktest = sql`${changes.id} NOT LIKE 'ghb-%'`;
-    const rows = await (repoId ? q.where(and(eq(changes.repoId, repoId), notBacktest)) : q.where(notBacktest))
+    const rows = await (repoId
+      ? q.where(and(eq(changes.repoId, repoId), notBacktest))
+      : q.where(notBacktest)
+    )
       .groupBy(changes.repoId)
       .all();
     const out = new Map<string, LaneCounts>();
@@ -588,7 +601,9 @@ export class D1Store implements Store {
           const diff = await this.getDiff(r.changeId, r.headSha).catch(() => null);
           if (diff === null) continue;
           out.set(r.changeId, [
-            ...new Set(diff.files.flatMap((f) => [f.path, ...(f.previousPath ? [f.previousPath] : [])])),
+            ...new Set(
+              diff.files.flatMap((f) => [f.path, ...(f.previousPath ? [f.previousPath] : [])]),
+            ),
           ]);
           continue;
         }
@@ -622,6 +637,33 @@ export class D1Store implements Store {
       .insert(changeIntents)
       .values({ changeId, paths: bounded, createdAt: this.iso() })
       .onConflictDoNothing()
+      .run();
+  }
+
+  // ------------------------------------------------------------ attempts (plan picks)
+
+  /** The attempt a person picked for a plan, if any (services/attempts.ts). */
+  async getPlanPick(planId: string): Promise<PlanPick | null> {
+    const r = await this.db.select().from(planPicks).where(eq(planPicks.planId, planId)).get();
+    return r ?? null;
+  }
+
+  /**
+   * Record a pick; the first one stands (a plan is picked once). Returns the stored pick, which
+   * is another Change's when someone picked first.
+   */
+  async putPlanPick(pick: PlanPick): Promise<PlanPick> {
+    await this.db.insert(planPicks).values(pick).onConflictDoNothing().run();
+    const stored = await this.getPlanPick(pick.planId);
+    if (stored === null) throw new Error(`plan pick for ${pick.planId} was not stored`);
+    return stored;
+  }
+
+  /** Take back a pick whose approval failed (only that plan's pick of that change). */
+  async deletePlanPick(planId: string, changeId: string): Promise<void> {
+    await this.db
+      .delete(planPicks)
+      .where(and(eq(planPicks.planId, planId), eq(planPicks.changeId, changeId)))
       .run();
   }
 

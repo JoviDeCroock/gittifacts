@@ -3,6 +3,10 @@ import { createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 import {
   ApprovePlanBody,
+  AttemptsSchema,
+  ChangeIdParam,
+  PickAttemptBody,
+  PickAttemptResult,
   ChangeSchema,
   IdempotencyHeaders,
   PlanDraftBody,
@@ -14,6 +18,8 @@ import {
 } from "../api/schemas.js";
 import { callerOf, type HumanOnlyFix, requirePrincipal } from "../auth/middleware.js";
 import { idempotent } from "../idempotency.js";
+import { compareAttempts } from "../services/attempts.js";
+import { pickAttempt } from "../services/attempts-pick.js";
 import {
   approvePlan,
   createPlan,
@@ -40,6 +46,53 @@ const withdrawOrAsk: HumanOnlyFix = (c, origin) => {
     call: `withdraw_plan({ planId: "${planId}", reason: "<why>" })`,
   };
 };
+
+/** An agent at pick: picking approves a Change, which only a person does. */
+const askToPick: HumanOnlyFix = (c, origin) => {
+  const planId = c.req.param("planId") ?? "<planId>";
+  return {
+    explanation: `Only a person picks an attempt: picking approves that change, and agents never approve one (their own or another's). Ask a person to pick on the plan's page at ${pageUrl(origin, { planId })}; compare_attempts shows the ranking and which one is recommended.`,
+    call: `compare_attempts({ planId: "${planId}" })`,
+  };
+};
+
+const attempts = createRoute({
+  method: "get",
+  path: "/api/v1/plans/{planId}/attempts",
+  tags: ["plans"],
+  summary:
+    "Every change attempting this plan, ranked by evidence and lane, with the recommended one",
+  description:
+    "Several agents may attempt the same approved plan. Ranked best first by: finished and green before the rest (still grading never ranks above finished), lane, tests, CI, red/green proof, scope drift, coverage, mutation, public API, diff size (smaller wins), time to green. Anything not measured ranks below measured. `recommended` is the best finished green attempt (provisional when nothing has finished). The newest 20 changes on the plan.",
+  security: SECURITY,
+  middleware: [requirePrincipal(["repo:read"])] as const,
+  request: { params: PlanIdParam },
+  responses: { 200: json(AttemptsSchema, "Attempts"), ...errors(401, 403, 404) },
+});
+
+const pick = createRoute({
+  method: "post",
+  path: "/api/v1/plans/{planId}/attempts/{changeId}/pick",
+  tags: ["plans"],
+  summary:
+    "Pick one attempt (human, change:review, not its author): approves it, closes the others",
+  description:
+    "Approves the change through the normal review path (binds to `headSha`, or the current head; the change must be awaiting review, or already approved) and closes every other open change on the plan as superseded; their agents' wait_for_change answers `superseded`. One pick per plan (409 `already-picked`); the plan must be approved. Audited as `plan.attempt-picked` and `change.superseded`.",
+  security: SECURITY,
+  middleware: [
+    requirePrincipal(["change:review"], { humanOnly: askToPick }),
+    idempotent(),
+  ] as const,
+  request: {
+    headers: IdempotencyHeaders,
+    params: PlanIdParam.merge(ChangeIdParam),
+    body: body(PickAttemptBody),
+  },
+  responses: {
+    200: json(PickAttemptResult, "Picked"),
+    ...errors(400, 401, 403, 404, 409, 502),
+  },
+});
 
 const create = createRoute({
   method: "post",
@@ -134,6 +187,21 @@ export function registerPlanRoutes(app: ApiApp): void {
   app.openapi(detail, async (c) =>
     c.json(await getPlanDetail(c.get("services"), callerOf(c), c.req.valid("param").planId), 200),
   );
+  app.openapi(attempts, async (c) =>
+    c.json(await compareAttempts(c.get("services"), callerOf(c), c.req.valid("param").planId), 200),
+  );
+  app.openapi(pick, async (c) => {
+    const { planId, changeId } = c.req.valid("param");
+    const out = await pickAttempt(
+      c.get("services"),
+      callerOf(c),
+      planId,
+      changeId,
+      c.req.valid("json"),
+      c.req.valid("header")["idempotency-key"],
+    );
+    return c.json(out, 200);
+  });
   app.openapi(approve, async (c) => {
     const plan = await approvePlan(
       c.get("services"),

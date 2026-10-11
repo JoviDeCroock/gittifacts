@@ -9,3 +9,4 @@ export * from "./oauth-schema.js";
 export * from "./onboarding-schema.js";
 export * from "./qa-schema.js";
 export * from "./overlap-schema.js";
+export * from "./attempt-schema.js";

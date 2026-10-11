@@ -3,6 +3,7 @@
  * `.meta({ id })` turns them into named OpenAPI components.
  */
 import {
+  AttemptsRanking,
   AuditEvent,
   Change,
   ChangeDiff,
@@ -237,6 +238,38 @@ export const DeployTargetBody = z.object({
       "Short Worker name (lowercase letters, digits, dashes; 1–39 chars); the platform deploys to `gf-<repoId>-<script>`. null clears the deploy target.",
     ),
 });
+
+/** Who picked which attempt at a plan (one per plan). */
+export const AttemptPickSchema = z
+  .object({
+    changeId: Id,
+    by: z.object({ id: Id, name: z.string() }),
+    at: IsoDate,
+  })
+  .meta({ id: "AttemptPick" });
+export const AttemptsSchema = AttemptsRanking.extend({
+  planId: Id,
+  picked: AttemptPickSchema.nullable().describe(
+    "The attempt a person picked (approved; the other open attempts were closed as superseded). Null: none yet",
+  ),
+}).meta({ id: "Attempts" });
+/** `POST …/attempts/{changeId}/pick`: bind the approval to the head the person saw. */
+export const PickAttemptBody = z.object({
+  headSha: Sha.optional().describe("The head the person picked; defaults to the current head"),
+  comment: z.string().max(10_000).optional(),
+});
+export const PickAttemptResult = z
+  .object({
+    planId: Id,
+    picked: AttemptPickSchema,
+    change: ChangeSchema,
+    approved: z
+      .boolean()
+      .describe("This pick approved the change (false: it was already approved or queued)"),
+    superseded: z.array(z.object({ changeId: Id, title: z.string(), status: ChangeStatus })),
+    notClosed: z.array(z.object({ changeId: Id, error: z.string() })),
+  })
+  .meta({ id: "AttemptPicked" });
 
 export const PlanDraftBody = PlanDraftInput.meta({ id: "PlanDraftInput" });
 export const ApprovePlanBody = z.object({ comment: z.string().max(10_000).optional() });

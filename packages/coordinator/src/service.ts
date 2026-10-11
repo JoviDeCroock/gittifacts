@@ -292,13 +292,15 @@ export function createCoordinator(
   /**
    * Close or re-run a change: its author (or the agent's owning human) with `contribute`, or a
    * human maintainer (`approve`). A bootstrap Change (authored by the platform) counts as every
-   * contributor's own.
+   * contributor's own. The platform itself (the system principal) may: it closes the attempts a
+   * person did not pick, after checking that person's own access.
    */
   async function assertAuthorOrMaintainer(
     actor: Principal,
     change: Change,
     what: "close" | "rerun",
   ): Promise<void> {
+    if (actor.id === SYSTEM_PRINCIPAL_ID && actor.kind === "system") return;
     const author = await store.getPrincipal(change.authorId);
     const own =
       actor.id === change.authorId ||
@@ -309,7 +311,10 @@ export function createCoordinator(
       fail(
         "forbidden",
         `only the change's author, its owner or a maintainer can ${what === "close" ? "close" : "re-run CI for"} it`,
-        { explanation: "Ask the change's author, or a maintainer of the repo.", call: status(change.id) },
+        {
+          explanation: "Ask the change's author, or a maintainer of the repo.",
+          call: status(change.id),
+        },
       );
     }
   }
@@ -1155,10 +1160,14 @@ export function createCoordinator(
           .regrade({ changeId, reason: `re-run by ${actor.id}${why === null ? "" : `: ${why}`}` }),
       );
       if (out.action !== "started") {
-        fail("invalid-state", `the re-run did not start (${out.action === "ignored" ? out.reason : out.action})`, {
-          explanation: "The change moved on while asking; read its status and try again.",
-          call: status(changeId),
-        });
+        fail(
+          "invalid-state",
+          `the re-run did not start (${out.action === "ignored" ? out.reason : out.action})`,
+          {
+            explanation: "The change moved on while asking; read its status and try again.",
+            call: status(changeId),
+          },
+        );
       }
       await audit.append({
         principalId: actor.id,
@@ -1189,7 +1198,9 @@ export function createCoordinator(
       // (seen live) never answers. Our own deadline makes every answer come on time; an
       // interrupted wait answers from the store and says when to ask again.
       const held = await withDeadline(
-        bindings.changeCoordinator(changeId).waitFor({ changeId, until: milestone, timeoutMs: budget }),
+        bindings
+          .changeCoordinator(changeId)
+          .waitFor({ changeId, until: milestone, timeoutMs: budget }),
         budget + WAIT_GRACE_MS,
       );
       if (held.kind === "answered") {
