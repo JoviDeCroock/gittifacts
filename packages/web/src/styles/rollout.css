@@ -35,22 +35,10 @@
     padding: var(--s-5);
   }
 }
-.rollout-state__title {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
+/* The state line is the screen's title, in the Headline style at every width (DESIGN: rollout
+   state lines); "Rollout" and when it started sit in the meta row under it. */
+.rollout-page .page__title {
   font-size: var(--text-heading);
-  font-weight: var(--weight-bold);
-  line-height: var(--leading-tight);
-}
-.rollout-state--warn .rollout-state__title .icon {
-  color: var(--warn);
-}
-.rollout-state--danger .rollout-state__title .icon {
-  color: var(--danger);
-}
-.rollout-state--ok .rollout-state__title .icon {
-  color: var(--ok);
 }
 .rollout-state__line {
   color: var(--text-2);
@@ -345,35 +333,59 @@
   font-size: var(--text-body);
 }
 
-/* timeline */
+/* timeline: each row says the stage and who acted, and the whole row opens its record */
 .timeline ol {
   list-style: none;
   margin-block-start: var(--s-3);
   border-block-start: 1px solid var(--rule);
 }
 .timeline li {
+  border-block-end: 1px solid var(--rule);
+}
+.timeline__row {
   display: grid;
   grid-template-columns: minmax(64px, auto) minmax(0, 1fr) auto;
   gap: var(--s-3);
   align-items: baseline;
-  padding-block: 8px;
-  border-block-end: 1px solid var(--rule);
+  padding: 8px 4px;
   font-size: var(--text-small);
+  color: inherit;
+  text-decoration: none;
+}
+a.timeline__row {
+  transition: background-color var(--dur-feedback) var(--ease-out);
+}
+a.timeline__row:hover {
+  background: var(--panel);
+}
+a.timeline__row:hover .timeline__label {
+  text-decoration: underline;
+}
+@media (pointer: coarse) {
+  .timeline__row {
+    min-block-size: var(--tap);
+    align-content: center;
+  }
 }
 .timeline time {
   color: var(--text-3);
 }
 .timeline__what {
   display: grid;
+  justify-items: start;
   gap: 2px;
   min-inline-size: 0;
+}
+.timeline__label {
+  color: var(--text);
 }
 .timeline li.is-bad .timeline__label {
   color: var(--danger);
   font-weight: var(--weight-medium);
 }
-a.timeline__label {
-  color: inherit;
+.timeline__who {
+  font-size: var(--text-meta);
+  color: var(--text-2);
 }
 .timeline__detail {
   color: var(--text-3);
@@ -393,10 +405,6 @@ a.timeline__label {
 .timeline__seq {
   font-size: var(--text-meta);
   color: var(--text-3);
-  text-decoration: none;
-}
-a.timeline__seq:hover {
-  text-decoration: underline;
 }
 
 /* incident: the automatic steps, to the second */

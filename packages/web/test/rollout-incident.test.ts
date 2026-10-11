@@ -78,7 +78,18 @@ describe("timelineRows", () => {
       ["Merged into main", null],
     ]);
     expect(rows.find((r) => r.action === "deploy.regression-attributed")?.detail).toContain("Workers Logs poll");
-    expect(rows.find((r) => r.source === "issue")).toMatchObject({ seq: null, bad: true });
+    expect(rows.find((r) => r.source === "issue")).toMatchObject({ seq: null, bad: true, actorId: null });
+    expect(rows.find((r) => r.action === "deploy.flag-off")?.actorId).toBe("system");
+  });
+
+  it("says which stage: the percent the server names, else the nth stage of the rollout", () => {
+    const stages = [{ percent: 5 }, { percent: 25 }, { percent: 100 }];
+    const server = [ev(0, "rollout.stage", "Stage 5% started"), ev(60_000, "rollout.stage", "Stage 25% started"), ev(120_000, "rollout.watching")];
+    expect(timelineRows(server, [], null, stages).map((r) => r.label)).toEqual(["Watch window opened", "Moved to 25%", "Started at 5%"]);
+    const unnamed = [ev(0, "rollout.stage.started"), ev(60_000, "rollout.stage.completed"), ev(60_000, "rollout.stage.started")];
+    expect(timelineRows(unnamed, [], null, stages).map((r) => r.label)).toEqual(["Moved to 25%", "Finished 5%", "Started at 5%"]);
+    // No stages and no percent: the plain label, never a guess.
+    expect(timelineRows([ev(0, "rollout.stage.completed")], [], null).map((r) => r.label)).toEqual(["Stage completed"]);
   });
 });
 
