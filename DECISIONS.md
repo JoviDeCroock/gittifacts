@@ -3117,7 +3117,8 @@ anonymous `create_project` the next call got a 401 that never mentioned the proj
   `laneSummary { lane, deciding, passingCount }` (null before a lane). The GitHub check-run summary already
   sorted its reasons this way and is unchanged.
 
-**Consequences.** `pushIssues` and `laneSummary` are required fields of two outputs (additive for clients). The
+**Consequences.** `pushIssues` and `laneSummary` are new optional fields of two outputs (always set; optional so
+clients typed against the old shape keep compiling). The
 coordinator API gains `pushIssues(actor, changeId)`. If reading the list fails, it reports none rather than
 failing the status call: the list is a hint, and leaving it out never lowers risk.
 
@@ -3155,3 +3156,33 @@ e-mail.
 
 **Consequences.** `MembersView` gains `invites`, and `POST …/members` gains a 202 shape. Web clients must read both
 `member` and `invite`. The invite and reset screens are public routes like `/claim/:token`.
+
+## 2026-10-11 — Onboarding ends at the first merge: the golden path
+
+**Context.** Onboarding stopped at the first green check (49–61 s measured). Nobody reached the product's point on
+day one: a person approves a Plan, an agent builds it, the platform signs the evidence and picks a lane, the person
+approves, and the merge queue lands it with a signed why note. Time-to-first-merge was never measured.
+
+**Decision.**
+- Every template has a small `samplePlan` in the conventions catalogue (`TemplateSpec`, not `template.json`, so the
+  template files and their digests are unchanged): workers-api "Add GET /version", preact-app "Add a Reset button to
+  the counter", ts-library "Add capitalize()", static-site "Add a contact page".
+- `create_project` from a template drafts it as a Plan authored by the platform (`system`, id derived from the repo
+  id, so a retry finds it) and returns `samplePlanId`. The platform never approves: a human does, like any Plan.
+  No principal approves its own Plan, and a person is not its author, so the creating human (or, for an unclaimed
+  repo, its claimer once claimed) may. A draft that nobody wants costs nothing; the author or a maintainer rejects it.
+- `project_created` nextSteps keep the reconnect step and the first-CI wait first (the CLI, /start and journey 10
+  rely on that), then lead down the golden path: claim (if unclaimed) → a human approves the plan at its URL →
+  `start_change({ planId })` → push → `wait_for_change(lane_assigned)` → `request_review` → `wait_for_change(merged)`.
+- Time-to-first-merge: `project_onboarding` gains `sample_plan_id`, `first_merge_change_id`, `first_merged_at` and
+  `ms_to_first_merge` (migration 0023). The "merged" notification records it once per project (not the first
+  Change of the initial commit), with an Analytics Engine point (blob4 `ttfm`). `/internal/ttfg` adds `firstMerge`
+  (D1).
+- The dashboard's "Get started" checklist is the golden path in five steps, each ticked from real state and each
+  with one action: create a repo (any repo counts; the old "Bring a repo" step ticked only for imports), connect the
+  agent (MCP setup; also ticks when an agent wrote a Plan or Change in the person's repos), approve the first plan
+  (link to the sample Plan), review the first Change (the build prompt "Use <origin>/start. In repo <repoId>, build
+  plan <planId>.", then the Change), first merge (with its time-to-first-merge).
+
+**Consequences.** Template repos start with one draft Plan in their plan list. A person who wants something else
+rejects it or ignores it; nothing waits on it. Migration 0023 must run before the code deploys.
