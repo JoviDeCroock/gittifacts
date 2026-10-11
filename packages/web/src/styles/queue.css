@@ -687,3 +687,11 @@ a.q-stat__sub {
 .q-freeze__facts > .q-stall__next {
   grid-column: 1 / -1;
 }
+
+/* ---------------------------------------------------------------- overlapping work */
+/* A quiet secondary line (q-entry__rel): the paths are data, so mono, and they wrap anywhere. */
+.q-entry__overlap code {
+  font-size: var(--text-code);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}

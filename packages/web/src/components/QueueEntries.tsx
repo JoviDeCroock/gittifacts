@@ -2,7 +2,12 @@
  * Per-entry rows of the merge queue: where each change is, why, what blocks it, and, for an
  * ejected change, exactly what its agent should do next.
  */
-import type { EjectReason, QueueEntryView, QueueOverviewView } from "../api/queue.js";
+import type {
+  EjectReason,
+  QueueEntryView,
+  QueueOverlap,
+  QueueOverviewView,
+} from "../api/queue.js";
 import {
   BATCH_STATE,
   EJECT_CODE,
@@ -87,6 +92,59 @@ function EjectPanel({ r, find }: { r: EjectReason; find: Find }) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+/** At most this many overlap notes per entry; the rest are counted. */
+const OVERLAP_NOTES = 3;
+
+/** What one reason adds after the title: "same paths: a.ts", "same plan", or the server's words. */
+function OverlapReasonText({ r }: { r: QueueOverlap["reasons"][number] }) {
+  if (r.code === "same-paths") {
+    return (
+      <>
+        {" · same paths: "}
+        {r.paths.map((p, i) => (
+          <span key={p}>
+            {i > 0 ? ", " : null}
+            <code>{p}</code>
+          </span>
+        ))}
+        {r.morePaths > 0 ? <span class="q-dim"> and {r.morePaths} more</span> : null}
+      </>
+    );
+  }
+  if (r.code === "same-plan") return <>{" · same plan"}</>;
+  if (r.code === "paths-unknown") return <span class="q-dim">{" · nothing pushed yet"}</span>;
+  return <>{` · ${r.message}`}</>;
+}
+
+/** Quiet notes: other open changes on the same plan or paths, each linking to that change. */
+function OverlapNotes({ overlaps }: { overlaps: QueueOverlap[] }) {
+  const shown = overlaps.slice(0, OVERLAP_NOTES);
+  const more = overlaps.length - shown.length;
+  return (
+    <>
+      {shown.map((o) => (
+        <p
+          key={o.changeId}
+          class="q-entry__rel q-entry__overlap"
+          data-testid="queue-overlap"
+          title={o.reasons.map((r) => r.message).join("; ")}
+        >
+          Overlaps with <a href={`/changes/${o.changeId}`}>{o.title}</a>{" "}
+          <span class="q-dim">({o.author.name})</span>
+          {o.reasons.map((r) => (
+            <OverlapReasonText key={r.code} r={r} />
+          ))}
+        </p>
+      ))}
+      {more > 0 ? (
+        <p class="q-entry__rel q-dim">
+          and {more} more overlapping {more === 1 ? "change" : "changes"}
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -219,6 +277,7 @@ function EntryRow({
             Lands together with its plan group <a href={`/plans/${e.plangroup}`}>{e.plangroup}</a>
           </p>
         ) : null}
+        {e.overlaps && e.overlaps.length > 0 ? <OverlapNotes overlaps={e.overlaps} /> : null}
         {e.mergedSha ? (
           <p class="q-entry__rel" title="The queue lands every change as one commit; a change of several commits is squashed and its message lists them.">
             Merged as <Hash value={e.mergedSha} head={7} tail={0} /> <span class="q-dim">· one commit per change</span>

@@ -7,7 +7,7 @@
  */
 import { ApiError } from "./client.js";
 import { b64u, NOW, sha } from "./fixture-kit.js";
-import type { QueueEntryView, QueueOverviewView, QueueStall } from "./queue.js";
+import type { QueueEntryView, QueueOverlap, QueueOverviewView, QueueStall } from "./queue.js";
 
 const MIN = 60_000;
 const KNOWN = new Set(["repo_billing", "repo_edge", "repo_dashboard", "repo_ios", "repo_widget"]);
@@ -33,8 +33,31 @@ function entry(e: EntryInput & { enqueuedMin: number }): QueueEntryView {
     ejectReason: null,
     mergedSha: null,
     stall: null,
+    overlaps: [],
     ...rest,
     enqueuedAt: NOW - enqueuedMin * MIN,
+  };
+}
+
+/** The one overlap in the demo: two agents' changes both edit the billing date formatter. */
+function sharedFormat(
+  changeId: string,
+  title: string,
+  author: { id: string; name: string },
+): QueueOverlap {
+  return {
+    changeId,
+    title,
+    author: { ...author, kind: "agent" },
+    pathsKnown: true,
+    reasons: [
+      {
+        code: "same-paths",
+        message: "Touches the same path: src/billing/format.ts",
+        paths: ["src/billing/format.ts"],
+        morePaths: 0,
+      },
+    ],
   };
 }
 
@@ -67,6 +90,12 @@ function billingEntries(): QueueEntryView[] {
       etaSeconds: 540,
       predictedPassProbability: 0.91,
       reason: "In batch b_41 with 1 other change. CI is running on main plus both changes.",
+      overlaps: [
+        sharedFormat("chg_lc3m9", "Fall back to en-US when a customer's receipt locale is missing", {
+          id: "prn_coder12",
+          name: "fleet-coder-12",
+        }),
+      ],
       enqueuedMin: 19,
     }),
     entry({
@@ -81,6 +110,12 @@ function billingEntries(): QueueEntryView[] {
       etaSeconds: 540,
       predictedPassProbability: 0.88,
       reason: "In batch b_41 with 1 other change. CI is running on main plus both changes.",
+      overlaps: [
+        sharedFormat("chg_tz7k2", "Fix invoice due dates drifting a day for customers far from UTC", {
+          id: "prn_coder07",
+          name: "fleet-coder-07",
+        }),
+      ],
       enqueuedMin: 17,
     }),
     entry({

@@ -66,6 +66,18 @@ export interface QueueStall {
   next: { kind: "retry"; at: number } | { kind: "rebuild"; at: number | null } | { kind: "human"; message: string };
 }
 
+export type OverlapReasonCode = "same-plan" | "same-paths" | "paths-unknown";
+
+/** Another open Change this entry shares a Plan or paths with (`overlaps` on the platform). */
+export interface QueueOverlap {
+  changeId: string;
+  title: string;
+  author: { id: string; kind: string; name: string };
+  /** False: it has nothing pushed yet, so whether its paths overlap is unknown. */
+  pathsKnown: boolean;
+  reasons: { code: OverlapReasonCode | (string & {}); message: string; paths: string[]; morePaths: number }[];
+}
+
 export interface QueueEntryView {
   changeId: string;
   title: string | null;
@@ -90,6 +102,8 @@ export interface QueueEntryView {
   mergedSha: string | null;
   /** Set while a step holding this change keeps failing or stopped (then there is no ETA). */
   stall: StallState | null;
+  /** Open Changes on the same Plan or paths; empty or absent when none or not known. */
+  overlaps?: QueueOverlap[];
 }
 
 export type FreezeKind = "post-merge-check" | "revert-in-progress" | "manual";
@@ -231,6 +245,26 @@ const entry = z.object({
   mergedSha: z.string().nullable(),
   // Older servers do not send it: nothing is known to be stalled.
   stall: z.enum(["retrying", "stalled", "needs-human"]).nullable().default(null),
+  // Absent for finished entries and from older servers: no note, nothing claimed.
+  overlaps: z
+    .array(
+      z.object({
+        changeId: z.string(),
+        title: z.string(),
+        author: z.object({ id: z.string(), kind: z.string(), name: z.string() }),
+        pathsKnown: z.boolean(),
+        // A reason code this client doesn't know still renders its message.
+        reasons: z.array(
+          z.object({
+            code: z.string(),
+            message: z.string(),
+            paths: ids,
+            morePaths: z.number(),
+          }),
+        ),
+      }),
+    )
+    .default([]),
 });
 
 const stall = z.object({
