@@ -62,7 +62,7 @@ export interface RepoRef {
 /** Objects the palette can open: fetched once per opening, from the lists the screens use. */
 export interface PaletteObjects {
   changes: { id: string; title: string; repoId: string; status: string }[];
-  plans: { id: string; title: string; repoId: string; status: string }[];
+  plans: { id: string; title: string; repoId: string; status: string; authorId?: string }[];
   agents: { id: string; name: string }[];
 }
 
@@ -97,9 +97,11 @@ export function contextOf(path: string): Ctx {
   return null;
 }
 
-/** What the palette knows about the change in view (from its objects), when it knows. */
+/** What the palette knows about the change or plan in view (from its objects), when it knows. */
 export interface ChangeHere {
   status?: string;
+  /** The viewer wrote it (a plan's author may withdraw it while it is a draft). */
+  mine?: boolean;
 }
 
 function changeCommands(id: string, sub: "" | "evidence" | "rollout", here: ChangeHere): Command[] {
@@ -143,7 +145,7 @@ function changeCommands(id: string, sub: "" | "evidence" | "rollout", here: Chan
   return out;
 }
 
-function planCommands(id: string): Command[] {
+function planCommands(id: string, here: ChangeHere): Command[] {
   const enc = encodeURIComponent(id);
   const twin: Twin = { tool: "get_plan", args: { planId: id }, positional: "planId" };
   const sign: Act = { kind: "go", href: `/plans/${enc}#sign` };
@@ -153,7 +155,8 @@ function planCommands(id: string): Command[] {
     { id: "plan.reject", label: "Reject the plan…", group: "This plan", icon: "ban", act: sign, twin: null, personOnly: "Only a person rejects a plan, and says why.", words: "decline intent" },
     { id: "plan.attempts", label: "Compare attempts", group: "This plan", icon: "list-ordered", act: { kind: "go", href: `/plans/${enc}#attempts` }, twin: { tool: "compare_attempts", args: { planId: id }, positional: "planId" }, words: "rank agents changes evidence best recommended" },
     { id: "plan.pick", label: "Pick an attempt…", group: "This plan", icon: "check", act: { kind: "go", href: `/plans/${enc}#attempts` }, twin: null, personOnly: PICK_RULE, words: "choose approve winner supersede" },
-    { id: "plan.withdraw", label: "Withdraw your draft plan", group: "This plan", icon: "undo", act: null, twin: { tool: "withdraw_plan", args: { planId: id }, positional: "planId" }, words: "cancel retract author" },
+    // A person runs it only where it applies: their own draft (the plan page confirms on #withdraw).
+    { id: "plan.withdraw", label: "Withdraw your draft plan…", group: "This plan", icon: "undo", act: here.status === "draft" && here.mine ? { kind: "go", href: `/plans/${enc}#withdraw` } : null, twin: { tool: "withdraw_plan", args: { planId: id }, positional: "planId" }, words: "cancel retract author" },
   ];
 }
 
@@ -291,7 +294,7 @@ export function commandsFor(path: string, repos: RepoRef[], here: ChangeHere = {
   const ctx = contextOf(path);
   const cmds: Command[] = [];
   if (ctx?.kind === "change") cmds.push(...changeCommands(ctx.id, ctx.sub, here));
-  if (ctx?.kind === "plan") cmds.push(...planCommands(ctx.id));
+  if (ctx?.kind === "plan") cmds.push(...planCommands(ctx.id, here));
   if (ctx?.kind === "repo") cmds.push(...repoCommands(repos.find((r) => r.id === ctx.id) ?? { id: ctx.id }, ctx.sub));
   if (ctx?.kind === "agents") cmds.push(...agentsCommands());
   const places = repos.map<Command>((r) => ({

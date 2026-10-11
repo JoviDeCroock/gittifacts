@@ -27,6 +27,7 @@ import {
   type RepoRef,
 } from "../lib/commands.js";
 import { prefersReducedMotion } from "../state/media.js";
+import { principal } from "../state/session.js";
 import { themePref } from "../state/prefs.js";
 import { Icon } from "./Icon.js";
 
@@ -63,7 +64,7 @@ async function loadObjects(): Promise<PaletteObjects> {
   const ok = <T,>(r: PromiseSettledResult<T>[]): T[] => r.flatMap((x) => (x.status === "fulfilled" ? [x.value] : []));
   return {
     changes: ok(changes).flatMap((r) => r.changes).filter((c) => !ENDED.has(c.status)).map((c) => ({ id: c.id, title: c.title, repoId: c.repoId, status: c.status })),
-    plans: ok(plans).flatMap((r) => r.plans).filter((p) => p.status === "draft" || p.status === "approved").map((p) => ({ id: p.id, title: p.title, repoId: p.repoId, status: p.status })),
+    plans: ok(plans).flatMap((r) => r.plans).filter((p) => p.status === "draft" || p.status === "approved").map((p) => ({ id: p.id, title: p.title, repoId: p.repoId, status: p.status, authorId: p.authorId })),
     agents: sessions.sessions.filter((a) => a.status === "active").map((a) => ({ id: a.principalId, name: a.name })),
   };
 }
@@ -193,7 +194,13 @@ export function Palette() {
 
   const list = useComputed(() => {
     const ctx = contextOf(path);
-    const here = ctx?.kind === "change" ? { status: objects.value.changes.find((c) => c.id === ctx.id)?.status } : {};
+    const plan = ctx?.kind === "plan" ? objects.value.plans.find((p) => p.id === ctx.id) : undefined;
+    const here =
+      ctx?.kind === "change"
+        ? { status: objects.value.changes.find((c) => c.id === ctx.id)?.status }
+        : plan
+          ? { status: plan.status, mine: plan.authorId !== undefined && plan.authorId === principal.value?.id }
+          : {};
     const cmds = commandsFor(path, paletteRepos.value, here);
     // Objects only while typing: unasked, they would bury the commands for the screen in view.
     if (query.value.trim()) {

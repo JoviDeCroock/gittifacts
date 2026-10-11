@@ -38,6 +38,7 @@ const OBJECTS = {
 const every: Command[] = [
   ...PATHS.flatMap((p) => commandsFor(p, REPOS)),
   ...commandsFor("/changes/chg_1", REPOS, { status: "queued" }),
+  ...commandsFor("/plans/plan_1", REPOS, { status: "draft", mine: true }),
   ...objectCommands(OBJECTS, REPOS),
   ...["chg_1", "plan_1", "repo_billing", "/audit"].flatMap((q) => jumpCommand(q, "https://x.test") ?? []),
 ];
@@ -97,6 +98,11 @@ describe("agent twins", () => {
     const me = forMode(commandsFor("/plans/plan_1", REPOS), "me", "/plans/plan_1");
     expect(me.find((c) => c.id === "plan.approve")?.act).toEqual({ kind: "go", href: "/plans/plan_1#sign" });
     expect(me.find((c) => c.id === "plan.reject")?.act).toEqual({ kind: "go", href: "/plans/plan_1#sign" });
+    // Withdrawing is for the author's own draft only; the page confirms it on #withdraw.
+    expect(me.map((c) => c.id)).not.toContain("plan.withdraw");
+    const mine = forMode(commandsFor("/plans/plan_1", REPOS, { status: "draft", mine: true }), "me", "/plans/plan_1");
+    expect(mine.find((c) => c.id === "plan.withdraw")?.act).toEqual({ kind: "go", href: "/plans/plan_1#withdraw" });
+    expect(forMode(commandsFor("/plans/plan_1", REPOS, { status: "approved", mine: true }), "me", "/plans/plan_1").map((c) => c.id)).not.toContain("plan.withdraw");
   });
 
   it("offers no merge queue on a GitHub-mode repo (GitHub merges)", () => {
