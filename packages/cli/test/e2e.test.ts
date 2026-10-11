@@ -16,8 +16,8 @@ import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TOOL_DEFINITIONS } from "../src/tools/definitions.js";
-import { type GitServer, serveGit } from "./support/git-server.js";
 import { journeyBackend } from "./support/git-journey.js";
+import { type GitServer, serveGit } from "./support/git-server.js";
 import { tempDir } from "./support/io.js";
 import { bearerFor, fakeBackend, hostOf, serveMcp } from "./support/mcp.js";
 

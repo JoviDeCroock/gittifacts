@@ -3,8 +3,9 @@
  * it (groupLaneReasons: deciding first, passing checks folded), the Change's page and ONE next
  * step. The JSON document and the terminal text say the same thing.
  */
-import { groupLaneReasons } from "@app/domain/lane-reasons";
+
 import type { Lane, LaneReason } from "@app/domain";
+import { groupLaneReasons } from "@app/domain/lane-reasons";
 import { LANE_LABELS } from "@app/domain/vocabulary";
 import { isRecord } from "./tools/schema.js";
 

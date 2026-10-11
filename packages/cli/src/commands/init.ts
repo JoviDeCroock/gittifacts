@@ -7,11 +7,11 @@
 import { existsSync, readdirSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { withCommands } from "../calls.js";
+import { adoptChange, installHelper, type WiringResult } from "../clone-setup.js";
 import { PROJECT_FILE, updateCredentials, writeProject } from "../config.js";
 import type { Ctx, Target } from "../context.js";
 import { cliError, EXIT, usageError } from "../errors.js";
 import { unknownTool } from "../failures.js";
-import { adoptChange, installHelper, type WiringResult } from "../clone-setup.js";
 import { clone, type GitAuth, splitRemote } from "../git.js";
 import { callAnyTool } from "../mcp.js";
 import { bundledCommands, IDEMPOTENCY_PROPERTY } from "../tools/commands.js";

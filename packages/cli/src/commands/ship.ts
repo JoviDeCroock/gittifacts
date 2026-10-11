@@ -253,6 +253,7 @@ async function report(
   const left = () => Math.ceil((deadline - ctx.io.now()) / 1000);
   let waited = 0;
   let outcome = "not waited";
+  let last: Record<string, unknown> = {};
   if (wait) {
     for (const until of ["evidence_ready", "lane_assigned"] as const) {
       for (;;) {
@@ -264,6 +265,7 @@ async function report(
         });
         waited += w.seconds;
         const ch = (w.result.change ?? {}) as Record<string, unknown>;
+        last = ch;
         outcome = String(w.result.reason ?? "timeout");
         // Reached for an older head: the platform hasn't seen the push yet.
         if (w.result.reached === true && ch.headSha !== r.head && left() > 2) {
@@ -273,11 +275,8 @@ async function report(
         break;
       }
       if (outcome !== "reached") break;
-      const status = await callTool(ctx, r.target, findCommand("get_change_status") ?? spec, {
-        changeId: r.changeId,
-      });
-      const ch = (status.change ?? {}) as Record<string, unknown>;
-      if (ch.status === "failing" || ch.lane !== null) break;
+      // CI failed (no lane is coming), or the evidence already came with its lane.
+      if (last.status === "failing" || (last.lane !== null && last.lane !== undefined)) break;
     }
   }
   const statusSpec = findCommand("get_change_status");

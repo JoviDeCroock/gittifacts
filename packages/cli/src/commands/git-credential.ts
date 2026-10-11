@@ -12,11 +12,12 @@
  *
  * stdout carries the protocol only; every message goes to stderr (git shows it).
  */
+
+import { basicPassword, originOf, parsePushRemote } from "../clone-setup.js";
+import { normalizeHost } from "../config.js";
 import type { Ctx } from "../context.js";
 import { CliError, EXIT } from "../errors.js";
 import { findCommand } from "../tools/commands.js";
-import { basicPassword, originOf, parsePushRemote } from "../clone-setup.js";
-import { normalizeHost } from "../config.js";
 import { callTool } from "./tool.js";
 
 /** `key=value` lines up to a blank line. */

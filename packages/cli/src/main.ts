@@ -7,9 +7,9 @@
 import { parseCommandTokens, splitArgv, wantsHuman } from "./args.js";
 import { login, logout } from "./commands/auth.js";
 import { type Builtin, bool, builtinSpec, int } from "./commands/builtin.js";
+import { clone } from "./commands/clone.js";
 import { gitCredential } from "./commands/git-credential.js";
 import { commandHelp, listTools, searchTools, topHelp } from "./commands/help.js";
-import { clone } from "./commands/clone.js";
 import { init } from "./commands/init.js";
 import { qa } from "./commands/qa.js";
 import { ship } from "./commands/ship.js";

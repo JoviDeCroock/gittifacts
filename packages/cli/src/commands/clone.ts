@@ -61,13 +61,7 @@ async function findRepo(ctx: Ctx, target: Target, repoId: string): Promise<RepoR
   };
 }
 
-function cloneUrlFor(
-  ctx: Ctx,
-  target: Target,
-  repoId: string,
-  repo: RepoRow | null,
-  flag?: string,
-): string {
+function cloneUrlFor(target: Target, repoId: string, repo: RepoRow | null, flag?: string): string {
   if (flag) {
     if (originOf(flag) !== target.host) {
       throw usageError(`--url must be on ${target.host}, got ${flag}`, {
@@ -120,7 +114,7 @@ export const clone: Builtin = {
     }
     const flag = str(parsed, "url");
     const repo = flag ? null : await findRepo(ctx, target, repoId);
-    const url = cloneUrlFor(ctx, target, repoId, repo, flag);
+    const url = cloneUrlFor(target, repoId, repo, flag);
     const name =
       repo?.name ??
       url

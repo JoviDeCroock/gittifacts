@@ -5,8 +5,8 @@
  */
 import { dirname } from "node:path";
 import { buildToolArgs, parseCommandTokens } from "../args.js";
-import { adoptChange, parsePushRemote, type WiringResult, workTreeRoot } from "../clone-setup.js";
 import { withCommands } from "../calls.js";
+import { adoptChange, parsePushRemote, type WiringResult, workTreeRoot } from "../clone-setup.js";
 import type { Ctx, Target } from "../context.js";
 import { CliError, cliError, EXIT, parseEnvelope } from "../errors.js";
 import { type AnyToolResult, callAnyTool, type RequestOptions } from "../mcp.js";
