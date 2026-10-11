@@ -27,6 +27,7 @@ import { PlatformPreviews } from "../../src/previews/port.js";
 import type { PortsEnv } from "../../src/runtime/ports.js";
 import { D1Store } from "../../src/store/d1-store.js";
 import { fakeBrowser } from "./preview-fakes.js";
+import { FakeResolver } from "./resolver-fakes.js";
 
 export const NAMESPACE = "gittifacts-eu";
 
@@ -175,6 +176,8 @@ export interface IntegrationFakes {
   sandbox: FakeSandboxJobs;
   ci: EngineShapedCi;
   reviewer: FakeReviewer;
+  /** The merge queue's conflict resolver (declines unless a test scripts it). */
+  resolver: FakeResolver;
 }
 
 const KEY = "__gittifactsPlatformIntegrationFakes";
@@ -186,6 +189,7 @@ function create(): IntegrationFakes {
     sandbox: new FakeSandboxJobs(git),
     ci: new EngineShapedCi(),
     reviewer: new FakeReviewer(),
+    resolver: new FakeResolver(),
   };
 }
 

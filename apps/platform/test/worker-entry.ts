@@ -36,6 +36,8 @@ configureCoordinatorRuntime<Bindings>({
     jobs: new FakeQueueJobs(integrationFakes().git),
     batchRuns: workflowHandle(env.BATCH_RUN_WORKFLOW),
     targetsSupported: true,
+    // The resolver without a model: declines every conflict unless a test scripts it.
+    resolver: () => integrationFakes().resolver,
   }),
   // Like src/index.ts: webhooks, and the first push to a repo closes its import-by-push grant.
   onPushEvent: (env, push) => platformPushObserver(env, push),

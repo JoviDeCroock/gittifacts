@@ -311,4 +311,166 @@ describe("many agents, one repo (workerd: real DOs + Workflows)", () => {
       await Promise.all(agents.map((a) => a.mcp.client.close()));
     }
   });
+
+  // The live demo (scripts/e2e/many-agents.ts) on a static site: docs-only Changes have no test
+  // targets, so once the first lands the others revalidate on main with an EMPTY target set (live
+  // 2026-10-11: the engine refused `testTargets: []`, the BatchRunWorkflow errored without a
+  // result, and four landing batches sat "running" for 25+ min). Agents 1 and 2 retitle the same
+  // README line; the resolver's merge writes a line found on neither side, so the human must
+  // approve the resolution again (live: the demo only approved first reviews and hung there).
+  it("docs-only Changes revalidate on main with no test targets and land; the README resolution waits for the human's re-approval", async () => {
+    const app = platformApp();
+    const human = await signUpHuman(app);
+    const created = await call(app, "POST", "/api/v1/repos", {
+      cookie: human.cookie,
+      body: { name: `docs-${Date.now().toString(36)}` },
+    });
+    const { repo } = await json<{ repo: { id: string; artifactsName: string } }>(created);
+    const intro = "\nA static site served by Workers static assets.\n";
+    const baseSha = fakes.git.seed(repo.artifactsName, {
+      "README.md": `# demo${intro}`,
+      "public/index.html": "<h1>demo</h1>\n",
+    });
+    const titled = (...tags: string[]) => `# demo${tags.map((t) => ` (${t})`).join("")}${intro}`;
+    // The resolver keeps both titles on one line: a line neither side wrote (needs re-approval).
+    fakes.resolver.script = {
+      novelLines: 1,
+      resolve: ({ files }) => {
+        const tag = (text: string | null) => /\((agent-\d)\)/.exec(text ?? "")?.[1] ?? "?";
+        const readme = files.find((f) => f.path === "README.md");
+        return readme === undefined
+          ? null
+          : { "README.md": titled(tag(readme.theirs), tag(readme.ours)) };
+      },
+    };
+    const agents: Agent[] = [];
+    for (let i = 1; i <= AGENTS; i++) {
+      const { token, principal } = await createAgent(app, human.cookie);
+      const mcp = await createPlatformClient(`${ORIGIN}/mcp`, token, { fetch: fetchVia(app) });
+      agents.push({ i, principalId: principal.id, token, mcp });
+    }
+    await using batchRuns = await introspectWorkflow(env.BATCH_RUN_WORKFLOW);
+    await batchRuns.modifyAll(async (m) => {
+      await m.disableSleeps();
+      await m.disableRetryDelays();
+    });
+    const disposables: AsyncDisposable[] = [];
+    try {
+      const work = await Promise.all(
+        agents.map(async (a) => {
+          const path = a.i <= 2 ? "README.md" : `AGENT-${a.i}.md`;
+          const started = await a.mcp.tools.start_change({
+            repoId: repo.id,
+            title: `Many agents agent-${a.i}`,
+            category: "docs",
+            paths: [path],
+            idempotencyKey: `docs-${a.i}`,
+          });
+          if (started.isError) throw new Error(JSON.stringify(started.content));
+          const { change } = started.structuredContent;
+          const forkName = `task-${change.id}`;
+          const head = fakes.git.commit(forkName, "main", {
+            [path]: a.i <= 2 ? titled(`agent-${a.i}`) : `# agent-${a.i}\n\nIndependent work.\n`,
+          });
+          const instanceId = changeWorkflowId(change.id, head);
+          const workflow = await introspectWorkflowInstance(env.CHANGE_WORKFLOW, instanceId);
+          disposables.push(workflow);
+          await workflow.modify(async (m) => {
+            await m.disableSleeps();
+            await m.disableRetryDelays();
+          });
+          await env.PUSH_ROUTER.create({
+            id: `push-${head}`,
+            params: {
+              type: "cf.artifacts.repo.pushed",
+              source: { type: "artifacts.repo", namespace: NAMESPACE, repoName: forkName },
+              payload: { ref: "refs/heads/main", before: baseSha, after: head },
+            },
+          });
+          await workflow.waitForStepResult({ name: "ci-start" });
+          await fakes.ci.finish(env, ciRunIdFor(instanceId));
+          await workflow.waitForStepResult({ name: "request-review" });
+          const queued = await a.mcp.tools.enqueue({ changeId: change.id });
+          if (queued.isError) throw new Error(JSON.stringify(queued.content));
+          return { agent: a, changeId: change.id };
+        }),
+      );
+      for (const w of work) {
+        const r = await call(app, "POST", `/api/v1/changes/${w.changeId}/review`, {
+          cookie: human.cookie,
+          body: { decision: "approve" },
+        });
+        expect(r.status).toBe(200);
+      }
+      // Like the demo's human: pass each queue run, and approve a resolution that asks for it
+      // (the Change is back in awaiting-review and its resolution says approvalRequested).
+      const reapproved = new Map<string, string>();
+      const states = async () => {
+        const res = await call(app, "GET", `/api/v1/repos/${repo.id}/queue`, {
+          cookie: human.cookie,
+        });
+        return json<{
+          entries: { changeId: string; state: string }[];
+          landing: { id: string; targets: string[] | "all" }[];
+          stalls: unknown[];
+        }>(res);
+      };
+      const landingTargets = new Map<string, string[] | "all">();
+      await vi.waitFor(
+        async () => {
+          for (const [id, run] of [...fakes.ci.runs])
+            if (id.startsWith("mq-") && run.status.status === "running")
+              await fakes.ci.finish(env, id);
+          for (const w of work) {
+            const res = await call(app, "GET", `/api/v1/changes/${w.changeId}/resolution`, {
+              cookie: human.cookie,
+            });
+            const { resolution } = await json<{
+              resolution: { headSha: string; approvalRequested: boolean } | null;
+            }>(res);
+            if (resolution?.approvalRequested !== true || reapproved.has(w.changeId)) continue;
+            const c = await call(app, "GET", `/api/v1/changes/${w.changeId}`, {
+              cookie: human.cookie,
+            });
+            const { change } = await json<{ change: { status: string } }>(c);
+            if (change.status !== "awaiting-review") continue;
+            const r = await call(app, "POST", `/api/v1/changes/${w.changeId}/review`, {
+              cookie: human.cookie,
+              body: { decision: "approve" },
+            });
+            expect(r.status).toBe(200);
+            reapproved.set(w.changeId, resolution.headSha);
+          }
+          const o = await states();
+          for (const l of o.landing) landingTargets.set(l.id, l.targets);
+          for (const w of work)
+            expect(o.entries).toContainEqual(
+              expect.objectContaining({ changeId: w.changeId, state: "merged" }),
+            );
+        },
+        { timeout: 45_000, interval: 100 },
+      );
+      // Both README titles landed (through the resolution), and both agents' notes.
+      const files = fakes.git.filesAt(fakes.git.head(repo.artifactsName)!);
+      expect([titled("agent-2", "agent-1"), titled("agent-1", "agent-2")]).toContain(
+        files["README.md"],
+      );
+      expect(Object.keys(files)).toEqual(expect.arrayContaining(["AGENT-3.md", "AGENT-4.md"]));
+      // Exactly one README Change was resolved, and it needed (and got) the human's re-approval.
+      expect(reapproved.size).toBe(1);
+      const [resolvedId] = [...reapproved.keys()];
+      expect(work.filter((w) => w.agent.i <= 2).map((w) => w.changeId)).toContain(resolvedId);
+      expect(fakes.resolver.calls).toContain(resolvedId);
+      // Docs-only Changes revalidated on main with no impacted test target, and still landed:
+      // the run on the landing tree covers everything (the engine takes no empty target list).
+      expect([...landingTargets.values()]).toContainEqual([]);
+      const landingRuns = [...fakes.ci.runs].filter(([id]) => /-l[0-9a-z]+-r\d+-r$/.test(id));
+      expect(landingRuns.length).toBeGreaterThan(0);
+      for (const [, run] of landingRuns) expect(run.request.testTargets).toBeUndefined();
+      expect((await states()).stalls).toEqual([]);
+    } finally {
+      for (const d of disposables) await d[Symbol.asyncDispose]();
+      await Promise.all(agents.map((a) => a.mcp.client.close()));
+    }
+  }, 60_000);
 });
