@@ -364,17 +364,30 @@ describe("submitReview", () => {
     ]);
   });
 
-  it("the agent's owner may approve (recorded); .platform changes need a human other than the author", async () => {
+  it("the agent's owner may approve its ordinary Change (recorded)", async () => {
+    const s = await scenario();
+    const { change } = await startAndPush(s);
+    expect(change.status).toBe("awaiting-review");
+    await s.coordinator.submitReview(s.owner, change.id, { decision: "approve" });
+    const audit = s.ports.audit.payloadOf("change.reviewed") as { approvedByAgentOwner: boolean };
+    expect(audit).toMatchObject({ approvedByAgentOwner: true, requiresHumanApproval: false });
+  });
+
+  it(".platform changes: not the authoring agent's owner (membership unknown: no solo exception); another human may", async () => {
     const s = await scenario();
     const { change } = await startAndPush(s, { ".platform/ci.ts": "export default () => {}\n" });
     const cls = await s.ports.store.getClassification(change.id, change.headSha ?? "");
     expect(cls?.requiresHumanApproval).toBe(true);
-    await s.coordinator.submitReview(s.owner, change.id, { decision: "approve" });
+    await expect(
+      s.coordinator.submitReview(s.owner, change.id, { decision: "approve" }),
+    ).rejects.toMatchObject({ code: "self-approval" });
+    expect(s.ports.store.reviews.size).toBe(0);
+    await s.coordinator.submitReview(s.reviewer, change.id, { decision: "approve" });
     const audit = s.ports.audit.payloadOf("change.reviewed") as {
       approvedByAgentOwner: boolean;
       requiresHumanApproval: boolean;
     };
-    expect(audit).toMatchObject({ approvedByAgentOwner: true, requiresHumanApproval: true });
+    expect(audit).toMatchObject({ approvedByAgentOwner: false, requiresHumanApproval: true });
   });
 
   it("is idempotent with a key (a retry after the workflow moved on is a no-op)", async () => {

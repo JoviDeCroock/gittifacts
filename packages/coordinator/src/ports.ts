@@ -570,6 +570,13 @@ export type RepoNeed = "read" | "contribute" | "review" | "approve" | "admin";
  */
 export interface RepoAccess {
   check(actor: Principal, repoId: string, need: RepoNeed): Promise<"allowed" | "hidden" | "denied">;
+  /**
+   * How many humans are members of the repo (any role). Separation of duties on `.platform/**`:
+   * an owner may approve a policy change their own agent wrote only when they are its only human
+   * (a solo project, which would otherwise be bricked). Absent or failing: unknown, so that
+   * exception never applies (unknown → escalate).
+   */
+  humanMembers?(repoId: string): Promise<number>;
 }
 
 export interface Ports {

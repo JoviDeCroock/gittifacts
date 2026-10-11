@@ -18,7 +18,6 @@ import {
   WaitUntil,
 } from "@app/domain";
 import { z } from "zod";
-import { recordHostReview } from "./host-review.js";
 import {
   type CoordinatorApi,
   CoordinatorError,
@@ -28,12 +27,13 @@ import {
 } from "./api.js";
 import { type CoordinatorBindings, type MergeQueueClient, terminateQuietly } from "./bindings.js";
 import { EVENT_ISSUE, EVENT_REVIEW, type ReviewEvent } from "./events.js";
+import { recordHostReview } from "./host-review.js";
 import {
   bootstrapChangeIdFor,
   changeSubject,
   changeWorkflowId,
-  FORK_PREFIX,
   distinctShas,
+  FORK_PREFIX,
   forkNameFor,
   isBootstrapChange,
   isForkName,
@@ -277,6 +277,38 @@ export function createCoordinator(
     fail("forbidden", `${actor.name} may not ${NEED_TEXT[need]} (repo ${repoId})`, {
       explanation:
         "Your role on this repo (an agent: its owner's role) does not allow this. Roles are reader < reviewer < maintainer < owner; ask an owner of the repo.",
+      call: `list_members({ repoId: "${repoId}" })`,
+    });
+  }
+
+  /**
+   * Separation of duties on `.platform/**` (policy, CI) and unknown-scope changes
+   * (`requiresHumanApproval`): the approving human is a maintainer or owner, and not the owner of
+   * the agent that wrote it, unless they are the repo's only human (a solo project; recorded).
+   * Membership the facade can't count is unknown: the solo exception does not apply. Returns
+   * whether the solo exception was used.
+   */
+  async function assertPolicyApprover(
+    actor: Principal,
+    repoId: string,
+    changeId: string,
+    viaOwner: boolean,
+  ): Promise<boolean> {
+    await assertAccess(actor, repoId, "approve", noChange(changeId)).catch((e: unknown) => {
+      if (e instanceof CoordinatorError && e.code === "forbidden")
+        fail("forbidden", "a change to .platform/ (policy or CI) needs a maintainer's approval", {
+          explanation:
+            "It changes how every other Change is graded, so a reviewer can't approve it. Ask a maintainer or owner of the repo.",
+          call: `list_members({ repoId: "${repoId}" })`,
+        });
+      throw e;
+    });
+    if (!viaOwner) return false;
+    const humans = await ports.access?.humanMembers?.(repoId).catch(() => null);
+    if (humans === 1) return true;
+    fail("self-approval", "a policy change your own agent wrote needs another maintainer", {
+      explanation:
+        "Separation of duties on .platform/: the owner of the authoring agent can't approve its policy or CI change while the repo has other members. Ask another maintainer or owner to approve it.",
       call: `list_members({ repoId: "${repoId}" })`,
     });
   }
@@ -800,6 +832,10 @@ export function createCoordinator(
         }
         const author = await store.getPrincipal(change.authorId);
         const viaOwner = author?.kind === "agent" && author.ownerId === actor.id;
+        const soloOwner =
+          review.decision === "approve" && classification.requiresHumanApproval
+            ? await assertPolicyApprover(actor, change.repoId, changeId, viaOwner)
+            : false;
         const decision: ReviewDecision = {
           id: key === null ? makeId() : await derivedId("review", changeId, key),
           changeId,
@@ -827,6 +863,8 @@ export function createCoordinator(
             // `.platform/**` (or unknown) changes: the approver above is a human other than the author.
             requiresHumanApproval: classification.requiresHumanApproval,
             approvedByAgentOwner: viaOwner,
+            // The solo exception to separation of duties on `.platform/**` was used.
+            ...(soloOwner ? { soloOwnerApprovedOwnAgentPolicy: true } : {}),
           },
         });
         // The agent-native merge queue may hold this Change for a fresh approval (its lane rose in

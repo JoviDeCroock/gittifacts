@@ -106,4 +106,55 @@ describe("coordinator access port", () => {
     await c.watchChange(system, change.id, { since: null, timeoutMs: 0 });
     expect(asked.every((a) => !a.startsWith(`${SYSTEM_PRINCIPAL_ID}:`))).toBe(true);
   });
+
+  describe("separation of duties on .platform/ (security audit 2026-10-11, M12)", () => {
+    /** Roles by principal; the reviewer is a reviewer-role human, `maint` a second maintainer. */
+    async function world(humans: number) {
+      const s = await scenario();
+      const { change } = await startAndPush(s, { ".platform/policy.ts": "export default {};\n" });
+      const maint = s.ports.store.addPrincipal(principal({ kind: "human" }));
+      const roles: Record<string, RepoNeed[]> = {
+        [s.owner.id]: ["read", "contribute", "review", "approve", "admin"],
+        [maint.id]: ["read", "contribute", "review", "approve"],
+        [s.reviewer.id]: ["read", "contribute", "review"],
+      };
+      const { access } = fakeAccess((actor, need) =>
+        roles[actor.id]?.includes(need) ? "allowed" : "denied",
+      );
+      access.humanMembers = async () => humans;
+      return { s, change, maint, c: guarded(s, access) };
+    }
+
+    it("a reviewer-role human can't approve a policy change; rejecting it is still fine", async () => {
+      const { s, change, c } = await world(3);
+      expect(await code(c.submitReview(s.reviewer, change.id, { decision: "approve" }))).toBe(
+        "forbidden",
+      );
+      expect(s.ports.store.reviews.size).toBe(0);
+      await c.submitReview(s.reviewer, change.id, { decision: "request-changes" });
+      expect(s.ports.store.reviews.size).toBe(1);
+    });
+
+    it("the owner of the authoring agent can't approve it while the repo has other humans; another maintainer can", async () => {
+      const { s, change, maint, c } = await world(3);
+      expect(await code(c.submitReview(s.owner, change.id, { decision: "approve" }))).toBe(
+        "self-approval",
+      );
+      await c.submitReview(maint, change.id, { decision: "approve" });
+      expect(s.ports.audit.payloadOf("change.reviewed")).toMatchObject({
+        approvedByAgentOwner: false,
+        requiresHumanApproval: true,
+      });
+    });
+
+    it("a solo project's only human may approve their own agent's policy change (recorded)", async () => {
+      const { s, change, c } = await world(1);
+      await c.submitReview(s.owner, change.id, { decision: "approve" });
+      expect(s.ports.audit.payloadOf("change.reviewed")).toMatchObject({
+        approvedByAgentOwner: true,
+        requiresHumanApproval: true,
+        soloOwnerApprovedOwnAgentPolicy: true,
+      });
+    });
+  });
 });
