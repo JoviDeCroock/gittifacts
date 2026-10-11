@@ -63,8 +63,11 @@
   flex-direction: column;
   animation: palette-in var(--dur-view) var(--ease-expo);
 }
+/* The full scrim and the allowed 4px blur: the page recedes, so the sheet separates from it. */
 .palette::backdrop {
-  background: color-mix(in oklch, var(--backdrop) 60%, transparent);
+  background: var(--backdrop);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 .palette[open]::backdrop {
   animation: scrim-in var(--dur-view) var(--ease-out);
@@ -207,6 +210,22 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Object rows (a change, a plan, an agent): the title, then where it lives and its state. */
+.palette__label--object {
+  display: grid;
+  padding-block: 6px;
+  white-space: normal;
+}
+.palette__name,
+.palette__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette__meta {
+  color: var(--text-3);
+  font-size: var(--text-meta);
 }
 .palette__tool {
   flex: none;

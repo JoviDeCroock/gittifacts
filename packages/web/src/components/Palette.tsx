@@ -3,13 +3,29 @@
  *
  * Two hands. "Do it myself" runs the command. "Hand to an agent" copies the agent twin, the MCP
  * call (Enter) or CLI command (Shift+Enter), and lists the acts a product rule keeps human with
- * that rule, so delegating never guesses at what an agent may do.
+ * that rule, so delegating never guesses at what an agent may do. Typing also finds the objects
+ * themselves (changes, plans, agents), fetched once per opening.
  */
 import { signal, useComputed, useSignal } from "@preact/signals";
 import { useLocation } from "preact-iso";
 import { useEffect, useRef } from "preact/hooks";
+import { api } from "../api/client.js";
+import { oauthApi } from "../api/oauth.js";
 import { cliCommand } from "../lib/cli.js";
-import { type Command, cliArgs, commandsFor, forMode, match, mcpText, type Mode, type RepoRef } from "../lib/commands.js";
+import {
+  type Command,
+  cliArgs,
+  commandsFor,
+  contextOf,
+  forMode,
+  jumpCommand,
+  match,
+  mcpText,
+  type Mode,
+  objectCommands,
+  type PaletteObjects,
+  type RepoRef,
+} from "../lib/commands.js";
 import { prefersReducedMotion } from "../state/media.js";
 import { themePref } from "../state/prefs.js";
 import { Icon } from "./Icon.js";
@@ -17,6 +33,40 @@ import { Icon } from "./Icon.js";
 export const paletteOpen = signal(false);
 /** Repos the sidebar already loaded; the palette lists them as places. */
 export const paletteRepos = signal<RepoRef[]>([]);
+/** The query the palette opens with (a not-found screen hands over what the address asked for). */
+const openingQuery = signal("");
+
+/** Opens the palette, optionally with a query already typed. */
+export function openPalette(query = ""): void {
+  openingQuery.value = query;
+  paletteOpen.value = true;
+}
+
+const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
+const ENDED = new Set(["merged", "released", "reverted", "rejected", "abandoned"]);
+/** Enough repos to cover a team's; the rest stay reachable by name or a pasted id. */
+const MAX_REPOS = 12;
+
+/**
+ * Open changes and live plans in your repos, and your agents: the lists the repo and agents
+ * screens already read. Each source may fail on its own; the palette shows what came back.
+ */
+async function loadObjects(): Promise<PaletteObjects> {
+  const repos = paletteRepos.value.length > 0 ? paletteRepos.value : (await api.repos().catch(() => ({ repos: [] }))).repos;
+  const ids = repos.slice(0, MAX_REPOS).map((r) => r.id);
+  const [changes, plans, sessions] = await Promise.all([
+    Promise.allSettled(ids.map((id) => api.changes(id))),
+    Promise.allSettled(ids.map((id) => api.repoPlans(id))),
+    oauthApi.sessions().catch(() => ({ sessions: [] })),
+  ]);
+  const ok = <T,>(r: PromiseSettledResult<T>[]): T[] => r.flatMap((x) => (x.status === "fulfilled" ? [x.value] : []));
+  return {
+    changes: ok(changes).flatMap((r) => r.changes).filter((c) => !ENDED.has(c.status)).map((c) => ({ id: c.id, title: c.title, repoId: c.repoId, status: c.status })),
+    plans: ok(plans).flatMap((r) => r.plans).filter((p) => p.status === "draft" || p.status === "approved").map((p) => ({ id: p.id, title: p.title, repoId: p.repoId, status: p.status })),
+    agents: sessions.sessions.filter((a) => a.status === "active").map((a) => ({ id: a.principalId, name: a.name })),
+  };
+}
 
 const MODE_KEY = "gf:palette-mode";
 function readMode(): Mode {
@@ -58,7 +108,7 @@ export function usePaletteShortcut(): void {
 
 /** The trigger in the sidebar and the phone top bar. */
 export function PaletteButton({ compact = false }: { compact?: boolean }) {
-  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+  const mac = isMac();
   if (compact) {
     return (
       <button type="button" class="icon-btn" aria-label="Search, act or hand to an agent" aria-haspopup="dialog" onClick={() => (paletteOpen.value = true)} data-testid="palette-open">
@@ -99,8 +149,8 @@ function TwinPane({ cmd, copied, onCopy }: { cmd: Command | null; copied: string
   if (!cmd.twin) {
     return (
       <div class="palette__twin palette__twin--person" data-testid="palette-twin">
-        <Icon name="shield-check" size={16} />
-        <p>{cmd.personOnly ?? "No agent equivalent yet."}</p>
+        <Icon name={cmd.personOnly ? "shield-check" : "info"} size={16} />
+        <p>{cmd.personOnly ?? cmd.twinless ?? "No agent equivalent yet."}</p>
       </div>
     );
   }
@@ -136,10 +186,22 @@ export function Palette() {
   const copied = useSignal<"mcp" | "cli" | null>(null);
   const status = useSignal("");
   const closing = useSignal(false);
+  const objects = useSignal<PaletteObjects>({ changes: [], plans: [], agents: [] });
   /** Closing because a command navigated: focus goes to the new page, not back to the trigger. */
   const focusMain = useRef(false);
+  const modes = useRef<HTMLDivElement>(null);
 
-  const list = useComputed(() => match(forMode(commandsFor(path, paletteRepos.value), mode.value, path), query.value));
+  const list = useComputed(() => {
+    const ctx = contextOf(path);
+    const here = ctx?.kind === "change" ? { status: objects.value.changes.find((c) => c.id === ctx.id)?.status } : {};
+    const cmds = commandsFor(path, paletteRepos.value, here);
+    // Objects only while typing: unasked, they would bury the commands for the screen in view.
+    if (query.value.trim()) {
+      const jump = jumpCommand(query.value, window.location.origin);
+      cmds.push(...(jump ? [jump] : []), ...objectCommands(objects.value, paletteRepos.value));
+    }
+    return match(forMode(cmds, mode.value, path), query.value);
+  });
   const items = list.value;
   const current = items[Math.min(active.value, items.length - 1)] ?? null;
 
@@ -147,12 +209,15 @@ export function Palette() {
     const d = ref.current;
     if (!d) return;
     if (paletteOpen.value && !d.open) {
-      query.value = "";
+      query.value = openingQuery.value;
+      openingQuery.value = "";
       active.value = 0;
       copied.value = null;
       status.value = "";
       d.showModal();
       input.current?.focus();
+      input.current?.select();
+      void loadObjects().then((o) => (objects.value = o));
     } else if (!paletteOpen.value && d.open && !closing.value) {
       closing.value = true;
       const done = () => {
@@ -188,9 +253,15 @@ export function Palette() {
     status.value = ok ? `Copied the ${kind === "mcp" ? "MCP call" : "CLI command"}. Paste it to your agent.` : "Couldn't copy. Select the text and copy it.";
   }
 
+  /** Why this row can't go to an agent: its rule or reason, said in the status line. */
+  function noTwin(cmd: Command) {
+    status.value = cmd.personOnly ?? cmd.twinless ?? "No agent equivalent yet.";
+  }
+
   function run(cmd: Command, shift = false) {
     if (mode.value === "agent") {
       if (cmd.twin) void handOff(cmd, shift ? "cli" : "mcp");
+      else noTwin(cmd);
       return;
     }
     const act = cmd.act;
@@ -211,13 +282,22 @@ export function Palette() {
     }
   }
 
-  function setMode(m: Mode) {
+  function setMode(m: Mode, focus: "input" | "radio" = "input") {
     mode.value = m;
     writeMode(m);
     active.value = 0;
     copied.value = null;
     status.value = "";
-    input.current?.focus();
+    if (focus === "input") input.current?.focus();
+    else modes.current?.querySelector<HTMLButtonElement>(`[data-testid="palette-mode-${m}"]`)?.focus();
+  }
+
+  /** The two hands are a radio group: one Tab stop, arrows move the choice. */
+  function onModeKey(e: KeyboardEvent) {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) return;
+    e.preventDefault();
+    const next: Mode = e.key === "Home" ? "me" : e.key === "End" ? "agent" : mode.value === "me" ? "agent" : "me";
+    setMode(next, "radio");
   }
 
   function onKeyDown(e: KeyboardEvent) {
@@ -228,11 +308,17 @@ export function Palette() {
     } else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) {
       e.preventDefault();
       active.value = n ? (active.value - 1 + n) % n : 0;
+    } else if (e.altKey && (e.code === "KeyA" || e.key.toLowerCase() === "a")) {
+      // Alt+A flips the hand without leaving the query.
+      e.preventDefault();
+      setMode(mode.value === "me" ? "agent" : "me");
     } else if (e.key === "Enter" && current) {
       e.preventDefault();
-      // ⌘/Ctrl+Enter hands any command to an agent without switching modes.
-      if ((e.metaKey || e.ctrlKey) && current.twin) void handOff(current, e.shiftKey ? "cli" : "mcp");
-      else run(current, e.shiftKey);
+      // ⌘/Ctrl+Enter hands any command to an agent without switching modes; it never runs one.
+      if (e.metaKey || e.ctrlKey) {
+        if (current.twin) void handOff(current, e.shiftKey ? "cli" : "mcp");
+        else noTwin(current);
+      } else run(current, e.shiftKey);
     }
   }
 
@@ -271,9 +357,19 @@ export function Palette() {
           autocomplete="off"
           spellcheck={false}
         />
-        <div class="palette__modes" role="radiogroup" aria-label="Who does it">
+        <div class="palette__modes" role="radiogroup" aria-label="Who does it" ref={modes} title="Alt+A switches">
           {(["me", "agent"] as const).map((m) => (
-            <button key={m} type="button" role="radio" aria-checked={mode.value === m} class="palette__mode" onClick={() => setMode(m)} data-testid={`palette-mode-${m}`}>
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={mode.value === m}
+              tabIndex={mode.value === m ? 0 : -1}
+              class="palette__mode"
+              onClick={() => setMode(m)}
+              onKeyDown={onModeKey}
+              data-testid={`palette-mode-${m}`}
+            >
               <Icon name={m === "me" ? "user" : "bot"} size={15} />
               <span>{m === "me" ? "Myself" : "An agent"}</span>
             </button>
@@ -305,9 +401,22 @@ export function Palette() {
               onClick={() => ((active.value = i), run(c))}
             >
               <Icon name={c.icon} size={17} />
-              <span class="palette__label">{c.label}</span>
+              {c.meta ? (
+                <span class="palette__label palette__label--object">
+                  <span class="palette__name">{c.label}</span>
+                  <span class="palette__meta">{c.meta}</span>
+                </span>
+              ) : (
+                <span class="palette__label">{c.label}</span>
+              )}
               {agent ? (
-                c.twin ? <code class="palette__tool">{c.twin.tool}</code> : <span class="palette__person"><Icon name="lock" size={13} /> Only a person</span>
+                c.twin ? (
+                  <code class="palette__tool">{c.twin.tool}</code>
+                ) : c.personOnly ? (
+                  <span class="palette__person"><Icon name="lock" size={13} /> Only a person</span>
+                ) : (
+                  <span class="palette__person">No agent tool</span>
+                )
               ) : c.keys ? (
                 <span class="palette__keys">{c.keys.map((k) => <kbd key={k} class="kbd">{k}</kbd>)}</span>
               ) : null}
@@ -318,7 +427,7 @@ export function Palette() {
       {agent ? <TwinPane cmd={current} copied={copied.value} onCopy={(k) => current && void handOff(current, k)} /> : null}
       <p class="palette__foot">
         <span class="sr-only" role="status">{status.value}</span>
-        <span aria-hidden="true">{status.value || (agent ? "↵ copy MCP call · ⇧↵ copy CLI · esc close" : "↵ run · ⌘↵ copy for an agent · esc close")}</span>
+        <span aria-hidden="true">{status.value || (agent ? "↵ copy MCP call · ⇧↵ copy CLI · alt A myself · esc close" : `↵ run · ${isMac() ? "⌘↵" : "Ctrl ↵"} copy for an agent · alt A switch · esc close`)}</span>
       </p>
     </dialog>
   );

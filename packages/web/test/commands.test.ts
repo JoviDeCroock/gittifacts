@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { type Command, cliArgs, commandsFor, contextOf, forMode, match, mcpText } from "../src/lib/commands.js";
+import { type Command, cliArgs, commandsFor, contextOf, forMode, jumpCommand, match, mcpText, objectCommands } from "../src/lib/commands.js";
 
 /** Input schemas from the generated MCP contract snapshot (`pnpm --filter @app/mcp snapshot`). */
 function contractInputs(): Map<string, { properties: Record<string, unknown>; required: string[] }> {
@@ -28,9 +28,19 @@ function contractInputs(): Map<string, { properties: Record<string, unknown>; re
 }
 
 const TOOLS = contractInputs();
-const REPOS = [{ id: "repo_billing", name: "billing-api" }];
-const PATHS = ["/dashboard", "/repos/repo_billing", "/repos/repo_billing/queue", "/repos/repo_billing/mission", "/plans/plan_1", "/changes/chg_1", "/changes/chg_1/evidence", "/changes/chg_1/rollout", "/agents"];
-const every: Command[] = PATHS.flatMap((p) => commandsFor(p, REPOS));
+const REPOS = [{ id: "repo_billing", name: "billing-api" }, { id: "gh-1", name: "acme/web", hosted: true }];
+const PATHS = ["/dashboard", "/repos/repo_billing", "/repos/repo_billing/queue", "/repos/repo_billing/members", "/repos/repo_billing/mission", "/repos/gh-1", "/plans/plan_1", "/changes/chg_1", "/changes/chg_1/evidence", "/changes/chg_1/rollout", "/agents", "/audit"];
+const OBJECTS = {
+  changes: [{ id: "chg_fx2r7", title: "Jittered backoff for webhook retries", repoId: "repo_billing", status: "awaiting-review" }],
+  plans: [{ id: "plan_tz", title: "Store timestamps in UTC", repoId: "repo_billing", status: "draft" }],
+  agents: [{ id: "prn_coder07", name: "fleet-coder-07" }],
+};
+const every: Command[] = [
+  ...PATHS.flatMap((p) => commandsFor(p, REPOS)),
+  ...commandsFor("/changes/chg_1", REPOS, { status: "queued" }),
+  ...objectCommands(OBJECTS, REPOS),
+  ...["chg_1", "plan_1", "repo_billing", "/audit"].flatMap((q) => jumpCommand(q, "https://x.test") ?? []),
+];
 
 describe("agent twins", () => {
   it("read the contract snapshot", () => {
@@ -51,11 +61,15 @@ describe("agent twins", () => {
     if (twin.positional) expect(Object.keys(twin.args)).toContain(twin.positional);
   });
 
+  // The Twin Rule (DESIGN.md, Palette): a twin, a person-only rule, or a reason there is none.
+  it.each(every.map((c) => [c.id, c] as const))("%s has exactly one of a twin, a person-only rule or a twinless reason", (_id, c) => {
+    const said = [c.twin !== null, c.personOnly !== undefined, c.twinless !== undefined].filter(Boolean).length;
+    expect(said, `${c.id}: give it a twin, a personOnly rule or a twinless reason (exactly one)`).toBe(1);
+    // A person-only row without an act (no screen does it yet) still shows the boundary to agents.
+    expect(c.act !== null || c.twin !== null || c.personOnly !== undefined, `${c.id} does nothing for anyone`).toBe(true);
+  });
+
   it("never offers a twin for an act a product rule keeps human", () => {
-    for (const c of every) {
-      if (c.personOnly) expect(c.twin, `${c.id} is person-only but has a twin`).toBeNull();
-      expect(c.act !== null || c.twin !== null || c.personOnly !== undefined, `${c.id} does nothing`).toBe(true);
-    }
     const approve = every.find((c) => c.id === "change.approve");
     expect(approve?.personOnly).toMatch(/person/i);
     expect(every.find((c) => c.id === "plan.approve")?.twin).toBeNull();
@@ -63,6 +77,31 @@ describe("agent twins", () => {
     // Picking an attempt approves it: person-only; comparing them is an agent's read.
     expect(every.find((c) => c.id === "plan.pick")).toMatchObject({ twin: null, personOnly: expect.stringMatching(/person/i) });
     expect(every.find((c) => c.id === "plan.attempts")?.twin).toMatchObject({ tool: "compare_attempts", args: { planId: "plan_1" } });
+    for (const id of ["go.agents", "agents.add", "agents.revoke", "repo.membership", "repo.lane0", "queue.freeze", "plan.reject"]) {
+      expect(every.find((c) => c.id === id)?.personOnly, `${id} is a person's act`).toMatch(/person/i);
+    }
+  });
+
+  it("names the walkthrough's own tool, and the agent's hand-offs on a change", () => {
+    const cmds = commandsFor("/changes/chg_1", REPOS);
+    expect(cmds.find((c) => c.id === "change.tour")?.twin?.tool).toBe("get_tour");
+    for (const tool of ["request_review", "close_change", "queue_status", "get_qa", "get_change_status"]) expect(cmds.map((c) => c.twin?.tool)).toContain(tool);
+    expect(cmds.map((c) => c.id)).not.toContain("change.dequeue");
+    expect(commandsFor("/changes/chg_1", REPOS, { status: "queued" }).find((c) => c.id === "change.dequeue")?.twin?.tool).toBe("dequeue");
+    expect(commandsFor("/changes/chg_1/rollout", REPOS).find((c) => c.id === "change.issues")?.twin?.tool).toBe("list_issues_for_change");
+    expect(cmds.find((c) => c.id === "change.rollout")?.twin?.tool).toBe("get_rollout");
+    expect(commandsFor("/dashboard", REPOS).find((c) => c.id === "go.audit")?.twin?.tool).toBe("list_audit_events");
+  });
+
+  it("lets a person reach plan approval from the palette, which signs nothing itself", () => {
+    const me = forMode(commandsFor("/plans/plan_1", REPOS), "me", "/plans/plan_1");
+    expect(me.find((c) => c.id === "plan.approve")?.act).toEqual({ kind: "go", href: "/plans/plan_1#sign" });
+    expect(me.find((c) => c.id === "plan.reject")?.act).toEqual({ kind: "go", href: "/plans/plan_1#sign" });
+  });
+
+  it("offers no merge queue on a GitHub-mode repo (GitHub merges)", () => {
+    expect(commandsFor("/repos/gh-1", REPOS).map((c) => c.id)).not.toContain("repo.queue");
+    expect(commandsFor("/repos/repo_billing", REPOS).map((c) => c.id)).toContain("repo.queue");
   });
 });
 
@@ -79,6 +118,10 @@ describe("modes", () => {
     expect(agent.map((c) => c.id)).toContain("change.rerun");
     expect(agent.map((c) => c.id)).toContain("change.approve");
     expect(agent.map((c) => c.id)).not.toContain("theme.dark");
+    expect(agent.map((c) => c.id)).not.toContain("change.next-stop");
+    // Places no tool reads yet stay listed, with the reason, instead of vanishing.
+    const audit = forMode(commandsFor("/dashboard", REPOS), "agent", "/dashboard").find((c) => c.id === "go.audit");
+    expect(audit?.twin ?? audit?.twinless).toBeTruthy();
   });
 });
 
@@ -100,7 +143,24 @@ describe("text", () => {
 
   it("reads the object in view from the path", () => {
     expect(contextOf("/changes/c%201/rollout")).toEqual({ kind: "change", id: "c 1", sub: "rollout" });
-    expect(contextOf("/repos/r1/queue")).toEqual({ kind: "repo", id: "r1" });
-    expect(contextOf("/audit")).toBeNull();
+    expect(contextOf("/repos/r1/queue")).toEqual({ kind: "repo", id: "r1", sub: "queue" });
+    expect(contextOf("/audit")).toEqual({ kind: "audit" });
+    expect(contextOf("/settings/integrations")).toBeNull();
+  });
+
+  it("finds changes, plans and agents by title or id, with one heading per group", () => {
+    const cmds = [...commandsFor("/dashboard", REPOS), ...objectCommands(OBJECTS, REPOS)];
+    expect(match(cmds, "jittered backoff")[0]?.id).toBe("open.change.chg_fx2r7");
+    expect(match(cmds, "chg_fx2r7")[0]?.id).toBe("open.change.chg_fx2r7");
+    expect(match(cmds, "utc")[0]?.id).toBe("open.plan.plan_tz");
+    expect(match(cmds, "fleet-coder")[0]?.id).toBe("open.agent.prn_coder07");
+    const groups = match(cmds, "a").map((c) => c.group);
+    expect(groups.filter((g, i) => g !== groups[i - 1])).toEqual([...new Set(groups)]);
+  });
+
+  it("jumps to a pasted id or app address", () => {
+    expect(jumpCommand("chg_zz9", "https://x.test")?.act).toEqual({ kind: "go", href: "/changes/chg_zz9" });
+    expect(jumpCommand("https://x.test/plans/plan_1#sign", "https://x.test")?.act).toEqual({ kind: "go", href: "/plans/plan_1#sign" });
+    expect(jumpCommand("backoff", "https://x.test")).toBeNull();
   });
 });
