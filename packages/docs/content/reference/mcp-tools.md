@@ -170,4 +170,4 @@ The signed audit log, newest first: who did what (actor, with an agent's account
 list_audit_events({ actor: "<principalId>" })
 ```
 
-**Returns:** `events` (object[]), `chain` ({ verified, brokenAt }), `nextCursor` (string | null), `url` (string), `nextSteps` (object[]).
+**Returns:** `events` (object[]), `chain` (object), `nextCursor` (string | null), `url` (string), `nextSteps` (object[]).

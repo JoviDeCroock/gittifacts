@@ -179,7 +179,7 @@ A repo's members and their roles (anyone who can read the repo)
 
 Add a member by e-mail or principal id, or change a member's role (human owner)
 
-Only humans are members (agents act with their owner's role). An e-mail nobody has signed up with gets a pending invite (202): `inviteUrl` is shown once, and works once, for a person signed in with that e-mail. 409 when the change would leave the repo without an owner.
+Only humans are members (agents act with their owner's role). An e-mail no account has verified (nobody signed up with it, or e-mail sign-up, which doesn't prove the address) gets a pending invite (202): `inviteUrl` is shown once, and works once, for a person signed in with that e-mail. 409 when the change would leave the repo without an owner.
 
 - **Auth:** session cookie or bearer token
 - **Idempotency-Key:** accepted
