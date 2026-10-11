@@ -14,9 +14,12 @@
  * Like evidence notes, the LAST complete JSON document in a note is authoritative.
  */
 import { z } from "zod";
-import { stableStringify } from "./canonical.js";
-import { EvidenceNoteError, splitNoteDocuments } from "./notes.js";
-import { Sha } from "./schema.js";
+import { documentSigningBytes, type VerifyFailureReason, verifyDocument } from "./attest.js";
+import { CanonicalizationError, stableStringify } from "./canonical.js";
+import { sha256Base64url } from "./encoding.js";
+import type { KeySet } from "./keys.js";
+import { EvidenceNoteError, lastNoteDocument, splitNoteDocuments } from "./notes.js";
+import { type DocumentSignature, Sha } from "./schema.js";
 
 export const WHY_NOTES_REF = "refs/notes/why";
 export const WHY_NOTE_FORMAT = "gittifacts.why/v1";
@@ -157,4 +160,104 @@ export function decodeWhyNote(text: string): WhyNote {
 export function whySigningRecord(note: WhyNote): WhyRecord {
   const { attestation: _, ...record } = note;
   return record;
+}
+
+// --------------------------------------------------------------------------- verify
+
+export type WhyVerifyFailureReason = VerifyFailureReason | "bad-note" | "commit-mismatch";
+
+export type WhyVerifyResult =
+  | {
+      ok: true;
+      note: WhyNote;
+      keyId: string;
+      keyName?: string;
+      /** False when no commit was given, so `landedSha` was not compared with anything. */
+      bindingChecked: boolean;
+    }
+  | {
+      ok: false;
+      reason: WhyVerifyFailureReason;
+      detail: string;
+      /** The schema-valid note, when it got that far (for display only: it is not trusted). */
+      note?: WhyNote;
+    };
+
+/**
+ * Verify a `refs/notes/why` note's text. Never throws for bad input.
+ *
+ * - The LAST complete JSON document is authoritative (an appended forgery fails the commit).
+ * - It must be a valid `gittifacts.why/v1` note signed with purpose `gittifacts/document`.
+ * - The signature is checked over the stored document minus `attestation`, as given (not the
+ *   schema-stripped copy), so a field injected after signing fails like an edited one.
+ * - `landedAt` is the signing time the note claims; it is only used to apply a key's `notAfter`.
+ * - With `opts.commit`, `landedSha` must name that commit (a note copied elsewhere fails).
+ */
+export async function verifyWhyNote(
+  text: string,
+  keys: KeySet | string,
+  opts: { commit?: string } = {},
+): Promise<WhyVerifyResult> {
+  let doc: unknown;
+  try {
+    doc = lastNoteDocument(text);
+  } catch (e) {
+    if (!(e instanceof EvidenceNoteError)) throw e;
+    return { ok: false, reason: "bad-note", detail: e.message };
+  }
+  const parsed = WhyNote.safeParse(doc);
+  if (!parsed.success) {
+    const issues = issuesOf(parsed.error).slice(0, 5);
+    return {
+      ok: false,
+      reason: "schema",
+      detail: `not a ${WHY_NOTE_FORMAT} note: ${issues.join("; ")}`,
+    };
+  }
+  const note = parsed.data;
+  const { attestation: _, ...record } = doc as Record<string, unknown>;
+  const { purpose } = note.attestation;
+  let bytes: Uint8Array;
+  try {
+    bytes = documentSigningBytes(record, purpose);
+  } catch (e) {
+    if (!(e instanceof CanonicalizationError)) throw e;
+    return { ok: false, reason: "schema", detail: `not canonicalizable: ${e.message}`, note };
+  }
+  if (Number.isNaN(Date.parse(note.landedAt))) {
+    return {
+      ok: false,
+      reason: "schema",
+      detail: `landedAt is not a date: ${note.landedAt}`,
+      note,
+    };
+  }
+  const sig: DocumentSignature = {
+    v: 1,
+    alg: "Ed25519",
+    keyId: note.attestation.keyId,
+    payloadDigest: await sha256Base64url(bytes),
+    signature: note.attestation.signature,
+    signedAt: new Date(note.landedAt).toISOString(),
+    signer: "gittifacts",
+    purpose,
+  };
+  const r = await verifyDocument(record, sig, keys, { purpose: WHY_SIGNATURE_PURPOSE });
+  if (!r.ok) return { ok: false, reason: r.reason, detail: r.detail, note };
+  if (opts.commit !== undefined && note.landedSha !== opts.commit) {
+    return {
+      ok: false,
+      reason: "commit-mismatch",
+      detail: `note says it landed as ${note.landedSha}, not ${opts.commit}`,
+      note,
+    };
+  }
+  const ok: WhyVerifyResult = {
+    ok: true,
+    note,
+    keyId: r.keyId,
+    bindingChecked: opts.commit !== undefined,
+  };
+  if (r.keyName !== undefined) ok.keyName = r.keyName;
+  return ok;
 }
