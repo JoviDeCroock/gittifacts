@@ -79,8 +79,33 @@
     margin-block: -12px;
   }
 }
-.plan-mini .tone {
+/* Status in ink: green is a verdict, not a label (finding 20). */
+.plan-mini__note {
   font-size: var(--text-meta);
+  color: var(--text-3);
+}
+.plan-mini + .plan-mini {
+  margin-block-start: var(--s-3);
+  padding-block-start: var(--s-3);
+  border-block-start: 1px solid var(--rule);
+}
+.plan-done {
+  margin-block-start: var(--s-3);
+  border-block-start: 1px solid var(--rule);
+}
+.plan-done > summary {
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.plan-done__count {
+  color: var(--text-3);
+  font-weight: var(--weight-regular);
+}
+.plan-done > summary .disclosure__chev {
+  margin-inline-start: auto;
+}
+.plan-done > .plan-mini {
+  padding-block-end: var(--s-2);
 }
 
 /* Plans awaiting approval */

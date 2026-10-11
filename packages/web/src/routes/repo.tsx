@@ -1,13 +1,14 @@
 import { useSignal } from "@preact/signals";
 import { useLocation } from "preact-iso";
 import { api, inlineError, newIdempotencyKey } from "../api/client.js";
-import type { ChangeSummary, Plan, RepoDetail } from "../api/types.js";
+import type { ChangeSummary, Plan, PrincipalRef, RepoDetail } from "../api/types.js";
 import { BacktestCard } from "../components/BacktestCard.js";
 import { Icon } from "../components/Icon.js";
+import { paletteRepos } from "../components/Palette.js";
 import { Page } from "../components/Shell.js";
 import { Button, EmptyState, ErrorState, LaneTag, LinkButton, Loading, Segmented, StatusChip, Who } from "../components/ui.js";
 import { type ChangeFilter, FILTERS, LANES, type LaneGroup, groupByLane, matchesFilter, topReason } from "../lib/lanes.js";
-import { shortAge } from "../lib/time.js";
+import { relative, shortAge } from "../lib/time.js";
 import { CATEGORY_LABEL, CHANGE_STATUS, PLAN_STATUS, plural } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
 import { useResource } from "../state/resource.js";
@@ -90,24 +91,46 @@ function LaneSection({ group, now, showStatus }: { group: LaneGroup<ChangeSummar
   );
 }
 
-function PlanRow({ plan, now }: { plan: Plan; now: number }) {
+/**
+ * A plan waiting for approval. The heading above already says it waits, so the row says who
+ * drafted it (an agent's square, a person's circle) and for how long.
+ */
+function PlanRow({ plan, author, now }: { plan: Plan; author: PrincipalRef | null; now: number }) {
   return (
     <li>
       <a class="plan-row" href={`/plans/${plan.id}`}>
         <Icon name="file-text" size={20} class="plan-row__icon" />
         <span class="plan-row__title">{plan.title}</span>
         <span class="plan-row__meta">
-          <StatusChip meta={PLAN_STATUS[plan.status]} />
+          {author ? <Who kind={author.kind} name={author.name} owner={author.ownerName ?? null} size={20} /> : null}
           <span>
             {plural(plan.acceptanceCriteria.length, "criterion", "criteria")} · {plural(plan.scopePaths.length, "scope path")}
           </span>
-          <time class="tnum" dateTime={plan.createdAt}>
-            {shortAge(plan.createdAt, now)}
-          </time>
+          <span>
+            waiting <time dateTime={plan.createdAt}>{relative(plan.createdAt, now).replace(/ ago$/, "")}</time>
+          </span>
         </span>
       </a>
     </li>
   );
+}
+
+/** Who drafted each plan (an agent with its person); the change list stands in if a lookup fails. */
+function useAuthors(plans: Plan[], changes: ChangeSummary[]): Map<string, PrincipalRef> {
+  const ids = [...new Set(plans.map((p) => p.authorId))].sort();
+  const res = useResource(
+    () =>
+      Promise.all(
+        ids.map(async (id): Promise<PrincipalRef | null> => {
+          const c = changes.find((x) => x.authorId === id);
+          const fallback = c ? { id, kind: c.authorKind, name: c.authorName, ownerId: null } : null;
+          return api.principal(id).then((r) => r.principal, () => fallback);
+        }),
+      ),
+    [ids.join(",")],
+  );
+  const st = res.state.value;
+  return new Map(st.status === "ok" ? st.data.filter((p): p is PrincipalRef => p !== null).map((p) => [p.id, p]) : []);
 }
 
 function Lane0Control({ detail, onChange }: { detail: RepoDetail; onChange: (d: RepoDetail) => void }) {
@@ -173,6 +196,53 @@ function Lane0Control({ detail, onChange }: { detail: RepoDetail; onChange: (d: 
   );
 }
 
+interface RailPlan {
+  plan: Plan;
+  /** What the side rail says about it, in ink: "2 changes open", "Ready: no changes yet", "Superseded". */
+  note: string;
+}
+
+const OPEN_CHANGE: ReadonlySet<ChangeSummary["status"]> = new Set(["awaiting-push", "running", "failing", "awaiting-review", "approved", "queued", "merged", "rolling-out"]);
+
+/**
+ * The side rail puts plans with work in flight first, then approved plans nobody has started,
+ * and folds the finished and withdrawn ones away (finding 20: a wall of green said nothing).
+ * Drafts are listed above the changes instead.
+ */
+function planRail(plans: Plan[], changes: ChangeSummary[]): { open: RailPlan[]; ready: RailPlan[]; done: RailPlan[] } {
+  const open: RailPlan[] = [];
+  const ready: RailPlan[] = [];
+  const done: RailPlan[] = [];
+  for (const plan of plans) {
+    if (plan.status === "draft") continue;
+    if (plan.status !== "approved") {
+      done.push({ plan, note: PLAN_STATUS[plan.status].label });
+      continue;
+    }
+    const mine = changes.filter((c) => c.planId === plan.id);
+    const live = mine.filter((c) => OPEN_CHANGE.has(c.status));
+    const review = live.filter((c) => c.status === "awaiting-review").length;
+    if (live.length > 0) open.push({ plan, note: `${plural(live.length, "change")} open${review > 0 ? ` · ${review} to review` : ""}` });
+    else if (mine.length === 0) ready.push({ plan, note: "Approved, no changes yet" });
+    else done.push({ plan, note: `Done: ${plural(mine.length, "change")}` });
+  }
+  return { open, ready, done };
+}
+
+function PlanMini({ plans }: { plans: RailPlan[] }) {
+  if (plans.length === 0) return null;
+  return (
+    <ul class="plan-mini">
+      {plans.map(({ plan, note }) => (
+        <li key={plan.id}>
+          <a href={`/plans/${plan.id}`}>{plan.title}</a>
+          <span class="plan-mini__note">{note}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function RepoChanges({ repoId }: { repoId: string }) {
   const { query, route } = useLocation();
   const filter = (FILTERS.some((f) => f.id === query.filter) ? query.filter : "review") as ChangeFilter;
@@ -183,17 +253,41 @@ export function RepoChanges({ repoId }: { repoId: string }) {
   const plans = useResource(() => api.repoPlans(repoId), [repoId]);
   const st = res.state.value;
   const now = minuteClock.value;
+  const pl = plans.state.value;
+  const drafts = pl.status === "ok" ? pl.data.plans.filter((p) => p.status === "draft") : [];
+  const authors = useAuthors(drafts, st.status === "ok" ? st.data.changes : []);
+  // The sidebar already knows the name: no "Repository" flash while the rest loads.
+  const known = paletteRepos.value.find((r) => r.id === repoId)?.name ?? "Repository";
 
   if (st.status === "loading") {
+    // The frame the data will fill (filter, lane groups, the side rail), so nothing jumps.
     return (
-      <Page title="Repository" crumbs={[{ href: "/dashboard", label: "Dashboard" }]}>
-        <Loading label="Loading changes" lines={8} />
+      <Page title={known} wide crumbs={[{ href: "/dashboard", label: "Dashboard" }]}>
+        <div class="repo-layout">
+          <div class="repo-layout__main">
+            <section class="changes" aria-labelledby="changes-title">
+              <div class="changes__bar">
+                <h2 id="changes-title" class="changes__title">
+                  Changes
+                </h2>
+                <Segmented label="Filter changes" value={filter} options={FILTERS.map((f) => ({ id: f.id, label: f.label }))} onChange={() => undefined} />
+              </div>
+              <Loading label="Loading changes" lines={8} />
+            </section>
+          </div>
+          <aside class="repo-layout__side">
+            <section class="side-block" aria-label="Plans">
+              <h2 class="side-block__title">Plans</h2>
+              <Loading label="Loading plans" lines={3} />
+            </section>
+          </aside>
+        </div>
       </Page>
     );
   }
   if (st.status === "error") {
     return (
-      <Page title="Repository" crumbs={[{ href: "/dashboard", label: "Dashboard" }]}>
+      <Page title={known} crumbs={[{ href: "/dashboard", label: "Dashboard" }]}>
         <ErrorState error={st.error} what="this repository" onRetry={res.reload} />
       </Page>
     );
@@ -204,9 +298,7 @@ export function RepoChanges({ repoId }: { repoId: string }) {
   const counts = Object.fromEntries(FILTERS.map((f) => [f.id, changes.filter((c) => matchesFilter(c.status, f.id)).length])) as Record<ChangeFilter, number>;
   const visible = changes.filter((c) => matchesFilter(c.status, filter));
   const groups = groupByLane(visible, repo.policy.lane0Enabled);
-  const pl = plans.state.value;
-  const drafts = pl.status === "ok" ? pl.data.plans.filter((p) => p.status === "draft") : [];
-  const others = pl.status === "ok" ? pl.data.plans.filter((p) => p.status !== "draft") : [];
+  const rail = planRail(pl.status === "ok" ? pl.data.plans : [], changes);
 
   return (
     <Page
@@ -263,7 +355,7 @@ export function RepoChanges({ repoId }: { repoId: string }) {
               <p class="plans-waiting__lede">Agents cannot start work on a plan until a person other than its author approves it.</p>
               <ul class="plan-list">
                 {drafts.map((p) => (
-                  <PlanRow key={p.id} plan={p} now={now} />
+                  <PlanRow key={p.id} plan={p} author={authors.get(p.authorId) ?? null} now={now} />
                 ))}
               </ul>
             </section>
@@ -313,17 +405,23 @@ export function RepoChanges({ repoId }: { repoId: string }) {
             </h2>
             {pl.status === "loading" ? <Loading label="Loading plans" lines={3} /> : null}
             {pl.status === "error" ? <ErrorState error={pl.error} what="plans" onRetry={plans.reload} /> : null}
-            {pl.status === "ok" && others.length === 0 && drafts.length === 0 ? <p class="side-block__empty">No plans yet. Agents and people draft them through the API.</p> : null}
-            {pl.status === "ok" && others.length === 0 && drafts.length > 0 ? <p class="side-block__empty">No approved plans yet. {drafts.length === 1 ? "The plan" : "The plans"} waiting for approval {drafts.length === 1 ? "is" : "are"} listed above the changes.</p> : null}
-            {others.length > 0 ? (
-              <ul class="plan-mini">
-                {others.map((p) => (
-                  <li key={p.id}>
-                    <a href={`/plans/${p.id}`}>{p.title}</a>
-                    <span class={`tone tone--${PLAN_STATUS[p.status].tone}`}>{PLAN_STATUS[p.status].label}</span>
-                  </li>
-                ))}
-              </ul>
+            {pl.status === "ok" && rail.open.length + rail.ready.length + rail.done.length === 0 ? (
+              <p class="side-block__empty">
+                {drafts.length === 0
+                  ? "No plans yet. Agents and people draft them through the API."
+                  : `No approved plans yet. ${drafts.length === 1 ? "The plan" : "The plans"} waiting for approval ${drafts.length === 1 ? "is" : "are"} listed above the changes.`}
+              </p>
+            ) : null}
+            <PlanMini plans={rail.open} />
+            <PlanMini plans={rail.ready} />
+            {rail.done.length > 0 ? (
+              <details class="disclosure plan-done">
+                <summary>
+                  Done and withdrawn <span class="tnum plan-done__count">{rail.done.length}</span>
+                  <Icon name="chevron-down" size={18} class="disclosure__chev" />
+                </summary>
+                <PlanMini plans={rail.done} />
+              </details>
             ) : null}
           </section>
         </aside>
