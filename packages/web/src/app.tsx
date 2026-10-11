@@ -5,7 +5,7 @@ import { AppErrorBoundary } from "./components/AppErrorBoundary.js";
 import { Shell } from "./components/Shell.js";
 import { ShellFrame } from "./components/Skeleton.js";
 import { Loading } from "./components/ui.js";
-import { APP_HOME, isServerPath, postAuthTarget, signInHref } from "./lib/nav.js";
+import { APP_HOME, isServerPath, postAuthTarget, SPA_SCOPE, signInHref } from "./lib/nav.js";
 import { loadSession, session } from "./state/session.js";
 
 const SignIn = lazy(() => import("./routes/signin.js").then((m) => m.SignIn));
@@ -185,7 +185,7 @@ export function App() {
     void loadSession();
   }, []);
   return (
-    <LocationProvider>
+    <LocationProvider scope={SPA_SCOPE}>
       <Gate />
     </LocationProvider>
   );

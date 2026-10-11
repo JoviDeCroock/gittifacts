@@ -7,6 +7,8 @@ import type { Change, EvidenceResponse, RepoDetail } from "../api/types.js";
 import { RedGreenList, ShotPair, kindIcon } from "../components/EvidenceBits.js";
 import { Icon } from "../components/Icon.js";
 import { Page } from "../components/Shell.js";
+import { Term } from "../components/Term.js";
+import { TriageChart } from "../components/TriageChart.js";
 import { Command, CopyButton, ErrorState, Hash, Loading, Meter } from "../components/ui.js";
 import { compressLines } from "../lib/diff.js";
 import { itemAnchor, itemTitle, splitFailures, stripAnsi, summarize, unmeasuredEffect, verifyCommand } from "../lib/evidence.js";
@@ -36,7 +38,7 @@ function Attestation({ ev, change }: { ev: EvidenceResponse; change: Change }) {
           </h2>
           <p class="attest__line">
             {ok
-              ? `Every item below is covered by one Ed25519 signature from ${a.signer}, checked against the platform's published key.`
+              ? <>Every item below is covered by one Ed25519 signature (the <Term id="attestation">attestation</Term>) from {a.signer}, checked against the platform's published key.</>
               : `${ev.verification.reason ?? "The signature did not match."} The classifier treats every item as unknown, which escalates the lane.`}
           </p>
         </div>
@@ -684,6 +686,14 @@ export function EvidenceView({ changeId }: { changeId: string }) {
       <div class="ev-layout">
         <EvidenceIndex items={items} />
         <div class="ev-main">
+          {change.lane !== null && change.laneReasons.length > 0 ? (
+            <section class="ev-lane" aria-labelledby="ev-lane-title" data-testid="ev-lane">
+              <h2 id="ev-lane-title" class="ev-lane__title">
+                Why this <Term id="lane">review lane</Term>
+              </h2>
+              <TriageChart reasons={change.laneReasons} computedLane={change.computedLane} lane={change.lane} changeId={change.id} />
+            </section>
+          ) : null}
           <Attestation ev={ev} change={change} />
           {items.map((i) => (
             <ItemSection key={i.id} item={i} policy={repo.repo.policy} reasons={change.laneReasons} />

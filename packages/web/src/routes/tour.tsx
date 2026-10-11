@@ -20,11 +20,12 @@ import { Prose } from "../components/Prose.js";
 import { QaPanel } from "../components/QaPanel.js";
 import { ResolutionPanel } from "../components/ResolutionPanel.js";
 import { Page } from "../components/Shell.js";
+import { Term } from "../components/Term.js";
 import { TriageChart } from "../components/TriageChart.js";
 import { Button, ErrorState, LaneTag, Loading, StatusChip, VerdictBadge, VerdictMark, Who } from "../components/ui.js";
 import { findItem } from "../lib/evidence.js";
-import { LANES, noTourCopy, triageChart, unroutedCopy } from "../lib/lanes.js";
-import { relative, stepTime } from "../lib/time.js";
+import { type ChartRow, foldChart, LANES, noTourCopy, triageChart, unroutedCopy } from "../lib/lanes.js";
+import { relative, shortAge, stepTime } from "../lib/time.js";
 import { CATEGORY_LABEL, CHANGE_STATUS, plural, ROLLOUT_STATUS, STOP_KIND, shortSha, VERDICT } from "../lib/vocab.js";
 import { minuteClock } from "../state/clock.js";
 import { usePageCommands } from "../state/keys.js";
@@ -168,6 +169,12 @@ function StationStrip({ tour, current, onJump, resumeAt, onResume, announce, ine
 
 // ---------------------------------------------------------------- lane block
 
+/** "2 reasons · 13 passed": what sets the lane, then the checks folded under it. */
+function reasonCount(rows: ChartRow[]): string {
+  const { shown, passing } = foldChart(rows);
+  return [shown.length > 0 ? plural(shown.length, "reason") : null, passing.length > 0 ? `${passing.length} passed` : null].filter(Boolean).join(" · ");
+}
+
 function LaneBlock({ change, open, rail = false }: { change: Change; open: boolean; rail?: boolean }) {
   const chart = triageChart(change.laneReasons, change.computedLane, change.lane);
   if (change.lane === null) {
@@ -196,7 +203,10 @@ function LaneBlock({ change, open, rail = false }: { change: Change; open: boole
         <LaneTag lane={chart.routedLane} size="lg" />
         <div>
           <h2 class="lane-block__title" id={rail ? "lane-title-rail" : "lane-title"}>
-            {routed.name} <span class="lane-block__badge">({routed.badge})</span>
+            {routed.name}{" "}
+            <span class="lane-block__badge">
+              (<Term id="lane">{routed.badge}</Term>)
+            </span>
           </h2>
           <p class="lane-block__line lane-block__line--clamp" title={why.length > 160 ? why : undefined}>
             {why}
@@ -206,7 +216,7 @@ function LaneBlock({ change, open, rail = false }: { change: Change; open: boole
       <details class="disclosure lane-block__why" open={open}>
         <summary>
           Why {routed.name.toLowerCase()}
-          <span class="lane-block__n">{plural(chart.rows.length, "reason")}</span>
+          <span class="lane-block__n">{reasonCount(chart.rows)}</span>
           <Icon name="chevron-down" class="disclosure__chev" />
         </summary>
         <TriageChart reasons={change.laneReasons} computedLane={change.computedLane} lane={change.lane} changeId={change.id} />
@@ -917,6 +927,9 @@ function TourBody({ data, onChange }: { data: TourData; onChange: (c: Change) =>
 
           {tour ? (
             <>
+              <p class="tour__lede">
+                The <Term id="walkthrough">walkthrough</Term> takes you through this <Term id="change">Change</Term>, riskiest part first. Every stop cites its <Term id="evidence">evidence</Term>.
+              </p>
               <Handover tour={tour} reviewer={data.reviewer} />
               <ol class="stops has-current" ref={listRef}>
                 {tour.stops.map((s, i) => (

@@ -1318,3 +1318,10 @@ a.ctx-link:hover .ctx-link__value {
   font-size: var(--text-small);
   color: var(--text-2);
 }
+
+/* One line that names the day-one words before the handover (DESIGN.md, Term). */
+.tour__lede {
+  margin-block: 0 var(--s-4);
+  max-inline-size: var(--measure);
+  color: var(--text-2);
+}

@@ -3,6 +3,7 @@
  * Pure functions only.
  */
 import type { Change, ChangeStatus, Lane, LaneReason } from "@app/domain";
+import { groupLaneReasons } from "@app/domain/lane-reasons";
 import { LANE_LABELS, laneLabel, type LaneLabel } from "@app/domain/vocabulary";
 import type { ShadowStats } from "../api/types.js";
 
@@ -347,6 +348,19 @@ export function triageChart(reasons: LaneReason[], computed: Lane | null, routed
       };
     });
   return { rows, computedLane, routedLane, shadowRaised: routedLane > computedLane, shadowReason };
+}
+
+/**
+ * The chart's rows in reading order (groupLaneReasons): the reasons that set the lane, then the
+ * ones that raised it less far, and the checks that passed folded away. A measurement that is
+ * missing never folds into "passed", whatever lane it carries (the Unknown Is Not Green Rule).
+ */
+export function foldChart(rows: readonly ChartRow[]): { shown: ChartRow[]; passing: ChartRow[] } {
+  const byReason = new Map(rows.map((r) => [r.reason, r] as const));
+  const g = groupLaneReasons(rows.map((r) => r.reason));
+  const pick = (reasons: readonly LaneReason[]) => reasons.map((x) => byReason.get(x)).filter((r): r is ChartRow => r !== undefined);
+  const passed = pick(g.passing);
+  return { shown: [...pick(g.deciding), ...pick(g.raising), ...passed.filter((r) => r.unknown)], passing: passed.filter((r) => !r.unknown) };
 }
 
 // ---------------------------------------------------------------- shadow agreement

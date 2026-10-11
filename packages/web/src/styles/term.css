@@ -1,0 +1,56 @@
+/* ================================================================ term (DESIGN.md, Term)
+   A word with its hint: a dotted underline in the text's own ink (not teal: it is not the
+   primary action), and on a tap a paper card with the hint and the docs link. */
+.term {
+  display: inline;
+}
+.term__word {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--text-4);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.22em;
+  cursor: help;
+  transition: text-decoration-color var(--dur-feedback) var(--ease-out);
+}
+.term__word:hover,
+.term__word[aria-expanded="true"] {
+  text-decoration-color: currentColor;
+}
+.term__card {
+  /* The popover's UA box is centred in the viewport; Term.tsx places it under the word. */
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  max-inline-size: calc(100vw - 2 * var(--s-4));
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  color: var(--text);
+  font-size: var(--text-small);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-body);
+  letter-spacing: normal;
+  text-align: start;
+  text-transform: none;
+  white-space: normal;
+}
+.term__hint {
+  display: block;
+  color: var(--text-2);
+}
+.term__more {
+  display: inline-block;
+  margin-block-start: var(--s-1);
+  color: var(--action-ink);
+  font-weight: var(--weight-medium);
+}

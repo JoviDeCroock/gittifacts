@@ -1,6 +1,6 @@
 import type { Change, LaneReason } from "@app/domain";
 import { describe, expect, it } from "vitest";
-import { familyLabel, groupByLane, matchesFilter, noTourCopy, pct, reasonFamily, shadowProgress, triageChart, unroutedCopy } from "../src/lib/lanes.js";
+import { familyLabel, foldChart, groupByLane, matchesFilter, noTourCopy, pct, reasonFamily, shadowProgress, triageChart, unroutedCopy } from "../src/lib/lanes.js";
 
 type C = Pick<Change, "lane" | "computedLane" | "status" | "updatedAt"> & { id: string };
 const c = (id: string, lane: C["lane"], computedLane: C["computedLane"], status: C["status"] = "awaiting-review", updatedAt = "2026-10-01T10:00:00Z"): C => ({
@@ -202,5 +202,20 @@ describe("noTourCopy", () => {
       "No walkthrough: the reviewer agent could not write one",
     );
     expect(noTourCopy(ch("failing"), "failed").body).toMatch(/pushes a fix/);
+  });
+});
+
+describe("foldChart", () => {
+  const r = (code: string, lane: 0 | 1 | 2): LaneReason => ({ code, lane, message: code });
+  it("puts the deciding reasons first, then the raising ones, and folds the passing checks", () => {
+    const chart = triageChart([r("tests.passed", 0), r("scope.drift", 1), r("api.breaking", 2), r("coverage.ok", 0), r("deps.added", 2)], null, null);
+    const { shown, passing } = foldChart(chart.rows);
+    expect(shown.map((x) => x.reason.code)).toEqual(["api.breaking", "deps.added", "scope.drift"]);
+    expect(passing.map((x) => x.reason.code)).toEqual(["tests.passed", "coverage.ok"]);
+  });
+  it("never folds a missing measurement into passed", () => {
+    const { shown, passing } = foldChart(triageChart([r("coverage.missing", 0), r("tests.passed", 0)], null, null).rows);
+    expect(shown.map((x) => x.reason.code)).toEqual(["coverage.missing"]);
+    expect(passing.map((x) => x.reason.code)).toEqual(["tests.passed"]);
   });
 });

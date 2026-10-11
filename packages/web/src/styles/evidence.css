@@ -521,3 +521,15 @@
 .api-sig--after .api-sig__mark {
   color: var(--ok);
 }
+
+/* Why this lane, above the signature: the reasons that set it first, passing checks folded. */
+.ev-lane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-inline-size: 0;
+  gap: var(--s-3);
+  margin-block-end: var(--s-5);
+}
+.ev-lane__title {
+  font-size: var(--text-title);
+}

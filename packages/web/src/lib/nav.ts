@@ -23,6 +23,13 @@ export function isServerPath(path: string): boolean {
 }
 
 /**
+ * The router's scope: links it may handle in the page. A link to a server path (`/docs/…`,
+ * `/start`, `/`) is a full navigation, so in-app docs links (a term's "Read more") never land on
+ * the SPA's not-found screen.
+ */
+export const SPA_SCOPE = new RegExp(`^(?!${SERVER_PATH.source.slice(1)})`);
+
+/**
  * A `next` parameter as a same-origin path, or null. Rejects other origins (`//host`, `/\host`,
  * schemes), sign-in itself (a loop) and `/` (the marketing page is not where sign-in should end).
  */

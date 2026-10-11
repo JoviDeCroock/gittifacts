@@ -91,6 +91,7 @@ export function LaneArtifact() {
         reasons={FX_REASONS}
         computedLane={1}
         lane={1}
+        foldPassing={false}
         caption={`Why ${EXAMPLE.id} gets a quick review (Lane 1)`}
       />
       <p class="art-lanes__shadow">

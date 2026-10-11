@@ -381,6 +381,11 @@ Sticky under the top bar, on acetate: "Stop 2 of 5" and a line of verdict marks 
 - **Status chip:** icon plus label on a tone tint (6px radius, 24px tall).
 - **Evidence chip:** sheet with hairline edge, kind icon, label and a tone-colored value; links to the evidence item.
 
+### Term
+Day-one vocabulary is Plan, Change and review lane. Every other word a new person meets (calibrating, evidence, walkthrough, attestation, policy, scopes, mission control, attempts…) is a Term where it first appears on a screen: the word in its own ink with a dotted ink-4 underline (never teal: it is not an action), a button whose accessible description is the one-line hint, and on tap a paper card (sheet, strong hairline, the float fall-off, 8px radius, up to 288px) with the hint and a teal "More about …" link to the docs page. The card is a popover under the word, kept inside the viewport, and closes on scroll, Escape or a tap elsewhere. Hints live in `lib/terms.ts` and follow the docs glossary.
+
+**The Show It When It Matters Rule.** Advanced chrome appears when it is relevant, never removed: Mission control only when agents have open Changes in the repo, the auto-merge agreement only while a repo is calibrating, raw scope ids only beside their words.
+
 ### Inputs / Fields
 Visible labels above, 44px minimum, 16px text, ink-4 boundary; 2px teal focus ring with 1px offset; carmine boundary and an inline message below on error.
 

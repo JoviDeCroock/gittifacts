@@ -139,3 +139,16 @@ a.triage__msg:hover {
   background: var(--text-3);
   clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
+
+/* The checks that passed, folded under the result: the reasons that set the lane read first. */
+.triage__passed {
+  margin-block-start: var(--s-2);
+}
+.triage__passed > summary {
+  gap: var(--s-2);
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.triage__passed > .triage__grid {
+  margin-block-start: var(--s-2);
+}
