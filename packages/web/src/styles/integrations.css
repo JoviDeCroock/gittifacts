@@ -5,13 +5,17 @@
  */
 
 /* ---------------------------------------------------------------- shared */
+/* Integrations are plates, not squares (squares mean agents; DESIGN.md, Shapes): the tag radius
+   with a hairline ring held 2px off the edge, like an app mounted on the page. */
 .int-logo {
   display: inline-grid;
   place-items: center;
   flex: none;
-  border-radius: 6px;
+  border-radius: var(--r-tag);
   background: var(--panel-strong);
-  border: 1px solid var(--rule);
+  border: 0;
+  outline: 1px solid var(--rule-strong);
+  outline-offset: 2px;
   color: var(--text-2);
   font-weight: var(--weight-bold);
   letter-spacing: 0.01em;
@@ -349,18 +353,6 @@ fieldset.confirm {
 }
 
 /* ---------------------------------------------------------------- developer portal */
-.dev-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-7);
-}
-@media (min-width: 1100px) {
-  .dev-layout {
-    grid-template-columns: minmax(0, 1fr) 440px;
-    gap: var(--s-7);
-    align-items: start;
-  }
-}
 .dev-main {
   min-inline-size: 0;
 }
@@ -412,47 +404,91 @@ fieldset.confirm {
 }
 
 /* register / edit forms */
+/* Registering an integration: the page's main column, four numbered steps on hairlines. Each step
+   says what it is for on the left (from 900px) and holds its fields on the right. */
 .int-form {
   display: grid;
-  gap: var(--s-5);
-  padding: var(--s-4);
-  border-radius: var(--r-panel);
-  background: var(--surface);
-  border: 1px solid var(--rule-strong);
+  gap: 0;
+  max-inline-size: 880px;
 }
-@media (min-width: 640px) {
-  .int-form {
-    padding: var(--s-5);
-  }
-}
-.int-form > .btn {
-  justify-self: start;
-}
-.int-form__title {
-  font-size: var(--text-title);
-}
-.int-form__lede {
-  margin-block-start: calc(-1 * var(--s-4));
+/* Every problem, each a link to its field (focus already went to the first). */
+.int-form__problems {
+  display: grid;
+  gap: var(--s-2);
+  margin-block-end: var(--s-5);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-control);
+  border-block-start: 3px solid var(--danger);
+  background: var(--panel);
   font-size: var(--text-small);
-  color: var(--text-2);
 }
-.int-form__group {
+.int-form__problems ul {
+  display: grid;
+  gap: 2px;
+  padding-inline-start: var(--s-5);
+}
+.int-form__problems a {
+  font-weight: var(--weight-medium);
+}
+.int-step {
   display: grid;
   gap: var(--s-4);
   margin: 0;
-  padding: 0;
+  padding: var(--s-5) 0;
   border: 0;
+  border-block-start: 1px solid var(--rule);
   min-inline-size: 0;
 }
-.int-form__group:disabled .field,
-.int-form__group:disabled .int-checks {
+.int-step__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-self: start;
+  align-content: start;
+  align-items: baseline;
+  column-gap: var(--s-2);
+  row-gap: 2px;
+}
+.int-step__n {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-bold);
+  color: var(--text);
+}
+.int-step__title {
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+}
+.int-step__lede {
+  grid-column: 2;
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.int-step__body {
+  display: grid;
+  gap: var(--s-4);
+  min-inline-size: 0;
+}
+.int-step:disabled .field,
+.int-step:disabled .int-checks {
   opacity: 0.6;
 }
-.int-form__legend {
-  padding: 0;
-  margin-block-end: var(--s-3);
-  font-size: var(--text-body);
-  font-weight: var(--weight-bold);
+@media (min-width: 900px) {
+  .int-step {
+    grid-template-columns: 240px minmax(0, 1fr);
+    column-gap: var(--s-6);
+  }
+}
+.int-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding-block-start: var(--s-5);
+  border-block-start: 1px solid var(--rule);
 }
 .int-form__opt {
   margin-inline-start: 4px;
@@ -890,6 +926,22 @@ fieldset.confirm {
   display: grid;
   gap: var(--s-4);
   min-inline-size: 0;
+}
+/* What a change here does to people who already installed it. */
+.int-sec__note {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--panel);
+  font-size: var(--text-small);
+  color: var(--text-2);
+}
+.int-sec__note .icon {
+  flex: none;
+  margin-block-start: 2px;
+  color: var(--text-3);
 }
 .int-sec .secret-reveal {
   margin-block-end: 0;

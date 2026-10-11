@@ -326,7 +326,7 @@ Scrims (`::backdrop`) may blur up to 4px so the page recedes behind a dialog; no
 
 ## Shapes
 
-Small, functional radii: tick marks 2px, tags and inline code 3px, chips and agent avatars 6px, controls 8px, panels and code blocks 12px, sheets 18px, and fully round pills only for count badges. Circles mean people (avatars) and stops (station numbers); squares mean agents and the platform. The lane tag is the one custom silhouette: a rectangle with a chamfered left end and a punched hole, drawn as an SVG path with an even-odd hole so it reads on any ground.
+Small, functional radii: tick marks 2px, tags and inline code 3px, chips and agent avatars 6px, controls 8px, panels and code blocks 12px, sheets 18px, and fully round pills only for count badges. Circles mean people (avatars) and stops (station numbers); squares mean agents and the platform. Integrations (apps a person installed: deploy platforms, check runners) are plates: their logo or monogram on the 3px tag radius, ringed by a hairline held 2px off the edge, so an installed app never reads as an agent. The lane tag is the one custom silhouette: a rectangle with a chamfered left end and a punched hole, drawn as an SVG path with an even-odd hole so it reads on any ground.
 
 On the landing the same silhouette turns portrait at poster scale as the case tag: both top corners chamfered (2.25rem), a hole (9px radius) punched through at center 30px from the top and ringed by a 5px panel-strong eyelet. Tear-off strips hang below it; a strip's perforation is a 2px dashed rule between 6px punched notches, and a torn strip trades the perforation for a toothed torn edge (10px teeth).
 
