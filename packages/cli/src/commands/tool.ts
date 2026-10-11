@@ -3,7 +3,9 @@
  * the output is the tool's `structuredContent`, with a shell `command` added next to every
  * `call` in next steps and fixes.
  */
+import { dirname } from "node:path";
 import { buildToolArgs, parseCommandTokens } from "../args.js";
+import { adoptChange, parsePushRemote, type WiringResult, workTreeRoot } from "../clone-setup.js";
 import { withCommands } from "../calls.js";
 import type { Ctx, Target } from "../context.js";
 import { CliError, cliError, EXIT, parseEnvelope } from "../errors.js";
@@ -85,6 +87,38 @@ export async function callTool(
   );
 }
 
+/**
+ * start-change inside a clone of the same repo: record the Change in `.gittifacts.json` and point
+ * `origin` at its fork, so plain `git push` goes there. Outside a clone nothing changes.
+ */
+async function wireStartedChange(
+  ctx: Ctx,
+  args: Record<string, unknown>,
+  doc: Record<string, unknown>,
+): Promise<WiringResult | null> {
+  const found = ctx.project();
+  const remote = parsePushRemote(doc.remote);
+  const change = isRecord(doc.change) ? doc.change : null;
+  if (!found || !remote || typeof change?.id !== "string") return null;
+  if (found.config.projectId !== args.repoId) return null;
+  const dir = await workTreeRoot(ctx.io, ctx.io.cwd);
+  if (!dir) return null;
+  try {
+    return await adoptChange(ctx.io, {
+      dir,
+      projectDir: dirname(found.path),
+      config: found.config,
+      changeId: change.id,
+      remote,
+    });
+  } catch (e) {
+    ctx.out.notice(
+      `gittifacts: started ${change.id}, but couldn't point this clone at its fork: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    return null;
+  }
+}
+
 /** Looks a command up on the live server (a tool newer than this build). */
 export async function resolveRemoteCommand(ctx: Ctx, name: string): Promise<CommandSpec | null> {
   const target = ctx.targetOrNull();
@@ -144,6 +178,10 @@ export async function runToolCommand(
         expiresAt: target.token?.expiresAt ?? null,
       },
     };
+  }
+  if (spec.tool === "start_change") {
+    const git = await wireStartedChange(ctx, args, doc);
+    if (git) out = { ...out, git };
   }
   if (key) out = { ...out, idempotencyKey: key };
   const tool = spec.tool ?? toolNameOf(spec.command);

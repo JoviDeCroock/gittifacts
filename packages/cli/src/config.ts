@@ -1,8 +1,8 @@
 /**
  * Where the CLI finds its host and token.
  *
- * - `.gittifacts.json` (found upward from the cwd): `{ host, projectId, remote }`. No secrets; safe
- *   to commit.
+ * - `.gittifacts.json` (found upward from the cwd): `{ host, projectId, remote, changeId? }`. No
+ *   secrets, but local to one clone (which Change it pushes to), so git ignores it.
  * - `~/.config/gittifacts/credentials.json` (`$XDG_CONFIG_HOME`, or `GITTIFACTS_CONFIG_DIR`),
  *   mode 0600 in a 0700 directory: the login token per host, and the token of each project
  *   created without an account (unclaimed).
@@ -88,20 +88,32 @@ export function mcpUrlFor(host: string, project: ProjectConfig | null, env: Env)
 export interface ProjectConfig {
   host: string;
   projectId: string;
-  /** Git remote URL (no credentials). */
+  /** Git remote URL (no credentials): the current Change's fork. */
   remote: string;
   mcpUrl?: string | undefined;
+  /** The Change this clone pushes to (`git push` asks refresh_push_token for it). */
+  changeId?: string | undefined;
+  /** The fork branch `git push` targets. */
+  branch?: string | undefined;
+  /** The read-only URL `gittifacts clone` cloned from (the platform's /git/ proxy). */
+  cloneUrl?: string | undefined;
 }
+
+const OPTIONAL_FIELDS = ["mcpUrl", "changeId", "branch", "cloneUrl"] as const;
 
 function parseProject(v: unknown): ProjectConfig | null {
   if (!isRecord(v)) return null;
   if (typeof v.host !== "string" || typeof v.projectId !== "string") return null;
-  return {
+  const config: ProjectConfig = {
     host: v.host,
     projectId: v.projectId,
     remote: typeof v.remote === "string" ? v.remote : "",
-    mcpUrl: typeof v.mcpUrl === "string" ? v.mcpUrl : undefined,
   };
+  for (const k of OPTIONAL_FIELDS) {
+    const value = v[k];
+    if (typeof value === "string" && value !== "") config[k] = value;
+  }
+  return config;
 }
 
 /** The nearest `.gittifacts.json` at or above `cwd`. */
@@ -145,7 +157,10 @@ export function writeProject(dir: string, config: ProjectConfig): string {
     projectId: config.projectId,
     remote: config.remote,
   };
-  if (config.mcpUrl) body.mcpUrl = config.mcpUrl;
+  for (const k of OPTIONAL_FIELDS) {
+    const value = config[k];
+    if (value) body[k] = value;
+  }
   writeFileSync(path, `${JSON.stringify(body, null, 2)}\n`);
   return path;
 }

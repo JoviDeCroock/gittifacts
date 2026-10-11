@@ -1,9 +1,11 @@
 /**
  * The output contract.
  *
- * - JSON (default): exactly one JSON document on stdout, success or error. Errors are
- *   `{ error: { code, message, fix }, ...meta }`. Progress and prompts go to stderr.
- * - `--human`: the same document as text sections and tables on stdout; errors on stderr.
+ * - JSON (stdout not a terminal, or `--json`): exactly one JSON document on stdout, success or
+ *   error. Errors are `{ error: { code, message, fix }, ...meta }`. Progress and prompts go to
+ *   stderr.
+ * - Text (a terminal, or `--human`): the same document as text sections and tables on stdout (or
+ *   a command's own short `text`); errors on stderr.
  */
 import type { ErrorBody } from "./errors.js";
 import {
@@ -34,12 +36,22 @@ export class Output {
     return typeof cols === "number" && cols > 20 ? cols : 100;
   }
 
-  /** `view` reshapes the document for `--human` only; the JSON output is always `doc`. */
+  /**
+   * `view` reshapes the document for people only, and `text` replaces the rendering with a
+   * command's own lines; the JSON output is always `doc`.
+   */
   result(
     doc: unknown,
-    opts: { title?: string | undefined; view?: ((doc: Record<string, unknown>) => unknown) | undefined } = {},
+    opts: {
+      title?: string | undefined;
+      view?: ((doc: Record<string, unknown>) => unknown) | undefined;
+      text?: string | undefined;
+    } = {},
   ): void {
-    if (this.human) {
+    if (this.human && opts.text !== undefined) {
+      const text = stripControl(opts.text);
+      this.io.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
+    } else if (this.human) {
       const shown = opts.view !== undefined && isRecord(doc) ? opts.view(doc) : doc;
       this.io.stdout.write(
         renderHuman(shown, { style: this.style, width: this.width, title: opts.title }),

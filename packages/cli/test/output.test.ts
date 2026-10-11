@@ -64,6 +64,8 @@ describe("JSON output (default)", () => {
     };
     expect(doc.commands.filter((c) => c.source === "builtin").map((c) => c.command)).toEqual([
       "init",
+      "clone",
+      "ship",
       "login",
       "logout",
       "wait",
@@ -71,6 +73,7 @@ describe("JSON output (default)", () => {
       "tools",
       "search-tools",
       "help",
+      "git-credential",
     ]);
     expect(Object.keys(doc.exitCodes)).toEqual(["0", "1", "2", "3", "130"]);
     const one = (await run(h, ["create-plan", "--help"])).json() as {

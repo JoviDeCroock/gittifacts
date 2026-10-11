@@ -5,12 +5,13 @@
  * in the project file) and a claim URL for a human.
  */
 import { existsSync, readdirSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { withCommands } from "../calls.js";
 import { PROJECT_FILE, updateCredentials, writeProject } from "../config.js";
 import type { Ctx, Target } from "../context.js";
 import { cliError, EXIT, usageError } from "../errors.js";
 import { unknownTool } from "../failures.js";
+import { adoptChange, installHelper, type WiringResult } from "../clone-setup.js";
 import { clone, type GitAuth, splitRemote } from "../git.js";
 import { callAnyTool } from "../mcp.js";
 import { bundledCommands, IDEMPOTENCY_PROPERTY } from "../tools/commands.js";
@@ -187,6 +188,36 @@ async function fallbackAuth(
   }
 }
 
+/**
+ * What a person at a terminal needs, in at most six lines: the repo, its preview, the claim link
+ * and the one next step. The JSON document (piped, --json) is unchanged.
+ */
+export function initText(
+  doc: Record<string, unknown>,
+  project: ProjectResult,
+  clonedTo: string | undefined,
+  cwd: string,
+): string {
+  const s = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
+  const name = s(doc.name);
+  const lines = [`Created repo ${name ? `${name} (${project.projectId})` : project.projectId}`];
+  const preview = s(doc.previewUrl);
+  if (preview) lines.push(`Preview: ${preview} (live once the first CI run is green)`);
+  if (project.claimUrl)
+    lines.push(`Claim it to keep it (unclaimed repos expire): ${project.claimUrl}`);
+  if (clonedTo) {
+    const rel = relative(cwd, clonedTo) || ".";
+    lines.push(`Cloned into ${rel}`, "Next: edit a file, commit, then ship it:");
+    lines.push(`  $ cd ${rel} && git commit -am "<what changed>" && gittifacts ship`);
+  } else {
+    const step = Array.isArray(doc.nextSteps) ? doc.nextSteps.find(isRecord) : undefined;
+    const command = s(step?.command);
+    lines.push(`Next: ${s(step?.title) ?? "wait for the first CI run"}`);
+    if (command) lines.push(`  $ ${command}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 function slug(s: string): string {
   return (
     s
@@ -337,29 +368,54 @@ export const init: Builtin = {
       clonedTo = dir;
       configDir = dir;
     }
-    const configPath = writeProject(configDir, {
+    const projectConfig = {
       host: target.host,
       projectId: project.projectId,
       remote: project.remoteUrl ?? "",
       mcpUrl: project.mcpUrl ?? undefined,
-    });
+    };
+    const configPath = writeProject(configDir, projectConfig);
+    // The clone pushes to the first Change's fork with plain `git push` (credential helper).
+    let git: WiringResult | undefined;
+    if (clonedTo && project.remoteUrl) {
+      const branch =
+        isRecord(doc.remote) && typeof doc.remote.branch === "string" ? doc.remote.branch : "main";
+      try {
+        git = project.remoteChangeId
+          ? await adoptChange(ctx.io, {
+              dir: clonedTo,
+              projectDir: clonedTo,
+              config: projectConfig,
+              changeId: project.remoteChangeId,
+              remote: { url: project.remoteUrl, branch },
+            })
+          : undefined;
+        if (!git) await installHelper(ctx.io, clonedTo, target.host, []);
+      } catch (e) {
+        ctx.out.notice(
+          `gittifacts: cloned, but couldn't set up git push: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
 
     const showToken = bool(parsed, "showToken");
     const shown = project.token !== null ? withoutReconnectStep(doc) : doc;
-    ctx.out.result(
-      withCommands(
-        {
-          ...redact(shown, showToken),
-          tokenStored: project.token !== null,
-          config: configPath,
-          ...(clonedTo ? { clonedTo } : {}),
-          ...(project.token ? { credentialsPath: ctx.credentialsPath } : {}),
-          idempotencyKey: key,
-        },
-        bundledCommands(),
-      ),
-      { title: `Repo ${project.projectId} created` },
+    const printed = withCommands(
+      {
+        ...redact(shown, showToken),
+        tokenStored: project.token !== null,
+        config: configPath,
+        ...(clonedTo ? { clonedTo } : {}),
+        ...(git ? { git } : {}),
+        ...(project.token ? { credentialsPath: ctx.credentialsPath } : {}),
+        idempotencyKey: key,
+      },
+      bundledCommands(),
     );
+    ctx.out.result(printed, {
+      title: `Repo ${project.projectId} created`,
+      text: initText(printed, project, clonedTo, base),
+    });
     return EXIT.ok;
   },
 };

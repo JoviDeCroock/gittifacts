@@ -74,6 +74,7 @@ export function harness(
       clock.now += ms;
     },
     randomId: () => `id${++id}`,
+    self: { node: process.execPath, script: null },
     onInterrupt(handler) {
       handlers.add(handler);
       return () => handlers.delete(handler);

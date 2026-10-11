@@ -1,15 +1,18 @@
 /**
- * Dispatch: local commands first (init, login, logout, wait, tools, search-tools, help), then one
+ * Dispatch: local commands first (init, clone, ship, login, wait, tools, help, ...), then one
  * command per MCP tool from this build's table, then (for a tool newer than this build) the live
  * server's `tools/list`. Every failure ends as one `{ error }` document and an exit code.
  */
 
-import { parseCommandTokens, splitArgv } from "./args.js";
+import { parseCommandTokens, splitArgv, wantsHuman } from "./args.js";
 import { login, logout } from "./commands/auth.js";
 import { type Builtin, bool, builtinSpec, int } from "./commands/builtin.js";
+import { gitCredential } from "./commands/git-credential.js";
 import { commandHelp, listTools, searchTools, topHelp } from "./commands/help.js";
+import { clone } from "./commands/clone.js";
 import { init } from "./commands/init.js";
 import { qa } from "./commands/qa.js";
+import { ship } from "./commands/ship.js";
 import { resolveRemoteCommand, runToolCommand } from "./commands/tool.js";
 import { wait } from "./commands/wait.js";
 import { Ctx } from "./context.js";
@@ -88,7 +91,31 @@ const help: Builtin = {
   },
 };
 
-export const BUILTINS: readonly Builtin[] = [init, login, logout, wait, qa, tools, search, help];
+const credential: Builtin = {
+  spec: builtinSpec({
+    command: "git-credential",
+    title: "git credential helper",
+    description:
+      "git's credential helper (installed per clone by init --clone, clone, start-change and ship): a fresh push token for this clone's Change on every git push. Not for running by hand.",
+    properties: { action: { enum: ["get", "store", "erase"] } },
+    positional: "action",
+  }),
+  run: (ctx, parsed) => gitCredential(ctx, parsed.positionals[0]),
+};
+
+export const BUILTINS: readonly Builtin[] = [
+  init,
+  clone,
+  ship,
+  login,
+  logout,
+  wait,
+  qa,
+  tools,
+  search,
+  help,
+  credential,
+];
 
 function unknownCommand(name: string): CliError {
   const names = [
@@ -132,12 +159,14 @@ async function dispatch(
 /** Runs the CLI; returns the exit code. Never throws. */
 export async function runCli(argv: readonly string[], io: CliIo): Promise<number> {
   // Decided up front: `--human` may follow the command, and errors while parsing render in it too.
-  const ddash = argv.indexOf("--");
-  const human = (ddash < 0 ? argv : argv.slice(0, ddash)).includes("--human");
+  const human = wantsHuman(argv, io.stdout.isTTY === true);
   const out = new Output(io, human);
   let ctx = new Ctx(io, argv, { human, help: false, version: false }, out);
+  // git's credential helper: the protocol on stdout, messages on stderr, never an envelope.
+  if (argv[0] === "git-credential") return gitCredential(ctx, argv[1]);
   try {
     const inv = splitArgv(argv);
+    inv.globals.human = human;
     ctx = new Ctx(io, argv, inv.globals, out);
     return await dispatch(ctx, inv.command, inv.tokens);
   } catch (e) {

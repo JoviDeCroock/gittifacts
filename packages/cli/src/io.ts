@@ -4,7 +4,9 @@
  */
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { type Connector, connectMcp, type FetchLike } from "./mcp.js";
 
 export interface Writer {
@@ -25,6 +27,13 @@ export type GitRunner = (
   opts: { cwd: string; env: Record<string, string> },
 ) => Promise<GitResult>;
 
+/** How to run this CLI again (the git credential helper): node and the bundle, when it is one. */
+export interface SelfCommand {
+  node: string;
+  /** Absolute path of the bundled cli.mjs, or null when running from source. */
+  script: string | null;
+}
+
 export interface CliIo {
   stdout: Writer;
   stderr: Writer;
@@ -40,6 +49,7 @@ export interface CliIo {
   sleep(ms: number, signal?: AbortSignal): Promise<void>;
   /** A fresh random id (idempotency keys). */
   randomId(): string;
+  self: SelfCommand;
   /** Registers a Ctrl-C handler; returns its unregister function. */
   onInterrupt(handler: () => void): () => void;
 }
@@ -87,6 +97,18 @@ export const runGit: GitRunner = (args, opts) =>
     child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
   });
 
+/** In the bundle, this module is dist/cli.mjs itself. */
+function selfCommand(): SelfCommand {
+  let script: string | null = null;
+  try {
+    const file = fileURLToPath(import.meta.url);
+    if (file.endsWith(".mjs") && existsSync(file)) script = file;
+  } catch {
+    script = null;
+  }
+  return { node: process.execPath, script };
+}
+
 export function processIo(): CliIo {
   return {
     stdout: process.stdout,
@@ -101,6 +123,7 @@ export function processIo(): CliIo {
     now: () => Date.now(),
     sleep,
     randomId: () => randomBytes(12).toString("base64url"),
+    self: selfCommand(),
     onInterrupt(handler) {
       process.on("SIGINT", handler);
       return () => {

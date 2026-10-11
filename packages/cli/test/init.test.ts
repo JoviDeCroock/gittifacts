@@ -241,7 +241,7 @@ describe("gittifacts init", () => {
     const r = await run(h, ["init", "--template", "workers-api", "--name", "My API", "--clone"]);
     expect(r.code).toBe(EXIT.ok);
     const dir = join(h.dir, "my-api");
-    expect(gitCalls).toEqual([
+    expect(gitCalls.filter((c) => c.args[0] === "clone")).toEqual([
       {
         args: ["clone", "--", "https://git.gittifacts.example/prj_1.git", dir],
         env: {
@@ -252,7 +252,7 @@ describe("gittifacts init", () => {
         },
       },
     ]);
-    expect(JSON.stringify(gitCalls[0]?.args)).not.toContain("art_tok");
+    expect(JSON.stringify(gitCalls.map((c) => c.args))).not.toContain("art_tok");
     expect(existsSync(join(dir, ".gittifacts.json"))).toBe(true);
     expect(r.json()).toMatchObject({ clonedTo: dir });
     h.cleanup();

@@ -35,10 +35,10 @@ export const ENV_VARS: Record<string, string> = {
 
 export const QUICKSTART = [
   "gittifacts init --template workers-api --name my-api --clone",
-  "gittifacts wait <changeId> --until evidence_ready",
-  "gittifacts get-change-status <changeId> --human",
-  "gittifacts create-plan --repo-id <repoId> --title ... --intent ... --acceptance-criteria ...",
-  "gittifacts start-change --repo-id <repoId> --plan-id <planId> --title ... --category feature",
+  "cd my-api, edit, git commit -am '...'",
+  "gittifacts ship",
+  "gittifacts request-review <changeId>",
+  "gittifacts clone <repoId> (an existing repo; then edit, commit, ship)",
 ];
 
 function flagDoc(spec: CommandSpec) {
@@ -116,7 +116,7 @@ export function topHelp(ctx: Ctx, builtins: readonly Builtin[]): number {
     version: CLI_VERSION,
     usage: "gittifacts <command> [flags]",
     output:
-      "One JSON document on stdout (errors too: { error: { code, message, fix } }). --human for text. Next steps and fixes carry an MCP `call` and the matching CLI `command`.",
+      "Text on a terminal; one JSON document on stdout when piped or with --json (errors too: { error: { code, message, fix } }). Next steps and fixes carry an MCP `call` and the matching CLI `command`.",
     commands,
     globalFlags: GLOBAL_FLAGS.map((f) => ({ flag: f.flag, description: f.description })),
     exitCodes: EXIT_CODES,
@@ -160,7 +160,7 @@ export function topHelp(ctx: Ctx, builtins: readonly Builtin[]): number {
     s.bold("Exit codes"),
     ...Object.entries(EXIT_CODES).map(([code, d]) => `  ${code.padEnd(4)} ${d}`),
     "",
-    "Run `gittifacts <command> --help` for flags. Output is JSON unless --human.",
+    "Run `gittifacts <command> --help` for flags. Piped output is JSON; --json forces it.",
   ];
   ctx.io.stdout.write(`${lines.join("\n")}\n`);
   return EXIT.ok;

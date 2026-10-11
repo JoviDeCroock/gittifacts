@@ -19,6 +19,8 @@ export interface Globals {
   human: boolean;
   /** Raw tool arguments as a JSON object, or `-` for stdin. */
   json?: string | undefined;
+  /** `--json` with no object after it: print JSON even on a terminal. */
+  jsonOutput?: boolean | undefined;
   idempotencyKey?: string | undefined;
   help: boolean;
   version: boolean;
@@ -37,11 +39,16 @@ export const GLOBAL_FLAGS = [
     placeholder: "<url>",
     description: "Platform origin (else GITTIFACTS_HOST, .gittifacts.json, the last login).",
   },
-  { flag: "--human", placeholder: "", description: "Tables and sections instead of JSON." },
+  {
+    flag: "--human",
+    placeholder: "",
+    description: "Text for people (the default when stdout is a terminal).",
+  },
   {
     flag: "--json",
-    placeholder: "<object|->",
-    description: "Raw tool arguments as a JSON object (`-` reads stdin).",
+    placeholder: "[<object|->]",
+    description:
+      "Print JSON (the default when stdout is not a terminal). With an object (or `-` for stdin): raw tool arguments.",
   },
   {
     flag: "--idempotency-key",
@@ -51,13 +58,32 @@ export const GLOBAL_FLAGS = [
   {
     flag: "--help",
     placeholder: "",
-    description: "Usage for a command (JSON, or text with --human).",
+    description: "Usage for a command.",
   },
   { flag: "--version", placeholder: "", description: "Print the CLI version." },
 ] as const;
 
 const GLOBAL_VALUE_FLAGS = new Set(["--host", "--json", "--idempotency-key"]);
 
+/** `--json <value>` carries tool arguments only when the value looks like them. */
+function isJsonArgument(token: string | undefined): boolean {
+  if (token === undefined) return false;
+  const t = token.trimStart();
+  return t === "-" || t.startsWith("{") || t.startsWith("[");
+}
+
+/**
+ * People get text, programs get JSON: text when stdout is a terminal, unless `--json` (with no
+ * object after it) asks for JSON; `--human` asks for text anywhere. Decided before parsing, so
+ * a parse error renders in the same mode.
+ */
+export function wantsHuman(argv: readonly string[], stdoutIsTTY: boolean): boolean {
+  const ddash = argv.indexOf("--");
+  const pre = ddash < 0 ? argv : argv.slice(0, ddash);
+  const jsonOutput = pre.some((t, i) => t === "--json" && !isJsonArgument(pre[i + 1]));
+  if (jsonOutput) return false;
+  return pre.includes("--human") || stdoutIsTTY;
+}
 /** Applies a global flag; returns how many tokens it consumed (0 when `token` isn't one). */
 function takeGlobal(globals: Globals, tokens: readonly string[], i: number): number {
   const token = tokens[i] ?? "";
@@ -67,6 +93,11 @@ function takeGlobal(globals: Globals, tokens: readonly string[], i: number): num
   const eq = token.indexOf("=");
   const name = eq > 0 ? token.slice(0, eq) : token;
   if (!GLOBAL_VALUE_FLAGS.has(name)) return 0;
+  if (token === "--json" && !isJsonArgument(tokens[i + 1])) {
+    globals.jsonOutput = true;
+    globals.human = false;
+    return 1;
+  }
   let value: string | undefined;
   let used = 1;
   if (eq > 0) value = token.slice(eq + 1);
@@ -319,8 +350,10 @@ export function buildToolArgs(
     (p) => p !== IDEMPOTENCY_PROPERTY && args[p] === undefined,
   );
   // A change by id or (GitHub mode) by pull request: one of the two is required.
-  const byRef = spec.positional === "changeId" && !(spec.inputSchema.required ?? []).includes("changeId");
-  if (byRef && args.changeId === undefined && args.github === undefined) missing.unshift("changeId");
+  const byRef =
+    spec.positional === "changeId" && !(spec.inputSchema.required ?? []).includes("changeId");
+  if (byRef && args.changeId === undefined && args.github === undefined)
+    missing.unshift("changeId");
   if (missing.length > 0) {
     const flags = missing.map((p) => {
       const flag = spec.flags.find((f) => f.property === p)?.flag ?? `--${kebab(p)}`;
