@@ -8,7 +8,8 @@ import {
   PrincipalsMapSchema,
 } from "../api/schemas.js";
 import { callerOf, requirePrincipal } from "../auth/middleware.js";
-import { listAudit } from "../services/audit.js";
+import { assertPlatformAdmin } from "../limits/routes.js";
+import { listAudit, reverifyAudit } from "../services/audit.js";
 import { type ApiApp, errors, json, SECURITY } from "./common.js";
 
 const list = createRoute({
@@ -34,7 +35,27 @@ const list = createRoute({
   },
 });
 
+const reverify = createRoute({
+  method: "post",
+  path: "/api/v1/admin/audit/verify",
+  tags: ["internal"],
+  summary: "Re-verify the whole audit chain from genesis, ignoring the verified-through checkpoint",
+  description:
+    "Reads verify the chain incrementally from a checkpoint. This checks every entry again (O(N) signature checks), clears a recorded break when the chain passes, and moves the checkpoint to the head. Platform admins only (PLATFORM_ADMINS).",
+  security: SECURITY,
+  middleware: [requirePrincipal([], { humanOnly: true })] as const,
+  responses: {
+    200: json(ChainStatusSchema.extend({ checked: z.number().int() }), "Full verification"),
+    ...errors(401, 403),
+  },
+});
+
 export function registerAuditRoutes(app: ApiApp): void {
+  app.openapi(reverify, async (c) => {
+    assertPlatformAdmin(callerOf(c), c.env);
+    return c.json(await reverifyAudit(c.get("services")), 200);
+  });
+
   app.openapi(list, async (c) =>
     c.json(await listAudit(c.get("services"), callerOf(c), c.req.valid("query")), 200),
   );

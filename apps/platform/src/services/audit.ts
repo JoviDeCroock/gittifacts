@@ -30,10 +30,22 @@ export interface AuditSubjectRef {
   repoName: string | null;
 }
 
+export interface ChainStatus {
+  /** True only when no break was found and every entry up to the head is verified. */
+  verified: boolean;
+  brokenAt?: number;
+  /** Highest seq verified in the AuditLog DO (it and every earlier entry). */
+  verifiedThrough: number;
+  /** Head of the log when checked. */
+  headSeq: number;
+  /** verifiedThrough reached headSeq; false means the rest is checked on later reads. */
+  complete: boolean;
+}
+
 export interface AuditPage {
   events: AuditEventView[];
   nextCursor: string | null;
-  chain: { verified: boolean; brokenAt?: number };
+  chain: ChainStatus;
   principals: Record<string, PrincipalRef>;
   /** `change:<id>`, `plan:<id>`, `repo:<id>`, `principal:<id>` → its title (unknown ones left out). */
   subjects: Record<string, AuditSubjectRef>;
@@ -116,7 +128,9 @@ export interface AuditFilter {
  * A page of the audit log (newest first) from the D1 mirror, with two checks:
  * 1. the returned rows themselves (hashes, payloads, signatures, links between adjacent seqs),
  *    which catches tampering with the mirror;
- * 2. the full chain in the AuditLog DO (the source of truth).
+ * 2. the chain in the AuditLog DO (the source of truth), incrementally from its verified-through
+ *    checkpoint and at most a bounded number of new entries per read (M9): when more remain the
+ *    status says so (`complete: false`, `verifiedThrough`) instead of blocking the log.
  * `brokenAt` is the lowest failing seq.
  *
  * Only events the caller may read (src/access/audit.ts): its repos' events, its own principals',
@@ -156,9 +170,16 @@ export async function listAudit(
     verifyEntries(ascending, signer, { payloads, contiguous: false }),
     auditLogStub(svc.env, svc.auditLog).verifyChain(),
   ]);
-  const broken = [pageCheck, doCheck].filter((r) => !r.verified).map((r) => r.brokenAt ?? 0);
-  const chain =
-    broken.length === 0 ? { verified: true } : { verified: false, brokenAt: Math.min(...broken) };
+  const broken = [pageCheck, doCheck]
+    .map((r) => r.brokenAt)
+    .filter((b): b is number => b !== undefined);
+  const chain: ChainStatus = {
+    verified: pageCheck.verified && doCheck.verified,
+    verifiedThrough: doCheck.verifiedThrough,
+    headSeq: doCheck.headSeq,
+    complete: doCheck.complete,
+    ...(broken.length > 0 ? { brokenAt: Math.min(...broken) } : {}),
+  };
   const events2 = page.map((e) => ({ ...e, summary: summarizeAudit(e, payloads.get(e.seq)) }));
   // Subjects about principals are named too (e.g. `principal:<agent>` when a token is issued).
   const principals = await svc.store.principalRefs(
@@ -172,4 +193,17 @@ export async function listAudit(
     principals,
   );
   return { events: events2, nextCursor, chain, principals, subjects };
+}
+
+/** Full re-verify of the AuditLog DO from genesis (platform admins only; see routes/audit.ts). */
+export async function reverifyAudit(svc: Services): Promise<ChainStatus & { checked: number }> {
+  const r = await auditLogStub(svc.env, svc.auditLog).verifyChainFull();
+  return {
+    verified: r.verified,
+    verifiedThrough: r.verifiedThrough,
+    headSeq: r.headSeq,
+    complete: r.complete,
+    checked: r.checked,
+    ...(r.brokenAt !== undefined ? { brokenAt: r.brokenAt } : {}),
+  };
 }

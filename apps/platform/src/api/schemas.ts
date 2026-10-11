@@ -187,7 +187,22 @@ export const VerificationSchema = z
   .meta({ id: "Verification" });
 
 export const ChainStatusSchema = z
-  .object({ verified: z.boolean(), brokenAt: z.number().int().optional() })
+  .object({
+    verified: z
+      .boolean()
+      .describe("No break found and every entry up to headSeq verified (false while incomplete)"),
+    brokenAt: z.number().int().optional().describe("Lowest seq that failed verification"),
+    verifiedThrough: z
+      .number()
+      .int()
+      .describe("Highest seq verified, together with every earlier entry"),
+    headSeq: z.number().int().describe("Head of the log when checked"),
+    complete: z
+      .boolean()
+      .describe(
+        "verifiedThrough reached headSeq. Each read verifies a bounded number of new entries; later reads continue",
+      ),
+  })
   .meta({ id: "ChainStatus" });
 
 // ---------------------------------------------------------------- params & queries

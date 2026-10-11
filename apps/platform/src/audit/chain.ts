@@ -80,6 +80,21 @@ export interface ChainVerification {
 }
 
 /**
+ * The AuditLog's verdict on its own chain. Reads verify incrementally from a verified-through
+ * checkpoint and at most a bounded number of new entries per call, so `verified` is only true when
+ * every entry up to the head has been checked (`complete`). `verifiedThrough` is the highest seq
+ * known good; a recorded break stays reported until a full re-verify passes.
+ */
+export interface LogVerification extends ChainVerification {
+  /** Highest seq whose entry and every earlier one have been verified (0 = none). */
+  verifiedThrough: number;
+  /** True when verifiedThrough reached the head of the log. */
+  complete: boolean;
+  /** When the last full re-verify from genesis passed (null = never). */
+  fullAt: string | null;
+}
+
+/**
  * Verify entries in ascending seq order. `anchor` is the entry before the first one
  * (null = the first entry must be seq 1 and link to genesis). `payloads` (by seq), when present,
  * are re-hashed against `payloadHash`. With `contiguous: false`, gaps in seq are allowed and

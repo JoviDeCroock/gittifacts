@@ -412,6 +412,6 @@ describe("audit route", () => {
     const bad = await json<{ chain: { verified: boolean; brokenAt?: number } }>(
       await call(app, "GET", `/api/v1/audit?subject=${subject}`, { cookie: human.cookie }),
     );
-    expect(bad.chain).toEqual({ verified: false, brokenAt: target });
+    expect(bad.chain).toMatchObject({ verified: false, brokenAt: target });
   });
 });
