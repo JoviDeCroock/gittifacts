@@ -9,6 +9,7 @@ import type {
   ErrorFix,
   Lane,
   Principal,
+  PushIssue,
   Repo,
   WaitUntil,
 } from "@app/domain";
@@ -213,6 +214,12 @@ export interface CoordinatorApi {
     until: WaitUntil,
     timeoutMs: number,
   ): Promise<WaitResult>;
+
+  /**
+   * Pushes the change's fork received since its last graded one that graded nothing (another
+   * branch, a tag, nothing on top of the base), newest last. Readers of the change only.
+   */
+  pushIssues(actor: Principal, changeId: string): Promise<PushIssue[]>;
 
   /**
    * Subscription hook (SSE/webhooks): resolves with the change as soon as its `version` differs

@@ -14,6 +14,7 @@ import type {
   Plan,
   PlanDraftInput,
   Principal,
+  PushIssue,
   Repo,
   StartChangeInput,
   Tour,
@@ -240,6 +241,8 @@ export interface McpBackend
     supersededBy?: string | null;
     /** Who started it (with an agent's owner). */
     author: ActorData;
+    /** Fork pushes since the last graded one that graded nothing (absent: none known). */
+    pushIssues?: PushIssue[] | undefined;
   }>;
   /** The merge queue's latest resolution of the change's current head, or null (read access). */
   getResolution(caller: McpCaller, changeId: string): Promise<ResolutionData | null>;
@@ -293,6 +296,8 @@ export interface McpBackend
     retryAfterSec?: number;
     /** With "superseded": the attempt at the same plan a person picked instead. */
     supersededBy?: string;
+    /** Fork pushes since the last graded one that graded nothing (absent: none known). */
+    pushIssues?: PushIssue[] | undefined;
   }>;
   /** The platform's error envelope for anything a backend call threw. */
   errorEnvelope(err: unknown): ApiError;

@@ -27,4 +27,5 @@ export const unavailableCoordinator: CoordinatorApi = {
   rerun: async () => down(),
   waitFor: async () => down(),
   watchChange: async () => down(),
+  pushIssues: async () => down(),
 };

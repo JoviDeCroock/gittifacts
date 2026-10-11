@@ -74,6 +74,56 @@ const LaneReason = {
   required: ["code", "lane", "message"],
 } as const;
 
+/** The reasons that set the lane, first; passing checks only counted (@app/domain groupLaneReasons). */
+const LaneSummary = {
+  anyOf: [
+    { type: "null" },
+    {
+      type: "object",
+      properties: {
+        lane,
+        deciding: {
+          type: "array",
+          items: LaneReason,
+          description: "The reasons that put the change in this lane (empty in Lane 0).",
+        },
+        passingCount: {
+          type: "integer",
+          minimum: 0,
+          description: "Checks that passed (Lane 0 reasons); change.laneReasons lists them last.",
+        },
+      },
+      required: ["lane", "deciding", "passingCount"],
+    },
+  ],
+  description:
+    "Why the change is in its lane, compact: the deciding reasons and how many checks passed. Null before a lane is set.",
+} as const;
+
+/** Pushes the fork received that graded nothing (@app/domain PushIssue), each with its fix. */
+const PushIssues = {
+  type: "array",
+  description:
+    "Pushes to the fork since its last graded push that graded nothing (another branch, a tag, nothing on top of the base). Non-empty: your work never reached CI; run fix.command.",
+  items: {
+    type: "object",
+    properties: {
+      kind: { enum: ["wrong-ref", "tag", "no-new-commits"] },
+      ref: str,
+      expectedRef: str,
+      sha: str,
+      at: str,
+      why: str,
+      fix: {
+        type: "object",
+        properties: { explanation: str, command: str, call: str },
+        required: ["explanation"],
+      },
+    },
+    required: ["kind", "ref", "expectedRef", "sha", "at", "why", "fix"],
+  },
+} as const;
+
 export const ChangeBrief = {
   type: "object",
   properties: {
@@ -817,6 +867,8 @@ export const ChangeStatusOutput = {
       description:
         "Several agents attempted this change's plan and a person picked this other change, which closed this one (null: not superseded).",
     },
+    laneSummary: LaneSummary,
+    pushIssues: PushIssues,
     nextSteps: NextSteps,
   },
   required: [
@@ -829,6 +881,8 @@ export const ChangeStatusOutput = {
     "classification",
     "previewUrl",
     "overlaps",
+    "laneSummary",
+    "pushIssues",
     "nextSteps",
   ],
 } as const;
@@ -1006,7 +1060,14 @@ export const WaitForChangeOutput = {
     },
     change: ChangeBrief,
     url: changeUrl,
+    laneSummary: LaneSummary,
+    pushIssues: PushIssues,
+    warning: {
+      type: "string",
+      description:
+        "Set when something needs you rather than more waiting, e.g. a timeout while your pushes went to the wrong ref (see pushIssues).",
+    },
     nextSteps: NextSteps,
   },
-  required: ["reached", "reason", "change", "url", "nextSteps"],
+  required: ["reached", "reason", "change", "url", "laneSummary", "pushIssues", "nextSteps"],
 } as const;

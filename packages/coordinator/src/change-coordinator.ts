@@ -5,7 +5,13 @@
  *
  * Node-safe: the Durable Object class in change-coordinator-do.ts only wires storage and alarms.
  */
-import type { Change, WaitUntil } from "@app/domain";
+import {
+  type Change,
+  describePushIssue,
+  MAX_PUSH_ISSUES,
+  type PushIssueKind,
+  type WaitUntil,
+} from "@app/domain";
 import type {
   ChangeCoordinatorClient,
   ChangeCoordinatorState,
@@ -122,9 +128,12 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     // Natively the fork's default branch; a GitHub PR's head branch in the mirror.
     const headBranch = headBranchOf(change, repo);
     const branchRef = `refs/heads/${headBranch}`;
-    if (input.ref !== branchRef)
-      return { action: "ignored", reason: `push to ${input.ref}, not ${branchRef}` };
     if (input.after === ZERO_SHA) return { action: "ignored", reason: "branch deleted" };
+    if (input.ref !== branchRef) {
+      const kind = input.ref.startsWith("refs/tags/") ? "tag" : "wrong-ref";
+      await this.recordPushIssue(change, kind, input.ref, branchRef, input.after);
+      return { action: "ignored", reason: `push to ${input.ref}, not ${branchRef}` };
+    }
 
     let state = await this.load();
     state = { ...state, changeId: change.id, forkName: change.forkName };
@@ -134,8 +143,10 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     if (tip === null) return { action: "ignored", reason: "branch no longer exists" };
     if (tip === state.headSha)
       return { action: "duplicate", headSha: tip, instanceId: state.instanceId };
-    if (tip === change.baseSha)
+    if (tip === change.baseSha) {
+      await this.recordPushIssue(change, "no-new-commits", input.ref, branchRef, tip);
       return { action: "ignored", reason: "no commits on top of the base" };
+    }
 
     // Supersede the in-flight workflow for the older head.
     const superseded = state.instanceId;
@@ -181,9 +192,40 @@ export class ChangeCoordinatorCore implements ChangeCoordinatorClient {
     });
     // The same head pushed again after a different one (A → B → A): start it over.
     if (!created) await instance.restart();
-    await this.save({ ...state, headSha: tip, instanceId, runId: null, regrades: 0 });
+    // A push that grades clears the ignored ones before it: they are no longer the story.
+    await this.save({
+      ...state,
+      headSha: tip,
+      instanceId,
+      runId: null,
+      regrades: 0,
+      pushIssues: [],
+    });
     await this.changed(change.id);
     return { action: "started", headSha: tip, instanceId, superseded };
+  }
+
+  /** Remember a push that graded nothing (newest last, a few kept) and audit it. */
+  private async recordPushIssue(
+    change: Change,
+    kind: PushIssueKind,
+    ref: string,
+    expectedRef: string,
+    sha: string,
+  ): Promise<void> {
+    const { audit, clock } = this.deps.ports;
+    const at = clock.now().toISOString();
+    const why = describePushIssue(kind, ref, expectedRef);
+    const state = await this.load();
+    const kept = (state.pushIssues ?? []).filter((i) => !(i.ref === ref && i.sha === sha));
+    const pushIssues = [...kept, { kind, ref, expectedRef, sha, at, why }].slice(-MAX_PUSH_ISSUES);
+    await this.save({ ...state, changeId: change.id, forkName: change.forkName, pushIssues });
+    await audit.append({
+      principalId: SYSTEM_PRINCIPAL_ID,
+      action: "change.push-ignored",
+      subject: changeSubject(change.id),
+      payload: { kind, ref, expectedRef, sha, at, summary: why },
+    });
   }
 
   /** A placeholder-titled Change's real title: its Plan's, else the pushed commit's subject. */

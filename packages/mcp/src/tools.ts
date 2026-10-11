@@ -10,10 +10,16 @@
 import {
   type ApiError,
   type Change,
+  groupLaneReasons,
   Id,
+  type LaneReason,
   type OverlapReport,
+  openPushIssues,
+  orderLaneReasons,
   type PipelineRun,
   PlanDraftInput,
+  type PushIssue,
+  pushIssueFix,
   type Scope,
   StartChangeInput,
   WaitUntil,
@@ -152,7 +158,8 @@ export function changeBrief(c: Change) {
     status: c.status,
     lane: c.lane,
     computedLane: c.computedLane,
-    laneReasons: c.laneReasons.map((r) => ({ code: r.code, lane: r.lane, message: r.message })),
+    // Reading order: the reasons that set the lane first, passing checks last.
+    laneReasons: orderLaneReasons(c.laneReasons).map(reasonBrief),
     baseSha: c.baseSha,
     headSha: c.headSha,
     forkName: c.forkName,
@@ -162,7 +169,35 @@ export function changeBrief(c: Change) {
   };
 }
 
-type NextStep = { title: string; call?: string; why?: string };
+const reasonBrief = (r: LaneReason) => ({ code: r.code, lane: r.lane, message: r.message });
+
+/** Why the change is in its lane, compact: deciding reasons + passing count (null: no lane yet). */
+export function laneSummaryOf(c: Change) {
+  if (c.lane === null) return null;
+  const g = groupLaneReasons(c.laneReasons);
+  return { lane: c.lane, deciding: g.deciding.map(reasonBrief), passingCount: g.passing.length };
+}
+
+/** Ignored fork pushes still worth telling the agent about, each with its fix. */
+export function pushIssuesOf(c: Change, issues: readonly PushIssue[] | undefined) {
+  return openPushIssues(issues, c.headSha).map((i) => ({ ...i, fix: pushIssueFix(i, c.id) }));
+}
+
+type NextStep = { title: string; call?: string; command?: string; why?: string };
+
+/** The newest ignored push comes first in nextSteps: the agent's work never reached CI. */
+function pushIssueSteps(issues: ReturnType<typeof pushIssuesOf>): NextStep[] {
+  const last = issues.at(-1);
+  if (last === undefined) return [];
+  const branch = last.expectedRef.replace(/^refs\/heads\//, "");
+  return [
+    {
+      title: clip(`Your push to ${last.ref} graded nothing: push to ${branch} of the fork`, 200),
+      why: clip(`${last.why} ${last.fix.explanation}`),
+      ...(last.fix.command === undefined ? {} : { command: last.fix.command }),
+    },
+  ];
+}
 
 /** start_change: say who else is on the same plan or paths before the agent writes code. */
 function overlapSteps(report: OverlapReport | null): NextStep[] {
@@ -737,6 +772,7 @@ export function buildTools(backend: McpBackend) {
             backend.getResolution(caller, changeId),
           ]),
         );
+        const issues = pushIssuesOf(s.change, s.pushIssues);
         return {
           change: changeBrief(s.change),
           url: backend.webUrl({ changeId: s.change.id }),
@@ -771,20 +807,22 @@ export function buildTools(backend: McpBackend) {
                 shadow: s.classification.shadow,
                 blocked: s.classification.blocked,
                 requiresHumanApproval: s.classification.requiresHumanApproval,
-                reasons: s.classification.reasons.map((r) => ({
-                  code: r.code,
-                  lane: r.lane,
-                  message: r.message,
-                })),
+                reasons: orderLaneReasons(s.classification.reasons).map(reasonBrief),
               }
             : null,
           previewUrl: s.previewUrl ?? null,
           overlaps: s.overlaps,
           supersededBy: s.supersededBy ?? null,
+          laneSummary: laneSummaryOf(s.change),
+          pushIssues: issues,
           nextSteps:
             s.supersededBy != null
               ? supersededSteps(s.change, s.supersededBy)
-              : [...resolutionSteps(s.change.id, resolution), ...changeNextSteps(s.change, s.runs, s.reviews)],
+              : [
+                  ...pushIssueSteps(issues),
+                  ...resolutionSteps(s.change.id, resolution),
+                  ...changeNextSteps(s.change, s.runs, s.reviews),
+                ],
         };
       },
     },
@@ -1034,6 +1072,13 @@ export function buildTools(backend: McpBackend) {
           backend.waitForChange(caller, changeId, v.until, v.timeoutSec * 1000),
         );
         const by = r.reason === "superseded" ? (r.supersededBy ?? null) : null;
+        const issues = pushIssuesOf(r.change, r.pushIssues);
+        const last = issues.at(-1);
+        // Waiting again would only time out again: the pushes went where nothing grades them.
+        const warning =
+          r.reason === "timeout" && last !== undefined
+            ? `Timed out, and your last push graded nothing: ${last.why} Run pushIssues[].fix.command, then wait again.`
+            : undefined;
         return {
           reached: r.reached,
           reason: r.reason,
@@ -1041,8 +1086,13 @@ export function buildTools(backend: McpBackend) {
           ...(by !== null ? { supersededBy: by } : {}),
           change: changeBrief(r.change),
           url: backend.webUrl({ changeId: r.change.id }),
+          laneSummary: laneSummaryOf(r.change),
+          pushIssues: issues,
+          ...(warning === undefined ? {} : { warning }),
           nextSteps:
-            r.reason === "superseded" ? supersededSteps(r.change, by) : changeNextSteps(r.change),
+            r.reason === "superseded"
+              ? supersededSteps(r.change, by)
+              : [...pushIssueSteps(issues), ...changeNextSteps(r.change)],
         };
       },
     },

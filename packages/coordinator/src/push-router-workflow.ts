@@ -1,7 +1,8 @@
 /**
  * `PushRouter`: started by `triggers.events` for every `cf.artifacts.repo.pushed` in the namespace.
  * Validates the event and hands it to `coordinator.onPush`, which routes change-fork pushes to
- * the change's ChangeCoordinator DO (deletes, non-branch refs and main repos are ignored), then to
+ * the change's ChangeCoordinator DO (deletes, refs other than branches and tags, and main repos are
+ * ignored; a push to the wrong branch or a tag is recorded as a push issue), then to
  * the runtime's optional `onPushEvent` observer (every push, main repos included).
  *
  *   "triggers": { "events": [{ "type": "cf.artifacts.repo.pushed",

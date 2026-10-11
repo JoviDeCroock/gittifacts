@@ -6,6 +6,7 @@ import {
   type Evidence,
   type Lane,
   type LinkedIssue,
+  orderLaneReasons,
   type OverlapReport,
   type PipelineRun,
   type ReviewDecision,
@@ -71,7 +72,8 @@ function withoutAnsi(c: ClassifyResult | null): ClassifyResult | null {
   if (c === null) return null;
   return {
     ...c,
-    reasons: c.reasons.map((r) => ({ ...r, message: stripAnsi(r.message) })),
+    // Reading order: the reasons that set the lane first, passing checks last.
+    reasons: orderLaneReasons(c.reasons).map((r) => ({ ...r, message: stripAnsi(r.message) })),
     checklist: c.checklist.map((g) => ({ ...g, detail: stripAnsi(g.detail) })),
   };
 }
@@ -104,7 +106,8 @@ export async function getChangeDetail(
     change.authorId,
     ...(plan ? planPrincipalIds([plan]) : []),
   ]);
-  return { change, plan, runs, classification, principals };
+  const ordered = { ...change, laneReasons: orderLaneReasons(change.laneReasons) };
+  return { change: ordered, plan, runs, classification, principals };
 }
 
 export async function listChangeReviews(

@@ -9,7 +9,7 @@
  * `scoped` call named, so a reader's agent can read and nothing else. The services re-check.
  */
 import { pageUrl } from "@app/conventions";
-import { type Change, Principal, type ReviewDecision } from "@app/domain";
+import { type Change, Principal, type PushIssue, type ReviewDecision } from "@app/domain";
 import type { ActorData, AuditEventData, ChangeReviewData, McpBackend, McpCaller } from "@app/mcp";
 import { z } from "zod";
 import { type AccessTarget, assertTargetAccess } from "../access/access.js";
@@ -146,6 +146,20 @@ async function overlapsOf(svc: Services, caller: Caller, changeId: string) {
   } catch (err) {
     console.warn("get_change_status: overlap check failed", err);
     return null;
+  }
+}
+
+/** Ignored fork pushes (wrong ref, tag, no new commits); absent when the read failed. */
+async function pushIssuesOf(
+  svc: Services,
+  caller: Caller,
+  changeId: string,
+): Promise<PushIssue[] | undefined> {
+  try {
+    return await svc.coordinator.pushIssues(caller.principal, changeId);
+  } catch (err) {
+    console.warn("change status: reading push issues failed", err);
+    return undefined;
   }
 }
 
@@ -294,6 +308,7 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
         previewUrl: await previewUrlOf(svc, d.change),
         overlaps: await overlapsOf(svc, caller, changeId),
         supersededBy: await supersededBy(svc, d.change).catch(() => null),
+        pushIssues: await pushIssuesOf(svc, caller, changeId),
         reviews: r.reviews.map((x) => reviewData(x, r.principals)),
         change: d.change,
         runs: d.runs,
@@ -408,7 +423,7 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
         const by = await supersededBy(svc, r.change).catch(() => null);
         if (by !== null) return { ...r, reason: "superseded" as const, supersededBy: by };
       }
-      return r;
+      return { ...r, pushIssues: await pushIssuesOf(svc, caller, changeId) };
     },
 
     async getRollout(mc, changeId) {

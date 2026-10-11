@@ -696,7 +696,9 @@ export function createCoordinator(
 
     async onPush(event) {
       if (!isForkName(event.repoName)) return; // only change forks are routed
-      if (!event.ref.startsWith("refs/heads/") || event.after === ZERO_SHA) return;
+      if (event.after === ZERO_SHA) return; // deletes grade nothing and need no warning
+      // Branches and tags: the Change's coordinator records a push to the wrong one (pushIssues).
+      if (!/^refs\/(heads|tags)\//.test(event.ref)) return;
       const change = await store.getChangeByFork(event.repoName);
       if (change === null) return;
       await bindings.changeCoordinator(change.id).onPush({
@@ -1211,6 +1213,13 @@ export function createCoordinator(
       const state = milestoneState(change, milestone);
       if (state !== "pending") return { change, reached: state === "reached", reason: state };
       return { change, reached: false, reason: "timeout", retryAfterSec: WAIT_RETRY_AFTER_SEC };
+    },
+
+    async pushIssues(actor, changeId) {
+      const watched = await requireChange(changeId);
+      await assertAccess(actor, watched.repoId, "read", noChange(changeId));
+      const state = await bindings.changeCoordinator(changeId).state(changeId);
+      return state.pushIssues ?? [];
     },
 
     async watchChange(actor, changeId, opts) {

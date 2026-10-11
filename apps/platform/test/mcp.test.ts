@@ -81,6 +81,45 @@ describe("POST /mcp", () => {
     }
   });
 
+  it("get_change_status puts the reasons that set the lane first and summarizes them", async () => {
+    const { app, mcp, repo, agent } = await setup();
+    const reasons = [
+      { code: "tests.ok", lane: 0 as const, message: "tests passed" },
+      { code: "size.lane1", lane: 1 as const, message: "diff is medium sized" },
+      { code: "lint.ok", lane: 0 as const, message: "lint clean" },
+      { code: "paths.platform", lane: 2 as const, message: "touches .platform/**" },
+    ];
+    const s = store();
+    const change = changeFixture(repo.id, agent.principal.id, { lane: 2, laneReasons: reasons });
+    await s.insertChange(change);
+    await s.putClassification(change.id, HEAD_SHA, classificationFixture({ lane: 2, reasons }));
+    try {
+      const r = await mcp.tools.get_change_status({ changeId: change.id });
+      if (r.isError) throw new Error(JSON.stringify(r.content));
+      const order = ["paths.platform", "size.lane1", "tests.ok", "lint.ok"];
+      expect(r.structuredContent.change.laneReasons.map((x) => x.code)).toEqual(order);
+      expect(r.structuredContent.classification?.reasons.map((x) => x.code)).toEqual(order);
+      expect(r.structuredContent.laneSummary).toEqual({
+        lane: 2,
+        deciding: [{ code: "paths.platform", lane: 2, message: "touches .platform/**" }],
+        passingCount: 2,
+      });
+      // The coordinator is down in this app: no push issues known, and the status still answers.
+      expect(r.structuredContent.pushIssues).toEqual([]);
+      // The HTTP API reads the same order.
+      const http = await call(app, "GET", `/api/v1/changes/${change.id}`, { token: agent.token });
+      expect(http.status).toBe(200);
+      const body = await json<{
+        change: { laneReasons: { code: string }[] };
+        classification: { reasons: { code: string }[] };
+      }>(http);
+      expect(body.change.laneReasons.map((x) => x.code)).toEqual(order);
+      expect(body.classification.reasons.map((x) => x.code)).toEqual(order);
+    } finally {
+      await mcp.client.close();
+    }
+  });
+
   it("whoami reports the agent, its scopes and that it can never approve", async () => {
     const { mcp, agent, repo } = await setup();
     try {
@@ -168,7 +207,7 @@ describe("POST /mcp", () => {
   });
 
   it("rejects missing/human/invalid bearer tokens and foreign origins", async () => {
-    const { app, human, agent } = await setup();
+    const { app, human, agent, mcp } = await setup();
     // A tool that needs a token (O3: tools/list, create_project and whoami work without one).
     const rpc = {
       jsonrpc: "2.0",
@@ -186,7 +225,19 @@ describe("POST /mcp", () => {
     });
     expect(none.status).toBe(401);
     expect(none.headers.get("www-authenticate")).toMatch(/^Bearer/);
-    await none.text();
+    // The fix leads with the likeliest cause: an agent that created a project anonymously and
+    // kept its anonymous session (wait_for_change next) must reconnect with the project token.
+    const noneBody = await json<{ error: { code: string; message: string; fix: { explanation: string } } }>(none);
+    expect(noneBody.error.code).toBe("unauthorized");
+    expect(noneBody.error.message).toContain("create_project and whoami work without credentials");
+    expect(noneBody.error.fix.explanation).toContain(
+      "Reconnect with `Authorization: Bearer <token from create_project>`",
+    );
+    expect(noneBody.error.fix.explanation).toContain("MCP OAuth");
+    // The server's instructions say the same before the first call.
+    expect(mcp.client.getInstructions()).toContain(
+      "After create_project, reconnect with `Authorization: Bearer <token>`",
+    );
     // A human session cookie is not an agent token.
     const viaCookie = await call(app, "POST", "/mcp", { body: rpc, cookie: human.cookie, headers });
     expect(viaCookie.status).toBe(401);
@@ -198,6 +249,7 @@ describe("POST /mcp", () => {
     });
     expect(foreign.status).toBe(403);
     await foreign.text();
+    await mcp.client.close();
   });
 });
 

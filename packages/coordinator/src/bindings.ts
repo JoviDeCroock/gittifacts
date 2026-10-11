@@ -3,7 +3,7 @@
  * builds these from real bindings; tests pass in-process fakes. Only plain, serializable values
  * cross these interfaces (they are RPC boundaries in production).
  */
-import type { Change, WaitUntil } from "@app/domain";
+import type { Change, PushIssue, WaitUntil } from "@app/domain";
 import type { ChangeWorkflowParams, RolloutParams } from "./events.js";
 import type { WaitReason } from "./milestones.js";
 
@@ -62,6 +62,11 @@ export interface ChangeCoordinatorState {
   gcAt: number | null;
   /** Re-gradings of the current head so far (each gets its own workflow instance and CI run). */
   regrades?: number;
+  /**
+   * Pushes ignored since the last one that started a pipeline (wrong branch, a tag, nothing on
+   * top of the base), newest last: get_change_status / wait_for_change tell the agent.
+   */
+  pushIssues?: PushIssue[];
 }
 
 export interface ChangeCoordinatorClient {
