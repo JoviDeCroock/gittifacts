@@ -3,7 +3,7 @@
  * Same rules as the platform: owners manage, a member may leave, the last owner stays.
  */
 import { ApiError } from "./client.js";
-import { ME } from "./fixtures.js";
+import { ME, principals } from "./fixtures.js";
 import type { AddMemberInput, MembersView, RepoMember, RepoRole } from "./members.js";
 
 const PEOPLE: Record<string, { name: string; email: string }> = {
@@ -41,13 +41,20 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** The demo agents each person runs (fixtures: fleet-coder-07, planner-02 and issue-triager are Maya's). */
+function agentsOf(personId: string) {
+  return principals()
+    .filter((p) => p.kind === "agent" && p.ownerId === personId)
+    .map((p) => ({ principalId: p.id, name: p.name }));
+}
+
 function view(repoId: string): MembersView {
   const all = rows(repoId);
   const viewerRole = all.find((m) => m.principalId === ME)?.role ?? null;
   const canManage = viewerRole === "owner";
   return {
     repoId,
-    members: all.map((m) => ({ ...m, email: canManage ? m.email : null })),
+    members: all.map((m) => ({ ...m, email: canManage ? m.email : null, agents: agentsOf(m.principalId) })),
     viewerRole,
     canManage,
   };

@@ -34,6 +34,16 @@ export interface RepoMember {
   role: RepoRole;
   addedBy: string;
   addedAt: string;
+  /**
+   * The agents this person runs: they act with this role here and lose access with it. Optional:
+   * a server that does not send it yet leaves the line out (the screen fills in the viewer's own).
+   */
+  agents?: MemberAgent[];
+}
+
+export interface MemberAgent {
+  principalId: string;
+  name: string;
 }
 
 export interface MembersView {
