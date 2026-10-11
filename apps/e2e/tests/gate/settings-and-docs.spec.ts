@@ -25,6 +25,29 @@ test("agents: create an agent and see its token once", async ({ authed: page, re
   await expectNoHorizontalScroll(page);
 });
 
+test("agents: a create sent before the repositories arrive waits for them (its one repository is picked)", async ({ authed: page, world }) => {
+  // Hold the repository list back: the form must not answer "pick a repository" for a list it hasn't shown.
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route("**/api/v1/repos", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goto("/agents");
+  await page.getByTestId("create-agent-open").click();
+  const form = page.getByTestId("create-agent");
+  await form.getByRole("textbox", { name: "Name" }).fill(uniqueName("early").toLowerCase());
+  const submit = form.locator('button[type="submit"]');
+  await expect(submit).toBeDisabled();
+  await expect(submit).toHaveText(/Loading repositories/);
+  release();
+  // The one repository (the world's) is picked for the person, and the create goes through.
+  await expect(form.getByRole("checkbox", { name: world.repoName })).toBeChecked();
+  await submit.click();
+  await expect(page.getByTestId("agent-token")).toBeVisible();
+  await expect(form.getByRole("alert")).toHaveCount(0);
+});
+
 const SETTINGS = ["/settings/integrations", "/settings/integrations/developer", ...(GITHUB_SURFACES ? ["/settings/github"] : []), "/audit"];
 for (const path of SETTINGS) {
   test(`settings page ${path} renders without errors`, async ({ authed: page }) => {
