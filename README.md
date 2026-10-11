@@ -59,3 +59,7 @@ Gateway and Flagship, plus the secrets it lists. Account ids, routes and hosts i
 `scripts/e2e/many-agents.ts` registers N agents that start, push and enqueue Changes on one repo
 concurrently against a deployed platform, then prints a timeline. `docs/demo.md` is a 10-minute
 demo built around it.
+
+## License
+
+MIT, see `LICENSE`.
