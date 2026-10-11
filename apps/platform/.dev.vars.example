@@ -36,3 +36,7 @@ CF_API_TOKEN=
 
 # Optional: AI Gateway token for the reviewer's HTTP fallback when the AI binding fails.
 AI_GATEWAY_TOKEN=
+
+# Claim page Turnstile. Without TURNSTILE_SECRET_KEY claims fail closed; TURNSTILE_TEST_KEYS=1 uses
+# Cloudflare's always-pass test keys instead. Local dev only: never set it in a deployment.
+TURNSTILE_TEST_KEYS=1

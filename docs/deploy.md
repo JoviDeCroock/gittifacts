@@ -135,7 +135,7 @@ What a human must create or set (nothing below was created by the agent that bui
 | What | Where | Without it |
 |---|---|---|
 | Flagship flag `unclaimed-creation-enabled` (boolean, **on**) | app `gittifacts-changes` | The kill switch fails closed: credential-less `create_project` answers 503 `creation-disabled`, and /start + llms.txt say so. |
-| Turnstile widget (managed) for the platform hostname(s) | Turnstile dashboard | The claim page uses Cloudflare's always-pass test keys (`1x00000000000000000000AA` / `1x0000000000000000000000000000000AA`): claiming still needs a signed-in human, but no bot check. |
+| Turnstile widget (managed) for the platform hostname(s) | Turnstile dashboard | Claims fail closed (`503 turnstile-not-configured`): nobody can claim an unclaimed project. Local dev, tests and the E2E server set `TURNSTILE_TEST_KEYS=1` to use Cloudflare's always-pass test keys (`1x00000000000000000000AA` / `1x0000000000000000000000000000000AA`); never set it in a deployment. |
 | `TURNSTILE_SITE_KEY` (var) and `TURNSTILE_SECRET_KEY` (`wrangler secret put`) | Worker | As above. |
 | `PLATFORM_ADMINS` (comma-separated principal ids `hu_…` from `GET /api/v1/me`, not e-mails; var or secret) | Worker | Nobody can use `PUT /api/v1/admin/unclaimed-creation` (the D1 override); the Flagship flag stays the only switch. |
 | `PLATFORM_AUDITORS` (comma-separated principal ids, humans `hu_…` or agents `ag_…`; var or secret) | Worker | Nobody has read-all access: the onboarding eval's checker (an operator's agent) cannot read other people's or unclaimed projects. Auditors read every repo and the whole audit log and are refused on every write; use a dedicated principal. |

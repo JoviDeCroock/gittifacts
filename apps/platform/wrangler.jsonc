@@ -33,7 +33,9 @@
     // Unclaimed projects (O3): deleted this many days after creation unless a human claims them.
     // Every other unclaimed limit has a default in src/limits/config.ts; override any subset with
     // an `UNCLAIMED_LIMITS` JSON var. Optional, set outside this file: TURNSTILE_SITE_KEY (var)
-    // and TURNSTILE_SECRET_KEY (secret) for the claim page (unset: Cloudflare's test keys), and
+    // and TURNSTILE_SECRET_KEY (secret) for the claim page (unset: claims fail closed with
+    // "turnstile-not-configured"; only TURNSTILE_TEST_KEYS="1", set by dev/tests/E2E, falls back
+    // to Cloudflare's always-pass test keys; never set it in a deployment), and
     // PLATFORM_ADMINS (comma-separated principal ids, hu_…) for the kill-switch override endpoint.
     "UNCLAIMED_TTL_DAYS": "7",
     // Public origin (better-auth callbacks, webhook payloads built outside a request).

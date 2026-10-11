@@ -62,6 +62,7 @@ export function writeE2eConfig({ platformDir, port, secretNames }: E2eConfigOpti
     ...(cfg.vars as Json),
     BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
     TURNSTILE_SITE_KEY: "",
+    TURNSTILE_TEST_KEYS: "1",
     PLATFORM_ADMINS: "",
     PLATFORM_AUDITORS: "",
     GITHUB_REPO_ALLOWLIST: "",

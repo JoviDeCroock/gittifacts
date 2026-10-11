@@ -10,9 +10,11 @@ import { D1Store } from "./store/d1-store.js";
 /** Worker bindings (generated `Env`) plus optional, untyped-by-wrangler vars. */
 export type Bindings = Env & {
   BETTER_AUTH_URL?: string;
-  /** O3 claim page (unset: Cloudflare's always-pass test keys; src/claim/turnstile.ts). */
+  /** O3 claim page (no secret: claims fail closed; src/claim/turnstile.ts). */
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
+  /** "1" (dev, tests, E2E only): no secret falls back to Cloudflare's always-pass test keys. */
+  TURNSTILE_TEST_KEYS?: string;
   /** Comma-separated principal ids (hu_…) of platform admins (kill-switch override). */
   PLATFORM_ADMINS?: string;
   /** Comma-separated principal ids (humans or agents) with read-only access to every repo. */

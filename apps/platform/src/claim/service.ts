@@ -25,7 +25,7 @@ import { previewUrlFor, previewZone } from "../previews/ids.js";
 import { limitsFor, type WorkspaceConfigVars } from "../workspace/model.js";
 import { type ClaimRow, claimRowByToken } from "./store.js";
 import { isClaimTokenShape } from "./tokens.js";
-import { turnstileSiteKey, verifyTurnstile } from "./turnstile.js";
+import { NOT_CONFIGURED, turnstileSiteKey, verifyTurnstile } from "./turnstile.js";
 
 export interface ClaimView {
   status: "unclaimed" | "claimed" | "expired";
@@ -207,12 +207,25 @@ export async function claimProject(
     ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
   });
   if (!check.success) {
+    const notConfigured = check.errorCodes.includes(NOT_CONFIGURED);
     await svc.audit.append({
       principalId: claimer.id,
       action: "project.claim-refused",
       subject: `repo:${row.repoId}`,
       payload: { reason: "turnstile", errorCodes: check.errorCodes },
     });
+    if (notConfigured) {
+      throw new ApiError(
+        503,
+        NOT_CONFIGURED,
+        "turnstile is not configured on this platform, so no project can be claimed",
+        { errorCodes: check.errorCodes },
+        {
+          explanation:
+            "The operator must set the TURNSTILE_SECRET_KEY secret (and TURNSTILE_SITE_KEY var). Local dev and tests set TURNSTILE_TEST_KEYS=1 to use Cloudflare's test keys. Retrying will not help until then.",
+        },
+      );
+    }
     throw new ApiError(
       403,
       "turnstile-failed",

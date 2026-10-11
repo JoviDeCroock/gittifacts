@@ -75,6 +75,15 @@ describe("claim flow", () => {
 
     // Turnstile fails → 403 turnstile-failed, nothing changes.
     const human = await signUpHuman(app, "Owner");
+    // No secret and no explicit test-key opt-in (a deployment that forgot the secret) → fail
+    // closed with 503 turnstile-not-configured, nothing changes.
+    const unconfigured = await claim(app, p, {
+      cookie: human.cookie,
+      env: { TURNSTILE_SECRET_KEY: "", TURNSTILE_TEST_KEYS: "" },
+    });
+    expect(unconfigured.status).toBe(503);
+    expect(((await unconfigured.json()) as Envelope).error.code).toBe("turnstile-not-configured");
+    expect((await store().getRepo(p.projectId))?.claim.status).toBe("unclaimed");
     const failed = await claim(app, p, {
       cookie: human.cookie,
       env: { TURNSTILE_SECRET_KEY: TEST_SECRET_FAIL },

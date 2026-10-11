@@ -228,7 +228,12 @@ describe("Turnstile", () => {
     const offline = (() => {
       throw new Error("no network in tests");
     }) as unknown as typeof fetch;
+    // No secret: fails closed unless test keys are explicitly opted in.
     expect(await verifyTurnstile({}, input, offline)).toMatchObject({
+      success: false,
+      errorCodes: ["turnstile-not-configured"],
+    });
+    expect(await verifyTurnstile({ TURNSTILE_TEST_KEYS: "1" }, input, offline)).toMatchObject({
       success: true,
       testKeys: true,
     });

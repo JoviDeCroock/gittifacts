@@ -53,8 +53,10 @@ export default defineConfig(async () => ({
           GITHUB_REPO_ALLOWLIST: "",
           CF_API_TOKEN: "",
           // wrangler.jsonc carries the production Turnstile site key and admins: tests use
-          // Cloudflare's test keys (an empty var falls back to them) and no platform admins.
+          // Cloudflare's test keys (an empty var falls back to them, opted in with
+          // TURNSTILE_TEST_KEYS; without it a missing secret fails closed) and no platform admins.
           TURNSTILE_SITE_KEY: "",
+          TURNSTILE_TEST_KEYS: "1",
           PLATFORM_ADMINS: "",
         },
       },
