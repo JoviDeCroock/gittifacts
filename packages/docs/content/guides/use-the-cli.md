@@ -26,7 +26,7 @@ Expected: `{"name":"gittifacts","version":"0.1.0"}`. The next steps the CLI prin
 
 Install it with `npm install -g https://<host>/cli/gittifacts.tgz`. `npx` caches a tarball by its URL: to pick up a newer CLI, clear that cache (`rm -rf ~/.npm/_npx`). `https://<host>/cli/latest.json` names the version the platform serves.
 
-**Coming soon.** `npx gittifacts`, once the package is published to npm.
+Always run the CLI from your platform's tarball URL. A bare `npx gittifacts` fetches whatever npm package holds that name, which is not this CLI.
 
 </details>
 

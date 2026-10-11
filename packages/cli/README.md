@@ -4,8 +4,8 @@ The CLI for [gittifacts](https://github.com/JoviDeCroock/gittifacts), the git pl
 Humans approve intent and machines prove conformance. Every MCP tool is a command, the output is JSON by default, and
 you don't need an account to start.
 
-The platform serves the CLI as an npm tarball (it is not on npm yet; `npx gittifacts` will work once it is
-published). Node 22 or later:
+The platform serves the CLI as an npm tarball; always run it from your platform's URL. A bare `npx gittifacts`
+fetches whatever npm package holds that name, which is not this CLI. Node 22 or later:
 
 ```sh
 npx -y https://<host>/cli/gittifacts.tgz --host https://<host> init --template workers-api --name my-api --clone

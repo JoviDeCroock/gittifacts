@@ -139,7 +139,9 @@ describe("startGuide CLI", () => {
       `npx -y ${tarball} --host ${HOST} init --template workers-api --name my-api --clone`,
     );
     expect(json.cli.alias).toBe(`alias gittifacts="npx -y ${tarball}"`);
-    expect(json.cli.note).toContain("npx gittifacts");
+    // Never a bare `npx gittifacts`: that npm name isn't ours, so the note warns against it.
+    expect(json.cli.note).toContain("always run it from that URL");
+    expect(json.cli.note).not.toMatch(/will work once|once (it|the package) is published/);
     expect(json.auth.deviceFlow.command).toBe(`npx -y ${tarball} --host ${HOST} login`);
     expect(markdown).toContain(`\`${json.cli.command}\``);
     expect(markdown).toContain(json.cli.alias);

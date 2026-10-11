@@ -29,4 +29,4 @@ export function cliAlias(host: string): string {
 
 /** Said wherever the tarball command appears. */
 export const CLI_NPM_NOTE =
-  "The CLI is not on npm yet, so it is served by the platform; `npx gittifacts` will work once it is published.";
+  "The platform serves the CLI as a tarball: always run it from that URL. A bare `npx gittifacts` fetches whatever npm package holds that name, which is not this CLI.";
