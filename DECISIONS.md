@@ -2913,3 +2913,49 @@ native-first for now.
 
 **Consequences.** Overlap work runs on every queue poll (bounded at 50 open Changes, ≤5 R2 reads).
 Turning GitHub back on is one line plus the E2E spec that asserts it is hidden.
+
+## 2026-10-11 — Compare attempts at one Plan; a person picks one with a tap
+
+**Context.** Cloudflare's brief asks how many agents work at once; a natural pattern is several
+agents attempting the same approved Plan and a person choosing the best result. Without support,
+the person reads three Changes side by side and approves one by hand, and the other two agents
+wait forever.
+
+**Decision.**
+- **Ranking is pure and deterministic** (`rankAttempts` in `@app/domain`, no I/O or clocks;
+  domain rather than the classifier so the web demo ranks with the same code). The key order is:
+  finished and green (CI passed, no new failing test), then finished but not green, then still
+  grading, then closed. Within that: lane (none last), tests, CI, red/green, scope drift, coverage,
+  mutation (whole percents), public API, diff size (smaller wins) and time to green, then start
+  time and id. The facts come from the lane reasons the classifier already wrote (what it
+  measured), the sealed evidence (counts, ratios), the diff and the green run. A fact that can't be
+  read is unknown and ranks below a measured one, never above. The recommendation is the best
+  finished green attempt. When nothing has finished, it is the leader so far, marked
+  `provisional`. When everything finished red, there is none. Ranking is advice: it never sets a
+  lane or approves anything.
+- **Picking is approving.** `POST /api/v1/plans/{planId}/attempts/{changeId}/pick` is for session
+  humans only; agents get the human-only 403 with a fix naming `compare_attempts`. It reuses
+  `submitReview(approve)`, so the usual rules hold: not the author, the approval binds to the head
+  the person saw, review rights on the repo, and approval enqueues (agents don't need to). The
+  attempt must be awaiting review, or already approved or queued (then nothing is approved
+  again), and the plan must be approved, because intent comes before choosing how. The pick is
+  claimed first in `plan_picks`, one per plan, so of two simultaneous picks one wins (409
+  `already-picked`). If the approval fails, the pick is taken back.
+- **The others are closed as superseded, by the platform.** The losers are abandoned with a reason
+  that names the pick. Status stays `abandoned`, so no new ChangeStatus is needed. The
+  coordinator lets the system principal close; the person needed review rights on the winner, not
+  maintainer rights on every loser. The MCP layer maps "ended" plus "the plan's pick is another
+  Change" to wait reason `superseded` with `supersededBy`, and `get_change_status` says the same.
+  Audit: `plan.attempt-picked` on the plan and `change.superseded` per loser, both by the person
+  (plus the coordinator's own `change.abandoned`).
+- Web: the Plan page shows an Attempts section once ≥2 Changes share the plan. There is one tap and
+  no modal, like change approval. The palette's "Compare attempts" has the twin
+  `compare_attempts`, and "Pick an attempt" is person-only.
+
+**Consequences.** Migration 0021 is additive. A reviewer can close other agents' attempts through a
+pick, which is the point, but only on a plan whose intent a maintainer approved. Closing the losers
+is best effort: failures are listed in `notClosed`, and retrying the pick closes what is left.
+`wait_for_change` adds one store read only for changes that ended. The newest 20 Changes on a plan
+are compared, with one diff read each. Open: the live demo hasn't been run against a deployment
+yet; ranking doesn't weigh the reviewer agent's walkthrough verdicts; `CONVENTIONS_VERSION` is not
+bumped, so existing repos keep the AGENTS.md they have.
