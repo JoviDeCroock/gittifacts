@@ -60,6 +60,8 @@ export function stagingConfig(prod: Json, d1Id: string): Json {
     GITHUB_APP_SLUG: "",
     GITHUB_APP_CLIENT_ID: "",
     GITHUB_REPO_ALLOWLIST: "",
+    // No Turnstile secret on staging: claims use Cloudflare's always-pass test keys (opt-in, audit M11).
+    TURNSTILE_TEST_KEYS: "1",
   };
   cfg.d1_databases = [{ binding: "DB", database_name: STAGING.d1, database_id: d1Id, migrations_dir: "migrations" }];
   cfg.r2_buckets = (cfg.r2_buckets as Json[]).map((b) => ({ ...b, bucket_name: STAGING.bucket }));
