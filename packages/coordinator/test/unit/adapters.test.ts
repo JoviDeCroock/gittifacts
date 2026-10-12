@@ -1020,6 +1020,55 @@ describe("ArtifactsGitHost", () => {
     expect(d.files[0]?.hunks[0]?.header).toBe("@@ -1,2 +1,2 @@");
   });
 
+  it("diffs a root commit against the empty tree", async () => {
+    const { h } = host();
+    const d = await h.diff("main", null, "c1");
+    expect(d.baseSha).toBe("0".repeat(40));
+    expect(d.files.map((f) => [f.path, f.status])).toEqual([
+      ["a.txt", "added"],
+      ["img.png", "added"],
+      ["src/keep.ts", "added"],
+    ]);
+  });
+
+  it("browses: walks paths through trees, reads small blobs only, logs with metadata", async () => {
+    const { h } = host();
+    const root = await h.readPath("main", "c1", "", { maxBytes: 100 });
+    expect(root?.type === "tree" && root.entries.map((e) => [e.name, e.type])).toEqual([
+      ["a.txt", "blob"],
+      ["src", "tree"],
+      ["img.png", "blob"],
+    ]);
+    const dir = await h.readPath("main", "c1", "src", { maxBytes: 100 });
+    expect(dir).toMatchObject({ type: "tree", sha: "src1" });
+    const file = await h.readPath("main", "c1", "src/keep.ts", { maxBytes: 100 });
+    expect(file).toMatchObject({ type: "blob", sha: "b3", size: 5, mode: "100644" });
+    expect(file?.type === "blob" && new TextDecoder().decode(file.bytes ?? undefined)).toBe(
+      "same\n",
+    );
+    // Over the cap: the size is known, the bytes are not read.
+    expect(await h.readPath("main", "c1", "a.txt", { maxBytes: 3 })).toMatchObject({
+      size: 8,
+      bytes: null,
+    });
+    // Nothing there, or a file used as a directory.
+    expect(await h.readPath("main", "c1", "nope.ts", { maxBytes: 100 })).toBeNull();
+    expect(await h.readPath("main", "c1", "a.txt/x", { maxBytes: 100 })).toBeNull();
+    // A log row without metadata is read on its own; people default to empty, times to 0.
+    const log = await h.log("main", "main", { limit: 10 });
+    expect(log).toEqual([
+      {
+        sha: "c2",
+        tree: "root2",
+        parents: ["c1"],
+        message: "",
+        author: { name: "", email: "", at: 0 },
+        committer: { name: "", email: "", at: 0 },
+      },
+    ]);
+    expect(await h.resolveRef("main", "main")).toBe("c2");
+  });
+
   it("does not line-diff huge blobs but counts them (never under-reports)", async () => {
     const big = `${"x\n".repeat(100)}`;
     const reader = {

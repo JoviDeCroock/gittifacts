@@ -7,14 +7,31 @@ import type { ChangeDiff, ChangeDiffFile } from "@app/domain";
 import { diffText } from "../adapters/line-diff.js";
 import { buildChangeDiff } from "../adapters/tree-diff.js";
 import { isForkName, ZERO_SHA } from "../ids.js";
-import type { FastForwardResult, GitHost } from "../ports.js";
+import type {
+  FastForwardResult,
+  GitCommitInfo,
+  GitHost,
+  GitPath,
+  GitPerson,
+  GitTreeItem,
+} from "../ports.js";
 
 export interface FakeCommit {
   sha: string;
   tree: string;
   parents: string[];
   message: string;
+  /** Author and committer are the same person in the fake. */
+  author: GitPerson;
 }
+
+/** Who a fake commit is by and when (seconds); defaults: the fake author, the host's clock. */
+export interface FakeCommitOptions {
+  author?: { name: string; email: string };
+  at?: number;
+}
+
+export const FAKE_AUTHOR = { name: "Fake Author", email: "author@example.test" };
 
 export interface FakeRepo {
   name: string;
@@ -78,8 +95,12 @@ export class FakeGitHost implements GitHost {
   private counter = 0;
   private tokenCounter = 0;
 
-  constructor(opts: { namespace?: string } = {}) {
+  /** Milliseconds since the epoch; dates new commits. */
+  clock: () => number;
+
+  constructor(opts: { namespace?: string; clock?: () => number } = {}) {
     this.namespace = opts.namespace ?? "fake-eu";
+    this.clock = opts.clock ?? (() => Date.now());
   }
 
   // ------------------------------------------------------------ test helpers
@@ -93,11 +114,23 @@ export class FakeGitHost implements GitHost {
     return sha;
   }
 
-  private newCommit(tree: string, parents: string[], message: string): string {
+  private newCommit(
+    tree: string,
+    parents: string[],
+    message: string,
+    opts: FakeCommitOptions = {},
+  ): string {
     const sha = hex40(
       `commit\u0000${++this.counter}\u0000${tree}\u0000${parents.join(",")}\u0000${message}`,
     );
-    this.commits.set(sha, { sha, tree, parents, message });
+    const at = opts.at ?? Math.floor(this.clock() / 1000);
+    this.commits.set(sha, {
+      sha,
+      tree,
+      parents,
+      message,
+      author: { ...(opts.author ?? FAKE_AUTHOR), at },
+    });
     return sha;
   }
 
@@ -111,7 +144,7 @@ export class FakeGitHost implements GitHost {
   seed(
     name: string,
     files: Files,
-    opts: { defaultBranch?: string; message?: string } = {},
+    opts: { defaultBranch?: string; message?: string } & FakeCommitOptions = {},
   ): string {
     const branch = opts.defaultBranch ?? "main";
     if (!this.repos.has(name)) {
@@ -123,7 +156,7 @@ export class FakeGitHost implements GitHost {
         notes: new Map(),
       });
     }
-    const sha = this.newCommit(this.treeSha(files), [], opts.message ?? "initial commit");
+    const sha = this.newCommit(this.treeSha(files), [], opts.message ?? "initial commit", opts);
     const repo = this.repo(name);
     repo.objects.add(sha);
     repo.refs.set(`refs/heads/${branch}`, sha);
@@ -136,6 +169,7 @@ export class FakeGitHost implements GitHost {
     branch: string,
     changes: Record<string, string | null>,
     message = "change",
+    opts: FakeCommitOptions = {},
   ): string {
     const repo = this.repo(repoName);
     const parent = repo.refs.get(`refs/heads/${branch}`) ?? null;
@@ -144,7 +178,7 @@ export class FakeGitHost implements GitHost {
       if (content === null) delete files[path];
       else files[path] = content;
     }
-    const sha = this.newCommit(this.treeSha(files), parent === null ? [] : [parent], message);
+    const sha = this.newCommit(this.treeSha(files), parent === null ? [] : [parent], message, opts);
     repo.objects.add(sha);
     repo.refs.set(`refs/heads/${branch}`, sha);
     return sha;
@@ -318,11 +352,109 @@ export class FakeGitHost implements GitHost {
     return content === undefined ? null : new TextEncoder().encode(content);
   }
 
-  async diff(repo: string, baseSha: string, headSha: string): Promise<ChangeDiff> {
+  async diff(repo: string, baseSha: string | null, headSha: string): Promise<ChangeDiff> {
     const r = this.repo(repo);
-    for (const s of [baseSha, headSha])
+    for (const s of [baseSha ?? headSha, headSha])
       if (!r.objects.has(s)) throw new FakeGitError("NOT_FOUND", `commit ${s} in ${repo}`);
-    return diffFiles(baseSha, headSha, this.filesAt(baseSha), this.filesAt(headSha));
+    const base = baseSha === null ? {} : this.filesAt(baseSha);
+    return diffFiles(baseSha ?? ZERO_SHA, headSha, base, this.filesAt(headSha));
+  }
+
+  // ------------------------------------------------------------ browsing
+
+  /** A ref name, `refs/heads|tags/<ref>`, or a sha this repo has. */
+  private resolve(repo: string, ref: string): string | null {
+    const r = this.repo(repo);
+    return (
+      r.refs.get(ref) ??
+      r.refs.get(`refs/heads/${ref}`) ??
+      r.refs.get(`refs/tags/${ref}`) ??
+      (r.objects.has(ref) ? ref : null)
+    );
+  }
+
+  private info(sha: string): GitCommitInfo | null {
+    const c = this.commits.get(sha);
+    if (c === undefined) return null;
+    return {
+      sha,
+      tree: c.tree,
+      parents: [...c.parents],
+      message: c.message,
+      author: { ...c.author },
+      committer: { ...c.author },
+    };
+  }
+
+  async resolveRef(repo: string, ref: string): Promise<string | null> {
+    return this.resolve(repo, ref);
+  }
+
+  async readCommit(repo: string, sha: string): Promise<GitCommitInfo | null> {
+    return this.repo(repo).objects.has(sha) ? this.info(sha) : null;
+  }
+
+  async log(
+    repo: string,
+    ref: string,
+    opts: { limit: number; offset?: number },
+  ): Promise<GitCommitInfo[]> {
+    const tip = this.resolve(repo, ref);
+    if (tip === null) return [];
+    const offset = opts.offset ?? 0;
+    return this.ancestry(tip)
+      .slice(offset, offset + opts.limit)
+      .flatMap((sha) => this.info(sha) ?? []);
+  }
+
+  async readPath(
+    repo: string,
+    sha: string,
+    path: string,
+    opts: { maxBytes: number },
+  ): Promise<GitPath | null> {
+    if (!this.repo(repo).objects.has(sha)) return null;
+    const files = this.filesAt(sha);
+    const encoder = new TextEncoder();
+    const file = files[path];
+    if (path !== "" && file !== undefined) {
+      const bytes = encoder.encode(file);
+      return {
+        type: "blob",
+        sha: hex40(`blob\u0000${file}`),
+        mode: "100644",
+        size: bytes.length,
+        bytes: bytes.length <= opts.maxBytes ? bytes : null,
+      };
+    }
+    // Directories are implied by the flat paths below them.
+    const prefix = path === "" ? "" : `${path}/`;
+    const children = new Map<string, Record<string, string>>();
+    const entries: GitTreeItem[] = [];
+    const here: Record<string, string> = {};
+    for (const [p, content] of Object.entries(files)) {
+      if (!p.startsWith(prefix)) continue;
+      const rest = p.slice(prefix.length);
+      here[rest] = content;
+      const slash = rest.indexOf("/");
+      if (slash < 0) {
+        entries.push({
+          name: rest,
+          mode: "100644",
+          sha: hex40(`blob\u0000${content}`),
+          type: "blob",
+        });
+        continue;
+      }
+      const dir = rest.slice(0, slash);
+      const sub = children.get(dir) ?? {};
+      sub[rest.slice(slash + 1)] = content;
+      children.set(dir, sub);
+    }
+    if (entries.length === 0 && children.size === 0) return null;
+    for (const [name, sub] of children)
+      entries.push({ name, mode: "40000", sha: this.treeSha(sub), type: "tree" });
+    return { type: "tree", sha: this.treeSha(here), entries };
   }
 
   async readNote(

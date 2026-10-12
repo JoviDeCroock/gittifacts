@@ -155,10 +155,10 @@ export interface GitHost {
   commitMessage?(repo: string, sha: string): Promise<string | null>;
   treeOf(repo: string, sha: string): Promise<string | null>;
   readFile(repo: string, ref: string, path: string): Promise<Uint8Array | null>;
-  /** Unified diff between two commits that both exist in `repo`. */
+  /** Unified diff between two commits that both exist in `repo` (null base: the empty tree). */
   diff(
     repo: string,
-    baseSha: string,
+    baseSha: string | null,
     headSha: string,
     opts?: { maxFileBytes?: number },
   ): Promise<ChangeDiff>;
@@ -207,7 +207,55 @@ export interface GitHost {
       expectedOld: string;
     },
   ): Promise<{ sha: string }>;
+
+  // Browsing (read-only): the code and history people and agents look at.
+  /** The commit a branch, tag or sha names in `repo`, or null. */
+  resolveRef(repo: string, ref: string): Promise<string | null>;
+  readCommit(repo: string, sha: string): Promise<GitCommitInfo | null>;
+  /** First-parent history from `ref`, newest first ([] for an unknown ref). */
+  log(
+    repo: string,
+    ref: string,
+    opts: { limit: number; offset?: number },
+  ): Promise<GitCommitInfo[]>;
+  /**
+   * What `path` ("" = root) is at commit `sha`: a directory's immediate entries, or a file whose
+   * bytes are read only when it is at most `maxBytes`. Null when nothing is there.
+   */
+  readPath(
+    repo: string,
+    sha: string,
+    path: string,
+    opts: { maxBytes: number },
+  ): Promise<GitPath | null>;
 }
+
+export interface GitPerson {
+  name: string;
+  email: string;
+  /** Seconds since the epoch. */
+  at: number;
+}
+
+export interface GitCommitInfo {
+  sha: string;
+  tree: string;
+  parents: string[];
+  message: string;
+  author: GitPerson;
+  committer: GitPerson;
+}
+
+export interface GitTreeItem {
+  name: string;
+  mode: string;
+  sha: string;
+  type: "tree" | "blob" | "symlink" | "gitlink" | "exec";
+}
+
+export type GitPath =
+  | { type: "tree"; sha: string; entries: GitTreeItem[] }
+  | { type: "blob"; sha: string; mode: string; size: number; bytes: Uint8Array | null };
 
 // ---------------------------------------------------------------- sandbox jobs (not the CI pipeline)
 

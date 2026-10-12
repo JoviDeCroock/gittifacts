@@ -13,7 +13,7 @@
  */
 import type { ChangeDiff } from "@app/domain";
 import { isForkName } from "../ids.js";
-import type { FastForwardResult, GitHost } from "../ports.js";
+import type { FastForwardResult, GitCommitInfo, GitHost, GitPath, GitTreeItem } from "../ports.js";
 import { diffTrees, type TreeReader } from "./tree-diff.js";
 
 /** gitwire's remote shape. */
@@ -103,15 +103,31 @@ export interface ArtifactsRepoLike {
     hash: string;
     type: "tree" | "blob" | "symlink" | "gitlink" | "exec";
   }> | null>;
-  readCommit(
-    hash: string,
-  ): Promise<{ hash: string; treeHash: string; parents: string[]; message?: string } | null>;
+  readCommit(hash: string): Promise<ArtifactsCommitLike | null>;
   readFile(args: { ref: string; path: string }): Promise<Blob | null>;
-  log(opts?: { ref?: string; limit?: number; offset?: number }): Promise<Array<{ hash: string }>>;
+  /** First-parent chain, newest first; [] for an unknown ref. Fake repos may omit the metadata. */
+  log(opts?: {
+    ref?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Array<Partial<ArtifactsCommitLike> & { hash: string }>>;
   fork(
     name: string,
     opts?: { description?: string; readOnly?: boolean; defaultBranchOnly?: boolean },
   ): Promise<{ remote: string }>;
+}
+
+/** `ArtifactsCommitMetadata` (docs/research/artifacts.md §2); the people and times may be absent in fakes. */
+export interface ArtifactsCommitLike {
+  hash: string;
+  treeHash: string;
+  parents: string[];
+  message?: string;
+  author?: { name: string; email: string };
+  committer?: { name: string; email: string };
+  /** Seconds since the epoch. */
+  authoredAt?: number;
+  committedAt?: number;
 }
 
 /** Structural slice of the `Artifacts` binding. */
@@ -233,6 +249,19 @@ function dispose(handle: unknown): void {
   if (sym === undefined || typeof handle !== "object" || handle === null) return;
   const fn = (handle as Record<symbol, unknown>)[sym];
   if (typeof fn === "function") (fn as () => void).call(handle);
+}
+
+function commitInfo(c: ArtifactsCommitLike): GitCommitInfo {
+  const author = c.author ?? { name: "", email: "" };
+  const committer = c.committer ?? author;
+  return {
+    sha: c.hash,
+    tree: c.treeHash,
+    parents: [...c.parents],
+    message: c.message ?? "",
+    author: { ...author, at: c.authoredAt ?? 0 },
+    committer: { ...committer, at: c.committedAt ?? c.authoredAt ?? 0 },
+  };
 }
 
 export class ArtifactsGitHost implements GitHost {
@@ -504,14 +533,17 @@ export class ArtifactsGitHost implements GitHost {
 
   async diff(
     repo: string,
-    baseSha: string,
+    baseSha: string | null,
     headSha: string,
     opts: { maxFileBytes?: number } = {},
   ): Promise<ChangeDiff> {
     return this.withRepo(repo, async (r) => {
-      const [base, head] = await Promise.all([r.readCommit(baseSha), r.readCommit(headSha)]);
-      if (base === null || head === null)
-        throw new Error(`commit ${base === null ? baseSha : headSha} not found in ${repo}`);
+      const [base, head] = await Promise.all([
+        baseSha === null ? null : r.readCommit(baseSha),
+        r.readCommit(headSha),
+      ]);
+      if ((baseSha !== null && base === null) || head === null)
+        throw new Error(`commit ${head === null ? headSha : baseSha} not found in ${repo}`);
       const reader: TreeReader = {
         readTree: (hash) => r.readTree(hash),
         readBlob: async (hash) => {
@@ -523,9 +555,90 @@ export class ArtifactsGitHost implements GitHost {
       };
       return diffTrees(
         reader,
-        { baseSha, headSha, baseTree: base.treeHash, headTree: head.treeHash },
+        {
+          baseSha: baseSha ?? ZERO,
+          headSha,
+          baseTree: base?.treeHash ?? null,
+          headTree: head.treeHash,
+        },
         opts.maxFileBytes === undefined ? {} : { maxFileBytes: opts.maxFileBytes },
       );
+    });
+  }
+
+  // ------------------------------------------------------------ browsing
+
+  async resolveRef(repo: string, ref: string): Promise<string | null> {
+    return this.withRepo(repo, async (r) => {
+      if (/^[0-9a-f]{40}$/.test(ref)) return (await r.readCommit(ref))?.hash ?? null;
+      return (await r.log({ ref, limit: 1 }))[0]?.hash ?? null;
+    });
+  }
+
+  async readCommit(repo: string, sha: string): Promise<GitCommitInfo | null> {
+    return this.withRepo(repo, async (r) => {
+      const c = await r.readCommit(sha);
+      return c === null ? null : commitInfo(c);
+    });
+  }
+
+  async log(
+    repo: string,
+    ref: string,
+    opts: { limit: number; offset?: number },
+  ): Promise<GitCommitInfo[]> {
+    return this.withRepo(repo, async (r) => {
+      const rows = await r.log({ ref, limit: opts.limit, offset: opts.offset ?? 0 });
+      // `log` carries the metadata; a row without it (older runtimes) is read on its own.
+      return Promise.all(
+        rows.map(async (row) => {
+          if (row.treeHash !== undefined && row.parents !== undefined)
+            return commitInfo(row as ArtifactsCommitLike);
+          const full = await r.readCommit(row.hash);
+          if (full === null) throw new Error(`commit ${row.hash} in ${repo} log is unreadable`);
+          return commitInfo(full);
+        }),
+      );
+    });
+  }
+
+  async readPath(
+    repo: string,
+    sha: string,
+    path: string,
+    opts: { maxBytes: number },
+  ): Promise<GitPath | null> {
+    return this.withRepo(repo, async (r) => {
+      const commit = await r.readCommit(sha);
+      if (commit === null) return null;
+      let tree = commit.treeHash;
+      const parts = path === "" ? [] : path.split("/");
+      for (const [i, name] of parts.entries()) {
+        const entries = await r.readTree(tree);
+        const entry = entries?.find((e) => e.name === name);
+        if (entry === undefined) return null;
+        if (entry.type === "tree") {
+          tree = entry.hash;
+          continue;
+        }
+        // A file in the middle of the path ("README.md/x") names nothing.
+        if (i < parts.length - 1) return null;
+        if (entry.type === "gitlink")
+          return { type: "blob", sha: entry.hash, mode: entry.mode, size: 0, bytes: null };
+        const blob = await r.readBlob(entry.hash);
+        if (blob === null) return null;
+        const bytes = blob.size <= opts.maxBytes ? new Uint8Array(await blob.arrayBuffer()) : null;
+        return { type: "blob", sha: entry.hash, mode: entry.mode, size: blob.size, bytes };
+      }
+      const entries = await r.readTree(tree);
+      if (entries === null) return null;
+      return {
+        type: "tree",
+        sha: tree,
+        entries: entries.map(
+          (e): GitTreeItem => ({ name: e.name, mode: e.mode, sha: e.hash, type: e.type }),
+        ),
+      };
     });
   }
 

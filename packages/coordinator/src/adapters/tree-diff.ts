@@ -256,7 +256,7 @@ export function buildChangeDiff(
 /** Diff two root trees. */
 export async function diffTrees(
   reader: TreeReader,
-  input: { baseSha: string; headSha: string; baseTree: string; headTree: string },
+  input: { baseSha: string; headSha: string; baseTree: string | null; headTree: string },
   options: DiffOptions = {},
 ): Promise<ChangeDiff> {
   const opts: Required<DiffOptions> = {
