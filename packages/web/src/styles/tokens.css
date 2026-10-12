@@ -204,6 +204,14 @@
   --code-keyword: oklch(38% 0.1 262);
   --code-number: oklch(46% 0.12 40);
 
+  /* Commit activity: one ink ramp, light to dark (a count is ink, never teal or a lane band).
+     Mixed from --text into --panel, so the night theme gets its own steps from the same rule. */
+  --heat-0: var(--panel-strong);
+  --heat-1: color-mix(in oklch, var(--text) 22%, var(--panel));
+  --heat-2: color-mix(in oklch, var(--text) 42%, var(--panel));
+  --heat-3: color-mix(in oklch, var(--text) 64%, var(--panel));
+  --heat-4: color-mix(in oklch, var(--text) 88%, var(--panel));
+
   --shadow-raise: 0 1px 2px oklch(23% 0.035 262 / 0.06), 0 4px 14px oklch(23% 0.035 262 / 0.06);
   --shadow-sheet: 0 -6px 28px oklch(23% 0.035 262 / 0.14);
   /* Under floating acetate: a soft fall-off below the edge, never a halo. */

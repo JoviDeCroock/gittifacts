@@ -17,7 +17,7 @@ import {
 } from "../lib/diff.js";
 import { Icon } from "./Icon.js";
 
-function Code({ text, hash }: { text: string; hash: boolean }) {
+export function Code({ text, hash }: { text: string; hash: boolean }) {
   if (text === "") return <span> </span>;
   return (
     <>
@@ -38,7 +38,7 @@ function Code({ text, hash }: { text: string; hash: boolean }) {
  * Whether the code runs past the box's right edge: the edge fades to say "more", and the Wrap
  * toggle appears. Re-measured on scroll and resize; a wrapped box never overflows.
  */
-function useOverflow() {
+export function useOverflow() {
   const ref = useRef<HTMLElement>(null);
   const overflows = useSignal(false);
   const more = useSignal(false);

@@ -54,6 +54,12 @@ const PATHS = [
   "/repos/repo_billing/queue",
   "/repos/repo_billing/members",
   "/repos/repo_billing/mission",
+  "/repos/repo_billing/tree",
+  "/repos/repo_billing/tree/src/lib",
+  "/repos/repo_billing/blob/src/index.ts",
+  "/repos/repo_billing/commits",
+  `/repos/repo_billing/commits/${"a".repeat(40)}`,
+  "/repos/repo_billing/activity",
   "/repos/gh-1",
   "/plans/plan_1",
   "/changes/chg_1",
@@ -306,6 +312,20 @@ describe("text", () => {
       sub: "rollout",
     });
     expect(contextOf("/repos/r1/queue")).toEqual({ kind: "repo", id: "r1", sub: "queue" });
+    expect(contextOf("/repos/r1/tree/src")).toEqual({ kind: "repo", id: "r1", sub: "code" });
+    expect(contextOf("/repos/r1/blob/src/a%20b.ts")).toEqual({
+      kind: "repo",
+      id: "r1",
+      sub: "code",
+      at: { kind: "blob", path: "src/a b.ts" },
+    });
+    expect(contextOf("/repos/r1/commits/abc")).toEqual({
+      kind: "repo",
+      id: "r1",
+      sub: "commits",
+      at: { kind: "commit", sha: "abc" },
+    });
+    expect(contextOf("/repos/r1/activity")).toEqual({ kind: "repo", id: "r1", sub: "activity" });
     expect(contextOf("/audit")).toEqual({ kind: "audit" });
     expect(contextOf("/settings/integrations")).toBeNull();
   });

@@ -9,8 +9,10 @@
  * Pure: no DOM, no fetches. The palette supplies the path, the repos the sidebar loaded and the
  * objects it fetched for this opening.
  */
+
 import { GITHUB_SURFACES } from "@app/domain/surfaces";
 import type { IconId } from "../components/Icon.js";
+import { activityHref, blobHref, commitHref, commitsHref, treeHref } from "./code.js";
 
 /** An MCP tool call. `positional` names the argument the CLI takes without a flag. */
 export interface Twin {
@@ -88,13 +90,16 @@ const PICK_RULE =
 const AGENTS_RULE = "Only a person creates, revokes or pauses agents.";
 const NAV_ONLY = "Navigation only: a key for the reader, not an act.";
 
-/** The repo screens: changes, merge queue, members, mission control. */
-type RepoSub = "" | "queue" | "members" | "mission";
+/** The repo screens: changes, merge queue, members, mission control, code, commits, activity. */
+type RepoSub = "" | "queue" | "members" | "mission" | "code" | "commits" | "activity";
+
+/** What a code or history screen is on: a file, or one commit. */
+export type RepoAt = { kind: "blob"; path: string } | { kind: "commit"; sha: string };
 
 export type Ctx =
   | { kind: "change"; id: string; sub: "" | "evidence" | "rollout" }
   | { kind: "plan"; id: string }
-  | { kind: "repo"; id: string; sub: RepoSub }
+  | { kind: "repo"; id: string; sub: RepoSub; at?: RepoAt }
   | { kind: "agents" }
   | { kind: "audit" }
   | null;
@@ -113,6 +118,19 @@ export function contextOf(path: string): Ctx {
   if (m?.[1]) return { kind: "plan", id: decodeURIComponent(m[1]) };
   m = /^\/repos\/([^/]+)(?:\/(queue|members|mission))?$/.exec(p);
   if (m?.[1]) return { kind: "repo", id: decodeURIComponent(m[1]), sub: (m[2] ?? "") as RepoSub };
+  m = /^\/repos\/([^/]+)\/(tree|blob|commits|activity)(?:\/(.+))?$/.exec(p);
+  if (m?.[1]) {
+    const id = decodeURIComponent(m[1]);
+    const rest = m[3] === undefined ? undefined : m[3].split("/").map(decodeURIComponent).join("/");
+    if (m[2] === "activity") return { kind: "repo", id, sub: "activity" };
+    if (m[2] === "commits")
+      return rest === undefined
+        ? { kind: "repo", id, sub: "commits" }
+        : { kind: "repo", id, sub: "commits", at: { kind: "commit", sha: rest } };
+    if (m[2] === "blob" && rest !== undefined)
+      return { kind: "repo", id, sub: "code", at: { kind: "blob", path: rest } };
+    return { kind: "repo", id, sub: "code" };
+  }
   if (p === "/agents") return { kind: "agents" };
   if (p === "/audit") return { kind: "audit" };
   return null;
@@ -439,9 +457,66 @@ function planCommands(id: string, here: ChangeHere): Command[] {
   ];
 }
 
+/** A repo's code and history: what has landed, the same reads agents make. */
+function codeCommands(repoId: string, at: RepoAt | undefined): Command[] {
+  const args = { repoId };
+  const here: Command[] = [];
+  if (at?.kind === "blob")
+    here.push({
+      id: "repo.file",
+      label: "This file",
+      group: "This repo",
+      icon: "file-code",
+      act: { kind: "go", href: blobHref(repoId, at.path) },
+      twin: { tool: "read_repo_file", args: { repoId, path: at.path } },
+      words: "read source content",
+    });
+  if (at?.kind === "commit")
+    here.push({
+      id: "repo.commit",
+      label: "This commit",
+      group: "This repo",
+      icon: "git-commit",
+      act: { kind: "go", href: commitHref(repoId, at.sha) },
+      twin: { tool: "get_commit", args: { repoId, sha: at.sha } },
+      words: "diff patch sha",
+    });
+  return [
+    ...here,
+    {
+      id: "repo.code",
+      label: "Code",
+      group: "This repo",
+      icon: "code",
+      act: { kind: "go", href: treeHref(repoId) },
+      twin: { tool: "list_repo_files", args, positional: "repoId" },
+      words: "files browse source tree readme",
+    },
+    {
+      id: "repo.commits",
+      label: "Commits",
+      group: "This repo",
+      icon: "git-commit",
+      act: { kind: "go", href: commitsHref(repoId) },
+      twin: { tool: "list_commits", args, positional: "repoId" },
+      words: "history log landed",
+    },
+    {
+      id: "repo.activity",
+      label: "Commit activity",
+      group: "This repo",
+      icon: "activity",
+      act: { kind: "go", href: activityHref(repoId) },
+      twin: { tool: "get_commit_activity", args, positional: "repoId" },
+      words: "graph contributions calendar busy",
+    },
+  ];
+}
+
 function repoCommands(
   repo: RepoRef | { id: string; name?: undefined; hosted?: undefined },
   sub: RepoSub,
+  at?: RepoAt,
 ): Command[] {
   const enc = encodeURIComponent(repo.id);
   const args = { repoId: repo.id };
@@ -487,6 +562,7 @@ function repoCommands(
       twin: { tool: "list_plans", args, positional: "repoId" },
       words: "intent approval",
     },
+    ...codeCommands(repo.id, at),
     {
       id: "repo.members",
       label: "Members",
@@ -821,7 +897,9 @@ export function commandsFor(path: string, repos: RepoRef[], here: ChangeHere = {
   if (ctx?.kind === "change") cmds.push(...changeCommands(ctx.id, ctx.sub, here));
   if (ctx?.kind === "plan") cmds.push(...planCommands(ctx.id, here));
   if (ctx?.kind === "repo")
-    cmds.push(...repoCommands(repos.find((r) => r.id === ctx.id) ?? { id: ctx.id }, ctx.sub));
+    cmds.push(
+      ...repoCommands(repos.find((r) => r.id === ctx.id) ?? { id: ctx.id }, ctx.sub, ctx.at),
+    );
   if (ctx?.kind === "agents") cmds.push(...agentsCommands());
   const places = repos.map<Command>((r) => ({
     id: `go.repo.${r.id}`,

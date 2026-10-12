@@ -6,6 +6,7 @@ import { BacktestCard } from "../components/BacktestCard.js";
 import { Icon } from "../components/Icon.js";
 import { IntentPanel } from "../components/IntentPanel.js";
 import { paletteRepos } from "../components/Palette.js";
+import { RepoTabs } from "../components/RepoTabs.js";
 import { Page } from "../components/Shell.js";
 import { Term } from "../components/Term.js";
 import {
@@ -384,6 +385,7 @@ export function RepoChanges({ repoId }: { repoId: string }) {
     // The frame the data will fill (filter, lane groups, the side rail), so nothing jumps.
     return (
       <Page title={known} wide crumbs={[{ href: "/dashboard", label: "Dashboard" }]}>
+        <RepoTabs repoId={repoId} current="changes" />
         <div class="repo-layout">
           <div class="repo-layout__main">
             <section class="changes" aria-labelledby="changes-title">
@@ -487,6 +489,7 @@ export function RepoChanges({ repoId }: { repoId: string }) {
         </>
       }
     >
+      <RepoTabs repoId={repoId} current="changes" />
       <div class="repo-layout">
         <div class="repo-layout__main">
           <IntentPanel repoId={repo.id} />

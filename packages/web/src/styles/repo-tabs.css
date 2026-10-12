@@ -1,0 +1,40 @@
+/* A repository's places (components/RepoTabs.tsx): Changes, Code, Commits, Activity. */
+.repo-tabs {
+  margin-block-end: var(--s-5);
+  border-block-end: 1px solid var(--rule);
+}
+.repo-tabs ul {
+  display: flex;
+  gap: var(--s-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.repo-tabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: var(--tap);
+  padding-inline: var(--s-3);
+  border-block-end: 2px solid transparent;
+  margin-block-end: -1px;
+  color: var(--text-2);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    color var(--dur-feedback) var(--ease-out),
+    border-color var(--dur-feedback) var(--ease-out);
+}
+.repo-tabs a:hover {
+  color: var(--text);
+}
+.repo-tabs a[aria-current="page"] {
+  border-block-end-color: var(--action);
+  color: var(--text);
+}
+.repo-tabs .icon {
+  color: var(--text-3);
+}

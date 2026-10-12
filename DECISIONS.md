@@ -3565,3 +3565,30 @@ continues to expire resources, enforce spend budgets and retry deliveries.
 `deploy-clean.sh` no longer invokes staging. It keeps the pre-deploy gate and post-deploy smoke;
 `--staging` exits before doing work, while `--no-staging` stays compatible with existing callers.
 The legacy staging setup/deploy utilities require a new owner decision before reuse.
+
+## 2026-10-12 — Read-only code and history: tree, files, commits, a commit, activity
+
+The app showed only work in progress (Plans, Changes, the queue); there was no way to read the code or its history.
+Now every repository has Code, Commits and Activity tabs beside Changes, each with an MCP twin (`list_repo_files`,
+`read_repo_file`, `list_commits`, `get_commit`, `get_commit_activity`; CLI commands derived) and an HTTP route
+(`/api/v1/repos/:id/{tree,file,raw,commits,commits/:sha,activity}`). URLs: `/repos/:id/tree[/path]`,
+`/repos/:id/blob/path`, `/repos/:id/commits[/sha]`, `/repos/:id/activity`, each with `?ref=`.
+- **Reads go through the GitHost port** (`resolveRef`, `readCommit`, `log`, `readPath`), on Artifacts and the fake.
+  History is first-parent from the ref; a root commit diffs against the empty tree.
+- **A commit names the Change that landed it** by joining `changes.merged_sha`; that is the product's point (a
+  commit is the end of a reviewed Change, or plainly says it was pushed directly).
+- **Cost caps, said out loud**: a commit page reads at most 300 files (sorted by path; the rest listed without lines,
+  `complete: false`); a file over 512 KiB isn't inlined; activity reads at most 1,000 commits and says "at least"
+  when the window reaches further.
+- **Raw files are inert**: images from an allowlist, text as `text/plain`, anything else as an attachment, always
+  `nosniff` and `CSP: default-src 'none'; sandbox`, ≤ 10 MiB (413 above).
+- **READMEs render through a JSX-only Markdown subset** (no HTML passthrough, http(s) links only, images as their
+  alt text), so a repository can't inject markup into the app.
+- **Activity is one ink ramp** (`--heat-0..4` in tokens.css, `color-mix` of `--text` into `--panel`): a count is
+  magnitude, not a lane or an action (DESIGN.md: Activity Calendar, Repo Tabs).
+- Route params are `:filePath`, not `:path`: preact-iso hands every route its own `path` prop (the URL's), which
+  silently shadowed ours; the E2E caught it.
+Tests: domain unit tests (paths, activity windows), the workerd test `code-browse.test.ts` (HTTP + MCP, access,
+empty repo, landed-by, caps), web unit tests, and the E2E `web-code.spec.ts` (desktop + phone, through the real
+Worker). Screenshots: `docs/screenshots/code-*`. Rejected: blame and search (later), syntax highlighting beyond the
+existing excerpt tokenizer, and a write path from these screens (the product rule: changes go through a Plan).

@@ -1,0 +1,557 @@
+/* A repo's code and history: the repo's places, the tree, files, commits and activity.
+   Rows on paper divided by hairlines (DESIGN.md Layout); code in the Diff Excerpt's box. */
+
+/* ---------------------------------------------------------------- ref and path */
+.code-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-block-end: var(--s-3);
+}
+.ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 32px;
+  padding-inline: 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+}
+.ref-chip .icon {
+  color: var(--text-3);
+}
+.path-bar ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+}
+.path-bar li + li::before {
+  content: "/";
+  padding-inline: 6px;
+  color: var(--text-3);
+}
+.path-bar [aria-current="page"] {
+  font-weight: var(--weight-bold);
+}
+
+/* ---------------------------------------------------------------- the tree */
+.last-commit {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px var(--s-2);
+  padding: 10px var(--s-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel) var(--r-panel) 0 0;
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+  font-size: var(--text-small);
+}
+.last-commit .icon {
+  color: var(--text-3);
+}
+.last-commit__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-medium);
+}
+.last-commit__meta {
+  grid-column: 2;
+  grid-row: 2;
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.last-commit__sha {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.last-commit:hover .last-commit__title {
+  text-decoration: underline;
+}
+.tree-list {
+  margin: 0 0 var(--s-6);
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  overflow: hidden;
+}
+.last-commit + .tree-list {
+  border-block-start: 0;
+  border-radius: 0 0 var(--r-panel) var(--r-panel);
+}
+.tree-list li + li {
+  border-block-start: 1px solid var(--rule);
+}
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-block-size: var(--tap);
+  padding-inline: var(--s-3);
+  color: var(--text);
+  text-decoration: none;
+  transition: background-color var(--dur-feedback) var(--ease-out);
+}
+.tree-row:hover {
+  background: var(--panel);
+}
+.tree-row__icon {
+  flex: none;
+  color: var(--text-3);
+}
+.tree-row--dir .tree-row__icon {
+  color: var(--text-2);
+}
+.tree-row__name {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+}
+.tree-row:hover .tree-row__name {
+  text-decoration: underline;
+}
+.tree-row__kind {
+  margin-inline-start: auto;
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+
+/* ---------------------------------------------------------------- README */
+.readme {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+}
+.readme__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px var(--s-4);
+  border-block-end: 1px solid var(--rule);
+  font-size: var(--text-small);
+  font-family: var(--font-code);
+}
+.readme__title .icon {
+  color: var(--text-3);
+}
+.readme > .markdown,
+.readme__plain {
+  padding: var(--s-4) var(--s-5) var(--s-5);
+}
+.readme__plain {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+}
+.markdown {
+  max-inline-size: 72ch;
+  line-height: var(--leading-body);
+}
+.markdown > * + * {
+  margin-block-start: var(--s-3);
+}
+.markdown :is(h2, h3, h4, h5) {
+  margin-block-start: var(--s-5);
+  line-height: var(--leading-tight);
+}
+.markdown h2 {
+  font-size: var(--text-heading);
+}
+.markdown h3 {
+  font-size: var(--text-title);
+}
+.markdown :is(h4, h5) {
+  font-size: var(--text-body);
+}
+.markdown > :first-child {
+  margin-block-start: 0;
+}
+.markdown :is(ul, ol) {
+  padding-inline-start: 1.4em;
+}
+.markdown code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--panel);
+  font-family: var(--font-code);
+  font-size: 0.9em;
+}
+.markdown__code {
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--code-bg);
+}
+.markdown__code code {
+  padding: 0;
+  background: none;
+}
+.markdown blockquote {
+  margin: 0;
+  padding-inline-start: var(--s-3);
+  border-inline-start: 2px solid var(--rule-strong);
+  color: var(--text-2);
+}
+.markdown hr {
+  border: 0;
+  border-block-start: 1px solid var(--rule);
+}
+
+/* ---------------------------------------------------------------- one file */
+.code-view__no {
+  display: inline-block;
+  min-inline-size: 3ch;
+  text-align: end;
+}
+.code-view__more {
+  padding: var(--s-2) var(--s-3);
+  border-block-start: 1px solid var(--rule);
+  background: var(--surface);
+}
+.file-image {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  padding: var(--s-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--panel);
+}
+.file-image img {
+  max-inline-size: 100%;
+  block-size: auto;
+}
+.file-image figcaption,
+.code-foot {
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.code-foot {
+  margin-block-start: var(--s-3);
+}
+.code-empty__cmd {
+  margin-block-start: var(--s-3);
+}
+
+/* ---------------------------------------------------------------- history */
+.code-section__title {
+  margin-block-end: var(--s-3);
+  font-size: var(--text-title);
+}
+.code-section__title code {
+  font-size: 0.85em;
+}
+.code-note {
+  margin-block: 0 var(--s-4);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--warn-tint);
+  color: var(--text);
+  font-size: var(--text-small);
+}
+.commit-day + .commit-day {
+  margin-block-start: var(--s-5);
+}
+.commit-day__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-block-end: var(--s-2);
+  color: var(--text-2);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+}
+.commit-day__title .icon {
+  color: var(--text-3);
+}
+.commit-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+}
+.commit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px var(--s-3);
+  padding: 10px var(--s-3);
+}
+.commit-row + .commit-row {
+  border-block-start: 1px solid var(--rule);
+}
+.commit-row__title {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+.commit-row__title:hover {
+  text-decoration: underline;
+}
+.commit-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--s-3);
+  grid-column: 1;
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.commit-row__author {
+  color: var(--text-2);
+}
+.commit-row__change {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+}
+.commit-row__sha {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.commit-more {
+  margin-block-start: var(--s-4);
+}
+
+/* ---------------------------------------------------------------- one commit */
+.commit-sha {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+}
+.commit-sha code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-meta);
+}
+.landed-by {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-block-end: var(--s-4);
+  padding: var(--s-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+a.landed-by:hover {
+  background: var(--panel);
+}
+a.landed-by > .icon {
+  margin-inline-start: auto;
+  color: var(--text-3);
+}
+.landed-by__text {
+  min-inline-size: 0;
+}
+.landed-by--none {
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.commit-message {
+  margin: 0 0 var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-panel);
+  background: var(--panel);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  line-height: var(--leading-code);
+}
+.commit-parents {
+  margin-block-end: var(--s-5);
+  color: var(--text-3);
+  font-size: var(--text-small);
+}
+.diffstat--add {
+  color: var(--ok);
+}
+.diffstat--del {
+  color: var(--danger);
+}
+
+/* ---------------------------------------------------------------- activity */
+.activity-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-block-end: var(--s-4);
+}
+.activity-bar .code-section__title {
+  margin: 0;
+}
+.activity-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--s-3);
+  margin: 0 0 var(--s-5);
+}
+.activity-totals > div {
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+}
+.activity-totals dt {
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+.activity-totals dd {
+  margin: 2px 0 0;
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+}
+.calendar {
+  margin: 0 0 var(--s-4);
+  padding: var(--s-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+}
+.calendar__scroll {
+  outline-offset: 2px;
+}
+.calendar__grid {
+  --cell: 13px;
+  display: grid;
+  /* A week grows to 24px on a wide screen, so six months fill the card; narrow ones scroll. */
+  grid-template-columns: 3ch repeat(var(--weeks), minmax(var(--cell), 24px));
+  justify-content: start;
+  align-items: center;
+  gap: 3px;
+  min-inline-size: min-content;
+}
+.calendar__month,
+.calendar__weekday {
+  color: var(--text-3);
+  font-size: 0.6875rem;
+  line-height: var(--cell);
+  white-space: nowrap;
+}
+.calendar__cell {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 3px;
+}
+.calendar__cell--none {
+  background: none;
+}
+.calendar__cell.is-picked {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.heat-0 {
+  background: var(--heat-0);
+}
+.heat-1 {
+  background: var(--heat-1);
+}
+.heat-2 {
+  background: var(--heat-2);
+}
+.heat-3 {
+  background: var(--heat-3);
+}
+.heat-4 {
+  background: var(--heat-4);
+}
+.calendar__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  margin-block-start: var(--s-3);
+  font-size: var(--text-meta);
+  color: var(--text-2);
+}
+.calendar__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-3);
+}
+.calendar__key .calendar__cell {
+  inline-size: 11px;
+}
+.activity-table {
+  margin-block-end: var(--s-5);
+}
+.activity-table table {
+  margin-block-start: var(--s-2);
+  border-collapse: collapse;
+  font-size: var(--text-small);
+}
+.activity-table :is(th, td) {
+  padding: 4px var(--s-4) 4px 0;
+  border-block-end: 1px solid var(--rule);
+  text-align: start;
+}
+.activity-authors ol {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.activity-authors li {
+  display: grid;
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: var(--text-small);
+}
+.activity-authors__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-authors__bar {
+  block-size: 8px;
+  border-radius: 4px;
+  background: var(--heat-0);
+}
+.activity-authors__bar > span {
+  display: block;
+  block-size: 100%;
+  border-radius: 4px;
+  background: var(--heat-3);
+}
+.activity-authors__n {
+  color: var(--text-2);
+}

@@ -94,6 +94,24 @@ const PushInput = z.object({
 });
 const FinishInput = z.object({ changeId: z.string().min(1) });
 
+/** A repo's history on its default branch, oldest first (code browsing E2E). */
+const GitHistoryInput = z.object({
+  artifactsName: z.string().min(1),
+  commits: z
+    .array(
+      z.object({
+        files: z.record(z.string(), z.string().nullable()),
+        message: z.string().min(1),
+        author: z.object({ name: z.string(), email: z.string() }).optional(),
+        daysAgo: z.number().nonnegative().optional(),
+        /** Record the commit as this Change's merge (what the merge queue does on landing). */
+        landsChangeId: z.string().min(1).optional(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+
 const DEFAULT_FILES = {
   "package.json": '{ "name": "e2e", "scripts": { "test": "vitest run" } }\n',
   "src/a.ts": "export const a = (x: number) => x + 1;\n",
@@ -165,6 +183,34 @@ async function pipeline(path: string, body: unknown): Promise<Response> {
     const input = GitSeedInput.parse(body);
     const sha = fakes.git.seed(input.artifactsName, input.files ?? DEFAULT_FILES);
     return Response.json({ sha }, { status: 201 });
+  }
+  if (path === "/__e2e/git/history") {
+    const input = GitHistoryInput.parse(body);
+    const shas: string[] = [];
+    const nowSec = Math.floor(Date.now() / 1000);
+    for (const c of input.commits) {
+      const opts = {
+        ...(c.author ? { author: c.author } : {}),
+        at: nowSec - Math.round((c.daysAgo ?? 0) * 86_400),
+      };
+      const fresh =
+        !fakes.git.repos.has(input.artifactsName) || fakes.git.head(input.artifactsName) === null;
+      const files = Object.fromEntries(
+        Object.entries(c.files).filter((e): e is [string, string] => e[1] !== null),
+      );
+      const sha = fresh
+        ? fakes.git.seed(input.artifactsName, files, { message: c.message, ...opts })
+        : fakes.git.commit(input.artifactsName, "main", c.files, c.message, opts);
+      if (c.landsChangeId) {
+        const db = (env as unknown as { DB: D1Database }).DB;
+        await db
+          .prepare("UPDATE changes SET status = 'merged', merged_sha = ? WHERE id = ?")
+          .bind(sha, c.landsChangeId)
+          .run();
+      }
+      shas.push(sha);
+    }
+    return Response.json({ shas }, { status: 201 });
   }
   if (path === "/__e2e/git/push") {
     const input = PushInput.parse(body);

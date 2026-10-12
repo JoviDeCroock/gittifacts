@@ -1,6 +1,6 @@
 # Status
 
-_Last updated: 2026-10-11_
+_Last updated: 2026-10-12_
 
 Specs:
 - `docs/prompts/01-platform.md`: platform, M1–M5
@@ -127,6 +127,12 @@ integrations guide, 21 generated reference pages, security model) as HTML in the
 twins (`.md` or `Accept: text/markdown`) and `/docs/llms-full.txt`. Linked from `/start`, `/llms.txt`, the landing
 footer and the app shell. `pnpm --filter @app/docs check` gates links, samples, generated pages and style; screenshots
 in `docs/screenshots/docs-*`.
+
+Code and history: every repository has Code (tree, files, rendered README, raw), Commits (by day, each naming the
+Change that landed it) and Activity (a commit calendar, totals, authors) tabs, read-only, with MCP/CLI twins
+(`list_repo_files`, `read_repo_file`, `list_commits`, `get_commit`, `get_commit_activity`). Tested in workerd
+(`code-browse.test.ts`) and E2E (`web-code.spec.ts`); screenshots in `docs/screenshots/code-*`. Not yet: blame,
+code search, branch/tag picker (a ref works through `?ref=`).
 
 ## Live infrastructure (see docs/deploy.md)
 - Artifacts namespace `gittifacts-eu` (EU)
