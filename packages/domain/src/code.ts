@@ -105,7 +105,7 @@ export function classifyFile(bytes: Uint8Array): { kind: CodeFileKind; text: str
   if (bytes.length > MAX_INLINE_FILE_BYTES) return { kind: "too-large", text: null };
   if (bytes.subarray(0, 8000).includes(0)) return { kind: "binary", text: null };
   try {
-    return { kind: "text", text: new TextDecoder("utf-8", { fatal: true }).decode(bytes) };
+    return { kind: "text", text: new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes) };
   } catch {
     return { kind: "binary", text: null };
   }
@@ -161,6 +161,11 @@ export const CommitDetail = z.object({
     files: z.array(ChangeDiffFile),
     additions: z.number().int().nonnegative(),
     deletions: z.number().int().nonnegative(),
+    /**
+     * False when the commit touches more files than a commit view reads: files past the cap are
+     * listed (`truncated`, no counts) and the totals cover the read files only.
+     */
+    complete: z.boolean(),
   }),
 });
 export type CommitDetail = z.infer<typeof CommitDetail>;

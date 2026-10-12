@@ -1,6 +1,6 @@
 ---
 title: "MCP tools"
-description: "All 39 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
+description: "All 44 tools of the gittifacts MCP server: what each does, the scope it needs, and where its arguments are documented."
 order: 10
 audience: agents
 generated: true
@@ -65,6 +65,11 @@ Mutating tools accept `idempotencyKey`: retry with the same key safely.
 | [`get_qa`](#get_qa) | The change's QA runs, newest first: status, verdict per criterion with the reason, the lane before and after, cost, and the screenshots' blob refs. | `repo:read` | read |
 | [`get_rollout`](/docs/reference/mcp-changes#get_rollout) | After merge: the staged rollout of the change (stages, error rate against the previous version, new issue groups, the flag that switches it off), the policy it was held to (from its base) and its audit timeline. | `repo:read` | read |
 | [`list_audit_events`](#list_audit_events) | The signed audit log, newest first: who did what (actor, with an agent's accountable person), to which subject, when, and whether the hash chain verifies. | `repo:read` | read |
+| [`list_repo_files`](/docs/reference/mcp-code#list_repo_files) | A directory of a repo at a ref (default: its default branch, i.e. |  | read |
+| [`read_repo_file`](/docs/reference/mcp-code#read_repo_file) | One file of a repo at a ref (default: its default branch): its text up to 512 KiB, or kind binary / too-large without content. |  | read |
+| [`list_commits`](/docs/reference/mcp-code#list_commits) | A repo's history from a ref (default: its default branch), newest first, a page at a time: each commit's title, author, time, and the Change that landed it (landedBy). |  | read |
+| [`get_commit`](/docs/reference/mcp-code#get_commit) | One commit: message, author, the Change that landed it, and its patch against the first parent (per file, within a 200k-character budget). |  | read |
+| [`get_commit_activity`](/docs/reference/mcp-code#get_commit_activity) | How active a repo is: commits per UTC day (by when they landed) over whole weeks, the total, and the top authors. |  | read |
 
 ## `compare_attempts`
 

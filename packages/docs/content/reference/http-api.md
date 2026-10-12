@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "All 123 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
+description: "All 129 HTTP operations of the platform, grouped by area, with auth, idempotency, bodies and error codes."
 order: 30
 audience: both
 generated: true
@@ -110,10 +110,14 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `GET` | [`/api/v1/repos`](/docs/reference/http-repos) | Repos with lane counts and shadow-mode stats |
 | `POST` | [`/api/v1/repos`](/docs/reference/http-repos) | Create a repo, or import one from a public https git URL |
 | `GET` | [`/api/v1/repos/{repoId}`](/docs/reference/http-repos) | A repo with shadow-mode stats and lane counts |
+| `GET` | [`/api/v1/repos/{repoId}/activity`](/docs/reference/http-repos) | Commits per day (UTC, by landing date) over whole weeks, and the top authors |
 | `GET` | [`/api/v1/repos/{repoId}/changes`](/docs/reference/http-changes) | Changes of a repo (with plan title and author), most recently updated first |
+| `GET` | [`/api/v1/repos/{repoId}/commits`](/docs/reference/http-repos) | First-parent history from a ref, newest first, each with the Change that landed it |
+| `GET` | [`/api/v1/repos/{repoId}/commits/{sha}`](/docs/reference/http-repos) | One commit with its diff against its first parent |
 | `PATCH` | [`/api/v1/repos/{repoId}/deploy-target`](/docs/reference/http-repos) | Set or clear the Worker merged Changes roll out to (human repo admin, claimed projects) |
 | `GET` | [`/api/v1/repos/{repoId}/deployments`](/docs/reference/http-integrations) | Deployments reported for a repo (newest first) |
 | `POST` | [`/api/v1/repos/{repoId}/deployments`](/docs/reference/http-integrations) | Integrations: report a deployment of a commit (preview of a Change, or production) |
+| `GET` | [`/api/v1/repos/{repoId}/file`](/docs/reference/http-repos) | One file at a ref: text up to 512 KiB, else binary or too-large without content |
 | `GET` | [`/api/v1/repos/{repoId}/import-grant`](/docs/reference/http-repos) | The project's import-by-push grant (state only, never the token) |
 | `POST` | [`/api/v1/repos/{repoId}/import-grant`](/docs/reference/http-repos) | Open a new import-by-push grant for a project that has no default branch yet |
 | `DELETE` | [`/api/v1/repos/{repoId}/import-grant`](/docs/reference/http-repos) | Close the import-by-push grant now (revokes its token) |
@@ -130,6 +134,8 @@ JSON over HTTPS at `https://<host>`. The OpenAPI 3.1 document is at `https://<ho
 | `POST` | [`/api/v1/repos/{repoId}/queue/freeze`](/docs/reference/http-merge-queue) | Freeze the queue: only reverts and incident fixes land (human-signed audit event) |
 | `POST` | [`/api/v1/repos/{repoId}/queue/resume`](/docs/reference/http-merge-queue) | Resume a queue that halted on an invariant violation (after an operator checked it) |
 | `POST` | [`/api/v1/repos/{repoId}/queue/thaw`](/docs/reference/http-merge-queue) | Thaw the queue; batches built on the bad main are invalidated (human-signed audit event) |
+| `GET` | [`/api/v1/repos/{repoId}/raw`](/docs/reference/http-repos) | One file's raw bytes at a ref (images inline, text as text/plain, else a download; ≤10 MiB) |
+| `GET` | [`/api/v1/repos/{repoId}/tree`](/docs/reference/http-repos) | A directory's entries at a ref (directories first), with its README |
 | `GET` | [`/api/v1/sign-in-options`](/docs/reference/http-identity) | What the sign-in page may offer on this deployment (no sign-in needed) |
 | `GET` | [`/api/v1/stats/first-green`](/docs/reference/http-platform) | Live time-to-first-green: aggregates only (no project ids), no auth |
 | `POST` | [`/git/{owner}/{repo}.git/git-receive-pack`](/docs/reference/http-integrations) | Always 403: nothing pushes through the integration git endpoint |

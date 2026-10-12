@@ -51,6 +51,13 @@ import {
   rerunChangeCi,
   startChange,
 } from "../services/changes.js";
+import {
+  getCommit,
+  getCommitActivity,
+  listCommits,
+  listRepoFiles,
+  readRepoFile,
+} from "../services/code.js";
 import { getChangeOverlaps } from "../services/overlaps.js";
 import { createPlan, getPlanDetail, listPlans, withdrawPlan } from "../services/plans.js";
 import { createProject } from "../services/projects.js";
@@ -464,6 +471,24 @@ export function createPlatformMcpBackend(svc: Services): McpBackend {
 
     async listMembers(mc, repoId) {
       return listMembers(svc, await scoped(mc, { repoId }), repoId);
+    },
+
+    // A repo's code and history (list_repo_files, read_repo_file, list_commits, get_commit,
+    // get_commit_activity): the same reads as the web's Code, Commits and Activity pages.
+    async listRepoFiles(mc, repoId, input) {
+      return listRepoFiles(svc, await scoped(mc, { repoId }), repoId, input);
+    },
+    async readRepoFile(mc, repoId, input) {
+      return readRepoFile(svc, await scoped(mc, { repoId }), repoId, input);
+    },
+    async listCommits(mc, repoId, input) {
+      return listCommits(svc, await scoped(mc, { repoId }), repoId, input);
+    },
+    async getCommit(mc, repoId, sha) {
+      return getCommit(svc, await scoped(mc, { repoId }), repoId, sha);
+    },
+    async getCommitActivity(mc, repoId, input) {
+      return getCommitActivity(svc, await scoped(mc, { repoId }), repoId, input);
     },
 
     errorEnvelope(err) {

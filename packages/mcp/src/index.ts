@@ -32,6 +32,7 @@ export {
   type ChangeListToolsBackend,
   changeListTools,
 } from "./tools/changes.js";
+export { type CodeToolsBackend, codeTools } from "./tools/code.js";
 export {
   type ImportToolsBackend,
   type ProposalStatus,

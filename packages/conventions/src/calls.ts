@@ -51,6 +51,12 @@ export const TOOL_NAMES = [
   "close_workspace",
   // imported repos
   "propose_platform_config",
+  // a repo's code and history (read-only)
+  "list_repo_files",
+  "read_repo_file",
+  "list_commits",
+  "get_commit",
+  "get_commit_activity",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 

@@ -33,6 +33,7 @@ const TOOL_SOURCES = [
   "tools/qa.ts",
   "tools/rollout.ts",
   "tools/audit.ts",
+  "tools/code.ts",
 ].map((f) => join(REPO, "packages/mcp/src", f));
 
 /** Scopes each tool's handler checks, in source order. */
@@ -97,6 +98,20 @@ export const FAMILIES: readonly {
       "request_review",
       "get_rollout",
       "list_issues_for_change",
+    ],
+  },
+  {
+    file: "reference/mcp-code.md",
+    title: "MCP tools: code and history",
+    nav: "MCP: code and history",
+    description:
+      "list_repo_files, read_repo_file, list_commits, get_commit and get_commit_activity: a repo's code and history at a ref, read-only. Arguments, scopes, examples and outputs.",
+    tools: [
+      "list_repo_files",
+      "read_repo_file",
+      "list_commits",
+      "get_commit",
+      "get_commit_activity",
     ],
   },
   {

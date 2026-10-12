@@ -2243,6 +2243,345 @@ export type introspection = {
       }
     },
     /**
+     * Get a commit
+     * One commit: message, author, the Change that landed it, and its patch against the first parent (per file, within a 200k-character budget).
+     * @param args.repoId The repo (list_repos).
+     * @param args.sha Full commit sha (list_commits).
+     */
+    "get_commit": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "The repo (list_repos)."
+          },
+          "sha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$",
+            "description": "Full commit sha (list_commits)."
+          }
+        },
+        "required": [
+          "repoId",
+          "sha"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "commit": {
+            "type": "object",
+            "properties": {
+              "sha": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "author": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "ISO time (null: unknown)."
+                  }
+                },
+                "required": [
+                  "name",
+                  "email",
+                  "at"
+                ]
+              },
+              "committedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "parents": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "landedBy": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "The Change whose merge produced this commit (null: pushed or imported directly).",
+                "properties": {
+                  "changeId": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "lane": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "authorKind": {
+                    "enum": [
+                      "human",
+                      "agent",
+                      "system",
+                      "integration"
+                    ]
+                  },
+                  "authorName": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "changeId",
+                  "title",
+                  "lane",
+                  "authorKind",
+                  "authorName"
+                ]
+              },
+              "url": {
+                "type": "string",
+                "description": "The same view on the platform, to hand a person."
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sha",
+              "title",
+              "author",
+              "committedAt",
+              "parents",
+              "landedBy",
+              "url"
+            ]
+          },
+          "parentSha": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The diff's base (first parent); null for a root commit."
+          },
+          "additions": {
+            "type": "integer"
+          },
+          "deletions": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean",
+            "description": "False: more files than a commit view reads; the rest are listed without a patch."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "previousPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "status": {
+                  "enum": [
+                    "added",
+                    "modified",
+                    "deleted",
+                    "renamed",
+                    "copied",
+                    "type-changed"
+                  ]
+                },
+                "additions": {
+                  "type": "integer"
+                },
+                "deletions": {
+                  "type": "integer"
+                },
+                "binary": {
+                  "type": "boolean"
+                },
+                "patch": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Unified hunks (null: binary, too large, or past the budget)."
+                }
+              },
+              "required": [
+                "path",
+                "previousPath",
+                "status",
+                "additions",
+                "deletions",
+                "binary",
+                "patch"
+              ]
+            }
+          }
+        },
+        "required": [
+          "commit",
+          "parentSha",
+          "additions",
+          "deletions",
+          "complete",
+          "files"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Get commit activity
+     * How active a repo is: commits per UTC day (by when they landed) over whole weeks, the total, and the top authors.
+     * @param args.repoId The repo (list_repos).
+     * @param args.ref Branch, tag or commit sha. Default: the repo's default branch (what has landed).
+     * @param args.weeks Whole weeks back (default 26).
+     */
+    "get_commit_activity": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "The repo (list_repos)."
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Branch, tag or commit sha. Default: the repo's default branch (what has landed)."
+          },
+          "weeks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 52,
+            "description": "Whole weeks back (default 26)."
+          }
+        },
+        "required": [
+          "repoId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "description": "First day (a Monday, UTC)."
+          },
+          "to": {
+            "type": "string",
+            "description": "Today (UTC)."
+          },
+          "total": {
+            "type": "integer"
+          },
+          "days": {
+            "type": "array",
+            "description": "Commits per UTC day by landing (committer) date, from..to.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string"
+                },
+                "commits": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "date",
+                "commits"
+              ]
+            }
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "commits": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "commits"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True: only the newest 1000 commits were read; counts are a lower bound."
+          },
+          "url": {
+            "type": "string",
+            "description": "The same view on the platform, to hand a person."
+          }
+        },
+        "required": [
+          "ref",
+          "headSha",
+          "from",
+          "to",
+          "total",
+          "days",
+          "authors",
+          "truncated",
+          "url"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
      * Get evidence
      * The signed evidence for the change's current head (tests, red/green proof, coverage, API diff, ...) and whether the signature verifies.
      * @param args.github GitHub mode: the pull request as owner/repo#123, instead of changeId (pass exactly one).
@@ -3939,6 +4278,183 @@ export type introspection = {
       }
     },
     /**
+     * List commits
+     * A repo's history from a ref (default: its default branch), newest first, a page at a time: each commit's title, author, time, and the Change that landed it (landedBy).
+     * @param args.repoId The repo (list_repos).
+     * @param args.ref Branch, tag or commit sha. Default: the repo's default branch (what has landed).
+     * @param args.limit Page size (default 30).
+     * @param args.offset nextOffset from the previous page.
+     */
+    "list_commits": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "The repo (list_repos)."
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Branch, tag or commit sha. Default: the repo's default branch (what has landed)."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Page size (default 30)."
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "nextOffset from the previous page."
+          }
+        },
+        "required": [
+          "repoId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string"
+          },
+          "headSha": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null: nothing has landed yet."
+          },
+          "commits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sha": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "author": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "ISO time (null: unknown)."
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "email",
+                    "at"
+                  ]
+                },
+                "committedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "parents": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "landedBy": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "description": "The Change whose merge produced this commit (null: pushed or imported directly).",
+                  "properties": {
+                    "changeId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "lane": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "authorKind": {
+                      "enum": [
+                        "human",
+                        "agent",
+                        "system",
+                        "integration"
+                      ]
+                    },
+                    "authorName": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "changeId",
+                    "title",
+                    "lane",
+                    "authorKind",
+                    "authorName"
+                  ]
+                },
+                "url": {
+                  "type": "string",
+                  "description": "The same view on the platform, to hand a person."
+                }
+              },
+              "required": [
+                "sha",
+                "title",
+                "author",
+                "committedAt",
+                "parents",
+                "landedBy",
+                "url"
+              ]
+            },
+            "description": "Newest first (first-parent)."
+          },
+          "nextOffset": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Pass as offset for the next page; null on the last."
+          }
+        },
+        "required": [
+          "ref",
+          "headSha",
+          "commits",
+          "nextOffset"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
      * List production issues for a change
      * Workers Issues attributed to the change or the version it rolled out (errors seen in production).
      */
@@ -4217,6 +4733,119 @@ export type introspection = {
         },
         "required": [
           "plans"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * List a repo's files
+     * A directory of a repo at a ref (default: its default branch, i.e. what has landed): entries, directories first, and the directory's README. Walk deeper with path; read a file with read_repo_file.
+     * @param args.repoId The repo (list_repos).
+     * @param args.path Repo-relative path, e.g. "src/lib" ("" or absent: the root).
+     * @param args.ref Branch, tag or commit sha. Default: the repo's default branch (what has landed).
+     */
+    "list_repo_files": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "The repo (list_repos)."
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Repo-relative path, e.g. \"src/lib\" (\"\" or absent: the root)."
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Branch, tag or commit sha. Default: the repo's default branch (what has landed)."
+          }
+        },
+        "required": [
+          "repoId"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string"
+          },
+          "commitSha": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "description": "Directories first, then files, by name.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "dir",
+                    "file",
+                    "symlink",
+                    "submodule"
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "path",
+                "kind"
+              ]
+            }
+          },
+          "readme": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The directory's README, when it has a text one.",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "text"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "The same view on the platform, to hand a person."
+          }
+        },
+        "required": [
+          "ref",
+          "commitSha",
+          "path",
+          "entries",
+          "readme",
+          "url"
         ]
       },
       "annotations": {
@@ -5455,6 +6084,93 @@ export type introspection = {
           "status",
           "resolution",
           "nextSteps"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    /**
+     * Read a file
+     * One file of a repo at a ref (default: its default branch): its text up to 512 KiB, or kind binary / too-large without content.
+     * @param args.repoId The repo (list_repos).
+     * @param args.path The file, e.g. "src/index.ts".
+     * @param args.ref Branch, tag or commit sha. Default: the repo's default branch (what has landed).
+     */
+    "read_repo_file": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repoId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "The repo (list_repos)."
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "The file, e.g. \"src/index.ts\".",
+            "minLength": 1
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Branch, tag or commit sha. Default: the repo's default branch (what has landed)."
+          }
+        },
+        "required": [
+          "repoId",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string"
+          },
+          "commitSha": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "binary",
+              "too-large"
+            ],
+            "description": "too-large: over 512 KiB; clone to read it."
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The content (null unless kind is text)."
+          },
+          "url": {
+            "type": "string",
+            "description": "The same view on the platform, to hand a person."
+          }
+        },
+        "required": [
+          "ref",
+          "commitSha",
+          "path",
+          "size",
+          "kind",
+          "text",
+          "url"
         ]
       },
       "annotations": {

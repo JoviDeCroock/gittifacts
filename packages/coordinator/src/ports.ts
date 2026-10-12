@@ -160,7 +160,7 @@ export interface GitHost {
     repo: string,
     baseSha: string | null,
     headSha: string,
-    opts?: { maxFileBytes?: number },
+    opts?: { maxFileBytes?: number; maxFiles?: number },
   ): Promise<ChangeDiff>;
   readNote(repo: string, targetSha: string, notesRef?: string): Promise<string | null>;
   writeNote(

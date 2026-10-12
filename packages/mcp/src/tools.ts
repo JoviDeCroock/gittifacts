@@ -60,6 +60,7 @@ import {
 import { attemptTools } from "./tools/attempts.js";
 import { auditTools } from "./tools/audit.js";
 import { changeListTools } from "./tools/changes.js";
+import { codeTools } from "./tools/code.js";
 import { importTools } from "./tools/import.js";
 import { planTools } from "./tools/plans.js";
 import { qaTools } from "./tools/qa.js";
@@ -1109,6 +1110,8 @@ export function buildTools(backend: McpBackend) {
       changeIdOf: (caller, args) => changeIdOf(backend, caller, args),
     }),
     ...auditTools(backend, kit),
+    // A repo's code and history: read-only, the views people browse.
+    ...codeTools(backend, kit),
   ]);
 }
 

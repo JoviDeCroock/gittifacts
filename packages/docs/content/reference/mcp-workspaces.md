@@ -2,7 +2,7 @@
 title: "MCP tools: remote workspaces"
 nav: "MCP: workspaces"
 description: "open_workspace and the ws_* tools for agents without a shell: arguments, scopes, examples and outputs."
-order: 13
+order: 14
 audience: agents
 generated: true
 ---

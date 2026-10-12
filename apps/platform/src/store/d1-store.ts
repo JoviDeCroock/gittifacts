@@ -10,6 +10,7 @@ import {
   type Change,
   ChangeDiff,
   Evidence,
+  LandedBy,
   Lane,
   type LinkedIssue,
   PipelineRun,
@@ -683,6 +684,39 @@ export class D1Store implements Store {
       for (const r of rows) {
         const parsed = PathList.safeParse(r.paths);
         if (parsed.success && parsed.data.length > 0) out.set(r.changeId, parsed.data);
+      }
+    }
+    return out;
+  }
+
+  /** The Changes that landed these commits in `repoId` (by `mergedSha`), keyed by commit sha. */
+  async changesLandedAt(repoId: string, shas: readonly string[]): Promise<Map<string, LandedBy>> {
+    const out = new Map<string, LandedBy>();
+    const unique = [...new Set(shas)];
+    for (let i = 0; i < unique.length; i += 90) {
+      const rows = await this.db
+        .select({
+          id: changes.id,
+          title: changes.title,
+          lane: changes.lane,
+          mergedSha: changes.mergedSha,
+          authorId: changes.authorId,
+          authorName: principals.name,
+          authorKind: principals.kind,
+        })
+        .from(changes)
+        .leftJoin(principals, eq(principals.id, changes.authorId))
+        .where(and(eq(changes.repoId, repoId), inArray(changes.mergedSha, unique.slice(i, i + 90))))
+        .all();
+      for (const r of rows) {
+        if (r.mergedSha === null) continue;
+        out.set(r.mergedSha, {
+          changeId: r.id,
+          title: r.title,
+          lane: r.lane === 0 || r.lane === 1 || r.lane === 2 ? r.lane : null,
+          authorKind: LandedBy.shape.authorKind.safeParse(r.authorKind).data ?? "agent",
+          authorName: r.authorName ?? r.authorId,
+        });
       }
     }
     return out;

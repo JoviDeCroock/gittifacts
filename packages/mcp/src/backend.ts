@@ -25,6 +25,7 @@ import type { z } from "zod";
 import type { AttemptToolsBackend } from "./tools/attempts.js";
 import type { ActorData, AuditToolsBackend } from "./tools/audit.js";
 import type { ChangeListToolsBackend } from "./tools/changes.js";
+import type { CodeToolsBackend } from "./tools/code.js";
 import type { ImportToolsBackend } from "./tools/import.js";
 import type { PlanToolsBackend } from "./tools/plans.js";
 import type { QaToolsBackend } from "./tools/qa.js";
@@ -186,7 +187,11 @@ export type WebPage =
   | { planId: string }
   | { changeId: string; view?: "evidence" | "rollout" | undefined }
   /** The person's agents page, where an owner inspects or revokes them. */
-  | { agents: true };
+  | { agents: true }
+  /** A repo's code, its history or one commit, and its commit activity. */
+  | { repoId: string; code: { kind: "tree" | "blob"; path: string; ref?: string | undefined } }
+  | { repoId: string; commits: { sha?: string | undefined; ref?: string | undefined } }
+  | { repoId: string; activity: { ref?: string | undefined } };
 
 /** Every tool family's backend: the core tools below, remote workspaces and import detection. */
 export interface McpBackend
@@ -198,7 +203,8 @@ export interface McpBackend
     ChangeListToolsBackend,
     AttemptToolsBackend,
     RolloutToolsBackend,
-    AuditToolsBackend {
+    AuditToolsBackend,
+    CodeToolsBackend {
   /** The absolute URL of `page` on the platform, to hand to a person. */
   webUrl(page: WebPage): string;
   whoami(caller: McpCaller): Promise<WhoamiData>;

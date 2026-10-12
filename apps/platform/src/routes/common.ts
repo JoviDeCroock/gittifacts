@@ -14,6 +14,7 @@ const ERROR_DESCRIPTIONS = {
   403: "Forbidden (missing scope, not a human, or self-approval)",
   404: "Not found",
   409: "Conflict with the current state",
+  413: "Too large to serve (the fix says where to get it instead)",
   415: "Content-Type must be application/json",
   429: "Rate limited (see retryAfterSec and the Retry-After header)",
   502: "Upstream (coordinator, Cloudflare) failed",

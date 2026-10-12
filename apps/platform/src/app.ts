@@ -21,6 +21,7 @@ import { registerQueueRoutes } from "./queue/routes.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerChangeRoutes } from "./routes/changes.js";
 import { registerCliRoutes } from "./routes/cli.js";
+import { registerCodeRoutes } from "./routes/code.js";
 import { type ApiApp, newApiApp, SECURITY } from "./routes/common.js";
 import { registerDocsRoutes } from "./routes/docs.js";
 import { registerFrontDoorRoutes } from "./routes/front-door.js";
@@ -118,6 +119,8 @@ export function createApp(options: Partial<AppOptions> = {}): ApiApp {
   // The dashboard's first-run checklist.
   registerGettingStartedRoutes(app);
   registerRepoRoutes(app);
+  // Browsing a repo's code and history (read-only).
+  registerCodeRoutes(app);
   registerMemberRoutes(app);
   registerImportRoutes(app);
   registerImportGrantRoutes(app);

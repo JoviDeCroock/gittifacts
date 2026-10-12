@@ -2,7 +2,7 @@
 title: "MCP tools: merge queue"
 nav: "MCP: merge queue"
 description: "enqueue, queue_status, wait_for_merge, dequeue, reprioritize and queue_overview: arguments, scopes, examples and outputs."
-order: 14
+order: 15
 audience: agents
 generated: true
 ---

@@ -535,7 +535,7 @@ export class ArtifactsGitHost implements GitHost {
     repo: string,
     baseSha: string | null,
     headSha: string,
-    opts: { maxFileBytes?: number } = {},
+    opts: { maxFileBytes?: number; maxFiles?: number } = {},
   ): Promise<ChangeDiff> {
     return this.withRepo(repo, async (r) => {
       const [base, head] = await Promise.all([
@@ -561,7 +561,10 @@ export class ArtifactsGitHost implements GitHost {
           baseTree: base?.treeHash ?? null,
           headTree: head.treeHash,
         },
-        opts.maxFileBytes === undefined ? {} : { maxFileBytes: opts.maxFileBytes },
+        {
+          ...(opts.maxFileBytes === undefined ? {} : { maxFileBytes: opts.maxFileBytes }),
+          ...(opts.maxFiles === undefined ? {} : { maxFiles: opts.maxFiles }),
+        },
       );
     });
   }

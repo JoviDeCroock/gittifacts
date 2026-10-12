@@ -31,6 +31,11 @@ export interface DiffOptions {
   /** Blobs above this are not even read; their line count is estimated. Default 16 MiB. */
   maxReadBytes?: number;
   context?: number;
+  /**
+   * Files read and diffed at most (by path order); the rest are listed with status only, zero
+   * counts and `truncated`. Default: all. A commit view caps this so a huge import stays cheap.
+   */
+  maxFiles?: number;
 }
 
 interface RawChange {
@@ -263,10 +268,28 @@ export async function diffTrees(
     maxFileBytes: options.maxFileBytes ?? 1024 * 1024,
     maxReadBytes: options.maxReadBytes ?? 16 * 1024 * 1024,
     context: options.context ?? 3,
+    maxFiles: options.maxFiles ?? Number.POSITIVE_INFINITY,
   };
   const raw: RawChange[] = [];
   await walk(reader, input.baseTree, input.headTree, "", raw);
-  const changes = detectRenames(raw);
-  const files = await mapLimit(changes, 8, (c) => fileDiff(reader, c, opts));
+  const changes = detectRenames(raw).sort((a, b) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+  );
+  const files = await mapLimit(changes.slice(0, opts.maxFiles), 8, (c) =>
+    fileDiff(reader, c, opts),
+  );
+  for (const c of changes.slice(opts.maxFiles)) {
+    files.push({
+      path: c.path,
+      previousPath: c.previousPath,
+      status: c.status,
+      transformVerified: false,
+      additions: 0,
+      deletions: 0,
+      binary: false,
+      hunks: [],
+      truncated: true,
+    });
+  }
   return buildChangeDiff(input.baseSha, input.headSha, files);
 }

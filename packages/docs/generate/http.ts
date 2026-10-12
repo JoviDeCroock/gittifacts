@@ -26,8 +26,9 @@ const GROUPS: readonly {
     file: "reference/http-repos.md",
     title: "HTTP API: projects, repos and members",
     nav: "HTTP: repos and members",
-    tags: ["projects", "repos", "members"],
-    blurb: "create_project, repos, Lane 0, deploy targets, import grants, members and invites",
+    tags: ["projects", "repos", "members", "code"],
+    blurb:
+      "create_project, repos, Lane 0, deploy targets, import grants, members and invites, and a repo's code and history (tree, files, commits, activity)",
   },
   {
     file: "reference/http-plans.md",

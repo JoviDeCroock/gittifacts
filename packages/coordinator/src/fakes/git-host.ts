@@ -352,12 +352,25 @@ export class FakeGitHost implements GitHost {
     return content === undefined ? null : new TextEncoder().encode(content);
   }
 
-  async diff(repo: string, baseSha: string | null, headSha: string): Promise<ChangeDiff> {
+  async diff(
+    repo: string,
+    baseSha: string | null,
+    headSha: string,
+    opts: { maxFiles?: number } = {},
+  ): Promise<ChangeDiff> {
     const r = this.repo(repo);
     for (const s of [baseSha ?? headSha, headSha])
       if (!r.objects.has(s)) throw new FakeGitError("NOT_FOUND", `commit ${s} in ${repo}`);
     const base = baseSha === null ? {} : this.filesAt(baseSha);
-    return diffFiles(baseSha ?? ZERO_SHA, headSha, base, this.filesAt(headSha));
+    const d = diffFiles(baseSha ?? ZERO_SHA, headSha, base, this.filesAt(headSha));
+    if (opts.maxFiles === undefined || d.files.length <= opts.maxFiles) return d;
+    // Like the real host: files past the cap keep their status, without counts or hunks.
+    const files = d.files.map((f, i) =>
+      i < (opts.maxFiles ?? 0)
+        ? f
+        : { ...f, additions: 0, deletions: 0, hunks: [], truncated: true },
+    );
+    return buildChangeDiff(baseSha ?? ZERO_SHA, headSha, files);
   }
 
   // ------------------------------------------------------------ browsing

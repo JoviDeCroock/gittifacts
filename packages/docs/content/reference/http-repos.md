@@ -1,7 +1,7 @@
 ---
 title: "HTTP API: projects, repos and members"
 nav: "HTTP: repos and members"
-description: "HTTP endpoints for create_project, repos, Lane 0, deploy targets, import grants, members and invites."
+description: "HTTP endpoints for create_project, repos, Lane 0, deploy targets, import grants, members and invites, and a repo's code and history (tree, files, commits, activity)."
 order: 32
 audience: both
 generated: true
@@ -199,3 +199,59 @@ Remove a member (human owner), or leave the repo (your own principal id)
 - **Parameters:** `repoId` (path, required), `principalId` (path, required)
 - **200:** `{ removed, principalId }`
 - **Errors:** 401, 403, 404, 409
+
+## code
+
+### `GET /api/v1/repos/{repoId}/activity`
+
+Commits per day (UTC, by landing date) over whole weeks, and the top authors
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `repoId` (path, required), `ref` (query), `weeks` (query)
+- **200:** `{ ref, headSha, weeks, from, to, days, total, authors, truncated }`
+- **Errors:** 400, 401, 403, 404
+
+### `GET /api/v1/repos/{repoId}/commits`
+
+First-parent history from a ref, newest first, each with the Change that landed it
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `repoId` (path, required), `ref` (query), `limit` (query), `offset` (query)
+- **200:** `{ ref, headSha, commits, nextOffset }`
+- **Errors:** 400, 401, 403, 404
+
+### `GET /api/v1/repos/{repoId}/commits/{sha}`
+
+One commit with its diff against its first parent
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `repoId` (path, required), `sha` (path, required)
+- **200:** `{ commit, diff }`
+- **Errors:** 400, 401, 403, 404
+
+### `GET /api/v1/repos/{repoId}/file`
+
+One file at a ref: text up to 512 KiB, else binary or too-large without content
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `repoId` (path, required), `ref` (query), `path` (query)
+- **200:** `{ ref, commitSha, file }`
+- **Errors:** 400, 401, 403, 404
+
+### `GET /api/v1/repos/{repoId}/raw`
+
+One file's raw bytes at a ref (images inline, text as text/plain, else a download; ≤10 MiB)
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `repoId` (path, required), `ref` (query), `path` (query)
+- **200:** The file's bytes
+- **Errors:** 400, 401, 403, 404, 413
+
+### `GET /api/v1/repos/{repoId}/tree`
+
+A directory's entries at a ref (directories first), with its README
+
+- **Auth:** session cookie or bearer token
+- **Parameters:** `repoId` (path, required), `ref` (query), `path` (query)
+- **200:** `{ ref, commitSha, path, entries, readme }`
+- **Errors:** 400, 401, 403, 404

@@ -1,6 +1,7 @@
 import type { ApiError, AttemptFacts, Change, Plan, Repo, Tour } from "@app/domain";
 import { defaultPolicy, rankAttempts } from "@app/domain";
 import type { McpBackend, PlanData, QueueEntry, WorkspaceView } from "../../src/index.js";
+import type { CodeToolsBackend } from "../../src/tools/code.js";
 
 export const SHA = "a".repeat(40);
 export const HEAD = "b".repeat(40);
@@ -131,6 +132,13 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
   const base: McpBackend = {
     webUrl(page) {
       if ("agents" in page) return "https://gittifacts.test/agents";
+      if ("repoId" in page) {
+        if ("code" in page)
+          return `https://gittifacts.test/repos/${page.repoId}/${page.code.kind}/${page.code.path}`;
+        if ("commits" in page)
+          return `https://gittifacts.test/repos/${page.repoId}/commits/${page.commits.sha ?? ""}`;
+        return `https://gittifacts.test/repos/${page.repoId}/activity`;
+      }
       return "planId" in page
         ? `https://gittifacts.test/plans/${page.planId}`
         : `https://gittifacts.test/changes/${page.changeId}${page.view ? `/${page.view}` : ""}`;
@@ -138,6 +146,7 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
     async getResolution() {
       return null;
     },
+    ...fakeCodeBackend(calls),
     auditUrl(filter) {
       const q = new URLSearchParams(filter as Record<string, string>).toString();
       return `https://gittifacts.test/audit${q ? `?${q}` : ""}`;
@@ -604,4 +613,106 @@ export function fakeBackend(over: Partial<McpBackend> = {}): McpBackend & { call
     },
   };
   return Object.assign({ ...base, ...over }, { calls });
+}
+
+const SHA_A = "a".repeat(40);
+const SHA_B = "b".repeat(40);
+
+/** A repo with one file and two commits, the second landed by a Change. */
+function fakeCodeBackend(calls: string[]): CodeToolsBackend {
+  const person = { name: "Ada", email: "ada@example.test", at: "2026-10-12T10:00:00.000Z" };
+  const commit = (sha: string, parents: string[], title: string) => ({
+    sha,
+    title,
+    message: `${title}\n\nbody`,
+    author: person,
+    committer: person,
+    parents,
+    landedBy:
+      sha === SHA_B
+        ? {
+            changeId: "chg_1",
+            title,
+            lane: 1 as const,
+            authorKind: "agent" as const,
+            authorName: "agent-1",
+          }
+        : null,
+  });
+  return {
+    async listRepoFiles(_c, repoId, input) {
+      calls.push(`listRepoFiles:${repoId}:${input.path ?? ""}`);
+      return {
+        ref: input.ref ?? "main",
+        commitSha: SHA_B,
+        path: input.path ?? "",
+        entries: [{ name: "a.ts", path: "a.ts", kind: "file", mode: "100644", sha: SHA_A }],
+        readme: null,
+      };
+    },
+    async readRepoFile(_c, repoId, input) {
+      calls.push(`readRepoFile:${repoId}:${input.path}`);
+      return {
+        ref: "main",
+        commitSha: SHA_B,
+        file: { path: input.path, sha: SHA_A, size: 3, kind: "text", text: "a=1" },
+      };
+    },
+    async listCommits(_c, repoId) {
+      calls.push(`listCommits:${repoId}`);
+      return {
+        ref: "main",
+        headSha: SHA_B,
+        commits: [commit(SHA_B, [SHA_A], "Round totals"), commit(SHA_A, [], "initial")],
+        nextOffset: null,
+      };
+    },
+    async getCommit(_c, repoId, sha) {
+      calls.push(`getCommit:${repoId}:${sha}`);
+      const lines = [{ kind: "add" as const, oldNo: null, newNo: 1, text: "x".repeat(150_000) }];
+      const hunk = {
+        header: "@@ -0,0 +1 @@",
+        oldStart: 0,
+        oldLines: 0,
+        newStart: 1,
+        newLines: 1,
+        lines,
+      };
+      const file = (path: string) => ({
+        path,
+        previousPath: null,
+        status: "added" as const,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        transformVerified: false,
+        hunks: [hunk],
+        truncated: false,
+      });
+      return {
+        commit: commit(sha, [SHA_A], "Round totals"),
+        diff: {
+          parentSha: SHA_A,
+          files: [file("a.ts"), file("b.ts")],
+          additions: 2,
+          deletions: 0,
+          complete: true,
+        },
+      };
+    },
+    async getCommitActivity(_c, repoId) {
+      calls.push(`getCommitActivity:${repoId}`);
+      return {
+        ref: "main",
+        headSha: SHA_B,
+        weeks: 1,
+        from: "2026-10-12",
+        to: "2026-10-12",
+        days: [{ date: "2026-10-12", commits: 2 }],
+        total: 2,
+        authors: [{ name: "Ada", commits: 2 }],
+        truncated: false,
+      };
+    },
+  };
 }
